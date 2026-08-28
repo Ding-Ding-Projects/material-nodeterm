@@ -10,6 +10,7 @@ describe('SETTINGS_GROUPS', () => {
     const ids = allSectionIds()
     expect(ids).toHaveLength(37)
     expect(new Set(ids).size).toBe(37)
+  })
   it('lists exactly 25 sections with no duplicates', () => {
     const ids = allSectionIds()
     expect(ids).toHaveLength(25)

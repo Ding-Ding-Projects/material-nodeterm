@@ -7,6 +7,40 @@ const path = require('node:path')
 
 const SUPPORTED_NODE_RANGE = '^22.22.2 || ^24.15.0 || >=26.0.0'
 
+function manifestBuildNodeVersion() {
+  const root = path.resolve(__dirname, '..')
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(root, 'dependencies.manifest.json'), 'utf8'),
+  )
+  const version = String(manifest.node?.version || '')
+  if (!/^\d+\.\d+\.\d+$/.test(version)) {
+    throw new Error('dependencies.manifest.json must declare node.version as three decimal parts')
+  }
+  return version
+}
+
+function manifestPortableNode(architecture) {
+  if (architecture !== 'win-x64' && architecture !== 'win-arm64') {
+    throw new Error(`unsupported portable Node architecture ${JSON.stringify(architecture)}`)
+  }
+  const root = path.resolve(__dirname, '..')
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(root, 'dependencies.manifest.json'), 'utf8'),
+  )
+  const version = manifestBuildNodeVersion()
+  const entry = manifest.node?.portable?.[architecture]
+  const url = String(entry?.url || '')
+  const sha256 = String(entry?.sha256 || '')
+  const expectedUrl =
+    `https://nodejs.org/dist/v${version}/node-v${version}-${architecture}.zip`
+  if (url !== expectedUrl || !/^[a-fA-F0-9]{64}$/.test(sha256)) {
+    throw new Error(
+      'dependencies.manifest.json portable Node entry must use the exact official URL and SHA-256',
+    )
+  }
+  return { version, url, sha256 }
+}
+
 function parseVersion(value) {
   const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(String(value || ''))
   if (!match) return null
@@ -32,9 +66,28 @@ function main(argv) {
     return 2
   }
 
+  const printPortable = argv.length === 2 && argv[0] === '--print-portable'
+  const manifestPin = argv.length === 1 && argv[0] === '--manifest-pin'
+  if (printPortable) {
+    try {
+      const portable = manifestPortableNode(argv[1])
+      console.log(`NODE_VERSION=${portable.version}`)
+      console.log(`NODE_URL=${portable.url}`)
+      console.log(`NODE_SHA256=${portable.sha256}`)
+      return 0
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error))
+      return 2
+    }
+  }
   const requested = argv.length === 2 && argv[0] === '--check' ? argv[1] : process.versions.node
-  if ((argv.length !== 0 && argv.length !== 2) || (argv.length === 2 && argv[0] !== '--check')) {
-    console.error('usage: check-node-version.cjs [--check <version>]')
+  if (
+    (argv.length !== 0 && !manifestPin && argv.length !== 2) ||
+    (argv.length === 2 && argv[0] !== '--check')
+  ) {
+    console.error(
+      'usage: check-node-version.cjs [--check <version> | --manifest-pin | --print-portable <win-x64|win-arm64>]',
+    )
     return 2
   }
   if (!isSupportedNodeVersion(requested)) {
@@ -42,7 +95,15 @@ function main(argv) {
     return 1
   }
 
-  const expected = process.env.NODETERM_EXPECTED_NODE_VERSION
+  let expected = process.env.NODETERM_EXPECTED_NODE_VERSION
+  if (manifestPin) {
+    try {
+      expected = manifestBuildNodeVersion()
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error))
+      return 2
+    }
+  }
   if (expected && String(requested).replace(/^v/, '') !== String(expected).replace(/^v/, '')) {
     console.error(`Node version mismatch: expected ${expected}, got ${requested}`)
     return 1
@@ -54,4 +115,10 @@ function main(argv) {
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2))
 
-module.exports = { SUPPORTED_NODE_RANGE, isSupportedNodeVersion, parseVersion }
+module.exports = {
+  SUPPORTED_NODE_RANGE,
+  isSupportedNodeVersion,
+  manifestBuildNodeVersion,
+  manifestPortableNode,
+  parseVersion,
+}

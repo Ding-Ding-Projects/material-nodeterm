@@ -13,7 +13,6 @@ import os from 'os'
 import path from 'path'
 import { writeFileAtomic } from '../fs-atomic'
 import { normalizeClaude, type NormalizedAgentEvent } from '../../shared/agents/normalize'
-import { renameAtomic, tempNameFor } from '../fs-atomic'
 
 /** pendingId shape the script generates (`<node>-<ms>-<pid>`) and the ONLY thing we interpolate
  *  into a filename. Validated everywhere a pendingId becomes a path so a forged value can't
@@ -50,13 +49,6 @@ export async function writePendingAnswerLocal(
   if (decision !== 'allow' && decision !== 'deny') return false
   const dir = pendingDir(homeDir)
   const file = path.join(dir, `${pendingId}.answer`)
-  // The pid separated processes but nothing separated two calls for the SAME pendingId inside
-  // one of them (a double-fired Approve/Deny), which shared this exact path.
-  const tmp = tempNameFor(file)
-  try {
-    await fs.promises.mkdir(dir, { recursive: true, mode: 0o700 })
-    await fs.promises.writeFile(tmp, decision, { mode: 0o600 })
-    await renameAtomic(tmp, file)
   try {
     await fs.promises.mkdir(dir, { recursive: true, mode: 0o700 })
     // writeFileAtomic: unique tmp + retrying rename (core/fs-atomic.ts); removes its temp on failure.

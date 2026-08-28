@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
 import { DESTRUCTIVE_VERBS } from '@shared/control-verbs'
 import {
   dispatchDestructiveControl,
@@ -146,8 +145,10 @@ describe('destructive canvas-control behavior', () => {
     expect(open).not.toHaveBeenCalled()
     expect(perform).not.toHaveBeenCalled()
     expect(replies).toEqual([{ ok: false, error: 'write requires --node' }])
-/**
- * The body of an EARLY-HANDLED verb's block — `open-project` is dispatched before the
+  })
+})
+/*
+ * The old source-structure test was superseded by the executable dispatcher harness above.
  * source-routing machinery (a STORE_ANSWERED_VERBS member, spec §2.3), so it has no `case` label.
  * Delimited by its `if (verb === '<verb>')` guard and the next section-comment rule (`// ──`),
  * the same way the switch slice above is delimited by the next case label.

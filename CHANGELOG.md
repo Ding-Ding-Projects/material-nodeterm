@@ -2,6 +2,125 @@
 
 ## Unreleased
 
+- Add an explicit Codex crash-recovery continuation surface. One encrypted, bounded packet per node
+  is derived from provider events, reviewed beside the owning node, and cleared only after a
+  verified next-turn receipt. Failed provider start, delivery, and receipt checks retain the packet;
+  terminal scrollback and credential-shaped content remain outside the boundary. Tests, builds,
+  packaging, runtime interaction, and captures were not run in this ultra-speed lane.
+
+- Repair the renderer stylesheet merge remnants around the destructive confirmation surface. The
+  destination gate now has complete standalone overlay, heading, key, progress, completion, action,
+  exit, hover, reduced-motion, and anchored-scrim rules. The interleaved card-modal resize, header,
+  and rendered-markdown rules remain available as independent selectors, and the other ten missing
+  declaration boundaries in the stylesheet are closed. This ultra-speed repair ran no tests, type
+  checks, lint, reviews, audits, builds, packaging, runtime interaction, or screen captures.
+
+  Stylesheet merge leftovers 清走晒：destructive confirmation gate 而家有返完整 overlay、heading、key、
+  progress、completion、action、exit、hover、reduced-motion 同 anchored-scrim rules。card modal 嘅
+  resize、header 同 rendered-markdown styles 亦保留，而且各自企返喺獨立 selector 入面。今次
+  ultra-speed repair 沒有執行 tests、type checks、lint、reviews、audits、builds、packaging、runtime
+  interaction 或 screen captures。
+
+- Restore the core board-attachment detector export used by portable project import. The detector
+  remains byte-derived and shared, preserving MIME and extension classification, bounded attachment
+  carriers, path safety, and archive integrity validation while restoring the correct core import
+  boundary. This ultra-speed repair ran no tests, type checks, lint, reviews, audits, builds,
+  packaging, runtime interaction, or screen captures.
+
+  Merge leftovers 清走晒：board attachment detector 重新由 core boundary export，portable import
+  可以继续用同一套 byte classification，path safety 同 archive integrity 都原封不動。今次
+  ultra-speed repair 沒有執行 tests、type checks、lint、reviews、audits、builds、packaging、runtime
+  interaction 或 screen captures。
+
+- Restore the Cloudflare Tunnel route planner after a merge retained the closing brace from a
+  block-bodied conflict branch beside the one-line return from another version. Route ownership
+  conflicts and DNS-only conflicts now remain inside the same guarded planning operation, with the
+  existing fail-closed tunnel, hostname, path, zone, DNS-record, and explicit-adoption checks
+  unchanged. A single-file esbuild transform recorded syntax-only evidence. This ultra-speed repair
+  ran no tests, type checks, lint, reviews, audits, builds, packaging, runtime interaction, or screen
+  captures.
+
+- Remove residual duplicate declarations in the PTY manager, shared settings defaults, and torrent
+  service. The PTY manager now has one complete end-session implementation, the Windows terminal
+  font fallback keeps the current Consolas and Cascadia Mono stack, speech keeps its explicit no-
+  dictation default, and the torrent service keeps its public task subscription method without a
+  class-member name collision. A single-file esbuild transform reported `PARSE_OK` for each changed
+  source file. This ultra-speed repair ran no tests, type checks, lint, reviews, audits, builds,
+  packaging, runtime interaction, or screen captures.
+
+  Merge leftovers 清走晒：PTY 收返一份完整收尾流程，Windows 字型保留現行 fallback，speech 繼續
+  支援明確停用 dictation，torrent listener 唔再同 callback 撞名。三個 source file 各自通過
+  `PARSE_OK` syntax evidence；其餘 checks 今次 ultra-speed repair 沒有執行。
+- Reconstruct the SSH project manager after a merge retained two remote Codex account and runtime
+  implementations. The manager now keeps one safe-home-validated account lifecycle, one
+  credential-local identity path, one executable-only runtime installer, and one relay-source
+  provider, while preserving per-node token materialization, live host status, OAuth forwarding,
+  and the current project and canvas integrations. Duplicate imports and displaced method
+  documentation were removed with the obsolete blocks. A single-file esbuild transform recorded
+  syntax-only evidence. This ultra-speed repair ran no tests, type checks, lint, reviews, audits,
+  builds, packaging, runtime interaction, or screen captures.
+
+- Reconcile stale merge fragments in `src/main/index.ts`. The main process now keeps one import
+  declaration per duplicated filesystem, Electron, SSH, account, and notification helper; one quit-confirmation
+  declaration and detail; one configurable-shortcut interception path; one native-notification
+  composition path; one `codexAccounts` provider and `registerNode` object key; the corrected
+  `initSshProject` argument order and separator; one nested before-quit condition; and one
+  keep-awake teardown. This ultra-speed repair ran no tests, type checks, lint, reviews, audits,
+  builds, packaging, runtime interaction, or screen captures.
+
+- Reconstruct the Codex relay daemon after a merge retained incompatible fragments from several
+  implementations. The daemon now keeps one descriptor-based process-lock inspection, one relay
+  root and server path, one quote-aware endpoint parser per request helper, one synchronous thread
+  reservation path, and one response-error rewrite. The existing stdin capability registration,
+  strict account validation, atomic rollout exposure, and native-thread outcome remain intact. A
+  single-file esbuild transform recorded syntax-only evidence. This ultra-speed repair ran no
+  tests, type checks, lint, reviews, audits, builds, packaging, runtime interaction, or screen
+  captures.
+
+- Repair WSL copy coverage for the validation phase. The catalogue now supplies ten English and
+  Cantonese variants for `wsl.create.progress.validating`, with a factual level-one fallback and
+  bilingual resolution. The coverage regression removes the first parsed inventory row using exact
+  line boundaries that work for both CRLF and LF, and fails if the mutation is a no-op. This
+  ultra-speed repair ran no tests, type checks, lint, reviews, audits, builds, packaging, runtime
+  interaction, or screen captures; only JavaScript syntax evidence was permitted.
+
+- Repair the personal-vocabulary coverage contract after the merge recovery combined newer
+  producer lanes with an older canonical manifest. The hand-written implementation array and its
+  independent canonical list now contain the same 145 unique producer identifiers, including all
+  rows already documented by the Material audit. Settings restores its real mapper and registration
+  boundaries, Canvas keeps one notification for each project-save outcome, and every retained Canvas
+  notification classifies authored copy separately from runtime facts. The Canvas subinventory names
+  57 checker-retained production calls in source order, while the two nested planner notifications
+  remain explicitly classified in their action. This ultra-speed repair ran
+  no tests, type checks, lint, reviews, audits, runtime interaction, packaging, or screen captures;
+  only JavaScript syntax and source-record consistency were checked locally.
+
+- Pin source builds to Node 24.19.0 before native dependency lifecycle scripts run. Node 26.4.0
+  publishes Clang thin-LTO settings through its build metadata, which caused node-gyp to forward
+  `-flto=thin` and `/opt:lldltojobs=2` into MSVC while compiling `smart-whisper`. The one-click
+  dependency bootstrap now selects the SHA-pinned manifest runtime before `npm ci`, and npm's
+  source-tree `devEngines` check refuses a direct install under a different Node version. The
+  portable manifest record is validated by the same JavaScript contract used for the build-runtime
+  probe, avoiding shell-specific JSON parsing. The shipped runtime support range is unchanged. The
+  fresh build reached the root native rebuild without the thin-LTO flags or `LNK1117`, then stopped
+  on the separate `node-pty` `MSB8040` caused by a Visual Studio 18 Spectre-library mismatch. The
+  bootstrap now selects one exact C++ installation whose default toolset owns matching Spectre
+  libraries, passes that installation to node-gyp through `VCINSTALLDIR`, and makes preflight check
+  that exact active toolset instead of accepting any older mitigated directory. A fresh
+  `build.bat /s` completed `npm ci` and the full native rebuild, then the later source build stopped
+  on a pre-existing duplicate declaration in `scripts/check-personal-vocabulary-coverage.mjs`. The
+  ultra-speed pass intentionally runs no tests, type checks, lint, reviews, audits, runtime
+  interaction, or screen captures.
+
+- Consolidate the malformed TypeScript merge recovery into the combined recovery pull request.
+  The implementation lane repairs parser-invalid remnants across core services, host and bridge
+  code, renderer surfaces, shared contracts, account and identity handling, and release workflow
+  wiring. It also adds the source-parse validation path and aligns the Windows installer contract
+  with the unsigned Squirrel.Windows packaging policy. This recovery record is intentionally
+  unverified until the parent integration lane completes its parser, type-check, build, packaging,
+  and release-workflow checks. The ultra-speed pass does not run tests, reviews, accessibility or
+  security checks, runtime interaction, or screen captures after activation.
+
 - Load pull requests for the attach guide through the typed `pull-request.list` capability with
   bounded pagination and provider head-ref facts. Open an attached chip or frame pill in the in-app
   Markdown detail and review surface, with an explicit secondary link to GitHub. Partial and

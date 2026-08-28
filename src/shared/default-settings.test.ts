@@ -31,6 +31,7 @@ describe('DEFAULT_SETTINGS', () => {
     expect(DEFAULT_SETTINGS.remoteSystemAccountLabels).not.toBe(
       DEFAULT_SETTINGS.remoteSystemCodexAccountLabels
     )
+  })
   it('uses the shared worktree path template default', () => {
     expect(DEFAULT_SETTINGS.worktreePathTemplate).toBe(DEFAULT_WORKTREE_PATH_TEMPLATE)
   })

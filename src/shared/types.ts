@@ -12,6 +12,7 @@ import type { NormalizedAgentEvent } from './agents/normalize'
 import type { AgentStatusSnapshot } from './agents/status-snapshot'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId, PromptInjectionMode } from './agents/config'
 import type { AgentMessageDeliverRequest, AgentMessageReply } from './agents/agent-messaging'
+import type { AgentContinuationApi } from './agent-continuation'
 import type { BrowserLeasePush } from './browser-indicator'
 import type { DebugBrowserIntent, DebugBrowserProfile } from './browser-debug-sessions'
 import type { GroupWorktree } from './worktree'
@@ -797,7 +798,7 @@ export interface CanvasNodeState {
   kioskPwaIntent?: PortableKioskPwaIntent
   /** Debugging-browser intent only. Certificates, credentials, executable paths and process state stay local. */
   debugBrowser?: DebugBrowserIntent
-   * browser-only: the Electron session partition for an AGENT-opened browser node
+  /** browser-only: the Electron session partition for an AGENT-opened browser node
    * (`persist:nt-agent-browser-<projectId>`), set once at creation and never mutated. Absent for a
    * USER-opened node (default session, no migration). Persisted so the jar survives reopen; carried
    * through untouched on Server Edition / mobile, where a browser node renders with no <webview>.
@@ -1093,6 +1094,7 @@ export interface NavStop {
   nodeId: string
   at: number
   note: string
+}
 /** One captured debug-log line (issue #78). `seq` is monotonic across the process lifetime so
  *  subscribers can dedupe batches against the snapshot they filled from. */
 export interface LogRecord {
@@ -1796,6 +1798,7 @@ export interface ServerDeploymentApi {
    *  at most one — `start()` dedupes concurrent callers onto a single run). Returns an
    *  unsubscribe function. */
   onProgress(cb: (stage: ServerDeploymentStage) => void): () => void
+}
 export interface ProjectSettingsApi {
   /** `{shared, local, conflict?}` for a known project id, or null for an unknown one. */
   read(projectId: string): Promise<import('./project-settings').ProjectSettingsSnapshot | null>
@@ -2072,8 +2075,8 @@ export interface BrowserApi {
   profile: BrowserProfileApi
 }
 
-/** A user-defined agent (BYO CLI). In no capability list, so it gets only spawn +
- * terminal-title + process status (no hooks/branch/loop/bridge). */
+/** Browser control operations for the agent-driven browser node surface. */
+export interface BrowserControlApi {
   /** Push: the current set of browser nodes an agent is driving (chip / rope / kill row). `stopped`
    *  ids drop from the chip immediately, skipping the anti-flicker linger. */
   onLeaseChanged(listener: (push: BrowserLeasePush) => void): () => void
@@ -2926,7 +2929,6 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   fontSize: 13,
   fontFamily: 'Menlo, Monaco, Consolas, "Cascadia Mono", "Courier New", monospace',
-  fontFamily: 'Menlo, Monaco, "Courier New", monospace',
   // Keep hyphens, underscores, slashes and dots inside words so identifiers and paths select whole.
   terminalWordSeparator: " ()[]{}',\"",
   cursorBlink: true,
@@ -3060,7 +3062,6 @@ export const DEFAULT_SETTINGS: Settings = {
   notchHud: true,
   notchWidth: 168,
   notchHoverExpand: true,
-  speech: { engine: 'whisper', model: 'tiny', language: 'auto', shortcut: 'Cmd+Alt' },
   languageMode: 'en',
   // New installations start at the maximum deliberate voice level. Existing saved values are
   // preserved by the versioned settings migration in core/settings-store.ts.
@@ -4205,32 +4206,6 @@ export interface CodexAccountsApi {
   /** Identity of the system ~/.codex account, read through account/read. */
   systemIdentity(ctx?: AccountSshCtx): Promise<{ email: string | null } | null>
   /** Rebind an idle conversation to another login without changing its thread identity. */
-/**
- * Machine-scoped managed Codex accounts (S6). LOCAL accounts on this Mac are reachable through
- * PR 5; SSH remote accounts land in PR 6. The account LIST is renderer-owned in `settings.json`
- * (`codexAccounts`), exactly like `claudeAccounts`; main owns only the fs + daemon lifecycle and
- * the switch protocol.
- */
-export interface CodexAccountsApi {
-  /** Mint a new managed account: create its private CODEX_HOME (0700) and symlink the shared,
-   *  non-secret runtime assets in. Returns the new id + its home. */
-  add(): Promise<{ id: string; home: string }>
-  /** Poll the account's `auth.json` (a real file, never a symlink) every 2s up to 5min for a
-   *  completed device login, then read its email; null on timeout/cancel. */
-  waitLogin(id: string): Promise<{ email: string | null } | null>
-  /** Cancel an in-flight `waitLogin` for this account. */
-  cancelWaitLogin(id: string): Promise<void>
-  /** Read a managed account's already-logged-in identity (email), or null if not logged in. */
-  identity(id: string): Promise<{ email: string | null } | null>
-  /** Read a machine's system (`~/.codex`) account identity. No arg ⇒ this Mac. `{ projectId }` ⇒
-   *  the connected SSH host behind that project; a host whose system identity cannot be resolved
-   *  resolves `null` (fail-closed — a remote machine panel never borrows this Mac's login). */
-  systemIdentity(ctx?: { projectId?: string }): Promise<{ email: string | null } | null>
-  /** Remove a managed account: stop its daemon and delete its home. Refused while a switch
-   *  reservation holds it or a concurrent removal is in flight (Property 10). */
-  remove(id: string): Promise<void>
-  /** Phase 1 of the owner-authorized same-machine switch: plan + reserve the rollout exposure of a
-   *  conversation from one account to another under a `rollbackToken` (TTL 60s, owner = caller). */
   switchThread(
     threadId: string,
     cwd: string,
@@ -4247,21 +4222,6 @@ export interface CodexAccountsApi {
   commitSwitch(rollbackToken: string): Promise<void>
   finishSwitch(rollbackToken: string): Promise<void>
   rollbackSwitch(rollbackToken: string): Promise<void>
-  /** Phase 2: commit the reserved exposure (atomic hardlink into the target account). */
-  commitSwitch(rollbackToken: string): Promise<void>
-  /** Phase 3a: finish a committed switch, releasing the reservation. */
-  finishSwitch(rollbackToken: string): Promise<void>
-  /** Phase 3b: roll back a reservation (releases it; a committed link is left for cleanup). */
-  rollbackSwitch(rollbackToken: string): Promise<void>
-  /** Source-side leg of moving an idle LOCAL conversation to an SSH account: validate strict source
-   *  containment then hand the upload to the remote import path (PR 6). Local rollout untouched. */
-  transferThreadToSsh(
-    threadId: string,
-    cwd: string,
-    projectId: string,
-    targetAccountId?: string,
-    sourceAccountId?: string
-  ): Promise<{ threadId: string; imported: boolean }>
 }
 
 /** One ranked search hit across all on-disk Claude session transcripts. */
@@ -4871,6 +4831,7 @@ export interface TimerApi {
   schedule(timerId: string, scheduledAt: number): Promise<import('./timer').TimerOccurrence | null>
   transition(id: string, state: import('./timer').TimerOccurrenceState): Promise<import('./timer').TimerOccurrence | null>
   lap(id: string, elapsedMs: number): Promise<number[] | null>
+}
 /** Keyboard-shortcut plumbing the RENDERER cannot do for itself. */
 export interface ShortcutsApi {
   /** Tell the shell that a shortcut recorder is armed (`true`) or released (`false`), so the
@@ -4975,6 +4936,8 @@ export interface NodeTerminalApi {
   githubCliAccounts: import('./github-issues').GitHubCliAccountsApi
   usage: UsageApi
   sessionMemory: SessionMemoryApi
+  /** Encrypted, bounded Codex continuation packets for explicit cold-relaunch review. */
+  agentContinuation?: AgentContinuationApi
   vscode: VsCodeApi
   /** Windows-only WSL distribution management (docs pending) — src/core/wsl/service.ts.
    *  Optional: a Linux Server Edition host and every non-Windows/mobile bridge simply omit

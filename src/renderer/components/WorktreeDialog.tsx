@@ -7,13 +7,6 @@ import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { isValidGitRef, type WorktreeCreateValue, type WorktreeEntry } from '@shared/worktree'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { Radio } from '../ui/md3'
-import { Radio } from '@renderer/ui/md3'
-import {
-  filterWorktrees,
-  isValidGitRef,
-  type WorktreeCreateValue,
-  type WorktreeEntry
-} from '@shared/worktree'
 
 interface Props {
   /** 'create' = the pane/palette entry point (a new group frame); 'bind' = an existing group's
@@ -86,8 +79,6 @@ export function WorktreeDialog({
   }, [defaultBaseRef, baseEdited])
 
   const hasBranches = branches.length > 0
-  const filteredExisting = filterWorktrees(existing, existingQuery)
-
   const filteredExisting = useMemo(
     () =>
       existing.filter((entry) =>
@@ -224,43 +215,6 @@ export function WorktreeDialog({
               )}
             </ul>
           </section>
-          <div className="bind-existing">
-            <div className="bind-existing__title">Existing worktrees</div>
-            <input
-              className="bind-existing__search"
-              type="search"
-              aria-label="Search existing worktrees"
-              placeholder="Search branch or path…"
-              value={existingQuery}
-              onChange={(e) => setExistingQuery(e.target.value)}
-            />
-            <div className="bind-existing__list">
-              {filteredExisting.map((e) => (
-                // A detached-HEAD worktree cannot be bound (there is no branch to merge or name the
-                // group after), so the row is DISABLED and says why — clicking it used to be a
-                // silent no-op.
-                <button
-                  key={e.path}
-                  className="bind-existing__row"
-                  disabled={busy || !e.branch}
-                  onClick={() => onBindExisting(e)}
-                  title={
-                    e.branch
-                      ? e.path
-                      : `${e.path}\nDetached HEAD — check out a branch in this worktree first.`
-                  }
-                >
-                  <span className="bind-existing__branch">
-                    {e.branch ? `⎇ ${e.branch}` : '⎇ (detached HEAD — check out a branch first)'}
-                  </span>
-                  <span className="bind-existing__path">{e.path}</span>
-                </button>
-              ))}
-              {filteredExisting.length === 0 && (
-                <div className="bind-existing__empty">No matching worktrees</div>
-              )}
-            </div>
-          </div>
         )}
 
         <div className="bind-mode">
@@ -270,10 +224,6 @@ export function WorktreeDialog({
           <label>
             <Radio
               name="worktree-mode"
-            <Radio checked={mode === 'new'} onChange={() => setMode('new')} /> {vocabulary('New branch')}
-          </label>
-          <label>
-            <Radio
               checked={mode === 'existing'}
               onChange={() => setMode('existing')}
             />{' '}

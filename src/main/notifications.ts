@@ -20,20 +20,6 @@ export type PreparedNativeNotification = {
   bodyKind: 'authored' | 'fact'
 }
 
-export function isPreparedNativeNotification(payload: {
-  title?: unknown
-  body?: unknown
-  titleKind?: unknown
-  bodyKind?: unknown
-}): payload is PreparedNativeNotification {
-  return (
-    typeof payload.title === 'string' &&
-    typeof payload.body === 'string' &&
-    (payload.titleKind === 'authored' || payload.titleKind === 'fact') &&
-    (payload.bodyKind === 'authored' || payload.bodyKind === 'fact')
-  )
-}
-
 export function isPreparedNativeNotification(payload: unknown): payload is PreparedNativeNotification {
   if (!payload || typeof payload !== 'object') return false
   const candidate = payload as {

@@ -259,10 +259,6 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const activeProject = useProjects((s) => s.projects.find((p) => p.id === activeProjectId))
   const setProjectCapability = useProjects((s) => s.setProjectCapability)
-  // LIVE"; browser PR 4 / messaging PR 6 rely on that shape).
-  const activeProjectId = useProjects((s) => s.activeProjectId)
-  const activeProject = useProjects((s) => s.projects.find((p) => p.id === activeProjectId))
-  const setProjectCapability = useProjects((s) => s.setProjectCapability)
   // The kill row (Task 6.4): browser nodes an agent is driving RIGHT NOW, across every open project,
   // each with a Stop and one Stop-all. The precedent is the identity escape hatch — a user who
   // notices their browser doing something needs one obvious place to end it, not a per-node hunt.
@@ -373,9 +369,6 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
             'like --resume appended after it, so the command must pass its arguments through — a shell script should ' +
             'end with `exec claude "$@"`. Leave empty for the default. Stored locally in settings.json only — never ' +
             'shared through a project file. SSH projects run the same command on the remote host.'
-            'Used everywhere the agent is launched (new sessions, resumes, restarts), with flags like --resume appended after it, ' +
-            'so the command must pass its arguments through — a shell script should end with `exec claude "$@"`. ' +
-            'Leave empty for the default. SSH projects run the same command on the remote host.'
           }
           control={null}
         />
@@ -474,7 +467,6 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
       <SearchableRow {...ROWS.nodeIdentity}>
         <FieldRow
           label="Require verified node identity for canvas control"
-          description={`Commands that open, write to or close nodes — and that read a linked node's context — must present the identity NodeTerm issued to the node they say they came from. Automatic starts refusing the ones that can't from ${NODE_IDENTITY_STRICT_DATE}; until then they still run and the reply tells you to restart that node. Set this to "Not required" if an upgrade left a running session unable to drive the canvas: it restores the behaviour from before this feature, past ${NODE_IDENTITY_STRICT_DATE} as well. An identity that is actually forged is refused whatever you pick here. It does not release browser control, which always requires a verified identity.`}
           description={`Commands that open, write to or close nodes — and that read a linked node's context — must present the identity NodeTerm issued to the node they say they came from. Automatic starts refusing the ones that can't from ${NODE_IDENTITY_STRICT_DATE}; until then they still run and the reply tells you to restart that node. Set this to "Not required" if an upgrade left a running session unable to drive the canvas: it restores the behaviour from before this feature, past ${NODE_IDENTITY_STRICT_DATE} as well. Browser control is the one exception — it always requires verified identity and this setting never releases it. An identity that is actually forged is refused whatever you pick here.`}
           control={
             <Select
@@ -536,10 +528,6 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
             // The description carries the capability's own copy AND its cloneWarning — the same
             // "this is in the project file" sentence the clone notice shows, so the two git-shared
             // grants read alike wherever they appear.
-            description={`${PROJECT_CAPABILITY_COPY[cap].description} ${PROJECT_CAPABILITY_COPY[cap].cloneWarning}`}
-            control={
-              <Switch
-            // grants read alike wherever they appear (pinned by agents-capabilities.test.tsx).
             description={`${PROJECT_CAPABILITY_COPY[cap].description} ${PROJECT_CAPABILITY_COPY[cap].cloneWarning}`}
             control={
               <Switch

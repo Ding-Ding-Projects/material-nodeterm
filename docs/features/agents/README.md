@@ -25,6 +25,8 @@ Cognition Devin are built in; any other CLI can be added as a custom agent.
   running-node recycle and resume, ownership checks, persistence, and recovery boundaries.
 - [Managed Codex account behavior](./codex-account-behavior.md) — isolated account lifecycle,
   owner-authorized same-machine switching, removal coordination, and credential boundaries.
+- [Codex crash-recovery continuation](./agent-continuation.md) — bounded encrypted provider-event
+  packets, anchored review, verified provider start and next-turn receipt, and safe retry retention.
 
 See also [Canvas → Node kinds](../canvas/README.md) for the agent node itself,
 [Kanban](../kanban/README.md) for how agent status renders on a board card, and

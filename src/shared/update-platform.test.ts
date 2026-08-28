@@ -66,11 +66,6 @@ describe('local dist scripts opt out of the production update feed', () => {
   it('every dist script that invokes electron-builder directly carries the marker', () => {
     expect(distBuilderScripts.length).toBeGreaterThanOrEqual(2) // dist, dist:linux
     expect(distBuilderScripts.filter((s) => !pkg.scripts[s].includes(MARKER))).toEqual([])
-
-  it('every dist script carries the marker — not just the one whose 404 was noticed', () => {
-    const dist = Object.keys(pkg.scripts).filter((s) => s === 'dist' || s.startsWith('dist:'))
-    expect(dist.length).toBeGreaterThanOrEqual(2) // dist, dist:linux
-    expect(dist.filter((s) => !pkg.scripts[s].includes(MARKER))).toEqual([])
   })
 
   it('release does NOT carry it — a promoted build must keep updating itself', () => {

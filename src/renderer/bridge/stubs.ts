@@ -514,14 +514,6 @@ export function buildStubApi(): Omit<
       commitSwitch: U('codexAccounts.commitSwitch'),
       finishSwitch: U('codexAccounts.finishSwitch'),
       rollbackSwitch: U('codexAccounts.rollbackSwitch')
-      identity: U('codexAccounts.identity'),
-      systemIdentity: U('codexAccounts.systemIdentity'),
-      remove: U('codexAccounts.remove'),
-      switchThread: U('codexAccounts.switchThread'),
-      commitSwitch: U('codexAccounts.commitSwitch'),
-      finishSwitch: U('codexAccounts.finishSwitch'),
-      rollbackSwitch: U('codexAccounts.rollbackSwitch'),
-      transferThreadToSsh: U('codexAccounts.transferThreadToSsh')
     },
     transcripts: {
       search: U('transcripts.search')
@@ -617,6 +609,7 @@ export function buildStubApi(): Omit<
       supported: false,
       list: U('relayPeers.list'),
       revoke: U('relayPeers.revoke')
+    },
     shortcuts: {
       // Deliberate no-op (not a gap): the recording bit exists to stand the DESKTOP's
       // `before-input-event` intercepts down, and a browser tab has no application menu to steal

@@ -131,9 +131,6 @@ export type ControlVerb =
   | 'close'
   | 'board'
   | 'assign'
-  | 'browser'
-  | 'send'
-  | 'reply'
   | 'notify'
   | 'sticky'
   | 'browser'
@@ -179,7 +176,7 @@ const VERBS: ControlVerb[] = [
   'close',
   'board',
   'assign',
-  'browser'
+  'browser',
   'send',
   'reply',
   'notify',

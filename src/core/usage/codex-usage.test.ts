@@ -10,12 +10,36 @@ import { primaryLimit, limitShortLabel } from '../../shared/usage-limits'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { EventEmitter } from 'events'
 
-// The app-server tier spawns the real `codex` binary; force it to decline instantly so the
-// identity-stamping tests below are hermetic (they exercise the backend + unavailable paths only).
+let appServerMode: 'throw' | 'success' = 'throw'
+
+// Keep the app-server transport hermetic while still exercising its real JSON-RPC fallback path.
 vi.mock('child_process', () => ({
   spawn: () => {
-    throw new Error('app-server disabled in test')
+    if (appServerMode === 'throw') throw new Error('app-server disabled in test')
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: EventEmitter
+      stdin: { write: (line: string) => void }
+      kill: () => void
+    }
+    child.stdout = new EventEmitter()
+    child.stdin = {
+      write: (line: string) => {
+        const message = JSON.parse(line) as { id?: number }
+        if (message.id === 1) child.stdout.emit('data', Buffer.from('{"id":1}\n'))
+        if (message.id === 2) {
+          child.stdout.emit(
+            'data',
+            Buffer.from(
+              JSON.stringify({ id: 2, result: { rateLimits: RPC_RATE_LIMITS } }) + '\n'
+            )
+          )
+        }
+      }
+    }
+    child.kill = () => undefined
+    return child
   }
 }))
 
@@ -164,6 +188,7 @@ describe('readCodexAuth', () => {
 
 describe('fetchCodexUsage account identity', () => {
   afterEach(() => {
+    appServerMode = 'throw'
     vi.unstubAllGlobals()
   })
 
@@ -191,6 +216,17 @@ describe('fetchCodexUsage account identity', () => {
     expect(row.accountId).toBe('acc-1')
     expect(row.account).toBe('work@example.com')
     expect(row.limits.length).toBeGreaterThan(0)
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('falls back to app-server when the backend throws', async () => {
+    appServerMode = 'success'
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('backend unavailable') }))
+    const dir = authHome()
+    const row = await fetchCodexUsage(dir, { id: 'acc-fallback', label: 'Fallback' })
+    expect(row.status).toBe('ok')
+    expect(row.accountId).toBe('acc-fallback')
+    expect(row.limits).toEqual(mapCodexLimits(RPC_RATE_LIMITS))
     fs.rmSync(dir, { recursive: true, force: true })
   })
 

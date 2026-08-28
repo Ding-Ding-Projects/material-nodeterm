@@ -187,6 +187,12 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   }
 
   const steps = Array.isArray(job.steps) ? job.steps : []
+  for (const step of steps) {
+    const executableRoutes = Number(typeof step?.run === 'string') + Number(typeof step?.uses === 'string')
+    if (executableRoutes !== 1) {
+      issues.push(`step ${step?.id ?? step?.name ?? '<unnamed>'} must declare exactly one executable route, run or uses`)
+    }
+  }
 
   // Every workflow step must have exactly one executable form. The historical zero-job release
   // failure removed the `run` block from `Plan the release version` while leaving its metadata,
@@ -555,10 +561,10 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   if (
     packageJson?.build?.win?.signExecutable !== false ||
     packageJson?.build?.win?.forceCodeSigning !== false ||
-    packageJson?.build?.win?.signAndEditExecutable === false ||
+    Object.hasOwn(packageJson?.build?.win ?? {}, 'signAndEditExecutable') ||
     packageJson?.build?.forceCodeSigning !== false
   ) {
-    issues.push('electron-builder must disable signing while preserving Windows resource editing')
+    issues.push('electron-builder must disable signing and omit signAndEditExecutable so default resource editing remains enabled')
   }
 
   const assetsAt = stepIndex(steps, 'assets')

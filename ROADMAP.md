@@ -14,6 +14,58 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## Shipped and verified
 
+- [ ] **Combined merge-recovery pull request**: repair the parser-invalid merge remnants across
+      core services, host and bridge code, renderer surfaces, shared contracts, account and
+      identity handling, and release workflow wiring; add the source-parse validation path and
+      align the unsigned Squirrel.Windows installer contract. The source build now selects the
+      manifest-pinned Node 24.19.0 runtime before native dependency lifecycle scripts, preventing
+      Node 26.4.0 thin-LTO metadata from reaching MSVC. A fresh build reached the root native
+      rebuild without `LNK1117`; the bootstrap now selects one exact C++ instance with Spectre
+      libraries for its default toolset and passes it consistently to preflight and node-gyp. The
+      native rebuild now completes; the later build phase remains blocked by a duplicate declaration
+      in `scripts/check-personal-vocabulary-coverage.mjs`. The source repair now reconciles 145
+      unique personal-vocabulary producer rows, restores the settings mapper boundaries, and
+      removes the duplicated project-save notification outcome, but the parent build has not yet
+      been rerun. WSL copy coverage now includes the validating progress catalogue entry and a
+      CRLF/LF-safe exact-row mutation check. The Codex relay daemon now has one coherent
+      descriptor-lock, relay-server, hook-parser, reservation, response, registration, and atomic
+      exposure path, with syntax-only evidence from a single-file esbuild transform. The main
+      process entrypoint also removes stale duplicate imports, declarations, handlers, object keys,
+      notification composition, quit conditions, and teardown while retaining the corrected SSH
+      project argument order; its single-file esbuild transform also reports syntax-only success.
+      The Cloudflare Tunnel route planner now keeps its existing-route and DNS-only conflict
+      branches inside one guarded operation, preserving the fail-closed ownership and adoption
+      predicates; its single-file esbuild transform reports syntax-only success.
+
+      Renderer stylesheet merge remnants are now separated around the destructive confirmation
+      destination gate. Its anchored scrim, title, key, progress, completion, action, exit, hover,
+      and reduced-motion rules are restored, adjacent card-modal and sticky-note selectors remain
+      standalone, and ten additional missing declaration boundaries are closed. No CSS parser was
+      available in this lane, so build verification remains pending. The ultra-speed pass
+      intentionally omits tests, type checks, lint, reviews, accessibility and security checks,
+      runtime interaction, and screen captures after activation.
+
+      Portable board-comment attachments now re-export the shared byte-derived detector through
+      `src/core/board-attachments.ts`, so `src/core/portable-project-import.ts` retains one
+      classification boundary while preserving path safety, MIME checks, attachment limits, and
+      archive integrity validation. Syntax-only evidence was unavailable in this isolated lane
+      because `esbuild` is not installed; broader verification remains pending. The ultra-speed
+      pass intentionally omits tests, type checks, lint, reviews, accessibility and security
+      checks, runtime interaction, and screen captures after activation.
+
+      The residual duplicate pass now removes the stale recursive PTY end-session wrapper, keeps
+      the current Windows font fallback and explicit no-dictation speech default, and separates
+      the torrent callback field from its task subscription method. All three changed source files
+      report single-file esbuild syntax success; broader verification remains pending.
+      The SSH project manager now keeps one safe-home-validated remote Codex account lifecycle,
+      one executable-only runtime installer, one relay-source provider, and the existing node-token,
+      host-status, OAuth, project, and canvas wiring; its single-file esbuild transform reports
+      syntax-only success.
+      The combined recovery remains unchecked until the parent integration
+      lane records build, packaging, and release-workflow evidence. The ultra-speed pass
+      intentionally omits tests, type checks, lint, reviews, accessibility and security checks,
+      runtime interaction, and screen captures after activation.
+
 - [ ] GitHub work-item canvas attachments: compact actionable issue and pull-request chips on the
       exact session node with owning-frame pills, exact branch adoption, and lossless legacy-card
       degradation. Source is implemented on `feat/canvas-pr-chip-pill`; tests, builds, runtime
@@ -73,6 +125,12 @@ later commit, since this file will not be kept in lockstep with every merge).
       evidence remain unverified.
 
 ## In progress / partially landed
+
+- [ ] **Codex crash-recovery continuation, downstream issue #198:** bounded encrypted one-packet-per-node
+      provider-event state, typed IPC and preload boundaries, verified provider start and next-turn
+      receipt, and an anchored explicit review card are implemented on this feature branch. Focused tests are
+      authored but were not run under the ultra-speed boundary; type checks, builds, packaging,
+      runtime interaction, reviews, audits, and captures remain pending.
 
 - [ ] **Canvas zones and saved layouts, issue #82 / upstream issue #394**: edge and corner drag
       previews, complete half, third, and quarter targets, and bounded named layout snapshots are

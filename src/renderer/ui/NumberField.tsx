@@ -23,18 +23,6 @@ export const NumberField = forwardRef<HTMLInputElement, {
   ariaLabel?: string
   vocabularyMode?: VocabularyTextMode
 } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type' | 'className'>>(
-  function NumberField({ value, onChange, min, max, step, className, disabled, ariaLabel, ...rest }, ref) {
-  function NumberField({
-    value,
-    onChange,
-    min,
-    max,
-    step,
-    className,
-    disabled,
-    ariaLabel,
-    ...rest
-  }, ref): React.JSX.Element {
   function NumberField({ value, onChange, min, max, step, className, disabled, ariaLabel, vocabularyMode = 'authored', ...rest }, ref) {
     const vocab = useVocabularyMapper()
     return (

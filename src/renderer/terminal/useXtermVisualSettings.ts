@@ -24,9 +24,6 @@ import { mergeProjectVisuals, XTERM_VISUAL_KEYS, type XtermVisualSettings } from
  * what the controls on the SAME page are editing, and those controls edit `base` (see
  * state/settings.ts's doc on `base` vs `settings`) — a preview reading the effective value would
  * silently disagree with its own sliders while a scheduled override happened to be active.
- */
-export function useXtermVisualSettings(source: 'settings' | 'base' = 'settings'): XtermVisualSettings {
-  return useSettings(
  * `projectId` layers that project's own `terminal.theme` / `terminal.fontFamily` over the global
  * pick (see `mergeProjectVisuals`). Omit it for a terminal that belongs to no project — the
  * settings-panel PREVIEW is the one such surface, and it must keep showing the GLOBAL settings
@@ -42,17 +39,18 @@ export function useXtermVisualSettings(source: 'settings' | 'base' = 'settings')
  * so the honest implementation is live and project-scoped: changing a project's theme repaints that
  * project's terminals, including ones already open, and leaves every other project's alone.
  */
-export function useXtermVisualSettings(projectId?: string): XtermVisualSettings {
+export function useXtermVisualSettings(sourceOrProjectId?: 'settings' | 'base' | string): XtermVisualSettings {
   const base = useSettings(
     useShallow((s) => {
       const out = {} as Record<string, unknown>
-      const src = source === 'base' ? s.base : s.settings
+      const src = sourceOrProjectId === 'base' ? s.base : s.settings
       for (const k of XTERM_VISUAL_KEYS) out[k] = src[k]
       return out as unknown as XtermVisualSettings
     })
   )
   const overrides = useProjectVisuals(
     useShallow((s) => {
+      const projectId = sourceOrProjectId === 'base' || sourceOrProjectId === 'settings' ? undefined : sourceOrProjectId
       const v = projectId ? s.byProject[projectId] : undefined
       // Normalised (never the stored object, never `undefined`) so the shallow comparison has a
       // stable shape to compare in every case — including a project whose entry is dropped.

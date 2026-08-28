@@ -1,6 +1,5 @@
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { MaterialSymbol } from './MaterialSymbol'
-import { conflictBarMessage } from '../lib/externalChange'
 
 /** Non-blocking strip shown when the active project's .nodeterm file changed on disk
  *  while there are unsaved local edits. Reload = take the disk version; Keep mine =
@@ -32,10 +31,6 @@ export function ConflictBar({
       <button className="md3-conflict-bar__btn md3-conflict-bar__btn--primary" onClick={onKeepMine}>
         {vocab('Keep my version')}
       </button>
-    <div className="conflict-bar">
-      <span>{conflictBarMessage(addedCount)}</span>
-      <button onClick={onReload}>Reload from disk</button>
-      <button onClick={onKeepMine}>Keep my version</button>
     </div>
   )
 }

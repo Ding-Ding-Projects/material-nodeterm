@@ -1,33 +1,25 @@
 import { useRef } from 'react'
 import { cn } from '@renderer/ui/cn'
 import { Input } from '@renderer/ui/Input'
-import { visibleSettingsGroups, type SettingsSectionId } from './nav'
 import { useI18n } from '@renderer/lib/i18n'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import type { RegexSearchFieldState } from '../../lib/regex/useRegexSearchField'
 import { useSchoolMode } from '../../state/schoolMode'
 
-const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 import { matchesEntry } from './search'
 import { SectionIcon } from './SettingsIcons'
+import { ProjectGlyph } from '../ProjectGlyph'
 import { settingsSidebarSearchEntry } from './vocabulary'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { useMemo } from 'react'
-import { cn } from '@renderer/ui/cn'
-import { Input } from '@renderer/ui/Input'
 import { visibleSettingsGroups, type SettingsGroup, type SettingsSectionId } from './nav'
-import { matchesQuery } from './search'
-import { SectionIcon } from './SettingsIcons'
-import { ProjectGlyph } from '../ProjectGlyph'
 
-const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
+const isPlatformVariant = false
 
 export function SettingsSidebar({
   activeSectionId,
   search,
   onSelect,
-  onClose
-  onQueryChange,
   onClose,
   extraGroups
 }: {
@@ -54,12 +46,13 @@ export function SettingsSidebar({
   const schoolModeName = useSchoolMode((s) => s.name)
   const schoolModeEnabled = useSchoolMode((s) => s.enabled)
   const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
-  const groups = visibleSettingsGroups(isMac, schoolModeHydrated && !schoolModeEnabled)
-  const hasQuery = query.trim() !== ''
-  const GROUPS = useMemo(
-    () => [...visibleSettingsGroups(isMac), ...(extraGroups ?? [])],
-    [extraGroups]
-  )
+  const groups = useMemo(() => {
+    const visibleGroups = visibleSettingsGroups(
+      isPlatformVariant,
+      schoolModeHydrated && !schoolModeEnabled
+    )
+    return [...visibleGroups, ...(extraGroups ?? [])]
+  }, [extraGroups, schoolModeEnabled, schoolModeHydrated])
   return (
     <aside className="md3-settings-sidebar flex shrink-0 flex-col">
       <div
@@ -147,8 +140,6 @@ export function SettingsSidebar({
                   aria-current={isActive ? 'page' : undefined}
                   className={cn('md3-settings-nav-row', dimmed && 'md3-settings-nav-row--dimmed')}
                 >
-                  <span className="md3-settings-nav-row__icon">
-                    <SectionIcon id={s.id} />
                   <span
                     className={cn(
                       'flex size-4 shrink-0 items-center justify-center transition-colors',

@@ -764,6 +764,18 @@ const api: NodeTerminalApi = {
     read: (q?: SessionMemoryQuery) => ipcRenderer.invoke(IPC.sessionMemory, q),
     host: (q?: SessionMemoryQuery) => ipcRenderer.invoke(IPC.sessionMemoryHost, q)
   },
+  agentContinuation: {
+    summary: () => ipcRenderer.invoke(IPC.agentContinuationSummary),
+    preview: (nodeId: string) => ipcRenderer.invoke(IPC.agentContinuationPreview, nodeId),
+    ack: (nodeId: string) => ipcRenderer.invoke(IPC.agentContinuationAck, nodeId),
+    discard: (nodeId: string) => ipcRenderer.invoke(IPC.agentContinuationDiscard, nodeId),
+    continue: (nodeId: string) => ipcRenderer.invoke(IPC.agentContinuationContinue, nodeId),
+    onUpdate: (listener) => {
+      const handler = (_e: unknown, packets: Parameters<typeof listener>[0]) => listener(packets)
+      ipcRenderer.on(IPC.agentContinuationUpdate, handler)
+      return () => ipcRenderer.removeListener(IPC.agentContinuationUpdate, handler)
+    }
+  },
   // WSL distribution management — Windows-only in practice (wsl.exe simply is not found
   // elsewhere); every call rejects honestly rather than resolving to a fabricated empty result.
   wsl: {
@@ -924,12 +936,6 @@ const api: NodeTerminalApi = {
     remove: (id, ctx) => ipcRenderer.invoke(IPC.codexAccountsRemove, id, ctx),
     identity: (id, ctx) => ipcRenderer.invoke(IPC.codexAccountsIdentity, id, ctx),
     systemIdentity: (ctx) => ipcRenderer.invoke(IPC.codexAccountsSystemIdentity, ctx),
-    add: () => ipcRenderer.invoke(IPC.codexAccountsAdd),
-    waitLogin: (id) => ipcRenderer.invoke(IPC.codexAccountsWaitLogin, id),
-    cancelWaitLogin: (id) => ipcRenderer.invoke(IPC.codexAccountsCancelWait, id),
-    identity: (id) => ipcRenderer.invoke(IPC.codexAccountsIdentity, id),
-    systemIdentity: (ctx) => ipcRenderer.invoke(IPC.codexAccountsSystemIdentity, ctx),
-    remove: (id) => ipcRenderer.invoke(IPC.codexAccountsRemove, id),
     switchThread: (threadId, cwd, sourceAccountId, targetAccountId) =>
       ipcRenderer.invoke(
         IPC.codexAccountsSwitchThread,
@@ -951,19 +957,7 @@ const api: NodeTerminalApi = {
     finishSwitch: (rollbackToken) =>
       ipcRenderer.invoke(IPC.codexAccountsFinishSwitch, rollbackToken),
     rollbackSwitch: (rollbackToken) =>
-      ipcRenderer.invoke(IPC.codexAccountsRollbackSwitch, rollbackToken)
-    commitSwitch: (token) => ipcRenderer.invoke(IPC.codexAccountsCommitSwitch, token),
-    finishSwitch: (token) => ipcRenderer.invoke(IPC.codexAccountsFinishSwitch, token),
-    rollbackSwitch: (token) => ipcRenderer.invoke(IPC.codexAccountsRollbackSwitch, token),
-    transferThreadToSsh: (threadId, cwd, projectId, targetAccountId, sourceAccountId) =>
-      ipcRenderer.invoke(
-        IPC.codexAccountsTransferThreadToSsh,
-        threadId,
-        cwd,
-        projectId,
-        targetAccountId,
-        sourceAccountId
-      )
+      ipcRenderer.invoke(IPC.codexAccountsRollbackSwitch, rollbackToken),
   },
   transcripts: {
     search: (query: string) => ipcRenderer.invoke(IPC.transcriptSearch, query)

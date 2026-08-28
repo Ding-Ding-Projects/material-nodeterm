@@ -153,6 +153,23 @@ export function spectreLibrariesPresent(toolsetPath, fs, libraryArchitectures) {
   })
 }
 
+function defaultToolsetVersion(installationPath, fs) {
+  const file = join(
+    installationPath,
+    'VC',
+    'Auxiliary',
+    'Build',
+    'Microsoft.VCToolsVersion.default.txt'
+  )
+  try {
+    const version = String(fs.readFile(file, 'utf8')).trim()
+    return /^\d+\.\d+\.\d+$/.test(version) ? version : null
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null
+    throw new Error(`could not read ${file}: ${error.message}`)
+  }
+}
+
 function visualStudioTools(instance, fs, requiredComponentPaths, libraryArchitectures) {
   const installationPath = instance?.installationPath
   if (typeof installationPath !== 'string' || !win32.isAbsolute(installationPath)) return null
@@ -172,6 +189,7 @@ function visualStudioTools(instance, fs, requiredComponentPaths, libraryArchitec
           )
         }))
     : []
+  const defaultVersion = defaultToolsetVersion(installationPath, fs)
 
   return {
     installationPath,
@@ -179,6 +197,7 @@ function visualStudioTools(instance, fs, requiredComponentPaths, libraryArchitec
       typeof instance.installationVersion === 'string' ? instance.installationVersion : '0',
     displayName: instance.displayName || installationPath,
     hasRequiredComponents: requiredComponentPaths.has(installationPath.toLowerCase()),
+    defaultToolsetVersion: defaultVersion,
     toolsets
   }
 }
@@ -188,11 +207,15 @@ function compareVersionsNewestFirst(a, b) {
 }
 
 function selectedCxxToolset(instances) {
-  const candidates = instances.flatMap((instance) =>
-    instance.toolsets
-      .filter((toolset) => toolset.hasSpectre && instance.hasRequiredComponents)
-      .map((toolset) => ({ instance, toolset }))
-  )
+  const candidates = instances
+    .filter((instance) => instance.toolsets.length > 0)
+    .map((instance) => {
+      const toolset =
+        instance.toolsets.find((candidate) => candidate.version === instance.defaultToolsetVersion) ??
+        [...instance.toolsets].sort((a, b) => compareVersionsNewestFirst(a.version, b.version))[0]
+      return { instance, toolset }
+    })
+    .filter(({ instance, toolset }) => instance.hasRequiredComponents && toolset.hasSpectre)
   candidates.sort(
     (a, b) =>
       compareVersionsNewestFirst(a.instance.installationVersion, b.instance.installationVersion) ||
@@ -283,8 +306,9 @@ function discoverInstances({
     vswhere,
     installerPresent: true,
     instances: raw
-      // The manifest IDs below are VS 2022 (17.x) selectors. A complete VS 2019 instance is not a
-      // safe modify target; leave it alone and install the side-by-side 2022 Build Tools product.
+      // The selected node-gyp version is pinned to Visual Studio 2022 below. Older instances are
+      // not safe modify targets, while Visual Studio 2026 is kept separate so the 2022 override,
+      // component proof, and installation path cannot disagree.
       .filter((instance) => /^17\./.test(String(instance?.installationVersion ?? '')))
       .map((instance) =>
         visualStudioTools(instance, fs, requiredComponentPaths, libraryArchitectures)
@@ -292,6 +316,31 @@ function discoverInstances({
       .filter(Boolean)
       .sort((a, b) => compareVersionsNewestFirst(a.installationVersion, b.installationVersion))
   }
+}
+
+export function activeVisualStudioSpectreComplaints(options = {}) {
+  const platform = options.platform ?? process.platform
+  if (platform !== 'win32') return []
+  const arch = options.arch ?? process.arch
+  const fs = options.fs ?? { readFile: readFileSync, readdir: readdirSync }
+  const vcInstallDir = options.vcInstallDir ?? process.env.VCINSTALLDIR
+  if (!vcInstallDir || !win32.isAbsolute(vcInstallDir)) {
+    return ['VCINSTALLDIR does not identify the Visual Studio instance selected by the bootstrap']
+  }
+  const installationPath = win32.resolve(vcInstallDir, '..')
+  const defaultVersion = defaultToolsetVersion(installationPath, fs)
+  if (!defaultVersion) {
+    return [`${installationPath} has no readable default MSVC toolset version`]
+  }
+  const toolsetPath = join(installationPath, 'VC', 'Tools', 'MSVC', defaultVersion)
+  const libraryArchitectures = arch === 'arm64' ? ['x86', 'x64', 'arm64'] : ['x86', 'x64']
+  if (!spectreLibrariesPresent(toolsetPath, fs, libraryArchitectures)) {
+    return [
+      `${installationPath} default toolset ${defaultVersion} has no real Spectre .lib files for ` +
+        libraryArchitectures.join(', ')
+    ]
+  }
+  return []
 }
 
 function defaultAdministratorStatus(run, systemPowerShell) {
@@ -359,6 +408,7 @@ export function ensureWindowsBuildToolchain(options = {}) {
   const nodePath = options.nodePath ?? process.execPath
   const helperPath = options.helperPath ?? fileURLToPath(import.meta.url)
   const elevatedToolchainOnly = options.elevatedToolchainOnly ?? false
+  const resultFile = options.resultFile
   let config
 
   if (platform !== 'win32') {
@@ -425,7 +475,7 @@ export function ensureWindowsBuildToolchain(options = {}) {
     return { code: ERROR_ACCESS_DENIED, changed: false }
   }
   if (selectedCxx) {
-    if (!writeToolchainSelection(options.resultFile, selectedCxx, report)) {
+    if (!writeToolchainSelection(resultFile, selectedCxx, report)) {
       return { code: 1, changed: false }
     }
     report.log(
@@ -625,7 +675,7 @@ export function ensureWindowsBuildToolchain(options = {}) {
     return { code: 1, changed: false }
   }
 
-  if (!writeToolchainSelection(options.resultFile, verified, report)) {
+  if (!writeToolchainSelection(resultFile, verified, report)) {
     return { code: 1, changed: false }
   }
 
@@ -637,10 +687,15 @@ const invokedPath = process.argv[1] ? resolve(process.argv[1]) : ''
 if (invokedPath && resolve(fileURLToPath(import.meta.url)).toLowerCase() === invokedPath.toLowerCase()) {
   const resultFileIndex = process.argv.indexOf('--result-file')
   const resultFile = resultFileIndex >= 0 ? process.argv[resultFileIndex + 1] : undefined
-  const result = ensureWindowsBuildToolchain({
-    silent: process.argv.includes('--silent'),
-    elevatedToolchainOnly: process.argv.includes('--elevated-toolchain-only'),
-    resultFile
-  })
-  process.exitCode = result.code
+  if (resultFileIndex >= 0 && !resultFile) {
+    console.error('--result-file requires a path')
+    process.exitCode = 2
+  } else {
+    const result = ensureWindowsBuildToolchain({
+      silent: process.argv.includes('--silent'),
+      elevatedToolchainOnly: process.argv.includes('--elevated-toolchain-only'),
+      resultFile
+    })
+    process.exitCode = result.code
+  }
 }

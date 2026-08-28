@@ -73,8 +73,6 @@ function DiffStat({ added, deleted }: { added: number; deleted: number }) {
   )
 }
 
-const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
-
 /** Visual Studio-style Source Control: file-level stage/diff/discard + branch switcher. */
 export function SourceControlPanel({
   onClose,

@@ -65,10 +65,6 @@ const PATHS: Record<StaticSettingsSectionId, React.JSX.Element> = {
       <path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6" />
     </>
   ),
-  shortcuts: (
-    <>
-      <rect x="2.2" y="4" width="11.6" height="8" rx="1.8" />
-      <path d="M5.4 8h.01M8 8h.01M10.6 8h.01" />
   // A keyboard: the outline, two key rows, and a wide space bar.
   shortcuts: (
     <>
@@ -258,13 +254,15 @@ const PATHS: Record<StaticSettingsSectionId, React.JSX.Element> = {
     <>
       <path d="M4 3h6.4L13 5.6V13H4z" />
       <path d="M10.4 3v2.6H13M6 8h4M6 10.4h4" />
+    </>
+  ),
   // A tiny bug (the debug section).
   debug: (
     <>
       <circle cx="8" cy="9" r="3.5" />
       <path d="M8 5.5V3.5M4.9 6.6 3.4 5.1M11.1 6.6l1.5-1.5M4.5 9H2.5M13.5 9h-2M4.9 11.4l-1.5 1.5M11.1 11.4l1.5 1.5" />
     </>
-  )
+  ),
 }
 
 // A small folder glyph, used for project sections — those ids are dynamic (one per open

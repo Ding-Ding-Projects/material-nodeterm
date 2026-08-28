@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { createServer } from 'http'
-import { linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'fs'
 import { spawnSync } from 'child_process'
 import {
   closeSync,
@@ -50,10 +49,6 @@ import {
 // test-side fix can route around. Every `it` below that calls this helper is therefore skipped on
 // win32; this is the same precedent already applied in src/core/codex-session-name.test.ts,
 // src/core/context-link.cli.test.ts, and src/main/canvas-control-shim.test.ts (see commit 99dfb2db).
-  tryReserveRelayThread,
-  type RelayThreadRequest
-} from './codex-relay-daemon'
-import { posixQuote } from '../shared/ssh'
 
 async function fakeCodexServer(
   socketPath: string,
@@ -343,7 +338,6 @@ describe('Codex shared relay thread observation', () => {
 
   // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
   it.skipIf(process.platform === 'win32')('lists and freshly verifies a paginated foreign fixture before path resume', async () => {
-  it('lists and freshly verifies a paginated foreign fixture before path resume', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-accounts-'))
     const sourceSocket = path.join(dir, 'source.sock')
     const sourceRequests: any[] = []
@@ -386,13 +380,7 @@ describe('Codex shared relay thread observation', () => {
     }
   })
 
-  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
   it.skipIf(process.platform === 'win32')('resolves a direct resume to exactly one foreign account without picker state', async () => {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('resolves a direct resume to exactly one foreign account without picker state', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-direct-resume-'))
     const currentSocket = path.join(dir, 'current.sock')
     const foreignSocket = path.join(dir, 'foreign.sock')
@@ -439,13 +427,7 @@ describe('Codex shared relay thread observation', () => {
     }
   })
 
-  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
   it.skipIf(process.platform === 'win32')('distinguishes a native thread from an unavailable id', async () => {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('distinguishes a native thread from an unavailable id', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-native-resume-'))
     const currentSocket = path.join(dir, 'current.sock')
     const stop = await fakeCodexServer(currentSocket, (message) => {
@@ -478,13 +460,7 @@ describe('Codex shared relay thread observation', () => {
     }
   })
 
-  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
   it.skipIf(process.platform === 'win32')('keeps direct resume fail-closed when two foreign accounts expose the same id', async () => {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('keeps direct resume fail-closed when two foreign accounts expose the same id', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-ambiguous-resume-'))
     const currentSocket = path.join(dir, 'current.sock')
     const foreignA = path.join(dir, 'foreign-a.sock')
@@ -521,13 +497,7 @@ describe('Codex shared relay thread observation', () => {
     }
   })
 
-  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
   it.skipIf(process.platform === 'win32')('deduplicates the same account-neutral rollout exposed by two foreign accounts', async () => {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('deduplicates the same account-neutral rollout exposed by two foreign accounts', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-shared-resume-'))
     const currentSocket = path.join(dir, 'current.sock')
     const foreignA = path.join(dir, 'foreign-a.sock')
@@ -566,13 +536,7 @@ describe('Codex shared relay thread observation', () => {
     }
   })
 
-  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
   it.skipIf(process.platform === 'win32')('fails closed when one foreign account matches but another account is unavailable', async () => {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('fails closed when one foreign account matches but another account is unavailable', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-partial-catalog-'))
     const currentSocket = path.join(dir, 'current.sock')
     const foreignSocket = path.join(dir, 'foreign.sock')
@@ -741,7 +705,7 @@ describe('exposeForeignThread — PR 3 primitive + verify-then-recycle (§4.2a, 
     return { root, threadId, sourceSocket, targetSocket, sourceRollout, targetRollout }
   }
 
-  it('hardlinks the foreign rollout via the primitive and only reports exposed once discoverable', async () => {
+  it.skipIf(process.platform === 'win32')('hardlinks the foreign rollout via the primitive and only reports exposed once discoverable', async () => {
     const { root, threadId, sourceSocket, targetSocket, sourceRollout, targetRollout } = setup()
     const stopSource = await fakeAccountServer(sourceSocket, (id) =>
       id === threadId ? { id, path: sourceRollout, cwd: '/repo' } : null
@@ -766,7 +730,7 @@ describe('exposeForeignThread — PR 3 primitive + verify-then-recycle (§4.2a, 
     }
   })
 
-  it('rolls the published link back when the target app-server cannot discover the copy', async () => {
+  it.skipIf(process.platform === 'win32')('rolls the published link back when the target app-server cannot discover the copy', async () => {
     const { root, threadId, sourceSocket, targetSocket, sourceRollout, targetRollout } = setup()
     const stopSource = await fakeAccountServer(sourceSocket, (id) =>
       id === threadId ? { id, path: sourceRollout, cwd: '/repo' } : null
@@ -786,7 +750,7 @@ describe('exposeForeignThread — PR 3 primitive + verify-then-recycle (§4.2a, 
     }
   })
 
-  it('never overwrites a different rollout already occupying the target path', async () => {
+  it.skipIf(process.platform === 'win32')('never overwrites a different rollout already occupying the target path', async () => {
     const { root, threadId, sourceSocket, targetSocket, sourceRollout, targetRollout } = setup()
     // A DIFFERENT, unrelated rollout (distinct inode) already sits where the copy would land.
     writeFileSync(targetRollout, 'a different conversation')
@@ -813,7 +777,7 @@ describe('exposeForeignThread — PR 3 primitive + verify-then-recycle (§4.2a, 
     }
   })
 
-  it('early-returns native without copying when the target account already owns the thread', async () => {
+  it.skipIf(process.platform === 'win32')('early-returns native without copying when the target account already owns the thread', async () => {
     const { root, threadId, sourceSocket, targetSocket, sourceRollout, targetRollout } = setup()
     const stopSource = await fakeAccountServer(sourceSocket, (id) =>
       id === threadId ? { id, path: sourceRollout, cwd: '/repo' } : null
@@ -832,7 +796,7 @@ describe('exposeForeignThread — PR 3 primitive + verify-then-recycle (§4.2a, 
     }
   })
 
-  it('refuses (does not copy) when the source id is ambiguous across two foreign accounts', async () => {
+  it.skipIf(process.platform === 'win32')('refuses (does not copy) when the source id is ambiguous across two foreign accounts', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nt-exp-amb-'))
     const threadId = 'thread01a'
     const targetSocket = path.join(root, 'tgt', 'app-server-control', 's.sock')

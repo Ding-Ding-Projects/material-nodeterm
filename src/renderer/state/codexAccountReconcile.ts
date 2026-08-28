@@ -30,12 +30,6 @@ export async function discoverResolvedCodexAccounts(
       id: account.id,
       identity: await identity(account.id).catch(() => null)
     }))
-    accounts
-      .filter((account) => account.pending)
-      .map(async (account) => ({
-        id: account.id,
-        identity: await identity(account.id).catch(() => null)
-      }))
   )
   return resolved.flatMap(({ id, identity: value }) =>
     value ? [{ id, email: value.email }] : []
@@ -61,11 +55,7 @@ export function applyResolvedCodexAccounts(
     if (!identity || !account.pending) return account
     return {
       ...account,
-      label:
-        account.label === 'New Codex account' && identity.email
-          ? identity.email
-          : account.label,
-        account.label === 'New Codex account' && identity.email ? identity.email : account.label,
+      label: account.label === 'New Codex account' && identity.email ? identity.email : account.label,
       email: identity.email ?? undefined,
       pending: false
     }

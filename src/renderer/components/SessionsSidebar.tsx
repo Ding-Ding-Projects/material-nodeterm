@@ -680,9 +680,8 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
           setDropProj(null)
         }}
       >
-        {groups.length === 0 && <div className="sessions-sidebar__empty">{vocab('No sessions yet.')}</div>}
         {groups.length === 0 && grouping !== 'status' && (
-          <div className="sessions-sidebar__empty">No sessions yet.</div>
+          <div className="sessions-sidebar__empty">{vocab('No sessions yet.')}</div>
         )}
         {grouping === 'status' ? (
           statusSections.map((section: StatusSection) => (

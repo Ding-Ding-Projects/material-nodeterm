@@ -242,8 +242,9 @@ the same version as `package.json`:
      dirty at build time.
 4. States plainly, every time, that **the installer is unsigned**. Code signing is permanently out
    of scope: root `build.forceCodeSigning` and `build.win.signExecutable` are `false`.
-   `build.win.signAndEditExecutable` remains enabled at its default so electron-builder still writes
-   the application icon and version resources; disabling signing must not disable resource editing.
+   `build.win.signAndEditExecutable` is omitted so electron-builder keeps its default resource-editing
+   behavior and still writes the application icon and version resources; disabling signing must not
+   disable resource editing.
    Installing or opening the artifact triggers Windows SmartScreen /
    "unknown publisher" warnings. That is expected, not a build defect.
 5. **Never publishes, tags, pushes, or creates a release.** It only builds and verifies a local

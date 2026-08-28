@@ -3059,6 +3059,7 @@ body,
   color: var(--danger);
   font-size: 11px;
   line-height: 1.4;
+}
 /* Rendered-markdown twin of the textarea body: same box, click flips into the textarea. */
 .sticky-node__view {
   flex: 1;
@@ -3537,6 +3538,7 @@ body,
   font-size: 11.5px;
   color: var(--muted);
   word-break: break-word;
+}
 /* Overlays/menus that can overlap the macOS title-bar strip must opt out of window-drag,
    otherwise clicks on their top controls (×, ↻, …) drag the window instead. */
 .drawer-overlay,
@@ -3571,6 +3573,13 @@ body,
 }
 
 .sticky-node__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  cursor: grab;
+  user-select: none;
+}
 /* Pinned explorer: no scrim, clicks pass through to the canvas. The drawer is a floating
    card on the right — same shape as the sessions sidebar on the left — so the controls
    cluster (top: 54px, right: 14px, 34px tall) stays reachable. z 26 sits with that cluster
@@ -4258,6 +4267,7 @@ body,
   padding: 5px 8px;
   font-size: 12px;
   outline: none;
+}
 .ex-head-actions button.is-on {
   color: var(--accent);
 }
@@ -4555,6 +4565,7 @@ body,
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
 /* A repository may have hundreds of worktrees. Keep the dialog controls reachable and scroll only
    the repeated rows; viewport-relative height still fits on short displays. */
 .bind-existing__list {
@@ -4819,6 +4830,7 @@ body,
 
 .scm-commit-btn:hover:not(:disabled) {
   filter: brightness(1.08);
+}
 .confirm__textarea {
   /* Task prose, not a one-liner: fixed comfortable height, user-growable. `font-family` because
      a bare textarea falls back to the UA monospace default, unlike input. */
@@ -5006,6 +5018,7 @@ body,
   flex-shrink: 0;
   border-top: 1px solid var(--border);
   padding: 6px 8px;
+}
 /* --- Debug log panel (issue #78) — same overlay family as the shortcuts panel ------------- */
 .logpanel {
   width: 860px;
@@ -5442,6 +5455,7 @@ body,
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
+}
 /* Project setup/archive script state for this checkout — same quiet weight as the status
    suffixes above; only a failure earns a color. */
 .group-node__setup {
@@ -6006,6 +6020,7 @@ button.group-node__setup:disabled {
   border-radius: 999px;
   user-select: none;
   cursor: grab;
+}
 .react-flow__controls-button:hover {
   background: var(--panel-header);
 }
@@ -10094,6 +10109,7 @@ button.group-node__setup:disabled {
 .label-picker__input {
   display: flex;
   flex-wrap: wrap;
+}
 .sessions-sidebar__head { display: flex; align-items: baseline; gap: 8px; padding: 10px 10px 8px; }
 .sessions-sidebar__title { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
 .sessions-sidebar__count { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -12198,6 +12214,9 @@ button.group-node__setup:disabled {
 /* Anchored variant: the scrim is still full-screen (click-outside-to-cancel + no interaction
    leaks through to whatever is behind it) but the CARD is positioned near the control that
    opened it via useMenuFlip, instead of dead center. */
+.destgate-overlay--anchored {
+  background: rgba(var(--scrim-rgb), calc(0.35 * var(--scrim-k)));
+}
 
 .destgate {
   width: 380px;
@@ -12223,13 +12242,6 @@ button.group-node__setup:disabled {
   transform: translate(-50%, -50%);
 }
 .destgate__head {
-.kanban-modal {
-  animation: kanban-pop 0.16s ease-out;
-  /* width/height are inline (remembered per machine — see cardModalSize.ts). These are the safety
-     ceiling so the sheet can never exceed the viewport, even for the frame before the clamp runs. */
-  max-width: calc(100vw - 24px);
-  max-height: calc(100vh - 24px);
-  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -12239,37 +12251,17 @@ button.group-node__setup:disabled {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-/* Resize handles (issue #389): thin strips just inside each edge, larger squares at the corners.
-   Inset (not outset) so the sheet's overflow:hidden / border-radius doesn't clip them. */
-.kanban-modal__resize {
-  position: absolute;
-  z-index: 6;
-  touch-action: none;
-}
-.kanban-modal__resize--n { top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
-.kanban-modal__resize--s { bottom: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
-.kanban-modal__resize--w { left: 0; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
-.kanban-modal__resize--e { right: 0; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
-.kanban-modal__resize--ne,
-.kanban-modal__resize--nw,
-.kanban-modal__resize--se,
-.kanban-modal__resize--sw {
-  width: 14px;
-  height: 14px;
-  z-index: 7; /* corners beat the edge strips they overlap */
-}
-.kanban-modal__resize--ne { top: 0; right: 0; cursor: nesw-resize; }
-.kanban-modal__resize--nw { top: 0; left: 0; cursor: nwse-resize; }
-.kanban-modal__resize--se { bottom: 0; right: 0; cursor: nwse-resize; }
-.kanban-modal__resize--sw { bottom: 0; left: 0; cursor: nesw-resize; }
-.kanban-modal__header {
-  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(255, 69, 58, 0.14);
   color: var(--danger);
   font-size: 16px;
+}
+.destgate__title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text);
 }
 
 .destgate__desc {
@@ -12313,6 +12305,9 @@ button.group-node__setup:disabled {
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
+}
+.destgate__key:hover {
+  background: rgba(var(--tint-rgb), 0.1);
 }
 
 .destgate__key[aria-pressed="true"] {
@@ -12422,8 +12417,77 @@ button.group-node__setup:disabled {
   }
 }
 .destgate__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.destgate__exit {
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(var(--tint-rgb), 0.08);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+}
+.destgate__exit:hover {
+  background: rgba(var(--tint-rgb), 0.14);
+}
+
+.destgate__hint {
+  font-size: 11px;
+  color: var(--muted-2);
+}
+
+/* ---- Card-modal additions kept separate from the destination confirmation surface ---- */
+.kanban-modal {
+  animation: kanban-pop 0.16s ease-out;
+  /* width/height are inline (remembered per machine; see cardModalSize.ts). These are the safety
+     ceiling so the sheet can never exceed the viewport, even for the frame before the clamp runs. */
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* Resize handles (issue #389): thin strips just inside each edge, larger squares at the corners.
+   Inset (not outset) so the sheet's overflow:hidden / border-radius doesn't clip them. */
+.kanban-modal__resize {
+  position: absolute;
+  z-index: 6;
+  touch-action: none;
+}
+.kanban-modal__resize--n { top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
+.kanban-modal__resize--s { bottom: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
+.kanban-modal__resize--w { left: 0; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+.kanban-modal__resize--e { right: 0; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+.kanban-modal__resize--ne,
+.kanban-modal__resize--nw,
+.kanban-modal__resize--se,
+.kanban-modal__resize--sw {
+  width: 14px;
+  height: 14px;
+  z-index: 7; /* corners beat the edge strips they overlap */
+}
+.kanban-modal__resize--ne { top: 0; right: 0; cursor: nesw-resize; }
+.kanban-modal__resize--nw { top: 0; left: 0; cursor: nwse-resize; }
+.kanban-modal__resize--se { bottom: 0; right: 0; cursor: nwse-resize; }
+.kanban-modal__resize--sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.kanban-modal__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 69, 58, 0.14);
+  color: var(--danger);
+  font-size: 16px;
+}
+
 /* Rendered-markdown twin of .kanban-modal__sticky: same box, click flips into the textarea.
-   The markdown inside uses the note's own .sticky-node__md rules — one set of typography, so the
+   The markdown inside uses the note's own .sticky-node__md rules, one set of typography, so the
    canvas and the card cannot disagree about how a heading or a code block reads. */
 .kanban-modal__sticky-view {
   flex: 1;
@@ -12439,30 +12503,6 @@ button.group-node__setup:disabled {
 }
 .kanban-modal__sticky-view .sticky-node__stamp {
   padding: 8px 0 0;
-}
-
-.kanban-modal__pane {
-  position: relative; /* anchors the markdown-view overlay */
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.destgate__exit {
-  padding: 8px 12px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
-  background: rgba(var(--tint-rgb), 0.08);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  cursor: pointer;
-}
-
-.destgate__hint {
-  font-size: 11px;
-  color: var(--muted-2);
 }
 
 /* ---- Context-menu keyboard-shortcut column ---- */

@@ -18,9 +18,9 @@ import {
   statSync,
   unlinkSync
 } from 'fs'
+import { renameAtomicSync } from './fs-atomic'
 import os from 'os'
 import path from 'path'
-import { renameAtomicSync } from './fs-atomic'
 import { ACCOUNT_ID_RE, isSafeAccountId } from '../shared/codex-account'
 
 export { ACCOUNT_ID_RE, isSafeAccountId } from '../shared/codex-account'
@@ -42,10 +42,6 @@ export function legacyCodexAccountHome(userDataDir: string, accountId: string): 
 }
 
 /**
- * `app-server-control.sock` lives below CODEX_HOME and macOS rejects Unix socket paths at
- * SUN_LEN. The normal Electron userData path plus a UUID is already too long, so managed
- * accounts use a deterministic short home. Include userDataDir in the digest to keep separate
- * NodeTerm profiles isolated while avoiding a global static account directory.
  * A managed account's local home, `~/.nodeterm/cx/<sha256(userDataDir\0accountId)[0..16]>`, mode
  * `0o700`. The digest is deliberately SHORT: the app-server control socket lives two levels below
  * it (`<home>/app-server-control/app-server-control.sock`) and must stay under macOS `SUN_LEN` —
@@ -81,11 +77,6 @@ export function migrateLegacyCodexAccountHome(
   const target = codexAccountHome(userDataDir, accountId, shortRoot)
   if (legacy === target || !existsSync(legacy) || existsSync(target)) return target
   mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 })
-  // A directory rename is refused with EPERM on Windows for the same reason a file publication is
-  // — anything holding a handle INSIDE the tree (Defender scanning a credential file it just saw
-  // appear, the indexer, a sync client over the user profile) blocks the move. Losing this one
-  // silently strands an account's whole home at the legacy path, so it retries like every other
-  // publication here rather than giving up on the first scanner tick.
   renameAtomicSync(legacy, target)
   return target
 }
@@ -108,7 +99,6 @@ export function migrateLegacyCodexAccountHomes(userDataDir: string, shortRoot?: 
     }
   }
 }
-
 /** The SYSTEM Codex home: `$CODEX_HOME` when set to an absolute path, else `~/.codex`. */
 export function systemCodexHome(): string {
   const configured = process.env.CODEX_HOME?.trim()
@@ -129,7 +119,6 @@ export function codexSocketForAccount(userDataDir: string, accountId?: string): 
   )
 }
 
-/** Short, deterministic remote homes keep the app-server Unix socket below SUN_LEN. */
 /** Short, deterministic remote homes keep the app-server Unix socket below SUN_LEN. A remote host
  *  has ONE home root, so the digest is over `accountId` only. */
 export function remoteCodexHome(remoteHome: string, accountId?: string): string {
@@ -236,7 +225,9 @@ export function resolveCodexSessionScope(
  * Codex agents need an explicit system-or-managed scope; a plain login terminal needs it when it
  * carries a managed CODEX account id. Sharing this predicate keeps tmux and plain PTYs aligned.
  *
- * `isCodexAccount` is REQUIRED, and deliberately has no default, because neither guess is safe.
+ * Generic callers pass `isCodexAccount` so managed Claude ids remain false. Specialized Codex
+ * callers use the two-argument legacy contract, where any non-empty Codex account id is scoped.
+ * The overload keeps those callers from being forced through a generic provider predicate.
  * Managed Claude and Codex accounts are separate lists that share one id alphabet, so the id alone
  * cannot say which provider it belongs to. Answering "yes" for any id — which this predicate used
  * to do via `!!accountId` — sends every managed CLAUDE node into the fail-closed Codex gate, where
@@ -247,12 +238,21 @@ export function resolveCodexSessionScope(
  */
 export function needsCodexAccountScope(
   agentId: string | undefined,
+  accountId: string | undefined
+): boolean
+export function needsCodexAccountScope(
+  agentId: string | undefined,
   accountId: string | undefined,
   isCodexAccount: (id: string) => boolean
+): boolean
+export function needsCodexAccountScope(
+  agentId: string | undefined,
+  accountId: string | undefined,
+  isCodexAccount?: (id: string) => boolean
 ): boolean {
   if (agentId === 'codex') return true
   if (!accountId) return false
-  return isCodexAccount(accountId)
+  return isCodexAccount ? isCodexAccount(accountId) : true
 }
 
 /** Usage discovery follows actual account homes, not the renderer's eventually-consistent
@@ -336,10 +336,6 @@ function containedRelativePath(root: string, candidate: string): string | null {
 }
 
 export interface CodexRolloutExposurePlan {
-  sourcePath: string
-  targetSessionsRoot: string
-  targetRelativePath: string
-  targetPath: string
   /** Canonicalized (`realpathSync`) absolute path of the source rollout. */
   sourcePath: string
   /** `<realpath(targetHome)>/sessions` — the target account's sessions root. */
@@ -353,7 +349,6 @@ export interface CodexRolloutExposurePlan {
   sourceIno: number
 }
 
-/** Validate a cross-account rollout before the renderer's second idle check. No files mutate. */
 /**
  * Validate a cross-account rollout exposure and return a plan. MUTATES NOTHING — no directory is
  * created, no link is made; a rejected request leaves the filesystem untouched (§5 property 2).
@@ -395,8 +390,6 @@ export function planCodexRolloutExposure(
   }
 }
 
-/** Commit after the renderer revalidates idle/session state. Hardlinks are atomic and survive
- * deletion of either account home because every link names the same inode independently. */
 /**
  * Commit a plan by ATOMICALLY hardlinking the source inode into the target account. Fail-closed
  * throughout (§5 property 2):
@@ -514,6 +507,10 @@ export function commitCodexRolloutExposure(
     }
     if (!isVerifiedRollout(plan.targetPath)) {
       throw new Error('Target Codex rollout did not preserve the verified source inode')
+    }
+    const publishedSource = statSync(plan.sourcePath)
+    if (publishedSource.dev !== plan.sourceDev || publishedSource.ino !== plan.sourceIno) {
+      throw new Error('Source Codex rollout changed after account switch commit')
     }
   } catch (error) {
     // Roll back a target THIS call published so a failed commit leaves the target as it was found

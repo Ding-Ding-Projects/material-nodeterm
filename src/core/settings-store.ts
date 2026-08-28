@@ -1,8 +1,8 @@
-import { promises as fs, readFileSync } from 'fs'
+import { readFileSync } from 'fs'
 import path from 'path'
 import { IPC } from '../shared/ipc'
 import { platform } from './platform'
-import { renameAtomic, tempNameFor } from './fs-atomic'
+import { writeFileAtomic } from './fs-atomic'
 import {
   DEFAULT_ACCENT,
   DEFAULT_SETTINGS,
@@ -183,15 +183,9 @@ export class SettingsStore {
   ): Promise<void> {
     const before = this.cache
     this.cache = mergeSettings(settings)
-    const tmp = tempNameFor(this.filePath)
     try {
-      await fs.writeFile(tmp, JSON.stringify(this.cache, null, 2), {
-        encoding: 'utf-8',
-        mode: 0o600,
-      })
-      await renameAtomic(tmp, this.filePath)
+      await writeFileAtomic(this.filePath, JSON.stringify(this.cache, null, 2), { mode: 0o600 })
     } catch (error) {
-      await fs.rm(tmp, { force: true }).catch(() => {})
       this.cache = before
       throw error
     }

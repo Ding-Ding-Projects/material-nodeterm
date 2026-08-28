@@ -691,12 +691,6 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     }))
   },
 
-  setProjectIcon(id, icon) {
-    set((s) => ({
-      projects: s.projects.map((p) => (p.id === id ? { ...p, icon } : p))
-    }))
-  },
-
   setProjectCwd(id, cwd) {
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, cwd } : p))

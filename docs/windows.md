@@ -224,9 +224,9 @@ parallel release routes.
 - **Signing**: `build.win.signExecutable` and root `build.forceCodeSigning` are explicitly `false`
   in `package.json`; the produced installer is intentionally unsigned. `build-installer.bat` and
   the publication workflow accept only exact Authenticode `NotSigned`.
-  `build.win.signAndEditExecutable` stays enabled at its default so icon and version resources are
-  still written; signing and resource editing are separate controls. Do not add a certificate or
-  signing script.
+  `build.win.signAndEditExecutable` is omitted so electron-builder keeps its default resource-editing
+  behavior and icon and version resources are still written; signing and resource editing are
+  separate controls. Do not add a certificate or signing script.
 - **`npm run rebuild`** matters on Windows: it rebuilds
   `node-pty` (and `smart-whisper`) against Electron's ABI via `electron-rebuild`. The
   `patch-node-pty.mjs` step it runs first patches node-pty's **Windows ConPTY baton/handle race**

@@ -209,18 +209,8 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
     setPendingRevoke(null)
     setRevokeNote(null)
     try {
-      await window.nodeTerminal.pairing.revokeDevice(device.id)
-      // A successful retry is the only thing that clears the persistent warning.
-      setRevokeError('')
-    } catch (error) {
-      const detail = error instanceof Error && error.message ? ` (${error.message})` : ''
-      // Never imply success when authorized_keys could not be checked or rewritten. The row stays
-      // in local state and refreshDevices preserves it on read failure, so the owner keeps a Retry.
-      setRevokeError(
-        `Couldn’t revoke “${device.name}”${detail}. Its SSH access may still be active. ` +
-          'The device remains listed; fix the file-access problem and retry Revoke.'
-      )
       const result = await window.nodeTerminal.pairing.revokeDevice(device.id)
+      setRevokeError('')
       // Additive, not exclusive: both legs can fail at once (an unwritable ~/.ssh while offline),
       // and being told only half of that leaves the other half to be discovered by accident.
       const notes: string[] = []
@@ -228,10 +218,6 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
         notes.push(`Couldn’t remove “${device.name}” from this machine — try again.`)
       }
       if (result.server === 'failed') {
-        // Deliberately not "pair it and remove it again": that used to be the whole advice, and it
-        // is wrong twice over — a 403 will never clear however long you wait, and pairing RESTORES
-        // the phone's Pro (the mint upserts its row) before the second removal tries again. It is
-        // offered as what it is — a retry that costs something — with support as the reliable path.
         notes.push(
           (result.local ? `Removed “${device.name}” from this machine, but its` : 'Its') +
             ' Pro access couldn’t be revoked — we were refused or couldn’t reach the server — so' +
@@ -242,16 +228,19 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
       if (notes.length) {
         setRevokeNote({ text: notes.join(' '), warn: true })
       } else if (result.server === 'ok') {
-        // Not instant, and we say so. The phone holds a signed entitlement minted for up to seven
-        // days; revoking the row stops the NEXT one, it cannot reach into the phone.
         setRevokeNote({
           text: `Removed “${device.name}”. Its Pro ends when the pass it already holds expires — within 7 days.`,
           warn: false
         })
       }
-    } catch {
-      // The call itself never got an answer (main is gone, or the surface doesn't support it).
-      setRevokeNote({ text: `Couldn’t remove “${device.name}” — try again.`, warn: true })
+    } catch (error) {
+      const detail = error instanceof Error && error.message ? ` (${error.message})` : ''
+      // Never imply success when authorized_keys could not be checked or rewritten. The row stays
+      // in local state and refreshDevices preserves it on read failure, so the owner keeps a Retry.
+      setRevokeError(
+        `Couldn’t revoke “${device.name}”${detail}. Its SSH access may still be active. ` +
+          'The device remains listed; fix the file-access problem and retry Revoke.'
+      )
     } finally {
       void refreshDevices()
     }
@@ -477,6 +466,15 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
               ))}
             </ul>
           )}
+          {revokeNote ? (
+            <p
+              role={revokeNote.warn ? 'alert' : undefined}
+              className={revokeNote.warn ? 'text-sm' : 'text-sm text-muted'}
+              style={revokeNote.warn ? { color: '#ff9f0a' } : undefined}
+            >
+              {revokeNote.text}
+            </p>
+          ) : null}
         </div>
       </SearchableRow>
 
@@ -512,14 +510,6 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
               ))}
             </ul>
           )}
-          {revokeNote ? (
-            <p
-              className={revokeNote.warn ? 'text-sm' : 'text-sm text-muted'}
-              style={revokeNote.warn ? { color: '#ff9f0a' } : undefined}
-            >
-              {revokeNote.text}
-            </p>
-          ) : null}
         </div>
       </SearchableRow>
 

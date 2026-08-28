@@ -120,15 +120,6 @@ export interface ProjectGlyphProps {
   /** Content sizing (emoji font-size / MaterialSymbol size). Fallback/icon box size comes from
    *  `className`'s own CSS, same as every render site did before this component existed — this
    *  only sizes the glyph drawn inside that box. */
-  /** The project's own color — tints the lucide placeholder and drives both fallbacks. Optional
-   *  so a caller can suppress the fallback tint entirely (TabBar's inactive-tab dot only colors
-   *  the active tab; passing `undefined` there reproduces that exactly). */
-  color?: string
-  /** Project display name — the monogram fallback's first initial, and the image's empty alt. */
-  name: string
-  /** Content sizing (emoji font-size). Fallback/icon box size comes from `className`'s own CSS,
-   *  same as every render site did before this component existed — this only sizes the glyph
-   *  drawn inside that box. */
   size?: number
   /** Fallback shape when `icon` is absent: a plain colored dot, or a colored circle with the
    *  name's first initial. Default 'monogram' — the more common site. */
@@ -205,9 +196,6 @@ export function ProjectGlyph({
   if (icon?.type === 'material-symbol') {
     const symbolName = resolveSymbolName(icon.name)
     if (symbolName) {
-  if (icon?.type === 'lucide') {
-    const Icon = LUCIDE_ICONS[icon.name]
-    if (Icon) {
       return (
         <span
           className={className}
@@ -218,16 +206,21 @@ export function ProjectGlyph({
         </span>
       )
     }
-    // Defensive only — sanitizeProjectIcon already restricts stored names to PROJECT_SYMBOL_IDS,
-    // which the module-level assertion above proves is a subset of the font. Falls through to the
-    // monogram fallback below rather than rendering nothing.
+  }
+
+  if (icon?.type === 'lucide') {
+    const Icon = LUCIDE_ICONS[icon.name]
+    if (Icon) {
+      return (
+        <span
+          className={className}
+          title={title}
           style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
         >
           <Icon color={color || 'currentColor'} width="100%" height="100%" aria-hidden="true" />
         </span>
       )
     }
-    // Unknown name (never happens for a sanitized icon) → fall through to the fallback below.
   }
 
   if (icon?.type === 'image') {

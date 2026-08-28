@@ -3,9 +3,9 @@ import {
   codexRemoteCommand,
   explicitCodexResumeSession,
   resumeCommand,
+  supportsSessionIdFlag,
   withSessionId
 } from './config'
-import { resumeCommand, supportsSessionIdFlag, withSessionId } from './config'
 
 describe('withSessionId', () => {
   it('appends the minted id for claude', () => {
@@ -147,21 +147,9 @@ describe('resumeCommand — launch-command override (base)', () => {
       'my-claude work --resume abc-123'
     )
     expect(resumeCommand('gemini', 'abc-123', { base: 'gemini-wrap' })).toBe(
- * `base` is the user's launch-command override (settings.agentLaunchCommands — e.g. an
- * account-switching wrapper), threaded in from the renderer because this shared module cannot
- * read the settings store. It replaces the PROGRAM part only; each agent's resume grammar
- * (`--resume` / `resume` / `--session`) stays put after it.
- */
-describe('resumeCommand — launch-command override (base)', () => {
-  it('replaces the program part for the --resume family', () => {
-    expect(resumeCommand('claude', 'abc-123', false, 'my-claude work')).toBe(
-      'my-claude work --resume abc-123'
-    )
-    expect(resumeCommand('gemini', 'abc-123', false, 'gemini-wrap')).toBe(
       'gemini-wrap --resume abc-123'
     )
   })
-
   it('keeps codex’s subcommand and opencode’s flag spelling', () => {
     expect(resumeCommand('codex', 'abc-123', { base: '/opt/bin/codex-work' })).toBe(
       '/opt/bin/codex-work resume abc-123'

@@ -4,119 +4,11 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PairedDevice } from '@shared/types'
 import { useKidsMode } from '../../../state/kidsMode'
-//
-// Settings → Phone, the Revoke button: which of the three revoke outcomes the user is TOLD about,
-// and in which voice.
-//   'skipped' → nothing. It is a normal state: a free-tier desktop holds no entitlement to revoke
-//               with, or there was no device left to name. Warning there would tell a free user
-//               their phone's Pro is stuck when it never had any of ours. (A phone paired before
-//               we recorded its relay id is NOT this case — the revoke falls back to our own
-//               pairing id and the server leg does run.)
-//   'ok'      → a receipt, not silence: the phone keeps the pass it already holds for up to 7
-//               days, and users who were told nothing filed that as "removal didn't work".
-//   'failed'  → a warning that does not prescribe waiting, because a 403 never clears by waiting.
-// Only a leg that actually failed may warn, and a failed one always must.
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { act } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
 import type { DeviceRevokeResult, PairedDevice } from '@shared/types'
 import { PhoneSection } from './PhoneSection'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const PHONE: PairedDevice = {
-  id: 'phone-a',
-  name: 'Alice’s Phone',
-  pairedAt: 1_700_000_000_000,
-  lastSeenAt: 0
-}
-
-describe('PhoneSection revoke failure', () => {
-  let root: Root | undefined
-  let host: HTMLDivElement
-  const listDevices = vi.fn(async () => [PHONE])
-  const revokeDevice = vi.fn()
-
-  const flush = async (): Promise<void> => {
-    await act(async () => {
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-  }
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    // Both fields matter: `kidsDestructiveGateRequired` (state/kidsMode.ts) is
-    // `enabled || policyStatus !== 'ready'`, and the store's own default `policyStatus` is
-    // 'loading' — a placeholder, not evidence the mode is off (same "displayed OFF is not
-    // authorization" rule School mode's store documents). Leaving policyStatus unset here made
-    // the gate fail closed, routing the click through the Kids-mode destructive gate instead of
-    // the plain ConfirmDialog this test expects. Matches the established precedent in
-    // AccountsSection.test.tsx / AuthenticatorSection.test.tsx.
-    useKidsMode.setState({ enabled: false, policyStatus: 'ready' })
-    host = document.createElement('div')
-    document.body.appendChild(host)
-    root = createRoot(host)
-    ;(window as unknown as { nodeTerminal: unknown }).nodeTerminal = {
-      pairing: {
-        supported: true,
-        start: vi.fn(),
-        stop: vi.fn(async () => undefined),
-        onDone: vi.fn(() => () => {}),
-        probeSsh: vi.fn(async () => true),
-        openRemoteLoginSettings: vi.fn(async () => undefined),
-        listDevices,
-        revokeDevice
-      },
-      remoteHost: { setPhoneAccess: vi.fn() }
-    }
-  })
-
-  afterEach(() => {
-    act(() => root?.unmount())
-    root = undefined
-    host.remove()
-  })
-
-  it('keeps the row and shows a persistent live-access warning when the bridge rejects', async () => {
-    revokeDevice.mockRejectedValueOnce(new Error('EACCES: authorized_keys unreadable'))
-    await act(async () => {
-      root!.render(<PhoneSection isActive />)
-    })
-    await flush()
-
-    const revoke = [...host.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Revoke')
-    )
-    expect(revoke).toBeDefined()
-    act(() => revoke!.click())
-
-    const confirm = [...document.querySelectorAll<HTMLButtonElement>('.confirm__btn')].find(
-      (button) => button.textContent === 'Revoke'
-    )
-    expect(confirm).toBeDefined()
-    act(() => confirm!.click())
-    await flush()
-
-    expect(revokeDevice).toHaveBeenCalledWith(PHONE.id)
-    expect(host.textContent).toContain(PHONE.name)
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain(
-      'SSH access may still be active'
-    )
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain('retry Revoke')
-    expect(listDevices).toHaveBeenCalledTimes(2)
-
-    // A successful retry is the only thing that clears the persistent warning.
-    revokeDevice.mockResolvedValueOnce(undefined)
-    act(() => revoke!.click())
-    const retry = [...document.querySelectorAll<HTMLButtonElement>('.confirm__btn')].find(
-      (button) => button.textContent === 'Revoke'
-    )
-    act(() => retry!.click())
-    await flush()
-
-    expect(revokeDevice).toHaveBeenCalledTimes(2)
-    expect(host.querySelector('[role="alert"]')).toBeNull()
 const DEVICE: PairedDevice = {
   id: 'dev-a',
   name: 'Enes’ iPhone',
@@ -181,6 +73,7 @@ async function revokeFlow(): Promise<string> {
 }
 
 beforeEach(() => {
+  useKidsMode.setState({ enabled: false, policyStatus: 'ready' })
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)

@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { SpeechModelInfo } from '@shared/types'
-import { DEFAULT_SETTINGS } from '@shared/types'
-import { hasSpeechModel, modelAfterDelete, modelAfterDownload, SPEECH_MODEL_NONE } from '@shared/speech'
+import {
+  hasSpeechModel,
+  modelAfterDelete,
+  modelAfterDownload,
+  SPEECH_MODEL_NONE
+} from '@shared/speech'
 import { dictationBinding } from '../../../lib/keybindingOverrides'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
 import { SettingsText } from '../SettingsText'
@@ -13,7 +18,6 @@ import { Radio } from '@renderer/ui/md3'
 import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { Button } from '@renderer/ui/Button'
 import { formatShortcut, isHoldChord } from '@shared/shortcut'
-import { ShortcutCaptureField } from '../ShortcutCaptureField'
 import type { SettingsSectionId } from '../nav'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
@@ -38,7 +42,6 @@ const ROWS = {
       'base',
       'small',
       'large',
-      'pro',
       'none',
       'off',
       'disable',
@@ -63,9 +66,9 @@ const ROWS = {
 const ENTRIES = Object.values(ROWS)
 
 /**
- * Dictation (desktop/server): engine, model, language, and the press/hold-to-talk shortcut.
- * The ShortcutCaptureField is the shared settings capture control (also used by Keyboard
- * Shortcuts); here it is wired hold-to-talk-capable (`allowChord`) with the speech default.
+ * Dictation (desktop/server): engine, model, language, and the central shortcut destination.
+ * The keybinding registry is the only shortcut editor; this section reports its exact effective
+ * chord and navigates there instead of maintaining a second capture control.
  */
 const LANGUAGES: { value: string; label: string }[] = [
   { value: 'auto', label: 'Auto-detect' },
@@ -91,15 +94,20 @@ function modelLabel(id: string): string {
     .join(' ')
 }
 
-export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+export function SpeechSection({
+  isActive,
+  onNavigate
+}: {
+  isActive: boolean
+  onNavigate: (section: SettingsSectionId) => void
+}): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
   // The chord's single source is the registry override (`speech.shortcut` is only the legacy
   // downgrade mirror), and a string selector keeps an unrelated settings write from re-rendering
   // this section. `''` = the user disabled dictation's shortcut.
   const dictationChord = useSettings(() => dictationBinding())
-  const isPremium = useEntitlement((s) => s.isPremium)
-
   const [models, setModels] = useState<SpeechModelInfo[]>([])
   const [progress, setProgress] = useState<Record<string, number>>({})
   const [busy, setBusy] = useState<Record<string, boolean>>({})
@@ -233,25 +241,33 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
         <FieldRow
           label="Shortcut"
           description="Dictation's shortcut is managed with every other keyboard shortcut."
-          note={
-            dictationChord === ''
-              ? 'Currently disabled.'
-              : isHoldChord(dictationChord)
-                ? `Currently hold-to-talk: hold ${formatShortcut(dictationChord, isMac)}.`
-                : `Currently toggle: press ${formatShortcut(dictationChord, isMac)}.`
-          }
           control={
-            <Button variant="ghost" onClick={() => onNavigate('shortcuts')}>
-              Open Keyboard Shortcuts
-            </Button>
-          }
-          control={
-            <ShortcutCaptureField
-              value={settings.speech.shortcut}
-              onChange={setShortcut}
-              defaultValue={DEFAULT_SHORTCUT}
-              allowChord
-            />
+            <div className="space-y-2 text-right">
+              <Button variant="ghost" onClick={() => onNavigate('shortcuts')}>
+                Open Keyboard Shortcuts
+              </Button>
+              <p className="text-[12px] text-muted" role="status">
+                {dictationChord === '' ? (
+                  <SettingsText>Currently disabled.</SettingsText>
+                ) : isHoldChord(dictationChord) ? (
+                  <SettingsText
+                    segments={[
+                      { kind: 'copy', value: 'Currently hold-to-talk: hold ' },
+                      { kind: 'fact', value: formatShortcut(dictationChord, isMac) },
+                      { kind: 'copy', value: '.' }
+                    ]}
+                  />
+                ) : (
+                  <SettingsText
+                    segments={[
+                      { kind: 'copy', value: 'Currently toggle: press ' },
+                      { kind: 'fact', value: formatShortcut(dictationChord, isMac) },
+                      { kind: 'copy', value: '.' }
+                    ]}
+                  />
+                )}
+              </p>
+            </div>
           }
         />
       </SearchableRow>
@@ -274,10 +290,11 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
                     onChange={() => update({ speech: { ...settings.speech, model: SPEECH_MODEL_NONE } })}
                   />
                   <div className="min-w-0">
-                    <span className="text-[13px] font-medium text-text">None</span>
+                    <span className="text-[13px] font-medium text-text">{vocab('None')}</span>
                     <p className="text-[12px] text-muted">
-                      Dictation off — the shortcut and the Dock mic explain instead of recording.
-                      Downloading a model below turns it on.
+                      <SettingsText>
+                        Dictation off. The shortcut and the Dock mic explain instead of recording. Downloading a model below turns it on.
+                      </SettingsText>
                     </p>
                   </div>
                 </label>
@@ -303,8 +320,22 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
                           </span>
                         </div>
                         <p className="text-[12px] text-muted">
-                          {m.downloaded ? formatSize(m.sizeMB ?? m.approxMB) : `~${formatSize(m.approxMB)}`}
-                          {downloading ? ` · downloading ${pct}%` : ''}
+                          <SettingsText
+                            segments={[
+                              {
+                                kind: 'fact',
+                                value: m.downloaded
+                                  ? formatSize(m.sizeMB ?? m.approxMB)
+                                  : `~${formatSize(m.approxMB)}`
+                              },
+                              ...(downloading
+                                ? [
+                                    { kind: 'copy' as const, value: ' · downloading ' },
+                                    { kind: 'fact' as const, value: `${pct}%` }
+                                  ]
+                                : [])
+                            ]}
+                          />
                         </p>
                         {rowError[m.id] ? (
                           <p className="text-[12px]" style={{ color: '#ff9f0a' }}>
@@ -320,11 +351,11 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
                           disabled={busy[m.id]}
                           onClick={() => void deleteModel(m)}
                         >
-                          Delete
+                          <SettingsText>Delete</SettingsText>
                         </Button>
                       ) : (
                         <Button disabled={busy[m.id]} onClick={() => void downloadModel(m)}>
-                          {downloading ? `${pct}%` : 'Download'}
+                          {downloading ? `${pct}%` : <SettingsText>Download</SettingsText>}
                         </Button>
                       )}
                     </div>

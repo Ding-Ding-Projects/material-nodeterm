@@ -418,12 +418,6 @@ export function CardModal({
           {/* Body is a flex row: the card's own pane (2/3) + the board-log panel (1/3, all kinds). */}
           <div className="kanban-modal__main">
             {session.kind === 'sticky' ? (
-              <TextArea
-                className="kanban-modal__sticky"
-                value={session.text ?? ''}
-                placeholder="Write a note…"
-                onChange={(e) => onEditSticky(e.target.value)}
-              />
               editingNote ? (
                 <textarea
                   className="kanban-modal__sticky"

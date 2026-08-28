@@ -1,8 +1,15 @@
 {
   "name": "node-terminal",
-  "version": "0.4.3",
+  "version": "0.4.121",
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "24.19.0",
+      "onFail": "error"
+    }
   },
   "description": "node-based terminal manager — multiple draggable, zoomable terminals on a single canvas.",
   "author": {
@@ -28,6 +35,7 @@
     "test:unit": "vitest run test/remote",
     "rebuild": "node scripts/check-build-preflight.mjs && node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper",
     "server:build": "esbuild src/server/main.ts --bundle --platform=node --format=cjs --outfile=out/server/main.cjs --external:node-pty --external:ws --external:smart-whisper --tsconfig=tsconfig.node.json",
+    "host:build": "esbuild src/session-host/host.ts --bundle --platform=node --format=cjs --outfile=out/session-host/host.cjs --external:node-pty --tsconfig=tsconfig.node.json",
     "server:start": "node out/server/main.cjs",
     "server:dev": "npm run build && npm run server:build && node out/server/main.cjs",
     "shots": "node scripts/capture-shots.mjs",

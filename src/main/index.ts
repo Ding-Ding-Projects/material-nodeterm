@@ -1,8 +1,16 @@
 import { join, resolve, posix, dirname as dirnameOf } from 'path'
 import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
-import { readFile, writeFile, rm as rmFile, mkdir as mkdirFs } from 'fs/promises'
-import { statSync } from 'fs'
+import {
+  readFile,
+  writeFile,
+  rm as rmFile,
+  mkdir as mkdirFs,
+  realpath as fsRealpath,
+  lstat as fsLstat,
+  writeFile as fsWriteFile
+} from 'fs/promises'
+import { existsSync, statSync, openSync, fstatSync, readFileSync, closeSync } from 'fs'
 import { renameAtomic, tempNameFor } from '../core/fs-atomic'
 import { homedir, hostname } from 'os'
 import { randomUUID } from 'crypto'
@@ -29,6 +37,7 @@ import {
   clipboard,
   dialog,
   ipcMain,
+  Menu,
   Notification,
   powerMonitor,
   safeStorage,
@@ -36,11 +45,6 @@ import {
   systemPreferences,
   webContents
 } from 'electron'
-import { readFile, realpath as fsRealpath, lstat as fsLstat, writeFile as fsWriteFile } from 'fs/promises'
-import { existsSync, statSync, openSync, fstatSync, readFileSync, closeSync } from 'fs'
-import { homedir, hostname } from 'os'
-import { randomUUID } from 'crypto'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, Notification, powerMonitor, safeStorage, shell, systemPreferences, webContents } from 'electron'
 import { IPC } from '../shared/ipc'
 
 // Debug log ring (issue #78): capture the process console from the first line — a packaged app
@@ -81,6 +85,12 @@ import { preparePortableMedia, type PortableMediaPreparation } from '../core/por
 import type { PortableMediaExportPlan, PortableMediaPrepareInput } from '../shared/portable-media'
 import { ServerDeploymentService, resolveServerDeploymentRoot } from './server-deployment'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
+import {
+  attachAgentContinuationDeps,
+  createAgentContinuationService,
+  parseCodexContinuationEvents,
+  type AgentContinuationService
+} from '../core/agent-continuation'
 import { describeSettingsChange } from '../shared/settings-diff'
 import type { NotifyPayload, RemoteLoginHelp, Settings } from '../shared/types'
 import {
@@ -94,7 +104,6 @@ import {
   removeExtensionByPath,
   resetBrowserProfile
 } from './browser-extensions'
-import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import {
   registerPasswordManagerHandlers,
   type PasswordManagerRoute
@@ -132,7 +141,6 @@ import {
   revokeAllBrowser,
   type RevocationTargets
 } from './browser-revocation'
-import { registerFsHandlers } from '../core/fs-handlers'
 import { LogBuffer } from '../core/log-buffer'
 import { installLogSink, splitTag } from '../core/log-sink'
 import { registerLogHandlers } from '../core/log-handlers'
@@ -262,8 +270,6 @@ import { createGrantsAccessor, type PushGrant } from '../core/push-grants'
 import { createRemoteGrantsCache } from '../core/remote-push-grants'
 import { createAckSweeper } from '../core/ack-sweep'
 import { createSessionReaper } from '../core/session-budget'
-import { initKeepAwake } from './keep-awake'
-import type { KeepAwakeTracker } from '../core/keep-awake'
 import { startSessionMemoryService, sshScopePredicate } from '../core/session-memory-service'
 import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
 import { startToyLockService } from '../core/toylocks/toylock-service'
@@ -315,8 +321,7 @@ import {
 } from '../core/remote-ssh/control-master'
 import { planRemoteWorkspacePoll } from './remote-workspace-poll'
 import { sessionName } from '../core/tmux-naming'
-import { posixQuote, sshHostKey } from '../shared/ssh'
-import { posixQuote, type SshConnection } from '../shared/ssh'
+import { posixQuote, sshHostKey, type SshConnection } from '../shared/ssh'
 import { buildHandoff, type HandoffRemote } from './handoff'
 import { initContextLink, setNodeTranscript } from '../core/context-link'
 import { transcriptPathOf } from '../core/context-link-core'
@@ -333,11 +338,9 @@ import { initClaudeAccounts } from './claude-accounts'
 import {
   ensureCodexAccountDaemon,
   initCodexAccounts,
-  localCodexAccountHome,
   localCodexSocket
 } from './codex-accounts'
 import { resolveForeignThreadAt } from './codex-relay-daemon'
-import { initCodexAccounts } from './codex-accounts'
 import { claudeCliCaps, registerClaudeCliIpc, type ClaudeCliCaps } from '../core/claude-cli'
 import { refreshCodexIdentityCaps, registerCodexIdentityIpc } from '../core/codex-identity-caps'
 import {
@@ -346,7 +349,6 @@ import {
   writeCodexThreadIdentity
 } from '../core/codex-identity-proxy'
 import { codexThreadExists, startCodexThread } from '../core/codex-session-name'
-import { codexUsageAccounts } from '../core/codex-accounts-core'
 import { codexHomeFor } from '../core/codex-config-dir'
 import { loadOrCreateNodeAuthSecret } from '../core/agents/node-auth-secret'
 import { initNodeTokens, refreshNodeTokens } from '../core/agents/node-token-service'
@@ -593,6 +595,7 @@ const windowsTerminalProfiles = new WindowsTerminalProfileService({
   getCustomExecutable: () => settingsStore.get().defaultShell
 })
 const ptyManager = new PtyManager({ terminalProfiles: windowsTerminalProfiles })
+let agentContinuationService: AgentContinuationService | undefined
 // One tiny detached relay is shared by every Codex node/account. Keeping it outside Electron
 // preserves live TUI connections across app restarts while the authenticated app-server remains
 // shared per account.
@@ -1337,7 +1340,7 @@ function createWindow(): BrowserWindow {
     // × reaches this directly (no app.quit() first), so the confirm gate must sit here too, not
     // only in before-quit — otherwise the window (and with it the only place to show a dialog)
     // would already be gone by the time we asked.
-    if (shouldConfirmQuit() && !quitConfirmed && !skipQuitConfirmation) {
+    if (shouldConfirmQuit()) {
       e.preventDefault()
       void confirmQuit(win).then((ok) => {
         if (ok) app.quit()
@@ -1402,6 +1405,7 @@ app.whenReady().then(async () => {
   // so publish one identity-only session event ourselves after the mapping is durable. During the
   // narrow boot window before the renderer/mirror fan-out is wired, retain those events in order.
   const pendingCodexIdentityEvents: NormalizedAgentEvent[] = []
+  const codexProviderStarts = new Map<string, number>()
   let emitAgentStatus: ((event: NormalizedAgentEvent) => void) | undefined
   if (!gotSingleInstanceLock) return // losing second instance — quitting; don't touch tmux
 
@@ -1913,6 +1917,36 @@ app.whenReady().then(async () => {
     () => gatewayCredentials.readForHost()
   )
   ptyManager.registerIpc()
+  agentContinuationService = createAgentContinuationService()
+  attachAgentContinuationDeps(agentContinuationService, {
+    providerReady: (nodeId, sessionId) => {
+      const at = codexProviderStarts.get(`${nodeId}|${sessionId}`)
+      return typeof at === 'number' && Date.now() - at <= 10 * 60_000
+    },
+    deliver: (nodeId, sessionId, text) => {
+      if (!codexProviderStarts.has(`${nodeId}|${sessionId}`)) return Promise.resolve(false)
+      return ptyManager.sendText(nodeId, text, { enter: true })
+    }
+  })
+  ipcMain.handle(IPC.agentContinuationSummary, () => agentContinuationService!.summary())
+  ipcMain.handle(IPC.agentContinuationPreview, (_event, nodeId: unknown) =>
+    typeof nodeId === 'string' ? agentContinuationService!.preview(nodeId) : null
+  )
+  ipcMain.handle(IPC.agentContinuationAck, (_event, nodeId: unknown) =>
+    typeof nodeId === 'string' ? agentContinuationService!.ack(nodeId) : false
+  )
+  ipcMain.handle(IPC.agentContinuationDiscard, (_event, nodeId: unknown) =>
+    typeof nodeId === 'string' ? agentContinuationService!.discard(nodeId) : false
+  )
+  ipcMain.handle(IPC.agentContinuationContinue, (_event, nodeId: unknown) =>
+    typeof nodeId === 'string'
+      ? agentContinuationService!.continue(nodeId)
+      : Promise.resolve({ ok: false, reason: 'invalid' as const })
+  )
+  agentContinuationService.onUpdate((packets) => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.agentContinuationUpdate, packets)
+  })
+  void agentContinuationService.hydrate().catch(() => undefined)
   workspaceStore.registerIpc()
   gitService.registerIpc()
   presenceHub.registerIpc()
@@ -3172,7 +3206,15 @@ app.whenReady().then(async () => {
   const codexContextTail = createContextTail(pushContextUpdate, {
     provider: 'codex',
     sourceKey: 'codex:local',
-    parse: codexContextParse
+    parse: codexContextParse,
+    onProviderEvent: (sessionId, lines) => {
+      const nodeId = [...nodeContextSession.entries()].find(([, mapped]) => mapped === sessionId)?.[0]
+      if (!nodeId) return
+      for (const event of parseCodexContinuationEvents(nodeId, sessionId, lines)) {
+        if (event.phase === 'provider-start') codexProviderStarts.set(`${nodeId}|${sessionId}`, Date.now())
+        agentContinuationService?.observe(event)
+      }
+    }
   })
   // Remote (SSH-project) counterparts: a node whose pty runs on a remote host has its Claude
   // transcript on that host, so its meter / subagent transcript / search must read over the
@@ -3436,6 +3478,11 @@ app.whenReady().then(async () => {
     // event ENRICHED for a needs-you edge (a question strips its pendingId), so the canvas keys off
     // the same single source of truth as the mirror/phone. Then broadcast the enriched event.
     const enriched = recordAgentEvent(e) ?? e
+    const continuation = enriched.continuation
+    if (continuation?.phase === 'provider-start') {
+      codexProviderStarts.set(`${continuation.nodeId}|${continuation.sessionId}`, Date.now())
+    }
+    if (continuation) agentContinuationService?.observe(continuation)
     sendToMain(IPC.agentStatus, enriched)
     // Feed the macOS Notch HUD its prompt (ev.task on newTurn) + subagent grouping (no-op off/non-darwin).
     notchHudOnAgentEvent(enriched)
@@ -4453,6 +4500,8 @@ app.whenReady().then(async () => {
   }
   const hostBridge = {
     git: gitService,
+    // Preserve the managed account colour and apply the configured Windows profile only at this
+    // host boundary, where remote node registration has the complete machine context.
     registerNode: (
       projectId: string,
       node: { id: string; title?: string; agentId?: string; accountId?: string }
@@ -4632,7 +4681,6 @@ app.whenReady().then(async () => {
         // best-effort: a failed resync leaves the stale sweep as the backstop, exactly as today
       })
     },
-    () => readFile(codexRelayScript, 'utf8'),
     // The remote tmux conf reads these, so an SSH project honours the same scrollback and
     // word-separator settings a local one does.
     () => ({
@@ -4816,8 +4864,6 @@ app.on('before-quit', (e) => {
   const scheduledSettingsStop = scheduledSettingsRuntime.stop()
   const plannerStop = plannerRuntime.stop()
   alarmPlannerRuntime.stop()
-  // Electron releases power assertions at exit anyway; disposing keeps the hold/release log honest.
-  keepAwake?.dispose()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log
   // honest. Clearing the ref too keeps a hook edge that lands during the quit flush (the pty
   // teardown window below) from re-holding an assertion nothing will ever release.

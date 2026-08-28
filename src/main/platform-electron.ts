@@ -156,17 +156,6 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
       addListener(ch, { fn, withSender: true })
       ipcMain.on(ch, (e, ...args) => fn(e.sender.id, ...args))
     },
-    async dispatch(clientId, req, source = {}) {
-      if (RELAY_LOCAL_ONLY_METHODS.has(req.method)) {
-        return {
-          t: 'res', id: req.id, ok: false,
-          error: {
-            code: 'E_FORBIDDEN',
-            message: 'machine-local desktop operation is not available to relay peers'
-          }
-        }
-      }
-      if (req.method.startsWith('githubControl:')) {
     async dispatch(clientId, req) {
       // Host-control admission, from the ONE shared list (src/shared/host-control.ts) rather than a
       // prefix test written out here — the second shell copying a stale copy of that test is the

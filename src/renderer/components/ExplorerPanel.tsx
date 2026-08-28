@@ -594,21 +594,11 @@ export function ExplorerPanel({
     >
       <aside
         className={pinned ? 'drawer md3-explorer drawer--pinned' : 'drawer md3-explorer'}
-      className={pinned ? 'drawer-overlay drawer-overlay--pinned' : 'drawer-overlay'}
-      // Pinned: no handler, so a CSS miss still cannot dismiss the docked tree. The overlay
-      // also has pointer-events:none (styles.css) — without that it would steal canvas clicks
-      // even with a no-op handler. Both halves are load-bearing.
-      onClick={explorerOverlayClickCloses(pinned) ? onClose : undefined}
-    >
-      <aside
-        className={pinned ? 'drawer drawer--pinned' : 'drawer'}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="drawer__head">
           <h2>{project?.name || vocab('Explorer')}</h2>
           <div className="ex-head-actions">
-            <button title={vocab('Refresh')} aria-label={vocab('Refresh')} onClick={() => setVersion((v) => v + 1)}>
-              <MaterialSymbol name="refresh" size={18} />
             <button type="button" title="Refresh" aria-label="Refresh" onClick={() => setVersion((v) => v + 1)}>
               ↻
             </button>
@@ -616,9 +606,7 @@ export function ExplorerPanel({
               <button
                 type="button"
                 className={pinned ? 'is-on' : ''}
-                title={vocab(pinned ? 'Unpin' : 'Pin')}
-                aria-label={vocab(pinned ? 'Unpin' : 'Pin')}
-                title={pinned ? 'Unpin' : 'Pin'}
+                 title={pinned ? 'Unpin' : 'Pin'}
                 aria-label={pinned ? 'Unpin' : 'Pin'}
                 aria-pressed={pinned}
                 onClick={onTogglePin}
@@ -626,9 +614,7 @@ export function ExplorerPanel({
                 <IconPin />
               </button>
             )}
-            <button className="drawer__close" aria-label={vocab('Close')} onClick={onClose}>
-              <MaterialSymbol name="close" size={19} />
-            <button type="button" className="drawer__close" title="Close" aria-label="Close" onClick={onClose}>
+             <button type="button" className="drawer__close" title="Close" aria-label="Close" onClick={onClose}>
               ×
             </button>
           </div>

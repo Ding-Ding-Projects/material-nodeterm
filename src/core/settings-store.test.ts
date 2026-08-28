@@ -189,6 +189,8 @@ describe('SettingsStore nested-default merge', () => {
       }).get()
       expect(settings.defaultTerminalProfileId).toBe(profileId)
       expect(settings.defaultShell).toBe(executable)
+    })
+
   describe('dictation chord seed (one-shot migration)', () => {
     // Same disk fixture as the sibling describes: write a settings.json, load it through the real
     // store, read the merged result back.
@@ -425,4 +427,5 @@ describe('settings:save atomic write', () => {
     if (process.platform === 'win32') expect(mode & 0o200).not.toBe(0)
     else expect(mode).toBe(0o600)
   })
+})
 })

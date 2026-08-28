@@ -12,7 +12,6 @@ import os from 'os'
 import path from 'path'
 import { initPlatform, resetPlatformForTests } from '../core/platform'
 import { fakePlatform } from '../core/platform-fake'
-import { hookServer } from '../core/agents/hook-server'
 import { hookServer, MESSAGING_CONTROL_REFUSAL } from '../core/agents/hook-server'
 import { nodeAuthToken } from '../core/agents/node-auth-token'
 import { STRICT_CONTROL_REFUSAL } from '../core/agents/node-identity-policy'
@@ -185,6 +184,7 @@ describe('the Server Edition wires it at boot', () => {
     const src = fs.readFileSync(path.resolve(__dirname, 'index.ts'), 'utf8')
     // Keep boot coupled to the helper so the refusal cannot silently drift from the direct seam.
     expect(src).toContain('installServerEditionControlHandler(hookServer)')
+  })
   it('registers the refusing handler instead of leaving the null branch', () => {
     // A hook-server change made on one shell only has shipped wrong three times in this repo, and
     // the null branch is invisible until an agent hits it in production.

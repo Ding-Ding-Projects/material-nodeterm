@@ -626,6 +626,9 @@ export function UsageIndicator({
               No usage from this host yet — it is read once the project connects.
             </div>
           )}
+          {/* U8 (owed from PR 7): Codex emits one row per account, all `provider: 'codex'`.
+              Key on provider+accountId so each account renders distinctly, and reduce true
+              duplicates (two settings entries → the same underlying account) to one row. */}
           {dedupeProviderRows(visibleProviders).map((p) => (
             <ProviderBlock key={providerRowKey(p)} u={p} mode={percentMode} identity={providerIdentity(p)} />
           ))}

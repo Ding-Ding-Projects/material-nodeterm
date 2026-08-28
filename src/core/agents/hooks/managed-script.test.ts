@@ -661,8 +661,7 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeo
     },
     // Git Bash on Windows starts the generated hook, the fixture curl, and the fallback scan as
     // separate processes. The behavior completes in ~8 s on a busy host, past Vitest's 5 s default.
-    REAL_SHELL_TEST_TIMEOUT_MS
-    }
+     REAL_SHELL_TEST_TIMEOUT_MS
   )
 
   /**

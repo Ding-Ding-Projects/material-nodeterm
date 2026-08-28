@@ -345,13 +345,15 @@ export async function writeFileAtomic(
 ): Promise<void> {
   const tmp = tempNameFor(target)
   try {
-    await fs.writeFile(tmp, data, { encoding: 'utf-8', ...opts })
-    // `wx`: fail if the temp already exists rather than following it. The name is unique per call,
-    // so this never fires in normal operation — its job is to refuse a symlink an attacker
-    // pre-planted at the (now guessable-in-principle) temp path, so a publish can never be
-    // redirected to write through it. On the expected fresh path it is a plain exclusive create.
+    // Create the unique temp exactly once and exclusively. A prior two-step write first created
+    // the file with the default truncating flag, then always failed its own `wx` create with EEXIST.
+    // Keeping the mode on this create also avoids a readable window for private stores.
     await fs.writeFile(tmp, data, { encoding: 'utf-8', flag: 'wx', ...opts })
     await renameAtomic(tmp, target)
+    // On POSIX, replacing an existing target keeps the temporary file's mode, while on Windows
+    // mode bits are only a compatibility hint. Apply the requested mode after publication so an
+    // existing target is corrected too, without changing the no-mode path.
+    if (opts.mode !== undefined) await fs.chmod(target, opts.mode)
   } catch (e) {
     await fs.rm(tmp, { force: true }).catch(() => {})
     throw e

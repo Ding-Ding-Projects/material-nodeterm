@@ -10,7 +10,6 @@ import {
   type ReactNode,
   type SyntheticEvent
 } from 'react'
-import { useEffect, useId, useRef, useState, type ReactNode, type SyntheticEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
@@ -96,8 +95,6 @@ export function Tooltip({ label, children, delay = 350 }: TooltipProps) {
       onMouseLeave={hide}
       onFocusCapture={show}
       onBlurCapture={hide}
-      onFocus={show}
-      onBlur={hide}
       onMouseDown={hide}
       onKeyDown={(e) => {
         if (e.key === 'Escape') hide()
@@ -109,13 +106,6 @@ export function Tooltip({ label, children, delay = 350 }: TooltipProps) {
       {pos &&
         createPortal(
           <div ref={tooltipRef} id={tooltipId} className="tooltip" role="tooltip" style={{ left: pos.x, top: pos.y, transform: 'translateX(-50%)' }}>
-      aria-describedby={pos ? tooltipId : undefined}
-      tabIndex={typeof children === 'string' || typeof children === 'number' ? 0 : undefined}
-    >
-      {children}
-      {pos &&
-        createPortal(
-          <div id={tooltipId} className="tooltip" role="tooltip" style={{ left: pos.x, top: pos.y }}>
             {vocab(label)}
           </div>,
           document.body

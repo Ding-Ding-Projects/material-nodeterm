@@ -41,9 +41,6 @@ const ROOTS: ScanRoot[] = [
     excludes: /\.test\.(?:mjs|cjs|js)$/
   }
 ]
-const ROOTS = ['core', 'main', 'server', 'session-host'].map((d) => join(__dirname, '..', d))
-const SOURCE_ROOT = join(__dirname, '..')
-
 /** Guard comparisons use one separator regardless of the host running Vitest. */
 function normalizedSourcePath(value: string): string {
   return value.replace(/\\/g, '/')
@@ -60,15 +57,6 @@ function sources(root: ScanRoot, out: string[] = [], dir = root.directory): stri
     if (statSync(p).isDirectory()) {
       if (entry !== 'node_modules') sources(root, out, p)
     } else if (root.includes.test(entry) && !root.excludes.test(entry)) {
-  return normalizedSourcePath(relative(SOURCE_ROOT, file))
-}
-
-function sources(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry)
-    if (statSync(p).isDirectory()) {
-      if (entry !== 'node_modules') sources(p, out)
-    } else if (/\.ts$/.test(entry) && !/\.test\.ts$/.test(entry)) {
       out.push(p)
     }
   }
@@ -99,7 +87,6 @@ function isRenameAllowed(relativeFile: string): boolean {
 
 describe('every store publishes through renameAtomic', () => {
   const files = ROOTS.flatMap((root) => sources(root))
-  const files = ROOTS.flatMap((r) => sources(r))
 
   it('finds the source tree (a zero-file scan would pass silently)', () => {
     // The failure this whole file is about, one level up: a scan that matches nothing reports
@@ -184,27 +171,21 @@ describe('every store publishes through renameAtomic', () => {
   }
 
   function renameHits(text: string): string[] {
-    const code = stripImports(
-      text
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .replace(/(^|[^:])\/\/.*$/gm, '$1')
-    )
-  function renameHits(text: string): string[] {
     const code = text
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/(^|[^:])\/\/.*$/gm, '$1')
-      .replace(/import\s*[\s\S]*?\s+from\s*['"][^'"]+['"]/g, '')
+    const stripped = stripImports(code)
     const bindings = fsRenameBindings(text)
     const hits: string[] = []
     for (const namespace of bindings.namespaces) {
       const call = new RegExp(
         `(?<![A-Za-z0-9_$.])${escaped(namespace)}(?:\\.promises)?\\.rename(?:Sync)?\\s*\\(`
       )
-      if (call.test(code)) hits.push(`${namespace}.rename`)
+      if (call.test(stripped)) hits.push(`${namespace}.rename`)
     }
     for (const local of [...bindings.asyncCalls, ...bindings.syncCalls]) {
       const call = new RegExp(`(?<![A-Za-z0-9_$.])${escaped(local)}\\s*\\(`)
-      if (call.test(code)) hits.push(`${local}(`)
+      if (call.test(stripped)) hits.push(`${local}(`)
     }
     return hits
   }
@@ -291,7 +272,6 @@ describe('every store publishes through renameAtomic', () => {
 
 describe('no local .tmp publisher uses a shared temp name', () => {
   const files = ROOTS.flatMap((root) => sources(root))
-  const files = ROOTS.flatMap((r) => sources(r))
 
   it('every local temp path carries random UUID entropy', () => {
     // The second bug at the same sites, independent of the platform question: a FIXED temp name

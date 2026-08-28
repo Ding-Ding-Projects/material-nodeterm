@@ -116,7 +116,7 @@ export function parseShortcut(s: string): ParsedShortcut {
     if (lower === 'cmd' || lower === 'command') {
       cmd = true
     } else if (lower === 'ctrl' || lower === 'control') {
-      ctrl = true
+      cmd = true
     } else if (lower === 'shift') {
       shift = true
     } else if (lower === 'alt' || lower === 'option') {
@@ -312,7 +312,6 @@ export function captureToShortcut(e: ShortcutKeyEvent, isMac: boolean): string |
   const key = normalizeKey(e.key)
   if (MODIFIER_KEYS.has(key)) return null
   const parts = ['Ctrl']
-  const parts = ['Cmd']
   if (isMac && e.ctrlKey) parts.push('Ctrl')
   if (e.altKey) parts.push('Alt')
   if (e.shiftKey) parts.push('Shift')
@@ -339,16 +338,6 @@ export interface ChordModifiers {
 export function buildModifierChord(mods: ChordModifiers): string | null {
   if (!mods.cmd) return null
   const parts = ['Ctrl']
-/** `{cmd:true, alt:true, shift:false}` -> `"Cmd+Alt"`; `{cmd:false, ...}` -> `null` (the primary
- *  modifier is mandatory, same as `captureToShortcut`). A `ctrl` observed beside the primary
- *  becomes the literal `Ctrl` token, for the same reason `captureToShortcut` records it: under
- *  exact matching, a chord that omits a modifier the user was holding can never fire. The Settings
- *  capture field calls this at keyUp, once every key has been released, using the modifier state it
- *  remembered from the last keyDown while only modifier keys had been pressed
- *  (`isModifierEventKey`) — the keyup event itself no longer carries that state. */
-export function buildModifierChord(mods: ChordModifiers): string | null {
-  if (!mods.cmd) return null
-  const parts = ['Cmd']
   if (mods.ctrl) parts.push('Ctrl')
   if (mods.alt) parts.push('Alt')
   if (mods.shift) parts.push('Shift')

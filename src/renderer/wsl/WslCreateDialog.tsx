@@ -8,7 +8,6 @@ import type { WslCreateProgress } from '@shared/wsl'
 import { validateWslCreateForm } from './wslCreateForm'
 import { useI18n } from '../lib/i18n'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
-import { formatText } from '@shared/i18n'
 import { mapAroundExactFacts } from '../nodes/nodeVocabulary'
 import {
   WSL_COPY,
@@ -27,86 +26,6 @@ interface WslCreateDialogProps {
   onCreate: (v: { operationId: string; catalogueId: string; name: string }) => void
   onCancelCreate: (operationId: string) => Promise<boolean>
   onCancel: () => void
-}
-
-interface WslDialogError {
-  ownership: 'authored' | 'external-factual'
-  text: string
-  copyId?: keyof typeof WSL_COPY_IDS
-  authoredPrefixId?: keyof typeof WSL_COPY_IDS
-}
-
-const WSL_BRAND = 'WSL'
-
-/** One canonical list of WSL-owned catalogue ids. Runtime facts are parameters, never ids. */
-export const WSL_COPY_IDS = {
-  title: 'wsl.create.title',
-  cancel: 'wsl.create.actions.cancel',
-  create: 'wsl.create.actions.create',
-  cancelling: 'wsl.create.actions.cancelling',
-  creating: 'wsl.create.actions.creating',
-  description: 'wsl.create.description',
-  filterLabel: 'wsl.create.filter.label',
-  filterRegex: 'wsl.create.filter.regex',
-  listAria: 'wsl.create.list.aria',
-  loading: 'wsl.create.status.loading',
-  catalogueError: 'wsl.create.error.cataloguePrefix',
-  emptyNone: 'wsl.create.empty.none',
-  emptyNoMatch: 'wsl.create.empty.noMatch',
-  nameLabel: 'wsl.create.field.name',
-  nameAria: 'wsl.create.field.nameAria',
-  namePlaceholder: 'wsl.create.field.placeholder',
-  nameSupport: 'wsl.create.field.support',
-  errorPrefix: 'wsl.create.error.prefix',
-  progressStarting: 'wsl.create.progress.starting',
-  progressCancelling: 'wsl.create.progress.cancelling',
-  progressValidating: 'wsl.create.progress.validating',
-  progressChecking: 'wsl.create.progress.checking',
-  progressInstalling: 'wsl.create.progress.installing',
-  progressTelemetry: 'wsl.create.progress.telemetry',
-  progressRecording: 'wsl.create.progress.recording',
-  progressCompleted: 'wsl.create.progress.completed',
-  progressFailed: 'wsl.create.progress.failed',
-  progressCancelled: 'wsl.create.progress.cancelled',
-  progressStep: 'wsl.create.progress.step',
-  progressOf: 'wsl.create.progress.of',
-  progressAria: 'wsl.create.progress.aria',
-  progressElapsed: 'wsl.create.progress.elapsed',
-  progressSeconds: 'wsl.create.progress.seconds',
-  progressCancellable: 'wsl.create.progress.cancellable',
-  errorNoActive: 'wsl.create.error.noActive',
-  errorCancelRejected: 'wsl.create.error.cancelRejected',
-  errorCancelPrefix: 'wsl.create.error.cancelPrefix',
-  validationRequired: 'wsl.create.validation.required',
-  validationWhitespace: 'wsl.create.validation.whitespace',
-  validationLength: 'wsl.create.validation.length',
-  validationCharacters: 'wsl.create.validation.characters',
-  validationShape: 'wsl.create.validation.shape',
-  validationDuplicate: 'wsl.create.validation.duplicate',
-  validationChooseDistribution: 'wsl.create.validation.chooseDistribution'
-} as const
-
-const STAGE_COPY_IDS: Record<WslCreateProgress['stage'], keyof typeof WSL_COPY_IDS> = {
-  validating: 'progressValidating',
-  checking: 'progressChecking',
-  installing: 'progressInstalling',
-  recording: 'progressRecording',
-  completed: 'progressCompleted',
-  failed: 'progressFailed',
-  cancelled: 'progressCancelled'
-}
-
-const VALIDATION_COPY_IDS: Record<string, keyof typeof WSL_COPY_IDS> = {
-  'Name is required.': 'validationRequired',
-  'Name cannot start or end with whitespace.': 'validationWhitespace',
-  'Name must be 64 characters or fewer.': 'validationLength',
-  'Name contains characters that are not allowed.': 'validationCharacters',
-  'Use letters, numbers, spaces, dots, hyphens, or underscores, starting and ending with a letter or number.': 'validationShape',
-  'A WSL instance with this name already exists.': 'validationDuplicate',
-  'Choose a distribution.': 'validationChooseDistribution',
-  'Creating…': 'creating',
-  'Loading available distributions…': 'loading',
-  'Could not load available distributions.': 'catalogueError'
 }
 
 /**
@@ -150,28 +69,6 @@ export function WslCreateDialog({
   // The fallback is both localized through the shared catalog and then passed through the local
   // personal-vocabulary boundary. Keys are derived only from fixed shipped copy, never from a
   // distribution name, user name, path, operation id, or external error.
-  const copy = (id: string, fallback: string, params: Record<string, string> = {}): string =>
-    formatText(mapVocabulary(ts(id, fallback)), params)
-
-  const renderError = (value: WslDialogError): string =>
-    value.ownership === 'external-factual'
-      ? `${value.authoredPrefixId
-        ? `${copy(WSL_COPY_IDS[value.authoredPrefixId], 'Could not cancel {brand} creation:', { brand: WSL_BRAND })} `
-        : ''}${value.text}`
-      : copy(
-        value.copyId ? WSL_COPY_IDS[value.copyId] : WSL_COPY_IDS.errorPrefix,
-        value.text,
-        { brand: WSL_BRAND }
-      )
-
-  const copyValidation = (value: string): string => {
-    const copyId = VALIDATION_COPY_IDS[value]
-    if (!copyId) return value
-    return copy(
-      WSL_COPY_IDS[copyId],
-      value,
-      { brand: WSL_BRAND }
-    )
   const copy = (key: WslCopyKey, facts: readonly string[] = [], params?: Record<string, string>): string => {
     const entry = WSL_COPY[key]
     return mapAroundExactFacts(ts(entry.id, entry.fallback, params), facts, mapVocabulary)
@@ -201,7 +98,6 @@ export function WslCreateDialog({
     const activeOperationId = operationIdRef.current
     if (!activeOperationId) {
       setCancelRequested(false)
-      setCancelError({ ownership: 'authored', copyId: 'errorNoActive', text: '' })
       setCancelError({ ownership: 'authored', copy: 'noActive' })
       return
     }
@@ -212,7 +108,6 @@ export function WslCreateDialog({
       const accepted = await onCancelCreate(activeOperationId)
       if (!accepted) {
         setCancelRequested(false)
-        setCancelError({ ownership: 'authored', copyId: 'errorCancelRejected', text: '' })
         setCancelError({ ownership: 'authored', copy: 'cancelRejected' })
       }
     } catch (e) {
@@ -221,7 +116,6 @@ export function WslCreateDialog({
       setCancelError({
         ownership: 'external-factual',
         text: detail,
-        authoredPrefixId: 'errorCancelPrefix'
         facts: [detail],
         authoredPrefix: 'cancelErrorPrefix'
       })
@@ -312,13 +206,6 @@ export function WslCreateDialog({
       closeOnScrimClick={!operationActive}
       closeOnEscape={false}
       className="wsl-create-dialog"
-      title={copy(WSL_COPY_IDS.title, 'New {brand} instance', { brand: WSL_BRAND })}
-      actions={
-        <>
-          <Button type="button" variant="text" onClick={() => void cancel()} disabled={cancelRequested}>
-            {cancelRequested
-              ? copy(WSL_COPY_IDS.cancelling, 'Cancelling {brand} creation…', { brand: WSL_BRAND })
-              : copy(WSL_COPY_IDS.cancel, 'Cancel')}
       title={copy('title')}
       actions={
         <>
@@ -328,13 +215,6 @@ export function WslCreateDialog({
           <Button
             type="button"
             variant="filled"
-            disabled={busy || !validation.valid}
-            title={validation.disabledReason ? copyValidation(validation.disabledReason) : undefined}
-            onClick={submit}
-          >
-            {busy
-              ? copy(WSL_COPY_IDS.creating, 'Creating {brand} instance…', { brand: WSL_BRAND })
-              : copy(WSL_COPY_IDS.create, 'Create')}
             disabled={operationActive || !validation.valid}
             title={validation.disabledReason ? copyFromFallback(validation.disabledReason) : undefined}
             onClick={submit}
@@ -346,11 +226,6 @@ export function WslCreateDialog({
     >
       <div className="wsl-create-dialog__body">
         <p className="wsl-create-dialog__description">
-          {copy(
-            WSL_COPY_IDS.description,
-            'Choose a distribution from the live {brand} catalogue, then give this machine-local instance a unique name.',
-            { brand: WSL_BRAND }
-          )}
           {copy('description')}
         </p>
 
@@ -359,8 +234,6 @@ export function WslCreateDialog({
             <TextField
               ref={searchInputRef}
               className="wsl-create-dialog__search-field"
-              label={copy(WSL_COPY_IDS.filterLabel, 'Filter distributions')}
-              aria-label={copy(WSL_COPY_IDS.filterLabel, 'Filter distributions')}
               label={copy('filterLabel')}
               aria-label={copy('filterLabel')}
               value={search.value}
@@ -369,7 +242,6 @@ export function WslCreateDialog({
               trailingSlot={<AnchoredRegexBuilder
                 search={search}
                 fieldRef={searchInputRef}
-                label={copy(WSL_COPY_IDS.filterRegex, 'Regex for {brand} distributions', { brand: WSL_BRAND })}
                 label={copy('filterRegex')}
                 zIndex={93}
               />}
@@ -381,18 +253,6 @@ export function WslCreateDialog({
           {search.error && <div className="menu-filter__error">{search.error}</div>}
         </div>
 
-        <div className="wsl-create-dialog__list" role="listbox" aria-label={copy(WSL_COPY_IDS.listAria, 'Available {brand} distributions', { brand: WSL_BRAND })} aria-busy={catalogueLoading}>
-          {catalogueLoading ? (
-            <div className="wsl-create-dialog__empty" role="status">{copy(WSL_COPY_IDS.loading, 'Loading available distributions…')}</div>
-          ) : catalogueError ? (
-            <div className="wsl-create-dialog__empty wsl-create-dialog__empty--error" role="alert">
-              {copy(WSL_COPY_IDS.catalogueError, 'Could not load available distributions:')} {catalogueError}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="wsl-create-dialog__empty">
-              {catalogue.length === 0
-                ? copy(WSL_COPY_IDS.emptyNone, 'No distributions available.')
-                : copy(WSL_COPY_IDS.emptyNoMatch, 'No distributions match that filter.')}
         <div className="wsl-create-dialog__list" role="listbox" aria-label={copy('listAria')} aria-busy={catalogueLoading}>
           {catalogueLoading ? (
             <div className="wsl-create-dialog__empty" role="status">{copy('loading')}</div>
@@ -425,16 +285,6 @@ export function WslCreateDialog({
         <TextField
             ref={nameInputRef}
             className="wsl-create-dialog__name-field"
-            label={copy(WSL_COPY_IDS.nameLabel, 'Instance name')}
-            aria-label={copy(WSL_COPY_IDS.nameAria, '{brand} instance name', { brand: WSL_BRAND })}
-            value={name}
-            spellCheck={false}
-            placeholder={copy(WSL_COPY_IDS.namePlaceholder, 'my-project')}
-            disabled={busy}
-            invalid={!!validation.nameError}
-            supportText={validation.nameError
-              ? copyValidation(validation.nameError)
-              : copy(WSL_COPY_IDS.nameSupport, 'Letters, numbers, spaces, dots, hyphens, and underscores are accepted.')}
             label={copy('nameLabel')}
             aria-label={copy('nameAria')}
             value={name}
@@ -452,7 +302,6 @@ export function WslCreateDialog({
         {(error || cancelError) && (
           <div className="wsl-create-dialog__field-error" role="alert">
             {error
-              ? <>{copy(WSL_COPY_IDS.errorPrefix, 'The {brand} operation reported an error:', { brand: WSL_BRAND })} {error}</>
               ? renderError(error)
               : cancelError
                 ? renderError(cancelError)
@@ -465,19 +314,6 @@ export function WslCreateDialog({
             <div className="wsl-create-dialog__progress-heading">
               <strong>
                 {cancelRequested
-                  ? copy(WSL_COPY_IDS.progressCancelling, 'Cancelling {brand} creation…', { brand: WSL_BRAND })
-                  : progress
-                    ? copy(
-                      WSL_COPY_IDS[STAGE_COPY_IDS[progress.stage]],
-                      '{brand} creation is in progress.',
-                      { brand: WSL_BRAND, exe: 'wsl.exe' }
-                    )
-                    : copy(WSL_COPY_IDS.progressStarting, 'Starting {brand} creation…', { brand: WSL_BRAND })}
-              </strong>
-              <span>
-                {copy(WSL_COPY_IDS.progressStep, 'Step')} {progress?.step ?? 1}{' '}
-                {copy(WSL_COPY_IDS.progressOf, 'of')} {progress?.steps ?? 4}
-              </span>
                   ? copy('cancellingProgress')
                   : progress
                     ? copy(progress.message.id as WslCopyKey, progress.message.facts, progress.message.params)
@@ -491,8 +327,6 @@ export function WslCreateDialog({
               aria-valuemin={1}
               aria-valuemax={progress?.steps ?? 4}
               aria-valuenow={progress?.step ?? 1}
-              aria-valuetext={`${copy(WSL_COPY_IDS.progressStep, 'Step')} ${progress?.step ?? 1} ${copy(WSL_COPY_IDS.progressOf, 'of')} ${progress?.steps ?? 4}`}
-              aria-label={copy(WSL_COPY_IDS.progressAria, '{brand} creation phase progress', { brand: WSL_BRAND })}
               aria-valuetext={copy(
                 'progressValue',
                 [progress?.stage ?? 'validating', 'wsl.exe'],
@@ -508,24 +342,11 @@ export function WslCreateDialog({
               <span style={progress?.determinate ? { width: '100%' } : undefined} />
             </div>
             <p className="wsl-create-dialog__progress-detail">
-              {copy(WSL_COPY_IDS.progressElapsed, 'Elapsed time:')} {Math.floor((Math.max(elapsedMs, progress?.elapsedMs ?? 0)) / 1000)} {copy(WSL_COPY_IDS.progressSeconds, 'seconds.')}{' '}
-              {progress?.stage === 'installing'
-                ? copy(
-                  WSL_COPY_IDS.progressTelemetry,
-                  'Installation progress is reported by phase because {exe} provides no byte or percentage telemetry.',
-                  { exe: 'wsl.exe' }
-                )
-                : copy(WSL_COPY_IDS.progressCancellable, 'The operation is bounded and can be cancelled.')}
               {copy('elapsed')} {Math.floor((Math.max(elapsedMs, progress?.elapsedMs ?? 0)) / 1000)} {copy('seconds')}{' '}
               {progress?.stage === 'installing'
                 ? copy('installingDetail', ['wsl.exe'])
                 : copy('cancellable')}
             </p>
-            {progress?.message && (
-              <p className="wsl-create-dialog__progress-detail" data-vocabulary-ownership="external-factual">
-                {progress.message}
-              </p>
-            )}
           </div>
         )}
       </div>

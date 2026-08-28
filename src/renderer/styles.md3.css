@@ -12836,6 +12836,8 @@ button.term-node__title-text:focus-visible {
 }
 .mdx-row {
   border-radius: var(--md-shape-small);
+}
+
 /* ============================================================================================
    Desktop legacy-control remediation
    ============================================================================================
@@ -12905,6 +12907,8 @@ button.term-node__title-text:focus-visible {
 }
 .mc-link--danger {
   color: var(--md-error);
+}
+
 /* Unified Node Catalog. The dialog owns its own bounded list and the search field keeps the
    anchored regex trigger beside the exact corpus it filters. */
 .mdx-dialog.node-catalog-dialog {
@@ -13545,6 +13549,7 @@ button.term-node__title-text:focus-visible {
   .cdk-manager__availability { text-align: left; }
   .cdk-manager__folder-row > input,
   .cdk-manager__folder-row > button { width: 100%; flex-basis: 100%; }
+}
 
 .kiosk-pwa-setup-dialog {
   width: min(680px, calc(100vw - 32px));
@@ -13762,6 +13767,11 @@ button.term-node__title-text:focus-visible {
 
 .cloudformation-manager__rows {
   display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+}
+
 /* AWS identity manager. Every picker is a real list with its own search and anchored regex
    builder. The card keeps long endpoint and SSO values readable without leaking into the canvas. */
 .aws-identity {
@@ -13851,6 +13861,10 @@ button.term-node__title-text:focus-visible {
 
 .cloudformation-manager button:focus-visible,
 .cloudformation-manager input:focus-visible {
+  outline: 3px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
 .aws-identity__choices button,
 .aws-identity__endpoint-list button,
 .aws-identity__summary button,
@@ -14382,4 +14396,63 @@ button.term-node__title-text:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .canvas-zone-preview { transition: none; }
+}
+/* Codex crash-recovery review: anchored to the owning terminal node and intentionally quiet until
+   the provider has emitted a packet. No action is automatic; the card is a user decision surface. */
+.agent-continuation-review {
+  position: absolute;
+  z-index: 4;
+  inset-inline-end: 12px;
+  inset-block-start: 52px;
+  width: min(360px, calc(100% - 24px));
+  max-height: min(420px, calc(100% - 64px));
+  overflow: auto;
+  padding: 16px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-corner-large);
+}
+
+.agent-continuation-review__title {
+  color: var(--md-on-surface);
+  font: var(--md-typescale-title-medium);
+}
+
+.agent-continuation-review__summary,
+.agent-continuation-review__preview,
+.agent-continuation-review__warning,
+.agent-continuation-review__result {
+  margin: 8px 0;
+  color: var(--md-on-surface-variant);
+  font: var(--md-typescale-body-medium);
+}
+
+.agent-continuation-review__warning {
+  color: var(--md-error);
+}
+
+.agent-continuation-review__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block-start: 12px;
+}
+
+.agent-continuation-review__actions button {
+  min-block-size: 40px;
+  max-inline-size: 100%;
+  padding: 8px 12px;
+  color: var(--md-on-primary-container);
+  background: var(--md-primary-container);
+  border: 0;
+  border-radius: var(--md-shape-corner-full);
+  font: var(--md-typescale-label-large);
+  white-space: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-continuation-review {
+    scroll-behavior: auto;
+  }
 }

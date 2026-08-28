@@ -1,5 +1,75 @@
 # Handoff
 
+## 2026-08-27, QEMU installer spawn retry repair
+
+The pinned QEMU resource bootstrap now creates its temporary installer with exclusive ownership and
+removes that file from a `finally` block on every post-creation path. An existing path is never
+overwritten or removed, so cleanup cannot delete a file created by another process.
+
+Before a child process starts, transient `EACCES`, `EPERM`, and `EBUSY` spawn errors are retried at
+most three times with 50 ms and 100 ms delays. A child that starts and exits nonzero remains a
+terminal installer failure and is never retried. The fixed manifest URL, SHA-512 validation,
+shell-free `/S` and `/D=` arguments, extraction validation, QEMU version, size disclosure, and
+unsigned packaging policy are unchanged. The direct feature record is
+`docs/features/integrations/linux-iso-vm.md`.
+
+This lane did not run a build, packaging, test, lint, type-check, review, audit, runtime
+interaction, or capture workflow. The 180 MB installer was not executed.
+
+## 2026-08-28, parser recovery build handoff and QEMU packaging blocker
+
+The combined parser-recovery branch currently ends at
+`8352b8b49050706acc2f8948088cff648b8bb0c1`. At the final fetch before packaging, that commit was
+99 commits ahead of `origin/main` and zero behind. It includes the main-process, relay, account,
+identity, PTY, renderer, stylesheet, bridge, documentation-bundle, portable-media, session-host,
+and native-toolchain repairs accumulated under issue #104.
+
+The supported source build and the one-click full build both completed at that exact commit:
+
+- `npm run build` exited `0`. Repository contracts, main, preload, 3,950 renderer modules, the
+  complete renderer asset set, and `out/session-host/host.cjs` (368.1 kB) were produced.
+- `build.bat /s` exited `0`. It selected manifest-pinned Node.js `24.19.0`, Python 3.13, and
+  Visual Studio 2022 toolset `14.44.35207` from the compatible installation under shared program
+  data. The selected `VsDevCmd.bat` environment, real Spectre libraries, native rebuild, repository
+  contracts, and application bundles all completed.
+- No new test, lint, type-check, review, audit, runtime-interaction, or screenshot workflow ran in
+  this rapid recovery pass. The build commands above are build evidence only.
+
+`build-installer.bat /s` did not complete. It reached the guarded Windows installer wrapper, proved
+the source identity, then failed during pinned QEMU resource staging. After downloading and
+SHA-512-validating the pinned installer, Node could not spawn
+`resources/qemu/.qemu-w64-29620.exe` and reported `EACCES`. The retained failed-attempt file is
+180,204,136 bytes with SHA-256
+`c7592db7716029e814d71c9a7dfc9b76dc72019753ee9afc2fa70b14c9d28b4f`. It has only the data stream.
+No Squirrel.Windows output was produced by that attempt.
+
+A source worker was started to add bounded retry for transient child-process `EACCES`, `EPERM`,
+and `EBUSY` errors in `scripts/ensure-qemu-resources.mjs`, while preserving fixed arguments,
+`shell: false`, hash validation, real installer exit failures, required payload checks, and
+current-process temporary-file cleanup in `finally`. The session was stopped before that worker
+edited the file, so no partial implementation exists and nothing is hidden outside commits.
+A direct attempt to remove the failed temporary installer was refused before execution by the
+automation safety boundary, so the exact file remains for the next owner to inspect or remove
+through an approved route.
+
+Next actions:
+
+1. Implement the bounded QEMU spawn retry and `finally` cleanup in
+   `scripts/ensure-qemu-resources.mjs`.
+2. Rerun `build-installer.bat /s` at a commit that includes that repair. Record every unsigned
+   Squirrel.Windows output, size, signature state, and SHA-256.
+3. Open one combined pull request for issue #104. Do not split the related recovery commits into
+   separate pull requests.
+4. Add a separate new pull-request comment stating that implementation workers use Luna,
+   reviewers and auditors use Terra, and large repair lanes use Sol.
+5. Merge only after the pull request is mergeable, then verify the unique non-draft release target
+   and every required downloadable asset. Do not infer release success from a build or a queued run.
+6. Keep downstream issue #198 in Ding-Ding-Projects/material-nodeterm separate. Its encrypted
+   continuation-packet feature is an independent active feature branch and explicitly depends on
+   this recovery finishing. The separately numbered eneskirca/nodeterm PR #198 is an unrelated
+   merged security change.
+7. Preserve the unrelated primary-checkout edit in `src/main/codex-accounts.ts` and the named
+   preservation stash. They were not created by this recovery integration.
 ## 2026-08-27, session budget documentation review follow-up
 
 Copilot review comment [#207 discussion 3877552877](https://github.com/Ding-Ding-Projects/material-nodeterm/pull/207#discussion_r3877552877)
@@ -197,27 +267,6 @@ This lane intentionally ran no tests, lint, type checks, builds, packaging, inst
 runtime interaction, reviews, audits, or UI captures. Read-only source and history inspection was
 used to locate the shutdown boundary. The integration owner must evaluate the exact commit and the
 follow-up GitHub Actions run before treating this repair as verified.
-## 2026-08-27, VS2022 Spectre toolchain selection for native npm builds
-
-The fresh full checkout build for version `0.4.121` ran `build.bat /s` and exited `1` during the
-npm postinstall path for `electron-rebuild` and `node-pty`. The diagnostic was `MSB8040`, which
-requires the Spectre-mitigated libraries. Bootstrap discovery found Node `24.19.0`, Python
-`3.13`, and the required x86/x64 Spectre libraries in the VS2022 toolset `14.44.35207`, but the
-native build selected `C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Microsoft\VC\v180`,
-where the matching Spectre libraries were absent.
-
-The cause was that `download-dependencies.bat` validated the supported VS2022 toolchain but left
-node-gyp and npm free to auto-select the newer VS18 installation. The repair sets both
-`GYP_MSVS_VERSION=2022` and `npm_config_msvs_version=2022` immediately after successful VS2022
-validation, including the interactive post-UAC path, and exports both values through the final
-`endlocal` handoff so later npm, node-gyp, and electron-rebuild commands receive the same choice.
-The script does not modify global npm configuration, Visual Studio, or Spectre mitigation.
-
-No tests, checkers, lint, type checks, builds, packaging, installer execution, runtime interaction,
-reviews, audits, or UI captures were run in this lane. The manual build result above is the source
-diagnostic, not a post-repair verification. The coordinating owner must run the supported build
-path and inspect the resulting GitHub Actions run before claiming the repair verified.
-
 ## 2026-08-27, notification preparation and relay argument punctuation repair
 
 Release run `33128741581` at `7117d7bc97b6a7a7f83f0d4607d30a018b741922` passed all repository,
@@ -240,7 +289,29 @@ execution, runtime interaction, reviews, audits, or UI captures. Read-only sourc
 the notification helper types and the `initSshProject` argument boundary. The integration owner
 must evaluate the exact commit and follow-up GitHub Actions run before treating this repair as verified.
 
-## 2026-08-27, browser registration callback closure repair
+## 2026-08-27, opening merge-recovery repairs
+
+### Renderer stylesheet boundary repair
+
+`src/renderer/styles.css` contained merge remnants inside the destructive confirmation styles. The
+`.destgate__head`, `.destgate__icon`, and `.destgate__actions` rules had been split by card-modal and
+sticky-note selectors, leaving the destination gate incomplete and causing the renderer stylesheet
+parse failure at `.destgate__actions`.
+
+The repair restores the destination gate from clean history at `8498eb32`, including the anchored
+scrim, title, hover, completion, exit, and reduced-motion rules. The card-modal resize, header, and
+rendered-markdown rules that were interleaved in the damaged range are retained as independent
+selectors. A full source scan also identified ten other merge-spliced declaration blocks, and their
+missing closing braces were restored at the exact selector boundaries without changing their
+declarations. The resulting brace count is balanced at 2,637 opening and 2,637 closing braces after
+comment removal.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, audits, or UI captures. No local CSS parser was installed or
+available, so the brace-balance result is syntax-adjacent evidence only. The integration owner must
+run the permitted build path and verify the exact combined commit.
+
+### Browser registration callback closure repair
 
 Release run `33128093384` at `61afa6a19c7f159780073eb91efa2dbefd463420` failed during the application
 build at `src/main/index.ts:1975:2` with `Unexpected ")"`. The `IPC.browserRegister` callback opened
@@ -286,7 +357,7 @@ repairs, or UI captures were run in the ultra-speed lane. The feature branch is 
 integration task to review, commit, and push. The mobile companion remains an explicit bridge-parity
 follow-up because this lane changes the shared canvas projection only.
 
-## 2026-08-27, main-process keyboard interception repair
+### Main-process keyboard interception repair
 
 Release run `33127262674` at `35f76e8fdb8a6921fc7dc2a3caf9ddb2d3ec93cb` passed both coverage checkers,
 packaging, provenance, and icon phases, then failed during the application build at
@@ -309,7 +380,7 @@ execution, runtime interaction, reviews, audits, or UI captures. Read-only sourc
 identified the duplicate registration boundary and import usage. The integration owner must evaluate
 the exact commit and the follow-up GitHub Actions run before treating this repair as verified.
 
-## 2026-08-27, main-process parser repair
+### Main-process parser repair
 
 Release run `33126389977` reached the application build after both coverage checkers and all
 packaging and icon phases passed, then failed at `src/main/index.ts:884:4` with
@@ -331,7 +402,7 @@ execution, runtime interaction, reviews, audits, or UI captures. Read-only sourc
 were used to identify the exact duplicate splices. The integration owner must evaluate the exact
 commit and the follow-up GitHub Actions run before treating this repair as verified.
 
-## 2026-08-27, Canvas notification inventory repair
+### Canvas notification inventory repair
 
 Release run `33123084094` at `e6697feb31e5e59f36e916b4e5b00966e9b57891` executed the repaired
 coverage checker. Producer manifest, producer uniqueness, speech marker, project-save markers,
@@ -352,7 +423,7 @@ installer execution, runtime interaction, reviews, audits, or UI captures. The p
 read-only and separate from the production checker, so the repair remains unverified by those
 activities until the integration owner evaluates the exact merged commit.
 
-## 2026-08-27, personal vocabulary producer and save-notification repair
+### Personal vocabulary producer and save-notification repair
 
 Release run `33121962513` at `9c5cbc2883c0218ff159cf39874d5e94c1db45c4` executed the coverage checker
 and reported eight base failures: the canonical producer mismatch, Canvas notification count and
@@ -373,7 +444,7 @@ packaging, installer execution, runtime interaction, reviews, audits, or UI capt
 remains unverified by those activities until the integration owner evaluates the exact merged
 commit.
 
-## 2026-08-27, personal vocabulary coverage parser repair
+### Personal vocabulary coverage parser repair
 
 Release run `33119050796` reached application build after the source identity, resource, icon,
 HTTPS, and metadata phases passed, then failed while parsing
@@ -392,6 +463,209 @@ This lane intentionally ran no tests, checkers, lint, type checks, builds, packa
 execution, runtime interaction, reviews, audits, or UI captures. The repaired source therefore
 remains unverified by those activities, and the integration owner must evaluate the exact merged
 commit before treating the release workflow as recovered.
+
+### Portable board-attachment detector export
+
+`src/core/board-attachments.ts` already consumed the shared byte-derived
+`detectBoardAttachmentKind` implementation, including the current file, image, audio, and video
+classification contract. A merge left the imported value unexported from the core attachment
+boundary, while `src/core/portable-project-import.ts` correctly imported it from that boundary.
+
+The repair adds one explicit re-export and keeps the shared implementation as the single source of
+truth. Portable import therefore continues to validate bounded attachment bytes, MIME and kind,
+SHA-256, archive paths, and symlink-safe destinations without duplicating the detector or changing
+the attachment schema. The adjacent source scan found one detector definition in
+`src/shared/comment-attachments.ts`, one core re-export, one import in portable import, and the
+expected materialize, read, and archive-validation call sites.
+
+Direct records are `CHANGELOG.md`, `ROADMAP.md`, and this handoff. No tests, type checks, lint,
+reviews, audits, builds, packaging, runtime interaction, or screen captures were run under the
+ultra-speed boundary. The parent integration lane owns broader verification, release work, and
+the combined pull request.
+
+Board attachment merge leftovers 清走晒：shared detector 保留一份，core export boundary 補返，
+portable import 繼續用同一個 classification，limits、path safety、hash 同 archive validation
+冇改。今次只做 source-level repair，其他 checks 留返 parent integration lane。
+
+## 2026-08-27, Cloudflare Tunnel route-planner merge reconstruction
+
+`src/shared/cloudflare-tunnels.ts` retained the one-line existing-route conflict return from one
+implementation and the closing brace from a block-bodied version. That brace ended the `try` body
+before the DNS-only conflict branch, so parsing stopped with `Expected finally but found if`.
+
+The repair restores one block-bodied existing-route branch inside the original `try` scope. It
+keeps the current `route-in-use` versus `hostname-in-use` distinction, permits adoption only when
+the selected tunnel already owns a managed route, preserves the DNS-only conflict when records
+exist without a route, and leaves the exact record, zone, hostname, route, ownership, and explicit
+adoption checks unchanged. The complete file contains one declaration for every exported type,
+interface, normalizer, validator, planner, portable-intent helper, and inventory-search helper.
+
+The direct records for this repair are
+`docs/features/remote/cloudflare-tunnel-inventory.md`, `CHANGELOG.md`, `ROADMAP.md`, and this
+handoff. A single-file esbuild transform reported `PARSE_OK`, which is syntax evidence only. No
+tests, type checks, lint, reviews, audits, builds, packaging, runtime interaction, or screen
+captures were run. The parent integration lane owns the combined pull request, build, packaging,
+release, and broader verification.
+
+## 2026-08-27, residual duplicate declarations
+
+The residual duplicate lane repaired three merge remnants in the exact task-owned source files.
+`src/core/pty-manager.ts` now retains one `runEndSession` implementation, the complete current
+teardown path that records backend acknowledgements, session ownership, tombstones, subscribers,
+scrollback, identity state, and platform-specific process cleanup. The removed declaration was a
+recursive copy of the `endSession` coordination wrapper and could never provide the real teardown.
+
+`src/shared/types.ts` now keeps the current Windows-friendly default font stack with Consolas and
+Cascadia Mono before Courier New, plus the explicit empty speech model that means no dictation is
+selected until the user chooses one. The stale duplicate font and earlier speech defaults are gone.
+`src/core/torrent/service.ts` keeps the callback supplied through `TorrentServiceOptions` under the
+distinct `taskCallback` field, while preserving the public `onTask(listener)` subscription method.
+This removes the class-member collision without changing either notification route.
+
+Direct records are `CHANGELOG.md`, `ROADMAP.md`, and this handoff. Single-file esbuild transforms
+reported `PARSE_OK` for all three changed source files, with zero warnings. No tests, type checks,
+lint, reviews, audits, builds, packaging, runtime interaction, or screen captures were run in this
+ultra-speed lane. The parent integration lane owns the combined pull request and all broader
+verification.
+
+Merge leftovers 清走晒：PTY 收返一份完整收尾流程，Windows 字型保留現行 fallback，speech 繼續
+明確停用 dictation，torrent callback 同 listener method 分開命名，唔再撞車。三個 source file
+都有 `PARSE_OK` syntax evidence；其餘 checks 留返 parent integration lane 處理。
+## 2026-08-27, SSH project manager merge reconstruction
+
+`src/main/remote-ssh/ssh-project.ts` retained an older duplicate of the remote Codex account
+lifecycle and runtime installer beside the newer safe-home-validated implementation. The repair
+keeps the current account-aware methods, their real non-symlink `auth.json` boundary, remote-only
+credential handling, the node, Codex, and curl runtime probe, executable-only relay and launcher
+uploads, and the complete remote catalog, thread, exposure, and atomic import path. It also keeps
+the per-node token minter, host-status callbacks, OAuth callback forwarding, live terminal settings,
+and the current project and canvas registrations.
+
+The original one-set implementation is recorded at `20aeabcfe9cec74bdf0f79fb098285e1f4461bff`.
+The hardened one-set parent at `34595056f67c84208944d0923180b6f8c6ef10fa` adds the retained safe-home
+helpers and checks. Merge `7c14db981f9e130cda2b9100285805f9646d7e58` first combined both method
+sets, and later recovery commits removed other fragments without removing this duplicate.
+
+The obsolete account and installer block, duplicate imports, duplicate `codexRelaySource` object
+key, and displaced method documentation were removed. The direct records are `CHANGELOG.md`,
+`ROADMAP.md`, and this handoff. A single-file esbuild transform reported `PARSE_OK`; that is syntax
+evidence only. No tests, type checks, lint, reviews, audits, builds, packaging, runtime interaction,
+or screen captures were run. The parent integration lane owns the combined pull request, release,
+and broader verification.
+
+## 2026-08-27, main process index merge-fragment repair
+
+The main process entrypoint `src/main/index.ts` retained stale fragments from several merged
+implementations. The repair keeps one import declaration per duplicated filesystem, Electron, SSH, account, and
+notification helpers; one quit-confirmation declaration and detail; one configurable-shortcut
+interception path through `installKeydownIntercepts`; one native-notification composition path;
+one `codexAccounts` provider and `registerNode` object key; the corrected `initSshProject`
+argument order and separator; one nested before-quit condition; and one keep-awake teardown.
+
+The direct records for this source repair are `CHANGELOG.md`, `ROADMAP.md`, and this handoff. A
+single-file esbuild transform reported `PARSE_OK`; that is syntax evidence only. No tests, type
+checks, lint, reviews, audits, builds, packaging, runtime interaction, or screen captures were run.
+The parent integration lane owns the final merge and all broader verification.
+
+## 2026-08-27, Codex relay daemon merge reconstruction
+
+`src/main/codex-relay-daemon.ts` retained incompatible fragments from several historical
+implementations. The repair removes the old path-based process-lock read and keeps the
+descriptor-based implementation from `68112546591f6fa9fe34b60ae46b60239109a7d9`, including the
+same-descriptor modification time used for incomplete-directory grace. It also removes the orphan
+function opener that nested `ensureCodexRelayRoot`, retaining the top-level root helper and single
+server function from `59be08f0df637533e7cf3d50af6e048639af7f02`.
+
+The hook request helpers now use only the shared quote-aware endpoint parser introduced by
+`11a30fc60d43267110165cd50b78af17d151be76`. The daemon keeps one exported endpoint-options helper,
+one synchronous thread-reservation primitive, and one response-error rewrite through
+`relayThreadResponseError`. The dotted node capability format, strict account predicate,
+stdin-based registration, atomic cross-account rollout publication, native outcome, and final
+command wrapper remain unchanged.
+
+The exact implementation file and direct records are `src/main/codex-relay-daemon.ts`,
+`CHANGELOG.md`, `ROADMAP.md`, and this handoff. A single-file esbuild transform returned
+`PARSE_OK` after the source edit. This is syntax-only evidence. No tests, type checks, lint,
+reviews, audits, builds, packaging, runtime interaction, or screen captures were run. The parent
+integration lane owns the combined pull request, release workflow, and final verification.
+
+## 2026-08-27, WSL copy coverage repair
+
+The WSL copy coverage lane repaired two merge-recovery defects in the exact task-owned files.
+`src/shared/i18n/catalog.ts` now includes `wsl.create.progress.validating` with ten English and
+Cantonese variants. The first variant in each language preserves the factual fallback, while the
+later variants provide bounded voice changes and bilingual mode continues to resolve English as
+the primary text with Cantonese as the secondary text.
+
+`scripts/check-wsl-copy-coverage.mjs` now removes the first parsed inventory row by splitting on
+CRLF, LF, or CR boundaries and matching the exact key, catalogue id, and fallback. It asserts that
+the mutation changed the source and that the exact row disappeared, so a newline mismatch or a
+substring match cannot make the negative regression pass without testing anything.
+
+Direct records are `docs/features/wsl/wsl-instances.md`, `CHANGELOG.md`, `ROADMAP.md`, and this
+handoff. No tests, type checks, lint, reviews, audits, builds, packaging, runtime interaction, or
+screen captures were run under the ultra-speed boundary. Only `node --check` syntax evidence is
+permitted in this lane. The parent integration lane owns merge, build, packaging, release, and
+remote verification.
+
+## 2026-08-27, personal vocabulary coverage and settings recovery
+
+Release run `33119050796` reached application build after the source identity, resource, icon,
+HTTPS, and metadata phases passed, then failed while parsing
+`scripts/check-personal-vocabulary-coverage.mjs:306` with
+`SyntaxError: Identifier 'CANONICAL_CANVAS_NOTIFY_CALL_IDS' has already been declared`.
+
+Later release run `33121962513` at `9c5cbc2883c0218ff159cf39874d5e94c1db45c4`
+executed the coverage checker and reported eight base failures: the canonical producer mismatch,
+Canvas notification count and title/body ownership mismatches, incorrect `Project save cancelled`
+and `Project save failed` marker counts, the speech settings marker, and duplicate producer IDs.
+The complete-fixture check added one aggregate failure.
+
+Release run `33123084094` at `e6697feb31e5e59f36e916b4e5b00966e9b57891` then passed the producer
+manifest, producer uniqueness, speech marker, project-save markers, surface manifest, and mutation
+checks. Its remaining three base failures were the Canvas notification count, title ownership, and
+body ownership checks, plus one aggregate complete-fixture failure.
+
+The merge had combined several complete producer changes while retaining an older canonical
+manifest, an obsolete Canvas notification declaration, duplicate ownership checks, malformed
+producer separators, duplicate rows, and an unclosed mutation block. The repaired checker keeps one
+ordered array of 145 unique producer identifiers, one matching canonical producer list, one ordered
+array of 61 production surfaces, and one detailed list of 57 checker-retained Canvas notification
+calls. It filters parsed calls to production object payloads before one inventory, title-ownership,
+body-ownership, and title-marker pass. The two planner notifications nested inside the project-open
+success action keep their own explicit ownership fields in source.
+
+An independent read-only parser matching `callArguments` selected 57 production object payloads,
+with no unmatched calls or IDs. All 57 selected calls carry `titleKind`; 54 carry a body and all 54
+carry `bodyKind`. Placement failures keep factual runtime details, while node-catalog and AWS
+Universe availability reasons remain authored because their source modules generate application
+copy. The title-marker manifest covers current placement, unavailable-node, AWS Universe, media,
+planner, and project notifications, with the separate save-cancelled and save-failed markers at one
+each.
+
+Duplicate producer evidence now resolves to one row per ID. The password manager and authenticator
+rows use the exact `const vocab = useVocabularyMapper()` boundary, the converter catalog keeps one
+mapper row, and speech keeps its direct `useVocabularyMapper()` boundary while `SettingsText`
+remains independently recorded by the mixed-copy manifest. Canvas project saving emits one
+cancellation notification from the cancelled branch and one failure notification from the failure
+branch, with title and body ownership retained.
+
+The settings shell also retained parts of two incompatible implementations. `SettingsPage.tsx` now
+owns one coherent search, navigation, project-scope, School-mode, and local vocabulary boundary;
+`SettingsSidebar.tsx` keeps its shared registry and project-icon route; and `SpeechSection.tsx`
+keeps one free-model, explicit-off, central-shortcut implementation with mapped authored copy.
+Canvas project export keeps one cancellation path and one failure path, and every retained direct
+notification declares title and body ownership without changing external facts.
+
+Changed files are `scripts/check-personal-vocabulary-coverage.mjs`,
+`docs/features/appearance/material-3-audit.md`, `src/renderer/canvas/Canvas.tsx`,
+`src/renderer/components/settings/SettingsPage.tsx`,
+`src/renderer/components/settings/SettingsSidebar.tsx`,
+`src/renderer/components/settings/sections/SpeechSection.tsx`, `CHANGELOG.md`, `ROADMAP.md`, and
+this handoff. The source-only repair recorded JavaScript syntax and source-record consistency
+evidence before integration. No tests, type checks, lint, reviews, audits, builds, packaging,
+installer execution, runtime interaction, or UI captures were run in that lane. The integration
+owner must evaluate the exact merged commit before treating the release workflow as recovered.
 
 ## 2026-08-27, personal vocabulary surface manifest repair
 
@@ -4096,6 +4370,48 @@ No tests, lint, type checks, builds, packaging, runtime interaction, reviews, au
 were run, as required by issue #103. The feature branch remains separate from `main`; the parent agent
 must perform integration and any later verification.
 
+# 2026-08-27, combined parser and release recovery
+
+The recovery work is being consolidated into one pull request so related repairs reach the default
+branch together. The implementation scope covers parser-invalid merge remnants across core
+services, host and bridge code, renderer surfaces, shared contracts, account and identity handling,
+and release workflow wiring. The same recovery also adds the source-parse validation path and
+aligns the Windows installer contract with the unsigned Squirrel.Windows packaging policy.
+
+The native source-build lane traces the MSVC `LNK1117` failure to Node 26.4.0 build metadata, not
+to `smart-whisper`. Node 26.4.0 reports Clang thin LTO and two LTO jobs, and its downloaded
+`common.gypi` translates those values to `-flto=thin` and `/opt:lldltojobs=2` for native add-ons.
+The supported bootstrap now selects the exact Node 24.19.0 manifest pin before `npm ci`, while a
+source-tree `devEngines` requirement refuses direct npm installation under a different Node
+version. The wider installed-runtime support range remains unchanged.
+
+Build evidence is scoped to the blocker. A direct Node 26.4.0 dry-run stopped before dependency
+work with `EBADDEVENGINES`. A fresh `build.bat /s` then downloaded and SHA-verified Node 24.19.0,
+completed the Visual Studio, Python, and preflight phases, and reached the root native rebuild with
+no thin-LTO option or `LNK1117`. The next distinct blocker is `node-pty` `MSB8040`: preflight found
+Spectre libraries for toolset `14.44.35207`, while MSBuild selected Visual Studio 18 under `v180`.
+The failing projects are `conpty.vcxproj`, `conpty_console_list.vcxproj`, `winpty-agent.vcxproj`, and
+`winpty.vcxproj`. The expanded lane now selects one exact installed C++ instance whose default
+toolset contains the required Spectre libraries, returns that path to the normal-user bootstrap,
+sets `VCINSTALLDIR` before npm, and makes preflight validate that exact active default toolset.
+
+The final lane build used Node 24.19.0 and selected
+`C:\ProgramData\LibreOfficeMaterialTools\VS2022`, whose declared default toolset is `14.44.35207`
+and contains matching x86/x64 Spectre libraries. `npm ci` completed in 204 seconds and
+`electron-rebuild` reported `Rebuild Complete`. The build then advanced through the current
+vocabulary lock and Material audit before stopping on the pre-existing duplicate
+`CANONICAL_CANVAS_NOTIFY_CALL_IDS` declaration in
+`scripts/check-personal-vocabulary-coverage.mjs:306`. That source file is outside this lane and is
+the remaining build blocker after the native route.
+
+The parent integration lane owns the final merge and all verification. At handoff, the parser,
+type-check, build, packaging, and release-workflow verdicts are not yet recorded here. The
+ultra-speed pass intentionally skipped tests, reviews, accessibility and security checks,
+runtime interaction, and screen captures after activation. Earlier results remain historical and must not
+be reused as verification for the combined recovery commit.
+
+Only the three public records in this lane are changed: `CHANGELOG.md`, `ROADMAP.md`, and
+`HANDOFF.md`. No pull request, merge, or push was performed by this lane.
 # 2026-08-27, Easter egg contextual-trigger correction, issue #103
 
 Reconciled the task-owned feature branch with the exact `origin/main` tip
@@ -4225,7 +4541,6 @@ Changed files: `src/main/codex-relay-daemon.ts` and `HANDOFF.md`. No tests, chec
 checks, builds, packaging, installer execution, runtime interaction, reviews, audits, or UI
 captures were run in this lane. The coordinating owner must evaluate the exact merged commit and
 the resulting remote workflow before treating the release as recovered.
-
 # 2026-08-27, duplicate registerNode property repair
 
 Release run `33130189125` reported a duplicate `registerNode` property in the `hostBridge` object
@@ -4375,3 +4690,30 @@ Changed files: `src/main/pairing-service.ts` and `HANDOFF.md`.
 This ultra-speed parser lane deliberately ran no tests, checkers, lint, type checks, builds, packaging,
 reviews, audits, runtime interaction, or UI captures. The repair and the manual release remain unverified
 until the coordinating owner integrates this commit and observes the hosted workflow.
+
+# Codex crash-recovery continuation, downstream issue #198
+
+The feature branch `feat/agent-recovery-context` adds the source contract for one bounded encrypted
+Codex continuation packet per node. `src/core/agent-continuation.ts` stores AES-256-GCM records
+under the app data directory, seals the per-install key through the platform secret store, binds
+authenticated data to the stable node id, redacts credential-shaped text, and serializes
+acknowledgement, discard, and continue mutations. `src/shared/agent-continuation.ts`,
+`src/shared/ipc.ts`, `src/shared/types.ts`, and `src/preload/index.ts` expose typed summary,
+preview, acknowledgement, discard, continue, and update boundaries. `src/shared/agents/normalize.ts`
+distills Codex provider events only, never terminal scrollback. `src/main/index.ts` wires the
+service to the verified provider-start map, explicit delivery, and next-turn receipt. The renderer
+card is `src/renderer/components/AgentContinuationReview.tsx`, mounted beside each terminal node.
+
+The card warns that earlier side effects may already exist. It has no automatic injection path. A
+packet clears only after the core has observed the same node and session's next-turn event. Failed
+provider readiness, delivery, or receipt verification retains the packet and serialized retry state.
+The initial adapter is Codex only.
+
+Focused behavior and negative-regression tests are authored in
+`src/core/agent-continuation.test.ts`, but no tests, lint, type checks, builds, packaging, reviews,
+audits, runtime interaction, or captures were run under the ultra-speed issue boundary. No public
+issue, pull request, discussion, release, tag, or default branch integration was mutated by this lane.
+The coordinating owner must exercise parsing, type checking, building, and the real packaged desktop
+flow before integrating this feature branch. The similarly numbered eneskirca/nodeterm PR #198 is
+a separate merged paste-injection security change and was inspected only to avoid confusing the
+two records.

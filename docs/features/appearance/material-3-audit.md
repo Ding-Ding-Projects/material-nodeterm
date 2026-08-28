@@ -16,6 +16,10 @@ Every desktop row is reviewed against the shared Material Design 3 primitives an
 
 The concrete source remediations in this pass are:
 
+- `src/renderer/styles.css` restores the destructive confirmation destination-gate rule boundaries,
+  including anchored scrim, completion, action, exit, hover, and reduced-motion styling, while
+  retaining the adjacent card-modal and sticky-note selectors as standalone rules. Source parsing
+  remains pending the integration build because no CSS parser was available in this lane.
 - `src/renderer/ui/NumberField.tsx` now renders the shared `mdx-input mdx-number-field` recipe instead of legacy utility and palette classes.
 - `src/renderer/ui/md3/Radio.tsx` and `src/renderer/ui/md3/Progress.tsx` provide native, accessible, tokenized controls through the shared barrel.
 - Worktree, toy-lock, authenticator, and speech model choices use the shared radio primitive.
@@ -259,7 +263,7 @@ The remaining source-only caveat is visual confirmation. The desktop package mus
 
 ## Personal vocabulary producer inventory
 
-Every listed renderer producer has an explicit local mapper boundary. Commands, paths, identifiers, external records, filenames, hashes, provider values, and user-supplied values remain outside the boundary. The inventory is hand-written and checked by `scripts/check-personal-vocabulary-coverage.mjs`.
+Every listed renderer producer has an explicit local mapper boundary. Commands, paths, identifiers, external records, filenames, hashes, provider values, and user-supplied values remain outside the boundary. The inventory is hand-written and checked by `scripts/check-personal-vocabulary-coverage.mjs`. Its producer array and independent canonical manifest now contain the same 145 unique identifiers in the same order, so a duplicate row or an undocumented merge remnant cannot satisfy the completeness check.
 
 | Producer | Surface | Source | Required boundary |
 | --- | --- | --- | --- |
@@ -369,20 +373,20 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `color-field` | Colour field | `src/renderer/components/color/ColorField.tsx` | `useVocabularyMapper()` |
 | `color-picker` | Colour picker | `src/renderer/components/color/ColorPicker.tsx` | `useVocabularyMapper()` |
 | `bulk-preview-segments` | Bulk preview typed copy and count fields | `src/renderer/components/BulkActionPreview.tsx` | `messageSegments={messageSegments}` |
-| `bulk-preview-single-title-map` | Bulk preview action-label boundary | `src/renderer/components/BulkActionBar.tsx` | `title={vocab(pending.label)}` |
+| `bulk-preview-single-title-map` | Bulk preview action-label boundary | `src/renderer/components/BulkActionBar.tsx` | `titleSegments={[copy(pending.label)]}` |
 | `project-storage-segments` | Project storage confirmation facts | `src/renderer/components/ProjectSwitcher.tsx` | `messageSegments={` |
-| `project-other-unread-fact` | Other-project unread count fact | `src/renderer/components/ProjectSwitcher.tsx` | `mapOwnedSentence(vocab, [fact(String(otherUnread))` |
+| `project-other-unread-fact` | Other-project unread count fact | `src/renderer/components/ProjectSwitcher.tsx` | `unreadCountSegments(otherUnread, ' unread in other projects')` |
 | `converter-detection-note-fact` | Converter detection note fact | `src/renderer/components/converter/FileConverterPanel.tsx` | `f.detection.note` |
-| `converter-adapter-id-corpus` | Adapter id search corpus | `src/renderer/components/converter/AdapterCatalog.tsx` | `row.id} ${row.label}` |
-| `ollama-staleness-segments` | Model catalogue staleness facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `mapOwnedSentence(vocab, staleness)` |
-| `ollama-completeness-segments` | Model catalogue completeness facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `catalogHeadlineText(vocab, catalog)` |
+| `converter-adapter-id-corpus` | Adapter id search corpus | `src/renderer/components/converter/AdapterCatalog.tsx` | `adapterSearchCorpus(` |
+| `ollama-staleness-segments` | Model catalogue staleness facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `catalogStalenessSegments(` |
+| `ollama-completeness-segments` | Model catalogue completeness facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `catalogHeadlineText(` |
 | `ollama-completeness-reason-fact` | Model catalogue reason facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `mapOwnedSentence(vocab, [fact(reason)]` |
-| `ollama-queue-phase-fact` | Pull queue phase ownership | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `item.digestPhase ?? vocab(item.status)` |
+| `ollama-queue-phase-fact` | Pull queue phase ownership | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `item.digestPhase ??` |
 | `ollama-fit-evidence-fact` | Hardware fit evidence ownership | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `vocab('Evidence:')` |
 | `appearance-weight-segments` | Font weight copy and numeric facts | `src/renderer/components/appearance/AppearanceEditor.tsx` | `w.label.indexOf` |
 | `appearance-font-preview-fact` | Font preview name ownership | `src/renderer/components/appearance/AppearanceEditor.tsx` | `quoteFamily(primary ||` |
-| `docs-section-copy` | Documentation section metadata | `src/renderer/components/DocsBrowser.tsx` | `vocab(section.label)` |
-| `history-restore-segments` | History restore target ownership | `src/renderer/components/LocalHistoryPanel.tsx` | `messageSegments={[` |
+| `docs-section-copy` | Documentation section metadata | `src/renderer/components/DocsBrowser.tsx` | `vocab(section.label` |
+| `history-restore-segments` | History restore target ownership | `src/renderer/components/LocalHistoryPanel.tsx` | `messageSegments={historyRestoreMessageSegments(` |
 | `converter-upload-limit` | Converter upload limit message | `src/renderer/components/converter/FileConverterPanel.tsx` | `mapLocalVocabularyText(` |
 | `minecraft-backups` | Minecraft backups | `src/renderer/components/minecraft/MinecraftBackupsPanel.tsx` | `useVocabularyMapper()` |
 | `minecraft-players` | Minecraft players | `src/renderer/components/minecraft/MinecraftPlayersPanel.tsx` | `useVocabularyMapper()` |
@@ -411,10 +415,10 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 
 ## Complete production surface classification
 
-Every production renderer surface is explicitly classified below. Surfaces marked
-unmapped-callsite-pending are intentionally reported as open until their own prose and accessible
-names call the validated mapper. The root-level attempted boundary was removed because traversing a
-single React element cannot reach the descendants produced by a component.
+Every production renderer surface is explicitly classified below. Each row carries its current
+mapper or an explicit boundary reason, and no surface remains in a pending classification. The
+root-level attempted boundary was removed because traversing a single React element cannot reach the
+descendants produced by a component.
 
 | Surface | Source | Boundary |
 | --- | --- | --- |
@@ -445,21 +449,16 @@ single React element cannot reach the descendants produced by a component.
 | browser-start-page | src/renderer/nodes/BrowserStartPage.tsx | mapped-callsite |
 | browser-extensions-panel | src/renderer/nodes/BrowserExtensionsPanel.tsx | mapped-callsite |
 | discarded-plate | src/renderer/nodes/DiscardedPlate.tsx | mapped-callsite |
-| wsl-dialog | src/renderer/wsl/WslCreateDialog.tsx | unmapped-callsite-pending |
+| wsl-dialog | src/renderer/wsl/WslCreateDialog.tsx | mapped-callsite |
 | regex-builder | src/renderer/components/regex/RegexBuilder.tsx | mapped-callsite |
 | anchored-regex-builder | src/renderer/components/regex/AnchoredRegexBuilder.tsx | mapped-callsite |
-| wsl-dialog | src/renderer/wsl/WslCreateDialog.tsx | mapped-callsite |
-| regex-builder | src/renderer/components/regex/RegexBuilder.tsx | unmapped-callsite-pending |
-| anchored-regex-builder | src/renderer/components/regex/AnchoredRegexBuilder.tsx | unmapped-callsite-pending |
 | notification-center | src/renderer/components/NotificationCenter.tsx | mapped-callsite |
 | notification-toasts | src/renderer/components/NotificationToasts.tsx | mapped-callsite |
 | changelog-panel | src/renderer/components/changelog/ChangelogPanel.tsx | mapped-callsite |
 | release-card | src/renderer/components/changelog/ReleaseCard.tsx | mapped-callsite |
 | local-history | src/renderer/components/LocalHistoryPanel.tsx | mapped-callsite |
-| local-history-panel | src/renderer/components/LocalHistoryPanel.tsx | mapped-callsite |
 | docs-browser | src/renderer/components/DocsBrowser.tsx | mapped-callsite |
 | docs-article | src/renderer/components/docs/DocsArticleView.tsx | mapped-callsite |
-| docs-article-view | src/renderer/components/docs/DocsArticleView.tsx | mapped-callsite |
 | appearance-editor | src/renderer/components/appearance/AppearanceEditor.tsx | mapped-callsite |
 | color-field | src/renderer/components/color/ColorField.tsx | mapped-callsite |
 | color-menu | src/renderer/components/color/ColorMenu.tsx | colors-only-no-prose |
@@ -479,10 +478,6 @@ single React element cannot reach the descendants produced by a component.
 | ssh-project-dialog | src/renderer/components/SshProjectDialog.tsx | mapped-callsite |
 | phone-pair-popover | src/renderer/components/PhonePairPopover.tsx | mapped-callsite |
 | dictation-overlay | src/renderer/components/DictationOverlay.tsx | mapped-callsite |
-| bulk-action-bar | src/renderer/components/BulkActionBar.tsx | unmapped-callsite-pending |
-| pty-pressure | src/renderer/components/PtyPressureBanner.tsx | unmapped-callsite-pending |
-| update-card | src/renderer/components/UpdateCard.tsx | unmapped-callsite-pending |
-| resume-card | src/renderer/components/ResumeCard.tsx | unmapped-callsite-pending |
 | widget-entrypoint | src/renderer/widget/WidgetApp.tsx | mapped-callsite |
 | hud-entrypoint | src/renderer/hud/main.ts | mapped-callsite |
 | dialog-picker-root | src/renderer/bridge/dialog-picker.tsx | mapped-callsite |
@@ -505,7 +500,10 @@ landing-page JSON/cache validators. The site renderer also has an independent pe
 manifest with file-backed removal mutations. Runtime facts such as paths, IDs, model names,
 provider errors, visible commands, brand names, license text, and shortcut text remain outside the
 authored-copy mapper. Canvas notifications classify every direct body as authored or fact, and the
-landing-page file reader keeps rejected reads visible instead of treating them as successful input.
+hand-written Canvas inventory now names 57 checker-retained production calls in source order. Two
+planner notifications are nested inside the project-open success action and remain explicitly
+classified in source. The landing-page file reader keeps rejected reads visible instead of
+treating them as successful input.
 The per-string checker parses the arguments of each copy call, while the delegated file-change
 tests exercise size rejection, read failure, picker reset, valid binding, and the resulting render.
 

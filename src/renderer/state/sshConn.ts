@@ -124,9 +124,6 @@ interface SshConnState {
   ownerProjectId(scopeId: string): string
   /** Forget an attachment entirely (its canvas was deleted). Also drops any live connection info. */
   clearAttachment(scopeId: string): void
-  getCodexRuntime(
-    projectId: string
-  ): Pick<SshConnInfo, 'codexLauncherPath' | 'codexRelayScriptPath' | 'codexRelayRuntimePath'>
   /** True ONLY when the remote CLI was probed and is known to accept `--permission-mode auto`.
    *  Not connected / never probed / older CLI all answer false (conservative — omit the flag). */
   supportsAutoPermissionMode(projectId: string): boolean
@@ -212,14 +209,6 @@ export const useSshConn = create<SshConnState>((set, get) => ({
       delete conns[scopeId]
       return { attachments: next, byProject: conns }
     })
-  },
-  getCodexRuntime(projectId) {
-    const info = get().byProject[projectId]
-    return {
-      codexLauncherPath: info?.codexLauncherPath,
-      codexRelayScriptPath: info?.codexRelayScriptPath,
-      codexRelayRuntimePath: info?.codexRelayRuntimePath
-    }
   },
   supportsAutoPermissionMode(projectId) {
     return get().autoPermByProject[projectId] === true

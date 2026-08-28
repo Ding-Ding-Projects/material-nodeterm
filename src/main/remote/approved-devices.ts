@@ -84,6 +84,7 @@ export function mutateApprovedDevices(
     await writeApprovedDevices(next)
     return parsePersistedApprovedDevices(next)
   })
+}
 /**
  * Persist the pinned-device list atomically (unique temp + retrying rename, 0600) via
  * `writeFileAtomic`.
@@ -102,6 +103,3 @@ export function mutateApprovedDevices(
  * or agent.json (src/main/pairing-service.ts): those orphan temps hold live credentials, but these are
  * PUBLIC keys, so a stray temp is litter rather than a leak.
  */
-export async function saveApprovedDevices(store: ApprovedDevices): Promise<void> {
-  await writeFileAtomic(file(), JSON.stringify(store), { mode: 0o600 })
-}

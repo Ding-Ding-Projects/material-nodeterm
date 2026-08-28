@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { codexAccountSwitchStillEligible } from './codex-account-switch'
 import type { CodexAccount } from '@shared/codex-account'
 import { codexAccountSelectable, codexAccountSwitchStillEligible } from './codex-account-switch'
 
@@ -28,17 +27,6 @@ describe('codexAccountSwitchStillEligible', () => {
     { ...expected, cwd: '/other', state: 'done' },
     { ...expected, ssh: true, state: 'done' }
   ])('rejects state drift before recycle: %o', (current) => {
-    expect(codexAccountSwitchStillEligible(expected, current)).toBe(false)
-  })
-})
-    { name: 'still working', current: { ...expected, state: 'working' } },
-    // MUTATION PIN: drop the `sessionId` equality from the eligibility check → this case
-    // (a diverged thread) goes green, i.e. a forked pane would be recycled. Must stay red.
-    { name: 'sessionId diverged', current: { ...expected, sessionId: 'thread-new', state: 'done' } },
-    { name: 'accountId changed', current: { ...expected, accountId: 'account-b', state: 'done' } },
-    { name: 'cwd moved', current: { ...expected, cwd: '/other', state: 'done' } },
-    { name: 'ssh flag flipped', current: { ...expected, ssh: true, state: 'done' } }
-  ])('rejects state drift before recycle: $name', ({ current }) => {
     expect(codexAccountSwitchStillEligible(expected, current)).toBe(false)
   })
 })

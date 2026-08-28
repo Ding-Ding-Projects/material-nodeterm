@@ -2141,7 +2141,6 @@ describe('a restored entry is never proof', () => {
   afterEach(() => {
     _resetForTest()
     fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
-    fs.rmSync(dir, { recursive: true, force: true })
   })
 
   it('is marked, and carries no proof, however the file was written', () => {
@@ -2175,7 +2174,6 @@ describe('a restored entry is never proof', () => {
     expect(reduceEntry(a, ev({ kind: 'context' } as never), 5).restored).toBeUndefined()
   })
 
-  it('a restored `stateVerified` never survives to disk either', () => {
   it('the first live event that COMMITS a state clears `restored`', () => {
     // `newTurn` matters here and the first draft of this test omitted it: at now=5 against a
     // restored `done` stamped 0, a bare `working` is inside the done-holdoff, commits nothing, and
