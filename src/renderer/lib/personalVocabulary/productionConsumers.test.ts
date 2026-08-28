@@ -51,7 +51,7 @@ describe('production vocabulary consumers', () => {
     expect(mapOwnedSentence(map, ollamaPageSummarySegments({ from: 1, to: 2, total: 50, page: 1, pageCount: 25 } as never))).toBe(
       'Displaying 1–2 of 50 matching references (page 1 of 25).'
     )
-    expect(mapOwnedSentence(map, catalogStalenessSegments({ staleness: 'fresh', indexFetchedAt: 0 } as never, 60_000))).toContain('Catalog fetched')
+    expect(mapOwnedSentence(map, catalogStalenessSegments({ staleness: 'fresh', indexFetchedAt: 1 } as never, 60_000) ?? [])).toContain('Catalog fetched')
   })
 
   it('keeps ProjectSwitcher counts and restore storage facts exact', () => {
