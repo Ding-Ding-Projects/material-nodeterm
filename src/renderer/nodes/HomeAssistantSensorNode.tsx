@@ -79,7 +79,7 @@ export default function HomeAssistantSensorNode({ id, data, selected }: NodeProp
   const modeSearchRef = useRef<HTMLInputElement>(null)
 
   const setConfig = useCallback((patch: Partial<typeof config>) => updateNodeData(id, { homeAssistantSensorConfig: { ...config, ...patch } }), [config, id, updateNodeData])
-  const report = useCallback((kind: 'info' | 'success' | 'error', title: string, body: string) => { notify({ kind, title, body }); }, [])
+  const report = useCallback((kind: 'info' | 'success' | 'warning' | 'error', title: string, body: string) => { notify({ kind, title, body }); }, [])
 
   useEffect(() => {
     let active = true

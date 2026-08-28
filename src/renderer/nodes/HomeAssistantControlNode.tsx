@@ -95,9 +95,13 @@ export default function HomeAssistantControlNode({ id, data, selected }: NodePro
 
   const filteredConnections = useMemo(() => connections.filter((item) => connectionSearch.test(`${item.label} ${item.origin}`)), [connections, connectionSearch])
   const filteredEntities = useMemo(() => entities.filter((entity) => entitySearch.test(`${entity.friendlyName} ${entity.entityId} ${entity.domain} ${entity.state}`)), [entities, entitySearch])
-  const selectedEntity = entities.find((entity) => entity.entityId === config.entityHint) ?? null
+  // The runtime value may be null while no entity is selected. The schema renderer only reads
+  // entityId behind selectedService, which is itself suppressed whenever this value is null.
+  const selectedEntity = (entities.find((entity) => entity.entityId === config.entityHint) ?? null) as HomeAssistantEntity
   const availableServices = useMemo(() => services.filter((service) => !selectedEntity || service.domain === selectedEntity.domain || ['homeassistant', 'scene', 'script'].includes(service.domain)).filter((service) => serviceSearch.test(`${service.domain}.${service.service} ${service.name} ${service.description}`)), [selectedEntity, serviceSearch, services])
-  const selectedService = services.find((service) => `${service.domain}.${service.service}` === config.serviceHint) ?? null
+  const selectedService = selectedEntity
+    ? services.find((service) => `${service.domain}.${service.service}` === config.serviceHint) ?? null
+    : null
 
   const call = async (domain: string, service: string, values: Record<string, string | number | boolean | null> = {}): Promise<void> => {
     if (!selectedEntity) return
