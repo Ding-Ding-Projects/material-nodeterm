@@ -1,7 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http'
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
-import { writeFileSync, mkdirSync } from 'fs'
-import { randomUUID, timingSafeEqual } from 'crypto'
 import { writeFileSync, mkdirSync, chmodSync, unlinkSync } from 'fs'
 import path from 'path'
 import { platform } from '../platform'
@@ -11,7 +9,6 @@ import { normalizeFor, type NormalizedAgentEvent } from '../../shared/agents/nor
 import type { CodexIdentityEvent } from '../../shared/types'
 import type { NodeTokenVerdict } from './node-auth-token'
 import { nodeTokenDir } from './node-token-files'
-import { posixQuote } from '../../shared/ssh'
 import { isForeignKidToken, isSafeNodeId, nodeAuthToken, verifyNodeToken } from './node-auth-token'
 import { isSafeThreadId } from '../codex-identity-proxy'
 import { isSafeAccountId } from '../../shared/codex-account'
@@ -1383,7 +1380,6 @@ class HookServer {
           // Windows silently lost its per-node capability and degraded to the no-identity fallback,
           // every single launch. Measured directly (`. file` on a hand-built fixture with this
           // exact shape). Single-quoting is a no-op on POSIX, where the value never contains `\`.
-          `NODETERM_NODE_TOKEN_DIR=${posixQuote(nodeTokenDir())}\n`,
           `NODETERM_NODE_TOKEN_DIR=${posixQuote(nodeTokenDir())}\n` +
           // The unix-socket twin, only when it actually bound. Every generated client (managed
           // hook script, both sh shims, opencode plugin, codex launcher) is already sock-first —
