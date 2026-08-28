@@ -12,6 +12,9 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 import { notify } from '../lib/adhdNotify'
 import KioskPwaNode from './KioskPwaNode'
 import { portableKioskPwaIntent } from '@shared/kiosk-pwa'
+import { NODE_MIN_SIZES } from '../lib/nodeSizing'
+import { BrowserDrivingIndicator } from './BrowserDrivingChip'
+import { useWebviewKeepAlive } from '../state/webviewKeepAlive'
 
 /** Debounce for persisting a tab's live URL/title while the user navigates — matches the SSH
  *  mirror's 5s write-throttle intent (this repo's established pattern for "don't rewrite the
@@ -37,13 +40,6 @@ const NAV_PERSIST_DEBOUNCE_MS = 800
  * the user switch which of the project's named `browserProfiles` this node uses — two nodes on
  * the same profile share cookies/storage, nodes on different profiles are isolated. See
  * `shared/browser-profiles.ts` for the partition derivation this is built on.
-import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
-import { NODE_MIN_SIZES } from '../lib/nodeSizing'
-import type { CanvasNode } from '../state/workspace'
-import { BrowserSurface } from './BrowserSurface'
-import { BrowserDrivingIndicator } from './BrowserDrivingChip'
-import { useWebviewKeepAlive } from '../state/webviewKeepAlive'
-
 /**
  * A navigable Chromium browser node: node chrome (frame/header/resize/close) wrapping the shared
  * {@link BrowserSurface} (webview + toolbar). The last top-level URL persists to `data.url` so the
