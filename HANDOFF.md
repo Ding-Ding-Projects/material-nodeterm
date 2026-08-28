@@ -1,5 +1,21 @@
 # Handoff
 
+## 2026-08-27, duplicate Codex usage callback repair
+
+Release run `33130189125` reported a duplicate `codexAccounts` property in the object passed to
+`initClaudeUsage` at `src/main/index.ts:4394` and `src/main/index.ts:4399`. The earlier callback
+included remote accounts and resolved homes through `localCodexAccountHome`; the later
+`localCodexAccounts` callback is the current complete value because it excludes remote and pending
+accounts and resolves each local managed account through `codexHomeFor`.
+
+The repair removes only the earlier duplicate property. The complete local account callback and
+all neighboring usage, mirror, remote usage, and shutdown wiring remain unchanged.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, audits, or UI captures under the ultra-speed repair
+boundary. The coordinating owner must evaluate the exact commit and follow-up GitHub Actions run
+before treating this repair as verified.
+
 ## 2026-08-27, shutdown-chain parser repair
 
 Release run `33129445887` at `1c62698a7243f153c102afa6f3a7b683a6822edb` reported an application-build
