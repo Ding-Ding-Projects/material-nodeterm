@@ -147,6 +147,7 @@ import {
   parseLoopInterval,
   validLoopInterval
 } from '../lib/nativeLoop'
+import { paneCommandMatchesAgent } from '../lib/nativeLoopDelivery'
 import { withNodeBoundary } from '../components/NodeBoundary'
 import { NavRail, type RailDestination } from '../components/NavRail'
 import { enterKidsModeFromRail } from '../components/kids/entry'
@@ -2245,7 +2246,7 @@ export function Canvas() {
       'open-webui-hosting': withNodeBoundary(OpenWebUiHostingNode),
       'cloudflare-tunnel': withNodeBoundary(ServiceNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode),
-      'windows-diagnostics': withNodeBoundary(WindowsDiagnosticsNode)
+      'windows-diagnostics': withNodeBoundary(WindowsDiagnosticsNode),
       awsidentity: withNodeBoundary(ServiceNode),
       'gitlab-hosting': withNodeBoundary(GitLabHostingNode),
       'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
@@ -12896,22 +12897,23 @@ export function Canvas() {
     async (message: AgentMessage): Promise<boolean> => {
       if (message.status !== 'queued') return message.status === 'delivered'
       if (message.recipient.projectId !== useProjects.getState().activeProjectId) return false
-      const target = nodesRef.current.find((node) => node.id === message.recipient.nodeId)
-      if (!target || target.type !== 'terminal') return false
-      const configuredAgent = createdAgentId(target.data)
-      const live = useAgentStatus.getState().byId[target.id]
-      // A terminal shell accepting bytes is not proof that an agent turn received them. Only
-      // created agent nodes whose expected CLI currently owns the pane may advance to delivered.
-      if (!configuredAgent || live?.agentId !== configuredAgent) return false
-      const expectedProcess = agentConfig(configuredAgent)?.expectedProcess
-      const paneProcess = (await api.pty.paneCommand(target.id))?.split('/').pop()
-      if (!expectedProcess || paneProcess !== expectedProcess) return false
-      const state = live.state
-      if (state === 'working' || state === 'blocked' || state === 'waiting') return false
       const inFlight = mailboxDeliveryInFlightRef.current
       if (inFlight.has(message.id)) return false
       inFlight.add(message.id)
       try {
+        const target = nodesRef.current.find((node) => node.id === message.recipient.nodeId)
+        if (!target || target.type !== 'terminal') return false
+        const configuredAgent = createdAgentId(target.data)
+        const live = useAgentStatus.getState().byId[target.id]
+        if (!configuredAgent || live?.agentId !== configuredAgent) return false
+        const expectedProcess = agentConfig(configuredAgent)?.expectedProcess
+        const paneProcess = await api.pty.paneCommand(target.id)
+        // The native Windows session host returns executable names such as `codex.exe`; the
+        // portable agent declaration is `codex`. Normalize that exact platform boundary while
+        // keeping a different or unknown process refused.
+        if (!paneCommandMatchesAgent(paneProcess, expectedProcess)) return false
+        const state = live.state
+        if (state === 'working' || state === 'blocked' || state === 'waiting') return false
         const ok = await api.pty.sendText(target.id, renderAgentMessage(message))
         if (ok) agentMailbox().markDelivered(message.id)
         return ok
