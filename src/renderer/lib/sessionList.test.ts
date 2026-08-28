@@ -31,6 +31,9 @@ const projects = (): ProjectInput[] => [
   { id: 'p2', name: 'Beta', color: '#222', nodes: [node('t2'), node('s1', { kind: 'sticky' }), node('e1', { kind: 'editor' })] }
 ]
 
+const projectGroups = (groups: ReturnType<typeof buildSessionList>): SessionGroup[] =>
+  groups.flatMap((repo) => repo.projects)
+
 describe('sessionStatusKind', () => {
   it('maps agent states to status kinds', () => {
     expect(sessionStatusKind('working')).toBe('working')
@@ -116,13 +119,13 @@ describe('projectHeadClickAction', () => {
 
 describe('buildSessionList', () => {
   it('keeps store order (mirrors the tab bar) regardless of which project is active', () => {
-    const groups = buildSessionList(projects(), null, 'p2', {}, '')
+    const groups = projectGroups(buildSessionList(projects(), null, 'p2', {}, ''))
     expect(groups.map((g) => g.projectId)).toEqual(['p1', 'p2'])
     expect(groups.find((g) => g.projectId === 'p2')!.isActive).toBe(true)
   })
 
   it('keeps only terminal/agent nodes and flags agents', () => {
-    const groups = buildSessionList(projects(), null, 'p1', {}, '')
+    const groups = projectGroups(buildSessionList(projects(), null, 'p1', {}, ''))
     const p2 = groups.find((g) => g.projectId === 'p2')!
     expect(p2.ungrouped.map((s) => s.id)).toEqual(['t2']) // sticky + editor dropped
     const p1 = groups.find((g) => g.projectId === 'p1')!
@@ -134,7 +137,7 @@ describe('buildSessionList', () => {
     const status: Record<string, AgentNodeStatus> = {
       a1: { unread: true, state: 'working', agentId: 'claude', session: 'fix bug', sessionId: 'sess-1' }
     }
-    const groups = buildSessionList(projects(), null, 'p1', status, '')
+    const groups = projectGroups(buildSessionList(projects(), null, 'p1', status, ''))
     const a1 = groups[0].ungrouped.find((s) => s.id === 'a1')!
     expect(a1.statusKind).toBe('working')
     expect(a1.unread).toBe(true)
@@ -145,7 +148,7 @@ describe('buildSessionList', () => {
 
   it('uses live nodes for the active project instead of serialized ones', () => {
     const live = [node('t1', { title: 'renamed live' })]
-    const groups = buildSessionList(projects(), live, 'p1', {}, '')
+    const groups = projectGroups(buildSessionList(projects(), live, 'p1', {}, ''))
     const p1 = groups.find((g) => g.projectId === 'p1')!
     expect(p1.ungrouped.map((s) => s.title)).toEqual(['renamed live'])
   })
@@ -165,7 +168,7 @@ describe('buildSessionList', () => {
         ]
       }
     ]
-    const [p1] = buildSessionList(proj, null, 'p1', {}, '')
+    const [p1] = projectGroups(buildSessionList(proj, null, 'p1', {}, ''))
     expect(p1.groups).toHaveLength(1)
     expect(p1.groups[0]).toMatchObject({ id: 'g1', title: 'Frontend', color: '#abc' })
     expect(p1.groups[0].sessions.map((s) => s.id)).toEqual(['t1', 't2'])
@@ -186,21 +189,21 @@ describe('buildSessionList', () => {
         ]
       }
     ]
-    const unfiltered = buildSessionList(proj, null, 'p1', {}, '')
+    const unfiltered = projectGroups(buildSessionList(proj, null, 'p1', {}, ''))
     expect(unfiltered[0].groups.map((b) => b.id)).toEqual(['g1', 'g2']) // empty g1 kept
 
-    const filtered = buildSessionList(proj, null, 'p1', {}, 'spec')
+    const filtered = projectGroups(buildSessionList(proj, null, 'p1', {}, 'spec'))
     expect(filtered[0].groups.map((b) => b.id)).toEqual(['g2']) // empty g1 dropped
     expect(filtered[0].groups[0].sessions.map((s) => s.id)).toEqual(['t1'])
   })
 
   it('filters by title and session name, hiding empty projects only when filtering', () => {
     const status: Record<string, AgentNodeStatus> = { a1: { unread: false, session: 'special' } }
-    const filtered = buildSessionList(projects(), null, 'p1', status, 'spec')
+    const filtered = projectGroups(buildSessionList(projects(), null, 'p1', status, 'spec'))
     expect(filtered.map((g) => g.projectId)).toEqual(['p1'])
     expect(filtered[0].ungrouped.map((s) => s.id)).toEqual(['a1'])
 
-    const unfiltered = buildSessionList(projects(), null, 'p1', {}, '')
+    const unfiltered = projectGroups(buildSessionList(projects(), null, 'p1', {}, ''))
     expect(unfiltered.length).toBe(2) // both projects kept when no filter
   })
 
@@ -219,13 +222,13 @@ describe('buildSessionList', () => {
         ]
       }
     ]
-    const [all] = buildSessionList(
+    const [all] = projectGroups(buildSessionList(
       proj,
       null,
       'p1',
       { target: { unread: false, state: 'waiting' } },
       ''
-    )
+    ))
     const outer = all.groups[0]
     expect(outer.children[0].children[0].id).toBe('deep')
     expect(groupSessionRows(outer).map((row) => row.id)).toEqual(['direct', 'target'])
@@ -234,7 +237,7 @@ describe('buildSessionList', () => {
     expect(projectSignalCounts(all)).toEqual({ attention: 1, unread: 0, working: 0 })
 
     // Filtering keeps the ancestors of a match — otherwise the hit is unreachable in the tree.
-    const [filtered] = buildSessionList(proj, null, 'p1', {}, 'needle')
+    const [filtered] = projectGroups(buildSessionList(proj, null, 'p1', {}, 'needle'))
     expect(filtered.groups[0].id).toBe('outer')
     expect(filtered.groups[0].children[0].children[0].sessions.map((row) => row.id)).toEqual([
       'target'
@@ -254,7 +257,7 @@ describe('buildSessionList', () => {
         ]
       }
     ]
-    const [group] = buildSessionList(proj, null, 'p1', {}, '')
+    const [group] = projectGroups(buildSessionList(proj, null, 'p1', {}, ''))
     expect(new Set(group.groups.map((bucket) => bucket.id))).toEqual(
       new Set(['dangling', 'a', 'b'])
     )
@@ -278,7 +281,7 @@ describe('sidebar disclosure keys', () => {
   it('lists a key for the project and for every frame at any depth', () => {
     const keys = liveCollapseKeys(buildSessionList(proj, null, 'p1', {}, ''))
     expect(keys).toEqual(
-      new Set(['project:p1', 'project:p1:group:outer', 'project:p1:group:inner'])
+      new Set(['repo:__norepo__:p1', 'project:p1', 'project:p1:group:outer', 'project:p1:group:inner'])
     )
   })
 
@@ -356,7 +359,7 @@ describe('projectSignalCounts', () => {
       d: { unread: true },
       e: { unread: true, state: 'working' }
     }
-    const [g] = buildSessionList(proj, null, 'p1', status, '')
+    const [g] = projectGroups(buildSessionList(proj, null, 'p1', status, ''))
     // `e` is the load-bearing one: it is the single working session AND carries an unread mark,
     // so it must land in `working` and NOT in `unread`. `c` (done+unread) now counts as unread,
     // not attention — the user's call: unread already signals "there's something new here".
@@ -364,13 +367,13 @@ describe('projectSignalCounts', () => {
   })
 
   it('returns zeros for a quiet project', () => {
-    const [g] = buildSessionList(
+    const [g] = projectGroups(buildSessionList(
       [{ id: 'p1', name: 'P1', color: '#123', nodes: [node('x')] }],
       null,
       'p1',
       {},
       ''
-    )
+    ))
     expect(projectSignalCounts(g)).toEqual({ attention: 0, unread: 0, working: 0 })
   })
 
@@ -407,7 +410,7 @@ describe('projectSignalCounts', () => {
       a1: { unread: true, state: 'blocked', agentId: 'claude', session: 'blocked task', sessionId: 'sess-a1' },
       a2: { unread: true, state: 'working', agentId: 'claude', session: 'working task', sessionId: 'sess-a2' }
     }
-    const [p1] = buildSessionList(proj, null, 'p1', status, '')
+    const [p1] = projectGroups(buildSessionList(proj, null, 'p1', status, ''))
     expect(p1.groups[0].sessions.map((s) => s.id)).toEqual(['a1', 'a2']) // sanity: sessions really live under group.groups
     expect(projectSignalCounts(p1)).toEqual({ attention: 1, unread: 0, working: 1 })
   })

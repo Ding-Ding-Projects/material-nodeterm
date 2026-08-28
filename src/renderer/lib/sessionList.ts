@@ -448,11 +448,12 @@ export function buildSessionList(
       ? entry.repoRoot.split('/').filter(Boolean).pop() ?? entry.repoRoot
       : sole?.projectName ?? 'Repo'
     const active = entry.projects.find((group) => group.isActive)
-    const adoptable = active && entry.repoRoot
+    const repoRoot = entry.repoRoot
+    const adoptable = active && repoRoot
       ? (orphansByProject[active.projectId] ?? []).map((worktree) => ({
           kind: 'adoptable-worktree' as const,
           entry: worktree,
-          repoRoot: entry.repoRoot
+          repoRoot
         }))
       : []
     return {
