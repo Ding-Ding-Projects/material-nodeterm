@@ -125,7 +125,8 @@ describe('non-CSS editing formats', () => {
   }
 
   function commitField(label: string, value: string): void {
-    const input = host.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)
+    const input = [...host.querySelectorAll<HTMLInputElement>('input[type="number"]')]
+      .find((candidate) => candidate.closest('label')?.querySelector('span')?.textContent === label)
     expect(input, label).toBeTruthy()
     act(() => {
       input!.value = value
