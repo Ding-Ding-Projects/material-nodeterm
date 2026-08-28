@@ -228,7 +228,7 @@ function FieldEditor({ field, value, onChange, disabled = false }: FieldEditorPr
           void window.nodeTerminal.dialog.selectFile().then((path) => {
             if (path) onChange({ kind: 'local-file', path, name: path.split(/[\\/]/).pop() ?? '' })
           }).catch(() => setFileError(vocab('The local file picker was unavailable. Choose a file again.')))
-        }}>{file.name || vocab('Choose local file')}</Button>
+        }}>{typeof file.name === 'string' && file.name ? file.name : vocab('Choose local file')}</Button>
         {fileError && <p role="alert">{fileError}</p>}
       </div>
     )
