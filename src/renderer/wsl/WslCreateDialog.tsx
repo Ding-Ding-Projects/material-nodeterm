@@ -71,7 +71,7 @@ export function WslCreateDialog({
   // distribution name, user name, path, operation id, or external error.
   const copy = (key: WslCopyKey, facts: readonly string[] = [], params?: Record<string, string>): string => {
     const entry = WSL_COPY[key]
-    return mapAroundExactFacts(ts(entry.id, entry.fallback, params), facts, mapVocabulary)
+    return mapAroundExactFacts(ts(entry.id, entry.fallback, { brand: 'WSL', ...params }), facts, mapVocabulary)
   }
 
   const copyFromFallback = (fallback: string, facts: readonly string[] = []): string => {

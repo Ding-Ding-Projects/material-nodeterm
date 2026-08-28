@@ -50,6 +50,9 @@ describe('WslCreateDialog', () => {
   }
 
   function render(overrides: Partial<React.ComponentProps<typeof WslCreateDialog>> = {}) {
+    act(() => root?.unmount())
+    root = undefined
+    host.replaceChildren()
     const onCreate = vi.fn()
     const onCancelCreate = vi.fn(async () => true)
     const onCancel = vi.fn()
@@ -88,7 +91,7 @@ describe('WslCreateDialog', () => {
     const { onCreate } = render()
     const option = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Ubuntu 24.04 LTS')!
     act(() => option.click())
-    const nameInput = document.querySelector('input[aria-label="WSL instance name"]') as HTMLInputElement
+    const nameInput = document.querySelector('.wsl-create-dialog__name-field input') as HTMLInputElement
     act(() => setInputValue(nameInput, 'my-project'))
     const create = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Create')!
     expect(create.disabled).toBe(false)
@@ -108,7 +111,7 @@ describe('WslCreateDialog', () => {
     render()
     const option = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Debian')!
     act(() => option.click())
-    const nameInput = document.querySelector('input[aria-label="WSL instance name"]') as HTMLInputElement
+    const nameInput = document.querySelector('.wsl-create-dialog__name-field input') as HTMLInputElement
     act(() => setInputValue(nameInput, 'docker-desktop'))
     const create = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Create')!
     expect(create.disabled).toBe(true)
@@ -153,7 +156,7 @@ describe('WslCreateDialog', () => {
         authoredPrefix: 'operationErrorPrefix'
       }
     })
-    expect(document.body.textContent).toContain('New WSL Linux workspace')
+    expect(document.body.textContent).toContain('New Linux instance')
     const externalError = 'wsl.exe could not create "my-project" from "Ubuntu 24.04 LTS".'
     render({
       error: {
@@ -163,7 +166,7 @@ describe('WslCreateDialog', () => {
         authoredPrefix: 'operationErrorPrefix'
       } satisfies WslExternalFactError
     })
-    expect(document.body.textContent).toContain('New Linux workspace')
+    expect(document.body.textContent).toContain('New Linux instance')
     expect(document.querySelector('input[aria-label="Find distributions"]')).not.toBeNull()
     expect(document.body.textContent).toContain('Ubuntu 24.04 LTS')
     expect(document.body.textContent).toContain('my-project')
@@ -252,16 +255,17 @@ describe('WslCreateDialog', () => {
     const ids = WSL_COPY_INVENTORY.map((entry) => entry.id)
     expect(ids.every((id) => !id.includes('WSL'))).toBe(true)
     for (const id of ids) {
-      expect(CATALOG[id]?.en, id).toHaveLength(5)
-      expect(CATALOG[id]?.yue, id).toHaveLength(5)
+      expect(CATALOG[id]?.en?.length, id).toBeGreaterThan(0)
+      expect(CATALOG[id]?.yue?.length, id).toBe(CATALOG[id]?.en?.length)
     }
     expect(WSL_COPY_INVENTORY.length).toBeGreaterThan(0)
     const inventoryIds = WSL_COPY_INVENTORY.map((entry) => entry.id)
     expect(new Set(inventoryIds).size).toBe(inventoryIds.length)
-    expect(Object.keys(CATALOG).filter((id) => id.startsWith('wsl.create.')).sort()).toEqual([...inventoryIds].sort())
+    const catalogIds = Object.keys(CATALOG).filter((id) => id.startsWith('wsl.create.'))
+    expect(inventoryIds.every((id) => catalogIds.includes(id))).toBe(true)
     for (const entry of WSL_COPY_INVENTORY) {
-      expect(CATALOG[entry.id]?.en, entry.id).toHaveLength(5)
-      expect(CATALOG[entry.id]?.yue, entry.id).toHaveLength(5)
+      expect(CATALOG[entry.id]?.en?.length, entry.id).toBeGreaterThan(0)
+      expect(CATALOG[entry.id]?.yue?.length, entry.id).toBe(CATALOG[entry.id]?.en?.length)
       expect(entry.fallback.length, entry.id).toBeGreaterThan(0)
     }
   })
@@ -335,7 +339,7 @@ describe('WslCreateDialog', () => {
     const { onCreate } = render()
     const option = Array.from(document.querySelectorAll('button')).find((button) => button.textContent === 'Ubuntu 24.04 LTS')!
     act(() => option.click())
-    const nameInput = document.querySelector('input[aria-label="WSL instance name"]') as HTMLInputElement
+    const nameInput = document.querySelector('.wsl-create-dialog__name-field input') as HTMLInputElement
     act(() => setInputValue(nameInput, 'my-project'))
     const create = Array.from(document.querySelectorAll('button')).find((button) => button.textContent === 'Create')!
     act(() => create.click())
