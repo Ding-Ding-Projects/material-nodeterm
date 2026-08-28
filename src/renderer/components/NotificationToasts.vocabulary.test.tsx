@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 import { NotificationToasts } from './NotificationToasts'
-import { mapNotificationCopy, matchesQuery, toMarkdown } from './NotificationCenter'
+import { mapNotificationCopy, matchesQuery, notificationToExportRecord, toMarkdown } from './NotificationCenter'
 import { useNotifications } from '../state/notifications'
 import { usePersonalVocabulary } from '../state/personalVocabulary'
 import { useSchoolMode } from '../state/schoolMode'
@@ -133,7 +133,7 @@ describe('NotificationCenter personal vocabulary', () => {
     deliveredSilently: false
   }
 
-  it('maps authored title but preserves factual body in render, search, and export', () => {
+  it('maps authored title but preserves factual body in render and search, while export keeps stored fields', () => {
     const vocab = (value: string): string => value.replace('terminal', 'shell box')
     expect(mapNotificationCopy(notification, vocab)).toEqual({
       title: 'Open shell box',
@@ -142,9 +142,15 @@ describe('NotificationCenter personal vocabulary', () => {
     expect(matchesQuery(notification, 'shell box', vocab)).toBe(true)
     expect(matchesQuery(notification, 'C:/workspace/terminal', vocab)).toBe(true)
     expect(matchesQuery(notification, 'wrong fact', vocab)).toBe(false)
-    const markdown = toMarkdown([notification], vocab)
-    expect(markdown).toContain('Open shell box')
+    const markdown = toMarkdown([notification])
+    expect(markdown).toContain('Open terminal')
     expect(markdown).toContain('fatal: C:/workspace/terminal')
-    expect(markdown).not.toContain('shell box</')
+    expect(markdown).not.toContain('Open shell box')
+    expect(notificationToExportRecord(notification)).toMatchObject({
+      title: 'Open terminal',
+      body: 'fatal: C:/workspace/terminal',
+      titleKind: 'authored',
+      bodyKind: 'fact'
+    })
   })
 })

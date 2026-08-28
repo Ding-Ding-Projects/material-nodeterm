@@ -12,6 +12,7 @@ import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { keyLabel } from '@shared/platform-utils'
 import type { AccountPresentation } from '../lib/accountPresentation'
 import { AccountIdentityPills } from './AccountIdentityPills'
+import { useVocabularyMapper, type VocabularyTextMode } from '../lib/personalVocabulary/useVocabularyText'
 
 type AccountMenuPresentation = {
   accountPresentation?: AccountPresentation
@@ -40,9 +41,11 @@ export type MenuItem =
        * bound shortcut — never pad the column with a placeholder.
        */
       shortcut?: string[]
+      /** Whether this row's visible label and hint are app-authored copy or an exact fact. */
+      vocabularyMode?: VocabularyTextMode
     } & AccountMenuPresentation)
   | { type: 'separator' }
-  | { type: 'label'; label: string }
+  | { type: 'label'; label: string; vocabularyMode?: VocabularyTextMode }
   | {
       type: 'colors'
       onPick: (color: string) => void
@@ -56,6 +59,7 @@ export type MenuItem =
       label: string
       icon?: ReactNode
       children: MenuItem[]
+      vocabularyMode?: VocabularyTextMode
     } & AccountMenuPresentation)
 
 function MenuItemLabel({ item }: { item: AccountMenuPresentation & { label: string } }) {
@@ -67,6 +71,40 @@ function MenuItemLabel({ item }: { item: AccountMenuPresentation & { label: stri
       ) : null}
     </span>
   )
+}
+
+/** Map only explicitly authored menu copy. Raw ContextMenu callers intentionally default to
+ * factual because this shell also renders paths, branch names, commit identities, and commands.
+ * The prose-menu wrapper may continue to map its complete authored tree before it reaches here. */
+export function mapAuthoredMenuItems(
+  items: MenuItem[],
+  map: <T extends string | undefined | null>(text: T) => T
+): MenuItem[] {
+  let changed = false
+  const mapped = items.map((item) => {
+    if (item.type === 'separator' || item.type === 'colors') return item
+    if (item.type === 'submenu') {
+      const label = item.vocabularyMode === 'authored' ? map(item.label) : item.label
+      const children = mapAuthoredMenuItems(item.children, map)
+      if (label === item.label && children === item.children) return item
+      changed = true
+      return { ...item, label, children }
+    }
+    if (item.type === 'label') {
+      if (item.vocabularyMode !== 'authored') return item
+      const label = map(item.label)
+      if (label === item.label) return item
+      changed = true
+      return { ...item, label }
+    }
+    if (item.vocabularyMode !== 'authored') return item
+    const label = map(item.label)
+    const hint = map(item.hint)
+    if (label === item.label && hint === item.hint) return item
+    changed = true
+    return { ...item, label, hint }
+  })
+  return changed ? mapped : items
 }
 
 /** `['⌘', '⇧', 'T']` → `"Meta+Shift+T"` — the token shape `aria-keyshortcuts` expects, so a
@@ -111,6 +149,8 @@ interface ContextMenuProps {
  * clipped or hidden behind the canvas. Closes on backdrop click.
  */
 export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) {
+  const vocab = useVocabularyMapper()
+  const visibleItems = mapAuthoredMenuItems(items, vocab)
   // Keep the menu one above its backdrop (matches the default 46/45 CSS ordering).
   const backdropStyle = zIndex != null ? { zIndex } : undefined
   // Flip away from the viewport edges: a right-click near the bottom (or right) edge used to
@@ -219,7 +259,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
       ?.focus()
   }, [menuId, openSub])
 
-  const filterable = isFilterableMenu(items)
+  const filterable = isFilterableMenu(visibleItems)
   // Every root menu gets its own bounded scroll body. Flyouts are portaled to document.body below,
   // so the root scroll container cannot clip a child surface. Keep the legacy `scroll` prop in the
   // public API for callers, but no longer let its omission leave a dynamic menu unbounded.
@@ -229,14 +269,14 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
   const search = useRegexSearchField()
   // The full per-row visibility (items, submenus, colors, labels, separators) — the single source
   // of truth `menuRowVisibility` computes; see its doc for the section/dangling-separator rules.
-  const rowVisible = filterable ? menuRowVisibility(items, search.test, search.active) : []
+  const rowVisible = filterable ? menuRowVisibility(visibleItems, search.test, search.active) : []
   // The KEYBOARD-navigable subset: only rows with their own activation (plain items and submenu
   // triggers) — a label/separator/colors row has no "activate" semantic for Enter/arrow nav.
   // Built with an explicit loop (not filter+map) so TypeScript narrows `it` per branch instead of
   // losing the union across the chain.
   const filterItems: MenuFilterItem[] = []
   if (filterable) {
-    items.forEach((it, i) => {
+    visibleItems.forEach((it, i) => {
       if (!rowVisible[i]) return
       if (it.type === 'item' || !it.type) {
         filterItems.push({ id: String(i), label: it.label, disabled: it.disabled })
@@ -247,7 +287,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
   }
   const menuFilter = useMenuFilter(filterItems, search, {
     onActivate: (fi) => {
-      const item = items[Number(fi.id)]
+      const item = visibleItems[Number(fi.id)]
       if (!item) return
       if (item.type === 'item' || !item.type) {
         item.onClick()
@@ -262,7 +302,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
     onEmptyEscape: onClose
   })
 
-  const openSubmenu = openSub == null ? undefined : items[openSub]
+  const openSubmenu = openSub == null ? undefined : visibleItems[openSub]
   const flyoutPortal = openSubmenu?.type === 'submenu'
     ? createPortal(
         <div
@@ -385,7 +425,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
         {filterable && menuFilter.filtered.length === 0 && (
           <div className="ctx-empty">No matches</div>
         )}
-        {items.map((item, i) => {
+        {visibleItems.map((item, i) => {
           if (filterable && !rowVisible[i]) return null
           if (item.type === 'separator') return <div key={i} className="ctx-sep" role="separator" />
           if (item.type === 'label') return <div key={i} className="ctx-label">{item.label}</div>
