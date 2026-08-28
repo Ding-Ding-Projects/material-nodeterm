@@ -22,7 +22,7 @@ function sectionLabel(section: WindowsDiagnosticSection, vocab: (value: string) 
   return vocab(SECTION_LABELS[section])
 }
 
-function valueText(value: unknown): string {
+export function valueText(value: unknown): string {
   if (value === null || value === undefined || value === '') return 'Not reported'
   if (typeof value === 'number' && Number.isFinite(value)) return value.toLocaleString('en-US')
   return String(value)
@@ -44,9 +44,9 @@ export default function WindowsDiagnosticsNode({ id, data, selected }: NodeProps
       setError(null)
     } catch {
       setSnapshot(null)
-      setError('The Windows diagnostics snapshot could not be read from this host.')
+      setError(vocab('The Windows diagnostics snapshot could not be read from this host.'))
     }
-  }, [])
+  }, [vocab])
 
   useEffect(() => { void load() }, [load])
 
@@ -57,7 +57,14 @@ export default function WindowsDiagnosticsNode({ id, data, selected }: NodeProps
   }, [active, search])
 
   const headerFill = nodeHeaderFillStyle(data.color)
-  const status = error ?? (snapshot?.source === 'unavailable' ? 'This host did not return a Windows diagnostics snapshot.' : snapshot ? `Read-only snapshot checked ${new Date(snapshot.checkedAt).toLocaleString()}.` : 'Reading this host…')
+  const statusKind = error ? 'error' : snapshot?.source === 'unavailable' ? 'unavailable' : snapshot ? 'checked' : 'reading'
+  const statusText = statusKind === 'error'
+    ? error
+    : statusKind === 'unavailable'
+      ? vocab('This host did not return a Windows diagnostics snapshot.')
+      : statusKind === 'checked' && snapshot
+        ? <><span>{vocab('Read-only snapshot checked')}</span> {new Date(snapshot.checkedAt).toLocaleString()}.</>
+        : vocab('Reading this host…')
 
   return (
     <div className={`term-node windows-diagnostics-node${selected ? ' selected' : ''}`} style={{ borderTopColor: data.color }}>
@@ -75,23 +82,23 @@ export default function WindowsDiagnosticsNode({ id, data, selected }: NodeProps
         <button type="button" className="term-node__close" title={vocab('Refresh diagnostics')} aria-label={vocab('Refresh diagnostics')} onClick={() => void load()}>⟳</button>
       </div>
       <div className="windows-diagnostics-node__body nodrag nowheel">
-        <p className={`windows-diagnostics-node__status${error || snapshot?.source === 'unavailable' ? ' is-error' : ''}`} role={error || snapshot?.source === 'unavailable' ? 'alert' : 'status'}>{vocab(status)}</p>
+        <p className={`windows-diagnostics-node__status${error || snapshot?.source === 'unavailable' ? ' is-error' : ''}`} role={error || snapshot?.source === 'unavailable' ? 'alert' : 'status'}>{statusText}</p>
         <p className="windows-diagnostics-node__hint">{vocab('Read-only host facts. This node never starts, stops, enables, disables, edits, or deletes host resources.')}</p>
         <div className="windows-diagnostics-node__tabs" role="tablist" aria-label={vocab('Windows diagnostics sections')}>
           {WINDOWS_DIAGNOSTIC_SECTIONS.map((section) => {
             const current = snapshot?.sections[section]
             const count = current?.state === 'available' ? current.rows.length : 0
-            return <button key={section} type="button" role="tab" aria-selected={activeSection === section} aria-controls={`${id}-${section}`} className={activeSection === section ? 'is-active' : ''} onClick={() => { setActiveSection(section); search.setValue('') }}>{sectionLabel(section, vocab)} <span aria-label={`${count} rows`}>({count})</span></button>
+            return <button key={section} type="button" role="tab" aria-selected={activeSection === section} aria-controls={`${id}-${section}`} className={activeSection === section ? 'is-active' : ''} onClick={() => { setActiveSection(section); search.setValue('') }}>{sectionLabel(section, vocab)} <span aria-label={`${count} ${vocab('rows')}`}>({count})</span></button>
           })}
         </div>
         <div className="windows-diagnostics-node__search">
           <input ref={searchRef} value={search.value} onChange={(event) => search.setValue(event.target.value)} placeholder={search.mode === 'regex' ? vocab('Filter this section with regex') : vocab('Filter this section')} aria-label={`${vocab('Search')} ${sectionLabel(activeSection, vocab)}`} />
-          <AnchoredRegexBuilder search={search} fieldRef={searchRef} label={`Regex for ${SECTION_LABELS[activeSection]}`} />
+          <AnchoredRegexBuilder search={search} fieldRef={searchRef} label={`${vocab('Regex for')} ${sectionLabel(activeSection, vocab)}`} />
         </div>
         {search.error && <p className="windows-diagnostics-node__error" role="alert">{vocab(search.error)}</p>}
         <section id={`${id}-${activeSection}`} role="tabpanel" aria-label={sectionLabel(activeSection, vocab)} className="windows-diagnostics-node__panel">
-          {!active ? <p>{vocab('No snapshot is available yet.')}</p> : active.state !== 'available' ? <p role="alert">{vocab(active.reason)}</p> : visibleRows.length === 0 ? <p>{vocab(search.query ? 'No rows match this filter.' : 'The host reported no rows in this section.')}</p> : <div className="windows-diagnostics-node__table" role="table" aria-rowcount={visibleRows.length}>
-            {visibleRows.map((row) => <article key={row.id} className="windows-diagnostics-node__row" role="row"><strong>{row.id}</strong><div>{Object.entries(row.values).map(([key, value]) => <span key={key}><b>{key}</b><code>{valueText(value)}</code></span>)}</div></article>)}
+          {!active ? <p>{vocab('No snapshot is available yet.')}</p> : active.state !== 'available' ? <p role="alert">{active.reason}</p> : visibleRows.length === 0 ? <p>{vocab(search.query ? 'No rows match this filter.' : 'The host reported no rows in this section.')}</p> : <div className="windows-diagnostics-node__table" role="table" aria-rowcount={visibleRows.length}>
+            {visibleRows.map((row) => <article key={row.id} className="windows-diagnostics-node__row" role="row"><strong>{row.id}</strong><div>{Object.entries(row.values).map(([key, value]) => <span key={key}><b>{key}</b><code>{valueText(value) === 'Not reported' ? vocab('Not reported') : valueText(value)}</code></span>)}</div></article>)}
           </div>}
         </section>
       </div>
