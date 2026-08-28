@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Make the Windows QEMU packaging bootstrap tolerate short-lived executable locks from scanning
+  or indexing. It retries only pre-start `EACCES`, `EPERM`, and `EBUSY` failures through a finite
+  1.85-second backoff, never retries a child that started, and preserves a primary installer
+  failure if later owned-file cleanup is also locked. The focused retry suite was deliberately
+  made red by removing `EACCES`, then restored green.
+
+  Windows 上新寫入嘅 QEMU installer 有時會畀掃描器或者 indexer 短暫鎖住；而家只會對未成功
+  開始前嘅 `EACCES`、`EPERM` 同 `EBUSY` 做有限重試，已經開始咗嘅 child 失敗就唔會重試。
+  清理同時失敗亦唔會蓋過原本 installer error。測試刻意移除 `EACCES` 後確實變紅，再還原後
+  變綠。
+
 - Show the stamped package version and second-precision local updated time on the start screen.
   The stamped version remains visible when the optional runtime bridge is unavailable, while
   missing or invalid build provenance reports an honest unavailable state. This rapid lane ran

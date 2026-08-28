@@ -56,10 +56,12 @@ download; runtime does not perform this network operation.
 The resource bootstrap creates the temporary installer with exclusive ownership, so a stale file or
 another process's file is never overwritten or removed. If the freshly created installer cannot
 start because the operating system reports `EACCES`, `EPERM`, or `EBUSY` before a child process
-starts, the bootstrap makes at most three attempts with 50 ms and 100 ms delays. A child that did
-start and exits nonzero is terminal and is not retried. The current process's temporary installer is
-removed in `finally` after success, spawn refusal, child failure, or another thrown error; the
-fixed URL, SHA-512 validation, shell-free arguments, and required payload checks remain unchanged.
+starts, the bootstrap makes at most five attempts with 100 ms, 250 ms, 500 ms, and 1000 ms delays.
+This gives an antivirus or indexer a bounded 1.85 seconds to release a newly written executable. A
+child that did start and exits nonzero is terminal and is not retried. The current process's owned
+temporary installer is removed in `finally` with its own shorter bounded transient-lock retry. A
+cleanup refusal never replaces the earlier installer failure. The fixed URL, SHA-512 validation,
+shell-free arguments, and required payload checks remain unchanged.
 
 On Windows hosts, WHPX is preferred when the setting is enabled. The actual accelerator is reported
 as WHPX or TCG in the status result. A missing acceleration capability does not prevent a safe TCG

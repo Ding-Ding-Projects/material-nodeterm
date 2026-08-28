@@ -133,6 +133,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Release recovery:** the QEMU packaging bootstrap now uses a finite transient-lock retry
+      for newly written installers and preserves the first operational failure through cleanup.
+      Its focused retry guard was proven red then green. A real BAT-packaged installer, manual
+      `v0.4.121` publication, the hosted Node-runtime repair, and the following automatic
+      release remain pending.
+
 - [ ] **Codex crash-recovery continuation, downstream issue #198:** bounded encrypted one-packet-per-node
       provider-event state, typed IPC and preload boundaries, verified provider start and next-turn
       receipt, and an anchored explicit review card are implemented on this feature branch. Focused tests are
