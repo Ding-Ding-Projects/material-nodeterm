@@ -270,6 +270,14 @@ describe('Windows installer identity contract', () => {
     const packageName = 'node-terminal-0.4.0-full.nupkg'
     const unpacked = join(root, 'dist', 'win-unpacked')
     mkdirSync(unpacked, { recursive: true })
+    const sharpRoot = join(unpacked, 'resources', 'app.asar.unpacked', 'node_modules')
+    mkdirSync(join(sharpRoot, 'sharp'), { recursive: true })
+    mkdirSync(join(sharpRoot, '@img', 'sharp-win32-x64', 'lib'), { recursive: true })
+    writeFileSync(join(sharpRoot, 'sharp', 'package.json'), '{"name":"sharp"}\n')
+    writeFileSync(
+      join(sharpRoot, '@img', 'sharp-win32-x64', 'lib', 'sharp-win32-x64-0.35.3.node'),
+      'native-sharp-fixture',
+    )
     writeFileSync(join(unpacked, 'nodeterm.exe'), appPe)
     writeFileSync(join(unpacked, 'nodeterm_ExecutionStub.exe'), stubPe)
     writeFileSync(join(squirrel, 'nodeterm-Setup-0.4.0.exe'), setupPe)
@@ -406,6 +414,21 @@ describe('Windows installer identity contract', () => {
     await expect(assertPackagedIconContract(squirrel, metadataFile, root, {
       sourceIdentity: { sourceSha: SHA, repository: REPOSITORY },
     })).rejects.toThrow(/dist\/win-unpacked\/nodeterm\.exe does not exactly match/)
+  })
+
+  it('rejects a package missing the Sharp runtime or its Windows x64 native module', async () => {
+    writePackage()
+    const sharpRoot = join(root, 'dist', 'win-unpacked', 'resources', 'app.asar.unpacked', 'node_modules')
+    rmSync(join(sharpRoot, 'sharp'), { recursive: true, force: true })
+    await expect(assertPackagedIconContract(squirrel, metadataFile, root, {
+      sourceIdentity: { sourceSha: SHA, repository: REPOSITORY },
+    })).rejects.toThrow(/missing node_modules\/sharp\/package[.]json/)
+
+    writePackage()
+    rmSync(join(sharpRoot, '@img', 'sharp-win32-x64', 'lib'), { recursive: true, force: true })
+    await expect(assertPackagedIconContract(squirrel, metadataFile, root, {
+      sourceIdentity: { sourceSha: SHA, repository: REPOSITORY },
+    })).rejects.toThrow(/missing @img\/sharp-win32-x64\/lib/)
   })
 
   it('rejects mutable nuspec metadata and isolated app/stub/Setup identity mutations', async () => {

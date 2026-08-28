@@ -154,6 +154,35 @@ export function publicDesktopBootstrapFailure(error: unknown): string {
   return '[startup] Desktop bootstrap failed.'
 }
 
+export interface DesktopBootstrapFailureDialog {
+  title: string
+  content: string
+}
+
+export function desktopBootstrapFailureDialog(error: unknown): DesktopBootstrapFailureDialog {
+  const publicFailure = publicDesktopBootstrapFailure(error)
+  const category = /\(([^)]+)\)/u.exec(publicFailure)?.[1]
+  const missingModule = category === 'MODULE_NOT_FOUND' || category === 'ERR_MODULE_NOT_FOUND'
+  return {
+    title: 'nodeterm could not start',
+    content: missingModule
+      ? [
+          'A required component is missing from this nodeterm package, so the app stopped before opening a window.',
+          '',
+          `Error category: ${category}`,
+          '',
+          'Reinstalling the same release will not repair an incomplete package. Download a newer release that includes the startup repair.',
+          'Your nodeterm settings and projects were not removed.'
+        ].join('\n')
+      : [
+          'nodeterm encountered an early startup problem and stopped before opening a window.',
+          '',
+          ...(category ? [`Error category: ${category}`, ''] : []),
+          'Install a newer repaired release and try again. Your nodeterm settings and projects were not removed.'
+        ].join('\n')
+  }
+}
+
 export interface DesktopStartupDependencies {
   platform: NodeJS.Platform
   argv: readonly string[]

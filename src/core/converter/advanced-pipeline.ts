@@ -1,5 +1,4 @@
 import { createRequire } from 'node:module'
-import sharp from 'sharp'
 import { PDFDocument, degrees } from 'pdf-lib'
 import { createWorker, OEM } from 'tesseract.js'
 import * as unzipper from 'unzipper'
@@ -13,6 +12,13 @@ const MAX_ARCHIVE_ENTRIES = 2_048
 const MAX_ARCHIVE_EXPANDED_BYTES = 512 * 1024 * 1024
 const MAX_ARCHIVE_ENTRY_NAME_BYTES = 4_096
 const MAX_PIPELINE_OUTPUT_BYTES = 512 * 1024 * 1024
+
+let sharpModule: Promise<typeof import('sharp')> | undefined
+
+async function loadSharp(): Promise<typeof import('sharp')['default']> {
+  sharpModule ??= import('sharp')
+  return (await sharpModule).default
+}
 
 function nonEmpty(output: Buffer): string | null {
   if (output.length === 0) return 'Produced empty output'
@@ -224,6 +230,7 @@ export const mergePdfsFromZipAdapter: ConverterAdapter = {
 export function imageAdapter(target: 'png' | 'jpeg' | 'webp'): ConverterAdapter {
   return {
     async convert(input): Promise<AdapterRunResult> {
+      const sharp = await loadSharp()
       const pipeline = sharp(input, {
         animated: false,
         failOn: 'warning',
@@ -243,6 +250,7 @@ export function imageAdapter(target: 'png' | 'jpeg' | 'webp'): ConverterAdapter 
     },
     async validate(output): Promise<string | null> {
       try {
+        const sharp = await loadSharp()
         const metadata = await sharp(output, { limitInputPixels: MAX_IMAGE_PIXELS }).metadata()
         return metadata.width && metadata.height ? null : 'Produced image has no readable dimensions.'
       } catch (error) {

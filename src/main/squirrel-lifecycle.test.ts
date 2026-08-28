@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  desktopBootstrapFailureDialog,
   decideSquirrelLifecycle,
   executeSquirrelCommand,
   publicDesktopBootstrapFailure,
@@ -156,6 +157,33 @@ describe('normal bootstrap error reporting', () => {
     expect(publicDesktopBootstrapFailure({ code: String.raw`C:\private`, name: 'Bad Error!' })).toBe(
       '[startup] Desktop bootstrap failed.'
     )
+  })
+
+  it('builds a full path-free recovery dialog for a missing packaged component', () => {
+    const failure = Object.assign(
+      new Error(`Cannot find module at ${String.raw`C:\Users\Example User\private\sharp`}`),
+      { code: 'MODULE_NOT_FOUND' }
+    )
+
+    const dialog = desktopBootstrapFailureDialog(failure)
+
+    expect(dialog.title).toBe('nodeterm could not start')
+    expect(dialog.content).toContain('required component is missing')
+    expect(dialog.content).toContain('Error category: MODULE_NOT_FOUND')
+    expect(dialog.content).toContain('Reinstalling the same release will not repair')
+    expect(dialog.content).toContain('settings and projects were not removed')
+    expect(dialog.content).not.toContain('Example User')
+    expect(dialog.content).not.toContain('private')
+    expect(dialog.content).not.toContain('sharp')
+  })
+
+  it('shows generic recovery without inventing a private error category', () => {
+    const dialog = desktopBootstrapFailureDialog({ code: 'SECRET_TOKEN', name: 'PrivateFailure' })
+
+    expect(dialog.title).toBe('nodeterm could not start')
+    expect(dialog.content).toContain('early startup problem')
+    expect(dialog.content).not.toContain('SECRET_TOKEN')
+    expect(dialog.content).not.toContain('PrivateFailure')
   })
 })
 

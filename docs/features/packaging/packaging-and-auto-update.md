@@ -53,6 +53,20 @@ publication workflow separately accept only exact Setup Authenticode `NotSigned`
 `Update.exe` remains vendor-branded because the pinned builder exposes no supported project hook
 for rewriting it.
 
+The packaged-runtime check also requires `sharp/package.json` and exactly one Windows x64 Sharp
+native module under `app.asar.unpacked`. Sharp is a production dependency only, never duplicated
+under `devDependencies`; npm otherwise marks the package and its platform binary development-only,
+and electron-builder removes both. Image conversion resolves Sharp lazily at the point of use, so
+a future package-layout failure is reported by that converter instead of terminating desktop
+startup before a window exists.
+
+The tiny desktop startup entry remains independent of the normal application graph. If any early
+bootstrap import still fails, it writes only a sanitized failure category and opens a native
+recovery dialog before exiting. The dialog explains whether a packaged component is missing,
+states that reinstalling the same incomplete release cannot repair it, directs the user to a newer
+repaired release, and confirms that settings and projects were not removed. Local paths and raw
+exception messages never enter that dialog.
+
 **Windows auto-update.** Packaged Windows builds use Electron's built-in Squirrel updater. On
 launch and every six hours, it reads the stable release asset root at
 `https://github.com/Ding-Ding-Projects/material-nodeterm/releases/latest/download`, downloads a
@@ -113,6 +127,10 @@ applicable to those two surfaces.
   a second download.
 - **A package is corrupt or the download fails:** Squirrel refuses to mark it ready, so restart
   cannot invoke installation and the current version remains intact.
+- **A required main-process runtime package is missing:** packaging fails before publication. The
+  Sharp check verifies both JavaScript package metadata and the Windows x64 native module. This
+  prevents the `0.4.142` failure mode where reinstalling succeeded but every normal launch exited
+  with `MODULE_NOT_FOUND` before Chromium logging or a window could start.
 - **The downloaded release name parses as non-newer or wrong-channel:** the card diagnoses the
   mismatch and refuses the immediate-restart action. This is not an install barrier: Squirrel may
   still apply a successfully downloaded package on the next normal launch. The manual `main`-only

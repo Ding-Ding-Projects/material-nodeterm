@@ -869,6 +869,37 @@ async function inspectFullPackage(file, expectedUrl, expectedIconBytes, expected
   }
 }
 
+export async function assertPackagedSharpRuntime(unpackedDirectory) {
+  const nodeModules = path.join(unpackedDirectory, 'resources', 'app.asar.unpacked', 'node_modules')
+  const manifest = path.join(nodeModules, 'sharp', 'package.json')
+  let manifestStat
+  try {
+    manifestStat = await stat(manifest)
+  } catch {
+    fail('packaged runtime is missing node_modules/sharp/package.json')
+  }
+  if (!manifestStat.isFile() || manifestStat.size <= 0) {
+    fail('packaged runtime has an invalid node_modules/sharp/package.json')
+  }
+
+  const nativeDirectory = path.join(nodeModules, '@img', 'sharp-win32-x64', 'lib')
+  let nativeEntries
+  try {
+    nativeEntries = await readdir(nativeDirectory, { withFileTypes: true })
+  } catch {
+    fail('packaged runtime is missing @img/sharp-win32-x64/lib')
+  }
+  const native = nativeEntries.filter(
+    (entry) => entry.isFile() && /^sharp-win32-x64(?:-[0-9.]+)?[.]node$/u.test(entry.name)
+  )
+  if (native.length !== 1) {
+    fail(`packaged runtime must contain exactly one Sharp x64 native module; found ${native.length}`)
+  }
+  const nativeStat = await stat(path.join(nativeDirectory, native[0].name))
+  if (nativeStat.size <= 0) fail('packaged Sharp x64 native module is empty')
+  return { manifest, native: path.join(nativeDirectory, native[0].name) }
+}
+
 /** Validate the Setup/app/stub PE identity, immutable icon URL, and unsigned policy together. */
 export async function assertPackagedIconContract(directory, metadataFile, root = REPO_ROOT, options = {}) {
   const metadata = validateIconMetadata(JSON.parse(await readFile(metadataFile, 'utf8')))
@@ -891,6 +922,7 @@ export async function assertPackagedIconContract(directory, metadataFile, root =
   inspectUnsignedPe(setupBytes, 'Squirrel Setup executable')
   const packaged = await inspectFullPackage(assets.full, metadata.iconUrl, icon, releaseIdentity)
   const unpackedDirectory = path.join(root, 'dist', 'win-unpacked')
+  await assertPackagedSharpRuntime(unpackedDirectory)
   for (const [fileName, expected] of [
     [releaseIdentity.executableName, packaged.app],
     [releaseIdentity.executionStubName, packaged.stub],

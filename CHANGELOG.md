@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Fix packaged Windows startup after the file-converter pipeline added Sharp. The package now
+  classifies Sharp and its native Windows binary as production dependencies, loads Sharp only when
+  an image conversion needs it, and refuses any installer output that omits either runtime file.
+  Early bootstrap failures now show a native recovery dialog with a sanitized error category and
+  recovery instructions instead of exiting invisibly. The broken `0.4.142` package exited before
+  opening a window with `MODULE_NOT_FOUND`.
+
+  修正 file converter 加入 Sharp 後 Windows package 開唔到嘅問題。Sharp 同佢嘅 Windows native
+  binary 而家正式當 production dependency，只有 image conversion 真係要用先載入；installer
+  漏咗任何一件 runtime file 都會即刻拒絕。Early bootstrap 出事會彈 native recovery dialog，
+  唔再靜雞雞收工。壞咗嘅 `0.4.142` 之前會喺開 window 前就 `MODULE_NOT_FOUND` 收工。
+
 - Repair deferred settings persistence, runtime settings fragments, and settings filtering when
   regex-only state is absent. Focused AccountsSection and settings coverage passes 14 of 14 tests.
 
