@@ -437,13 +437,16 @@ function quarantineOtherCodexThreadIdentities(
   try {
     for (const [index, candidate] of identityFileCandidates(root).entries()) {
       if (candidate.file === excludeFile) continue
-      if (
-        (candidate.scope ?? SYSTEM_ACCOUNT_SCOPE) === keepScope &&
-        path.basename(candidate.file) === keepThreadId
-      ) continue
+      const candidateScope = candidate.scope ?? SYSTEM_ACCOUNT_SCOPE
+      const candidateThreadId = path.basename(candidate.file)
+      if (candidateScope === keepScope && candidateThreadId === keepThreadId) continue
       const identity = readIdentityFileCandidate(candidate)
       if (!identity) continue
-      if (identity.nodeId !== nodeId && path.basename(candidate.file) !== keepThreadId) continue
+      // A thread id may legitimately exist in more than one account scope. Only same-scope
+      // records participate in replacement; removing a cross-scope record erases the account
+      // dimension and makes an ownership conflict disappear by deleting evidence.
+      if (candidateThreadId === keepThreadId && candidateScope !== keepScope) continue
+      if (identity.nodeId !== nodeId && candidateThreadId !== keepThreadId) continue
       const quarantine = tempNameFor(candidate.file, { sequence: index + 1 })
       renameAtomicSync(candidate.file, quarantine)
       quarantined.push({ source: candidate.file, quarantine })
@@ -627,9 +630,10 @@ export function bindCodexThreadIdentity(
   }
   const root = path.isAbsolute(rootOrAccountId) ? rootOrAccountId : defaultIdentityRoot()
   const effectiveAccountId = path.isAbsolute(rootOrAccountId) ? accountId : rootOrAccountId
-  accountScope(effectiveAccountId) // reject an escaping account id before any read or write
+  const scope = accountScope(effectiveAccountId) // reject an escaping account id before any read or write
   const existing = readCodexThreadIdentity(threadId, root, effectiveAccountId)
   for (const candidate of identityCandidates(threadId, root)) {
+    if (candidate.scope !== scope) continue
     if (candidate.identity.nodeId !== nodeId && isNodeLive(candidate.identity.nodeId)) {
       throw new Error('Codex thread is already bound to another live node')
     }
