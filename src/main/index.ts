@@ -1971,6 +1971,7 @@ app.whenReady().then(async () => {
           nodeId,
           typeof ownerNodeId === 'string' ? ownerNodeId : undefined
         )
+      }
     }
   )
   ipcMain.on(IPC.browserUnregister, (_e, webContentsId: number) => {
