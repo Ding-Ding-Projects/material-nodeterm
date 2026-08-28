@@ -27,6 +27,7 @@ import {
   createGitLabHostingNode,
   createTimerNode,
   createAwsResourceNode,
+  createUniGetUiUniverseNode,
   isAccountLoginNode
 } from '@renderer/state/workspace'
 import { absolutePosition, type FocusableNode } from './nodeFocus'
@@ -223,6 +224,8 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       const node = createAwsResourceNode(0, intent?.mode === 'cloud-control' ? 'cloud-control' : 'resource-explorer')
       return { ...node, data: { ...node.data, awsManagerIntent: intent ?? node.data.awsManagerIntent } }
     }
+    case 'unigetui':
+      return createUniGetUiUniverseNode(0)
     case 'calendar':
       return createCalendarNode(0)
     case 'homeassistant-control': {

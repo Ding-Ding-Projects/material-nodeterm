@@ -59,6 +59,37 @@ Squirrel.Windows packaging because the existing immutable installer-icon URL ret
 No installer output, `RELEASES`, or `.nupkg` was produced. The failed preflight generated only
 build inputs, which were removed without changing tracked resources. Tests, type checks, lint,
 reviews, audits, runtime interaction, and screenshots remain intentionally unrun.
+## 2026-08-28, UniGetUI Global Universe issue #212
+
+The feature lane adds a machine-owned UniGetUI Global Universe independent of the active project.
+The shared contract is `src/shared/unigetui.ts`; the bounded official CLI client and application-data
+presentation store are `src/core/unigetui/client.ts` and `src/core/unigetui/store.ts`; typed handlers
+are registered by `src/core/unigetui/register-ipc.ts` and wired through `src/main/index.ts` and
+`src/server/handlers/index.ts`. `src/shared/ipc.ts`, `src/shared/types.ts`, `src/preload/index.ts`,
+`src/renderer/bridge/ws-bridge.ts`, and `src/renderer/bridge/stubs.ts` carry the desktop and Server
+Edition boundary. The renderer surface is `src/renderer/components/unigetui/UniGetUiUniversePanel.tsx`,
+with the project-safe portal node in `src/renderer/nodes/UniGetUiUniverseNode.tsx` and the catalog
+entry in `src/shared/node-catalog.ts`.
+
+The client uses only fixed `unigetui` argv through `execFile` with `shell: false`, hidden process
+chrome, bounded output and deadlines. It rejects malformed ids and paths, strips credential-shaped
+response keys before the renderer, never reads the UniGetUI session token, and never shells out to
+individual package managers. The local JSON store contains selected section and bounded search state
+only. Relay and mobile callers have no route to this machine-owned surface.
+
+The follow-up implementation adds the documented package reinstall, ignored-update rule, update-all,
+and manager-update commands. Manager controls use the official `manager action --manager ...
+--action ...` grammar, with separate enable, disable, reload, executable, and notification routes.
+The renderer exposes action controls for installed and update rows, operation output and lifecycle,
+manager maintenance, ignored updates, bundle controls, local backups, and non-secure settings. Bundle
+imports require a selected local file and never pass raw bundle content through argv. Standard local
+UniGetUI installation locations are searched in addition to PATH, and stderr is bounded and sanitized
+before it can reach the renderer.
+
+This accelerated lane intentionally ran no tests, type checks, lint, reviews, audits, runtime
+interaction, or screenshots. The coordinating owner must run the absolute `build.bat /s` and
+`build-installer.bat /s` commands against the exact candidate commit, then perform the remaining
+release proof. No external issue, discussion, push, merge, release, or cleanup was performed here.
 
 ## 2026-08-28, published v0.4.123 and continued repair state
 

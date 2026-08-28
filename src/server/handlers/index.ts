@@ -11,6 +11,7 @@ import { registerNodeDependencyIpc } from '../../core/node-dependencies/register
 import { registerAwsResourceIpc } from '../../core/aws-resource-register-ipc'
 import { AwsWizardModelService } from '../../core/aws-wizard/service'
 import { registerOllamaIpc } from '../../core/ollama/register-ipc'
+import { registerUniGetUiIpc } from '../../core/unigetui/register-ipc'
 import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
 import { registerTorrentIpc } from '../../core/torrent/register-ipc'
 import { registerRepositoryGraphIpc } from '../../core/repository-graph-register-ipc'
@@ -96,6 +97,7 @@ export function registerCoreHandlers(
     const info = deps.workspaceStore?.projectTargetInfo(projectId)
     return info ? { cwd: info.cwd, ssh: info.ssh, name: info.name } : null
   } })
+  registerUniGetUiIpc(platform)
   const { manager: minecraftServers } = registerMinecraftIpc(platform)
   registerTorrentIpc(platform)
   const { manager: virtualMachineManager } = registerVirtualMachineIpc(platform)

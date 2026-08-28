@@ -52,6 +52,24 @@
   防止過期規則搶返控制權，鎖住幾何操作，完結後保留內容、新增節點同使用者刪除。排程編輯會
   記入 `scheduled-settings` local-history domain，但運行中啟用效果唔會製造 history；外部 API
   只可以供應設定值，唔可以改本機效果指向。
+- Expand UniGetUI controls with guided package options, ignored-update handling, manager executable
+  and notification controls, operation output, bundle file import/export, source management, local
+  and cloud backup actions, and super-confirmed destructive actions. Bundle imports require a native
+  local file selection and do not send raw content through process arguments.
+
+  UniGetUI controls 加碼：package options、ignored updates、manager executable 同 notifications、operation output、
+  bundle file import/export、source management、local/cloud backup，同埋有 super confirmation 嘅 destructive actions。
+  Bundle import 一定用 native local file picker，唔會將 raw content 放入 process arguments。
+
+- Add a machine-owned UniGetUI Global Universe with typed local automation, package discovery and
+  operations, installed and update views, manager/source/settings/bundle/log/backup surfaces, and
+  explicit unavailable, malformed, stopped, not-installed, elevation-required, and partial-operation
+  states. Project files keep only a safe portal intent, never package-manager state or credentials.
+
+  新增獨立嘅 UniGetUI 全域宇宙，透過官方本機 automation 做搜尋、安裝、更新、下載、解除安裝、修復，
+  仲有 managers、sources、settings、bundles、logs 同 backups。Project file 只留安全入口，唔會偷渡套件狀態
+  或 credentials；未安裝、停機、回應壞咗、要提升權限同部分完成都會清楚講。
+
 - Fix packaged Windows startup after the file-converter pipeline added Sharp. The package now
   classifies Sharp and its native Windows binary as production dependencies, loads Sharp only when
   an image conversion needs it, and refuses any installer output that omits either runtime file.

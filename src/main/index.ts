@@ -59,6 +59,7 @@ import { TrackpadGestureLedger } from './trackpad-gesture'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
+import { registerUniGetUiIpc } from '../core/unigetui/register-ipc'
 import { registerOpenWebUiHosting } from './open-webui-hosting'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerAwsIdentityIpc } from '../core/aws-identity'
@@ -2295,6 +2296,7 @@ app.whenReady().then(async () => {
   const awsWizardModels = new AwsWizardModelService(nodeDependencyService)
   registerOllamaIpc(corePlatform)
   registerRepositoryGraphIpc(corePlatform, { projectTargetInfo: (projectId) => workspaceStore.projectTargetInfo(projectId) })
+  registerUniGetUiIpc(corePlatform)
   registerOpenWebUiHosting(getMainWindow, app.getPath('userData'))
   minecraftServers = registerMinecraftIpc(corePlatform).manager
   registerAwsIdentityIpc(corePlatform, {

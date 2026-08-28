@@ -14487,3 +14487,60 @@ button.term-node__title-text:focus-visible {
     scroll-behavior: auto;
   }
 }
+
+/* UniGetUI Global Universe. The manager paints its own bounded surface and keeps machine-local
+   package rows out of project canvas data. */
+.unigetui-universe {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: min(720px, calc(100vw - 32px));
+  max-width: min(920px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-large);
+  box-shadow: var(--md-sys-elevation-level3);
+}
+.unigetui-universe__header,
+.unigetui-universe__search-row { display: flex; align-items: center; gap: 12px; }
+.unigetui-universe__header { justify-content: space-between; }
+.unigetui-universe__header h2 { display: flex; align-items: center; gap: 8px; margin: 0; }
+.unigetui-universe__header p { margin: 4px 0 0; color: var(--md-sys-color-on-surface-variant); }
+.unigetui-universe__search { display: grid; gap: 6px; }
+.unigetui-universe__search-row input { flex: 1; min-width: 0; min-height: 44px; }
+.unigetui-universe__search-row button { min-width: 44px; min-height: 44px; }
+.unigetui-universe__status { display: grid; gap: 4px; padding: 12px 14px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-surface-container); }
+.unigetui-universe__status--ok { border-inline-start: 4px solid var(--md-sys-color-primary); }
+.unigetui-universe__status--not-installed,
+.unigetui-universe__status--stopped,
+.unigetui-universe__status--unavailable,
+.unigetui-universe__status--malformed,
+.unigetui-universe__status--failed { border-inline-start: 4px solid var(--md-sys-color-error); }
+.unigetui-universe__rows { display: grid; gap: 8px; list-style: none; padding: 0; margin: 0; }
+.unigetui-universe__rows li { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-surface-container); }
+.unigetui-universe__rows li pre { flex: 1; min-width: 0; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.unigetui-universe__page-actions, .unigetui-universe__row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.unigetui-universe__options { padding: 10px 12px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: var(--md-sys-shape-corner-medium); }
+.unigetui-universe__options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; padding-top: 10px; }
+.unigetui-universe__options-grid label { display: grid; gap: 4px; color: var(--md-sys-color-on-surface-variant); }
+.unigetui-universe__option-input { display: flex; gap: 4px; }
+.unigetui-universe__option-input input { min-width: 0; flex: 1; }
+.unigetui-universe__rows button { min-height: 40px; border-radius: var(--md-sys-shape-corner-full); }
+.unigetui-universe__empty,
+.unigetui-universe__error,
+.unigetui-universe__help { white-space: pre-wrap; overflow-wrap: anywhere; padding: 14px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-surface-container); }
+.unigetui-universe__error { color: var(--md-sys-color-on-error-container); background: var(--md-sys-color-error-container); }
+.unigetui-universe-node { display: grid; gap: 10px; min-width: 0; padding: 18px; color: var(--md-sys-color-on-surface); background: var(--md-sys-color-surface-container-high); border: 1px solid var(--md-sys-color-outline-variant); border-radius: var(--md-sys-shape-corner-large); box-shadow: var(--md-sys-elevation-level2); }
+.unigetui-universe-node__open { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 10px 14px; color: var(--md-sys-color-on-primary-container); background: var(--md-sys-color-primary-container); border: 0; border-radius: var(--md-sys-shape-corner-full); font: inherit; font-weight: 700; cursor: pointer; }
+.unigetui-universe-node p, .unigetui-universe-node small { margin: 0; color: var(--md-sys-color-on-surface-variant); overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .unigetui-universe { min-width: 0; width: calc(100vw - 32px); padding: 14px; }
+  .unigetui-universe__header { align-items: flex-start; }
+  .unigetui-universe__header p { font-size: 0.9em; }
+  .unigetui-universe__rows li { align-items: flex-start; flex-wrap: wrap; }
+  .unigetui-universe__rows li pre { flex-basis: 100%; order: 1; }
+}

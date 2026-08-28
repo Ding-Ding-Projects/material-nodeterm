@@ -215,6 +215,22 @@ const awsUniverseEntry: NodeCatalogEntry = {
       }
 }
 
+const unigetUiUniverseEntry: NodeCatalogEntry = {
+  id: 'unigetui-global-universe',
+  nodeKind: 'unigetui',
+  category: 'universes',
+  label: 'UniGetUI Global Universe',
+  description: 'Open the machine-owned UniGetUI package and installed-app workspace.',
+  keywords: ['unigetui', 'packages', 'installed', 'updates', 'global', 'machine'],
+  documentationPath: 'docs/features/integrations/unigetui-global-universe.md',
+  safeDefaults: { global: true },
+  dependencies: ['unigetui-cli'],
+  status: 'available',
+  availabilityMode: 'configure-later',
+  scope: 'any',
+  availability: alwaysAvailable
+}
+
 /**
  * The one source of truth for user-created node intents. Labels and descriptions deliberately stay
  * neutral English here; the renderer resolves them through the normal i18n catalogue, while this
@@ -697,6 +713,7 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   plannedEntry('planner', 'automation', 'Planner', 'Create a planner occurrence definition with explicit local binding.', 'planner-service'),
   plannedEntry('multiverse-portal', 'universes', 'Multiverse portal', 'Create a door-only Multiverse canvas below the depth limit.', 'multiverse-service', 'multiverse', 8),
   awsUniverseEntry,
+  unigetUiUniverseEntry,
   {
     id: 'aws-resource-explorer',
     nodeKind: 'aws-resource',
@@ -921,6 +938,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'planner', state: 'planned', scope: 'any', reason: 'planner service not implemented' },
   { id: 'multiverse-portal', state: 'planned', scope: 'multiverse', reason: 'Multiverse portal not implemented' },
   { id: 'aws-universe', state: 'current', scope: 'root', reason: 'AWS-only Universe portal and child canvas' },
+  { id: 'unigetui-global-universe', state: 'current', scope: 'any', reason: 'machine-owned UniGetUI Global Universe portal' },
   { id: 'aws-resource-explorer', state: 'current', scope: 'aws-universe', reason: 'guided Resource Explorer manager' },
   { id: 'aws-cloud-control', state: 'current', scope: 'aws-universe', reason: 'guided Cloud Control manager' },
   { id: 'aws-s3', state: 'current', scope: 'aws-universe', reason: 'guided S3 operations through shared AWS manager' },

@@ -20,6 +20,7 @@ import type { GitHubCliAccountsApi, GitHubControlApi, GitHubIssuesApi } from '..
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { RepositoryGraphApi } from '../../shared/repository-graph'
+import type { UniGetUiApi } from '../../shared/unigetui'
 import type { MinecraftApi } from '../../shared/minecraft'
 import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import type { AwsWizardModelsApi } from '../../shared/aws-wizard'
@@ -1197,6 +1198,73 @@ export function buildRepositoryGraphApi(client: RpcClient): Pick<NodeTerminalApi
   return { repositoryGraph }
 }
 
+/** Machine-owned UniGetUI Global Universe. It is host-scoped, so no project id is accepted. */
+export function buildUniGetUiApi(client: RpcClient): Pick<NodeTerminalApi, 'unigetui'> {
+  const unigetui: UniGetUiApi = {
+    status: () => client.request(IPC.unigetuiStatus) as ReturnType<UniGetUiApi['status']>,
+    universeState: () => client.request(IPC.unigetuiUniverseState) as ReturnType<UniGetUiApi['universeState']>,
+    saveUniverseState: (state) => client.request(IPC.unigetuiSaveUniverseState, state) as ReturnType<UniGetUiApi['saveUniverseState']>,
+    appStatus: () => client.request(IPC.unigetuiAppStatus),
+    navigate: (page) => client.request(IPC.unigetuiNavigate, page),
+    operations: () => client.request(IPC.unigetuiOperations) as ReturnType<UniGetUiApi['operations']>,
+    operation: (id) => client.request(IPC.unigetuiOperation, id) as ReturnType<UniGetUiApi['operation']>,
+    operationOutput: (id, tail) => client.request(IPC.unigetuiOperationOutput, id, tail) as ReturnType<UniGetUiApi['operationOutput']>,
+    operationWait: (id, timeout) => client.request(IPC.unigetuiOperationWait, id, timeout) as ReturnType<UniGetUiApi['operationWait']>,
+    operationCancel: (id) => client.request(IPC.unigetuiOperationCancel, id),
+    operationRetry: (id, mode) => client.request(IPC.unigetuiOperationRetry, id, mode),
+    operationReorder: (id, action) => client.request(IPC.unigetuiOperationReorder, id, action),
+    operationForget: (id) => client.request(IPC.unigetuiOperationForget, id),
+    managers: () => client.request(IPC.unigetuiManagers) as ReturnType<UniGetUiApi['managers']>,
+    managerAction: (manager, action, input) => client.request(IPC.unigetuiManagerAction, manager, action, input),
+    sources: (manager) => client.request(IPC.unigetuiSources, manager) as ReturnType<UniGetUiApi['sources']>,
+    sourceAdd: (manager, name, url) => client.request(IPC.unigetuiSourceAdd, manager, name, url),
+    sourceRemove: (manager, name, url) => client.request(IPC.unigetuiSourceRemove, manager, name, url),
+    settings: () => client.request(IPC.unigetuiSettings) as ReturnType<UniGetUiApi['settings']>,
+    settingGet: (key) => client.request(IPC.unigetuiSettingGet, key),
+    settingSet: (key, input) => client.request(IPC.unigetuiSettingSet, key, input),
+    settingClear: (key) => client.request(IPC.unigetuiSettingClear, key),
+    settingsReset: () => client.request(IPC.unigetuiSettingsReset),
+    shortcuts: () => client.request(IPC.unigetuiShortcuts),
+    shortcutSet: (path, status) => client.request(IPC.unigetuiShortcutSet, path, status),
+    shortcutReset: (path) => client.request(IPC.unigetuiShortcutReset, path),
+    shortcutResetAll: () => client.request(IPC.unigetuiShortcutResetAll),
+    logs: (kind, manager, level) => client.request(IPC.unigetuiLogs, kind, manager, level) as ReturnType<UniGetUiApi['logs']>,
+    backups: () => client.request(IPC.unigetuiBackups),
+    backupLocalCreate: () => client.request(IPC.unigetuiBackupLocalCreate),
+    backupCloudList: () => client.request(IPC.unigetuiBackupCloudList),
+    backupCloudCreate: () => client.request(IPC.unigetuiBackupCloudCreate),
+    backupCloudDownload: (key) => client.request(IPC.unigetuiBackupCloudDownload, key),
+    backupCloudRestore: (key, append) => client.request(IPC.unigetuiBackupCloudRestore, key, append),
+    backupLoginStart: (launchBrowser) => client.request(IPC.unigetuiBackupLoginStart, launchBrowser),
+    backupLoginComplete: () => client.request(IPC.unigetuiBackupLoginComplete),
+    backupLogout: () => client.request(IPC.unigetuiBackupLogout),
+    bundle: () => client.request(IPC.unigetuiBundle),
+    bundleReset: () => client.request(IPC.unigetuiBundleReset),
+    bundleImport: (input) => client.request(IPC.unigetuiBundleImport, input),
+    bundleExport: (path) => client.request(IPC.unigetuiBundleExport, path),
+    bundleAdd: (input) => client.request(IPC.unigetuiBundleAdd, input),
+    bundleRemove: (input) => client.request(IPC.unigetuiBundleRemove, input),
+    bundleInstall: (input) => client.request(IPC.unigetuiBundleInstall, input),
+    packageSearch: (query, manager, maxResults) => client.request(IPC.unigetuiPackageSearch, query, manager, maxResults),
+    packageDetails: (id, manager, source) => client.request(IPC.unigetuiPackageDetails, id, manager, source),
+    packageVersions: (id, manager, source) => client.request(IPC.unigetuiPackageVersions, id, manager, source),
+    packageInstalled: (manager) => client.request(IPC.unigetuiPackageInstalled, manager),
+    packageUpdates: (manager) => client.request(IPC.unigetuiPackageUpdates, manager),
+    packageInstall: (id, options) => client.request(IPC.unigetuiPackageInstall, id, options),
+    packageDownload: (id, options) => client.request(IPC.unigetuiPackageDownload, id, options),
+    packageUpdate: (id, options) => client.request(IPC.unigetuiPackageUpdate, id, options),
+    packageUninstall: (id, manager, options) => client.request(IPC.unigetuiPackageUninstall, id, manager, options),
+    packageRepair: (id, manager, options) => client.request(IPC.unigetuiPackageRepair, id, manager, options),
+    packageReinstall: (id, options) => client.request(IPC.unigetuiPackageReinstall, id, options),
+    ignoredUpdates: () => client.request(IPC.unigetuiIgnoredUpdates),
+    ignoredUpdateAdd: (id, options) => client.request(IPC.unigetuiIgnoredUpdateAdd, id, options),
+    ignoredUpdateRemove: (id, options) => client.request(IPC.unigetuiIgnoredUpdateRemove, id, options),
+    packageUpdateAll: (options) => client.request(IPC.unigetuiPackageUpdateAll, options),
+    packageUpdateManager: (manager, options) => client.request(IPC.unigetuiPackageUpdateManager, manager, options)
+  }
+  return { unigetui }
+}
+
 /** Guided AWS manager families over the authenticated WS bridge. */
 export function buildAwsResourceManagersApi(client: RpcClient): Pick<NodeTerminalApi, 'awsManagers'> {
   const awsManagers: AwsResourceManagerApi = {
@@ -1900,6 +1968,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildAwsIdentityApi(client),
     ...buildOllamaApi(client),
     ...buildRepositoryGraphApi(client),
+    ...buildUniGetUiApi(client),
     ...buildCloudflareCoreManagersApi(client),
     ...buildMinecraftApi(client),
     ...buildTorrentApi(client),

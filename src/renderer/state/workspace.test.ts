@@ -1248,6 +1248,7 @@ describe('duplicateNode across every node kind', () => {
     'windows-diagnostics': 'windows-diagnostics',
     'aws-universe': 'aws-universe',
     'aws-resource': 'aws-resource',
+    unigetui: 'unigetui',
     'recovery-game': 'recovery-game',
     'homeassistant-sensor': 'homeassistant-sensor',
     'gitlab-hosting': 'gitlab-hosting',

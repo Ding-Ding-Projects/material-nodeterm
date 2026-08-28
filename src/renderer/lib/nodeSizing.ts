@@ -41,7 +41,8 @@ export const NODE_MIN_SIZES: Record<NodeKind, { width: number; height: number }>
   'gitlab-hosting': { width: 560, height: 360 },
   'aws-universe': { width: 320, height: 220 },
   'aws-resource': { width: 520, height: 420 },
-  'repository-graph': { width: 560, height: 380 }
+  'repository-graph': { width: 560, height: 380 },
+  unigetui: { width: 360, height: 240 }
   , 'homeassistant-sensor': { width: 460, height: 360 }
   , alarm: { width: 360, height: 260 }
   , awsidentity: { width: 460, height: 360 }

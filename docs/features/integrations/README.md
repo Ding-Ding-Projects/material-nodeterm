@@ -37,6 +37,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues](cloudflare-zero-trust-managers.md) | typed fixed-route API managers with local protected credentials, portable neutral intent, bounded responses, progress, cancellation, and destructive confirmation; verification intentionally unrun |
 | [Guided GitHub API capabilities](github-api.md) | typed REST and GraphQL operation catalog with host-resolved credentials, approved-project scoping, bounded pagination, progress, cancellation, rate-limit state, and destructive confirmation; verification intentionally unrun |
 | [GitHub work-item canvas attachments](github-work-items.md) | compact issue and pull-request chips on attached session nodes with owning-frame pills, exact branch adoption, legacy-card preservation, and Desktop/Server Edition bridge parity; verification intentionally unrun |
+| [UniGetUI Global Universe](unigetui-global-universe.md) | machine-owned package and installed-app workspace through the official local UniGetUI automation CLI; verification intentionally unrun in issue #212's accelerated lane |
 
 Planned, not yet researched here:
 
