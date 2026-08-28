@@ -23,8 +23,6 @@
  * Electron-adjacent (holds a debugger on a page with real logins) → `src/main`, never Server Edition.
  */
 import type { CdpContext } from './browser-cdp-allowlist'
-import { type DebuggerLike, sendCdp } from './browser-cdp-send'
-
 import type { LayoutMetrics } from './browser-actions'
 import { type DebuggerLike, sendCdp } from './browser-cdp-send'
 // The indicator's linger now lives in `src/shared` (PR 6 consumes it from the renderer too, and a
