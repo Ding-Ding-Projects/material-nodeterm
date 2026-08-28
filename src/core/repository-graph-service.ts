@@ -103,11 +103,6 @@ function pushEdge(edges: Map<string, RepositoryGraphEdge>, edge: RepositoryGraph
   if (!edges.has(edge.id) && edges.size < REPOSITORY_GRAPH_LIMITS.maxEdges) edges.set(edge.id, edge)
 }
 
-function dependencyNameFromLine(line: string): string | null {
-  const match = /["']([^"']+)["']\s*(?::|=)/u.exec(line)
-  return match?.[1]?.slice(0, 240) ?? null
-}
-
 function addManifestDependencies(content: string, path: string, revision: string, nodes: Map<string, RepositoryGraphNode>, edges: Map<string, RepositoryGraphEdge>, omissions: string[]): void {
   const manager = basename(path).toLowerCase()
   let names: string[] = []
@@ -133,7 +128,6 @@ function addManifestDependencies(content: string, path: string, revision: string
   } else {
     omissions.push(`${path}: no bundled semantic adapter for this manifest format`)
     return
-    names = content.split(/\r?\n/u).map(dependencyNameFromLine).filter((v): v is string => !!v).slice(0, 5000)
   }
   const file = nodeId('file', path)
   for (const name of [...new Set(names)].slice(0, 5000)) {
