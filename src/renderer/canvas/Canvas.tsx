@@ -2470,7 +2470,7 @@ export function Canvas() {
     const hasAgents = Object.keys(agentById).length > 0
     const activeId = useProjects.getState().activeProjectId
     const activeProjectForProjection = projectCatalog.find((project) => project.id === activeId)
-    const foreign = resolveForeignNodeProjections(activeProjectForProjection, projectCatalog, nodes)
+    const foreign = resolveForeignNodeProjections(activeProjectForProjection, projectCatalog, flowToNodeStates(nodes))
     if (!hasLoops && !hasAgents && foreign.length === 0) return NO_EPHEMERAL
     // Explicit width/height for an ephemeral node (so it resizes like any other node).
     // Defaults switch with expand; a user resize override wins.

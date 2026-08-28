@@ -373,7 +373,8 @@ export interface NodeData {
 }
 
 /** React Flow node type string mirrors the persisted NodeKind. */
-export type CanvasNode = Node<NodeData, NodeKind>
+/** React Flow also carries ephemeral cross-project projection cards, which never enter storage. */
+export type CanvasNode = Node<NodeData, NodeKind | 'xproject'>
 
 /** Single-quote a string for safe use as one shell argument (POSIX).
  *  Imported from `@shared/shell-quote` so the renderer and the shared command-assembly layer share
@@ -3097,7 +3098,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
     // the session. Dropping them HERE rather than at each call site means every save path -- the
     // debounced autosave, an explicit save, the SSH mirror, the export archive -- agrees, and a
     // popup can never be resurrected by a reload into a node nobody opened.
-    .filter((n) => !n.data.temporary)
+    .filter((n) => !n.data.temporary && n.type !== 'xproject')
     .map((n) => {
       const kind: NodeKind = (n.type as NodeKind) ?? 'terminal'
       const collapsed = !!n.data.collapsed
