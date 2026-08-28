@@ -14,8 +14,8 @@ export interface SettingsSearchState {
   /** Plain-text query, live in text mode. */
   query: string
   /** Regex pattern source, live in regex mode. */
-  pattern: string
-  flags: string
+  pattern?: string
+  flags?: string
 }
 
 function haystack(entry: SettingsSearchEntry): string {
@@ -40,9 +40,9 @@ export function matchesQuery(query: string, entry: SettingsSearchEntry): boolean
  */
 export function matchesEntry(state: SettingsSearchState, entry: SettingsSearchEntry): boolean {
   if (state.mode === 'text') return matchesQuery(state.query, entry)
-  const pattern = state.pattern.trim()
+  const pattern = (state.pattern ?? '').trim()
   if (!pattern) return true
-  const re = compileForInlineFilter(pattern, state.flags)
+  const re = compileForInlineFilter(pattern, state.flags ?? 'i')
   if (!re) return true
   return new RegExp(re.source, re.flags).test(clampFilterCandidate(haystack(entry)))
 }
