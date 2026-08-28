@@ -15564,6 +15564,7 @@ export function Canvas() {
           closeRow
         ]
       })
+      return
       // For the ACTIVE project, reuse the SAME single-node menu the canvas right-click builds —
       // full parity (Color, Group, Duplicate, Branch, Collapse, Markdown view, Refresh terminal,
       // Restart agent, Restart agent and shell, Reopen session as, Switch model, Transfer with its
@@ -15605,6 +15606,7 @@ export function Canvas() {
               { type: 'separator' },
               { label: 'Close', icon: <IconTrash />, danger: true, onClick: () => closeSession(projectId, id) }
             ]
+      const head: MenuItem[] = []
       setMenu({ x: e.clientX, y: e.clientY, items: [...head, ...body] })
     },
     [
