@@ -278,7 +278,6 @@ import { getDeviceId } from '../core/device-id'
 import { initRemoteStatusPush } from './remote-ssh/remote-status-push'
 import { runGitRemoteOp } from '../core/git-remote-proxy'
 import { initCanvasSync } from '../core/canvas-sync'
-import { composeNativeNotification, isPreparedNativeNotification, retainUntilDismissed } from './notifications'
 import { composeNativeNotification, prepareNativeNotification, retainUntilDismissed } from './notifications'
 import { installManagedAgentHooks } from '../core/agents/hooks'
 import { createSubagentTail } from '../core/subagent-tail'
@@ -2149,8 +2148,6 @@ app.whenReady().then(async () => {
       // `force` (permission request / confirmation) shows even when focused; normal
       // completion notifications only show when the window is in the background.
       if (!payload.force && win.isFocused()) return 'skipped'
-      if (!isPreparedNativeNotification(payload)) return 'failed'
-      const copy = composeNativeNotification(payload)
       const copy = composeNativeNotification(prepared)
       const n = new Notification(copy)
       n.on('click', () => {
@@ -4655,7 +4652,7 @@ app.whenReady().then(async () => {
     () => ({
       tmuxScrollback: settingsStore.get().tmuxScrollback,
       terminalWordSeparators: settingsStore.get().terminalWordSeparators
-    })
+    }),
     // The standalone relay bundle uploaded to a Linux host for managed Codex accounts (S6 PR 6).
     // Only executable code is ever uploaded — never a credential (Property 1). Reading it is
     // single-fd (openSync→fstatSync→readFileSync(fd)) so there is no stat-then-read TOCTOU on the
