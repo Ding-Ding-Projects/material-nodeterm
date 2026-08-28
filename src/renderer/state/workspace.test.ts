@@ -1150,8 +1150,8 @@ describe('createAgentNode prompt injection', () => {
   })
   it('uses --interactive for Copilot so the prompted session stays open', () => {
     const n = createAgentNode('copilot', 0, undefined, undefined, 'fix the bug')
-    expect(n.data.initialCommand).toContain("copilot 'fix the bug'")
-    expect(n.data.initialCommand).not.toContain('--session-id=')
+    expect(n.data.initialCommand).toContain("copilot --interactive 'fix the bug'")
+    expect(n.data.initialCommand).toMatch(/--session-id=[A-Za-z0-9._-]+$/)
     expect(n.data.initialCommand).not.toContain('--prompt')
   })
   it('shell-quotes a flag-prompt safely', () => {

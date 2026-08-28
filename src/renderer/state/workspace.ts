@@ -889,9 +889,14 @@ export function createAgentNode(
   const promptArg = normalizedPrompt ? shellSingleQuote(normalizedPrompt) : null
   const sep = agentConfig(agentId)?.argvPromptSeparator
   const isFlagPrompt = agentConfig(agentId)?.promptInjectionMode === 'flag-prompt'
+  const isFlagInteractive = agentConfig(agentId)?.promptInjectionMode === 'flag-interactive'
   const usesSep = !!promptArg && !!sep && !isFlagPrompt
   const withPrompt = promptArg
-    ? isFlagPrompt ? `${baseCmd} --prompt ${promptArg}` : `${baseCmd} ${promptArg}`
+    ? isFlagPrompt
+      ? `${baseCmd} --prompt ${promptArg}`
+      : isFlagInteractive
+        ? `${baseCmd} --interactive ${promptArg}`
+        : `${baseCmd} ${promptArg}`
     : baseCmd
   // The session id is DECIDED here rather than learned from a hook later, so this node always has
   // something to resume with — see SESSION_ID_CAPABLE for the failure this closes. `uuid()` (not
