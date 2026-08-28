@@ -54,9 +54,12 @@ function currentIconLabel(icon: ProjectIcon | undefined): string {
     const pretty = icon.name.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
     return `${pretty} glyph`
   }
-  if (icon.source === 'github') return 'GitHub avatar'
-  if (icon.source === 'favicon') return 'Website icon'
-  return 'Uploaded image'
+  if (icon.type === 'image') {
+    if (icon.source === 'github') return 'GitHub avatar'
+    if (icon.source === 'favicon') return 'Website icon'
+    return 'Uploaded image'
+  }
+  return 'Material symbol'
 }
 
 export function ProjectIconPicker({
