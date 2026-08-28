@@ -21,7 +21,6 @@ import {
   SYSTEM_ACCOUNT_SCOPE,
   writeCodexThreadIdentity
 } from './codex-identity-proxy'
-import { createHmac } from 'node:crypto'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform } from './platform-fake'
 

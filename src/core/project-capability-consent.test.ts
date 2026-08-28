@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import * as core from './project-capability-consent'
-import * as shared from '../shared/project-capability-consent'
 
 describe('core re-exports the SAME functions the renderer imports from @shared — no drift possible', () => {
   it('every export is the same function object on both paths', () => {

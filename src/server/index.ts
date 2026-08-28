@@ -61,10 +61,7 @@ import { LogBuffer } from '../core/log-buffer'
 import { installLogSink } from '../core/log-sink'
 import { registerLogHandlers } from '../core/log-handlers'
 import { registerAgentStatusHandlers } from '../core/agent-status-handlers'
-import os from 'os'
-import { hookServer } from '../core/agents/hook-server'
 import { serverEditionControlHandler } from './control-unsupported'
-import { refreshNodeTokens } from '../core/agents/node-token-service'
 import { armServerNodeIdentity } from './node-identity-arm'
 import {
   writePendingAnswerLocal,
