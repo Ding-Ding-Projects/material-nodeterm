@@ -725,15 +725,16 @@ export async function readReleaseIdentity(packageJsonFile) {
   if (
     value?.build?.win?.signExecutable !== false ||
     value?.build?.win?.forceCodeSigning !== false ||
+    value?.build?.win?.signAndEditExecutable !== false ||
     value?.build?.forceCodeSigning !== false
   ) {
-    fail('Windows packaging must keep signExecutable:false and both forceCodeSigning flags false')
-  }
-  if (value?.build?.win && Object.hasOwn(value.build.win, 'signAndEditExecutable')) {
-    fail('build.win.signAndEditExecutable must be omitted so icon and PE metadata editing stay enabled')
+    fail('Windows packaging must keep signExecutable, signAndEditExecutable, and both forceCodeSigning controls false')
   }
   if (value?.build?.afterSign !== './scripts/windows-pe-identity.mjs') {
     fail('build.afterSign must preserve the Windows OriginalFilename identity hook')
+  }
+  if (value?.build?.afterPack !== './scripts/after-pack.cjs') {
+    fail('build.afterPack must preserve the unsigned Windows resource and package verification hook')
   }
   if (value?.build?.squirrelWindows?.artifactName !== '${productName}-Setup-${version}.${ext}') {
     fail('Squirrel Setup artifactName must remain ${productName}-Setup-${version}.${ext}')

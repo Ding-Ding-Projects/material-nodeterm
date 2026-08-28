@@ -71,6 +71,7 @@ type PackageConfigFixture = {
     appId: string
     productName: string
     afterSign: string
+    afterPack: string
     forceCodeSigning: boolean
     win: {
       icon: string
@@ -241,8 +242,14 @@ describe('Windows installer identity contract', () => {
         appId: 'com.nodeterm.app',
         productName: RELEASE_IDENTITY.productName,
         afterSign: './scripts/windows-pe-identity.mjs',
+        afterPack: './scripts/after-pack.cjs',
         forceCodeSigning: false,
-        win: { icon: 'build/icon.ico', forceCodeSigning: false, signExecutable: false },
+        win: {
+          icon: 'build/icon.ico',
+          forceCodeSigning: false,
+          signExecutable: false,
+          signAndEditExecutable: false,
+        },
         squirrelWindows: { artifactName: '${productName}-Setup-${version}.${ext}' },
       },
     }))
@@ -471,7 +478,8 @@ describe('Windows installer identity contract', () => {
     await expect(readReleaseIdentity(join(root, 'package.json'))).resolves.toMatchObject(WINDOWS_RELEASE_IDENTITY)
     const baseline = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as PackageConfigFixture
     const mutations: Array<[string, (config: PackageConfigFixture) => void]> = [
-      ['signAndEditExecutable', (config) => { config.build.win.signAndEditExecutable = false }],
+      ['signAndEditExecutable enabled', (config) => { config.build.win.signAndEditExecutable = true }],
+      ['signAndEditExecutable missing', (config) => { delete config.build.win.signAndEditExecutable }],
       ['signExecutable', (config) => { config.build.win.signExecutable = true }],
       ['win forceCodeSigning', (config) => { config.build.win.forceCodeSigning = true }],
       ['win icon', (config) => { config.build.win.icon = 'build/icon.png' }],
