@@ -141,6 +141,7 @@ export function createAgentNodeForExplorerFolder(args: {
     undefined,
     ssh,
     args.accountId,
+    undefined,
     args.launchPlan,
     args.options
   )
