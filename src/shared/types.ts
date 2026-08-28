@@ -402,6 +402,8 @@ export type NodeKind =
   | 'aws-universe'
   // Guided Resource Explorer and Cloud Control manager. Only safe operation intent is portable.
   | 'aws-resource'
+  // Portal into the machine-owned UniGetUI Global Universe. It carries no package-manager state.
+  | 'unigetui'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
   // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
@@ -547,6 +549,8 @@ export interface CanvasNodeState {
   universeCanvasId?: string
   /** Scope of the owning universe canvas. The root canvas is never a Shop scope. */
   universeScope?: 'multiverse' | 'aws-universe'
+  /** Safe portal intent for the machine-owned UniGetUI Global Universe. */
+  unigetuiGlobal?: boolean
   /** Real persisted depth of the owning universe canvas, with its root at depth 0. */
   universeDepth?: number
   /** True for the deterministic Shop node. Persisted as an invariant marker, not a security claim. */
@@ -4872,6 +4876,8 @@ export interface NodeTerminalApi {
   awsWizardModels: import('./aws-wizard').AwsWizardModelsApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Machine-owned UniGetUI Global Universe. It is deliberately independent of activeProjectId. */
+  unigetui: import('./unigetui').UniGetUiApi
   /** Guided local Open WebUI hosting with persistent volume and explicit provider setup. */
   openWebUi: import('./open-webui-hosting').OpenWebUiApi
   /** Guided Cloudflare managers — docs/features/integrations/cloudflare-core-managers.md. */

@@ -100,6 +100,8 @@ and then never edited this file.
 
 ## Open
 
+| UniGetUI Global Universe | Focused tests, type checks, runtime interaction, and captures. | `manual:issue #212 accelerated lane intentionally runs no tests` | `src/core/unigetui/register-ipc.ts`, `src/renderer/components/unigetui/UniGetUiUniversePanel.tsx`, and `docs/features/integrations/unigetui-global-universe.md` provide the implementation and documentation. |
+
 | Feature | What is missing | Closes when | Notes |
 | --- | --- | --- | --- |
 | Home Assistant multi-instance client | Focused tests, built-artifact interaction, and capture evidence. | `manual:issue 26 explicitly forbids checks and captures in its ultra-speed implementation lane` | Source, documentation, machine-local credential and instance persistence, REST and WebSocket discovery, and portable intent are implemented in issue #26. |

@@ -133,6 +133,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **UniGetUI Global Universe, issue #212.** Machine-owned portal and typed official local
+      automation are implemented in the accelerated lane, with no tests, type checks, lint,
+      reviews, audits, runtime interaction, or captures run. Build and packaging evidence remains
+      pending on the coordinating owner.
+
 - [ ] **Release recovery:** the QEMU packaging bootstrap now extracts the verified NSIS archive
       with a fixed bundled 7-Zip executable instead of executing the downloaded setup, and uses a
       finite transient-lock retry for the extractor while preserving the first operational failure

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add a machine-owned UniGetUI Global Universe with typed local automation, package discovery and
+  operations, installed and update views, manager/source/settings/bundle/log/backup surfaces, and
+  explicit unavailable, malformed, stopped, not-installed, elevation-required, and partial-operation
+  states. Project files keep only a safe portal intent, never package-manager state or credentials.
+
+  新增獨立嘅 UniGetUI 全域宇宙，透過官方本機 automation 做搜尋、安裝、更新、下載、解除安裝、修復，
+  仲有 managers、sources、settings、bundles、logs 同 backups。Project file 只留安全入口，唔會偷渡套件狀態
+  或 credentials；未安裝、停機、回應壞咗、要提升權限同部分完成都會清楚講。
+
 - Fix packaged Windows startup after the file-converter pipeline added Sharp. The package now
   classifies Sharp and its native Windows binary as production dependencies, loads Sharp only when
   an image conversion needs it, and refuses any installer output that omits either runtime file.

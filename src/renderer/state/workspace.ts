@@ -112,6 +112,7 @@ const WINDOWS_DIAGNOSTICS_SIZE = { width: 760, height: 560 }
 const TIMER_SIZE = { width: 380, height: 360 }
 const ALARM_SIZE = { width: 380, height: 360 }
 const OPEN_WEBUI_SIZE = { width: 680, height: 560 }
+const UNIGETUI_SIZE = { width: 520, height: 360 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
@@ -1604,6 +1605,26 @@ export function createAwsUniversePortalNode(index: number, canvasId: string, tit
   }
 }
 
+/** Creates a project-safe portal into the one machine-owned UniGetUI Global Universe. */
+export function createUniGetUiUniverseNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const size = UNIGETUI_SIZE
+  return {
+    id: nextId('unigetui'),
+    type: 'unigetui',
+    position: placeAt(center, index, size.width, size.height),
+    width: size.width,
+    height: size.height,
+    style: { width: size.width, height: size.height },
+    data: {
+      title: 'UniGetUI Global Universe',
+      color: '#6750a4',
+      group: null,
+      unigetuiGlobal: true,
+      tags: ['unigetui', 'global-universe']
+    }
+  }
+}
+
 /** Creates an unbound Home Assistant control. Import and creation perform no network request. */
 export function createHomeAssistantControlNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
@@ -2550,6 +2571,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   shop: true,
   'aws-universe': true,
   'aws-resource': true,
+  unigetui: true,
   torrent: true,
   'linux-vm': true,
   'open-webui-hosting': true,
@@ -2614,6 +2636,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   shop: SHOP_SIZE,
   'aws-universe': { width: 320, height: 220 },
   'aws-resource': AWS_RESOURCE_SIZE,
+  unigetui: UNIGETUI_SIZE,
   torrent: TORRENT_SIZE,
   'linux-vm': LINUX_VM_SIZE,
   'open-webui-hosting': OPEN_WEBUI_SIZE,
@@ -3046,6 +3069,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cloudflareTunnelIntent: sanitizeTunnelPortableIntent(n.cloudflareTunnelIntent) ?? undefined,
         universeCanvasId: n.universeCanvasId,
         universeScope: n.universeScope,
+        unigetuiGlobal: n.unigetuiGlobal,
         universeDepth: n.universeDepth,
         nonDeletable: n.nonDeletable,
         shopSelection: (n as CanvasNodeState & { shopSelection?: string }).shopSelection,
@@ -3211,6 +3235,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cloudflareTunnelIntent: sanitizeTunnelPortableIntent(n.data.cloudflareTunnelIntent) ?? undefined,
         universeCanvasId: n.data.universeCanvasId,
         universeScope: n.data.universeScope,
+        unigetuiGlobal: n.data.unigetuiGlobal,
         universeDepth: typeof n.data.universeDepth === 'number' ? n.data.universeDepth : undefined,
         nonDeletable: n.data.nonDeletable,
         shopSelection: n.data.shopSelection,

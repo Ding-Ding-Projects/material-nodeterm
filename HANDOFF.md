@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-08-28, UniGetUI Global Universe issue #212
+
+The feature lane adds a machine-owned UniGetUI Global Universe independent of the active project.
+The shared contract is `src/shared/unigetui.ts`; the bounded official CLI client and application-data
+presentation store are `src/core/unigetui/client.ts` and `src/core/unigetui/store.ts`; typed handlers
+are registered by `src/core/unigetui/register-ipc.ts` and wired through `src/main/index.ts` and
+`src/server/handlers/index.ts`. `src/shared/ipc.ts`, `src/shared/types.ts`, `src/preload/index.ts`,
+`src/renderer/bridge/ws-bridge.ts`, and `src/renderer/bridge/stubs.ts` carry the desktop and Server
+Edition boundary. The renderer surface is `src/renderer/components/unigetui/UniGetUiUniversePanel.tsx`,
+with the project-safe portal node in `src/renderer/nodes/UniGetUiUniverseNode.tsx` and the catalog
+entry in `src/shared/node-catalog.ts`.
+
+The client uses only fixed `unigetui` argv through `execFile` with `shell: false`, hidden process
+chrome, bounded output and deadlines. It rejects malformed ids and paths, strips credential-shaped
+response keys before the renderer, never reads the UniGetUI session token, and never shells out to
+individual package managers. The local JSON store contains selected section and bounded search state
+only. Relay and mobile callers have no route to this machine-owned surface.
+
+This accelerated lane intentionally ran no tests, type checks, lint, reviews, audits, runtime
+interaction, or screenshots. The coordinating owner must run the absolute `build.bat /s` and
+`build-installer.bat /s` commands against the exact candidate commit, then perform the remaining
+release proof. No external issue, discussion, push, merge, release, or cleanup was performed here.
+
 ## 2026-08-28, published v0.4.123 and continued repair state
 
 Release `v0.4.123` is published and non-draft. Its verified target is
