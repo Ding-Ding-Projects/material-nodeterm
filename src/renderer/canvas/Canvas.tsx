@@ -7296,7 +7296,7 @@ export function Canvas() {
         .map((n) => n.id)
       // Never reopenable: bringing this node back would recreate a "codex /login" node for a
       // credential that no longer exists.
-      if (loginIds.length) deleteNodes(loginIds, { record: false })
+      if (loginIds.length) deleteNodes(loginIds, undefined, 'node', { record: false })
       setNodes((ns) =>
         ns.some((n) => n.data.codexAccountId === accountId)
           ? ns.map((n) =>
