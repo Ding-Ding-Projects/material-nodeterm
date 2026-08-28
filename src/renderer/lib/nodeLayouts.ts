@@ -4,11 +4,12 @@ import type { CanvasNodeState, SavedCanvasLayout, Viewport } from '@shared/types
 export function captureSavedLayout(
   nodes: readonly CanvasNodeState[],
   viewport: Viewport,
-  input: Pick<SavedCanvasLayout, 'id' | 'name' | 'createdAt'> & Partial<Pick<SavedCanvasLayout, 'updatedAt'>>
+  input: Pick<SavedCanvasLayout, 'id' | 'name' | 'canvasId' | 'createdAt'> & Partial<Pick<SavedCanvasLayout, 'updatedAt'>>
 ): SavedCanvasLayout {
   return {
     id: input.id,
     name: input.name,
+    canvasId: input.canvasId,
     createdAt: input.createdAt,
     updatedAt: input.updatedAt ?? input.createdAt,
     viewport: { x: viewport.x, y: viewport.y, zoom: viewport.zoom },

@@ -164,13 +164,22 @@ export function resolveEffectiveStyle(
 }
 
 /** Builds the full generated stylesheet text for every persisted element entry. */
-export function buildAppearanceStylesheet(entries: Record<string, ElementAppearanceEntry>): string {
+export function buildAppearanceStylesheet(
+  entries: Record<string, ElementAppearanceEntry>,
+  transientEntries: Record<string, AppearanceTextStyle> = {}
+): string {
   const rules: string[] = []
   for (const id of Object.keys(entries)) {
     const style = resolveEffectiveStyle(id, entries)
     const decls = cssDeclarations(style)
     if (!decls) continue
     rules.push(`[data-appearance-id="${escapeSelector(id)}"] { ${decls} }`)
+  }
+  // Scheduled appearance is a transient layer. It is emitted after persistent entries and never
+  // passed through setElementStyle/applyPresetToElement, so deactivation removes only this CSS.
+  for (const [id, style] of Object.entries(transientEntries)) {
+    const decls = cssDeclarations(style)
+    if (decls) rules.push(`[data-appearance-id="${escapeSelector(id)}"] { ${decls} }`)
   }
   return rules.join('\n')
 }

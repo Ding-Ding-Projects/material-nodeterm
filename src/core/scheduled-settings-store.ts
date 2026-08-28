@@ -12,6 +12,7 @@ import {
   type ScheduledSettingsLoadState,
   type ScheduledSettingsFile
 } from '../shared/scheduled-settings'
+import type { HistoryAction } from '../shared/local-history'
 
 /**
  * Stores the scheduled-settings rules in `scheduled-settings.json`, mirroring `SettingsStore`'s
@@ -28,6 +29,7 @@ export class ScheduledSettingsStore {
     (file: ScheduledSettingsFile, previous: ScheduledSettingsFile) => void | Promise<void>
   >()
   private saveChain: Promise<unknown> = Promise.resolve()
+  private historyRecorder?: (before: ScheduledSettingsFile, after: ScheduledSettingsFile, change: { action: HistoryAction; label: string }) => void | Promise<void>
   private get filePath(): string {
     return path.join(platform().userDataDir, 'scheduled-settings.json')
   }
@@ -39,6 +41,14 @@ export class ScheduledSettingsStore {
   ): () => void {
     this.listeners.add(cb)
     return () => this.listeners.delete(cb)
+  }
+
+  /** Register the local-history sink. Runtime activation never calls this hook, only durable
+   * schedule edits do, keeping transient effects out of history. */
+  setHistoryRecorder(
+    fn: (before: ScheduledSettingsFile, after: ScheduledSettingsFile, change: { action: HistoryAction; label: string }) => void | Promise<void>
+  ): void {
+    this.historyRecorder = fn
   }
 
   /** Load synchronously into cache (call once at boot, same as `SettingsStore.init`). A failed
@@ -148,6 +158,18 @@ export class ScheduledSettingsStore {
         // "could not write" result. The schedule is durable; its credential lifecycle is not.
         listenerFailed = true
       }
+    }
+    try {
+      const beforeJson = JSON.stringify(previous)
+      const afterJson = JSON.stringify(next)
+      if (beforeJson !== afterJson) {
+        await this.historyRecorder?.(previous, next, {
+          action: 'updated',
+          label: 'Updated scheduled settings'
+        })
+      }
+    } catch {
+      // History is best effort and cannot turn a durable schedule edit into a false failure.
     }
     if (listenerFailed) throw new ScheduledSettingsPostSaveError()
   }

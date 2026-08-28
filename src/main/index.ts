@@ -1542,6 +1542,15 @@ app.whenReady().then(async () => {
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
+  scheduledSettingsRuntime.store.setHistoryRecorder(async (_before, after, change) => {
+    await localHistoryStore.record({
+      domain: 'scheduled-settings',
+      filename: 'scheduled-settings.json',
+      content: JSON.stringify(after, null, 2),
+      label: change.label,
+      action: change.action
+    })
+  })
   const projectArchives = new ProjectArchiveService(localHistoryStore, undefined, () => plannerRuntime.store.get().schedules)
   // One core registrar owns provider accounts, credential references, OAuth callbacks, and local
   // bindings for both shells. Import never calls these handlers, so opening a project cannot start
@@ -1807,11 +1816,16 @@ app.whenReady().then(async () => {
   })
   registerLocalHistoryHandlers(corePlatform, {
     historyStore: localHistoryStore,
-    domainFilenames: { settings: 'settings.json' },
+    domainFilenames: { settings: 'settings.json', 'scheduled-settings': 'scheduled-settings.json' },
     restoreHandlers: {
       settings: async (content: string, sha: string) => {
         const parsed = JSON.parse(content) as Settings
         await settingsStore.applyRestoredSettings(parsed, `Restored settings to ${sha.slice(0, 7)}`)
+      },
+      'scheduled-settings': async (content: string) => {
+        const parsed = JSON.parse(content)
+        const result = await scheduledSettingsRuntime.store.save(parsed)
+        if (!result.ok) throw new Error(result.error ?? 'Could not restore scheduled settings.')
       }
     }
   })

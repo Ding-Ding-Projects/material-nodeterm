@@ -149,9 +149,10 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 - [ ] **Canvas zones and saved layouts, issue #82 / upstream issue #394**: edge and corner drag
       previews, complete half, third, and quarter targets, and bounded named layout snapshots are
-      implemented in the source and project persistence path. Tests, type checks, lint, reviews,
-      built-artifact interaction, packaging, runtime verification, and captures remain pending
-      under the lane's ultra-speed boundary.
+      implemented in the source and project persistence path. Scheduled schema version 2 now adds
+      exact canvas identity plus transient saved-layout and appearance-target effects. Tests, type
+      checks, lint, reviews, built-artifact interaction, packaging, runtime verification, and
+      captures remain pending under the lane's ultra-speed boundary.
 - [ ] **AWS platform managers, issue #49**: ECR, ECS, EKS, RDS, database, VPC, Route 53, and cost
       operations are mounted on the existing shared AWS resource manager and AWS Shop. The node
       now carries typed previews, fixed argv with `shell: false`, bounded inputs and output,

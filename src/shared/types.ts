@@ -1201,6 +1201,8 @@ export interface ProjectPortalState {
 export interface SavedCanvasLayout {
   id: string
   name: string
+  /** Root or child canvas identity. Legacy layouts migrate to `root`. */
+  canvasId: string
   createdAt: number
   updatedAt: number
   viewport: Viewport

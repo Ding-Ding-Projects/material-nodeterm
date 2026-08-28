@@ -4925,3 +4925,33 @@ The coordinating owner must exercise parsing, type checking, building, and the r
 flow before integrating this feature branch. The similarly numbered eneskirca/nodeterm PR #198 is
 a separate merged paste-injection security change and was inspected only to avoid confusing the
 two records.
+# 2026-08-28, scheduled saved-layout and appearance effects, issue #211
+
+This isolated feature lane implements scheduled settings schema version 2. `SavedCanvasLayout`
+records an exact `canvasId`, with legacy layouts migrating to `root`. Schedule rules now carry
+local-only exact placement and appearance targets. The external API response remains limited to
+validated scalar settings and cannot retarget local project state.
+
+The renderer applies placement only when the named project and canvas are already active. It keeps
+an in-memory geometry and viewport snapshot, refuses drag, resize, regroup, tidy, and saved-layout
+operations while placement is active, and restores only surviving controlled-node geometry when the
+effect ends. Content changes, newly-created nodes, and user deletions survive. Appearance presets
+are emitted through a transient stylesheet layer and never persisted as element styles. A composed
+project, canvas, and layout key fences stale callbacks.
+
+Durable schedule edits are recorded in the `scheduled-settings` local-history domain. Runtime effect
+activation and deactivation create no history entries. The Schedule settings section now provides
+guided local project, canvas, layout, preset, and registered-target pickers with an adjacent regex
+builder and explicit unavailable-state copy.
+
+Changed files: `src/shared/scheduled-settings.ts`, `src/shared/types.ts`, `src/core/workspace-files.ts`,
+`src/core/scheduled-settings-store.ts`, `src/core/scheduled-settings-service.ts`, `src/main/index.ts`,
+`src/renderer/lib/nodeLayouts.ts`, `src/renderer/lib/appearance/apply.ts`,
+`src/renderer/components/appearance/AppearanceStyleInjector.tsx`,
+`src/renderer/components/settings/sections/ScheduleSection.tsx`, `src/renderer/canvas/Canvas.tsx`,
+`docs/scheduled-settings.md`, `docs/uh-feature-inventory.md`, `CHANGELOG.md`, and `ROADMAP.md`.
+
+This accelerated lane intentionally runs no tests, type checks, lint, reviews, audits, accessibility
+checks, security checks, runtime interaction, or screenshots. The required Windows build and
+Squirrel.Windows packaging commands remain to be run against the committed candidate. No external
+issue, discussion, release, or default-branch integration is changed by this lane.
