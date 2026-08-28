@@ -339,8 +339,8 @@ export function SceneKeepAwake({ agentId, label, color }: { agentId: AgentId; la
           <span className="onb-node__color" style={{ background: color }} />
           <AgentIcon agentId={agentId} size={13} />
           <span className="onb-node__title">{label}</span>
-          <span className="term-node__status term-node__status--busy" style={{ marginLeft: 'auto' }}>
-            <span className="term-node__status-dot" />
+           <span className="onb-node__status onb-node__status--busy" style={{ marginLeft: 'auto' }}>
+             <span className="onb-node__status-dot" />
             RUNNING
           </span>
         </div>
