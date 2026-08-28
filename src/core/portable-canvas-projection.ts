@@ -540,7 +540,7 @@ export function projectToPortableCanvasV3(project: Project, input: PortableCanva
   const projectChildren = [...multiverseChildren, ...lifecycleChildren]
   const childInputs = input.canvases ?? projectChildren
   const childNodes = input.canvases === undefined ? projectChildren.flatMap((canvas) => canvas.nodes) : []
-  const projectedNodes = [...project.nodes, ...childNodes].map(projectNode).sort((a, b) => a.id.localeCompare(b.id))
+  const projectedNodes = [...project.nodes, ...childNodes].map((node) => projectNode(node)).sort((a, b) => a.id.localeCompare(b.id))
   const childNodeIds = new Set(childInputs?.flatMap((canvas) => canvas.nodeIds ?? []) ?? [])
   const media = input.media === undefined ? undefined : validatePortableMediaManifest(input.media)
   const nodes = reconcileMediaReferences(projectedNodes, media)
@@ -594,19 +594,21 @@ export function serializePortableCanvasProjectionV3(value: PortableCanvasProject
 export function validatePortableCanvasProjectionV3(value: unknown): PortableCanvasProjectionV3 {
   if (!record(value) || value.format !== PORTABLE_PROJECT_SCHEMA || value.schemaVersion !== 3 || !record(value.project) || !Array.isArray(value.canvases) || !Array.isArray(value.nodes) || !Array.isArray(value.relationships)) throw new PortableProjectV3Error('manifest', 'Portable canvas projection has an invalid schema 3 shape.')
   exactKeys(value, ALLOWED_TOP, 'projection')
-  exactKeys(value.project, ALLOWED_PROJECT, 'project')
-  text(value.project.name, 'project name'); text(value.project.color, 'project color')
-  if (!/^#[0-9a-f]{6,8}$/i.test(value.project.color)) throw new PortableProjectV3Error('manifest', 'Portable project color is invalid.')
+  const project = value.project
+  exactKeys(project, ALLOWED_PROJECT, 'project')
+  text(project.name, 'project name'); const projectColor = text(project.color, 'project color')
+  if (!/^#[0-9a-f]{6,8}$/i.test(projectColor)) throw new PortableProjectV3Error('manifest', 'Portable project color is invalid.')
   let icon: PortableProjectDisplayV3['icon']
-  if (value.project.icon !== undefined) {
-    if (!record(value.project.icon)) throw new PortableProjectV3Error('manifest', 'Portable icon is invalid.')
-    exactKeys(value.project.icon, ALLOWED_ICON, 'icon')
-    text(value.project.icon.type, 'icon type'); text(value.project.icon.name, 'icon name')
-    const candidate = value.project.icon.type === 'emoji' ? { type: 'emoji' as const, emoji: value.project.icon.name } : value.project.icon.type === 'material-symbol' ? { type: 'material-symbol' as const, name: value.project.icon.name } : undefined
+  if (project.icon !== undefined) {
+    if (!record(project.icon)) throw new PortableProjectV3Error('manifest', 'Portable icon is invalid.')
+    const iconValue = project.icon
+    exactKeys(iconValue, ALLOWED_ICON, 'icon')
+    const iconType = text(iconValue.type, 'icon type'); const iconName = text(iconValue.name, 'icon name')
+    const candidate = iconType === 'emoji' ? { type: 'emoji' as const, emoji: iconName } : iconType === 'material-symbol' ? { type: 'material-symbol' as const, name: iconName } : undefined
     if (!candidate || !sanitizeProjectIcon(candidate)) throw new PortableProjectV3Error('manifest', 'Portable icon is not an allowed icon.')
     icon = { type: candidate.type, name: candidate.type === 'emoji' ? candidate.emoji : candidate.name }
   }
-  text(value.rootCanvasId, 'root canvas id')
+  const rootCanvasId = text(value.rootCanvasId, 'root canvas id')
   if (value.canvases.length > PORTABLE_CANVAS_LIMITS.maxCanvases || value.nodes.length > PORTABLE_CANVAS_LIMITS.maxNodes || value.relationships.length > PORTABLE_CANVAS_LIMITS.maxRelationships) throw new PortableProjectV3Error('entry-limit', 'Portable canvas projection exceeds its bounds.')
   const ids = new Set<string>()
   const normalizedNodes: PortableCanvasNodeV3[] = []
@@ -615,7 +617,7 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
     const id = text(node.id, 'node id')
     if (ids.has(id)) throw new PortableProjectV3Error('manifest', `Duplicate portable node: ${id}`)
     ids.add(id)
-    normalizedNodes.push(projectNode(node as CanvasNodeState, true))
+    normalizedNodes.push(projectNode(node as unknown as CanvasNodeState, true))
   }
   for (const node of value.nodes) if (node.parentId !== undefined && (!ids.has(node.parentId) || node.parentId === node.id)) throw new PortableProjectV3Error('manifest', 'Portable node parent is missing or self-referential.')
   const canvasIds = new Set<string>(); const normalizedCanvases: PortableCanvasV3[] = []
@@ -633,9 +635,12 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
     if (canvas.parentCanvasId !== undefined) text(canvas.parentCanvasId, 'parent canvas id')
     if (canvas.viewport !== undefined) { if (!record(canvas.viewport)) throw new PortableProjectV3Error('manifest', 'Portable viewport is invalid.'); exactKeys(canvas.viewport, ALLOWED_VIEWPORT, 'viewport'); finite(canvas.viewport.x, 'viewport x'); finite(canvas.viewport.y, 'viewport y'); finite(canvas.viewport.zoom, 'viewport zoom') }
     if (typeof canvas.title !== 'string') throw new PortableProjectV3Error('manifest', 'Portable canvas title is invalid.')
-    text(canvas.title, 'canvas title'); finite(canvas.order, 'canvas order')
+    const title = text(canvas.title, 'canvas title')
+    const order = finite(canvas.order, 'canvas order')
     if (canvas.depth !== undefined && (typeof canvas.depth !== 'number' || !Number.isInteger(canvas.depth) || canvas.depth < 0 || canvas.depth > PORTABLE_CANVAS_LIMITS.maxCanvases)) throw new PortableProjectV3Error('manifest', 'Portable canvas depth is invalid.')
-    normalizedCanvases.push({ id, scope: canvas.scope as PortableCanvasScope, ...(canvas.parentCanvasId !== undefined ? { parentCanvasId: text(canvas.parentCanvasId, 'parent canvas id') } : {}), ...(canvas.depth !== undefined ? { depth: canvas.depth } : {}), title: canvas.title, order: canvas.order, ...(canvas.viewport ? { viewport: { x: canvas.viewport.x, y: canvas.viewport.y, zoom: canvas.viewport.zoom } } : {}), nodeIds: [...canvas.nodeIds] })
+    const depth = canvas.depth === undefined ? undefined : finite(canvas.depth, 'canvas depth')
+    const nodeIds = canvas.nodeIds.map((nodeId) => text(nodeId, 'canvas node id'))
+    normalizedCanvases.push({ id, scope: canvas.scope as PortableCanvasScope, ...(canvas.parentCanvasId !== undefined ? { parentCanvasId: text(canvas.parentCanvasId, 'parent canvas id') } : {}), ...(depth !== undefined ? { depth } : {}), title, order, ...(canvas.viewport ? { viewport: { x: finite(canvas.viewport.x, 'viewport x'), y: finite(canvas.viewport.y, 'viewport y'), zoom: finite(canvas.viewport.zoom, 'viewport zoom') } } : {}), nodeIds })
   }
   const roots = value.canvases.filter((canvas) => canvas.scope === 'root')
   if (roots.length !== 1 || roots[0].id !== value.rootCanvasId || roots[0].parentCanvasId !== undefined) throw new PortableProjectV3Error('manifest', 'Portable projection must contain exactly one parentless root canvas.')
@@ -674,34 +679,39 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
     nodeCanvas.set(nodeId, canvas.id)
   }
   for (const node of value.nodes) if (membership.get(node.id) !== 1) throw new PortableProjectV3Error('manifest', `Portable node must belong to exactly one canvas: ${node.id}`)
-  for (const link of value.relationships) {
+  const rawRelationships = value.relationships as Array<Record<string, unknown>>
+  for (const link of rawRelationships) {
     if (!record(link) || !['bridge', 'rope'].includes(String(link.kind))) throw new PortableProjectV3Error('manifest', 'Portable relationship is invalid.')
     exactKeys(link, ALLOWED_RELATIONSHIP, 'relationship')
-    text(link.id, 'relationship id'); text(link.source, 'relationship source'); text(link.target, 'relationship target'); finite(link.order, 'relationship order')
-    if (link.canvasId !== undefined && !canvasIds.has(text(link.canvasId, 'relationship canvas id'))) throw new PortableProjectV3Error('manifest', 'Portable relationship references an unknown canvas.')
-    if (!ids.has(link.source) || !ids.has(link.target)) throw new PortableProjectV3Error('manifest', 'Portable relationship references an unknown node.')
-    const owningCanvas = link.canvasId ?? value.rootCanvasId
-    if (nodeCanvas.get(link.source) !== owningCanvas || nodeCanvas.get(link.target) !== owningCanvas) {
+    const linkId = text(link.id, 'relationship id')
+    const source = text(link.source, 'relationship source')
+    const target = text(link.target, 'relationship target')
+    const order = finite(link.order, 'relationship order')
+    const canvasId = link.canvasId === undefined ? undefined : text(link.canvasId, 'relationship canvas id')
+    if (canvasId !== undefined && !canvasIds.has(canvasId)) throw new PortableProjectV3Error('manifest', 'Portable relationship references an unknown canvas.')
+    if (!ids.has(source) || !ids.has(target)) throw new PortableProjectV3Error('manifest', 'Portable relationship references an unknown node.')
+    const owningCanvas = canvasId ?? rootCanvasId
+    if (nodeCanvas.get(source) !== owningCanvas || nodeCanvas.get(target) !== owningCanvas) {
       throw new PortableProjectV3Error('manifest', 'Portable relationships must remain inside their owning canvas.')
     }
   }
   const relationshipIds = new Set<string>(); const foldedRelationshipIds = new Set<string>()
-  for (const link of value.relationships) { const folded = link.id.toLocaleLowerCase('en-US'); if (relationshipIds.has(link.id) || foldedRelationshipIds.has(folded)) throw new PortableProjectV3Error('manifest', `Duplicate or case-colliding relationship: ${link.id}`); relationshipIds.add(link.id); foldedRelationshipIds.add(folded) }
-  if (!canvasIds.has(value.rootCanvasId)) throw new PortableProjectV3Error('manifest', 'Portable root canvas is missing.')
+  for (const link of rawRelationships) { const id = text(link.id, 'relationship id'); const folded = id.toLocaleLowerCase('en-US'); if (relationshipIds.has(id) || foldedRelationshipIds.has(folded)) throw new PortableProjectV3Error('manifest', `Duplicate or case-colliding relationship: ${id}`); relationshipIds.add(id); foldedRelationshipIds.add(folded) }
+  if (!canvasIds.has(rootCanvasId)) throw new PortableProjectV3Error('manifest', 'Portable root canvas is missing.')
   const doors = value.doors === undefined
     ? undefined
     : Array.isArray(value.doors)
       ? validatePortableUniverseDoors(value.doors as unknown as PortableUniverseDoorV3[], canvasIds)
       : (() => { throw new PortableProjectV3Error('manifest', 'Portable doors must be an array.') })()
   if (value.appearance !== undefined) safeAppearance(value.appearance)
-  const normalizedRelationships = value.relationships.map((link) => ({ id: link.id, kind: link.kind as 'bridge' | 'rope', ...(link.canvasId ? { canvasId: link.canvasId } : {}), source: link.source, target: link.target, order: link.order }))
+  const normalizedRelationships = rawRelationships.map((link) => ({ id: text(link.id, 'relationship id'), kind: link.kind as 'bridge' | 'rope', ...(link.canvasId ? { canvasId: text(link.canvasId, 'relationship canvas id') } : {}), source: text(link.source, 'relationship source'), target: text(link.target, 'relationship target'), order: finite(link.order, 'relationship order') }))
   const media = value.media === undefined ? undefined : validatePortableMediaManifest(value.media)
   const mediaNodes = reconcileMediaReferences(normalizedNodes, media)
   const planner = value.planner === undefined ? undefined : validatePortablePlannerDefinitions(value.planner)
   const debugBrowserProfiles = value.debugBrowserProfiles === undefined ? undefined : normalizeDebugBrowserProfiles(value.debugBrowserProfiles)
   if (value.debugBrowserProfiles !== undefined && !debugBrowserProfiles) throw new PortableProjectV3Error('manifest', 'Portable debugging-browser profiles are invalid.')
   const portals = value.portals === undefined ? undefined : validatePortablePortals(value.portals, normalizedCanvases)
-  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: value.project.name, color: value.project.color, ...(icon ? { icon } : {}) }, rootCanvasId: value.rootCanvasId, canvases: normalizedCanvases, nodes: mediaNodes, relationships: normalizedRelationships, ...(doors ? { doors } : {}), ...(portals ? { portals } : {}), ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}), ...(planner ? { planner } : {}), ...(debugBrowserProfiles ? { debugBrowserProfiles } : {}) }
+  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: text(project.name, 'project name'), color: projectColor, ...(icon ? { icon } : {}) }, rootCanvasId, canvases: normalizedCanvases, nodes: mediaNodes, relationships: normalizedRelationships, ...(doors ? { doors } : {}), ...(portals ? { portals } : {}), ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}), ...(planner ? { planner } : {}), ...(debugBrowserProfiles ? { debugBrowserProfiles } : {}) }
 }
 
 export function parsePortableCanvasProjectionV3(bytes: Uint8Array): PortableCanvasProjectionV3 {
@@ -779,7 +789,7 @@ export function portableCanvasProjectionToProject(
     ...(node.annotationDir !== undefined ? { annotationDir: node.annotationDir } : {}),
     ...(node.annotationLabel !== undefined ? { annotationLabel: node.annotationLabel } : {}),
     ...(node.annotationThickness !== undefined ? { annotationThickness: node.annotationThickness } : {})
-  })
+  }) as unknown as CanvasNodeState
   const nodeById = new Map(value.nodes.map((node) => [node.id, runtimeNode(node)]))
   const rootCanvas = value.canvases.find((canvas) => canvas.id === value.rootCanvasId)!
   const rootNodes = rootCanvas.nodeIds.map((id) => nodeById.get(id)).filter((node): node is CanvasNodeState => !!node)
