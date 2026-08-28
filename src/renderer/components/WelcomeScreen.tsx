@@ -93,13 +93,16 @@ function VocabularyLocalized({
 export function vocabularyProvenanceLine(
   version: string,
   stamp: unknown,
-  vocab: (text: string) => string
+  vocab: (text: string) => string,
+  updatedLabel = 'built',
+  unavailableLabel = ''
 ): string {
   const provenance = readBuildProvenance(version, stamp)
   if (!provenance.available) {
-    return `v${provenance.version} · ${vocab('build time')} ${vocab(provenance.reason)}`
+    const status = unavailableLabel || `${vocab('build time')} ${vocab(provenance.reason)}`
+    return `v${provenance.version} · ${status}`
   }
-  return `v${provenance.version} · ${vocab('built')} ${formatBuildTime(provenance.builtAt)}`
+  return `v${provenance.version} · ${updatedLabel} ${formatBuildTime(provenance.builtAt)}`
 }
 
 /** Start screen with quick actions — shown when there are no projects, or on demand via "+". */
@@ -122,19 +125,31 @@ export function WelcomeScreen({
   const displayName = useSettings((s) => resolveAppDisplayName(s.settings.appDisplayName))
   // Which build is running, on the FRONT screen rather than four levels into Settings. It is the
   // first question in every bug report, and the app is the only thing that can answer it truthfully.
-  const [version, setVersion] = useState<string | null>(null)
+  // The stamped version is the safe first answer. Runtime getVersion() can be absent on the
+  // browser surface, and an Electron runtime can report its own version while unpackaged. The
+  // build stamp remains authoritative whenever it exists, so the line never vanishes merely
+  // because the optional runtime bridge is unavailable.
+  const stampedVersion =
+    typeof __APP_BUILD__ !== 'undefined' &&
+    typeof __APP_BUILD__.version === 'string' &&
+    __APP_BUILD__.version.length > 0
+      ? __APP_BUILD__.version
+      : null
+  const [version, setVersion] = useState<string | null>(stampedVersion)
   useEffect(() => {
     let alive = true
     // Optional-chained through the namespace, not just the call. This screen is the FIRST thing
     // rendered, so a throw here is a blank application rather than a missing line, and the whole
     // point of a version string is to be readable when something else has already gone wrong.
-    // The degrade was already designed for below: `version === null` renders nothing at all, so
-    // an absent namespace and a failed read land in exactly the same honest place, and neither
-    // invents a version it cannot prove.
-    void window.nodeTerminal?.updates
-      ?.getVersion()
-      .then((v) => alive && setVersion(v))
-      .catch(() => alive && setVersion(null))
+    // An absent bridge is normal on the browser surface. Keep the stamped version in place and
+    // render its honest unavailable state instead of calling promise methods on `undefined`.
+    const runtimeVersion = window.nodeTerminal?.updates?.getVersion()
+    if (!runtimeVersion) return () => {
+      alive = false
+    }
+    void runtimeVersion
+      .then((v) => alive && setVersion(stampedVersion ?? v ?? null))
+      .catch(() => alive && setVersion(stampedVersion))
     return () => {
       alive = false
     }
@@ -425,11 +440,13 @@ export function WelcomeScreen({
             server) says so plainly rather than showing a plausible wrong time. */}
         <p className="md3-welcome__build" title={text('welcome.build.title', 'The build this window is running')}>
           {version === null
-            ? ''
+            ? text('welcome.build.unavailable', 'Version and updated time unavailable')
             : vocabularyProvenanceLine(
                 version,
                 typeof __APP_BUILD__ === 'undefined' ? undefined : __APP_BUILD__,
-                vocab
+                vocab,
+                text('welcome.build.updated', 'Updated'),
+                text('welcome.build.unavailable', 'Updated time unavailable')
               )}
         </p>
       </div>

@@ -19,5 +19,7 @@ migration toward Material Design 3.
   documentation page, plus the source-level remediation and remaining ownership conflicts.
 - [Easter eggs](./easter-eggs.md) — the stable 60-entry catalog of local, accessible interface
   surprises, its bounded trigger cabinet, ten funny levels, and School-mode suppression contract.
+- [Build version and updated time](./build-provenance.md) - the stamped package version and
+  second-precision local build time shown on the start screen, with an honest unavailable state.
 
 See also [Canvas](../canvas/README.md), whose node chrome consumes most of these tokens.

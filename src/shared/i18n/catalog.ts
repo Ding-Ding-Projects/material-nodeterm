@@ -747,6 +747,18 @@ export const CATALOG: Catalog = {
     en: flat('Work on a remote host'),
     yue: flat('喺遠端主機度做嘢')
   },
+  'welcome.build.title': {
+    en: flat('The build this window is running'),
+    yue: flat('呢個視窗而家行緊嘅版本')
+  },
+  'welcome.build.updated': {
+    en: flat('Updated'),
+    yue: flat('更新於')
+  },
+  'welcome.build.unavailable': {
+    en: flat('Updated time unavailable'),
+    yue: flat('更新時間未能提供')
+  },
 
   // ---------------------------------------------------------------------------------------
   // Update card (UpdateCard.tsx). {version} / {minSupported} are filled in by the caller with
