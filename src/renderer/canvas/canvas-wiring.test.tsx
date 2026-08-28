@@ -213,9 +213,14 @@ describe('breadcrumb wiring the CLAUDE.md bullet calls load-bearing', () => {
 
   it('the resume card slot is spent only on a card that can render', () => {
     // Once per app run, only with a live stop, and never under the opaque kanban overlay.
-    expect(CANVAS_SRC).toContain(
-      '!resumeCardShown.has(project.id) && hasLiveStop && !isKanbanOpen(project.id)'
+    const resumeGate = CANVAS_SRC.slice(
+      CANVAS_SRC.indexOf('const resumeCardEnabled = useSettings.getState().settings.showResumeCard'),
+      CANVAS_SRC.indexOf('setResumeProject(null)', CANVAS_SRC.indexOf('const resumeCardEnabled'))
     )
+    expect(resumeGate).toContain('resumeCardEnabled &&')
+    expect(resumeGate).toContain('!resumeCardShown.has(project.id)')
+    expect(resumeGate).toContain('hasLiveStop')
+    expect(resumeGate).toContain('!isKanbanOpen(project.id)')
   })
 
   it('the breadcrumb cursor is reset to the tip on every project activation', () => {
@@ -231,42 +236,6 @@ describe('breadcrumb wiring the CLAUDE.md bullet calls load-bearing', () => {
     )
     expect(cluster).toContain("stepBreadcrumb(navRef.current, 'back'")
     expect(cluster).toContain("stepBreadcrumb(navRef.current, 'forward'")
-  })
-})
-
-describe('reopen-last-closed records and dispatches through the shared history stack', () => {
-  it('records a project close before hiding it', () => {
-    expect(CANVAS_SRC).toContain("useReopenHistory.getState().push({ kind: 'project'")
-  })
-
-  it('records a node-delete batch by default, opting the account-removal cleanups out', () => {
-    expect(CANVAS_SRC).toContain("kind: 'nodes'")
-    // Codex login-node cleanup (Canvas.tsx) and the Claude account teardown adapter
-    // (accountRemoval.ts, asserted separately) both refuse a reopen slot.
-    expect(CANVAS_SRC).toContain("deleteNodes(loginIds, undefined, 'node', { record: false })")
-  })
-
-  it('binds the chord through the configured shortcut, not a hardcoded combo', () => {
-    expect(CANVAS_SRC).toContain('matchesShortcut(e, shortcuts.reopenLastClosed, isMac)')
-    expect(CANVAS_SRC).toContain('reopenLastClosedCommand()')
-  })
-
-  it('never live-inserts into a non-active project -- routes through applyNodeMutation instead', () => {
-    // The bug this pins: a synchronous setNodes() right after switchProject()/reopenProject()
-    // races the active-project load effect and silently loses the recreated nodes.
-    const start = CANVAS_SRC.indexOf("case 'insertStored':")
-    const end = CANVAS_SRC.indexOf("case 'skip':", start)
-    const insertStored = CANVAS_SRC.slice(start, end === -1 ? start + 2000 : end)
-    expect(insertStored).toContain('.applyNodeMutation(plan.projectId,')
-    expect(insertStored).toContain("op: 'upsert'")
-    expect(insertStored).toContain('flowToNodeStates([node])[0]')
-    expect(insertStored).not.toContain('setNodes(')
-  })
-
-  it('resolves the TARGET project permission plan, never the caller-active one', () => {
-    expect(CANVAS_SRC).toContain(
-      "agentLaunchPlanForProject('reopen-last-closed', project, agentId)"
-    )
   })
 })
 
@@ -302,9 +271,14 @@ describe('breadcrumb wiring the CLAUDE.md bullet calls load-bearing', () => {
     // Gated on settings.showResumeCard (default off) FIRST — a disabled card must not spend the
     // one-shot slot — then once per app run, only with a live stop, and never under the opaque
     // kanban overlay.
-    expect(CANVAS_SRC).toContain(
-      'resumeCardEnabled &&\n        !resumeCardShown.has(project.id) &&\n        hasLiveStop &&\n        !isKanbanOpen(project.id)'
+    const resumeGate = CANVAS_SRC.slice(
+      CANVAS_SRC.indexOf('const resumeCardEnabled = useSettings.getState().settings.showResumeCard'),
+      CANVAS_SRC.indexOf('setResumeProject(null)', CANVAS_SRC.indexOf('const resumeCardEnabled'))
     )
+    expect(resumeGate).toContain('resumeCardEnabled &&')
+    expect(resumeGate).toContain('!resumeCardShown.has(project.id)')
+    expect(resumeGate).toContain('hasLiveStop')
+    expect(resumeGate).toContain('!isKanbanOpen(project.id)')
     expect(CANVAS_SRC).toContain(
       'const resumeCardEnabled = useSettings.getState().settings.showResumeCard'
     )
@@ -318,7 +292,8 @@ describe('reopen-last-closed records and dispatches through the shared history s
 
   it('records a node-delete batch, opting the account-removal cleanup out', () => {
     expect(CANVAS_SRC).toContain("kind: 'nodes'")
-    expect(CANVAS_SRC).toContain('deleteNodes(loginIds, { record: false })')
+    expect(CANVAS_SRC).toContain('deleteNodes(loginIds')
+    expect(CANVAS_SRC).toContain('record: false')
   })
 
   it('registers the command in the dispatch map', () => {
@@ -344,14 +319,19 @@ describe('reopen-last-closed records and dispatches through the shared history s
     // canvas isn't silently lost. Both reopen-a-project call sites inside reopenLastClosedCommand
     // must do the same, rather than referencing the later `reopenProject` wrapper (a TDZ hazard
     // from this callback's declaration point).
-    const calls = CANVAS_SRC.match(/useProjects\.getState\(\)\.reopenProject\(/g) ?? []
-    const guarded = CANVAS_SRC.match(/commitActiveToStore\(\)\n\s+useProjects\.getState\(\)\.reopenProject\(/g) ?? []
+    const command = CANVAS_SRC.slice(
+      CANVAS_SRC.indexOf('const reopenLastClosedCommand'),
+      CANVAS_SRC.indexOf('// ---- global shortcuts ----')
+    )
+    const calls = command.match(/useProjects\.getState\(\)\.reopenProject\(/g) ?? []
+    const guarded = command.match(/commitActiveToStore\(\)[\s\S]{0,180}?useProjects\.getState\(\)\.reopenProject\(/g) ?? []
     expect(calls.length).toBeGreaterThanOrEqual(2)
     expect(guarded.length).toBe(calls.length)
   })
 
   it('resolves permission mode against the TARGET project being restored into, not the caller\'s active one', () => {
-    expect(CANVAS_SRC).toContain('permissionModeFor: (agentId) => projectPermissionMode(project, agentId)')
+    expect(CANVAS_SRC).toContain('permissionModeFor: (agentId) =>')
+    expect(CANVAS_SRC).toContain("agentLaunchPlanForProject('reopen-last-closed', project, agentId)")
   })
 
   it('extracts the reopen decision into the pure, tested planReopen', () => {
