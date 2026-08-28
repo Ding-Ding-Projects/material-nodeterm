@@ -1,5 +1,5 @@
 import type React from 'react'
-import { SettingsVocabularyContext, resolutionIncludes, useSettingsSearchState, type SettingsVocabularyResolution } from './context'
+import { SettingsForceVisibleContext, SettingsVocabularyContext, resolutionIncludes, useSettingsSearchState, type SettingsVocabularyResolution } from './context'
 import { matchesEntry, matchesQuery, type SettingsSearchEntry } from './search'
 import { useVocabularyMapper, useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
 import { settingsSearchEntryWithVocabulary } from './vocabulary'
@@ -72,7 +72,7 @@ export function SettingsSection({
   )
   if (hasQuery) {
     const anyMatch = !visibleEntries || visibleEntries.some((e) => matchesEntry(search, e))
-    if (!anyMatch) {
+    if (!anyMatch && !forceVisible) {
       return null
     }
   } else if (!isActive) {
@@ -88,7 +88,13 @@ export function SettingsSection({
         ) : null}
       </div>
       <div className="divide-y divide-border/60 rounded-2xl border border-border bg-white/[0.02] px-6 shadow-sm [&>*]:py-5">
-        <SettingsSearchContext.Provider value={search}>{children}</SettingsSearchContext.Provider>
+        <SettingsForceVisibleContext.Provider value={!!forceVisible}>
+          <SettingsSearchContext.Provider
+            value={forceVisible ? { ...search, query: '', pattern: '' } : search}
+          >
+            {children}
+          </SettingsSearchContext.Provider>
+        </SettingsForceVisibleContext.Provider>
       </div>
       </section>
     </SettingsVocabularyContext.Provider>

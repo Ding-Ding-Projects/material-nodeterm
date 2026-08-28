@@ -5,6 +5,8 @@ const DEFAULT_STATE: SettingsSearchState = { mode: 'text', query: '', pattern: '
 
 /** Current settings search state, provided by SettingsPage to all descendant rows. */
 export const SettingsSearchContext = createContext<SettingsSearchState>(DEFAULT_STATE)
+/** A matching section title keeps every row in that section visible. */
+export const SettingsForceVisibleContext = createContext(false)
 export interface SettingsVocabularyResolution {
   source: 'i18n' | 'localized-vocabulary'
   fields: 'section' | 'row' | 'all'

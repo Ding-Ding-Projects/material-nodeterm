@@ -1,5 +1,6 @@
+import { useContext } from 'react'
 import type React from 'react'
-import { useSettingsSearchState } from './context'
+import { SettingsForceVisibleContext, useSettingsSearchState } from './context'
 import { matchesEntry, type SettingsSearchEntry } from './search'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { settingsSearchEntryWithVocabulary } from './vocabulary'
@@ -15,6 +16,7 @@ export function SearchableRow({
   resolvedVocabulary
 }: SettingsSearchEntry & { children: React.ReactNode; resolvedVocabulary?: SettingsVocabularyResolution }): React.JSX.Element | null {
   const state = useSettingsSearchState()
+  const forceVisible = useContext(SettingsForceVisibleContext)
   const vocab = useVocabularyMapper()
   const inheritedVocabularyResolution = useSettingsVocabularyResolution()
   const alreadyApplied = resolutionIncludes(resolvedVocabulary, 'row') || (
@@ -24,7 +26,7 @@ export function SearchableRow({
   // Search both the shipped alias and the visible replacement. This keeps existing command
   // palette/teleport queries valid while allowing a user to find the wording they actually see.
   const visible = alreadyApplied ? { title, description, keywords } : settingsSearchEntryWithVocabulary({ title, description, keywords }, vocab)
-  if (!matchesEntry(state, { ...visible, keywords: visible.keywords })) {
+  if (!forceVisible && !matchesEntry(state, { ...visible, keywords: visible.keywords })) {
     return null
   }
   return <>{children}</>
