@@ -14,16 +14,19 @@ function fakeWin(): { win: never; send: ReturnType<typeof vi.fn> } {
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 30))
 
 describe('createRemoteContextTail', () => {
-  it('reads the remote transcript via readTail and pushes ContextWindowUsage on first usage', async () => {
+  it('reads the remote transcript with its absolute size and pushes ContextWindowUsage on first usage', async () => {
     const { win, send } = fakeWin()
     const remoteFile = {
-      readTail: vi.fn(async () => line(120, 'claude-opus-4-8')),
+      readTailWithSize: vi.fn(async () => ({
+        data: Buffer.from(line(120, 'claude-opus-4-8')),
+        size: Buffer.byteLength(line(120, 'claude-opus-4-8'))
+      })),
       readFrom: vi.fn(async (_r: RemoteFileRef, o: number) => ({ text: '', newOffset: o }))
     }
     const tail = createRemoteContextTail(win, remoteFile as never)
     tail.track('sess1', ref)
     await tick()
-    expect(remoteFile.readTail).toHaveBeenCalled()
+    expect(remoteFile.readTailWithSize).toHaveBeenCalled()
     expect(send).toHaveBeenCalled()
     const [channel, payload] = send.mock.calls.at(-1)!
     expect(channel).toBe('context:update')
@@ -40,13 +43,16 @@ describe('createRemoteContextTail', () => {
     const { win } = fakeWin()
     const readFrom = vi.fn(async (_r: RemoteFileRef, o: number) => ({ text: '', newOffset: o + 0 }))
     const remoteFile = {
-      readTail: vi.fn(async () => line(50, 'claude-haiku')),
+      readTailWithSize: vi.fn(async () => ({
+        data: Buffer.from(line(50, 'claude-haiku')),
+        size: Buffer.byteLength(line(50, 'claude-haiku'))
+      })),
       readFrom
     }
     const tail = createRemoteContextTail(win, remoteFile as never)
     tail.track('sess2', ref)
     await tick()
-    expect(remoteFile.readTail).toHaveBeenCalledTimes(1)
+    expect(remoteFile.readTailWithSize).toHaveBeenCalledTimes(1)
     // pathFor exposes the tracked path
     expect(tail.pathFor('sess2')).toBe('/abs/x.jsonl')
     tail.untrack('sess2')
@@ -61,7 +67,10 @@ describe('createRemoteContextTail', () => {
     })
     let served = false
     const remoteFile = {
-      readTail: vi.fn(async () => line(10, 'claude-opus-4-8') + '\n'),
+      readTailWithSize: vi.fn(async () => ({
+        data: Buffer.from(line(10, 'claude-opus-4-8') + '\n'),
+        size: Buffer.byteLength(line(10, 'claude-opus-4-8') + '\n')
+      })),
       readFrom: vi.fn(async (_r: RemoteFileRef, o: number) => {
         if (served) return { text: '', newOffset: o }
         served = true
@@ -84,7 +93,10 @@ describe('createRemoteContextTail', () => {
     // line into the next read, so un-delimited records would garble on purpose).
     let nextFrom = line(200, 'claude-opus-4-8') + '\n'
     const remoteFile = {
-      readTail: vi.fn(async () => line(100, 'claude-opus-4-8') + '\n'),
+      readTailWithSize: vi.fn(async () => ({
+        data: Buffer.from(line(100, 'claude-opus-4-8') + '\n'),
+        size: Buffer.byteLength(line(100, 'claude-opus-4-8') + '\n')
+      })),
       readFrom: vi.fn(async (_r: RemoteFileRef, o: number) => {
         const text = nextFrom
         nextFrom = ''
