@@ -4463,15 +4463,6 @@ app.whenReady().then(async () => {
         undefined,
         process.platform === 'win32' ? settingsStore.get().defaultTerminalProfileId : undefined
       ),
-    // `accountId` = the managed Claude account the phone launched the session under. It has to be
-    // declared here too, or the wire's honest shape stops at this boundary (see RemoteNodeInput).
-    registerNode: (
-      projectId: string,
-      node: { id: string; title?: string; agentId?: string; accountId?: string }
-    ) => workspaceStore.appendRemoteNode(projectId, {
-      ...node,
-      accountColor: accountColorForRemoteNode(node)
-    }),
     // "End session" from the phone (`pty.destroy`): the SAME two steps the desktop × performs —
     // kill the tmux session on every socket it could live on (the sweep may have seen it on either
     // — see the session-memory panel's kill rule), then take the node off its project's canvas

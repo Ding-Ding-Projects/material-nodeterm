@@ -4019,3 +4019,20 @@ Changed files: `src/main/codex-relay-daemon.ts` and `HANDOFF.md`. No tests, chec
 checks, builds, packaging, installer execution, runtime interaction, reviews, audits, or UI
 captures were run in this lane. The coordinating owner must evaluate the exact merged commit and
 the resulting remote workflow before treating the release as recovered.
+
+# 2026-08-27, duplicate registerNode property repair
+
+Release run `33130189125` reported a duplicate `registerNode` property in the `hostBridge` object
+at `src/main/index.ts:4473`. The repair keeps the earlier complete callback, including the Windows
+default terminal profile routing, account colour calculation, and remote-node append behavior, and
+removes the later duplicate callback plus its now-misleading boundary comment. One callback now does
+one job, so the object literal no longer asks the parser to choose between identical menu entries.
+
+發佈流程喺 `src/main/index.ts:4473` 見到 `hostBridge` 有兩份 `registerNode`。今次保留完整嗰份，
+連埋 Windows default terminal profile、account colour 同 remote node 寫入路線，移除後面重複嗰份，
+等 parser 唔使再玩「邊份先係真身」嘅抽獎遊戲。
+
+Changed files: `src/main/index.ts` and `HANDOFF.md`. This ultra-speed repair lane deliberately ran
+no tests, lint, type checks, builds, packaging, reviews, audits, runtime interaction, or UI captures.
+The coordinating owner must merge and evaluate the resulting hosted workflow before calling the
+release path verified.
