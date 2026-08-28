@@ -284,7 +284,6 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <>
             <button
               className="editor-node__toggle"
-              title={hintLabel(`${vocab('Toggle markdown preview')} (⌘M)`)}
               title={commandTooltip('Toggle markdown preview', 'node.toggleMarkdown')}
               onClick={togglePreview}
             >
