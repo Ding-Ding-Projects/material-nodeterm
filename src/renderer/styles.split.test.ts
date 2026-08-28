@@ -297,6 +297,12 @@ const KNOWN_FULLY_COVERED_EXCEPTIONS: KnownFullyCoveredException[] = [
     reason:
       "The emergency-exit hover treatment is intentionally tuned separately from the destructive key " +
       'controls so the cancellation route remains visually recognizable.'
+  },
+  {
+    selector: '.alarm-clock-node__options',
+    reason:
+      "The options row keeps an 8px gap rather than the shared day-row 5px gap so its wrapped " +
+      'labels remain separated in the compact canvas node; the property-name overlap is intentional.'
   }
 ]
 

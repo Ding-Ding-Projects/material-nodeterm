@@ -4621,6 +4621,9 @@ button.term-node__title-text:focus-visible {
   align-items: flex-start;
   padding-top: 12vh;
 }
+@media (prefers-reduced-motion: reduce) {
+  .palette { animation: none; }
+}
 .palette {
   background: var(--md-surface-container-high);
   border: none;
