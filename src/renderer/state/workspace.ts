@@ -33,24 +33,13 @@ import {
   permissionModeFromLaunchPlan,
   type ActiveAgentLaunchPlan
 } from './permissionMode'
-import type {
-  CanvasMutation,
-  CanvasNodeState,
-  ClaudeAccount,
-  NodeKind,
-  PendingLaunch,
-  Project,
-  Settings
-} from '@shared/types'
-import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
-import { agentConfig, supportsSessionIdFlag } from '@shared/agents/config'
+import type { Settings } from '@shared/types'
+import { supportsSessionIdFlag } from '@shared/agents/config'
 import { resolveAgentBase } from '@shared/agents/custom-agent'
 import { assembleLaunchCommand } from '@shared/agents/launch'
 import { agentAccountColor } from '@shared/agents/account-color'
 import { boundAccountId } from '@shared/agents/account-binding'
 import { agentEnvSnapshot } from '../lib/agentEnv'
-import { uuid } from '@renderer/lib/uuid'
-import { claudeCliCapsNow } from './permissionMode'
 import { projectLaunchInfoNow } from './projectLaunchInfo'
 import { isAgentEnabled, launchableDefaultAgent } from './agentAvailability'
 import { codexSharedIdentity } from './codexIdentity'

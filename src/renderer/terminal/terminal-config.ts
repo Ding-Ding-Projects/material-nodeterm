@@ -326,7 +326,6 @@ export interface XtermVisualOptions {
   lineHeight: number
   letterSpacing: number
   scrollback: number
-  wordSeparator: string
   theme: ITheme
 }
 
