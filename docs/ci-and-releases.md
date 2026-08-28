@@ -52,7 +52,8 @@ job:
    own `run_started_at`). If this call fails (missing `actions: read` on a fallback token,
    API hiccup) the step warns and leaves it unset — `release-notes.mjs` then reports the
    start time as **missing**, never an estimate.
-5. **Set up Node 22.23.2** with the npm cache, then compute the stable release tag — exactly
+5. **Set up Node 24.19.0** with the npm cache, matching `package.json`'s exact
+   `devEngines.runtime.version`, then compute the stable release tag - exactly
    `v<package.json version>`. The version must be a stable `major.minor.patch` value; a run-number
    or prerelease suffix is refused because the Windows updater's `latest/download` feed must never
    point at a feature build masquerading as stable.
@@ -191,8 +192,10 @@ printed as **missing**, not guessed at. It always includes:
    specifically so a release is never read as "passing" a check it never ran.
 4. **The unsigned-installer warning** described above.
 5. **The asset list** (installer filename + size), when the packaging step located any.
-6. **A dim-sum code name with an honest public catalog-photo link.** The photo remains hosted by
-   the catalog release and is not described as attached to this consumer release.
+6. **A dim-sum code name with an honest public catalog-photo link.** The note generator reads the
+   workflow's already-paginated prior-release bodies before selecting a dish, so a successfully
+   published code name is not reused. The photo remains hosted by the catalog release and is not
+   described as attached to this consumer release.
 
 ### `scripts/count-lines.mjs`
 

@@ -86,6 +86,12 @@ describe('release workflow semantic contract', () => {
     rejected('on: {}')
   })
 
+  it('rejects a setup runtime that differs from package devEngines', () => {
+    const wrongNode = check(replaceOnce(WORKFLOW, "node-version: '24.19.0'", "node-version: '22.23.2'"))
+    expect(wrongNode.status).toBe(1)
+    expect(wrongNode.output).toMatch(/Setup Node must use the exact package\.json devEngines\.runtime\.version/i)
+  })
+
   it('rejects a non-main guard that is weakened, non-failing, or moved after checkout', () => {
     const wrongBranch = check(
       replaceOnce(
@@ -275,7 +281,7 @@ describe('release workflow semantic contract', () => {
       },
     })
     expect(signingEnabled.status).toBe(1)
-    expect(signingEnabled.output).toMatch(/disable signing.*preserving/i)
+    expect(signingEnabled.output).toMatch(/disable signing.*default resource editing/i)
 
     const windowsForceSigningEnabled = check(WORKFLOW, {
       ...PACKAGE,
@@ -285,7 +291,7 @@ describe('release workflow semantic contract', () => {
       },
     })
     expect(windowsForceSigningEnabled.status).toBe(1)
-    expect(windowsForceSigningEnabled.output).toMatch(/disable signing.*preserving/i)
+    expect(windowsForceSigningEnabled.output).toMatch(/disable signing.*default resource editing/i)
 
     const resourceEditingDisabled = check(WORKFLOW, {
       ...PACKAGE,
@@ -295,7 +301,7 @@ describe('release workflow semantic contract', () => {
       },
     })
     expect(resourceEditingDisabled.status).toBe(1)
-    expect(resourceEditingDisabled.output).toMatch(/preserving Windows resource editing/i)
+    expect(resourceEditingDisabled.output).toMatch(/default resource editing/i)
   })
 
   it('keeps write credentials out of checkout and build subprocesses', () => {

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Repair hosted release setup so `actions/setup-node` uses the exact Node `24.19.0` declared by
+  `package.json`. The workflow contract now rejects any drift, release notes consume the already
+  paginated prior release bodies to avoid a repeated dim-sum code name, and the next release
+  version is `0.4.122`.
+
+  Hosted release setup 而家同 `package.json` 一樣用準確 Node `24.19.0`；workflow contract 會拒絕
+  runtime drift，release notes 會讀返已經 pagination 完嘅舊 release bodies，避免重覆 dim-sum
+  code name。下一個版本係 `0.4.122`。
+
 - Keep post-build installer verification bound to the source identity captured before managed
   QEMU and AWS resource bootstraps. The standalone verifier now validates that recorded identity
   from icon metadata instead of misclassifying the build's own generated resources as source edits.

@@ -25,7 +25,7 @@
  *   RELEASE_ASSET_MANIFEST   validated JSON manifest containing each asset's SHA-256.
  *                             The release workflow always supplies it.
  */
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { computeLineCounts } from './count-lines.mjs'
@@ -166,6 +166,31 @@ export async function renderLineCountSection(compute = computeLineCounts) {
   return lines.join('\n')
 }
 
+/** Read release bodies from the workflow's already-fetched, paginated release inventory. */
+export async function readPriorReleaseBodies(file, read = readFile) {
+  if (!file) return []
+  const parsed = JSON.parse(await read(file, 'utf8'))
+  const entries = Array.isArray(parsed)
+    ? parsed.flatMap((page) => Array.isArray(page) ? page : [page])
+    : []
+  return entries
+    .filter((entry) => entry && typeof entry === 'object')
+    .map((entry) => typeof entry.body === 'string' ? entry.body : '')
+    .filter(Boolean)
+}
+
+async function priorReleaseBodiesFromEnvironment() {
+  const file = process.env.RELEASE_PRIOR_BODIES_FILE
+  if (file) {
+    try {
+      return await readPriorReleaseBodies(file)
+    } catch {
+      return []
+    }
+  }
+  return (process.env.RELEASE_PRIOR_BODIES ?? '').split('\u0000').filter(Boolean)
+}
+
 function renderChecksSection() {
   return [
     '## What actually ran',
@@ -239,7 +264,7 @@ async function main() {
   // yet", which is the correct answer for a project publishing its first code name.
   const codeNameSection = renderCodeNameSection(
     await resolveCodeName({
-      releaseBodies: (process.env.RELEASE_PRIOR_BODIES ?? '').split('\u0000').filter(Boolean)
+      releaseBodies: await priorReleaseBodiesFromEnvironment()
     }).catch(() => null)
   )
   if (codeNameSection) {

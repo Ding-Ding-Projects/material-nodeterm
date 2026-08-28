@@ -187,6 +187,18 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   }
 
   const steps = Array.isArray(job.steps) ? job.steps : []
+  const expectedRuntime = packageJson?.devEngines?.runtime
+  const expectedNodeVersion = expectedRuntime?.name === 'node' ? expectedRuntime.version : null
+  const setupNodeSteps = steps.filter((step) => step?.name === 'Setup Node')
+  if (
+    typeof expectedNodeVersion !== 'string' ||
+    !/^\d+\.\d+\.\d+$/.test(expectedNodeVersion) ||
+    setupNodeSteps.length !== 1 ||
+    !String(setupNodeSteps[0]?.uses ?? '').startsWith('actions/setup-node@') ||
+    setupNodeSteps[0]?.with?.['node-version'] !== expectedNodeVersion
+  ) {
+    issues.push('Setup Node must use the exact package.json devEngines.runtime.version')
+  }
   for (const step of steps) {
     const executableRoutes = Number(typeof step?.run === 'string') + Number(typeof step?.uses === 'string')
     if (executableRoutes !== 1) {
@@ -391,6 +403,7 @@ export function validateReleaseWorkflow(workflow, packageJson) {
         WORKFLOW_STARTED_AT: '${{ steps.timing.outputs.started_at }}',
         RELEASE_ASSET_PATHS: '${{ steps.assets.outputs.paths }}',
         RELEASE_ASSET_MANIFEST: '${{ steps.assets.outputs.manifest }}',
+        RELEASE_PRIOR_BODIES_FILE: '${{ runner.temp }}/releases-for-plan.json',
       },
     ],
     [

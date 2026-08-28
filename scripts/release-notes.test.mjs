@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { renderLineCountSection } from './release-notes.mjs'
+import { readPriorReleaseBodies, renderLineCountSection } from './release-notes.mjs'
 
 /**
  * The line-count contract has two halves, and only one of them had a test.
@@ -89,5 +89,19 @@ describe('renderLineCountSection', () => {
   it('names the exact command a reader can run to reproduce the figures', async () => {
     const out = await renderLineCountSection(async () => fixtureCounts())
     expect(out).toContain('node scripts/count-lines.mjs')
+  })
+})
+
+describe('readPriorReleaseBodies', () => {
+  it("reads every body from the workflow's paginated release inventory", async () => {
+    const bodies = await readPriorReleaseBodies('releases.json', async () => JSON.stringify([
+      [{ body: 'hk-dish-0001' }, { body: null }],
+      [{ body: 'hk-dish-0002' }],
+    ]))
+    expect(bodies).toEqual(['hk-dish-0001', 'hk-dish-0002'])
+  })
+
+  it('rejects malformed release-inventory JSON instead of inventing a prior-body list', async () => {
+    await expect(readPriorReleaseBodies('releases.json', async () => '{not json')).rejects.toThrow()
   })
 })

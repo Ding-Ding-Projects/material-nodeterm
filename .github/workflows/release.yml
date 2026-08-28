@@ -86,7 +86,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
-          node-version: '22.23.2'
+          node-version: '24.19.0'
           cache: 'npm'
 
       # Bootstraps everything `npm ci` needs: locked npm dependencies, plus the postinstall
@@ -307,6 +307,7 @@ jobs:
           WORKFLOW_STARTED_AT: ${{ steps.timing.outputs.started_at }}
           RELEASE_ASSET_PATHS: ${{ steps.assets.outputs.paths }}
           RELEASE_ASSET_MANIFEST: ${{ steps.assets.outputs.manifest }}
+          RELEASE_PRIOR_BODIES_FILE: ${{ runner.temp }}/releases-for-plan.json
         run: |
           # RELEASE_NOTES_GENERATED_AT is left unset on purpose: release-notes.mjs stamps its
           # own "now" after the potentially slow upload. It labels that boundary honestly;
