@@ -1614,6 +1614,8 @@ export function Canvas() {
   // longer owns the dialog.
   // Node to center once its project finishes loading (cross-project notification click).
   const pendingFocusRef = useRef<string | null>(null)
+  // Cross-project sidebar requests wait here until the requested project has finished loading.
+  const pendingAddRef = useRef<string | null>(null)
   // One-shot: the next active-project load keeps the CURRENT camera instead of applying the
   // project's saved viewport. Set by reloadActiveProject (in-place external-change reload).
   const preserveViewportRef = useRef(false)
