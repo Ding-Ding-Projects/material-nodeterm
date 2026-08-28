@@ -1,5 +1,21 @@
 # Handoff
 
+## 2026-08-27, session budget documentation review follow-up
+
+Copilot review comment [#207 discussion 3877552877](https://github.com/Ding-Ding-Projects/material-nodeterm/pull/207#discussion_r3877552877)
+identified a stale sentence in the `src/core/session-budget.ts` policy documentation. The sentence
+said an attached session was never eligible, while the actual `planReap()` path uses pane output
+silence past `graceSec` and does not consult `clients`.
+
+The follow-up changes only that documentation block. It now states that an attached session may be
+reaped after its pane remains silent past the grace period, while a keystroke refreshes the output
+clock. No policy behavior, configuration value, caller, or reaping operation changed.
+
+Changed files: `src/core/session-budget.ts` and `HANDOFF.md`.
+
+This follow-up intentionally ran no tests, builds, reviews, or UI captures. The source-only change is
+ready for the coordinating owner to integrate and observe through the hosted workflow.
+
 ## 2026-08-27, session budget parser repair
 
 Release run `33135784814` stopped while parsing `src/core/session-budget.ts` at line 264 with

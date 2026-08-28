@@ -329,9 +329,10 @@ export function hostUnderMemoryPressure(mem: MemInfo | null, cfg: SessionBudgetC
  * A deliberate trade-off rides on that clock: PASSIVELY VIEWING a session no longer protects it.
  * Attaching and reading a pane without pressing a key moves neither `window_activity` (measured —
  * attach does not bump it) nor, therefore, `outputSec`, so a long-silent session someone glanced at
- * an hour ago is still eligible. Accepted because the exposure is narrow — an ATTACHED session is
- * never eligible at all, a single keystroke's echo restamps the clock, and the grace window still
- * applies — and because the alternative is the attach clock this module just stopped trusting.
+ * an hour ago is still eligible. Accepted because attachment does not distinguish live attention on
+ * a canvas: an attached session can still be reaped when its pane stays silent past grace. A single
+ * keystroke's echo restamps the clock, and the grace window still applies, while the alternative is
+ * the attach clock this module just stopped trusting.
  *
  * Eligible = named `nt-*` AND silent past the grace window. Attachment is deliberately NOT consulted
  * — see the header for why it separated nothing on a canvas app. Then:
