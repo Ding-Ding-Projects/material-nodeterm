@@ -4166,6 +4166,25 @@ This ultra-speed parser lane deliberately ran no tests, checkers, lint, type che
 reviews, audits, runtime interaction, or UI captures. The coordinating owner must merge and observe the
 resulting hosted workflow before treating the release path as verified.
 
+# 2026-08-28, PR #203 identity proxy review follow-up
+
+Three concrete inline review findings from PR #203 were accepted and repaired in the same identity
+proxy lane:
+
+1. [Explicit root ignored by one overload](https://github.com/Ding-Ding-Projects/material-nodeterm/pull/203#discussion_r3877270497):
+   the `(threadId, nodeId, isNodeLive, root?)` overload now honors its explicit root.
+2. [Canonicalization write failure escaped the read contract](https://github.com/Ding-Ding-Projects/material-nodeterm/pull/203#discussion_r3877270518):
+   canonical endpoint rewrite, rename, and recursive reread failures now return `undefined`.
+3. [Quarantine filename was not collision-resistant](https://github.com/Ding-Ding-Projects/material-nodeterm/pull/203#discussion_r3877270542):
+   quarantine paths now use `tempNameFor` and remain separate from the final destination path, with
+   rollback and restoration preserved.
+
+Changed files: `src/core/codex-identity-proxy.ts` and `HANDOFF.md`.
+
+This follow-up deliberately ran no tests, builds, reviews, or UI captures. The coordinating owner
+must reconcile the repair with the current main branch, observe the hosted workflow, and verify the
+manual release path before making a release claim.
+
 # 2026-08-28, PTY manager import boundary repair
 
 Release run `33133756388` and build check `33133739506` stopped at
