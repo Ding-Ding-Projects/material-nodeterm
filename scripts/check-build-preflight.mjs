@@ -14,7 +14,7 @@
 //
 // WHY THE LOCK CHECK EXISTS
 //
-// `npm run dist:win` runs @electron/rebuild, which deletes and recompiles node-pty. On Windows you
+// `npm run rebuild` runs @electron/rebuild, which deletes and recompiles node-pty. On Windows you
 // cannot delete a DLL that is mapped into a live process, so if ANY instance of the app is
 // running — a dev window from `npm start`, a packaged build, a leftover process from a test run —
 // the rebuild dies with:
@@ -27,7 +27,9 @@
 // blame antivirus — all fail, because none of them is the cause. It cost real time to trace an
 // identical EPERM to a dev instance started hours earlier and forgotten.
 //
-// It cannot happen on macOS or Linux, where unlinking an open file is ordinary. So it is invisible
+// The Windows packaging route does not rebuild or reinstall native modules. It passes
+// `--no-native-mutation` explicitly and checks the toolchain without requiring a dormant relay.
+// This cannot happen on macOS or Linux, where unlinking an open file is ordinary. So it is invisible
 // to everyone not building on Windows, which is the platform this project ships.
 //
 // HOW IT DETECTS THE LOCK
@@ -124,14 +126,17 @@ function holdersOf(file) {
  * Returns a list of complaints, empty when fine or when the answer cannot be determined — an
  * unknown toolchain layout must not block a build that would have worked.
  */
+const nativeMutationExpected = !process.argv.includes('--no-native-mutation')
 const locked = []
-for (const file of lockableBinaries(MODULES)) {
-  try {
-    closeSync(openSync(file, 'r+'))
-  } catch (e) {
-    // EBUSY/EPERM: something has it. EACCES: read-only on disk, which is a different problem and
-    // not one this check is about. Anything else (a vanished file mid-scan) is not our business.
-    if (e.code === 'EBUSY' || e.code === 'EPERM') locked.push(file)
+if (nativeMutationExpected) {
+  for (const file of lockableBinaries(MODULES)) {
+    try {
+      closeSync(openSync(file, 'r+'))
+    } catch (e) {
+      // EBUSY/EPERM: something has it. EACCES: read-only on disk, which is a different problem and
+      // not one this check is about. Anything else (a vanished file mid-scan) is not our business.
+      if (e.code === 'EBUSY' || e.code === 'EPERM') locked.push(file)
+    }
   }
 }
 

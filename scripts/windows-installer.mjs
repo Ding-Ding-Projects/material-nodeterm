@@ -934,7 +934,10 @@ async function buildWindowsInstaller() {
   const metadataFile = path.join(REPO_ROOT, 'dist', 'windows-icon-contract.json')
   const squirrelOutput = path.join(REPO_ROOT, 'dist', 'squirrel-windows')
   await runStage('clean Windows package outputs', () => cleanWindowsPackageOutputs(REPO_ROOT))
-  await runStage('build preflight', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'check-build-preflight.mjs')], { description: 'build preflight' }))
+  // This route packages the already-built native modules and does not run npm ci or electron-rebuild.
+  // The strict preflight remains mandatory for `npm run rebuild`; this explicit mode only avoids
+  // treating an unrelated live relay as a file that this packaging route will replace.
+  await runStage('build preflight', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'check-build-preflight.mjs'), '--no-native-mutation'], { description: 'build preflight' }))
   const sourceIdentity = await runStage('source identity resolution', () => resolveSourceIdentity(REPO_ROOT))
   await runStage('pinned QEMU resource bootstrap', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'ensure-qemu-resources.mjs'), '--output', path.join(REPO_ROOT, 'resources', 'qemu')], { description: 'pinned QEMU resource bootstrap' }))
   await runStage('pinned AWS CLI resource bootstrap', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'ensure-aws-cli-resources.mjs'), '--output', path.join(REPO_ROOT, 'resources', 'aws-cli-v2')], { description: 'pinned AWS CLI v2 resource bootstrap' }))
