@@ -8,6 +8,7 @@ import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 const MODES: readonly RepositoryGraphMode[] = ['code', 'dependencies', 'combined']
@@ -15,6 +16,27 @@ const EXPORTS: readonly RepositoryGraphExportInput['format'][] = ['json', 'jsonl
 
 function modeLabel(mode: RepositoryGraphMode): string {
   return mode === 'code' ? 'Code' : mode === 'dependencies' ? 'Dependency' : 'Combined'
+}
+
+export function mapRepositoryGraphSummary(
+  snapshot: RepositoryGraphSnapshot | null,
+  map: (text: string) => string
+): string {
+  if (!snapshot) return map('Reading project graph…')
+  if (snapshot.status === 'idle') return map('No verified snapshot. Refresh to index this project.')
+  return mapOwnedSentence(map, [
+    fact(String(snapshot.nodes.length)), copy(' nodes, '),
+    fact(String(snapshot.edges.length)), copy(' edges, revision '),
+    fact(snapshot.fingerprint.revision)
+  ])
+}
+
+export function mapRepositoryGraphProgress(
+  completed: number,
+  total: number,
+  map: (text: string) => string
+): string {
+  return mapOwnedSentence(map, [fact(String(completed)), copy(' of '), fact(String(total)), copy(' graph items')])
 }
 
 function download(content: string, filename: string): void {
@@ -90,7 +112,7 @@ export default function RepositoryGraphNode({ id, data, selected }: NodeProps<Ca
   }
 
   const headerFill = nodeHeaderFillStyle(data.color)
-  const status = error ?? progress?.message ?? (snapshot?.status === 'idle' ? vocab('No verified snapshot. Refresh to index this project.') : snapshot ? `${snapshot.nodes.length} nodes, ${snapshot.edges.length} edges, revision ${snapshot.fingerprint.revision}` : vocab('Reading project graph…'))
+  const status = error ?? progress?.message ?? mapRepositoryGraphSummary(snapshot, vocab)
 
   return (
     <div className={`term-node repository-graph-node${selected ? ' selected' : ''}`} style={{ borderTopColor: data.color }}>
@@ -111,9 +133,9 @@ export default function RepositoryGraphNode({ id, data, selected }: NodeProps<Ca
           <select aria-label={vocab('Export graph format')} value={exportFormat} onChange={(event) => setExportFormat(event.target.value as RepositoryGraphExportInput['format'])}>{EXPORTS.map((format) => <option key={format} value={format}>{format.toUpperCase()}</option>)}</select>
           <button type="button" onClick={() => void doExport()} disabled={!snapshot}>{vocab('Export')}</button>
         </div>
-        {search.error && <p className="repository-graph-node__error" role="alert">{vocab(search.error)}</p>}
-        {progress && progress.status === 'running' && <progress max={progress.total || 1} value={progress.completed} aria-label={`${progress.completed} of ${progress.total} graph items`} />}
-        <div className="repository-graph-node__summary"><span>{snapshot?.fingerprint.files ?? 0} files</span><span>{snapshot?.nodes.length ?? 0} nodes</span><span>{snapshot?.edges.length ?? 0} edges</span><span>{snapshot?.status ?? 'idle'}</span></div>
+        {search.error && <p className="repository-graph-node__error" role="alert">{search.error}</p>}
+        {progress && progress.status === 'running' && <progress max={progress.total || 1} value={progress.completed} aria-label={mapRepositoryGraphProgress(progress.completed, progress.total, vocab)} />}
+        <div className="repository-graph-node__summary"><span>{mapOwnedSentence(vocab, [fact(String(snapshot?.fingerprint.files ?? 0)), copy(' files')])}</span><span>{mapOwnedSentence(vocab, [fact(String(snapshot?.nodes.length ?? 0)), copy(' nodes')])}</span><span>{mapOwnedSentence(vocab, [fact(String(snapshot?.edges.length ?? 0)), copy(' edges')])}</span><span>{snapshot?.status ?? 'idle'}</span></div>
         {visualNodes.length > 0 && <div className="repository-graph-node__visual" aria-label={vocab('Interactive graph preview')}>
           <svg viewBox={`0 0 760 ${Math.max(120, Math.ceil(visualNodes.length / 4) * 76 + 30)}`} role="img" aria-label={vocab('Graph relationships')}>
             <defs><marker id={`${id}-arrow`} markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="currentColor" /></marker></defs>
@@ -122,7 +144,7 @@ export default function RepositoryGraphNode({ id, data, selected }: NodeProps<Ca
           </svg>
         </div>}
         <section className="repository-graph-node__list" role="list" aria-label={vocab('Graph nodes')}>
-          {!snapshot || visibleNodes.length === 0 ? <p>{vocab(snapshot ? 'No graph nodes match this search.' : 'Refresh to build a verified graph snapshot.')}</p> : visibleNodes.map((node) => <article className="repository-graph-node__row" key={node.id} role="listitem"><button type="button" className="repository-graph-node__node" onClick={() => { const expanded = new Set(intent.expandedNodeIds ?? []); expanded.has(node.id) ? expanded.delete(node.id) : expanded.add(node.id); setIntent({ expandedNodeIds: [...expanded].slice(0, 2000) }) }} aria-expanded={intent.expandedNodeIds?.includes(node.id)}><strong>{node.label}</strong><span>{node.kind}{node.unresolved ? ' · unresolved' : ''}</span></button>{intent.expandedNodeIds?.includes(node.id) && <div className="repository-graph-node__detail"><code>{node.id}</code>{node.detail && <span>{node.detail}</span>}{node.source && <button type="button" onClick={() => void openSource(node)}>{node.source.path}{node.source.line ? `:${node.source.line}:${node.source.column ?? 1}` : ''}</button>}</div>}</article>)}
+          {!snapshot || visibleNodes.length === 0 ? <p>{vocab(snapshot ? 'No graph nodes match this search.' : 'Refresh to build a verified graph snapshot.')}</p> : visibleNodes.map((node) => <article className="repository-graph-node__row" key={node.id} role="listitem"><button type="button" className="repository-graph-node__node" onClick={() => { const expanded = new Set(intent.expandedNodeIds ?? []); expanded.has(node.id) ? expanded.delete(node.id) : expanded.add(node.id); setIntent({ expandedNodeIds: [...expanded].slice(0, 2000) }) }} aria-expanded={intent.expandedNodeIds?.includes(node.id)}><strong>{node.label}</strong><span>{mapOwnedSentence(vocab, [fact(node.kind), ...(node.unresolved ? [copy(' · unresolved')] : [])])}</span></button>{intent.expandedNodeIds?.includes(node.id) && <div className="repository-graph-node__detail"><code>{node.id}</code>{node.detail && <span>{node.detail}</span>}{node.source && <button type="button" onClick={() => void openSource(node)}>{node.source.path}{node.source.line ? `:${node.source.line}:${node.source.column ?? 1}` : ''}</button>}</div>}</article>)}
         </section>
         {snapshot?.omissions.length ? <details><summary>{vocab('Omissions and unsupported relationships')}</summary><ul>{snapshot.omissions.slice(0, 100).map((item) => <li key={item}>{item}</li>)}</ul></details> : null}
       </div>
