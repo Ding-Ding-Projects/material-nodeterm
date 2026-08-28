@@ -14495,6 +14495,7 @@ button.term-node__title-text:focus-visible {
 .unigetui-universe__rows { display: grid; gap: 8px; list-style: none; padding: 0; margin: 0; }
 .unigetui-universe__rows li { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-surface-container); }
 .unigetui-universe__rows li pre { flex: 1; min-width: 0; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.unigetui-universe__page-actions, .unigetui-universe__row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .unigetui-universe__rows button { min-height: 40px; border-radius: var(--md-sys-shape-corner-full); }
 .unigetui-universe__empty,
 .unigetui-universe__error,

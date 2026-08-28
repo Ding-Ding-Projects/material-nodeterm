@@ -133,8 +133,19 @@ export class UniGetUiClient implements UniGetUiApi {
 
   private async locate(): Promise<string | null> {
     if (this.executable) return this.executable
-    const names = process.platform === 'win32' ? ['unigetui.exe', 'unigetui'] : ['unigetui']
-    for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
+    const names = process.platform === 'win32' ? ['unigetui.exe', 'UniGetUI.exe', 'unigetui'] : ['unigetui']
+    const dirs = (process.env.PATH ?? '').split(path.delimiter)
+    if (process.platform === 'win32') {
+      const local = process.env.LOCALAPPDATA
+      const programFiles = process.env.ProgramFiles
+      const programFilesX86 = process.env['ProgramFiles(x86)']
+      const programW6432 = process.env.ProgramW6432
+      for (const root of [local, programFiles, programFilesX86, programW6432]) {
+        if (!root) continue
+        dirs.push(root, path.join(root, 'UniGetUI'), path.join(root, 'UniGetUI', 'CLI'))
+      }
+    }
+    for (const dir of dirs) {
       if (!dir) continue
       for (const name of names) {
         const candidate = path.join(dir, name)
@@ -186,7 +197,8 @@ export class UniGetUiClient implements UniGetUiApi {
       const e = error as { code?: unknown; killed?: boolean; stdout?: string; stderr?: string; message?: string }
       if (e.killed) throw new UniGetUiClientError('The UniGetUI operation exceeded its time limit.', 'unavailable')
       const code = typeof e.code === 'number' ? e.code : null
-      const detail = typeof e.stderr === 'string' && e.stderr.trim() ? e.stderr.trim() : String(e.message ?? error)
+      const rawDetail = typeof e.stderr === 'string' && e.stderr.trim() ? e.stderr.trim() : String(e.message ?? error)
+      const detail = rawDetail.replace(/(token|secret|password|credential|authorization)[^\r\n]{0,160}/giu, '$1 redacted').replace(/[\r\n]+/gu, ' ').slice(0, 2000)
       if (code === 3 || /ipc|pipe|socket|unavailable|not running|connection refused/i.test(detail)) {
         throw new UniGetUiClientError(detail, 'stopped', code)
       }
@@ -219,8 +231,17 @@ export class UniGetUiClient implements UniGetUiApi {
   async managers(): Promise<UniGetUiManager[]> { return asArray<UniGetUiManager>(await this.run(['manager', 'list'])) }
   async managerAction(manager: string, action: string, input: { path?: string; confirm?: boolean } = {}): Promise<unknown> {
     const id = managerId(manager)
-    const allowed = new Set(['reload', 'enable', 'disable', 'notifications-enable', 'notifications-disable', 'maintenance', 'executable-set'])
+    const allowed = new Set(['reload', 'enable', 'disable', 'maintenance', 'set-executable', 'clear-executable', 'notifications-enable', 'notifications-disable'])
     if (!allowed.has(action)) throw new UniGetUiClientError('The requested manager action is not allowlisted.', 'malformed')
+    if (action === 'set-executable') {
+      if (input.path === undefined) throw new UniGetUiClientError('A verified executable path is required.', 'malformed')
+      return this.run(['manager', 'set-executable', '--manager', id, '--path', boundedPath(input.path)])
+    }
+    if (action === 'clear-executable') return this.run(['manager', 'clear-executable', '--manager', id])
+    if (action === 'notifications-enable' || action === 'notifications-disable') {
+      return this.run(['manager', 'notifications', action.endsWith('enable') ? 'enable' : 'disable', '--manager', id])
+    }
+    if (action === 'maintenance') return this.run(['manager', 'action', '--manager', id, '--action', 'maintenance', ...(input.confirm === undefined ? [] : ['--confirm', input.confirm ? 'true' : 'false'])])
     const args = ['manager', action, '--manager', id]
     if (input.path !== undefined) args.push('--path', boundedPath(input.path))
     if (input.confirm !== undefined) args.push('--confirm', input.confirm ? 'true' : 'false')
@@ -246,7 +267,10 @@ export class UniGetUiClient implements UniGetUiApi {
   async backupLocalCreate(): Promise<unknown> { return this.run(['backup', 'local', 'create'], WAIT_TIMEOUT_MS) }
   async bundle(): Promise<unknown> { return this.run(['bundle', 'get']) }
   async bundleReset(): Promise<unknown> { return this.run(['bundle', 'reset']) }
-  async bundleImport(input: { path?: string; content?: string; format?: string; append?: boolean }): Promise<unknown> { return this.run(['bundle', 'import', ...(input.path ? ['--path', boundedPath(input.path)] : []), ...(input.content ? ['--content', safeArg(input.content, 1024 * 1024)] : []), ...(input.format ? ['--format', safeArg(input.format, 32)] : []), ...boolArg(input.append).flatMap((v) => ['--append', v])]) }
+  async bundleImport(input: { path?: string; content?: string; format?: string; append?: boolean }): Promise<unknown> {
+    if (!input.path || input.content !== undefined) throw new UniGetUiClientError('Bundle import requires a selected local file; raw bundle content is not accepted on the command line.', 'malformed')
+    return this.run(['bundle', 'import', '--path', boundedPath(input.path), ...(input.format ? ['--format', safeArg(input.format, 32)] : []), ...boolArg(input.append).flatMap((v) => ['--append', v])])
+  }
   async bundleExport(p?: string): Promise<unknown> { return this.run(['bundle', 'export', ...(p ? ['--path', boundedPath(p)] : [])]) }
   async bundleAdd(input: UniGetUiPackageInstallOptions & { id: string; selection?: string }): Promise<unknown> { return this.run(['bundle', 'add', '--id', packageId(input.id), ...optionArgs(input), ...(input.selection ? ['--selection', safeArg(input.selection, 32)] : [])]) }
   async bundleRemove(input: UniGetUiPackageInstallOptions & { id: string; selection?: string }): Promise<unknown> { return this.run(['bundle', 'remove', '--id', packageId(input.id), ...optionArgs(input), ...(input.selection ? ['--selection', safeArg(input.selection, 32)] : [])]) }
@@ -261,4 +285,10 @@ export class UniGetUiClient implements UniGetUiApi {
   async packageUpdate(id: string, options: UniGetUiPackageInstallOptions = {}): Promise<unknown> { return this.run(['package', 'update', '--id', packageId(id), ...optionArgs(options)], WAIT_TIMEOUT_MS) }
   async packageUninstall(id: string, manager?: string, options: { elevated?: boolean; wait?: boolean } = {}): Promise<unknown> { return this.run(['package', 'uninstall', '--id', packageId(id), ...(manager ? ['--manager', managerId(manager)] : []), ...(options.elevated === undefined ? [] : ['--elevated', options.elevated ? 'true' : 'false']), ...(options.wait === undefined ? [] : ['--wait', options.wait ? 'true' : 'false'])], WAIT_TIMEOUT_MS) }
   async packageRepair(id: string, manager?: string, options: { elevated?: boolean; wait?: boolean } = {}): Promise<unknown> { return this.run(['package', 'repair', '--id', packageId(id), ...(manager ? ['--manager', managerId(manager)] : []), ...(options.elevated === undefined ? [] : ['--elevated', options.elevated ? 'true' : 'false']), ...(options.wait === undefined ? [] : ['--wait', options.wait ? 'true' : 'false'])], WAIT_TIMEOUT_MS) }
+  async packageReinstall(id: string, options: UniGetUiPackageInstallOptions = {}): Promise<unknown> { return this.run(['package', 'reinstall', '--id', packageId(id), ...optionArgs(options)], WAIT_TIMEOUT_MS) }
+  async ignoredUpdates(): Promise<UniGetUiPackage[]> { return asArray<UniGetUiPackage>(await this.run(['package', 'ignored', 'list'])) }
+  async ignoredUpdateAdd(id: string, options: { manager?: string; version?: string; source?: string } = {}): Promise<unknown> { return this.run(['package', 'ignored', 'add', '--id', packageId(id), ...(options.manager ? ['--manager', managerId(options.manager)] : []), ...(options.version ? ['--version', safeArg(options.version)] : []), ...(options.source ? ['--source', safeArg(options.source)] : [])]) }
+  async ignoredUpdateRemove(id: string, options: { manager?: string; version?: string; source?: string } = {}): Promise<unknown> { return this.run(['package', 'ignored', 'remove', '--id', packageId(id), ...(options.manager ? ['--manager', managerId(options.manager)] : []), ...(options.version ? ['--version', safeArg(options.version)] : []), ...(options.source ? ['--source', safeArg(options.source)] : [])]) }
+  async packageUpdateAll(options: { elevated?: boolean; interactive?: boolean; wait?: boolean } = {}): Promise<unknown> { return this.run(['package', 'update-all', ...(options.elevated === undefined ? [] : ['--elevated', options.elevated ? 'true' : 'false']), ...(options.interactive === undefined ? [] : ['--interactive', options.interactive ? 'true' : 'false']), ...(options.wait === undefined ? [] : ['--wait', options.wait ? 'true' : 'false'])], WAIT_TIMEOUT_MS) }
+  async packageUpdateManager(manager: string, options: { elevated?: boolean; interactive?: boolean; wait?: boolean } = {}): Promise<unknown> { return this.run(['package', 'update-manager', '--manager', managerId(manager), ...(options.elevated === undefined ? [] : ['--elevated', options.elevated ? 'true' : 'false']), ...(options.interactive === undefined ? [] : ['--interactive', options.interactive ? 'true' : 'false']), ...(options.wait === undefined ? [] : ['--wait', options.wait ? 'true' : 'false'])], WAIT_TIMEOUT_MS) }
 }

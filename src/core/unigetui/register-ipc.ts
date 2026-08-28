@@ -55,5 +55,11 @@ export function registerUniGetUiIpc(platform: CorePlatform): { client: UniGetUiC
   platform.handle(IPC.unigetuiPackageUpdate, (id, options: UniGetUiPackageInstallOptions) => client.packageUpdate(id, options))
   platform.handle(IPC.unigetuiPackageUninstall, (id, manager, options) => client.packageUninstall(id, manager, options))
   platform.handle(IPC.unigetuiPackageRepair, (id, manager, options) => client.packageRepair(id, manager, options))
+  platform.handle(IPC.unigetuiPackageReinstall, (id, options) => client.packageReinstall(id, options))
+  platform.handle(IPC.unigetuiIgnoredUpdates, () => client.ignoredUpdates())
+  platform.handle(IPC.unigetuiIgnoredUpdateAdd, (id, options) => client.ignoredUpdateAdd(id, options))
+  platform.handle(IPC.unigetuiIgnoredUpdateRemove, (id, options) => client.ignoredUpdateRemove(id, options))
+  platform.handle(IPC.unigetuiPackageUpdateAll, (options) => client.packageUpdateAll(options))
+  platform.handle(IPC.unigetuiPackageUpdateManager, (manager, options) => client.packageUpdateManager(manager, options))
   return { client, store }
 }

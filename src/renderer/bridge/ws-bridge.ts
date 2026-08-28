@@ -1232,7 +1232,13 @@ export function buildUniGetUiApi(client: RpcClient): Pick<NodeTerminalApi, 'unig
     packageDownload: (id, options) => client.request(IPC.unigetuiPackageDownload, id, options),
     packageUpdate: (id, options) => client.request(IPC.unigetuiPackageUpdate, id, options),
     packageUninstall: (id, manager, options) => client.request(IPC.unigetuiPackageUninstall, id, manager, options),
-    packageRepair: (id, manager, options) => client.request(IPC.unigetuiPackageRepair, id, manager, options)
+    packageRepair: (id, manager, options) => client.request(IPC.unigetuiPackageRepair, id, manager, options),
+    packageReinstall: (id, options) => client.request(IPC.unigetuiPackageReinstall, id, options),
+    ignoredUpdates: () => client.request(IPC.unigetuiIgnoredUpdates),
+    ignoredUpdateAdd: (id, options) => client.request(IPC.unigetuiIgnoredUpdateAdd, id, options),
+    ignoredUpdateRemove: (id, options) => client.request(IPC.unigetuiIgnoredUpdateRemove, id, options),
+    packageUpdateAll: (options) => client.request(IPC.unigetuiPackageUpdateAll, options),
+    packageUpdateManager: (manager, options) => client.request(IPC.unigetuiPackageUpdateManager, manager, options)
   }
   return { unigetui }
 }

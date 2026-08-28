@@ -137,6 +137,12 @@ export interface UniGetUiApi {
   packageUpdate(id: string, options?: UniGetUiPackageInstallOptions): Promise<unknown>
   packageUninstall(id: string, manager?: string, options?: { elevated?: boolean; wait?: boolean }): Promise<unknown>
   packageRepair(id: string, manager?: string, options?: { elevated?: boolean; wait?: boolean }): Promise<unknown>
+  packageReinstall(id: string, options?: UniGetUiPackageInstallOptions): Promise<unknown>
+  ignoredUpdates(): Promise<UniGetUiPackage[]>
+  ignoredUpdateAdd(id: string, options?: { manager?: string; version?: string; source?: string }): Promise<unknown>
+  ignoredUpdateRemove(id: string, options?: { manager?: string; version?: string; source?: string }): Promise<unknown>
+  packageUpdateAll(options?: { elevated?: boolean; interactive?: boolean; wait?: boolean }): Promise<unknown>
+  packageUpdateManager(manager: string, options?: { elevated?: boolean; interactive?: boolean; wait?: boolean }): Promise<unknown>
 }
 
 export const UNIGETUI_DEFAULT_UNIVERSE_STATE: UniGetUiUniverseState = {

@@ -18,6 +18,15 @@ response keys before the renderer, never reads the UniGetUI session token, and n
 individual package managers. The local JSON store contains selected section and bounded search state
 only. Relay and mobile callers have no route to this machine-owned surface.
 
+The follow-up implementation adds the documented package reinstall, ignored-update rule, update-all,
+and manager-update commands. Manager controls use the official `manager action --manager ...
+--action ...` grammar, with separate enable, disable, reload, executable, and notification routes.
+The renderer exposes action controls for installed and update rows, operation output and lifecycle,
+manager maintenance, ignored updates, bundle controls, local backups, and non-secure settings. Bundle
+imports require a selected local file and never pass raw bundle content through argv. Standard local
+UniGetUI installation locations are searched in addition to PATH, and stderr is bounded and sanitized
+before it can reach the renderer.
+
 This accelerated lane intentionally ran no tests, type checks, lint, reviews, audits, runtime
 interaction, or screenshots. The coordinating owner must run the absolute `build.bat /s` and
 `build-installer.bat /s` commands against the exact candidate commit, then perform the remaining

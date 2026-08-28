@@ -934,6 +934,12 @@ export const IPC = {
   unigetuiPackageUpdate: 'unigetui:package-update',
   unigetuiPackageUninstall: 'unigetui:package-uninstall',
   unigetuiPackageRepair: 'unigetui:package-repair',
+  unigetuiPackageReinstall: 'unigetui:package-reinstall',
+  unigetuiIgnoredUpdates: 'unigetui:ignored-updates',
+  unigetuiIgnoredUpdateAdd: 'unigetui:ignored-update-add',
+  unigetuiIgnoredUpdateRemove: 'unigetui:ignored-update-remove',
+  unigetuiPackageUpdateAll: 'unigetui:package-update-all',
+  unigetuiPackageUpdateManager: 'unigetui:package-update-manager',
   // Open WebUI hosting node. The renderer submits a closed operation shape; Docker context,
   // image, volume, archive, and provider secrets are validated and owned by the privileged host.
   openWebUiContexts: 'open-webui:contexts',

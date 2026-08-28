@@ -845,7 +845,13 @@ export function buildStubApi(): Omit<
       packageDownload: U('unigetui.packageDownload'),
       packageUpdate: U('unigetui.packageUpdate'),
       packageUninstall: U('unigetui.packageUninstall'),
-      packageRepair: U('unigetui.packageRepair')
+      packageRepair: U('unigetui.packageRepair'),
+      packageReinstall: U('unigetui.packageReinstall'),
+      ignoredUpdates: U('unigetui.ignoredUpdates'),
+      ignoredUpdateAdd: U('unigetui.ignoredUpdateAdd'),
+      ignoredUpdateRemove: U('unigetui.ignoredUpdateRemove'),
+      packageUpdateAll: U('unigetui.packageUpdateAll'),
+      packageUpdateManager: U('unigetui.packageUpdateManager')
     },
     openWebUi: {
       contexts: U('openWebUi.contexts'),

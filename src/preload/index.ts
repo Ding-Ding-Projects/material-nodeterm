@@ -1330,7 +1330,13 @@ const api: NodeTerminalApi = {
     packageDownload: (id, options) => ipcRenderer.invoke(IPC.unigetuiPackageDownload, id, options),
     packageUpdate: (id, options) => ipcRenderer.invoke(IPC.unigetuiPackageUpdate, id, options),
     packageUninstall: (id, manager, options) => ipcRenderer.invoke(IPC.unigetuiPackageUninstall, id, manager, options),
-    packageRepair: (id, manager, options) => ipcRenderer.invoke(IPC.unigetuiPackageRepair, id, manager, options)
+    packageRepair: (id, manager, options) => ipcRenderer.invoke(IPC.unigetuiPackageRepair, id, manager, options),
+    packageReinstall: (id, options) => ipcRenderer.invoke(IPC.unigetuiPackageReinstall, id, options),
+    ignoredUpdates: () => ipcRenderer.invoke(IPC.unigetuiIgnoredUpdates),
+    ignoredUpdateAdd: (id, options) => ipcRenderer.invoke(IPC.unigetuiIgnoredUpdateAdd, id, options),
+    ignoredUpdateRemove: (id, options) => ipcRenderer.invoke(IPC.unigetuiIgnoredUpdateRemove, id, options),
+    packageUpdateAll: (options) => ipcRenderer.invoke(IPC.unigetuiPackageUpdateAll, options),
+    packageUpdateManager: (manager, options) => ipcRenderer.invoke(IPC.unigetuiPackageUpdateManager, manager, options)
   } satisfies UniGetUiApi,
   openWebUi: {
     contexts: () => ipcRenderer.invoke(IPC.openWebUiContexts),

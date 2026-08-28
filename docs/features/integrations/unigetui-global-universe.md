@@ -22,12 +22,14 @@ session and handles its authentication internally. This application never reads,
 persists that authentication value. Direct calls to WinGet, Chocolatey, Scoop, npm, pip, Cargo, or
 other package managers are not used.
 
-Read-only sections expose status, search, details, versions, installed items, updates, operations,
-managers, sources, settings, shortcuts, logs, backups, and bundles. Mutating operations are typed
-and explicit: install, download, update, uninstall, repair, source changes, bundle changes, manager
-maintenance, and operation cancel, retry, reorder, wait, and forget. Elevation is passed only when
-the user explicitly selected it. The host never retries a non-elevated operation silently with
-elevation.
+Read-only sections expose status, search, details, versions, installed items, updates, ignored-update
+rules, operations, managers, sources, settings, shortcuts, logs, backups, and bundles. Mutating
+operations are typed and explicit: install, download, update, reinstall, uninstall, repair, update
+all, manager update, ignored-rule add/remove, source changes, bundle changes, manager enable/disable/
+reload/maintenance/executable override/notification controls, and operation cancel, retry, reorder,
+wait, and forget. Elevation is passed only when the user explicitly selected it. The host never
+retries a non-elevated operation silently with elevation. Bundle imports require a local file pick,
+so raw package content is never placed in a process argument.
 
 ## Honest states and privacy
 
