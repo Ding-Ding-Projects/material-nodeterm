@@ -166,7 +166,7 @@ export class CloudflareZeroTrustService implements CloudflareApi {
 
   async removeAccount(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
     if (!/^[0-9a-f-]{36}$/iu.test(id)) return { ok: false, error: 'Cloudflare account id is invalid.' }
-    return this.accountStore.mutate((entries) => {
+    return this.accountStore.mutate<{ ok: true } | { ok: false; error: string }>((entries) => {
       const index = entries.findIndex((entry) => entry.meta.id === id)
       if (index < 0) return { changed: false, result: { ok: false as const, error: 'Cloudflare account was not found.' } }
       entries.splice(index, 1)
@@ -194,7 +194,7 @@ export class CloudflareZeroTrustService implements CloudflareApi {
   }
 
   async saveBinding(nodeId: string, binding: CloudflareLocalBinding): Promise<void> {
-    if (!NODE_ID.test(nodeId) || !isRecord(binding)) throw new Error('Cloudflare local binding is invalid.')
+    if (!NODE_ID.test(nodeId)) throw new Error('Cloudflare local binding is invalid.')
     if (binding.accountId !== undefined && !ACCOUNT_ID.test(binding.accountId)) throw new Error('Cloudflare account id is invalid.')
     if (binding.credentialRef !== undefined && !/^cloudflare-account:[0-9a-f-]{36}$/iu.test(binding.credentialRef)) throw new Error('Cloudflare credential reference is invalid.')
     const bindings = await this.loadBindings()
