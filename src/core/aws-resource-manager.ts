@@ -589,7 +589,8 @@ export class AwsResourceManagerService {
             break
           }
           if (status === 'FAILED') {
-            const reason = typeof (describedPayload as Record<string, unknown>).StatusReason === 'string' ? (describedPayload as Record<string, unknown>).StatusReason : ''
+            const rawReason = (describedPayload as Record<string, unknown>).StatusReason
+            const reason = typeof rawReason === 'string' ? rawReason : ''
             throw new Error(reason || 'CloudFormation could not create the change-set preview.')
           }
           await new Promise((resolve) => setTimeout(resolve, 2000))
@@ -718,7 +719,8 @@ export class AwsResourceManagerService {
     allowNonZero = false
   ): Promise<CommandOutput> {
     return new Promise((resolve, reject) => {
-      const child = spawn(executable, [...args], { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+      const child = spawn(executable, [...args], { shell: false, windowsHide: true, stdio: 'pipe' })
+      child.stdin.end()
       if (operationId) this.running.set(operationId, child)
       let stdout = ''
       let stderr = ''
