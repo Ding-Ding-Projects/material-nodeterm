@@ -10,8 +10,8 @@ describe('useWsl catalogue error boundary', () => {
 
   it('keeps a typed production catalogue failure for the dialog renderer', async () => {
     const raw = Object.assign(new Error('wsl.exe parser detail'), {
-      code: 'parse-failed',
-      messageId: 'catalogueParseFailed',
+      code: 'parse-failed' as const,
+      messageId: 'catalogueParseFailed' as const,
       facts: ['wsl.exe'],
       detail: 'wsl.exe parser detail'
     }) satisfies Error & WslCatalogueError
