@@ -260,6 +260,14 @@ async function postSecure(
   return { ...(await postWire(port, wire)), sharedKey }
 }
 
+function openSecureResponse(response: HttpResponse & { sharedKey: Uint8Array }): string {
+  const wire = JSON.parse(response.text) as { box?: string }
+  if (typeof wire.box !== 'string') throw new Error('pairing response did not contain a box')
+  const plain = decrypt(Uint8Array.from(Buffer.from(wire.box, 'base64')), response.sharedKey)
+  if (!plain) throw new Error('pairing response could not be decrypted')
+  return Buffer.from(plain).toString('utf8')
+}
+
 /**
  * Open a real HTTP request, send all but its final byte, and leave it parked in the server's
  * readBody await. `onPairRequestAccepted` is the deterministic barrier proving the socket is on
@@ -1156,17 +1164,21 @@ describe('pairing remembers the phone’s relay device id', () => {
   }
 
   it('persists the id the phone sent, alongside the local one it does not replace', async () => {
-    const service = createPairingService()
+    const service = createPairingService(secureDeps({
+      getSettings: () => ({ phoneAccessEnabled: true }) as ReturnType<PairingRelayDeps['getSettings']>
+    }))
     try {
       const started = await service.start(() => {})
-      const { token, pairPort } = JSON.parse(started.payload) as { token: string; pairPort: number }
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as { token: string; pairPort: number; hostKey: string }
 
-      const respText = await post(pairPort, {
+      const response = await postSecure(pairPort, hostKey, {
         token,
         publicKey: freshEd25519Line(),
         deviceName: 'New Phone',
         deviceId: 'phone-abc'
       })
+      expect(response.status).toBe(200)
+      const respText = openSecureResponse(response)
 
       const { deviceId } = JSON.parse(respText) as { deviceId: string }
       expect(paired(deviceId).relayDeviceId).toBe('phone-abc')
@@ -1180,16 +1192,20 @@ describe('pairing remembers the phone’s relay device id', () => {
   })
 
   it('falls back to the local id when the phone sent none, so the two coincide', async () => {
-    const service = createPairingService()
+    const service = createPairingService(secureDeps({
+      getSettings: () => ({ phoneAccessEnabled: true }) as ReturnType<PairingRelayDeps['getSettings']>
+    }))
     try {
       const started = await service.start(() => {})
-      const { token, pairPort } = JSON.parse(started.payload) as { token: string; pairPort: number }
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as { token: string; pairPort: number; hostKey: string }
 
-      const respText = await post(pairPort, {
+      const response = await postSecure(pairPort, hostKey, {
         token,
         publicKey: freshEd25519Line(),
         deviceName: 'Quiet Phone'
       })
+      expect(response.status).toBe(200)
+      const respText = openSecureResponse(response)
 
       const { deviceId } = JSON.parse(respText) as { deviceId: string }
       expect(paired(deviceId).relayDeviceId).toBe(deviceId)
@@ -1209,14 +1225,16 @@ describe('pairing remembers the phone’s relay device id', () => {
     const service = createPairingService(relayDeps())
     try {
       const started = await service.start(() => {})
-      const { token, pairPort } = JSON.parse(started.payload) as { token: string; pairPort: number }
+      const { token, pairPort, hostKey } = JSON.parse(started.payload) as { token: string; pairPort: number; hostKey: string }
 
-      const respText = await post(pairPort, {
+      const response = await postSecure(pairPort, hostKey, {
         token,
         publicKey: freshEd25519Line(),
         deviceName: 'Relay Phone',
         deviceId: 'phone-relay-1'
       })
+      expect(response.status).toBe(200)
+      const respText = openSecureResponse(response)
 
       expect(fetchSpy).toHaveBeenCalledTimes(1)
       const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
