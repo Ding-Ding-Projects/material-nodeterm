@@ -764,6 +764,18 @@ const api: NodeTerminalApi = {
     read: (q?: SessionMemoryQuery) => ipcRenderer.invoke(IPC.sessionMemory, q),
     host: (q?: SessionMemoryQuery) => ipcRenderer.invoke(IPC.sessionMemoryHost, q)
   },
+  agentContinuation: {
+    summary: () => ipcRenderer.invoke(IPC.agentContinuationSummary),
+    preview: (nodeId: string) => ipcRenderer.invoke(IPC.agentContinuationPreview, nodeId),
+    ack: (nodeId: string) => ipcRenderer.invoke(IPC.agentContinuationAck, nodeId),
+    discard: (nodeId: string) => ipcRenderer.invoke(IPC.agentContinuationDiscard, nodeId),
+    continue: (nodeId: string) => ipcRenderer.invoke(IPC.agentContinuationContinue, nodeId),
+    onUpdate: (listener) => {
+      const handler = (_e: unknown, packets: Parameters<typeof listener>[0]) => listener(packets)
+      ipcRenderer.on(IPC.agentContinuationUpdate, handler)
+      return () => ipcRenderer.removeListener(IPC.agentContinuationUpdate, handler)
+    }
+  },
   // WSL distribution management — Windows-only in practice (wsl.exe simply is not found
   // elsewhere); every call rejects honestly rather than resolving to a fabricated empty result.
   wsl: {

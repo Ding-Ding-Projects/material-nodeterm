@@ -69,6 +69,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Codex crash-recovery continuation, issue #198:** bounded encrypted one-packet-per-node
+      provider-event state, typed IPC and preload boundaries, verified provider start and next-turn
+      receipt, and an anchored explicit review card are implemented on this jer. Focused tests are
+      authored but were not run under the ultra-speed boundary; type checks, builds, packaging,
+      runtime interaction, reviews, audits, and captures remain pending.
+
 - [ ] **Canvas zones and saved layouts, issue #82 / upstream issue #394**: edge and corner drag
       previews, complete half, third, and quarter targets, and bounded named layout snapshots are
       implemented in the source and project persistence path. Tests, type checks, lint, reviews,

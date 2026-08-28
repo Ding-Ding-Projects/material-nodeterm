@@ -153,6 +153,7 @@ import { Tooltip } from '../components/Tooltip'
 import { useTerminalSearch } from '../terminal/useTerminalSearch'
 import { useCopyFeedback } from '../terminal/useCopyFeedback'
 import { ContextMeter } from '../components/ContextMeter'
+import { AgentContinuationReview } from '../components/AgentContinuationReview'
 import { contextSourceKey } from '../state/contextWindow'
 import { AdhdElapsedChip, AdhdMomentumNote } from '../components/AdhdNodeSurfaces'
 import { markNodeActivity, markNodeOpened } from '../lib/nodeActivity'
@@ -5678,6 +5679,9 @@ export function TerminalNode({
           {/* ADHD time awareness — beside the session chip, because a clock in a menu does nothing
             for time blindness. Renders nothing at all while the mode is off. */}
           <AdhdElapsedChip nodeId={id} />
+          {/* Cold-relaunch recovery is an explicit anchored review card. It reads encrypted provider
+            state only; mounting never sends text and the Continue action owns the only delivery. */}
+          <AgentContinuationReview nodeId={id} api={api.agentContinuation} />
           {/* Who else is in this node. Subscribes to presence itself — see PresenceChips. */}
           <PresenceChips nodeId={id} />
           {status?.state === 'working' && (

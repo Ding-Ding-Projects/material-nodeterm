@@ -1,4 +1,5 @@
 import type { AgentId } from './config'
+import type { AgentContinuationEvent } from '../agent-continuation'
 
 export type AgentState = 'working' | 'waiting' | 'blocked' | 'done'
 
@@ -80,6 +81,8 @@ export interface NormalizedAgentEvent {
   recurringEnd?: boolean
   task?: string
   schedule?: string
+  /** Provider transcript event distilled for encrypted crash recovery. Never terminal scrollback. */
+  continuation?: AgentContinuationEvent
 }
 
 // What the hook server hands a normalizer: the node id, the agent id, and the
@@ -309,6 +312,10 @@ export function normalizeCodex(env: RawHookEnvelope): NormalizedAgentEvent | nul
   const p = env.payload as CodexPayload
   const ev = p.hook_event_name ?? p.hookEventName
   const base = { nodeId: env.nodeId, agentId: env.agentId, sessionId: p.session_id }
+  const continuation = (phase: AgentContinuationEvent['phase'], summary: string, preview?: string): AgentContinuationEvent | undefined =>
+    p.session_id
+      ? { nodeId: env.nodeId, provider: 'codex', sessionId: p.session_id, phase, summary, ...(preview ? { preview } : {}) }
+      : undefined
 
   // Subagent fan-out (spawn_agent). Keyed by agent_id — the child's rollout/session uuid —
   // NOT tool_use_id: the spawn tool's Pre/PostToolUse and the SubagentStart it launches carry
@@ -336,7 +343,7 @@ export function normalizeCodex(env: RawHookEnvelope): NormalizedAgentEvent | nul
   // UserPromptSubmit is codex's turn start — flag newTurn so the renderer clears
   // per-turn fan-out once per turn, not on every tool event.
   if (ev === 'UserPromptSubmit') {
-    return { ...base, kind: 'state', state: 'working', newTurn: true }
+    return { ...base, kind: 'state', state: 'working', newTurn: true, continuation: continuation('turn-start', 'Codex started a new turn.') }
   }
   // `request_user_input` is Codex's ask-the-user tool, and it is NOT a blocking tool: the
   // turn ENDS (Stop fires) with the question still unanswered, and the answer arrives as a
@@ -353,15 +360,20 @@ export function normalizeCodex(env: RawHookEnvelope): NormalizedAgentEvent | nul
       kind: 'state',
       state: 'waiting',
       awaitingInput: true,
+      continuation: ev === 'PreToolUse' ? continuation('progress', 'Codex is waiting for user input.') : undefined,
       ...(question ? { lastMessage: question } : {})
     }
   }
   // SessionStart + tool events keep the node "working".
-  if (ev === 'SessionStart' || ev === 'PreToolUse' || ev === 'PostToolUse') {
-    return { ...base, kind: 'state', state: 'working' }
+  if (ev === 'SessionStart') {
+    return { ...base, kind: 'state', state: 'working', continuation: continuation('provider-start', 'Codex provider session started.') }
+  }
+  if (ev === 'PreToolUse' || ev === 'PostToolUse') {
+    return { ...base, kind: 'state', state: 'working', continuation: ev === 'PreToolUse' ? continuation('progress', `Codex is using ${p.tool_name || 'a provider tool'}.`) : undefined }
   }
   if (ev === 'PermissionRequest') return { ...base, kind: 'state', state: 'waiting' }
-  if (ev === 'Stop') return { ...base, kind: 'state', state: 'done' }
+  if (ev === 'Stop') return { ...base, kind: 'state', state: 'done', continuation: continuation('turn-stop', 'Codex stopped before the next turn.', p.last_assistant_message) }
+  if (ev === 'SessionEnd') return { ...base, kind: 'session', sessionPhase: 'end', continuation: continuation('provider-end', 'Codex provider session ended.') }
   return null
 }
 

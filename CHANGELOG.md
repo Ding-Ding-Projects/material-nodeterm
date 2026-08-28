@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an explicit Codex crash-recovery continuation surface. One encrypted, bounded packet per node
+  is derived from provider hook events, reviewed beside the owning node, and cleared only after a
+  verified next-turn receipt. Failed provider start, delivery, and receipt checks retain the packet;
+  terminal scrollback and credential-shaped content remain outside the boundary. Tests, builds,
+  packaging, runtime interaction, and captures were not run in this ultra-speed lane.
+
 - Use a bounded Node HTTPS stream for the production immutable icon download, retaining the
   fetch-style injection seam for tests. The wrapper rejects redirects and invalid status or length,
   stops oversized or stalled responses, compares exact bytes, and reports each source-icon phase.

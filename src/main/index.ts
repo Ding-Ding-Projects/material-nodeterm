@@ -81,6 +81,12 @@ import { preparePortableMedia, type PortableMediaPreparation } from '../core/por
 import type { PortableMediaExportPlan, PortableMediaPrepareInput } from '../shared/portable-media'
 import { ServerDeploymentService, resolveServerDeploymentRoot } from './server-deployment'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
+import {
+  attachAgentContinuationDeps,
+  createAgentContinuationService,
+  parseCodexContinuationEvents,
+  type AgentContinuationService
+} from '../core/agent-continuation'
 import { describeSettingsChange } from '../shared/settings-diff'
 import type { NotifyPayload, RemoteLoginHelp, Settings } from '../shared/types'
 import {
@@ -593,6 +599,7 @@ const windowsTerminalProfiles = new WindowsTerminalProfileService({
   getCustomExecutable: () => settingsStore.get().defaultShell
 })
 const ptyManager = new PtyManager({ terminalProfiles: windowsTerminalProfiles })
+let agentContinuationService: AgentContinuationService | undefined
 // One tiny detached relay is shared by every Codex node/account. Keeping it outside Electron
 // preserves live TUI connections across app restarts while the authenticated app-server remains
 // shared per account.
@@ -1402,6 +1409,7 @@ app.whenReady().then(async () => {
   // so publish one identity-only session event ourselves after the mapping is durable. During the
   // narrow boot window before the renderer/mirror fan-out is wired, retain those events in order.
   const pendingCodexIdentityEvents: NormalizedAgentEvent[] = []
+  const codexProviderStarts = new Map<string, number>()
   let emitAgentStatus: ((event: NormalizedAgentEvent) => void) | undefined
   if (!gotSingleInstanceLock) return // losing second instance — quitting; don't touch tmux
 
@@ -1913,6 +1921,36 @@ app.whenReady().then(async () => {
     () => gatewayCredentials.readForHost()
   )
   ptyManager.registerIpc()
+  agentContinuationService = createAgentContinuationService()
+  attachAgentContinuationDeps(agentContinuationService, {
+    providerReady: (nodeId, sessionId) => {
+      const at = codexProviderStarts.get(`${nodeId}|${sessionId}`)
+      return typeof at === 'number' && Date.now() - at <= 10 * 60_000
+    },
+    deliver: (nodeId, sessionId, text) => {
+      if (!codexProviderStarts.has(`${nodeId}|${sessionId}`)) return Promise.resolve(false)
+      return ptyManager.sendText(nodeId, text, { enter: true })
+    }
+  })
+  ipcMain.handle(IPC.agentContinuationSummary, () => agentContinuationService!.summary())
+  ipcMain.handle(IPC.agentContinuationPreview, (_event, nodeId: unknown) =>
+    typeof nodeId === 'string' ? agentContinuationService!.preview(nodeId) : null
+  )
+  ipcMain.handle(IPC.agentContinuationAck, (_event, nodeId: unknown) =>
+    typeof nodeId === 'string' ? agentContinuationService!.ack(nodeId) : false
+  )
+  ipcMain.handle(IPC.agentContinuationDiscard, (_event, nodeId: unknown) =>
+    typeof nodeId === 'string' ? agentContinuationService!.discard(nodeId) : false
+  )
+  ipcMain.handle(IPC.agentContinuationContinue, (_event, nodeId: unknown) =>
+    typeof nodeId === 'string'
+      ? agentContinuationService!.continue(nodeId)
+      : Promise.resolve({ ok: false, reason: 'invalid' as const })
+  )
+  agentContinuationService.onUpdate((packets) => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.agentContinuationUpdate, packets)
+  })
+  void agentContinuationService.hydrate().catch(() => undefined)
   workspaceStore.registerIpc()
   gitService.registerIpc()
   presenceHub.registerIpc()
@@ -3172,7 +3210,15 @@ app.whenReady().then(async () => {
   const codexContextTail = createContextTail(pushContextUpdate, {
     provider: 'codex',
     sourceKey: 'codex:local',
-    parse: codexContextParse
+    parse: codexContextParse,
+    onProviderEvent: (sessionId, lines) => {
+      const nodeId = [...nodeContextSession.entries()].find(([, mapped]) => mapped === sessionId)?.[0]
+      if (!nodeId) return
+      for (const event of parseCodexContinuationEvents(nodeId, sessionId, lines)) {
+        if (event.phase === 'provider-start') codexProviderStarts.set(`${nodeId}|${sessionId}`, Date.now())
+        agentContinuationService?.observe(event)
+      }
+    }
   })
   // Remote (SSH-project) counterparts: a node whose pty runs on a remote host has its Claude
   // transcript on that host, so its meter / subagent transcript / search must read over the
@@ -3436,6 +3482,11 @@ app.whenReady().then(async () => {
     // event ENRICHED for a needs-you edge (a question strips its pendingId), so the canvas keys off
     // the same single source of truth as the mirror/phone. Then broadcast the enriched event.
     const enriched = recordAgentEvent(e) ?? e
+    const continuation = enriched.continuation
+    if (continuation?.phase === 'provider-start') {
+      codexProviderStarts.set(`${continuation.nodeId}|${continuation.sessionId}`, Date.now())
+    }
+    if (continuation) agentContinuationService?.observe(continuation)
     sendToMain(IPC.agentStatus, enriched)
     // Feed the macOS Notch HUD its prompt (ev.task on newTurn) + subagent grouping (no-op off/non-darwin).
     notchHudOnAgentEvent(enriched)

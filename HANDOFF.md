@@ -3976,3 +3976,27 @@ Changed files: `src/main/codex-relay-daemon.ts` and `HANDOFF.md`. No tests, chec
 checks, builds, packaging, installer execution, runtime interaction, reviews, audits, or UI
 captures were run in this lane. The coordinating owner must evaluate the exact merged commit and
 the resulting remote workflow before treating the release as recovered.
+# Codex crash-recovery continuation, issue #198
+
+The feature jer `feat/agent-recovery-context` adds the source contract for one bounded encrypted
+Codex continuation packet per node. `src/core/agent-continuation.ts` stores AES-256-GCM records
+under the app data directory, seals the per-install key through the OS-backed platform secret
+store, binds authenticated data to the stable node id, redacts credential-shaped text, and
+serializes acknowledgement, discard, and continue mutations. `src/shared/agent-continuation.ts`,
+`src/shared/ipc.ts`, `src/shared/types.ts`, and `src/preload/index.ts` expose typed summary,
+preview, acknowledgement, discard, continue, and update boundaries. `src/shared/agents/normalize.ts`
+distills Codex provider hook events only, never terminal scrollback. `src/main/index.ts` wires the
+service to the verified provider-start map, explicit delivery, and next-turn receipt. The renderer
+card is `src/renderer/components/AgentContinuationReview.tsx`, mounted beside each terminal node.
+
+The card warns that earlier side effects may already exist. It has no automatic injection path. A
+packet clears only after the core has observed the same node and session's next-turn event. Failed
+provider readiness, delivery, or receipt verification retains the packet and serialized retry state.
+The initial adapter is Codex only.
+
+Focused behavior and negative-regression tests are authored in
+`src/core/agent-continuation.test.ts`, but no tests, lint, type checks, builds, packaging, reviews,
+audits, runtime interaction, or captures were run under the ultra-speed issue boundary. No public
+issue, pull request, discussion, release, tag, or default-jer integration was mutated by this lane.
+The coordinating owner must exercise parsing, type checking, building, and the real packaged desktop flow before
+integrating this jer.
