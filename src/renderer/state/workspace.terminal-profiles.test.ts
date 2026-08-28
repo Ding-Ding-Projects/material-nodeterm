@@ -83,6 +83,7 @@ describe('terminal profile snapshots on node creation', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         localWindowsDesktop
       ).data.terminalProfileId
     ).toBe('pwsh')
@@ -100,6 +101,7 @@ describe('terminal profile snapshots on node creation', () => {
     const agent = createAgentNode(
       'codex',
       1,
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -129,6 +131,7 @@ describe('terminal profile snapshots on node creation', () => {
       undefined,
       undefined,
       ssh,
+      undefined,
       undefined,
       undefined,
       { sessionSource: 'local', terminalProfileId: 'git-bash' }
@@ -168,6 +171,7 @@ describe('terminal profile snapshots on node creation', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         { sessionSource, terminalProfileId: 'git-bash' }
       )
 
@@ -190,6 +194,7 @@ describe('terminal profile snapshots on node creation', () => {
       createAgentNode(
         'codex',
         1,
+        undefined,
         undefined,
         undefined,
         undefined,

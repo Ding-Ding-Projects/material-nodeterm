@@ -225,7 +225,6 @@ describe('createAgentNode — the project launch command reaches the typed line'
       'fix the bug',
       undefined,
       undefined,
-      undefined,
       'p1'
     )
     expect(node.data.initialCommand).toBe("proj-wrap 'fix the bug'")
