@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Extend scheduled settings to schema version 2. Existing files remain readable, saved layouts carry
+  an exact canvas identity, and rules can reference one exact project, canvas, saved layout, preset,
+  and appearance target. Placement and appearance are transient renderer effects with stale-epoch
+  protection, geometry-operation refusal, and restoration that preserves content, new nodes, and
+  user deletions. Schedule edits are recorded in the `scheduled-settings` local-history domain, while
+  runtime activation remains history-free. External API payloads cannot retarget local effects.
+
+  排程設定升級到 schema version 2。舊檔案照樣讀得到，saved layout 而家記住準確 canvas；規則可以
+  指定一個 project、canvas、layout、preset 同 appearance target。套用時只係暫時改 renderer，會
+  防止過期規則搶返控制權，鎖住幾何操作，完結後保留內容、新增節點同使用者刪除。排程編輯會
+  記入 `scheduled-settings` local-history domain，但運行中啟用效果唔會製造 history；外部 API
+  只可以供應設定值，唔可以改本機效果指向。
+
 - Fix packaged Windows startup after the file-converter pipeline added Sharp. The package now
   classifies Sharp and its native Windows binary as production dependencies, loads Sharp only when
   an image conversion needs it, and refuses any installer output that omits either runtime file.

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useSettings } from '@renderer/state/settings'
 import { buildAppearanceStylesheet } from '@renderer/lib/appearance/apply'
+import { useScheduledSettings } from '@renderer/state/scheduledSettings'
 
 const STYLE_ELEMENT_ID = 'nodeterm-appearance-overrides'
 
@@ -12,6 +13,14 @@ const STYLE_ELEMENT_ID = 'nodeterm-appearance-overrides'
  */
 export function AppearanceStyleInjector(): null {
   const entries = useSettings((s) => s.settings.elementAppearance)
+  const presets = useSettings((s) => s.settings.appearancePresets)
+  const activeAppearance = useScheduledSettings((s) => s.active?.active?.effects?.appearance)
+  const transientEntries = activeAppearance
+    ? (() => {
+        const preset = presets.find((candidate) => candidate.id === activeAppearance.presetId)
+        return preset ? { [activeAppearance.targetId]: preset.style } : {}
+      })()
+    : {}
 
   useEffect(() => {
     let el = document.getElementById(STYLE_ELEMENT_ID) as HTMLStyleElement | null
@@ -20,8 +29,8 @@ export function AppearanceStyleInjector(): null {
       el.id = STYLE_ELEMENT_ID
       document.head.appendChild(el)
     }
-    el.textContent = buildAppearanceStylesheet(entries)
-  }, [entries])
+    el.textContent = buildAppearanceStylesheet(entries, transientEntries)
+  }, [entries, transientEntries])
 
   return null
 }

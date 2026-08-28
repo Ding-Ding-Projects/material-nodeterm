@@ -392,9 +392,11 @@ export function validSavedLayouts(v: unknown): SavedCanvasLayout[] | undefined {
   for (const item of v) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue
     const candidate = item as Partial<SavedCanvasLayout>
+    const canvasId = candidate.canvasId === undefined ? 'root' : candidate.canvasId
     if (
       typeof candidate.id !== 'string' || candidate.id.length === 0 || candidate.id.length > 128 || layoutIds.has(candidate.id) ||
       typeof candidate.name !== 'string' || candidate.name.trim().length === 0 || candidate.name.length > 160 ||
+      typeof canvasId !== 'string' || canvasId.length === 0 || canvasId.length > 160 || /[\u0000-\u001f\u007f]/.test(canvasId) ||
       typeof candidate.createdAt !== 'number' || !Number.isFinite(candidate.createdAt) ||
       typeof candidate.updatedAt !== 'number' || !Number.isFinite(candidate.updatedAt) ||
       !candidate.viewport || typeof candidate.viewport !== 'object' ||
@@ -422,6 +424,7 @@ export function validSavedLayouts(v: unknown): SavedCanvasLayout[] | undefined {
     result.push({
       id: candidate.id,
       name: candidate.name.trim(),
+      canvasId,
       createdAt: candidate.createdAt,
       updatedAt: candidate.updatedAt,
       viewport: { x: candidate.viewport.x, y: candidate.viewport.y, zoom: candidate.viewport.zoom },
