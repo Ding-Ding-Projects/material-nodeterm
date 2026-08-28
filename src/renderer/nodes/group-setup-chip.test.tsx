@@ -16,7 +16,11 @@ import { useWorktrees } from '../state/worktrees'
 // React Flow instantiates custom nodes itself; the chip needs none of that machinery.
 vi.mock('@xyflow/react', () => ({
   NodeResizer: () => null,
-  useReactFlow: () => ({ updateNodeData: vi.fn(), setNodes: vi.fn() })
+  useReactFlow: () => ({ updateNodeData: vi.fn(), setNodes: vi.fn() }),
+  // GroupNode also reads the live node list to derive descendants and attached work items. The
+  // setup-chip fixture has no children, so an explicit empty store keeps that production read
+  // real without constructing an unrelated React Flow provider.
+  useStore: (selector: (state: { nodes: never[] }) => unknown) => selector({ nodes: [] })
 }))
 
 import { GroupNode, setWorktreeActionHandler, type WorktreeAction } from './GroupNode'
