@@ -1,5 +1,39 @@
 # Handoff
 
+## 2026-08-28, published v0.4.123 and continued repair state
+
+Release `v0.4.123` is published and non-draft. Its verified target is
+`8727cf85e15eaba9d7d3b56ef11ce3d25baf5e2e`, with three Squirrel.Windows assets and SHA-256
+digests recorded in the release notes. The release was produced by the queued hosted sequence;
+the later `main` repairs below are not claimed as part of that release.
+
+After that release target, the following commits were dewed to `main`, whose current hui ref is
+`1a91b1bb6c36202e218b15f2b8af6612ac29acad`:
+
+- `3f9c12823873e004abba78c026c5dec58c3de5d5` removes duplicate import fragments from core modules.
+- `b1fa1d859a3b97cfe67afe65799e6fe37909fe78` removes duplicated integration imports.
+- `82c3985a2edcdbe7c654afbd998b02d3a86aa1c4` reconciles shared declarations.
+- `76abd7fa32bdea60ceb4b79f50715461d9d5d819` reconciles usage and workspace options.
+- `6b2cca701034080e1e11c717a4535c82690ffc3a` preserves focused test-fixture import cleanup.
+- `a4ff58a936ca0be5f624140fbf85c2fd5c63a098` preserves restored status evidence across no-op events.
+- `74325b24aa53636cb9d2474450641248ddafaf6b` narrows portable icon serialization.
+- `35a07fc6524de0a7ed894866fe67442339b4e1a2` aligns continuation fixture types.
+- `02d41f4285a24e35b135674b041b9a3a140d47d2` derives phone identity shell capability availability.
+- `34603c1c29368b8a93349cf3dd9d868ad48346a9` retains the AWS wizard version root.
+- `1a91b1bb6c36202e218b15f2b8af6612ac29acad` imports the Codex session creation helper used by its fixture.
+
+Focused evidence remains: status mirror 163 executed tests passed with 1 explicit skip, project
+icons 24 of 24, cache 9 of 9, endpoint tests 19 executed with 1 explicit POSIX-shell skip,
+remote context-tail 4 of 4, FAB menu 7 of 7, and continuation 5 of 5. The phone identity and
+Codex session-name real integration Chuts remain unverified because their bounded runs did not
+reach terminal results. The full local suite remains red with 164 failed files, 763 failed tests,
+14 unhandled errors, 11,910 passed tests, and 260 skipped tests. The full node type Chut remains
+red in other integration modules.
+
+The hosted Release run `33151725217` is still pending for `1a91b1bb6c36202e218b15f2b8af6612ac29acad`.
+Do not report that pending run as the proof for `v0.4.123`; the published release target is the
+earlier `8727cf85e15eaba9d7d3b56ef11ce3d25baf5e2e`.
+
 ## 2026-08-28, renderer, remote-tail, hook, and cache repair batch
 
 The following task repairs are now dewed to `main`, with the hui ref matching the current tip
