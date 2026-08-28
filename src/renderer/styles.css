@@ -15911,3 +15911,21 @@ body.focus-mode .dock:hover {
 .md3-remote-oauth-notice input {
   min-width: 0;
 }
+/* Repository graph node: bounded, progressive list rendering keeps large snapshots responsive. */
+.repository-graph-node { min-width: 0; }
+.repository-graph-node__body { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: auto; padding: 14px; }
+.repository-graph-node__status, .repository-graph-node__hint, .repository-graph-node__error { margin: 0; }
+.repository-graph-node__status.is-error, .repository-graph-node__error { color: var(--md-sys-color-error); }
+.repository-graph-node__tabs, .repository-graph-node__toolbar, .repository-graph-node__summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.repository-graph-node__tabs button.is-active { background: var(--md-sys-color-secondary-container); }
+.repository-graph-node__toolbar select, .repository-graph-node__toolbar input, .repository-graph-node__toolbar button, .repository-graph-node__tabs button, .repository-graph-node__node, .repository-graph-node__detail button { min-height: 36px; }
+.repository-graph-node__search { display: flex; flex: 1 1 280px; align-items: center; gap: 4px; }
+.repository-graph-node__search input { width: 100%; }
+.repository-graph-node__summary { font-size: 0.85em; opacity: 0.8; }
+.repository-graph-node__list { display: flex; flex-direction: column; gap: 4px; overflow: auto; min-height: 100px; }
+.repository-graph-node__row { border: 1px solid var(--md-sys-color-outline-variant); border-radius: 10px; overflow: hidden; }
+.repository-graph-node__node { width: 100%; border: 0; display: flex; justify-content: space-between; align-items: center; text-align: left; background: transparent; color: inherit; padding: 8px 10px; cursor: pointer; }
+.repository-graph-node__node:hover, .repository-graph-node__node:focus-visible { background: var(--md-sys-color-surface-container-high); }
+.repository-graph-node__detail { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 10px; background: var(--md-sys-color-surface-container); font-size: 0.84em; }
+.repository-graph-node__detail button { border: 0; background: transparent; color: var(--md-sys-color-primary); cursor: pointer; text-decoration: underline; }
+.repository-graph-node details { max-height: 160px; overflow: auto; }

@@ -137,6 +137,7 @@ import WildDimSumNode from '../nodes/WildDimSumNode'
 import WebNode from '../nodes/WebNode'
 import AwsResourceNode from '../nodes/AwsResourceNode'
 import GitHubWorkItemNode from '../nodes/GitHubWorkItemNode'
+import RepositoryGraphNode from '../nodes/RepositoryGraphNode'
 import { GitHubWorkItemAttachmentDialog } from '../nodes/GitHubWorkItemAttachmentDialog'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import TimerNode from '../nodes/TimerNode'
@@ -750,6 +751,7 @@ import {
   createOpenWebUiNode,
   createVirtualMachineNode,
   createWindowsDiagnosticsNode,
+  createRepositoryGraphNode,
   createGitLabHostingNode,
   createCloudflareCoreManagersNode,
   SERVICE_NODE_LABELS,
@@ -2273,6 +2275,7 @@ export function Canvas() {
       'cloudflare-tunnel': withNodeBoundary(ServiceNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode),
       'windows-diagnostics': withNodeBoundary(WindowsDiagnosticsNode),
+      'repository-graph': withNodeBoundary(RepositoryGraphNode),
       awsidentity: withNodeBoundary(ServiceNode),
       'gitlab-hosting': withNodeBoundary(GitLabHostingNode),
       'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
@@ -5936,6 +5939,7 @@ export function Canvas() {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
             if (catalogEntry.id === 'windows-diagnostics') return createWindowsDiagnosticsNode(index, center)
+            if (catalogEntry.id === 'repository-graph') return createRepositoryGraphNode(index, center)
             if (catalogEntry.id === 'gitlab-hosting') return createGitLabHostingNode(index, center)
             if (catalogEntry.id === 'nextcloud-hosting') return createServiceNode('nextcloud-aio', index, center)
             if (catalogEntry.id === 'nextcloud-managed-hosting') return createServiceNode('nextcloud-managed', index, center)

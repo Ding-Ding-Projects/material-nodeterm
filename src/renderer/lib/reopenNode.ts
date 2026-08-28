@@ -19,6 +19,7 @@ import {
   createRecoveryGameNode,
   createVirtualMachineNode,
   createWindowsDiagnosticsNode,
+  createRepositoryGraphNode,
   createTorrentNode,
   createCalendarNode,
   createHomeAssistantControlNode,
@@ -208,6 +209,10 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
     }
     case 'windows-diagnostics':
       return createWindowsDiagnosticsNode(0)
+    case 'repository-graph': {
+      const node = createRepositoryGraphNode(0)
+      return { ...node, data: { ...node.data, repositoryGraphIntent: d.repositoryGraphIntent ?? node.data.repositoryGraphIntent } }
+    }
     case 'torrent':
       return createTorrentNode(0)
     case 'aws-resource': {

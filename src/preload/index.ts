@@ -1282,6 +1282,14 @@ const api: NodeTerminalApi = {
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
   },
+  repositoryGraph: {
+    inspect: (projectId, mode) => ipcRenderer.invoke(IPC.repositoryGraphInspect, projectId, mode),
+    refresh: (input) => ipcRenderer.invoke(IPC.repositoryGraphRefresh, input),
+    cancel: (operationId) => ipcRenderer.invoke(IPC.repositoryGraphCancel, operationId),
+    export: (input) => ipcRenderer.invoke(IPC.repositoryGraphExport, input),
+    openSource: (projectId, location) => ipcRenderer.invoke(IPC.repositoryGraphOpenSource, projectId, location),
+    onProgress: (listener) => subscribe<[import('@shared/repository-graph').RepositoryGraphProgress]>(IPC.repositoryGraphProgress)(listener)
+  },
   openWebUi: {
     contexts: () => ipcRenderer.invoke(IPC.openWebUiContexts),
     state: (nodeId: string, intent: OpenWebUiIntent) => ipcRenderer.invoke(IPC.openWebUiState, nodeId, intent),

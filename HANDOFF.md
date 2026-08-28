@@ -4925,3 +4925,19 @@ The coordinating owner must exercise parsing, type checking, building, and the r
 flow before integrating this feature branch. The similarly numbered eneskirca/nodeterm PR #198 is
 a separate merged paste-injection security change and was inspected only to avoid confusing the
 two records.
+## 2026-08-28, repository graph universe, issue #213
+
+Implemented the project-scoped repository graph lane on `feat/repository-graph-universe-20260828`.
+The shared contract is in `src/shared/repository-graph.ts`; `src/core/repository-graph-service.ts`
+performs bounded host-owned TypeScript/JavaScript and manifest indexing with source fingerprints,
+previous-snapshot retention, cancellation, progress, provenance, confidence, and JSON, JSONL, CSV,
+TSV, Markdown, HTML, GraphML, and DOT exports. IPC and Server Edition wiring live in
+`src/core/repository-graph-register-ipc.ts`, `src/shared/ipc.ts`, `src/preload/index.ts`,
+`src/renderer/bridge/ws-bridge.ts`, and `src/renderer/bridge/stubs.ts`. The project node and Node
+Catalog entry are in `src/renderer/nodes/RepositoryGraphNode.tsx`, `src/renderer/canvas/Canvas.tsx`,
+`src/renderer/state/workspace.ts`, `src/renderer/lib/nodeSizing.ts`, and
+`src/shared/node-catalog.ts`.
+
+Tests, type checks, lint, reviews, accessibility checks, security checks, runtime interaction, and
+screenshots were intentionally not run in the accelerated lane. Build and packaging remain the
+next required commands for this candidate.

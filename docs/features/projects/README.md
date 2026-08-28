@@ -20,6 +20,8 @@ A project is one canvas — one page of nodes, with its own working directory an
   commits, persisted `Project.links`, background-project context transport, and endpoint filtering.
 - [Alarm Clock nodes](../../alarm-clock.md): one-shot and recurring wall-clock reminders with
   timezone and DST handling, snooze, dismiss, and missed-occurrence history.
+- [Repository graph universe](./repository-graph-universe.md): project-scoped semantic code and
+  dependency graphs with bounded host-owned snapshots and provenance.
 
 See also [Canvas](../canvas/README.md) for what lives inside a project, and
 [Source control](../source-control/README.md) for how a project's working directory relates to

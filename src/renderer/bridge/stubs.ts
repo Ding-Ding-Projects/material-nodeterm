@@ -798,6 +798,14 @@ export function buildStubApi(): Omit<
       chatStop: U('ollama.chatStop'),
       onChatStream: noopUnsub
     },
+    repositoryGraph: {
+      inspect: () => unsupported('repository graph'),
+      refresh: () => unsupported('repository graph'),
+      cancel: () => Promise.resolve(false),
+      export: () => unsupported('repository graph export'),
+      openSource: () => unsupported('repository graph source navigation'),
+      onProgress: noopUnsub
+    },
     openWebUi: {
       contexts: U('openWebUi.contexts'),
       state: U('openWebUi.state'),

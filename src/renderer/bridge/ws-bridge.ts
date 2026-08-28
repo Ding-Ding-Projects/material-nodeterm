@@ -19,6 +19,7 @@ import type { GitHubApiApi, GitHubApiProgress, GitHubApiRequest } from '../../sh
 import type { GitHubCliAccountsApi, GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
+import type { RepositoryGraphApi } from '../../shared/repository-graph'
 import type { MinecraftApi } from '../../shared/minecraft'
 import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import type { AwsWizardModelsApi } from '../../shared/aws-wizard'
@@ -1182,6 +1183,20 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+/** Host-owned repository graph API. The Server Edition indexes the server's own project root,
+ * never the browser's filesystem, while relay sessions intentionally use the explicit stub. */
+export function buildRepositoryGraphApi(client: RpcClient): Pick<NodeTerminalApi, 'repositoryGraph'> {
+  const repositoryGraph: RepositoryGraphApi = {
+    inspect: (projectId, mode) => client.request(IPC.repositoryGraphInspect, projectId, mode) as ReturnType<RepositoryGraphApi['inspect']>,
+    refresh: (input) => client.request(IPC.repositoryGraphRefresh, input) as ReturnType<RepositoryGraphApi['refresh']>,
+    cancel: (operationId) => client.request(IPC.repositoryGraphCancel, operationId) as ReturnType<RepositoryGraphApi['cancel']>,
+    export: (input) => client.request(IPC.repositoryGraphExport, input) as ReturnType<RepositoryGraphApi['export']>,
+    openSource: (projectId, location) => client.request(IPC.repositoryGraphOpenSource, projectId, location) as ReturnType<RepositoryGraphApi['openSource']>,
+    onProgress: (listener) => client.subscribe(IPC.repositoryGraphProgress, listener as Listener)
+  }
+  return { repositoryGraph }
+}
+
 /** Guided AWS manager families over the authenticated WS bridge. */
 export function buildAwsResourceManagersApi(client: RpcClient): Pick<NodeTerminalApi, 'awsManagers'> {
   const awsManagers: AwsResourceManagerApi = {
@@ -1884,6 +1899,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildAwsWizardModelsApi(client),
     ...buildAwsIdentityApi(client),
     ...buildOllamaApi(client),
+    ...buildRepositoryGraphApi(client),
     ...buildCloudflareCoreManagersApi(client),
     ...buildMinecraftApi(client),
     ...buildTorrentApi(client),

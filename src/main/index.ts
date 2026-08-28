@@ -66,6 +66,7 @@ import { registerAwsResourceIpc } from '../core/aws-resource-register-ipc'
 import { registerAwsResourceManagersIpc } from '../core/aws-resource-managers'
 import { AwsWizardModelService } from '../core/aws-wizard/service'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
+import { registerRepositoryGraphIpc } from '../core/repository-graph-register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../core/calendar/register-ipc'
 import { registerCdkHandlers } from './aws/cdk-manager'
@@ -2278,6 +2279,7 @@ app.whenReady().then(async () => {
   const nodeDependencyService = registerNodeDependencyIpc(corePlatform)
   const awsWizardModels = new AwsWizardModelService(nodeDependencyService)
   registerOllamaIpc(corePlatform)
+  registerRepositoryGraphIpc(corePlatform, { projectTargetInfo: (projectId) => workspaceStore.projectTargetInfo(projectId) })
   registerOpenWebUiHosting(getMainWindow, app.getPath('userData'))
   minecraftServers = registerMinecraftIpc(corePlatform).manager
   registerAwsIdentityIpc(corePlatform, {
