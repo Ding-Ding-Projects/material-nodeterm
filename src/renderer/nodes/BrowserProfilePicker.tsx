@@ -269,7 +269,7 @@ export function BrowserProfilePicker({
                   />
                   <IconButton
                     aria-label={`${vocab('Reset')} “${p.name}”`}
-                    icon="restart_alt"
+                    icon="refresh"
                     size="dense"
                     onClick={(e) => requestReset(p, e)}
                   />
