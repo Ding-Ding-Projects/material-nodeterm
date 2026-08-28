@@ -3993,6 +3993,6 @@ settings store was changed.
 
 Changed files: `src/core/settings-store.ts` and `HANDOFF.md`.
 
-This Yum Leung Cha lane intentionally ran no tests, lint, type checks, builds, packaging, reviews,
+This ultra-speed source lane intentionally ran no tests, lint, type checks, builds, packaging, reviews,
 audits, runtime interaction, or UI captures. The repair remains unverified by those checks until
 the coordinating owner integrates it and observes the resulting hosted workflow.
