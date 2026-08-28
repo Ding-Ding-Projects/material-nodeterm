@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Expand UniGetUI controls with guided package options, ignored-update handling, manager executable
+  and notification controls, operation output, bundle file import/export, source management, local
+  and cloud backup actions, and super-confirmed destructive actions. Bundle imports require a native
+  local file selection and do not send raw content through process arguments.
+
+  UniGetUI controls 加碼：package options、ignored updates、manager executable 同 notifications、operation output、
+  bundle file import/export、source management、local/cloud backup，同埋有 super confirmation 嘅 destructive actions。
+  Bundle import 一定用 native local file picker，唔會將 raw content 放入 process arguments。
+
 - Add a machine-owned UniGetUI Global Universe with typed local automation, package discovery and
   operations, installed and update views, manager/source/settings/bundle/log/backup surfaces, and
   explicit unavailable, malformed, stopped, not-installed, elevation-required, and partial-operation

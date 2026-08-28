@@ -31,6 +31,11 @@ wait, and forget. Elevation is passed only when the user explicitly selected it.
 retries a non-elevated operation silently with elevation. Bundle imports require a local file pick,
 so raw package content is never placed in a process argument.
 
+The panel also provides native folder browsing for install locations, manager executable selection
+and clearing, notification toggles, source creation and removal, bundle add and remove, cloud backup
+list/create/download/restore, and the official backup device-flow start/complete/logout commands.
+Actions that remove or reset data use the application's existing destructive confirmation surface.
+
 ## Honest states and privacy
 
 The surface distinguishes not-installed, stopped, unavailable, malformed response, elevation

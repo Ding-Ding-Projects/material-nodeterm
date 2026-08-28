@@ -14496,6 +14496,11 @@ button.term-node__title-text:focus-visible {
 .unigetui-universe__rows li { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; border-radius: var(--md-sys-shape-corner-medium); background: var(--md-sys-color-surface-container); }
 .unigetui-universe__rows li pre { flex: 1; min-width: 0; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .unigetui-universe__page-actions, .unigetui-universe__row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.unigetui-universe__options { padding: 10px 12px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: var(--md-sys-shape-corner-medium); }
+.unigetui-universe__options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; padding-top: 10px; }
+.unigetui-universe__options-grid label { display: grid; gap: 4px; color: var(--md-sys-color-on-surface-variant); }
+.unigetui-universe__option-input { display: flex; gap: 4px; }
+.unigetui-universe__option-input input { min-width: 0; flex: 1; }
 .unigetui-universe__rows button { min-height: 40px; border-radius: var(--md-sys-shape-corner-full); }
 .unigetui-universe__empty,
 .unigetui-universe__error,

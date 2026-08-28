@@ -120,6 +120,13 @@ export interface UniGetUiApi {
   logs(kind: 'app' | 'operations' | 'manager', manager?: string, level?: number): Promise<UniGetUiLogEntry[]>
   backups(): Promise<UniGetUiBackup[] | unknown>
   backupLocalCreate(): Promise<unknown>
+  backupCloudList(): Promise<unknown>
+  backupCloudCreate(): Promise<unknown>
+  backupCloudDownload(key: string): Promise<unknown>
+  backupCloudRestore(key: string, append?: boolean): Promise<unknown>
+  backupLoginStart(launchBrowser?: boolean): Promise<unknown>
+  backupLoginComplete(): Promise<unknown>
+  backupLogout(): Promise<unknown>
   bundle(): Promise<UniGetUiBundle | unknown>
   bundleReset(): Promise<unknown>
   bundleImport(input: { path?: string; content?: string; format?: string; append?: boolean }): Promise<unknown>

@@ -265,6 +265,13 @@ export class UniGetUiClient implements UniGetUiApi {
   }
   async backups(): Promise<unknown> { return this.run(['backup', 'status']) }
   async backupLocalCreate(): Promise<unknown> { return this.run(['backup', 'local', 'create'], WAIT_TIMEOUT_MS) }
+  async backupCloudList(): Promise<unknown> { return this.run(['backup', 'cloud', 'list']) }
+  async backupCloudCreate(): Promise<unknown> { return this.run(['backup', 'cloud', 'create'], WAIT_TIMEOUT_MS) }
+  async backupCloudDownload(key: string): Promise<unknown> { return this.run(['backup', 'cloud', 'download', '--key', safeArg(key, 256)], WAIT_TIMEOUT_MS) }
+  async backupCloudRestore(key: string, append = false): Promise<unknown> { return this.run(['backup', 'cloud', 'restore', '--key', safeArg(key, 256), ...(append ? ['--append'] : [])], WAIT_TIMEOUT_MS) }
+  async backupLoginStart(launchBrowser = false): Promise<unknown> { return this.run(['backup', 'github', 'login', 'start', ...(launchBrowser ? ['--launch-browser'] : [])]) }
+  async backupLoginComplete(): Promise<unknown> { return this.run(['backup', 'github', 'login', 'complete']) }
+  async backupLogout(): Promise<unknown> { return this.run(['backup', 'github', 'logout']) }
   async bundle(): Promise<unknown> { return this.run(['bundle', 'get']) }
   async bundleReset(): Promise<unknown> { return this.run(['bundle', 'reset']) }
   async bundleImport(input: { path?: string; content?: string; format?: string; append?: boolean }): Promise<unknown> {
