@@ -90,7 +90,7 @@ function invalidateQueuedSave(): boolean {
 }
 // Reload/quit inside the coalesce window must not lose the last edit. (Guarded: this module
 // is transitively imported by node-environment unit tests, where `window` doesn't exist.)
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   window.addEventListener('beforeunload', () => {
     const queued = pendingSave
     pendingSave = null
