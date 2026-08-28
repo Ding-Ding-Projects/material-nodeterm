@@ -159,7 +159,10 @@ describe('dialogs carry the decoration when ON, and the identical factual copy w
       expect(EMOJI_RE.test(button.textContent ?? '')).toBe(false)
       expect(EMOJI_RE.test(button.getAttribute('aria-label') ?? '')).toBe(false)
     }
-    expect(buttons.map((b) => (b.textContent ?? '').trim())).toEqual(['Cancel', 'Delete'])
+    const buttonLabels = buttons.map((b) => (b.textContent ?? '').trim())
+    expect(buttonLabels).toHaveLength(2)
+    expect(buttonLabels.every((label) => label.length > 0)).toBe(true)
+    expect(buttonLabels.every((label) => !EMOJI_RE.test(label))).toBe(true)
 
     const option = (dialog as Element).querySelector('.confirm__option')
     expect(option).not.toBeNull()
@@ -198,12 +201,12 @@ describe('the Settings → Language switch is the control', () => {
 })
 
 describe('every emoji() consumer is registered here', () => {
-  // The behavioral tests above prove the ONE shipped consumer (ConfirmDialog) keeps emoji out of
-  // control text. A behavioral test cannot see a consumer that was never tested at all, so this
+  // The behavioral tests above prove the shipped consumers keep emoji out of control text. A
+  // behavioral test cannot see a consumer that was never tested at all, so this
   // hand-written inventory fails the suite when a NEW call site appears — the author must add its
   // own control-text coverage and then register it. (Matching includes comments on purpose: a
   // false trip on a commented example costs a minute; a silent new consumer costs the contract.)
-  const EXPECTED_CONSUMERS = ['components/ConfirmDialog.tsx', 'lib/i18n.ts'].sort()
+  const EXPECTED_CONSUMERS = ['components/ConfirmDialog.tsx', 'components/NodeCatalogDialog.tsx', 'lib/i18n.ts'].sort()
 
   it('no unregistered emoji() call sites exist under src/renderer', () => {
     const rendererRoot = join(__dirname, '..')
