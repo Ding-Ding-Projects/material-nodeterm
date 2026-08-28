@@ -747,6 +747,15 @@ export function buildStubApi(): Omit<
       cancel: U('awsIdentity.cancel'),
       onOperation: noopUnsub
     },
+    awsManagers: {
+      catalog: U('awsManagers.catalog'),
+      availability: U('awsManagers.availability'),
+      list: U('awsManagers.list'),
+      run: U('awsManagers.run'),
+      progress: U('awsManagers.progress'),
+      cancel: U('awsManagers.cancel'),
+      retry: U('awsManagers.retry')
+    },
     cloudflareZeroTrust: {
       catalog: U('cloudflareZeroTrust.catalog'),
       accounts: U('cloudflareZeroTrust.accounts'),

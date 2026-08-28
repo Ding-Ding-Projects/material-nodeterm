@@ -23,6 +23,7 @@ import type { MinecraftApi } from '../../shared/minecraft'
 import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import type { AwsWizardModelsApi } from '../../shared/aws-wizard'
 import type { AwsIdentityApi } from '../../shared/aws-identity'
+import type { AwsResourceManagerApi } from '../../shared/aws-resource-managers'
 import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
@@ -1181,6 +1182,20 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+/** Guided AWS manager families over the authenticated WS bridge. */
+export function buildAwsResourceManagersApi(client: RpcClient): Pick<NodeTerminalApi, 'awsManagers'> {
+  const awsManagers: AwsResourceManagerApi = {
+    catalog: () => client.request(IPC.awsManagerCatalog) as ReturnType<AwsResourceManagerApi['catalog']>,
+    availability: (manager) => client.request(IPC.awsManagerAvailability, manager) as ReturnType<AwsResourceManagerApi['availability']>,
+    list: (request) => client.request(IPC.awsManagerList, request) as ReturnType<AwsResourceManagerApi['list']>,
+    run: (request) => client.request(IPC.awsManagerRun, request) as ReturnType<AwsResourceManagerApi['run']>,
+    progress: (jobId) => client.request(IPC.awsManagerProgress, jobId) as ReturnType<AwsResourceManagerApi['progress']>,
+    cancel: (jobId) => client.request(IPC.awsManagerCancel, jobId) as ReturnType<AwsResourceManagerApi['cancel']>,
+    retry: (jobId) => client.request(IPC.awsManagerRetry, jobId) as ReturnType<AwsResourceManagerApi['retry']>
+  }
+  return { awsManagers }
+}
+
 /** Guided Cloudflare managers over the authenticated WS bridge. */
 export function buildCloudflareCoreManagersApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudflareCoreManagers'> {
   const cloudflareCoreManagers: CloudflareCoreManagersApi = {
@@ -1892,6 +1907,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildPasswordManagerApi(client),
     ...buildUniverseDoorEntryApi(client),
     ...buildGitHubApi(client),
+    ...buildAwsResourceManagersApi(client),
     ...buildClaudeAccountsApi(client),
     codex: buildCodexApi(client),
     // `claude` is assembled from two builders: `cliCaps` from the relay-shared one, and the

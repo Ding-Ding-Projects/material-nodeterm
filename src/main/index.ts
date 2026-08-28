@@ -63,6 +63,7 @@ import { registerOpenWebUiHosting } from './open-webui-hosting'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerAwsIdentityIpc } from '../core/aws-identity'
 import { registerAwsResourceIpc } from '../core/aws-resource-register-ipc'
+import { registerAwsResourceManagersIpc } from '../core/aws-resource-managers'
 import { AwsWizardModelService } from '../core/aws-wizard/service'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
@@ -2351,6 +2352,7 @@ app.whenReady().then(async () => {
     const dependency = await nodeDependencyService.status('aws-cli-v2')
     return { path: dependency.executablePath ?? null, reason: dependency.disabledReason }
   }, awsWizardModels)
+  registerAwsResourceManagersIpc(corePlatform)
   registerTorrentIpc(corePlatform)
   virtualMachineManager = registerVirtualMachineIpc(corePlatform).manager
   registerCalendarIpc(corePlatform)

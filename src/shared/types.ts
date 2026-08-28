@@ -716,6 +716,8 @@ export interface CanvasNodeState {
   torrentMagnet?: string
   /** AWS manager safe operation intent. Profiles, endpoints, results, and credentials stay local. */
   awsManagerIntent?: import('./aws-resource').AwsManagerPortableIntent
+  /** Guided AWS manager operation intent, separate from the older Resource Explorer intent. */
+  awsResourceManagerIntent?: import('./aws-resource-managers').AwsResourceManagerIntent
   /** Linux ISO VM settings stored in the shared project projection. */
   virtualMachineConfig?: import('./virtual-machine').VirtualMachineConfig
   /** Linux ISO/disk selections stored only in the machine-local execution overlay. */
@@ -4882,6 +4884,8 @@ export interface NodeTerminalApi {
   awsIdentity: import('./aws-identity').AwsIdentityApi
   /** Desktop AWS Resource Explorer and Cloud Control managers. */
   awsResource?: import('./aws-resource').AwsResourceApi
+  /** Guided AWS manager families with catalog, availability, resource listing, and bounded jobs. */
+  awsManagers: import('./aws-resource-managers').AwsResourceManagerApi
   /** Local Linux ISO VM lifecycle — docs/linux-iso-vm.md. */
   virtualMachine: import('./virtual-machine').VirtualMachineApi
   /** Machine-local Home Assistant instances with bounded REST and WebSocket discovery. */

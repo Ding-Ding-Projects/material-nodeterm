@@ -1332,6 +1332,15 @@ const api: NodeTerminalApi = {
     cancel: (operationId: string) => ipcRenderer.invoke(IPC.awsIdentityCancel, operationId),
     onOperation: (listener: (operation: AwsIdentityOperation) => void) => subscribe<[AwsIdentityOperation]>(IPC.awsIdentityOperation)((operation) => listener(operation))
   },
+  awsManagers: {
+    catalog: () => ipcRenderer.invoke(IPC.awsManagerCatalog),
+    availability: (manager) => ipcRenderer.invoke(IPC.awsManagerAvailability, manager),
+    list: (request) => ipcRenderer.invoke(IPC.awsManagerList, request),
+    run: (request) => ipcRenderer.invoke(IPC.awsManagerRun, request),
+    progress: (jobId) => ipcRenderer.invoke(IPC.awsManagerProgress, jobId),
+    cancel: (jobId) => ipcRenderer.invoke(IPC.awsManagerCancel, jobId),
+    retry: (jobId) => ipcRenderer.invoke(IPC.awsManagerRetry, jobId)
+  },
   awsResource: {
     runtime: () => ipcRenderer.invoke(IPC.awsResourceRuntime),
     profiles: () => ipcRenderer.invoke(IPC.awsResourceProfiles),
