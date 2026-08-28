@@ -57,9 +57,6 @@ import {
   publicKeyToB64,
   type KeyPair
 } from './remote/e2ee'
-import { createPairingService, type PairingRelayDeps } from './pairing-service'
-import { rewriteKeyComment, type DeviceEntry } from './pairing-core'
-import { genKeyPair, publicKeyToB64 } from './remote/e2ee'
 import type { Settings } from '../shared/types'
 
 const HOME = os.homedir()
