@@ -98,7 +98,7 @@ jobs:
         shell: pwsh
         run: |
           $resultFile = Join-Path $env:RUNNER_TEMP 'nodeterm-vs-selection.txt'
-          node scripts/ensure-windows-build-toolchain.mjs --silent --result-file $resultFile
+          node scripts/ensure-windows-build-toolchain.mjs --silent --elevated-toolchain-only --result-file $resultFile
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $installation = (Get-Content -LiteralPath $resultFile -Raw).Trim()
           if (-not [IO.Path]::IsPathFullyQualified($installation)) { throw 'The validated Visual Studio selection was not an absolute path.' }

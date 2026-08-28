@@ -477,7 +477,7 @@ export function validateReleaseWorkflow(workflow, packageJson) {
     nativeToolchainAt <= checkoutAt ||
     nativeToolchainAt >= installAt ||
     steps[nativeToolchainAt]?.shell !== 'pwsh' ||
-    !nativeToolchainCommands.includes('node scripts/ensure-windows-build-toolchain.mjs --silent --result-file $resultFile') ||
+    !nativeToolchainCommands.includes('node scripts/ensure-windows-build-toolchain.mjs --silent --elevated-toolchain-only --result-file $resultFile') ||
     !nativeToolchainCommands.some((command) => /VsDevCmd\.bat/.test(command)) ||
     !nativeToolchainCommands.some((command) => /GITHUB_ENV/.test(command)) ||
     !nativeToolchainCommands.some((command) => /lib\\spectre\\x64/.test(command))
@@ -485,7 +485,7 @@ export function validateReleaseWorkflow(workflow, packageJson) {
     issues.push('native toolchain bootstrap must select VsDevCmd and Spectre libraries before npm ci')
   }
   const approvedPreInstallBootstrap = new Set([
-    'node scripts/ensure-windows-build-toolchain.mjs --silent --result-file $resultFile',
+    'node scripts/ensure-windows-build-toolchain.mjs --silent --elevated-toolchain-only --result-file $resultFile',
   ])
   const dependencyBackedScriptSteps = steps.flatMap((step, index) =>
     logicalCommands(step?.run)

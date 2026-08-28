@@ -58,10 +58,11 @@ job:
    or prerelease suffix is refused because the Windows updater's `latest/download` feed must never
    point at a feature build masquerading as stable.
 6. **Bootstrap the selected Windows native toolchain** before `npm ci`. The workflow uses the
-   repository's validated Visual Studio selector/installer, initializes its `VsDevCmd` environment,
-   confirms x64 Spectre libraries, and exports only the needed developer variables to later steps.
-   It does not disable Spectre mitigation or rely on whichever Visual Studio installation happens
-   to be first on the runner.
+   repository's validated Visual Studio selector/installer in its narrowly scoped
+   `--elevated-toolchain-only` mode, initializes its `VsDevCmd` environment, confirms x64 Spectre
+   libraries, and exports only the needed developer variables to later steps. It does not disable
+   Spectre mitigation or rely on whichever Visual Studio installation happens to be first on the
+   runner.
 7. **Verify stable version advancement before the build.** The release helper reads every hosted
    tag and release, rejects a non-newer version or a tag already owned by another commit, and binds
    this candidate to the exact source SHA. `0.4.0` is the candidate after `0.3.0`.

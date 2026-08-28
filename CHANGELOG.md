@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Run the hosted Visual Studio bootstrap in its dedicated elevated-toolchain-only mode, matching
+  the administrator token used by the hosted Windows runner while keeping npm and project lifecycle
+  scripts outside that privileged helper.
+
+  Hosted Windows runner 用 Administrator token，所以 Visual Studio bootstrap 改用專用
+  elevated-toolchain-only mode；npm 同 project lifecycle scripts 仍然唔會塞入嗰個 privileged helper。
+
 - Bootstrap the selected Visual Studio developer environment and x64 Spectre libraries in the
   hosted release workflow before native dependency installation. This carries the same validated
   toolchain selection used by the local BAT route into the hosted packaging process.

@@ -1,5 +1,63 @@
 # Handoff
 
+## 2026-08-28, hosted elevated-toolchain handoff
+
+The hui currently points `main` at `16f0b7e034eec228bb0138db3e0f63223221f622`. The follow-up
+Release run `33148336972` reached the new native-toolchain bootstrap but failed before npm because
+the hosted runner executes the helper as Administrator and the helper correctly refuses an elevated
+root build. No hosted installer or release was produced by that run.
+
+The next repair changes only the workflow invocation to
+`node scripts/ensure-windows-build-toolchain.mjs --silent --elevated-toolchain-only --result-file
+$resultFile`. This mode is limited to validated Visual Studio discovery and environment handoff; it
+does not run npm or project lifecycle scripts in the elevated helper. The workflow contract and
+release documentation are updated to require this exact ordering and argument.
+
+Local evidence remains: the source build passed at `cf5895b666733a84b1f8ef4002e528760ddd811a`, and
+the short-path installer passed at `ce35a00571bbd1b7cbecf5def5df91967da7470b`, producing the
+unsigned `nodeterm-Setup-0.4.122.exe` with SHA-256
+`c430569937b63c52f721e0a56dc886402ce034c59bb6ec83e6cf55ff6068c5dd`. The full local test run
+remains red with 164 failed files, 763 failed tests, 14 unhandled errors, 11,910 passed tests, and
+260 skipped tests. The focused release, release-notes, and installer-identity suite remains green
+at 33 of 33 tests, and the release workflow validator passes.
+
+The primary checkout also contains the current handoff and hosted-toolchain documentation edits
+that must be committed with this repair. No hosted green verdict or new release is claimed until a
+new run completes from the repair commit.
+
+## 2026-08-28, hosted toolchain handoff and current release verification
+
+The current default branch is `main` at commit `16f0b7e034eec228bb0138db3e0f63223221f622`, and
+the checked-out ref matches `origin/main`. The recovery candidate from the previous handoff is
+already an ancestor of this commit, so no separate merge remains for that candidate.
+
+The local source build completed successfully at commit `cf5895b666733a84b1f8ef4002e528760ddd811a`.
+The supported local installer route completed successfully from the short path `C:\mn-inst` at
+commit `ce35a00571bbd1b7cbecf5def5df91967da7470b`. It produced three verified Squirrel.Windows
+assets, including `nodeterm-Setup-0.4.122.exe` at 612,520,448 bytes with SHA-256
+`c430569937b63c52f721e0a56dc886402ce034c59bb6ec83e6cf55ff6068c5dd`. Authenticode reported
+`NotSigned`. The first isolated retry failed only because its path exceeded the Squirrel packaging
+path limit; the short-path retry resolved that environmental failure.
+
+The full local Vitest run remains red at the current codebase level: 164 test files failed, 763
+tests failed, 14 unhandled errors were reported, 11,910 tests passed, and 260 were skipped. The
+failures include duplicate declarations, missing bridge fields, renderer runtime exceptions, and
+remote-context API mismatches. A focused release, release-notes, and installer-identity run passed
+33 of 33 tests, and `node scripts/check-release-workflow.mjs` passed.
+
+Hosted Release run `33147665013` failed at commit
+`ce35a00571bbd1b7cbecf5def5df91967da7470b` because the hosted environment did not expose the
+validated Spectre toolchain identity to the package preflight. The workflow now binds the validated
+installation identity when the developer-environment helper omits those variables, and its
+contract test requires the bootstrap before `npm ci`. The follow-up Release run is
+`33148336972` at commit `16f0b7e034eec228bb0138db3e0f63223221f622`; it was still in progress when
+this handoff entry was written, so no hosted release or green hosted verdict is claimed here.
+
+The primary checkout has no local modifications at this entry. The remaining linked checkouts and
+any generated resource directories must be re-audited before cleanup. Do not remove the failed
+temporary QEMU installer from the recovery checkout until its ownership and preservation status
+are independently confirmed.
+
 ## 2026-08-28, start-screen updated-time provenance
 
 The start screen now renders the artifact-stamped package version and its local updated time with
