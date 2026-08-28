@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Repair deferred settings persistence, runtime settings fragments, and settings filtering when
+  regex-only state is absent. Focused AccountsSection and settings coverage passes 14 of 14 tests.
+
+  修正 deferred settings persistence、runtime settings fragment，同 regex state 缺失時嘅 settings
+  filter。Focused AccountsSection 同 settings coverage 通過 14/14 tests。
+
 - Normalize trailing directory separators before comparing the helper-selected and `VsDevCmd`
   Visual Studio identities on hosted runners. Equivalent paths now remain equivalent while a
   genuinely different installation is still rejected.

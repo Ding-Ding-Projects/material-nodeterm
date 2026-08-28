@@ -1,5 +1,20 @@
 # Handoff
 
+## 2026-08-28, settings persistence and filter crash repairs
+
+Two local runtime failures found by the full test run are repaired and dewed to `main`:
+
+- `fa9d822189994910042803255d2c625211502191` imports React at runtime for `SettingsText` fragments
+  and keeps the `{ settings, generation }` deferred-save envelope intact. The timer now dispatches
+  the latest settings snapshot instead of silently losing every coalesced disk write.
+- `93a0e9166887f92417ff798055d98e957071cd98` makes settings search tolerate callers that omit
+  regex-only `pattern` and `flags` fields, while preserving explicit regex behavior when supplied.
+
+The focused AccountsSection and settings suite passes 14 of 14 tests after these repairs. The
+dedicated FieldRow vocabulary test remains unavailable because this checkout does not contain its
+declared `@testing-library/react` package. The full local suite is still red and remains separately
+tracked; these two repairs are not a claim that the broader suite is green.
+
 ## 2026-08-28, current hosted release candidate
 
 The current `main` tip is `28234e3bfdfe209f60a000b55b630ee53f1d79b7`, and the hui ref matches it.
