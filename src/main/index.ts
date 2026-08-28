@@ -4786,8 +4786,8 @@ app.on('window-all-closed', () => {
 let quitFlushed = false
 app.on('before-quit', (e) => {
   // Menu Quit / Cmd+Q / Ctrl+Q reach here directly (no window-close event first), so the confirm
-  // gate is repeated here for that path. `quitConfirmed` short-circuits this on the re-issued
-  // app.quit() below once the user has answered, or on the win.close() gate's own re-issue.
+  // gate is repeated here for that path. `shouldConfirmQuit()` already excludes a confirmed or
+  // app-initiated quit, so the re-issued app.quit() below is not prompted a second time.
   if (shouldConfirmQuit()) {
     e.preventDefault()
     void confirmQuit(getMainWindow() as unknown as BrowserWindow | null).then((ok) => {

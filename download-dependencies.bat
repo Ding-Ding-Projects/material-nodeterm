@@ -179,6 +179,13 @@ if not "%TOOLCHAIN_EXIT%"=="0" (
 call :accept_toolchain_result
 if errorlevel 1 exit /b %ERRORLEVEL%
 :toolchain_phase_complete
+rem The toolchain helper has independently validated the supported VS2022 v143 instance and its
+rem Spectre libraries. Pin both node-gyp selectors for this process so a newer VS18 installation
+rem cannot silently win auto-detection and fail native builds with MSB8040. These values are
+rem exported below beside the verified Python selection for callers such as build.bat.
+set "GYP_MSVS_VERSION=2022"
+set "npm_config_msvs_version=2022"
+echo   Selected Visual Studio 2022 for node-gyp and electron-rebuild; the validated VS2022 Spectre libraries prevent unsupported toolset auto-selection.
 call :phase_end "Visual Studio C++ build toolchain"
 
 rem ---------------------------------------------------------------------------------------------
@@ -327,7 +334,9 @@ set "NODETERM_RETURN_PATH=%PATH%"
 set "NODETERM_RETURN_NODE_HOME=%NODETERM_NODE_HOME%"
 set "NODETERM_RETURN_PYTHON=%PYTHON%"
 set "NODETERM_RETURN_VCINSTALLDIR=%VCINSTALLDIR%"
-endlocal & set "PATH=%NODETERM_RETURN_PATH%" & set "NODETERM_NODE_HOME=%NODETERM_RETURN_NODE_HOME%" & set "PYTHON=%NODETERM_RETURN_PYTHON%" & set "NODE_GYP_FORCE_PYTHON=%NODETERM_RETURN_PYTHON%" & set "npm_config_python=%NODETERM_RETURN_PYTHON%" & set "VCINSTALLDIR=%NODETERM_RETURN_VCINSTALLDIR%"
+set "NODETERM_RETURN_GYP_MSVS_VERSION=%GYP_MSVS_VERSION%"
+set "NODETERM_RETURN_NPM_CONFIG_MSVS_VERSION=%npm_config_msvs_version%"
+endlocal & set "PATH=%NODETERM_RETURN_PATH%" & set "NODETERM_NODE_HOME=%NODETERM_RETURN_NODE_HOME%" & set "PYTHON=%NODETERM_RETURN_PYTHON%" & set "NODE_GYP_FORCE_PYTHON=%NODETERM_RETURN_PYTHON%" & set "npm_config_python=%NODETERM_RETURN_PYTHON%" & set "VCINSTALLDIR=%NODETERM_RETURN_VCINSTALLDIR%" & set "GYP_MSVS_VERSION=%NODETERM_RETURN_GYP_MSVS_VERSION%" & set "npm_config_msvs_version=%NODETERM_RETURN_NPM_CONFIG_MSVS_VERSION%"
 exit /b 0
 
 :accept_toolchain_result

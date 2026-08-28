@@ -1,5 +1,46 @@
 # Handoff
 
+## 2026-08-27, shutdown-chain parser repair
+
+Release run `33129445887` at `1c62698a7243f153c102afa6f3a7b683a6822edb` reported an application-build
+failure at `src/main/index.ts:4889:1`: `ERROR: Unexpected ')'`. The shutdown callback contained
+duplicate confirmation comments and nested quit-confirmation conditionals from a merge splice, so
+the final `speechService.shutdown().finally(() => app.quit())` chain reached the `app.on` closing
+parenthesis without a coherent callback boundary.
+
+The repair keeps every shutdown operation, including widget disposal, graceful server stop, virtual
+machine disposal, HUD teardown, scheduled-settings and planner shutdown, power-assertion disposal,
+workspace watcher disposal, setup-service disposal, SSH disconnect, app-private agent stop, askpass
+stop, browser backend stop, the bounded SIGTERM exit fallback, remote workspace flush, pty shutdown,
+and speech-service shutdown. It removes only the duplicate confirmation residue and restores one
+coherent `shouldConfirmQuit()` boundary before the shutdown sequence, leaving the final callback
+closure valid. No unrelated startup or registration code was changed.
+
+This lane intentionally ran no tests, lint, type checks, builds, packaging, installer execution,
+runtime interaction, reviews, audits, or UI captures. Read-only source and history inspection was
+used to locate the shutdown boundary. The integration owner must evaluate the exact commit and the
+follow-up GitHub Actions run before treating this repair as verified.
+## 2026-08-27, VS2022 Spectre toolchain selection for native npm builds
+
+The fresh full checkout build for version `0.4.121` ran `build.bat /s` and exited `1` during the
+npm postinstall path for `electron-rebuild` and `node-pty`. The diagnostic was `MSB8040`, which
+requires the Spectre-mitigated libraries. Bootstrap discovery found Node `24.19.0`, Python
+`3.13`, and the required x86/x64 Spectre libraries in the VS2022 toolset `14.44.35207`, but the
+native build selected `C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Microsoft\VC\v180`,
+where the matching Spectre libraries were absent.
+
+The cause was that `download-dependencies.bat` validated the supported VS2022 toolchain but left
+node-gyp and npm free to auto-select the newer VS18 installation. The repair sets both
+`GYP_MSVS_VERSION=2022` and `npm_config_msvs_version=2022` immediately after successful VS2022
+validation, including the interactive post-UAC path, and exports both values through the final
+`endlocal` handoff so later npm, node-gyp, and electron-rebuild commands receive the same choice.
+The script does not modify global npm configuration, Visual Studio, or Spectre mitigation.
+
+No tests, checkers, lint, type checks, builds, packaging, installer execution, runtime interaction,
+reviews, audits, or UI captures were run in this lane. The manual build result above is the source
+diagnostic, not a post-repair verification. The coordinating owner must run the supported build
+path and inspect the resulting GitHub Actions run before claiming the repair verified.
+
 ## 2026-08-27, notification preparation and relay argument punctuation repair
 
 Release run `33128741581` at `7117d7bc97b6a7a7f83f0d4607d30a018b741922` passed all repository,
