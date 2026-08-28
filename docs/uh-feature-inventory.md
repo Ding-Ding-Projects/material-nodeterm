@@ -53,7 +53,7 @@ and then never edited this file.
 | School mode | `src/core/school-mode.ts` | `docs/school-mode.md` | `src/core/school-mode.test.ts` |
 | Kids mode | `src/core/kids-mode.ts` | `docs/kids-mode.md` | `src/core/kids-mode.test.ts` |
 | Narrator, with a voice picker per language | `src/renderer/canvas/narration-policy.ts` | `docs/narrator.md` | `src/renderer/canvas/narration-policy.test.ts` |
-| Scheduled settings, incl. external sources and transient layout/appearance effects | `src/core/scheduled-settings-runtime.ts`, `src/renderer/canvas/Canvas.tsx`, `src/renderer/lib/appearance/apply.ts` | `docs/scheduled-settings.md` | `src/core/scheduled-settings-runtime.test.ts` |
+| Scheduled settings, incl. external sources | `src/core/scheduled-settings-runtime.ts`, `src/renderer/canvas/Canvas.tsx`, `src/renderer/lib/appearance/apply.ts` (schema v2 transient layout and appearance effects) | `docs/scheduled-settings.md` | `src/core/scheduled-settings-runtime.test.ts` |
 | Dim sum surprise | `src/renderer/components/DimSumSurprise.tsx` | `docs/dim-sum.md` | `src/renderer/components/DimSumSurprise.test.tsx` |
 | Regex builder, anchored beside every search | `src/renderer/components/regex/AnchoredRegexBuilder.tsx` | `docs/regex-builder.md` | `scripts/check-app-contract.mjs` (`regex-builder` row asserts the builder is wired into five real search surfaces — no behavioral suite exists) |
 | ADHD modes | `src/renderer/lib/adhdModes.ts` | `docs/adhd-modes.md` | `src/renderer/lib/adhdModes.test.ts` |
