@@ -64,8 +64,8 @@ describe('parseControlRequest', () => {
       verb: 'send', args: { node: 'n2', subject: 'NOTICE', text: 'hello' }
     })
     expect(parseControlRequest('reply', { message: 'msg-1' })).toEqual({ error: 'reply requires --text' })
-    expect(parseControlRequest('reply', { message: 'msg-1', text: 'ack' })).toEqual({
-      verb: 'reply', args: { message: 'msg-1', text: 'ack' }
+    expect(parseControlRequest('reply', { node: 'n2', message: 'msg-1', text: 'ack' })).toEqual({
+      verb: 'reply', args: { node: 'n2', message: 'msg-1', text: 'ack' }
     })
     expect(parseControlRequest('status', {})).toEqual({ error: 'status requires --message <id>' })
     expect(parseControlRequest('status', { message: 'msg-1' })).toEqual({
@@ -349,8 +349,8 @@ describe('parseControlRequest', () => {
   })
 
   it('send/reply require --text (Task 5.4)', () => {
-    expect(parseControlRequest('send', { node: 'n1' })).toEqual({ error: 'send requires --text' })
-    expect(parseControlRequest('reply', { node: 'n1' })).toEqual({ error: 'reply requires --text' })
+    expect(parseControlRequest('send', { node: 'n1' })).toEqual({ error: 'send requires --subject' })
+    expect(parseControlRequest('reply', { node: 'n1' })).toEqual({ error: 'reply requires --message <id>' })
   })
 
   it('the shim maps a bare positional onto arg.node for send/reply/sticky too', () => {
@@ -537,13 +537,9 @@ describe('the strict identity bucket now gates a real verb', () => {
     expect(STRICT_CONTROL_VERBS.has('browser')).toBe(true)
   })
 
-  it('is NOT yet documented to any agent (no drive session exists to execute it)', () => {
-    // There is no execution path for `browser` yet: no drive session, no renderer executor case
-    // in Canvas.tsx, so a call from an agent following the skill/AGENTS.md instructions would
-    // always fail. Advertising an always-failing verb is worse than omitting it; this pins that
-    // the docs stay silent about `browser` until the drive path lands.
-    expect(buildCanvasSkillBody('/x/shim.sh')).not.toContain('`browser ')
-    expect(buildCanvasControlInstructions('/tmp/nodeterm.sh')).not.toContain('`browser ')
+  it('is documented to agents with its verified-only boundary', () => {
+    expect(buildCanvasSkillBody('/x/shim.sh')).toContain('`browser --node <id> <one action>')
+    expect(buildCanvasControlInstructions('/tmp/nodeterm.sh')).toContain('`browser --node <id> <one action>')
   })
 
   it('`open-browser` IS a real verb and is deliberately NOT in the bucket', () => {
@@ -566,19 +562,19 @@ describe('the strict identity bucket now gates a real verb', () => {
  */
 describe('the messaging verbs parse', () => {
   it('send and reply accept a target and require one', () => {
-    expect(parseControlRequest('send', { node: 'n-1', text: 'hi' })).toEqual({
+    expect(parseControlRequest('send', { node: 'n-1', subject: 'NOTICE', text: 'hi' })).toEqual({
       verb: 'send',
-      args: { node: 'n-1', text: 'hi' }
+      args: { node: 'n-1', subject: 'NOTICE', text: 'hi' }
     })
-    expect(parseControlRequest('reply', { node: 'n-1', text: 'hi' })).toEqual({
+    expect(parseControlRequest('reply', { node: 'n-1', message: 'm-1', text: 'hi' })).toEqual({
       verb: 'reply',
-      args: { node: 'n-1', text: 'hi' }
+      args: { node: 'n-1', message: 'm-1', text: 'hi' }
     })
     expect(parseControlRequest('send', { text: 'hi' })).toEqual({
       error: 'send requires --node <id>'
     })
     expect(parseControlRequest('reply', { text: 'hi' })).toEqual({
-      error: 'reply requires --node <id>'
+      error: 'reply requires --message <id>'
     })
   })
 

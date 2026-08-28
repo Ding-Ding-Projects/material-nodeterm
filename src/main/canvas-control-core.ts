@@ -358,9 +358,9 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '',
     'Verbs:',
     '- `list` — current nodes (id, kind, title). Start here when you need a node id.',
-    '- `open-terminal [--count N] [--cwd P] [--cmd C] [--group <id>] [--after <id,id>]` — open N plain terminals.',
-    '- `open-claude [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]` — open N Claude sessions.',
-    '- `open-agent --agent claude|codex|gemini|opencode|<custom-id> [--resume <session-id>] [--account system|<id>] [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]` — open',
+    '- `open-terminal [--count N] [--cwd P] [--cmd C] [--group <id>] [--after <id,id>] [--project <id>]` — open N plain terminals.',
+    '- `open-claude [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>] [--project <id>]` — open N Claude sessions.',
+    '- `open-agent --agent claude|codex|gemini|opencode|<custom-id> [--resume <session-id>] [--account system|<id>] [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>] [--project <id>]` — open',
     '- `open-terminal [--count N] [--cwd P] [--cmd C] [--group <id>] [--after <id,id>] [--project <id>]` — open N plain terminals.',
     '- `open-claude [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>] [--project <id>]` — open N Claude sessions.',
     `- \`open-agent --agent ${agentChoices} [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>] [--project <id>]\` — open`,
@@ -679,9 +679,9 @@ value is allowed anywhere on the line, not only at the end.
 
 Verbs:
 - \`list\` — list current nodes (id, kind, title). Start here when you need a node id.
-- \`open-terminal [--count N] [--cwd P] [--cmd C] [--group <id>] [--after <id,id>]\` — open N plain terminals (default 1).
-- \`open-claude [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]\` — open N Claude sessions (default 1).
-- \`open-agent --agent claude|codex|gemini|opencode|<custom-id> [--resume <session-id>] [--account system|<id>] [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>]\` — open N sessions of any agent CLI.
+- \`open-terminal [--count N] [--cwd P] [--cmd C] [--group <id>] [--after <id,id>] [--project <id>]\` — open N plain terminals (default 1).
+- \`open-claude [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>] [--project <id>]\` — open N Claude sessions (default 1).
+- \`open-agent --agent claude|codex|gemini|opencode|<custom-id> [--resume <session-id>] [--account system|<id>] [--count N] [--cwd P] [--prompt T] [--group <id>] [--after <id,id>] [--project <id>]\` — open N sessions of any agent CLI.
   \`--resume\` opens exactly one existing session with the agent's native resume command.
   **Restore rule:** when an existing session id is known, you MUST pass it with \`--resume\`.
   A prompt-only node plus a renamed title is a new conversation, never a restored session.
