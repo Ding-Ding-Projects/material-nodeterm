@@ -12836,6 +12836,8 @@ button.term-node__title-text:focus-visible {
 }
 .mdx-row {
   border-radius: var(--md-shape-small);
+}
+
 /* ============================================================================================
    Desktop legacy-control remediation
    ============================================================================================
@@ -12905,6 +12907,8 @@ button.term-node__title-text:focus-visible {
 }
 .mc-link--danger {
   color: var(--md-error);
+}
+
 /* Unified Node Catalog. The dialog owns its own bounded list and the search field keeps the
    anchored regex trigger beside the exact corpus it filters. */
 .mdx-dialog.node-catalog-dialog {
@@ -13545,6 +13549,7 @@ button.term-node__title-text:focus-visible {
   .cdk-manager__availability { text-align: left; }
   .cdk-manager__folder-row > input,
   .cdk-manager__folder-row > button { width: 100%; flex-basis: 100%; }
+}
 
 .kiosk-pwa-setup-dialog {
   width: min(680px, calc(100vw - 32px));
@@ -13762,6 +13767,11 @@ button.term-node__title-text:focus-visible {
 
 .cloudformation-manager__rows {
   display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+}
+
 /* AWS identity manager. Every picker is a real list with its own search and anchored regex
    builder. The card keeps long endpoint and SSO values readable without leaking into the canvas. */
 .aws-identity {
@@ -13851,6 +13861,10 @@ button.term-node__title-text:focus-visible {
 
 .cloudformation-manager button:focus-visible,
 .cloudformation-manager input:focus-visible {
+  outline: 3px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
 .aws-identity__choices button,
 .aws-identity__endpoint-list button,
 .aws-identity__summary button,
