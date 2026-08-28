@@ -1,5 +1,32 @@
 # Handoff
 
+## 2026-08-28, renderer, remote-tail, hook, and cache repair batch
+
+The following task repairs are now dewed to `main`, with the hui ref matching the current tip
+`3f9c12823873e004abba78c026c5dec58c3de5d5`:
+
+- `e92218ffc58745f5d368b6a5286063e40a902dff` restores the FAB menu's settings and active-project
+  selectors and removes duplicate imports. Its focused Chut passes 7 of 7 tests.
+- `4873dc4b254a2731bd9aa871f9da529fa2018f25` updates remote context-tail fixtures to the current
+  `readTailWithSize` first-read contract. Its focused Chut passes 4 of 4 tests.
+- `23fe82ff233e1d61b7ee3e4fcd7ebe7cce873749` removes duplicate hook-server imports and repairs
+  endpoint payload assembly.
+- `7579c9bec9125be31a4bfa82aad5690ab67be67d` aligns endpoint-file assertions with quoted v2
+  output and the Deen No permission model. The focused endpoint set passes 19 executed tests,
+  with 1 explicit POSIX-shell skip because `/bin/sh` is unavailable on this host.
+- `4ebaadc50266c136ccf81d056e1052200d46cd9c` removes a duplicate cache publication call. The
+  cache Chut passes 9 of 9 tests.
+- `a06b238dee516ac2eeb12cc52152866d4251c204` removes duplicate atomic-helper imports from the
+  Codex hook and node-token writers.
+- `3f9c12823873e004abba78c026c5dec58c3de5d5` removes remaining duplicate import fragments from
+  the scrollback, whisper-model, and universe-door modules.
+
+The complete node type-check remains red because unrelated duplicate declarations and integration
+type mismatches remain elsewhere in the codebase. The full local suite remains red with 164 failed
+files, 763 failed tests, 14 unhandled errors, 11,910 passed tests, and 260 skipped tests. These
+focused repairs do not claim that either broader Chut is green. The nested `upstream/nodeterm`
+checkout and the recovery Gerk Tong Hui remain preserved and untouched.
+
 ## 2026-08-28, published release and final preservation state
 
 The current `main` tip is `c2acffb963468be3cb1f539e7e8a24f0cc1582d8`, and the hui ref matches it.
