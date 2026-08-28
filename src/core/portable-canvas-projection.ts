@@ -550,7 +550,11 @@ export function projectToPortableCanvasV3(project: Project, input: PortableCanva
   if (children.length + 1 > PORTABLE_CANVAS_LIMITS.maxCanvases) throw new PortableProjectV3Error('entry-limit', 'Portable canvas count exceeds its bound.')
   const canvases = [root, ...children].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
   const icon = project.icon && sanitizeProjectIcon(project.icon)
-  const portableIcon = icon?.type === 'emoji' ? { type: icon.type, name: icon.emoji } : icon ? { type: icon.type, name: icon.name } : undefined
+  const portableIcon = icon?.type === 'emoji'
+    ? { type: icon.type, name: icon.emoji }
+    : icon?.type === 'material-symbol'
+      ? { type: icon.type, name: icon.name }
+      : undefined
   const doorCanvasIds = new Set(canvases.map((canvas) => canvas.id))
   const derivedDoors = input.doors === undefined
     ? project.portals?.flatMap((portal) => createPortableUniverseDoorPair({
