@@ -1,10 +1,9 @@
 import { promises as fs } from 'fs'
 import { randomUUID } from 'node:crypto'
 import path from 'path'
-import { writeFileAtomic } from './fs-atomic'
+import { renameAtomic, sweepStaleTempFiles, tempNameFor, writeFileAtomic } from './fs-atomic'
 import { IPC } from '../shared/ipc'
 import { platform } from './platform'
-import { renameAtomic, sweepStaleTempFiles, tempNameFor } from './fs-atomic'
 import {
   DEFAULT_PROJECT_ID, EMPTY_WORKSPACE,
   type CanvasNodeState, type Link, type Project, type Workspace, type WorkspaceV1
@@ -373,7 +372,7 @@ export class WorkspaceStore {
               capabilityAck: e.capabilityAck,
               breadcrumbs: e.breadcrumbs,
               settingsOverrides: e.settingsOverrides,
-              localExec: this.execOverlay(e, p)
+              localExec: this.execOverlay(e)
             })
           })
         } else {
@@ -399,7 +398,7 @@ export class WorkspaceStore {
               capabilityAck: e.capabilityAck,
               breadcrumbs: e.breadcrumbs,
               settingsOverrides: e.settingsOverrides,
-              localExec: this.execOverlay(e, e.cache)
+              localExec: this.execOverlay(e)
             })
           })
         } else {
@@ -1174,8 +1173,8 @@ export class WorkspaceStore {
     if (!result.ok) return { ok: false, reason: result.detail ?? 'join failed' }
     const read = await this.readProjectFile(cwd, false)
     if (read) this.lastWritten.set(singleFile, read.raw)
-     return { ok: true }
-   }
+    return { ok: true }
+  }
 
   /**
    * Is this folder's `.nodeterm/project.json` genuinely gone, merely unreadable, or fine?

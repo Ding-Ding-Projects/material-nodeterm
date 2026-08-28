@@ -35,7 +35,12 @@ import {
   type PublicDevice,
   type RelayPairingBlock
 } from './pairing-core'
-import type { DeviceRevokeResult, DeviceRevokeServerOutcome, Settings } from '../shared/types'
+import type {
+  DeviceRevokeResult,
+  DeviceRevokeServerOutcome,
+  PairingDoneResult,
+  Settings
+} from '../shared/types'
 import { publicKeyToB64, deriveSharedKey, encrypt, decrypt, type KeyPair } from './remote/e2ee'
 import { hostIdFromPublicKeyB64 } from './remote/relay-id'
 import { getDeviceId } from '../core/device-id'
@@ -303,6 +308,7 @@ async function sweepStaleAgentTmp(): Promise<void> {
   } catch {
     // A dir we cannot read is not a reason to fail (or skip) the write below.
   }
+}
 }
 
 /** Detect the machine's display name (macOS ComputerName, else hostname). */

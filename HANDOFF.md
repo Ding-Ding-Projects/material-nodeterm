@@ -68,6 +68,74 @@ Next actions:
    branch and explicitly depends on this recovery finishing.
 7. Preserve the unrelated primary-checkout edit in `src/main/codex-accounts.ts` and the named
    preservation stash. They were not created by this recovery integration.
+## 2026-08-27, session budget documentation review follow-up
+
+Copilot review comment [#207 discussion 3877552877](https://github.com/Ding-Ding-Projects/material-nodeterm/pull/207#discussion_r3877552877)
+identified a stale sentence in the `src/core/session-budget.ts` policy documentation. The sentence
+said an attached session was never eligible, while the actual `planReap()` path uses pane output
+silence past `graceSec` and does not consult `clients`.
+
+The follow-up changes only that documentation block. It now states that an attached session may be
+reaped after its pane remains silent past the grace period, while a keystroke refreshes the output
+clock. No policy behavior, configuration value, caller, or reaping operation changed.
+
+Changed files: `src/core/session-budget.ts` and `HANDOFF.md`.
+
+This follow-up intentionally ran no tests, builds, reviews, or UI captures. The source-only change is
+ready for the coordinating owner to integrate and observe through the hosted workflow.
+
+## 2026-08-28, workspace store parser repair
+
+Release run `33136945595` and build check `33136931071` stopped while parsing
+`src/core/workspace-store.ts:396:14` with `Expected '}' but found breadcrumbs`. The `loadV3`
+project-entry mappings had a truncated merge generation in both the local-folder and SSH-cache
+paths: each carried one complete settings and execution mapping followed by a duplicate
+`breadcrumbs`, `capabilityAck`, and `localExec` block, and the duplicate local execution calls
+passed an obsolete second argument.
+
+The repair keeps one coherent mapping per path. It preserves the index entry identity, closed
+state, viewport, default account, capability acknowledgement, breadcrumbs, settings overrides,
+and the validated machine-local execution overlay. The SSH path keeps the same cache
+canonicalization and uses the same overlay boundary. No caller or persistence behavior outside
+this `loadV3` function was changed.
+
+Changed files: `src/core/workspace-store.ts` and `HANDOFF.md`.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, reviews,
+audits, runtime interaction, or UI captures. The retained generation and parser repair remain
+unverified until the coordinating owner integrates the lane and observes a fresh hosted build.
+
+合併碎片今次收返一條龍：local folder 同 SSH cache 各自保留一份完整 mapping，breadcrumbs、
+capability acknowledgement、settings overrides 同 local execution overlay 全部留低，重複
+欄位同過時參數就唔再同 parser 玩椅仔樂。今次冇跑 tests、build 或 packaging，所以 hosted
+編譯同 manual release 仍然未驗證。
+
+## 2026-08-27, session budget parser repair
+
+Release run `33135784814` stopped while parsing `src/core/session-budget.ts` at line 264 with
+`Expected '}' but found maxDetached`. The source had two merged budget-object generations, including
+competing `graceSec` and `batchMax` entries, a missing comma, two eligibility declarations, and two
+listing calls with the same local name.
+
+The repair keeps the host-derived `maxDetached` cap, the legacy `NODETERM_SESSION_MAX_DETACHED`
+fallback, the newer `NODETERM_SESSION_MAX_IDLE` override, the documented 24-hour grace period, the
+validated fractional-hour environment parser, the bounded batch size of 8, the swap and PSI pressure
+settings, and the existing disabled switch. Reaping keeps the current output-silence clock and does
+not use tmux attachment as a live-work signal. The duplicate session-list generation is removed so
+`list-windows -a` remains the single source that supplies pane output timestamps, and kill-time
+revalidation uses that same timestamp. Existing shadow-client normalization, socket traversal,
+exact-match kills, and caller signatures are unchanged.
+
+Changed files: `src/core/session-budget.ts` and `HANDOFF.md`.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, reviews, audits,
+runtime interaction, or UI captures. The repair is committed on `fix/session-budget-parser` from
+`origin/main` at `6e4a663cfc87517158b40c45a1e166ca4d4d1798`; hosted compilation and the manual release
+remain unverified until the coordinating owner integrates the lane.
+
+合併碎片今次收返一條龍：derived cap、24 小時 grace、batch 8 同環境變數驗證全部留低，重複
+budget object 同兩套 tmux listing 就唔再爭咪。Reaper 繼續睇 pane output silence，唔會畀 attachment
+呢個假訊號扮忙；不過今次冇跑 tests、build 或 packaging，未可以當 release 已經驗證。
 
 ## 2026-08-28, native child toolchain binding repair
 
@@ -4128,6 +4196,51 @@ This ultra-speed lane intentionally ran no tests, type checks, lint, builds, pac
 interaction, accessibility or security audits, reviews, or captures. The parent integration lane
 must supply every verification verdict and release evidence before describing the feature as
 verified.
+
+# 2026-08-28, GitHub control dead-validator follow-up
+
+Copilot review comment [discussion_r3877552847](https://github.com/Ding-Ding-Projects/material-nodeterm/pull/207#discussion_r3877552847)
+identified the local `validToken()` helper in `src/main/github-control.ts` as dead code. All live
+credential paths already use `validGitHubToken`, so the helper was removed without changing token
+validation, encryption, restricted-file storage, locking, atomic writes, host checks, or IPC behavior.
+
+Changed files: `src/main/github-control.ts` and `HANDOFF.md`.
+
+This follow-up ran no tests, checkers, lint, type checks, builds, packaging, reviews, audits, runtime
+interaction, or UI captures. The repair remains unverified until the coordinating owner observes the
+hosted build and reruns the manual release path.
+
+# 2026-08-28, GitHub control parser boundary repair
+
+The GitHub control module at `6e4a663cfc87517158b40c45a1e166ca4d4d1798` contained merge remnants
+that made the TypeScript parser report `Unexpected export` at `src/main/github-control.ts:39:0`.
+The source had a duplicated credentials import, an unterminated `GitHubSecretError` constructor,
+an active duplicate token document and secret-store error block, an unterminated atomic-write
+helper, and a duplicate `saveNow` implementation inserted into the first method.
+
+The repair restores one coherent implementation boundary, retaining the typed GitHub credential
+store, encrypted and restricted-file storage, atomic writes and cleanup, cross-process locking,
+host access checks, provider selection, approval and revocation, token save and clear operations,
+and all existing IPC callers. The duplicate generation is retained only as the existing commented
+historical block, matching the established repair shape without changing runtime behavior.
+
+Changed files: `src/main/github-control.ts` and `HANDOFF.md`.
+
+This bounded parser repair ran no tests, checkers, lint, type checks, builds, packaging, reviews,
+audits, runtime interaction, or UI captures. The coordinating owner must reconcile the repair with
+the current default branch, observe hosted build verification, and rerun the manual release path
+before making a release claim.
+
+# 2026-08-28, PTY manager review follow-up
+
+Copilot review comment `https://github.com/Ding-Ding-Projects/material-nodeterm/pull/206#discussion_r3877439420`
+identified an orphaned duplicate doc-comment block immediately after the `ConfirmedProcessRun` type
+in `src/core/pty-manager.ts:222`. The follow-up removes only that comment block. The single type and
+all PTY, SSH, relay, session-host, lifecycle, and shutdown behavior remain unchanged.
+
+No tests, checkers, lint, type checks, builds, packaging, reviews, audits, runtime interaction, or UI
+captures were run in this lane. The coordinating owner must observe the hosted workflow after this
+follow-up before treating the repair as verified.
 # Issue #60, Cloudflare Tunnel wizard source lane
 
 The isolated `feat/program-49-tunnel-wizard` lane adds the bounded wizard contract in
@@ -4555,3 +4668,24 @@ This lane started from the fetched remote default-branch tip `bd2696e9e4ef3bd267
 checkers, lint, type checks, builds, packaging, reviews, audits, runtime interaction, or UI captures
 were run. Hosted verification remains required before the repair or the manual release is treated as
 verified.
+
+# 2026-08-28, pairing service parser repair
+
+The manual release candidate build at `04268871a09fb106bd32f9c5431da8fce2d7d678` stopped during the
+application build at `src/main/pairing-service.ts:406:0` with `Unexpected export`. The file also contained
+three duplicated import groups, a missing closing brace around the `readAgentJson` object-shape check,
+and two competing pairing persistence splices. The competing splice would append the authorized key and
+persist the device before the encrypted response and cancellation checks, then repeat both operations in
+the retained registry-first path.
+
+The repair keeps one import set, closes the object-shape check and the adjacent temporary-file helper at
+their intended boundaries, and retains the current encrypted response, single-use attempt claim,
+registry-first persistence, cancellation rollback, SSH authorization, relay provisioning, and test-hook
+barriers. `relayDeviceId` remains persisted on the retained device record and the relay mint still uses
+the validated dependency object. No behavior outside `src/main/pairing-service.ts` was changed.
+
+Changed files: `src/main/pairing-service.ts` and `HANDOFF.md`.
+
+This ultra-speed parser lane deliberately ran no tests, checkers, lint, type checks, builds, packaging,
+reviews, audits, runtime interaction, or UI captures. The repair and the manual release remain unverified
+until the coordinating owner integrates this commit and observes the hosted workflow.

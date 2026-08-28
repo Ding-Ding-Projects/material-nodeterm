@@ -112,8 +112,7 @@ export interface SessionBudgetConfig {
   minAvailableMb: number
   /** Backstop: max idle-past-grace nt- sessions across sockets; excess is reaped without pressure. */
   maxIdle: number
-  /** A session with activity newer than this is never reaped. Sole guard — see the header. */
-  /** Backstop: max detached nt- sessions across sockets; excess is reaped even without pressure. */
+  /** Host-scaled detached cap retained for callers that inspect the derived budget. */
   maxDetached: number
   /**
    * Swap term: pressure when the free fraction of swap falls to or below this AND available memory
@@ -260,7 +259,7 @@ export function sessionBudgetConfig(
     minAvailableMb: envInt(env, 'NODETERM_SESSION_MIN_AVAILABLE_MB', Math.max(1024, Math.round(totalMb * 0.1))),
     maxIdle: envInt(env, 'NODETERM_SESSION_MAX_IDLE', envInt(env, 'NODETERM_SESSION_MAX_DETACHED', 48)),
     maxDetached: envInt(env, 'NODETERM_SESSION_MAX_DETACHED', derivedCap),
-    graceSec: envHours(env, 'NODETERM_SESSION_GRACE_HOURS', 6),
+    graceSec: envHours(env, 'NODETERM_SESSION_GRACE_HOURS', 24),
     batchMax: envInt(env, 'NODETERM_SESSION_REAP_BATCH', 8),
     // Percentages, so `envInt`'s `>= 1` floor is not the trap it is for a cap: 0 and junk both fall
     // back to the default, and an operator who wants the term OFF sets the ratio via a value the
@@ -330,13 +329,13 @@ export function hostUnderMemoryPressure(mem: MemInfo | null, cfg: SessionBudgetC
  * A deliberate trade-off rides on that clock: PASSIVELY VIEWING a session no longer protects it.
  * Attaching and reading a pane without pressing a key moves neither `window_activity` (measured —
  * attach does not bump it) nor, therefore, `outputSec`, so a long-silent session someone glanced at
- * an hour ago is still eligible. Accepted because the exposure is narrow — an ATTACHED session is
- * never eligible at all, a single keystroke's echo restamps the clock, and the grace window still
- * applies — and because the alternative is the attach clock this module just stopped trusting.
+ * an hour ago is still eligible. Accepted because attachment does not distinguish live attention on
+ * a canvas: an attached session can still be reaped when its pane stays silent past grace. A single
+ * keystroke's echo restamps the clock, and the grace window still applies, while the alternative is
+ * the attach clock this module just stopped trusting.
  *
- * Eligible = named `nt-*` AND idle past the grace window. Attachment is deliberately NOT consulted
+ * Eligible = named `nt-*` AND silent past the grace window. Attachment is deliberately NOT consulted
  * — see the header for why it separated nothing on a canvas app. Then:
- * Eligible = named `nt-*` AND detached AND silent past the grace window. Then:
  *   - memory below the watermark → up to `batchMax` (a failed memory read — `mem === null` — is
  *     NOT pressure: absence of evidence never triggers the primary path);
  *   - `externalPressure` → the same allowance, for a resource this module cannot measure (today:
