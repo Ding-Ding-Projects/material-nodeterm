@@ -299,7 +299,7 @@ function validatePortableCommentArchive(entries: ReadonlyMap<string, Uint8Array>
   for (const logPath of ['comments/board-log.jsonl.1', 'comments/board-log.jsonl']) {
     const data = entries.get(logPath)
     if (!data) continue
-    for (const line of data.toString('utf8').split('\n')) {
+    for (const line of Buffer.from(data).toString('utf8').split('\n')) {
       if (!line.trim()) continue
       let parsed: unknown
       try { parsed = JSON.parse(line) } catch { throw new PortableProjectV3Error('manifest', `Portable comment history contains malformed JSON in ${logPath}.`) }
