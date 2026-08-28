@@ -12,7 +12,7 @@ import type { CanvasNodeState, PendingLaunch, Project } from '../shared/types'
  * `src/renderer/state/workspace.cold-open.test.ts`.
  */
 describe('cold-open pin (c): pendingLaunch survives the disk round-trip', () => {
-  it('projectToFile → serialize → parse → fileToProject keeps pendingLaunch', () => {
+  it('projectToFile → serialize → parse → fileToProject omits machine-local pendingLaunch', () => {
     const pending: PendingLaunch = {
       after: [],
       launchId: '123e4567-e89b-42d3-a456-426614174000',
@@ -40,6 +40,6 @@ describe('cold-open pin (c): pendingLaunch survives the disk round-trip', () => 
     const file = projectToFile(project, 1, new Date(0).toISOString())
     const parsed = JSON.parse(serializeProjectFile(file))
     const loaded = fileToProject(parsed, { id: 'project-a', cwd: '/tmp/repoA' })
-    expect(loaded.nodes[0].pendingLaunch).toEqual(pending)
+    expect(loaded.nodes[0].pendingLaunch).toBeUndefined()
   })
 })
