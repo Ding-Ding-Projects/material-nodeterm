@@ -309,9 +309,11 @@ export function DictationOverlay({ target, stopSignal, onClose, onOpenLicense }:
     return createPortal(
       <div className="dictation dictation--warning nodrag nowheel" onMouseDown={(e) => e.stopPropagation()}>
         <span className="dictation__warning-text">
-          {mode === 'no-model'
-            ? 'Dictation is off — choose a Whisper model in Settings → Speech.'
-            : 'Select a terminal node first.'}
+          {vocab(
+            mode === 'no-model'
+              ? 'Dictation is off — choose a Whisper model in Settings → Speech.'
+              : 'Select a terminal node first.'
+          )}
         </span>
         <button type="button" className="dictation__close" title={vocab('Dismiss')} onClick={handleClose}>
           ×

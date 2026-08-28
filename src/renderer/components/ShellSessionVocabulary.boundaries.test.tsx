@@ -165,20 +165,26 @@ describe('shell and session vocabulary boundaries', () => {
   })
 
   it('maps StatusSurface search and card copy using the same live corpus', () => {
-    usePersonalVocabulary.setState({ entries: { Typecheck: 'Typecheck translated' }, status: 'loaded', entryCount: 1 })
+    usePersonalVocabulary.setState({ entries: { 'Built-app captures': 'Capture report' }, status: 'loaded', entryCount: 1 })
     mount(<StatusSurface />)
-    expect(host?.textContent).toContain('Typecheck translated')
+    expect(host?.textContent).toContain('Capture report')
     const input = host?.querySelector<HTMLInputElement>('.md3-status-search__input')
     if (!input) throw new Error('missing status search')
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
     act(() => {
-      setter?.call(input, 'translated')
+      setter?.call(input, 'report')
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(host?.querySelectorAll('.status-card')).toHaveLength(1)
     act(() => useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' }))
-    expect(host?.textContent).toContain('Typecheck')
-    expect(host?.textContent).not.toContain('Typecheck translated')
+    const restoredSearch = host?.querySelector<HTMLInputElement>('.md3-status-search__input')
+    const restoredSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    act(() => {
+      restoredSetter?.call(restoredSearch, '')
+      restoredSearch?.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(host?.textContent).toContain('Built-app captures')
+    expect(host?.textContent).not.toContain('Capture report')
   })
 
   it('maps the phone pairing shell but never changes its live code', async () => {
@@ -290,15 +296,16 @@ describe('shell and session vocabulary boundaries', () => {
   })
 
   it('maps DictationOverlay warning copy through the session provider boundary', () => {
-    usePersonalVocabulary.setState({ entries: { 'Select a terminal node first.': 'Choose a shell box first' }, status: 'loaded', entryCount: 1 })
+    const warning = 'Dictation is off — choose a Whisper model in Settings → Speech.×'
+    usePersonalVocabulary.setState({ entries: { 'Dictation is off — choose a Whisper model in Settings → Speech.': 'Dictation unavailable' }, status: 'loaded', entryCount: 1 })
     mount(
       <SessionContext.Provider value={{ id: 'test', source: 'local', label: 'test', api: {} as any, status: 'connected' }}>
         <DictationOverlay target={null} stopSignal={0} onClose={() => {}} onOpenLicense={() => {}} />
       </SessionContext.Provider>
     )
-    expect(document.body.textContent).toContain('Choose a shell box first')
+    expect(document.body.textContent).toContain('Dictation unavailable')
     act(() => useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' }))
-    expect(document.body.textContent).toContain('Select a terminal node first.')
+    expect(document.body.textContent).toContain(warning)
   })
 
   it('maps SessionsSidebar empty state and follows a live School change', () => {
