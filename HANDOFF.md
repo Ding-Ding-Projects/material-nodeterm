@@ -3855,6 +3855,27 @@ This ultra-speed lane intentionally ran no tests, type checks, lint, builds, pac
 interaction, accessibility or security audits, reviews, or captures. The parent integration lane
 must supply every verification verdict and release evidence before describing the feature as
 verified.
+
+# 2026-08-28, GitHub control parser boundary repair
+
+The GitHub control module at `6e4a663cfc87517158b40c45a1e166ca4d4d1798` contained merge remnants
+that made the TypeScript parser report `Unexpected export` at `src/main/github-control.ts:39:0`.
+The source had a duplicated credentials import, an unterminated `GitHubSecretError` constructor,
+an active duplicate token document and secret-store error block, an unterminated atomic-write
+helper, and a duplicate `saveNow` implementation inserted into the first method.
+
+The repair restores one coherent implementation boundary, retaining the typed GitHub credential
+store, encrypted and restricted-file storage, atomic writes and cleanup, cross-process locking,
+host access checks, provider selection, approval and revocation, token save and clear operations,
+and all existing IPC callers. The duplicate generation is retained only as the existing commented
+historical block, matching the established repair shape without changing runtime behavior.
+
+Changed files: `src/main/github-control.ts` and `HANDOFF.md`.
+
+This bounded parser repair ran no tests, checkers, lint, type checks, builds, packaging, reviews,
+audits, runtime interaction, or UI captures. The coordinating owner must reconcile the repair with
+the current default branch, observe hosted build verification, and rerun the manual release path
+before making a release claim.
 # Issue #60, Cloudflare Tunnel wizard source lane
 
 The isolated `feat/program-49-tunnel-wizard` lane adds the bounded wizard contract in
