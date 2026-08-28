@@ -903,7 +903,9 @@ export function createAgentNode(
   // command line stays byte-identical to what it has always been, and the node falls back to
   // learning its id from hooks exactly as before.
   const mintedSessionId =
-    mintsSessionId(agentId) && claudeCliCapsNow().sessionIdFlag ? uuid() : undefined
+    mintsSessionId(agentId) && (agentId !== 'claude' || claudeCliCapsNow().sessionIdFlag)
+      ? uuid()
+      : undefined
   const launchPlan =
     typeof resolvedLaunchPlan === 'object' ? resolvedLaunchPlan : undefined
   const explicitPermissionMode =
