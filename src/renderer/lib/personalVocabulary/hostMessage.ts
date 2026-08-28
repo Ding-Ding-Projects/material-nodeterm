@@ -4,6 +4,7 @@ import {
 } from './schema'
 import { applyVocabulary } from './apply'
 import { useSchoolMode } from '../../state/schoolMode'
+import { readLocal } from '../localStore'
 
 /** A host message is deliberately split into app-authored copy and verbatim runtime facts. */
 export type HostMessagePart =
@@ -64,9 +65,8 @@ function currentHostSchoolState(): HostVocabularySchoolState {
 /** Read the validated local cache for non-React entrypoints. A missing, stale, malformed, or
  * unavailable browser store returns an empty dictionary, which preserves original wording. */
 export function readLocalVocabularyEntries(now = Date.now()): PersonalVocabularyEntries {
-  if (typeof localStorage === 'undefined') return Object.create(null) as PersonalVocabularyEntries
   try {
-    const raw = localStorage.getItem(CACHE_KEY)
+    const raw = readLocal(CACHE_KEY)
     if (!raw) return Object.create(null) as PersonalVocabularyEntries
     const parsed = validateVocabularyCachePayload(raw)
     if (!parsed.ok) return Object.create(null) as PersonalVocabularyEntries
