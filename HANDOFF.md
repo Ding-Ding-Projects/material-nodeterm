@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-08-27, browser registration callback closure repair
+
+Release run `33128093384` at `61afa6a19c7f159780073eb91efa2dbefd463420` failed during the application
+build at `src/main/index.ts:1975:2` with `Unexpected ")"`. The `IPC.browserRegister` callback opened
+an arrow-function block, then closed only its nested `if (accepted ...)` block before the
+`ipcMain.on` closing parenthesis. The adjacent `IPC.browserUnregister` handler had its own complete
+callback boundary.
+
+The repair adds the one missing callback `}` at the correct indentation and preserves the
+`registerBrowserGuestRequest` call, its lookup and refusal callback, and the
+`browserUseBackend.register` arguments and behavior. No browser registration refactor or duplicate
+handler change was made. AWS, Cloudflare, hosted services, diagnostics, updater, account, relay,
+and no-signing registrations remain untouched.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, audits, or UI captures. Read-only source scans inspected
+the browser registration and unregistration boundaries. The integration owner must evaluate the
+exact commit and follow-up GitHub Actions run before treating this repair as verified.
+
 ## 2026-08-27, main-process keyboard interception repair
 
 Release run `33127262674` at `35f76e8fdb8a6921fc7dc2a3caf9ddb2d3ec93cb` passed both coverage checkers,
