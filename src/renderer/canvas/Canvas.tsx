@@ -8492,7 +8492,7 @@ export function Canvas() {
         const copies = sources.map((n, i) =>
           placeSpawned(duplicateNode(n), { x: abs[i].x + dx, y: abs[i].y + dy })
         )
-        let next = ns.map((n) => ({ ...n, selected: false }))
+        let next: CanvasNode[] = ns.map((n) => ({ ...n, selected: false }))
         for (const copy of copies) {
           const appended = nodeCreationCoordinatorRef.current.appendNode(next, copy)
           if (appended.result.error) {
