@@ -393,9 +393,6 @@ export class WorkspaceStore {
               breadcrumbs: e.breadcrumbs,
               settingsOverrides: e.settingsOverrides,
               localExec: this.execOverlay(e)
-              breadcrumbs: e.breadcrumbs,
-              capabilityAck: e.capabilityAck,
-              localExec: this.execOverlay(e, p)
             })
           })
         } else {
@@ -422,9 +419,6 @@ export class WorkspaceStore {
               breadcrumbs: e.breadcrumbs,
               settingsOverrides: e.settingsOverrides,
               localExec: this.execOverlay(e)
-              breadcrumbs: e.breadcrumbs,
-              capabilityAck: e.capabilityAck,
-              localExec: this.execOverlay(e, e.cache)
             })
           })
         } else {
