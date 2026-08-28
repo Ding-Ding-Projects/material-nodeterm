@@ -1,5 +1,7 @@
 import { spawn as nodeSpawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { rm as removeFile } from 'node:fs/promises'
+import path from 'node:path'
 
 /**
  * A newly written executable can be momentarily held by Windows scanning or indexing before a
@@ -95,4 +97,27 @@ export async function removeOwnedInstallerWithRetry(file, options = {}) {
       await sleep(retryDelaysMs[attempt])
     }
   }
+}
+
+/** Resolve the archive extractor bundled by the declared packaging dependency, never PATH. */
+export function resolveBundledSevenZip(root, options = {}) {
+  const exists = options.exists ?? existsSync
+  const extractor = path.join(root, 'node_modules', 'electron-winstaller', 'vendor', '7z.exe')
+  if (!exists(extractor)) {
+    throw new Error(`The bundled 7-Zip extractor is missing after dependency installation: ${extractor}`)
+  }
+  return extractor
+}
+
+/**
+ * Extract a verified installer archive without executing the downloaded installer itself.
+ * The bundled extractor receives only fixed 7-Zip arguments and a caller-validated output path.
+ */
+export async function extractInstallerArchive(root, archive, output, options = {}) {
+  const extractor = resolveBundledSevenZip(root, options)
+  const result = await spawnInstallerWithRetry(extractor, ['x', '-y', `-o${output}`, archive], options)
+  if (result.code !== 0) {
+    throw new Error(`Bundled 7-Zip extraction exited with code ${result.code ?? 'unknown'}${result.signal ? ` (${result.signal})` : ''}.`)
+  }
+  return result
 }

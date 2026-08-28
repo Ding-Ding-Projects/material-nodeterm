@@ -1,7 +1,9 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  extractInstallerArchive,
   removeOwnedInstallerWithRetry,
+  resolveBundledSevenZip,
   spawnInstallerWithRetry,
 } from './installer-bootstrap.mjs'
 
@@ -110,5 +112,22 @@ describe('installer bootstrap retry helpers', () => {
     const permanentRm = vi.fn().mockRejectedValue(permanent)
     await expect(removeOwnedInstallerWithRetry('owned.exe', { rm: permanentRm })).rejects.toBe(permanent)
     expect(permanentRm).toHaveBeenCalledOnce()
+  })
+
+  it('uses only the bundled 7-Zip path and fixed extraction argv for a verified installer archive', async () => {
+    const root = 'C:\\workspace'
+    const expected = 'C:\\workspace\\node_modules\\electron-winstaller\\vendor\\7z.exe'
+    const spawn = vi.fn(() => childFor([['spawn'], ['close', 0, null]]))
+
+    await expect(extractInstallerArchive(root, 'verified-installer.exe', 'output-dir', {
+      exists: (candidate) => candidate === expected,
+      spawn,
+    })).resolves.toMatchObject({ kind: 'exit', code: 0 })
+
+    expect(spawn).toHaveBeenCalledWith(expected, ['x', '-y', '-ooutput-dir', 'verified-installer.exe'], expect.any(Object))
+  })
+
+  it('refuses extraction when the declared bundled 7-Zip executable is absent', () => {
+    expect(() => resolveBundledSevenZip('C:\\workspace', { exists: () => false })).toThrow(/bundled 7-Zip extractor is missing/i)
   })
 })

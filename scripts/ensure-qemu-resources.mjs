@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, open, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { removeOwnedInstallerWithRetry, spawnInstallerWithRetry } from './lib/installer-bootstrap.mjs'
+import { extractInstallerArchive, removeOwnedInstallerWithRetry } from './lib/installer-bootstrap.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 if (process.platform !== 'win32') throw new Error('The pinned QEMU resource bootstrap currently supports Windows x64 only.')
@@ -41,10 +41,7 @@ try {
   await tempHandle.writeFile(bytes)
   await tempHandle.close()
   tempHandle = undefined
-  const result = await spawnInstallerWithRetry(temp, ['/S', `/D=${output}`])
-  if (result.code !== 0) {
-    throw new Error(`QEMU installer exited with code ${result.code ?? 'unknown'}${result.signal ? ` (${result.signal})` : ''}.`)
-  }
+  await extractInstallerArchive(root, temp, output)
   for (const entry of qemu.payload) {
     const target = path.join(output, entry.path.replace(/^qemu[\\/]/, ''))
     if (entry.required && !existsSync(target)) throw new Error(`QEMU package payload is missing after extraction: ${entry.path}.`)

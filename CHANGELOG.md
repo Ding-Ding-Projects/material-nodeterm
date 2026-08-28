@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Extract the SHA-512-verified QEMU NSIS archive with the 7-Zip executable bundled by the declared
+  packaging dependency, instead of executing the downloaded setup. The extractor path is fixed,
+  never comes from PATH, and is exercised with the real pinned archive before packaging.
+
+  而家唔會直接執行下載返嚟嘅 QEMU setup；會用已宣告 packaging dependency 入面 bundled 嘅
+  7-Zip 解開 SHA-512 已驗證嘅 NSIS archive。extractor 路徑固定，唔會喺 PATH 度亂搵。
+
 - Make the Windows QEMU packaging bootstrap tolerate short-lived executable locks from scanning
   or indexing. It retries only pre-start `EACCES`, `EPERM`, and `EBUSY` failures through a finite
   1.85-second backoff, never retries a child that started, and preserves a primary installer

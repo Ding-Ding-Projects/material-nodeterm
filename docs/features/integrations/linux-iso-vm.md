@@ -49,19 +49,21 @@ On a Server Edition host without packaged resources, the API reports the missing
 and does not expose a misleading viewer URL.
 
 Packaging runs `npm run prepare:qemu`, which downloads the manifest-pinned installer, verifies its
-SHA-512, extracts it to the package resource directory, and refuses to continue when either required
-executable is absent. The approximately 172 MiB installer-size disclosure is shown before the
-download; runtime does not perform this network operation.
+SHA-512, and extracts it with the 7-Zip executable bundled by the declared `electron-winstaller`
+dependency. The bootstrap never executes the downloaded QEMU setup, never searches PATH for an
+extractor, and refuses to continue when the bundled extractor or either required executable is
+absent. The approximately 172 MiB installer-size disclosure is shown before the download; runtime
+does not perform this network operation.
 
 The resource bootstrap creates the temporary installer with exclusive ownership, so a stale file or
-another process's file is never overwritten or removed. If the freshly created installer cannot
-start because the operating system reports `EACCES`, `EPERM`, or `EBUSY` before a child process
-starts, the bootstrap makes at most five attempts with 100 ms, 250 ms, 500 ms, and 1000 ms delays.
-This gives an antivirus or indexer a bounded 1.85 seconds to release a newly written executable. A
-child that did start and exits nonzero is terminal and is not retried. The current process's owned
-temporary installer is removed in `finally` with its own shorter bounded transient-lock retry. A
-cleanup refusal never replaces the earlier installer failure. The fixed URL, SHA-512 validation,
-shell-free arguments, and required payload checks remain unchanged.
+another process's file is never overwritten or removed. The trusted bundled extractor receives
+only fixed archive arguments. If that extractor cannot start because the operating system reports
+`EACCES`, `EPERM`, or `EBUSY` before a child process starts, the bootstrap makes at most five
+attempts with 100 ms, 250 ms, 500 ms, and 1000 ms delays. A child that did start and exits nonzero
+is terminal and is not retried. The current process's owned temporary installer is removed in
+`finally` with its own shorter bounded transient-lock retry. A cleanup refusal never replaces the
+earlier extraction failure. The fixed URL, SHA-512 validation, shell-free arguments, and required
+payload checks remain unchanged.
 
 On Windows hosts, WHPX is preferred when the setting is enabled. The actual accelerator is reported
 as WHPX or TCG in the status result. A missing acceleration capability does not prevent a safe TCG
