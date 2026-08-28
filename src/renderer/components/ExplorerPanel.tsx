@@ -21,7 +21,6 @@ import { isBrowserRuntime } from '../bridge/runtime'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { MaterialSymbol, type MaterialSymbolName } from './MaterialSymbol'
-import { IconPin } from './icons'
 import {
   AGENT_NODE_DRAG_MIME,
   hasDragType,

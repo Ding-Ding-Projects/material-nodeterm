@@ -162,7 +162,7 @@ export function ConfirmDialog({
               checked={option.checked}
               onChange={(e) => option.onChange(e.target.checked)}
             />
-            {optionLabel}
+            {option.label}
           </label>
         )}
         <div className="confirm__actions">
