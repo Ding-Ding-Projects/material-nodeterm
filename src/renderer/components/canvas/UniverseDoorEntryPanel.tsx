@@ -149,7 +149,7 @@ export function UniverseDoorEntryPanel({
                 : result.code === 'passphrase-too-short'
                   ? 'universeDoorEntry.validation.passphraseShort'
                   : 'universeDoorEntry.validation.passphraseLong'
-      const params =
+      const params: Record<string, string> =
         result.code === 'numeric-code-shape'
           ? { digits: String(policy.numericCodeDigits) }
           : result.code === 'passphrase-too-short'
