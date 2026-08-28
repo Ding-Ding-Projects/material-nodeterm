@@ -442,21 +442,27 @@ export function isVersionOnlyManifestChange(committedText, workingText) {
   return strip(committed) === strip(working)
 }
 
+const NON_PACKAGED_GITLINKS = new Set(['upstream/nodeterm'])
+
 export function requireCleanSourceStatus(status, readPair) {
   const changed = changedSourcePaths(status)
   if (changed === null) return
-  const unexpected = changed.filter((path) => !VERSION_BUMP_PATHS.has(path))
+  // The nested canonical source is a preserved Tow Fat used for comparison and upstream review,
+  // not a package input. Its own Gerk Tong Hui can stay active while this Oak Kay is packaged;
+  // every product path and every untracked path remains subject to the strict dirty-tree refusal.
+  const packagedChanged = changed.filter((path) => !NON_PACKAGED_GITLINKS.has(path))
+  const unexpected = packagedChanged.filter((path) => !VERSION_BUMP_PATHS.has(path))
   if (unexpected.length || typeof readPair !== 'function') {
     // NAME the offending paths. Without them this refusal is unactionable on a runner whose
     // working tree you cannot inspect: it cost a whole release cycle to learn only that
     // *something* was dirty, on a build where the release version bump legitimately dirties two
     // known files and the interesting question is which OTHER file joined them.
-    const offenders = unexpected.length ? unexpected : changed
+    const offenders = unexpected.length ? unexpected : packagedChanged
     fail(
       `refusing to package a dirty source tree; commit every tracked and untracked source first (dirty: ${offenders.join(', ')})`,
     )
   }
-  for (const path of changed) {
+  for (const path of packagedChanged) {
     const { committed, working } = readPair(path)
     if (!isVersionOnlyManifestChange(committed, working)) {
       fail(`refusing to package: ${path} differs from HEAD by more than its version`)

@@ -3,7 +3,13 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { immutableIconUrl, readReleaseIdentity, resolveSourceIdentity, sourceIdentityFromIconMetadata } from './windows-installer.mjs'
+import {
+  immutableIconUrl,
+  readReleaseIdentity,
+  requireCleanSourceStatus,
+  resolveSourceIdentity,
+  sourceIdentityFromIconMetadata
+} from './windows-installer.mjs'
 
 /**
  * `resolveSourceIdentity` is what stops a release being packaged from something other than the
@@ -97,6 +103,11 @@ describe('sourceIdentityFromIconMetadata', () => {
 
   it('reuses the validated pre-bootstrap identity for standalone package verification', () => {
     expect(sourceIdentityFromIconMetadata(metadata)).toEqual({ sourceSha, repository })
+  })
+  it('ignores the preserved canonical gitlink while still refusing product changes', () => {
+    const status = ' M upstream/nodeterm\n'
+    expect(() => requireCleanSourceStatus(status, () => { throw new Error('not read') })).not.toThrow()
+    expect(() => requireCleanSourceStatus(`${status} M file.txt\n`, () => ({ committed: 'one\n', working: 'two\n' }))).toThrow(/dirty source tree/)
   })
 
   it('refuses malformed metadata rather than accepting an arbitrary standalone identity', () => {
