@@ -308,6 +308,7 @@ export interface NodeData {
   /** Guided AWS manager operation intent, kept separate from Resource Explorer state. */
   awsResourceManagerIntent?: import('@shared/aws-resource-managers').AwsResourceManagerIntent
   /** Compact GitHub issue and pull-request attachments owned by this canvas node. */
+  githubWorkItem?: import('@shared/github-work-items').GitHubWorkItem
   githubWorkItems?: import('@shared/github-work-items').GitHubWorkItem[]
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
   nsisSpec?: NsisSpec
