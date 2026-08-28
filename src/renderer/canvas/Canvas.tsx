@@ -10684,6 +10684,7 @@ export function Canvas() {
   /** `at` is where the menu was opened, in flow coordinates: every entry that SPAWNS a node
    *  (Duplicate / Branch / Transfer) puts it there, instead of somewhere the user never pointed. */
   const selectionItems = useCallback((ids: string[], at?: { x: number; y: number }): MenuItem[] => {
+    const session = activeSession
     // Rows the user chose to hide (Settings). Read here rather than through a selector because the
     // menu is rebuilt on every open — a toggle applies to the next right-click with no reload.
     // Destructive/recovery rows (Delete, Restart agent, Branch/Transfer) are not hideable at all:
@@ -11414,7 +11415,7 @@ export function Canvas() {
     gatewayModels,
     gatewayStatus,
     gatewayError,
-    session.source
+    activeSession.source
   ])
 
   /** "New <agent>" creation entries shared by the pane and group context menus.
