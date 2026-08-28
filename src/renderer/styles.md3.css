@@ -14397,3 +14397,62 @@ button.term-node__title-text:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .canvas-zone-preview { transition: none; }
 }
+/* Codex crash-recovery review: anchored to the owning terminal node and intentionally quiet until
+   the provider has emitted a packet. No action is automatic; the card is a user decision surface. */
+.agent-continuation-review {
+  position: absolute;
+  z-index: 4;
+  inset-inline-end: 12px;
+  inset-block-start: 52px;
+  width: min(360px, calc(100% - 24px));
+  max-height: min(420px, calc(100% - 64px));
+  overflow: auto;
+  padding: 16px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-corner-large);
+}
+
+.agent-continuation-review__title {
+  color: var(--md-on-surface);
+  font: var(--md-typescale-title-medium);
+}
+
+.agent-continuation-review__summary,
+.agent-continuation-review__preview,
+.agent-continuation-review__warning,
+.agent-continuation-review__result {
+  margin: 8px 0;
+  color: var(--md-on-surface-variant);
+  font: var(--md-typescale-body-medium);
+}
+
+.agent-continuation-review__warning {
+  color: var(--md-error);
+}
+
+.agent-continuation-review__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block-start: 12px;
+}
+
+.agent-continuation-review__actions button {
+  min-block-size: 40px;
+  max-inline-size: 100%;
+  padding: 8px 12px;
+  color: var(--md-on-primary-container);
+  background: var(--md-primary-container);
+  border: 0;
+  border-radius: var(--md-shape-corner-full);
+  font: var(--md-typescale-label-large);
+  white-space: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-continuation-review {
+    scroll-behavior: auto;
+  }
+}

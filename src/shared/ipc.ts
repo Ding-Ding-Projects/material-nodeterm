@@ -262,6 +262,13 @@ export const IPC = {
   /** The scoped machine's RAM (available/total) — the cheap read behind the system-resource
    *  pill. Safe to poll locally; NOT polled for an SSH scope. */
   sessionMemoryHost: 'session-memory:host',
+  /** Local-only encrypted Codex crash-recovery packet reads and explicit actions. */
+  agentContinuationSummary: 'agent-continuation:summary',
+  agentContinuationPreview: 'agent-continuation:preview',
+  agentContinuationAck: 'agent-continuation:ack',
+  agentContinuationDiscard: 'agent-continuation:discard',
+  agentContinuationContinue: 'agent-continuation:continue',
+  agentContinuationUpdate: 'agent-continuation:update',
   /** WSL distribution management (docs pending) — src/core/wsl/service.ts. Windows-only in
    *  practice: `wsl.exe` simply is not found elsewhere, and every handler degrades to a real,
    *  honest error rather than a silent no-op. Local-only over relay — see

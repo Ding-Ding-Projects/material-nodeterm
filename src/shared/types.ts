@@ -12,6 +12,7 @@ import type { NormalizedAgentEvent } from './agents/normalize'
 import type { AgentStatusSnapshot } from './agents/status-snapshot'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId, PromptInjectionMode } from './agents/config'
 import type { AgentMessageDeliverRequest, AgentMessageReply } from './agents/agent-messaging'
+import type { AgentContinuationApi } from './agent-continuation'
 import type { BrowserLeasePush } from './browser-indicator'
 import type { DebugBrowserIntent, DebugBrowserProfile } from './browser-debug-sessions'
 import type { GroupWorktree } from './worktree'
@@ -4935,6 +4936,8 @@ export interface NodeTerminalApi {
   githubCliAccounts: import('./github-issues').GitHubCliAccountsApi
   usage: UsageApi
   sessionMemory: SessionMemoryApi
+  /** Encrypted, bounded Codex continuation packets for explicit cold-relaunch review. */
+  agentContinuation?: AgentContinuationApi
   vscode: VsCodeApi
   /** Windows-only WSL distribution management (docs pending) — src/core/wsl/service.ts.
    *  Optional: a Linux Server Edition host and every non-Windows/mobile bridge simply omit

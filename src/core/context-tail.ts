@@ -149,6 +149,8 @@ export interface ContextTailOptions {
   onTaskNotification?: (sessionId: string, n: TaskNotification) => void
   /** Fired when a tracked session's transcript records a tool RESULT — see `hasToolResult`. */
   onToolResult?: (sessionId: string) => void
+  /** Provider-owned transcript events for bounded features such as Codex continuation recovery. */
+  onProviderEvent?: (sessionId: string, lines: string[]) => void
   /**
    * How to read the used/window numbers out of this agent's transcript. Defaults to claude's
    * `parseLatestUsage`. gemini and codex pass their own (`core/gemini-session.ts`
@@ -294,6 +296,7 @@ export function createContextTail(
               opts.onTaskNotification(sessionId, n)
           }
           if (opts?.onToolResult && hasToolResult(completeLines)) opts.onToolResult(sessionId)
+          if (opts?.onProviderEvent && provider !== 'claude') opts.onProviderEvent(sessionId, completeLines)
         }
       }
 

@@ -64,8 +64,10 @@ Next actions:
    reviewers and auditors use Terra, and large repair lanes use Sol.
 5. Merge only after the pull request is mergeable, then verify the unique non-draft release target
    and every required downloadable asset. Do not infer release success from a build or a queued run.
-6. Keep issue #198 separate. Its encrypted continuation-packet feature is an independent active
-   branch and explicitly depends on this recovery finishing.
+6. Keep downstream issue #198 in Ding-Ding-Projects/material-nodeterm separate. Its encrypted
+   continuation-packet feature is an independent active feature branch and explicitly depends on
+   this recovery finishing. The separately numbered eneskirca/nodeterm PR #198 is an unrelated
+   merged security change.
 7. Preserve the unrelated primary-checkout edit in `src/main/codex-accounts.ts` and the named
    preservation stash. They were not created by this recovery integration.
 ## 2026-08-27, session budget documentation review follow-up
@@ -4689,3 +4691,30 @@ Changed files: `src/main/pairing-service.ts` and `HANDOFF.md`.
 This ultra-speed parser lane deliberately ran no tests, checkers, lint, type checks, builds, packaging,
 reviews, audits, runtime interaction, or UI captures. The repair and the manual release remain unverified
 until the coordinating owner integrates this commit and observes the hosted workflow.
+
+# Codex crash-recovery continuation, downstream issue #198
+
+The feature branch `feat/agent-recovery-context` adds the source contract for one bounded encrypted
+Codex continuation packet per node. `src/core/agent-continuation.ts` stores AES-256-GCM records
+under the app data directory, seals the per-install key through the platform secret store, binds
+authenticated data to the stable node id, redacts credential-shaped text, and serializes
+acknowledgement, discard, and continue mutations. `src/shared/agent-continuation.ts`,
+`src/shared/ipc.ts`, `src/shared/types.ts`, and `src/preload/index.ts` expose typed summary,
+preview, acknowledgement, discard, continue, and update boundaries. `src/shared/agents/normalize.ts`
+distills Codex provider events only, never terminal scrollback. `src/main/index.ts` wires the
+service to the verified provider-start map, explicit delivery, and next-turn receipt. The renderer
+card is `src/renderer/components/AgentContinuationReview.tsx`, mounted beside each terminal node.
+
+The card warns that earlier side effects may already exist. It has no automatic injection path. A
+packet clears only after the core has observed the same node and session's next-turn event. Failed
+provider readiness, delivery, or receipt verification retains the packet and serialized retry state.
+The initial adapter is Codex only.
+
+Focused behavior and negative-regression tests are authored in
+`src/core/agent-continuation.test.ts`, but no tests, lint, type checks, builds, packaging, reviews,
+audits, runtime interaction, or captures were run under the ultra-speed issue boundary. No public
+issue, pull request, discussion, release, tag, or default branch integration was mutated by this lane.
+The coordinating owner must exercise parsing, type checking, building, and the real packaged desktop
+flow before integrating this feature branch. The similarly numbered eneskirca/nodeterm PR #198 is
+a separate merged paste-injection security change and was inspected only to avoid confusing the
+two records.

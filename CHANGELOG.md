@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an explicit Codex crash-recovery continuation surface. One encrypted, bounded packet per node
+  is derived from provider events, reviewed beside the owning node, and cleared only after a
+  verified next-turn receipt. Failed provider start, delivery, and receipt checks retain the packet;
+  terminal scrollback and credential-shaped content remain outside the boundary. Tests, builds,
+  packaging, runtime interaction, and captures were not run in this ultra-speed lane.
+
 - Repair the renderer stylesheet merge remnants around the destructive confirmation surface. The
   destination gate now has complete standalone overlay, heading, key, progress, completion, action,
   exit, hover, reduced-motion, and anchored-scrim rules. The interleaved card-modal resize, header,
