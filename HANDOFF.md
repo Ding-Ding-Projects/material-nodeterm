@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-08-28, start-screen updated-time provenance
+
+The start screen now renders the artifact-stamped package version and its local updated time with
+second precision and a timezone. The surrounding `Updated` and unavailable labels use the existing
+English, playful Hong Kong Cantonese, and bilingual i18n resolver. The stamped version remains the
+source of truth when the optional runtime version bridge is missing or reports an error, and an
+invalid or absent stamp stays an honest unavailable state rather than using launch time or a file
+timestamp.
+
+Changed files: `src/renderer/components/WelcomeScreen.tsx`, `src/shared/i18n/catalog.ts`,
+`docs/features/appearance/build-provenance.md`, `docs/features/appearance/README.md`,
+`CHANGELOG.md`, `ROADMAP.md`, and `HANDOFF.md`.
+
+The implementation commit is `5a9e1e90ade901bb49735eb80d6c2919006ec149`, followed by an additive
+documentation record commit on `feat/version-updated-at-timestamp-20260828`. This rapid lane ran
+only `git diff --check`, targeted source inspection, marker/public scanning, status, ancestry, and
+remote-ref verification. Tests, lint, type checks, builds, packaging, runtime interaction,
+reviews, audits, and screen captures were intentionally not run.
+
 ## 2026-08-27, QEMU installer spawn retry repair
 
 The pinned QEMU resource bootstrap now creates its temporary installer with exclusive ownership and

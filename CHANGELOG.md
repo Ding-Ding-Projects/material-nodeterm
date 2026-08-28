@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Show the stamped package version and second-precision local updated time on the start screen.
+  The stamped version remains visible when the optional runtime bridge is unavailable, while
+  missing or invalid build provenance reports an honest unavailable state. This rapid lane ran
+  no tests, type checks, lint, reviews, audits, builds, packaging, runtime interaction, or screen
+  captures.
+
+  開機畫面而家會顯示打包版本同精確到秒嘅本地更新時間；橋接器唔得都唔會令版本資料消失，
+  冇效來源就老實顯示未能提供。今次快速 lane 冇跑 tests、type checks、lint、reviews、audits、
+  builds、packaging、runtime interaction 或 screen captures。
+
 - Add an explicit Codex crash-recovery continuation surface. One encrypted, bounded packet per node
   is derived from provider events, reviewed beside the owning node, and cleared only after a
   verified next-turn receipt. Failed provider start, delivery, and receipt checks retain the packet;

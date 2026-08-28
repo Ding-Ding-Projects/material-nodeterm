@@ -14,6 +14,13 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## Shipped and verified
 
+- [ ] **Start-screen build provenance:** show the artifact-stamped package version and second-
+      precision local updated time, with localized English, Cantonese, and bilingual labels. The
+      stamped version remains visible without the optional runtime bridge, and invalid provenance
+      reports an honest unavailable state. Implementation is committed on
+      `feat/version-updated-at-timestamp-20260828`; tests, builds, packaging, runtime interaction,
+      and captures remain intentionally unrun in the ultra-speed lane.
+
 - [ ] **Combined merge-recovery pull request**: repair the parser-invalid merge remnants across
       core services, host and bridge code, renderer surfaces, shared contracts, account and
       identity handling, and release workflow wiring; add the source-parse validation path and
