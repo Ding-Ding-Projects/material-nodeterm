@@ -302,37 +302,6 @@ export function initLicense(onChange?: () => void): void {
   platform().handle(IPC.licenseDetail, () => licenseCall('/v1/license/detail'))
   platform().handle(IPC.licenseRelease, () => licenseCall('/v1/license/release'))
 
-  // Device-bound upgrade: open Stripe checkout (carrying our deviceId), then poll the status
-  // endpoint until the webhook has bound + minted the entitlement. Status arrives via broadcast.
-  let polling = false
-  platform().handle(IPC.licenseUpgrade, async (target?: 'pro' | 'seats') => {
-    // 'seats' opens the add-seats (quantity) link; anything else opens base Pro. Both carry the
-    // deviceId so the same device-bound webhook binds either purchase to this machine.
-    const base = target === 'seats' ? SEATS_CHECKOUT_URL : CHECKOUT_URL
-    const url = `${base}${base.includes('?') ? '&' : '?'}client_reference_id=${encodeURIComponent(deviceId)}`
-    await platform().openExternal(url)
-    if (!polling) {
-      polling = true
-      const deadline = Date.now() + 6 * 60 * 1000 // poll up to 6 min after opening checkout
-      const poll = async (): Promise<void> => {
-        if (Date.now() > deadline) {
-          polling = false
-          return
-        }
-        const r = await getJson(`/v1/license/status?deviceId=${encodeURIComponent(deviceId)}`)
-        if (r.active && r.token) {
-          await save({ ...load(), token: r.token })
-          broadcast(statusFrom(r.token))
-          polling = false
-          return
-        }
-        setTimeout(() => void poll(), 4000)
-      }
-      setTimeout(() => void poll(), 4000)
-    }
-    return statusFrom(load().token)
-  })
-
   platform().handle(IPC.licenseActivate, async (key: string) => {
     const r = await call('/v1/license/activate', { key: String(key).trim(), deviceId })
     if (r.token) await save({ ...load(), key: String(key).trim(), token: r.token })
