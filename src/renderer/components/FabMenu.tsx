@@ -11,10 +11,6 @@ import { IconLock } from './icons'
 import { writeAuthenticatorDrag } from '../lib/explorerNodeDrag'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
-import { useState } from 'react'
-import type { AgentId } from '@shared/agents/config'
-import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
-import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 
 export interface FabMenuProps {
   /** Opens the single typed registry used by every creation surface. */
@@ -67,6 +63,15 @@ export function FabMenu({
   onAddRemote,
   onConnectRemote
 }: FabMenuProps) {
+  const customAgents = useSettings((s) => s.settings.customAgents)
+  const disabledAgents = useSettings((s) => s.settings.disabledAgents)
+  const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
+  const activeProjectId = useProjects((s) => s.activeProjectId)
+  const activeProject = useProjects((s) => s.projects.find((p) => p.id === activeProjectId))
+  const localAccounts = accountsForProject(claudeAccounts, activeProject)
+  const defaultAccountId = localAccounts.some((a) => a.id === activeProject?.defaultAccountId)
+    ? activeProject?.defaultAccountId
+    : undefined
   const profileText = useLocalizedVocabularyText()
   const vocab = useVocabularyMapper()
   const menuSearch = useRegexSearchField()
