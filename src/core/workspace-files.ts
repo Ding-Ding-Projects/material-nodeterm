@@ -512,10 +512,6 @@ export function fileToProject(
     /** This machine's navigation history for this entry (never from the file). */
     breadcrumbs?: NavStop[]
     settingsOverrides?: Project['settingsOverrides']
-    /** This machine's clone-notice acknowledgments for this entry (never from the file). */
-    capabilityAck?: import('../shared/project-capability-consent').CapabilityAckMap
-    /** This machine's navigation history for this entry (never from the file). */
-    breadcrumbs?: NavStop[]
     /** This machine's own exec values for these nodes (from the local index entry). A file read
      *  WITHOUT them — an adopted/cloned folder, a probe — gets the safe defaults, never the file's
      *  own `shell`/`ssh.extraArgs`. */

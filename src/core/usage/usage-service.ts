@@ -189,15 +189,6 @@ export interface UsageServiceOptions {
     email?: string | null
   }>
   /**
-   * Local managed Codex accounts (settings' non-`host`, non-`pending` codex accounts), each with
-   * the isolated home its `auth.json` lives in. Every one is fetched SEPARATELY and rendered by
-   * account — there is no reduce/merge step, so one account's usage can never be attributed to
-   * another (S6 §4.3, Property 9). The shell owns this because settings live in the shell. Must
-   * never throw — a throwing provider fails closed to system-only, never a fabricated account.
-   * Absent ⇒ the system Codex account only (the merged S4 flat-identity behavior is untouched).
-   */
-  codexAccounts?: () => Array<{ id: string; home: string; label: string; email?: string | null }>
-  /**
    * Fired after any account's cache is (re)populated — the mirror wires this to a flush so the
    * phone-facing `usage` block refreshes when a poll lands. Best-effort; must never throw.
    */
