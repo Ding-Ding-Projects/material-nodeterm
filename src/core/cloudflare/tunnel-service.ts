@@ -316,7 +316,7 @@ export class CloudflareTunnelService implements CloudflareTunnelApi {
       if (ingress.some((item) => item === null)) throw new Error('Cloudflare returned an ingress rule this manager cannot preserve. No route was changed.')
       const safeIngress = ingress as Record<string, unknown>[]
       await this.mutate(routeAccount(route, inventory), `/accounts/${routeAccount(route, inventory)}/cfd_tunnel/${route.tunnelId}/configurations`, 'PUT', { config: { ingress: [...safeIngress, { hostname: route.hostname, path: route.path, service: route.service }] } }, controller)
-      const saved: CloudflareTunnelRoute = { id: `route-${randomUUID()}`, tunnelId: route.tunnelId, hostname: route.hostname, path: route.path, origin: normalizeCloudflareService(route.service, route.protocol), ownership: 'managed', dnsRecordId: null, dnsProxied: null, sourceRevision: 'local-pending-refresh' }
+      const saved: CloudflareTunnelRoute = { id: `route-${randomUUID()}`, tunnelId: route.tunnelId, hostname: route.hostname, path: route.path ?? '/', origin: normalizeCloudflareService(route.service, route.protocol), ownership: 'managed', dnsRecordId: null, dnsProxied: null, sourceRevision: 'local-pending-refresh' }
       await this.saveLocalRoute(route, saved)
       return saved
     } finally { controller.abort() }
