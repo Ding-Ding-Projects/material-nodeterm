@@ -2,7 +2,7 @@
 
 ## 2026-08-28, hosted elevated-toolchain handoff
 
-The hui currently points `main` at `16f0b7e034eec228bb0138db3e0f63223221f622`. The follow-up
+The remote currently points `main` at `16f0b7e034eec228bb0138db3e0f63223221f622`. The follow-up
 Release run `33148336972` reached the new native-toolchain bootstrap but failed before npm because
 the hosted runner executes the helper as Administrator and the helper correctly refuses an elevated
 root build. No hosted installer or release was produced by that run.
