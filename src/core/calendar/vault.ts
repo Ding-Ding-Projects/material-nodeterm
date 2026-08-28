@@ -39,8 +39,10 @@ export class CalendarCredentialVault {
 
   async read(ref: string): Promise<CalendarCredential | null> {
     try {
-      let bytes = await readFile(this.file(ref))
-      if (this.platform.unsealSecret) bytes = this.platform.unsealSecret(bytes)
+      const storedBytes = await readFile(this.file(ref))
+      const bytes = this.platform.unsealSecret
+        ? this.platform.unsealSecret(storedBytes)
+        : storedBytes
       const parsed = JSON.parse(bytes.toString('utf8')) as unknown
       if (!validCredential(parsed)) throw new Error('Calendar credential has an unsupported shape.')
       return parsed
