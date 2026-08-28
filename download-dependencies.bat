@@ -215,7 +215,43 @@ rem enumeration-order selection of an instance whose v143 Spectre directories ar
 set "GYP_MSVS_VERSION=2022"
 set "npm_config_msvs_version=2022"
 set "GYP_MSVS_OVERRIDE_PATH=%NODETERM_VS_INSTALLATION%"
-echo   Selected Visual Studio 2022 at "%GYP_MSVS_OVERRIDE_PATH%" for node-gyp and electron-rebuild; the path has validated v143 Spectre libraries.
+set "NODETERM_VS_TARGET_ARCH=x64"
+if /I "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "NODETERM_VS_TARGET_ARCH=arm64"
+rem node-gyp 12.4.0 overwrites GYP_MSVS_OVERRIDE_PATH during configure after its own discovery.
+rem VsDevCmd is the supported selection boundary for this version: it sets VCINSTALLDIR and the
+rem target architecture, which node-gyp then uses to generate msbuild_path for this exact instance.
+call "%GYP_MSVS_OVERRIDE_PATH%\Common7\Tools\VsDevCmd.bat" -arch=%NODETERM_VS_TARGET_ARCH% -host_arch=%NODETERM_VS_TARGET_ARCH%
+if errorlevel 1 (
+    echo.
+    echo [FAILED] Visual Studio C++ build toolchain
+    echo   Dependency : selected Visual Studio 2022 developer environment
+    echo   Constraint : VsDevCmd must initialize the validated installation and target architecture
+    echo   Source     : "%GYP_MSVS_OVERRIDE_PATH%\Common7\Tools\VsDevCmd.bat"
+    echo   Error      : VsDevCmd exited with code %ERRORLEVEL%
+    exit /b 1
+)
+for %%P in ("%GYP_MSVS_OVERRIDE_PATH%") do set "NODETERM_EXPECTED_VS_ROOT=%%~fP"
+for %%P in ("%VCINSTALLDIR%\..") do set "NODETERM_ACTIVE_VS_ROOT=%%~fP"
+if /I not "%NODETERM_ACTIVE_VS_ROOT%"=="%NODETERM_EXPECTED_VS_ROOT%" (
+    echo.
+    echo [FAILED] Visual Studio C++ build toolchain
+    echo   Dependency : selected Visual Studio 2022 developer environment
+    echo   Constraint : VCINSTALLDIR must resolve to the helper-selected installation
+    echo   Source     : "%NODETERM_ACTIVE_VS_ROOT%"
+    echo   Error      : VsDevCmd selected a different Visual Studio installation
+    exit /b 1
+)
+if not exist "%VCToolsInstallDir%lib\spectre\%NODETERM_VS_TARGET_ARCH%" (
+    echo.
+    echo [FAILED] Visual Studio C++ build toolchain
+    echo   Dependency : VS2022 Spectre libraries for %NODETERM_VS_TARGET_ARCH%
+    echo   Constraint : VsDevCmd must expose the real lib\spectre directory
+    echo   Source     : "%VCToolsInstallDir%lib\spectre\%NODETERM_VS_TARGET_ARCH%"
+    echo   Error      : selected developer environment does not expose the validated Spectre path
+    exit /b 1
+)
+set "GYP_MSVS_OVERRIDE_PATH=%NODETERM_EXPECTED_VS_ROOT%"
+echo   Selected Visual Studio 2022 at "%GYP_MSVS_OVERRIDE_PATH%" for node-gyp and electron-rebuild; VsDevCmd bound VCINSTALLDIR to the validated v143 Spectre environment.
 call :phase_end "Visual Studio C++ build toolchain"
 
 rem ---------------------------------------------------------------------------------------------
@@ -366,7 +402,13 @@ set "NODETERM_RETURN_PYTHON=%PYTHON%"
 set "NODETERM_RETURN_GYP_MSVS_VERSION=%GYP_MSVS_VERSION%"
 set "NODETERM_RETURN_NPM_CONFIG_MSVS_VERSION=%npm_config_msvs_version%"
 set "NODETERM_RETURN_GYP_MSVS_OVERRIDE_PATH=%GYP_MSVS_OVERRIDE_PATH%"
-endlocal & set "PATH=%NODETERM_RETURN_PATH%" & set "NODETERM_NODE_HOME=%NODETERM_RETURN_NODE_HOME%" & set "PYTHON=%NODETERM_RETURN_PYTHON%" & set "NODE_GYP_FORCE_PYTHON=%NODETERM_RETURN_PYTHON%" & set "npm_config_python=%NODETERM_RETURN_PYTHON%" & set "GYP_MSVS_VERSION=%NODETERM_RETURN_GYP_MSVS_VERSION%" & set "npm_config_msvs_version=%NODETERM_RETURN_NPM_CONFIG_MSVS_VERSION%" & set "GYP_MSVS_OVERRIDE_PATH=%NODETERM_RETURN_GYP_MSVS_OVERRIDE_PATH%"
+set "NODETERM_RETURN_VCINSTALLDIR=%VCINSTALLDIR%"
+set "NODETERM_RETURN_VSINSTALLDIR=%VSINSTALLDIR%"
+set "NODETERM_RETURN_VSCMD_VER=%VSCMD_VER%"
+set "NODETERM_RETURN_VSCMD_ARG_TGT_ARCH=%VSCMD_ARG_TGT_ARCH%"
+set "NODETERM_RETURN_VSCMD_ARG_HOST_ARCH=%VSCMD_ARG_HOST_ARCH%"
+set "NODETERM_RETURN_VCTOOLS_INSTALL_DIR=%VCToolsInstallDir%"
+endlocal & set "PATH=%NODETERM_RETURN_PATH%" & set "NODETERM_NODE_HOME=%NODETERM_RETURN_NODE_HOME%" & set "PYTHON=%NODETERM_RETURN_PYTHON%" & set "NODE_GYP_FORCE_PYTHON=%NODETERM_RETURN_PYTHON%" & set "npm_config_python=%NODETERM_RETURN_PYTHON%" & set "GYP_MSVS_VERSION=%NODETERM_RETURN_GYP_MSVS_VERSION%" & set "npm_config_msvs_version=%NODETERM_RETURN_NPM_CONFIG_MSVS_VERSION%" & set "GYP_MSVS_OVERRIDE_PATH=%NODETERM_RETURN_GYP_MSVS_OVERRIDE_PATH%" & set "VCINSTALLDIR=%NODETERM_RETURN_VCINSTALLDIR%" & set "VSINSTALLDIR=%NODETERM_RETURN_VSINSTALLDIR%" & set "VSCMD_VER=%NODETERM_RETURN_VSCMD_VER%" & set "VSCMD_ARG_TGT_ARCH=%NODETERM_RETURN_VSCMD_ARG_TGT_ARCH%" & set "VSCMD_ARG_HOST_ARCH=%NODETERM_RETURN_VSCMD_ARG_HOST_ARCH%" & set "VCToolsInstallDir=%NODETERM_RETURN_VCTOOLS_INSTALL_DIR%"
 exit /b 0
 
 :elevate_toolchain
