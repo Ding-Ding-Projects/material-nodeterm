@@ -4,6 +4,8 @@ import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '@renderer/lib/regex/useRegexSearchField'
 import { useDialogStack } from '../dialog-stack'
 import { IconGroup } from '../icons'
+import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '@renderer/lib/personalVocabulary/ownedCopy'
 
 export interface GroupPickerOption {
   id: string
@@ -31,6 +33,7 @@ interface GroupPickerDialogProps {
  * surface, stays inside the viewport, and is fully keyboard-operable.
  */
 export function GroupPickerDialog({ count, groups, onPick, onCancel }: GroupPickerDialogProps): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const search = useRegexSearchField({ mode: 'text' })
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -88,10 +91,10 @@ export function GroupPickerDialog({ count, groups, onPick, onCancel }: GroupPick
       <div
         className="group-picker"
         role="dialog"
-        aria-label={`Add ${count === 1 ? '1 node' : `${count} nodes`} to existing group`}
+        aria-label={mapOwnedSentence(vocab, [copy('Add '), fact(String(count)), copy(count === 1 ? ' node to existing group' : ' nodes to existing group')])}
       >
         <div className="group-picker__title">
-          Add {count === 1 ? '1 node' : `${count} nodes`} to existing group
+          {mapOwnedSentence(vocab, [copy('Add '), fact(String(count)), copy(count === 1 ? ' node to existing group' : ' nodes to existing group')])}
         </div>
         <div className="menu-filter group-picker__search">
           <div className="menu-filter__row">
@@ -100,11 +103,11 @@ export function GroupPickerDialog({ count, groups, onPick, onCancel }: GroupPick
               className="menu-filter__input"
               value={search.value}
               spellCheck={false}
-              placeholder={search.mode === 'regex' ? 'Filter groups… (regex)' : 'Filter groups…'}
-              aria-label="Filter groups"
+              placeholder={vocab(search.mode === 'regex' ? 'Filter groups… (regex)' : 'Filter groups…')}
+              aria-label={vocab('Filter groups')}
               onChange={(e) => search.setValue(e.target.value)}
             />
-            <AnchoredRegexBuilder search={search} fieldRef={inputRef} label="Regex — group picker" zIndex={93} />
+            <AnchoredRegexBuilder search={search} fieldRef={inputRef} label={vocab('Regex — group picker')} zIndex={93} />
           </div>
           {search.error && <div className="menu-filter__error">{search.error}</div>}
         </div>
@@ -112,12 +115,12 @@ export function GroupPickerDialog({ count, groups, onPick, onCancel }: GroupPick
           ref={listRef}
           className="group-picker__list"
           role="listbox"
-          aria-label="Groups"
+          aria-label={vocab('Groups')}
           tabIndex={-1}
         >
           {filtered.length === 0 ? (
             <div className="group-picker__empty">
-              {groups.length === 0 ? 'No groups yet.' : 'No groups match that filter.'}
+              {groups.length === 0 ? vocab('No groups yet.') : vocab('No groups match that filter.')}
             </div>
           ) : (
             filtered.map((g, idx) => (
@@ -134,9 +137,9 @@ export function GroupPickerDialog({ count, groups, onPick, onCancel }: GroupPick
                 <span className="group-picker__swatch" style={g.color ? { background: g.color } : undefined}>
                   {!g.color && <IconGroup />}
                 </span>
-                <span className="group-picker__name">{g.title || 'Group'}</span>
+                <span className="group-picker__name">{g.title || vocab('Group')}</span>
                 <span className="group-picker__count">
-                  {g.memberCount} {g.memberCount === 1 ? 'node' : 'nodes'}
+                  {mapOwnedSentence(vocab, [fact(String(g.memberCount)), copy(g.memberCount === 1 ? ' node' : ' nodes')])}
                 </span>
               </button>
             ))
@@ -144,7 +147,7 @@ export function GroupPickerDialog({ count, groups, onPick, onCancel }: GroupPick
         </div>
         <div className="group-picker__footer">
           <button type="button" className="group-picker__cancel" onClick={onCancel}>
-            Cancel
+            {vocab('Cancel')}
           </button>
         </div>
       </div>

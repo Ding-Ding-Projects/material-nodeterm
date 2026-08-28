@@ -18,6 +18,8 @@ import { AnchoredPopover } from '../ui/AnchoredPopover'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { UniverseDoorEntryPanel } from './canvas/UniverseDoorEntryPanel'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
 export interface PortalLifecycleDialogProps {
   open: boolean
@@ -44,6 +46,7 @@ export function PortalLifecycleDialog({
   onVerifyEntry,
   onRequestDelete
 }: PortalLifecycleDialogProps) {
+  const vocab = useVocabularyMapper()
   const search = useRegexSearchField()
   const searchRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState('')
@@ -167,30 +170,32 @@ export function PortalLifecycleDialog({
 
   return (
     <Dialog open={open} onClose={onClose} title="Portal lifecycle" className="portal-lifecycle-dialog">
-      <p>Choose a containing canvas, give the child canvas a name, and create a closed portal. Import and repair never contact a provider or start a process.</p>
-      <section aria-label="Create portal" className="portal-lifecycle-dialog__create">
+      <p>{vocab('Choose a containing canvas, give the child canvas a name, and create a closed portal. Import and repair never contact a provider or start a process.')}</p>
+      <section aria-label={vocab('Create portal')} className="portal-lifecycle-dialog__create">
         <label>
-          Containing canvas
-          <select value={selectedParent} onChange={(event) => setSelectedParent(event.target.value)} aria-label="Containing canvas">
+          {vocab('Containing canvas')}
+          <select value={selectedParent} onChange={(event) => setSelectedParent(event.target.value)} aria-label={vocab('Containing canvas')}>
             {projection.canvases.map((canvas) => <option key={canvas.id} value={canvas.id}>{canvas.title} ({canvas.id})</option>)}
           </select>
         </label>
-        <TextField label="Portal title" value={title} onChange={(event) => setTitle(event.target.value)} />
-        <TextField label="New child canvas id" value={childId} onChange={(event) => setChildId(event.target.value)} supportText="Use a new visible identifier; credentials, paths, and runtime state never enter the projection." />
+        <TextField label="Portal title" aria-label="Portal title" value={title} onChange={(event) => setTitle(event.target.value)} />
+        <TextField label="New child canvas id" aria-label="New child canvas id" value={childId} onChange={(event) => setChildId(event.target.value)} supportText="Use a new visible identifier; credentials, paths, and runtime state never enter the projection." />
         <Button disabled={!canCreate} title={createReason} onClick={create}>Create portal</Button>
-        {!canCreate && <p role="status">{createReason}</p>}
+        {!canCreate && <p role="status">{createReason ? vocab(createReason) : null}</p>}
       </section>
-      <section aria-label="Search portals" className="portal-lifecycle-dialog__list">
+      <section aria-label={vocab('Search portals')} className="portal-lifecycle-dialog__list">
         <TextField
           ref={searchRef}
-          label="Search portals"
+          label={vocab('Search portals')}
+          aria-label={vocab('Search portals')}
           value={search.value}
           onChange={(event) => search.setValue(event.target.value)}
-          trailingSlot={<AnchoredRegexBuilder search={search} fieldRef={searchRef} label="Regex: portal search" />}
-          supportText={search.error ?? `${visible.length} portal${visible.length === 1 ? '' : 's'} shown`}
+          trailingSlot={<AnchoredRegexBuilder search={search} fieldRef={searchRef} label={vocab('Regex: portal search')} />}
+          supportText={search.error ?? mapOwnedSentence(vocab, [fact(String(visible.length)), copy(` portal${visible.length === 1 ? '' : 's'} shown`)])}
+          vocabularyMode="factual"
           invalid={!!search.error}
         />
-        {!visible.length ? <p role="status">No portals match this search.</p> : visible.map((portal) => {
+        {!visible.length ? <p role="status">{vocab('No portals match this search.')}</p> : visible.map((portal) => {
           const isCurrent = portal.parentCanvasId === currentCanvasId
           const isOpen = portal.status === 'open'
           return (

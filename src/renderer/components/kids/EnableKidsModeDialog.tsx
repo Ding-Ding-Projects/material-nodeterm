@@ -6,6 +6,7 @@ import { KIDS_DISCLOSURE } from '@shared/kids-mode-policy'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from '@renderer/components/dialog-stack'
 import { PinPad } from './PinPad'
 import { useEnableKidsDialog } from './entry'
+import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
 
 /**
  * First-time PIN setup for entering Kids mode from the nav rail's `child_care` destination — see
@@ -24,6 +25,7 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
   const [chosen, setChosen] = useState('')
   const [errorToken, setErrorToken] = useState<number | undefined>(undefined)
   const [busy, setBusy] = useState(false)
+  const vocab = useVocabularyMapper()
   const dialogId = useRef<string>()
   if (!dialogId.current) dialogId.current = nextDialogId()
 
@@ -81,12 +83,12 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
     <div className="confirm-overlay md3-kids-enable-overlay" onClick={close}>
       <div className="md3-kids-enable-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="md3-kids-enable-dialog__title">
-          {step === 'choose' ? 'Choose a grown-up PIN' : 'Enter it again to confirm'}
+          {step === 'choose' ? vocab('Choose a grown-up PIN') : vocab('Enter it again to confirm')}
         </div>
         <p className="md3-kids-enable-dialog__hint">
           {step === 'choose'
-            ? 'This 4-digit PIN unlocks the grown-up screen and turns Kids mode off. You can change it any time from Settings → Kids mode.'
-            : "Type the same 4 digits once more."}
+            ? vocab('This 4-digit PIN unlocks the grown-up screen and turns Kids mode off. You can change it any time from Settings → Kids mode.')
+            : vocab('Type the same 4 digits once more.')}
         </p>
         <PinPad
           // `key` is load-bearing, not tidiness. PinPad holds the typed digits in its OWN state and
@@ -100,16 +102,16 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
           onComplete={step === 'choose' ? onChoose : onConfirm}
           errorToken={errorToken}
           disabled={busy}
-          ariaLabel={step === 'choose' ? 'Choose a 4-digit PIN' : 'Confirm the 4-digit PIN'}
+          ariaLabel={step === 'choose' ? vocab('Choose a 4-digit PIN') : vocab('Confirm the 4-digit PIN')}
         />
         {errorToken !== undefined && step === 'choose' ? (
           <div className="md3-kids-gate__status" role="alert">
-            Those didn&apos;t match — try again.
+            {vocab("Those didn't match — try again.")}
           </div>
         ) : null}
-        <p className="md3-kids-disclosure">{KIDS_DISCLOSURE}</p>
+        <p className="md3-kids-disclosure">{vocab(KIDS_DISCLOSURE)}</p>
         <button type="button" className="md3-kids-textbtn" onClick={close}>
-          Cancel
+          {vocab('Cancel')}
         </button>
       </div>
     </div>,
