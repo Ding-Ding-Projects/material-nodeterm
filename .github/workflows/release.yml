@@ -89,6 +89,57 @@ jobs:
           node-version: '24.19.0'
           cache: 'npm'
 
+      # The hosted runner has Visual Studio installed, but not necessarily the exact selected
+      # v143 Spectre libraries or the VsDevCmd environment node-gyp needs. Reuse the repository's
+      # validated installer/selector and export only the resulting developer environment before
+      # npm reaches native lifecycle scripts or the packaging preflight.
+      - name: Bootstrap Windows native toolchain
+        id: native_toolchain
+        shell: pwsh
+        run: |
+          $resultFile = Join-Path $env:RUNNER_TEMP 'nodeterm-vs-selection.txt'
+          node scripts/ensure-windows-build-toolchain.mjs --silent --result-file $resultFile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installation = (Get-Content -LiteralPath $resultFile -Raw).Trim()
+          if (-not [IO.Path]::IsPathFullyQualified($installation)) { throw 'The validated Visual Studio selection was not an absolute path.' }
+          $devCmd = Join-Path $installation 'Common7\Tools\VsDevCmd.bat'
+          if (-not (Test-Path -LiteralPath $devCmd -PathType Leaf)) { throw "VsDevCmd was missing from the selected Visual Studio installation: $devCmd" }
+          $raw = & cmd.exe /d /s /c "call `"$devCmd`" -arch=x64 -host_arch=x64 >nul && set"
+          if ($LASTEXITCODE -ne 0) { throw "VsDevCmd failed with exit code $LASTEXITCODE" }
+          $values = @{}
+          foreach ($line in $raw) {
+            $separator = $line.IndexOf('=')
+            if ($separator -gt 0) { $values[$line.Substring(0, $separator)] = $line.Substring($separator + 1) }
+          }
+          $expectedVcInstallDir = [IO.Path]::GetFullPath((Join-Path $installation 'VC'))
+          if ([string]::IsNullOrWhiteSpace($values['VCINSTALLDIR'])) {
+            # Some hosted Visual Studio images omit VCINSTALLDIR from VsDevCmd's emitted
+            # environment even though the validated installation and its toolset are present.
+            # The helper already proved this exact installation owns the required Spectre files,
+            # so bind the missing identity explicitly instead of letting the later preflight
+            # misclassify the runner as unconfigured.
+            $values['VCINSTALLDIR'] = $expectedVcInstallDir
+          }
+          if ([string]::IsNullOrWhiteSpace($values['VSINSTALLDIR'])) {
+            $values['VSINSTALLDIR'] = $installation
+          }
+          $actualVcInstallDir = [IO.Path]::GetFullPath($values['VCINSTALLDIR'])
+          if (-not $actualVcInstallDir.Equals($expectedVcInstallDir, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "VsDevCmd selected a different VCINSTALLDIR: expected $expectedVcInstallDir, got $actualVcInstallDir"
+          }
+          $actualVsInstallDir = [IO.Path]::GetFullPath($values['VSINSTALLDIR'])
+          if (-not $actualVsInstallDir.Equals($installation, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "VsDevCmd selected a different VSINSTALLDIR: expected $installation, got $actualVsInstallDir"
+          }
+          foreach ($name in @('VCINSTALLDIR', 'VSINSTALLDIR', 'VCToolsInstallDir', 'VSCMD_VER', 'VSCMD_ARG_TGT_ARCH', 'VSCMD_ARG_HOST_ARCH', 'INCLUDE', 'LIB', 'LIBPATH', 'PATH')) {
+            if ([string]::IsNullOrWhiteSpace($values[$name])) { throw "VsDevCmd did not set required environment value $name" }
+            Add-Content -LiteralPath $env:GITHUB_ENV -Value "$name=$($values[$name])"
+          }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value 'GYP_MSVS_VERSION=2022'
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value 'npm_config_msvs_version=2022'
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "GYP_MSVS_OVERRIDE_PATH=$installation"
+          if (-not (Test-Path -LiteralPath (Join-Path $values['VCToolsInstallDir'] 'lib\spectre\x64') -PathType Container)) { throw 'The selected developer environment did not expose x64 Spectre libraries.' }
+
       # Bootstraps everything `npm ci` needs: locked npm dependencies, plus the postinstall
       # hook's own bootstrap (scripts/patch-node-pty.mjs + `electron-rebuild -f -w
       # node-pty,smart-whisper` against this runner's Electron ABI). windows-latest already
