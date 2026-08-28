@@ -332,14 +332,18 @@ export function readIdentityCandidate(
   // value first, then immediately replace it with the canonical value and a fresh scoped HMAC so
   // every generated POSIX resolver sees the same representation on its next read.
   if (canonicalEndpoint !== record.hookEndpoint) {
-    writeCodexThreadIdentity(
-      threadId,
-      record.nodeId,
-      canonicalEndpoint,
-      root,
-      norm === SYSTEM_ACCOUNT_SCOPE ? undefined : norm
-    )
-    return readIdentityCandidate(threadId, norm, root)
+    try {
+      writeCodexThreadIdentity(
+        threadId,
+        record.nodeId,
+        canonicalEndpoint,
+        root,
+        norm === SYSTEM_ACCOUNT_SCOPE ? undefined : norm
+      )
+      return readIdentityCandidate(threadId, norm, root)
+    } catch {
+      return undefined
+    }
   }
   return {
     accountId: record.accountId,
@@ -440,7 +444,7 @@ function quarantineOtherCodexThreadIdentities(
       const identity = readIdentityFileCandidate(candidate)
       if (!identity) continue
       if (identity.nodeId !== nodeId && path.basename(candidate.file) !== keepThreadId) continue
-      const quarantine = `${candidate.file}.transfer-${process.pid}-${Date.now()}-${index}`
+      const quarantine = tempNameFor(candidate.file, { sequence: index + 1 })
       renameAtomicSync(candidate.file, quarantine)
       quarantined.push({ source: candidate.file, quarantine })
     }
@@ -538,8 +542,8 @@ export function codexThreadIdentityHasLiveConflict(
       ? nodeIdOrLive
       : liveOrRoot as (nodeId: string) => boolean
   const identityRoot =
-    typeof nodeIdOrLive === 'string' && typeof liveOrRoot === 'string'
-      ? root ?? defaultIdentityRoot()
+    typeof nodeIdOrLive === 'string'
+      ? root ?? (typeof liveOrRoot === 'string' ? liveOrRoot : defaultIdentityRoot())
       : typeof liveOrRoot === 'string'
         ? liveOrRoot
         : defaultIdentityRoot()
