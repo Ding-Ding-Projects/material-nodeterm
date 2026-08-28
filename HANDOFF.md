@@ -26,6 +26,17 @@ Tests, type checks, lint, reviews, audits, runtime interaction, and screenshots 
 unrun in the accelerated lane. Build and package results must be recorded below after the pinned
 candidate is committed.
 
+### Accelerated delivery evidence
+
+The source candidate `6d31eb520ddaf3231d94a1162c7f980fbe98daa8` completed
+`C:\Users\cntow\Documents\GitHub\material-nodeterm-worktrees\ylc-veracrypt-20260828\build.bat /s`
+with exit code `0`. It produced the main, preload, renderer, and session-host output under `out/`.
+The subsequent `build-installer.bat /s` run was pinned to the same SHA and stopped before
+Squirrel.Windows packaging because the existing immutable installer-icon URL returned HTTP `404`.
+No installer output, `RELEASES`, or `.nupkg` was produced. The failed preflight generated only
+build inputs, which were removed without changing tracked resources. Tests, type checks, lint,
+reviews, audits, runtime interaction, and screenshots remain intentionally unrun.
+
 ## 2026-08-28, published v0.4.123 and continued repair state
 
 Release `v0.4.123` is published and non-draft. Its verified target is
