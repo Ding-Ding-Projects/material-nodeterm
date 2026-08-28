@@ -358,6 +358,7 @@ import { liveProjectJumpTarget, projectJumpDigit } from '../lib/projectJump'
 import {
   dispatchZoomActualSize,
   dispatchZoomShortcut,
+  liveZoomShortcutAction,
   liveZoomShortcutContext,
   zoomShortcutChord
 } from '../lib/zoomShortcut'
@@ -367,6 +368,7 @@ import {
   type GlobalKeydownDeps
 } from '../lib/globalKeybindings'
 import { isTerminalTarget, type ContextElement } from '../lib/keyContext'
+import { withPermissionMode } from '@shared/agents/approval-mode'
 import { installTerminalFocusMirror } from '../lib/terminalFocusMirror'
 import {
   applyWindowTitle,
