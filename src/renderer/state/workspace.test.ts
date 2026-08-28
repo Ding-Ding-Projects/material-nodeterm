@@ -1215,6 +1215,8 @@ describe('duplicateNode across every node kind', () => {
     loop: 'loop',
     scheduler: 'scheduler',
     dino: 'dino',
+    timer: 'timer',
+    'wild-dim-sum': 'wild-dim-sum',
     annotation: 'annotation',
     // The service family. Each prefix is the kind's own name, and none of them is `term` — that is
     // the point, not an aesthetic: `SAFE_NODE_ID` in core/project-node-append.ts is /^term-…/ and it
