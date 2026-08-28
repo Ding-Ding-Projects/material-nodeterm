@@ -3,6 +3,7 @@ import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '../state/workspace'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
+import { copy, fact, mapOwnedSentence, type DisplaySegment } from '../lib/personalVocabulary/ownedCopy'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import type {
   VeraCryptAvailability,
@@ -26,6 +27,35 @@ function displayPath(path: string): string {
   return name || path
 }
 
+type VeraCryptMessage = DisplaySegment
+
+const authoredMessage = (text: string): VeraCryptMessage => copy(text)
+const factualMessage = (text: string): VeraCryptMessage => fact(text)
+
+export function mapVeraCryptMessage(
+  message: VeraCryptMessage | null,
+  fallback: string,
+  map: (text: string) => string
+): string {
+  return message ? mapOwnedSentence(map, [message]) : map(fallback)
+}
+
+export function mapVeraCryptFavoriteLabel(
+  path: string,
+  preferredDriveLetter: string | null | undefined,
+  map: (text: string) => string
+): string {
+  return mapOwnedSentence(map, [fact(displayPath(path)), copy(' · '), preferredDriveLetter ? fact(`${preferredDriveLetter}:`) : copy('no letter')])
+}
+
+export function mapVeraCryptOperationText(
+  message: string,
+  driveLetter: string | null | undefined,
+  map: (text: string) => string
+): string {
+  return mapOwnedSentence(map, [fact(message), ...(driveLetter ? [copy(' · '), fact(`${driveLetter}:`)] : [])])
+}
+
 export default function VeraCryptNode({ id, data, selected }: NodeProps<CanvasNode>): React.JSX.Element {
   const vocab = useVocabularyMapper()
   const { updateNodeData } = useReactFlow()
@@ -34,7 +64,7 @@ export default function VeraCryptNode({ id, data, selected }: NodeProps<CanvasNo
   const [favorites, setFavorites] = useState<VeraCryptFavorite[]>([])
   const [options, setOptions] = useState<VeraCryptMountOptions>(data.veracryptIntent ?? defaultOptions)
   const [operation, setOperation] = useState<VeraCryptOperation | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
+  const [message, setMessage] = useState<VeraCryptMessage | null>(null)
   const [confirmWipe, setConfirmWipe] = useState(false)
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -47,9 +77,10 @@ export default function VeraCryptNode({ id, data, selected }: NodeProps<CanvasNo
       setAvailability(nextAvailability)
       setInventory(nextInventory)
       setFavorites(nextFavorites)
-      setMessage(nextInventory.reason ?? nextAvailability.reason)
+      const reason = nextInventory.reason ?? nextAvailability.reason
+      setMessage(reason ? factualMessage(reason) : null)
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'The VeraCrypt manager could not refresh its host state.')
+      setMessage(error instanceof Error ? factualMessage(error.message) : authoredMessage('The VeraCrypt manager could not refresh its host state.'))
     }
   }, [])
 
@@ -75,13 +106,13 @@ export default function VeraCryptNode({ id, data, selected }: NodeProps<CanvasNo
     try {
       const preflight = await window.nodeTerminal.veracrypt.preflight(options)
       if (!preflight.ok) {
-        setMessage(preflight.reason)
+        if (preflight.reason) setMessage(factualMessage(preflight.reason))
         return
       }
       setOperation(await window.nodeTerminal.veracrypt.mount(options))
       await refresh()
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'The VeraCrypt mount could not start.')
+      setMessage(error instanceof Error ? factualMessage(error.message) : authoredMessage('The VeraCrypt mount could not start.'))
     }
   }
 
@@ -123,7 +154,7 @@ export default function VeraCryptNode({ id, data, selected }: NodeProps<CanvasNo
         <button type="button" className="term-node__close" onClick={() => void refresh()} title={vocab('Refresh VeraCrypt state')} aria-label={vocab('Refresh VeraCrypt state')}>⟳</button>
       </div>
       <div className="veracrypt-node__body nodrag nowheel">
-        <p className={`veracrypt-node__status${unsupported || availability?.state === 'error' ? ' is-error' : ''}`} role={unsupported || availability?.state === 'error' ? 'alert' : 'status'}>{vocab(message ?? (availability?.state === 'available' ? 'VeraCrypt is available on this computer.' : 'Checking VeraCrypt availability…'))}</p>
+        <p className={`veracrypt-node__status${unsupported || availability?.state === 'error' ? ' is-error' : ''}`} role={unsupported || availability?.state === 'error' ? 'alert' : 'status'}>{mapVeraCryptMessage(message, availability?.state === 'available' ? 'VeraCrypt is available on this computer.' : 'Checking VeraCrypt availability…', vocab)}</p>
         <p className="veracrypt-node__note">{vocab('Only existing regular files are supported. VeraCrypt collects the password, PIM, keyfiles, and hidden-volume protection choice in its own prompt.')} </p>
         <label className="veracrypt-node__field">{vocab('Container file')}
           <span className="veracrypt-node__path-row"><input value={options.containerPath} onChange={(event) => setOption('containerPath', event.target.value)} placeholder={vocab('Choose an existing container file')} aria-label={vocab('VeraCrypt container file path')} /><button type="button" onClick={() => void chooseFile()} disabled={unsupported}>{vocab('Browse')}</button></span>
@@ -138,10 +169,10 @@ export default function VeraCryptNode({ id, data, selected }: NodeProps<CanvasNo
           <label><input type="checkbox" checked={options.exploreAfterMount === true} onChange={(event) => setOption('exploreAfterMount', event.target.checked)} /> {vocab('Explore after mount')}</label>
         </div>
         <div className="veracrypt-node__actions"><button type="button" className="primary" onClick={() => void mount()} disabled={unsupported || operation?.state === 'running'}>{vocab('Mount')}</button><button type="button" onClick={() => void saveFavorite()} disabled={!options.containerPath}>{vocab('Save favorite')}</button><button type="button" onClick={() => setConfirmWipe(true)} disabled={unsupported || operation?.state === 'running'}>{vocab('Wipe password cache')}</button>{operation?.state === 'running' && <button type="button" onClick={() => void window.nodeTerminal.veracrypt.cancel(operation.id)}>{vocab('Cancel')}</button>}</div>
-        {confirmWipe && <div className="veracrypt-node__confirm" role="alertdialog" aria-label={vocab('Confirm password cache wipe')}><p>{vocab('Wipe VeraCrypt password cache on this computer? This clears cached credentials and cannot be undone.')}</p><div className="veracrypt-node__actions"><button type="button" className="primary" onClick={() => { setConfirmWipe(false); void window.nodeTerminal.veracrypt.wipeCache().then(setOperation).catch((error) => setMessage(String(error))) }}>{vocab('Confirm wipe')}</button><button type="button" onClick={() => setConfirmWipe(false)}>{vocab('Cancel')}</button></div></div>}
-        {favorites.length > 0 && <section className="veracrypt-node__favorites" aria-label={vocab('VeraCrypt favorites')}><h3>{vocab('Favorites')}</h3>{favorites.map((favorite) => <button type="button" key={favorite.id} onClick={() => loadFavorite(favorite)} title={favorite.containerPath}>{displayPath(favorite.containerPath)} · {favorite.preferredDriveLetter ?? vocab('no letter')}</button>)}</section>}
-        <section className="veracrypt-node__mounted" aria-label={vocab('Verified VeraCrypt mounts')}><h3>{vocab('Verified mounts')}</h3>{mounted.length === 0 ? <p>{vocab('No manager-created mounts are currently verified.')}</p> : mounted.map((volume) => <article key={volume.driveLetter}><strong>{volume.driveLetter}:</strong><span>{volume.containerPath ?? vocab('Container path not returned by VeraCrypt')}</span><button type="button" onClick={() => void window.nodeTerminal.veracrypt.explore(volume.driveLetter)}>{vocab('Explore')}</button><button type="button" onClick={() => void window.nodeTerminal.veracrypt.unmount(volume.driveLetter).then(setOperation).then(() => refresh()).catch((error) => setMessage(String(error)))}>{vocab('Unmount')}</button></article>)}</section>
-        {operation && <p className="veracrypt-node__operation" role="status">{vocab(operation.message)}{operation.driveLetter ? ` · ${operation.driveLetter}:` : ''}</p>}
+        {confirmWipe && <div className="veracrypt-node__confirm" role="alertdialog" aria-label={vocab('Confirm password cache wipe')}><p>{vocab('Wipe VeraCrypt password cache on this computer? This clears cached credentials and cannot be undone.')}</p><div className="veracrypt-node__actions"><button type="button" className="primary" onClick={() => { setConfirmWipe(false); void window.nodeTerminal.veracrypt.wipeCache().then(setOperation).catch((error) => setMessage(factualMessage(String(error)))) }}>{vocab('Confirm wipe')}</button><button type="button" onClick={() => setConfirmWipe(false)}>{vocab('Cancel')}</button></div></div>}
+        {favorites.length > 0 && <section className="veracrypt-node__favorites" aria-label={vocab('VeraCrypt favorites')}><h3>{vocab('Favorites')}</h3>{favorites.map((favorite) => <button type="button" key={favorite.id} onClick={() => loadFavorite(favorite)} title={favorite.containerPath}>{mapVeraCryptFavoriteLabel(favorite.containerPath, favorite.preferredDriveLetter, vocab)}</button>)}</section>}
+        <section className="veracrypt-node__mounted" aria-label={vocab('Verified VeraCrypt mounts')}><h3>{vocab('Verified mounts')}</h3>{mounted.length === 0 ? <p>{vocab('No manager-created mounts are currently verified.')}</p> : mounted.map((volume) => <article key={volume.driveLetter}><strong>{volume.driveLetter}:</strong><span>{volume.containerPath ?? vocab('Container path not returned by VeraCrypt')}</span><button type="button" onClick={() => void window.nodeTerminal.veracrypt.explore(volume.driveLetter)}>{vocab('Explore')}</button><button type="button" onClick={() => void window.nodeTerminal.veracrypt.unmount(volume.driveLetter).then(setOperation).then(() => refresh()).catch((error) => setMessage(factualMessage(String(error))))}>{vocab('Unmount')}</button></article>)}</section>
+        {operation && <p className="veracrypt-node__operation" role="status">{mapVeraCryptOperationText(operation.message, operation.driveLetter, vocab)}</p>}
       </div>
     </div>
   )
