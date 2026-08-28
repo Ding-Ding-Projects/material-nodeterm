@@ -58,6 +58,7 @@ describe('a phone-spawned session presents its per-node token', { timeout: REAL_
     encoding: 'utf8',
     env: shellEnv
   })
+  const available = sh.status === 0 && curl.status === 0
   let dir = ''
   let server: Server | null = null
   let port = 0
