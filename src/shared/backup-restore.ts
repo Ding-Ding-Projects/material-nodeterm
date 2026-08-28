@@ -105,7 +105,9 @@ export interface BackupRestoreEntry {
 
 export async function sha256BackupBytes(data: Uint8Array): Promise<string> {
   if (!globalThis.crypto?.subtle) throw new BackupRestoreError('hash', 'SHA-256 is unavailable in this surface.')
-  const hash = await globalThis.crypto.subtle.digest('SHA-256', data)
+  const owned = new Uint8Array(data.byteLength)
+  owned.set(data)
+  const hash = await globalThis.crypto.subtle.digest('SHA-256', owned)
   return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
@@ -192,10 +194,11 @@ function validateVersion(value: unknown, label: string): BackupRestoreVersion {
   unknownFields(value, ['product', 'version', 'schema'], label)
   const product = boundedText(value.product, `${label} product`, 128, SAFE_PRODUCT)
   const version = boundedText(value.version, `${label} version`, BACKUP_RESTORE_LIMITS.maxVersionBytes, SAFE_VERSION)
-  if (!Number.isSafeInteger(value.schema) || value.schema < 1 || value.schema > 100) {
+  const schema = value.schema
+  if (typeof schema !== 'number' || !Number.isSafeInteger(schema) || schema < 1 || schema > 100) {
     throw new BackupRestoreError('unsupported-version', `${label} schema is unsupported.`)
   }
-  return { product, version, schema: value.schema }
+  return { product, version, schema }
 }
 
 export function validateBackupResourceDescriptor(value: unknown): BackupRestoreResourceDescriptor {
@@ -254,8 +257,10 @@ export function validateBackupRestoreManifest(value: unknown): BackupRestoreMani
   if (resource.edition !== value.edition) throw new BackupRestoreError('unsupported-edition', 'Backup and resource editions do not match.')
   if (!Array.isArray(value.entries) || value.entries.length > BACKUP_RESTORE_LIMITS.maxEntries) throw new BackupRestoreError('entry-limit', 'Backup entry inventory exceeds its limit.')
   if (!Array.isArray(value.omissions) || value.omissions.length > BACKUP_RESTORE_LIMITS.maxOmissions) throw new BackupRestoreError('manifest', 'Backup omission inventory exceeds its limit.')
-  if (!record(value.totals) || !Number.isSafeInteger(value.totals.rawBytes) || value.totals.rawBytes < 0 ||
-      !Number.isSafeInteger(value.totals.compressedBytes) || value.totals.compressedBytes < 0) throw new BackupRestoreError('manifest', 'Backup totals are invalid.')
+  if (!record(value.totals)) throw new BackupRestoreError('manifest', 'Backup totals are invalid.')
+  const totals = value.totals
+  if (typeof totals.rawBytes !== 'number' || !Number.isSafeInteger(totals.rawBytes) || totals.rawBytes < 0 ||
+      typeof totals.compressedBytes !== 'number' || !Number.isSafeInteger(totals.compressedBytes) || totals.compressedBytes < 0) throw new BackupRestoreError('manifest', 'Backup totals are invalid.')
   const entries: BackupRestoreEntryMetadata[] = []
   const seen = new Set<string>()
   const folded = new Set<string>()
@@ -266,19 +271,21 @@ export function validateBackupRestoreManifest(value: unknown): BackupRestoreMani
     unknownFields(item, ['path', 'sha256', 'rawBytes', 'compressedBytes', 'required'], 'Backup entry')
     const path = validateBackupArchivePath(item.path)
     if (path === 'manifest.json') throw new BackupRestoreError('duplicate-entry', 'The manifest is framing, not a payload entry.')
-    if (!SHA256.test(String(item.sha256)) || !Number.isSafeInteger(item.rawBytes) || item.rawBytes < 0 ||
-        !Number.isSafeInteger(item.compressedBytes) || item.compressedBytes < 0 || typeof item.required !== 'boolean') throw new BackupRestoreError('manifest', `Backup entry metadata is invalid: ${path}`)
+    const rawBytesValue = item.rawBytes
+    const compressedBytesValue = item.compressedBytes
+    if (!SHA256.test(String(item.sha256)) || typeof rawBytesValue !== 'number' || !Number.isSafeInteger(rawBytesValue) || rawBytesValue < 0 ||
+        typeof compressedBytesValue !== 'number' || !Number.isSafeInteger(compressedBytesValue) || compressedBytesValue < 0 || typeof item.required !== 'boolean') throw new BackupRestoreError('manifest', `Backup entry metadata is invalid: ${path}`)
     const key = backupArchivePathKey(path)
     if (seen.has(path)) throw new BackupRestoreError('duplicate-entry', `Duplicate backup entry: ${path}`)
     if (folded.has(key)) throw new BackupRestoreError('case-collision', `Case-colliding backup entry: ${path}`)
     seen.add(path)
     folded.add(key)
-    if (item.rawBytes > BACKUP_RESTORE_LIMITS.maxEntryBytes) throw new BackupRestoreError('raw-limit', `Backup entry exceeds its byte limit: ${path}`)
-    rawBytes += item.rawBytes
-    compressedBytes += item.compressedBytes
+    if (rawBytesValue > BACKUP_RESTORE_LIMITS.maxEntryBytes) throw new BackupRestoreError('raw-limit', `Backup entry exceeds its byte limit: ${path}`)
+    rawBytes += rawBytesValue
+    compressedBytes += compressedBytesValue
     if (rawBytes > BACKUP_RESTORE_LIMITS.maxRawBytes) throw new BackupRestoreError('raw-limit', 'Backup raw-byte total exceeds its limit.')
     if (compressedBytes > BACKUP_RESTORE_LIMITS.maxArchiveBytes) throw new BackupRestoreError('compressed-limit', 'Backup compressed-byte total exceeds its limit.')
-    entries.push({ path, sha256: String(item.sha256).toLowerCase(), rawBytes: item.rawBytes, compressedBytes: item.compressedBytes, required: item.required })
+    entries.push({ path, sha256: String(item.sha256).toLowerCase(), rawBytes: rawBytesValue, compressedBytes: compressedBytesValue, required: item.required })
   }
   if (!entries.some((entry) => entry.required)) throw new BackupRestoreError('required-entry', 'A hosted backup must contain a required payload entry.')
   const omissions = value.omissions.map(validateOmission)
@@ -288,7 +295,7 @@ export function validateBackupRestoreManifest(value: unknown): BackupRestoreMani
     if (seen.has(omission.path) || folded.has(key) || omissionSeen.has(key)) throw new BackupRestoreError('duplicate-entry', `Backup omission collides with an entry: ${omission.path}`)
     omissionSeen.add(key)
   }
-  if (rawBytes !== value.totals.rawBytes || compressedBytes !== value.totals.compressedBytes) throw new BackupRestoreError('manifest', 'Backup totals do not match the entry inventory.')
+  if (rawBytes !== totals.rawBytes || compressedBytes !== totals.compressedBytes) throw new BackupRestoreError('manifest', 'Backup totals do not match the entry inventory.')
   return { schema: BACKUP_RESTORE_SCHEMA, schemaVersion: 1, backupId, createdAt, framework, product, edition: value.edition as BackupRestoreEdition, resource, entries, omissions, totals: { rawBytes, compressedBytes } }
 }
 
@@ -431,10 +438,10 @@ export function reviewBackupRestore(
   if (edition === 'downgrade' && !options.allowVersionDowngrade) reasons.push('Restoring to a lower edition is disabled until explicitly allowed.')
   const versionComparison = compareVersion(manifest.resource.version.version, target.version.version)
   let version: BackupRestoreCompatibility['version'] = 'unknown'
-  if (versionComparison === 0) version = 'same'
+  if (versionComparison === null) version = 'unknown'
+  else if (versionComparison === 0) version = 'same'
   else if (versionComparison === -1) version = 'upgrade'
-  else if (versionComparison === 1) version = 'downgrade'
-  else version = 'incompatible'
+  else version = 'downgrade'
   if (version === 'downgrade' && !options.allowVersionDowngrade) reasons.push('The backup is newer than the destination version; downgrade confirmation is required.')
   if (version === 'unknown') warnings.push('Version ordering could not be proven from the recorded values.')
   let ownership: BackupRestoreCompatibility['ownership']
