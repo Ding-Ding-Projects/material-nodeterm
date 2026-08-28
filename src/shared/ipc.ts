@@ -841,6 +841,13 @@ export const IPC = {
   awsResourceExecute: 'aws-resource:execute',
   awsResourceCancel: 'aws-resource:cancel',
   awsResourceProgress: 'aws-resource:progress',
+  awsManagerCatalog: 'aws-manager:catalog',
+  awsManagerAvailability: 'aws-manager:availability',
+  awsManagerList: 'aws-manager:list',
+  awsManagerRun: 'aws-manager:run',
+  awsManagerProgress: 'aws-manager:progress',
+  awsManagerCancel: 'aws-manager:cancel',
+  awsManagerRetry: 'aws-manager:retry',
   /** Electron only: a multi-file picker (dialog:select-file only returns one path). Browser (Server
    *  Edition) uses a plain `<input type="file" multiple>` + files.saveUpload instead — see
    *  FileConverterPanel.tsx. */
