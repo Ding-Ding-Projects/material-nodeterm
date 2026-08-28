@@ -1024,6 +1024,7 @@ export function createCanvasControlTerminalNode(
     undefined,
     ssh,
     ssh ? undefined : selectedCodexAccountId,
+    undefined,
     permissionMode,
     options
   )

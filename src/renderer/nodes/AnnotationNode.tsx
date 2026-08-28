@@ -6,6 +6,7 @@ import { ColorMenu } from '../components/color/ColorMenu'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import {
   ANNOTATION_DEFAULT_THICKNESS,
+  ANNOTATION_MAX_THICKNESS,
   ANNOTATION_MAX_LABEL_LENGTH,
   ANNOTATION_MIN_THICKNESS,
   normalizeAnnotationLabel,

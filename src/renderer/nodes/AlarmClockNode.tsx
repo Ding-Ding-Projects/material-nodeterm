@@ -149,7 +149,7 @@ export default function AlarmClockNode({ id, data, selected }: NodeProps<CanvasN
       narratorEnabled: data.alarmNarratorEnabled !== false,
       nextOccurrenceAt: typeof data.alarmNextOccurrenceAt === 'number' ? data.alarmNextOccurrenceAt : undefined
     }
-    if (!validateAlarm({ ...input, createdAt: 0, updatedAt: 0 }).ok) return
+    if (!validateAlarm(input).ok) return
     let active = true
     void hostAlarm.upsert(input).then((snapshot) => {
       if (active) applyHostSnapshot(snapshot)

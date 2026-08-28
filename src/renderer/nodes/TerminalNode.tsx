@@ -11,7 +11,6 @@ import {
   useRef,
   useState
 } from 'react'
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import {
   Handle,
@@ -84,7 +83,6 @@ import {
   type WebglClientHandle
 } from '../terminal/webgl-budget'
 import { ensureProjectLaunchInfo } from '../state/projectLaunchInfo'
-import { loseWebglContexts, registerWebglClient, type WebglClientHandle } from '../terminal/webgl-budget'
 import { quantizeCharSize } from '../terminal/char-size-quantize'
 import {
   PARK_MAX,
@@ -146,8 +144,7 @@ import {
 } from '../terminal/agent-restart'
 import { WakeInputBuffer } from '../terminal/wake-input-buffer'
 import { FindBar } from '../components/FindBar'
-import { IconSearch, IconChat, IconMic, IconReload, IconPictureInPicture } from '../components/icons'
-import { IconSearch, IconChat, IconMic, IconReload, IconEye, IconEyeOff, IconGrid, IconFocus } from '../components/icons'
+import { IconSearch, IconChat, IconMic, IconReload, IconPictureInPicture, IconEye, IconEyeOff, IconGrid, IconFocus } from '../components/icons'
 import { NodeLabels } from '../components/kanban/NodeLabels'
 import { GitHubWorkItemAttachment } from './GitHubWorkItemAttachment'
 import { Tooltip } from '../components/Tooltip'
@@ -195,7 +192,6 @@ import {
   NODE_COLORS,
   type CanvasNode
 } from '../state/workspace'
-import { accountChipLabel, agentLaunchOverride, COLLAPSED_HEIGHT, NODE_COLORS, type CanvasNode } from '../state/workspace'
 import {
   hasHooks,
   canRecur,
@@ -206,11 +202,13 @@ import {
   canRename,
   canReadTitle,
   createdAgentId,
+  capabilityAgentId,
   createdAgentHarnessId,
   hasPermissionMode,
   reportsOwnCopy,
   resumeCommand,
-  agentConfig
+  agentConfig,
+  type AgentId
 } from '@shared/agents/config'
 import {
   commandForAgentLaunch,
@@ -222,7 +220,7 @@ import {
   sshHostKey,
   type SshConnection
 } from '@shared/ssh'
-import { hintLabel, isWindowsPlatform } from '@shared/platform-utils'
+import { hintLabel, isWindowsPlatform, isMacPlatform } from '@shared/platform-utils'
 import {
   windowsTerminalProfileId,
   windowsTerminalProfileLabel
@@ -246,15 +244,12 @@ import { assembleResumeCommand } from '@shared/agents/launch'
 import { agentEnvSnapshot } from '@renderer/lib/agentEnv'
 import { normalizedAgentModel } from '@shared/agents/model-gateway'
 import { ensureActivePermissionMode } from '../state/permissionMode'
-import { buildSshArgs, sshConnectionIdForProject, sshHostKey, type SshConnection } from '@shared/ssh'
 import {
   chipFor,
   effectiveBindings,
   terminalChordBubbles,
   terminalShortcutPolicy
 } from '../lib/keybindingOverrides'
-import { matchesShortcut } from '@shared/shortcut'
-import { hintLabel, isWindowsPlatform, isMacPlatform } from '@shared/platform-utils'
 import { ColumnPill } from '../components/kanban/ColumnPill'
 import { BoardLogPanel } from '../components/kanban/BoardLogPanel'
 import { AgentMascot } from './AgentMascot'
