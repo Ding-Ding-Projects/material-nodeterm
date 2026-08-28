@@ -376,9 +376,7 @@ export function buildRealApi(
   client: RpcClient
 ): Pick<
   NodeTerminalApi,
-  'pty' | 'workspace' | 'serverDeployment' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'planner' | 'userDataDir'
-  | 'pty'
-  | 'workspace'
+  'pty' | 'workspace' | 'timer' | 'serverDeployment' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'planner' | 'userDataDir'
   | 'projectSettings'
   | 'projectSetup'
   | 'worktree'
@@ -680,9 +678,10 @@ export function buildRealApi(
     status: async () => ({ running: false }),
     onProgress: () => () => {}
   }
-  return { pty, workspace, serverDeployment, settings, schoolMode, kidsMode, scheduledSettings, planner, userDataDir }
-  return { pty, workspace, timer, serverDeployment, settings, schoolMode, kidsMode, scheduledSettings, userDataDir }
-  return { pty, workspace, projectSettings, projectSetup, worktree, settings, agent, userDataDir }
+  return {
+    pty, workspace, timer, serverDeployment, settings, schoolMode, kidsMode,
+    scheduledSettings, planner, projectSettings, projectSetup, worktree, agent, userDataDir
+  }
 }
 
 export function buildGitHubApi(
@@ -992,7 +991,7 @@ export function buildFilesApi(
 /** Server Edition specialization: raw HTTP for upload bytes, RPC for the other file operations. */
 export function buildServerFilesApi(
   client: RpcClient
-): Pick<NodeTerminalApi, 'fs' | 'git' | 'files' | 'context' | 'boardLog'> {
+): Pick<NodeTerminalApi, 'fs' | 'git' | 'files' | 'context' | 'boardLog' | 'logs'> {
   const api = buildFilesApi(client)
   return {
     ...api,
@@ -1294,7 +1293,7 @@ export function buildTorrentApi(client: RpcClient): Pick<NodeTerminalApi, 'torre
     remove: (id) => client.request(IPC.torrentRemove, id) as ReturnType<TorrentApi['remove']>,
     setSeedPolicy: (id, policy) => client.request(IPC.torrentSetSeedPolicy, id, policy) as ReturnType<TorrentApi['setSeedPolicy']>,
     reconcile: () => client.request(IPC.torrentReconcile) as ReturnType<TorrentApi['reconcile']>,
-    onTask: (listener) => client.subscribe(IPC.torrentTask, listener as (payload: TorrentTaskState) => void)
+    onTask: (listener) => client.subscribe(IPC.torrentTask, listener as unknown as Listener)
   }
   return { torrent }
 }
@@ -1630,9 +1629,9 @@ export function buildPasswordManagerApi(client: RpcClient): Pick<NodeTerminalApi
 export function buildUniverseDoorEntryApi(client: RpcClient): Pick<NodeTerminalApi, 'universeDoorEntry'> {
   return {
     universeDoorEntry: {
-      configure: (input) => client.request(IPC.universeDoorEntryConfigure, input),
-      verify: (input) => client.request(IPC.universeDoorEntryVerify, input),
-      remove: (doorId) => client.request(IPC.universeDoorEntryRemove, doorId)
+      configure: (input) => client.request(IPC.universeDoorEntryConfigure, input) as ReturnType<NodeTerminalApi['universeDoorEntry']['configure']>,
+      verify: (input) => client.request(IPC.universeDoorEntryVerify, input) as ReturnType<NodeTerminalApi['universeDoorEntry']['verify']>,
+      remove: (doorId) => client.request(IPC.universeDoorEntryRemove, doorId) as ReturnType<NodeTerminalApi['universeDoorEntry']['remove']>
     }
   }
 }

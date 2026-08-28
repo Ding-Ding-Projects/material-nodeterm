@@ -654,7 +654,11 @@ export function buildStubApi(): Omit<
       // same authored/fact ownership contract, and authored fields are mapped before display.
       if (payload.titleKind !== 'authored' && payload.titleKind !== 'fact') return 'failed'
       if (payload.bodyKind !== 'authored' && payload.bodyKind !== 'fact') return 'failed'
-      const copy = mapNativeNotification(payload, mapLocalVocabularyText)
+      const copy = mapNativeNotification({
+        ...payload,
+        titleKind: payload.titleKind ?? 'fact',
+        bodyKind: payload.bodyKind ?? 'fact'
+      }, mapLocalVocabularyText)
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
           new Notification(copy.title, { body: copy.body })
