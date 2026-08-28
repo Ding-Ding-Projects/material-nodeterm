@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSystemCodexAccount } from "./systemCodexAccount";
 
 describe("useSystemCodexAccount remote identity cache", () => {
@@ -31,7 +31,6 @@ describe("useSystemCodexAccount remote identity cache", () => {
     expect(systemIdentity).toHaveBeenCalledWith({ projectId: "project-1" });
   });
 });
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const systemIdentity = vi.fn()
 

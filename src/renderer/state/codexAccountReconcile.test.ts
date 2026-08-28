@@ -54,7 +54,7 @@ describe('Codex account startup reconciliation', () => {
 describe('applyResolvedCodexAccounts', () => {
   it('promotes a generated label to the email and clears pending', () => {
     const out = applyResolvedCodexAccounts([pending('a')], [{ id: 'a', email: 'a@x' }])
-    expect(out).toEqual([{ id: 'a', label: 'a@x', email: 'a@x', pending: false }])
+    expect(out).toEqual([{ id: 'a', label: 'a@x', email: 'a@x', pending: false, createdAt: 1 }])
   })
 
   it('keeps a user-chosen label but still captures the email', () => {
@@ -67,7 +67,7 @@ describe('applyResolvedCodexAccounts', () => {
 
   it('merges against fresh state without reviving removed or already-changed accounts', () => {
     // Fresh list: 'a' was already settled by a concurrent edit; 'removed' is gone entirely.
-    const fresh: CodexAccount[] = [{ id: 'a', label: 'Renamed', email: 'a@x', pending: false }]
+    const fresh: CodexAccount[] = [{ id: 'a', label: 'Renamed', email: 'a@x', pending: false, createdAt: 0 }]
     const resolved: ResolvedCodexAccount[] = [
       { id: 'a', email: 'stale@x' }, // must NOT clobber the already-changed row
       { id: 'removed', email: 'ghost@x' } // must NOT be revived into the list

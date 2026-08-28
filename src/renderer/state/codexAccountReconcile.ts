@@ -1,4 +1,4 @@
-import type { CodexAccount } from '@shared/types'
+import type { CodexAccount } from '@shared/codex-account'
 // S6 PR 8 — reconcile pending Codex accounts against the app-servers' live identity, without
 // trusting attacker-controlled settings fields. Based on @Corvin's #112
 // (`src/renderer/state/codexAccountReconcile.ts`).
@@ -8,7 +8,6 @@ import type { CodexAccount } from '@shared/types'
 // late can never revive an account the user removed, nor clobber one that already changed. Nothing
 // here fabricates an account: an unauthenticated / unreadable home drops out of the resolved set.
 
-import type { CodexAccount } from '@shared/codex-account'
 
 export interface ResolvedCodexAccount {
   id: string

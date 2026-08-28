@@ -32,16 +32,6 @@ export interface SshConnInfo {
   /** The probed remote `claude --version` output (`null` = probe ran, claude not found). Feeds
    *  the tab menu's Auto hint; only present on a reused (already probed) connection. */
   remoteClaudeVersion?: string | null
-  /** Absolute remote path of the uploaded `nodeterm-codex` launcher (`chmod 700`). Present only
-   *  when `installRemoteCodexRuntime` found node+codex+curl and staged the runtime. Absent ⇒ this
-   *  host cannot host managed Codex accounts (the renderer keeps Codex nodes on the system login). */
-  codexLauncherPath?: string
-  /** Absolute remote path of the uploaded standalone relay bundle (`codex-relay.js`, `chmod 700`).
-   *  Only executable code is ever uploaded — never a credential (§2.1 / Property 1). */
-  codexRelayScriptPath?: string
-  /** Absolute remote path of the host's own Node (`readlink -f $(command -v node)`), the interpreter
-   *  the relay bundle and app-server run under. Absent ⇒ no managed Codex runtime on this host. */
-  codexRelayRuntimePath?: string
 }
 
 /**

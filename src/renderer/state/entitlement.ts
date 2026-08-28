@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { LicenseStatus } from '@shared/types'
+import type { LicenseDetail, LicenseStatus } from '@shared/types'
 import { useSettings } from './settings'
 import { featureEnabled, resolveProFeatures, type ProFeatureId } from '../lib/proFeatureAccess'
 
@@ -33,7 +33,6 @@ function currentFeatures(): Record<ProFeatureId, boolean> {
  * licence reporting MORE than this still wins, so nothing is taken away from anyone.
  */
 const FREE_SEATS = 32
-import type { LicenseDetail, LicenseStatus } from '@shared/types'
 import { isReleaseRefusal } from '@renderer/lib/licenseCopy'
 
 interface EntitlementState {
