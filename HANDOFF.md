@@ -1,5 +1,58 @@
 # Handoff
 
+## 2026-08-28, parser recovery build handoff and QEMU packaging blocker
+
+The combined parser-recovery branch currently ends at
+`8352b8b49050706acc2f8948088cff648b8bb0c1`. At the final fetch before packaging, that commit was
+99 commits ahead of `origin/main` and zero behind. It includes the main-process, relay, account,
+identity, PTY, renderer, stylesheet, bridge, documentation-bundle, portable-media, session-host,
+and native-toolchain repairs accumulated under issue #104.
+
+The supported source build and the one-click full build both completed at that exact commit:
+
+- `npm run build` exited `0`. Repository contracts, main, preload, 3,950 renderer modules, the
+  complete renderer asset set, and `out/session-host/host.cjs` (368.1 kB) were produced.
+- `build.bat /s` exited `0`. It selected manifest-pinned Node.js `24.19.0`, Python 3.13, and
+  Visual Studio 2022 toolset `14.44.35207` from the compatible installation under shared program
+  data. The selected `VsDevCmd.bat` environment, real Spectre libraries, native rebuild, repository
+  contracts, and application bundles all completed.
+- No new test, lint, type-check, review, audit, runtime-interaction, or screenshot workflow ran in
+  this rapid recovery pass. The build commands above are build evidence only.
+
+`build-installer.bat /s` did not complete. It reached the guarded Windows installer wrapper, proved
+the source identity, then failed during pinned QEMU resource staging. After downloading and
+SHA-512-validating the pinned installer, Node could not spawn
+`resources/qemu/.qemu-w64-29620.exe` and reported `EACCES`. The retained failed-attempt file is
+180,204,136 bytes with SHA-256
+`c7592db7716029e814d71c9a7dfc9b76dc72019753ee9afc2fa70b14c9d28b4f`. It has only the data stream.
+No Squirrel.Windows output was produced by that attempt.
+
+A source worker was started to add bounded retry for transient child-process `EACCES`, `EPERM`,
+and `EBUSY` errors in `scripts/ensure-qemu-resources.mjs`, while preserving fixed arguments,
+`shell: false`, hash validation, real installer exit failures, required payload checks, and
+current-process temporary-file cleanup in `finally`. The session was stopped before that worker
+edited the file, so no partial implementation exists and nothing is hidden outside commits.
+A direct attempt to remove the failed temporary installer was refused before execution by the
+automation safety boundary, so the exact file remains for the next owner to inspect or remove
+through an approved route.
+
+Next actions:
+
+1. Implement the bounded QEMU spawn retry and `finally` cleanup in
+   `scripts/ensure-qemu-resources.mjs`.
+2. Rerun `build-installer.bat /s` at a commit that includes that repair. Record every unsigned
+   Squirrel.Windows output, size, signature state, and SHA-256.
+3. Open one combined pull request for issue #104. Do not split the related recovery commits into
+   separate pull requests.
+4. Add a separate new pull-request comment stating that implementation workers use Luna,
+   reviewers and auditors use Terra, and large repair lanes use Sol.
+5. Merge only after the pull request is mergeable, then verify the unique non-draft release target
+   and every required downloadable asset. Do not infer release success from a build or a queued run.
+6. Keep issue #198 separate. Its encrypted continuation-packet feature is an independent active
+   branch and explicitly depends on this recovery finishing.
+7. Preserve the unrelated primary-checkout edit in `src/main/codex-accounts.ts` and the named
+   preservation stash. They were not created by this recovery integration.
+
 ## 2026-08-28, native child toolchain binding repair
 
 The fresh `0.4.121` build candidate at commit `43587f87390287bad0036ca20f91a37e2a44acd8` still
