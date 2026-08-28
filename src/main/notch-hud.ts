@@ -240,9 +240,6 @@ class NotchHudController {
     this.ipcBound = false
   }
 
-  /** Apply live tunables and re-push, so a slider drag moves the pill as you drag. */
-  setTunables(t: { notchWidth: number; hoverExpand: boolean }): void {
-    this.tunables = { notchWidth: t.notchWidth, hoverExpand: t.hoverExpand }
   /** Apply live tunables and re-push, so a slider drag moves the capsule as you drag. */
   setTunables(t: { notchWidth: number; hoverExpand: boolean; percentMode: 'used' | 'remaining' | 'tokens' }): void {
     this.tunables = { notchWidth: t.notchWidth, hoverExpand: t.hoverExpand, percentMode: t.percentMode }
