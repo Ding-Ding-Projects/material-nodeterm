@@ -4131,3 +4131,24 @@ Changed files: `src/core/codex-identity-proxy.ts` and `HANDOFF.md`.
 This ultra-speed parser lane deliberately ran no tests, checkers, lint, type checks, builds, packaging,
 reviews, audits, runtime interaction, or UI captures. The coordinating owner must merge and observe the
 resulting hosted workflow before treating the release path as verified.
+
+# 2026-08-28, PTY manager import boundary repair
+
+Release run `33133756388` and build check `33133739506` stopped at
+`src/core/pty-manager.ts:42:2` with `Expected '}' but found remotePaneProcessArgs`. The file header
+contained a missing comma, a duplicated `remotePaneCursorArgs` import, and repeated import groups for
+the tmux naming, account, Codex account, and shared agent configuration modules. The same reconciliation
+splice left an obsolete `sendText` path referring to removed `localTmuxSendKeysArgs` and
+`remoteTmuxSendKeysArgs` helpers, plus an unmatched `try` block.
+
+The repair keeps one coherent import set with every helper still used by PTY, SSH, relay, remote pane
+process, cursor, termination, lifecycle, and shutdown paths. It removes only obsolete imports and the
+unreachable duplicate send path, leaving the current stdin-backed local and remote paste delivery,
+session-host delivery, framed-message delivery, and all existing lifecycle behavior intact.
+
+Changed files: `src/core/pty-manager.ts` and `HANDOFF.md`.
+
+The lane started from `origin/main` at `740969735cd5389eb9959c62ad1e466ed0964e7d`. No tests, checkers,
+lint, type checks, builds, packaging, reviews, audits, runtime interaction, or UI captures were run by
+the explicitly bounded repair lane. The coordinating owner must merge this repair and observe the hosted
+workflow before treating the release path as verified.
