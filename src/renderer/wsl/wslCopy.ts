@@ -62,7 +62,7 @@ export const WSL_COPY_INVENTORY = Object.entries(WSL_COPY).map(([key, value]) =>
   ...value
 }))
 
-const WSL_COPY_BY_FALLBACK = new Map(
+const WSL_COPY_BY_FALLBACK: Map<string, WslCopyKey> = new Map(
   WSL_COPY_INVENTORY.map((entry) => [entry.fallback, entry.key])
 )
 

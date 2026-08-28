@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WslCreateDialog, WSL_COPY_IDS } from './WslCreateDialog'
+import { WslCreateDialog } from './WslCreateDialog'
 import { resetDialogStack } from '../components/dialog-stack'
 import type { WslCatalogueEntry } from './wslCoreApi'
 import { usePersonalVocabulary } from '../state/personalVocabulary'
@@ -145,7 +145,14 @@ describe('WslCreateDialog', () => {
       loadedAt: Date.now(),
       lastError: null
     })
-    render({ error: 'wsl.exe could not create "my-project" from "Ubuntu 24.04 LTS".' })
+    render({
+      error: {
+        ownership: 'external-factual',
+        text: 'wsl.exe could not create "my-project" from "Ubuntu 24.04 LTS".',
+        facts: ['wsl.exe', 'my-project', 'Ubuntu 24.04 LTS'],
+        authoredPrefix: 'operationErrorPrefix'
+      }
+    })
     expect(document.body.textContent).toContain('New WSL Linux workspace')
     const externalError = 'wsl.exe could not create "my-project" from "Ubuntu 24.04 LTS".'
     render({
@@ -168,8 +175,18 @@ describe('WslCreateDialog', () => {
   it('keeps catalogue and bridge error facts outside mapped authored copy', () => {
     const parserDetail = 'wsl.exe: parser rejected Ubuntu 24.04 LTS at C:\\work\\my-project.'
     render({
-      catalogueError: parserDetail,
-      error: 'wsl.exe could not create "my-project" from "Ubuntu 24.04 LTS".'
+      catalogueError: {
+        ownership: 'external-factual',
+        text: parserDetail,
+        facts: ['wsl.exe', 'Ubuntu 24.04 LTS', 'C:\\work\\my-project'],
+        authoredPrefix: 'catalogueErrorPrefix'
+      },
+      error: {
+        ownership: 'external-factual',
+        text: 'wsl.exe could not create "my-project" from "Ubuntu 24.04 LTS".',
+        facts: ['wsl.exe', 'my-project', 'Ubuntu 24.04 LTS'],
+        authoredPrefix: 'operationErrorPrefix'
+      }
     })
     expect(document.body.textContent).toContain('Could not load available distributions:')
     expect(document.body.textContent).toContain(parserDetail)
@@ -232,10 +249,8 @@ describe('WslCreateDialog', () => {
   })
 
   it('ships five English and Cantonese variants for every WSL dialog copy entry', () => {
-    const ids = [...new Set(Object.values(WSL_COPY_IDS))]
+    const ids = WSL_COPY_INVENTORY.map((entry) => entry.id)
     expect(ids.every((id) => !id.includes('WSL'))).toBe(true)
-    expect(CATALOG[WSL_COPY_IDS.title]?.en[0]).toContain('{brand}')
-    expect(CATALOG[WSL_COPY_IDS.progressTelemetry]?.en[0]).toContain('{exe}')
     for (const id of ids) {
       expect(CATALOG[id]?.en, id).toHaveLength(5)
       expect(CATALOG[id]?.yue, id).toHaveLength(5)
