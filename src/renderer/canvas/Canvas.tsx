@@ -2241,7 +2241,7 @@ export function Canvas() {
       'open-webui-hosting': withNodeBoundary(OpenWebUiHostingNode),
       'cloudflare-tunnel': withNodeBoundary(ServiceNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode),
-      'windows-diagnostics': withNodeBoundary(WindowsDiagnosticsNode)
+      'windows-diagnostics': withNodeBoundary(WindowsDiagnosticsNode),
       awsidentity: withNodeBoundary(ServiceNode),
       'gitlab-hosting': withNodeBoundary(GitLabHostingNode),
       'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
@@ -2429,9 +2429,6 @@ export function Canvas() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- armedDepSig/launchRetry are the triggers
   }, [nodes, armedDepSig, launchRetry, activeSession.id])
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- armedDepSig/armedSetupSig/launchRetry are the triggers
-  }, [nodes, armedDepSig, armedSetupSig, launchRetry])
-
   // Selection state for ephemeral nodes (they live outside React Flow's managed nodes), owned by
   // the agent-nodes store so the cards themselves can set it — see `selectable: false` below.
   const ephSelId = useAgentNodes((s) => s.selectedId)
