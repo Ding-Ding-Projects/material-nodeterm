@@ -5910,6 +5910,7 @@ export function Canvas() {
                 undefined,
                 ssh,
                 selectedAccount,
+                activeProjectId,
                 activeAgentLaunchPlan('canvas-new-agent', agentId),
                 terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId, options?.namedTerminalProfileId)
               )
@@ -6161,7 +6162,8 @@ export function Canvas() {
       center?: { x: number; y: number },
       groupId?: string,
       accountId?: string,
-      sshOverride?: Project['ssh']
+      sshOverride?: Project['ssh'],
+      initialPrompt?: string
     ) => {
       const project = useProjects.getState().getProject(activeProjectId)
       const cwd = cwdForNewNodeIn(groupId) ?? project?.cwd
@@ -6199,7 +6201,7 @@ export function Canvas() {
       setNodes((ns) => {
         const accountSsh = agentId === 'codex' ? sshForCodexAccount(account) : undefined
         const ssh = sshOverride ?? accountSsh ?? project?.ssh
-        const cwd = ssh?.remoteCwd ?? localCwd
+        const cwd = ssh?.remoteCwd ?? cwdForNewNodeIn(groupId) ?? project?.cwd
         const node = createAgentNode(
           agentId,
           ns.length,
@@ -6247,6 +6249,7 @@ export function Canvas() {
           useSettings.getState().settings
         ),
         at,
+        undefined,
         undefined,
         undefined,
         conductorPrompt({ task: v.task, worktrees: v.worktrees })
