@@ -44,8 +44,8 @@ describe('sharedProjectMenuActions', () => {
   })
 
   it('the project switcher renders the archive actions and the appearance action', () => {
-    expect(switcherSrc).toMatch(/\{SAVE_PROJECT_ARCHIVE_ACTION\.label\}/)
-    expect(switcherSrc).toMatch(/\{OPEN_PROJECT_ARCHIVE_ACTION\.label\}/)
-    expect(switcherSrc).toMatch(/\{EDIT_TAB_APPEARANCE_ACTION\.label\}/)
+    expect(switcherSrc).toMatch(/vocab\(SAVE_PROJECT_ARCHIVE_ACTION\.label\)/)
+    expect(switcherSrc).toMatch(/vocab\(OPEN_PROJECT_ARCHIVE_ACTION\.label\)/)
+    expect(switcherSrc).toMatch(/vocab\(EDIT_TAB_APPEARANCE_ACTION\.label\)/)
   })
 })
