@@ -17,7 +17,6 @@ describe('buildNote', () => {
 
   it('agent node with no session and no title falls back to the agent label', () => {
     expect(buildNote(target({ agentId: 'claude', title: '' }), undefined))
-      .toBe('Claude Code · Idle')
       .toBe('Claude Code · Unknown')
   })
 
@@ -26,17 +25,12 @@ describe('buildNote', () => {
     // session name nor a live state exists — "Claude Code · Idle" would name neither the node
     // nor what was happening. The node's title auto-tracks the session name via `titleAuto`.
     expect(buildNote(target({ agentId: 'claude', title: 'fix-auth-bug' }), undefined))
-      .toBe('fix-auth-bug · Idle')
-    // session name nor a live state exists — "Claude Code · Unknown" would name neither the node
-    // nor what was happening. The node's title auto-tracks the session name via `titleAuto`.
-    expect(buildNote(target({ agentId: 'claude', title: 'fix-auth-bug' }), undefined))
       .toBe('fix-auth-bug · Unknown')
   })
 
   it('agent node with a live state uses the sessions-sidebar phrasing', () => {
     const status: AgentNodeStatus = { state: 'waiting', unread: false }
     expect(buildNote(target({ agentId: 'claude', title: '' }), status))
-      .toBe('Claude Code · Needs you')
       .toBe('Claude Code · Waiting for your response')
   })
 
@@ -48,7 +42,6 @@ describe('buildNote', () => {
 
   it('custom agent id with no builtin config falls back to the raw id', () => {
     expect(buildNote(target({ agentId: 'my-custom-agent', title: '' }), undefined))
-      .toBe('my-custom-agent · Idle')
       .toBe('my-custom-agent · Unknown')
   })
 
