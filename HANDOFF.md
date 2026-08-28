@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-08-27, notification preparation and relay argument punctuation repair
+
+Release run `33128741581` at `7117d7bc97b6a7a7f83f0d4607d30a018b741922` passed all repository,
+package, and icon phases, then reported two application-build errors in `src/main/index.ts`.
+At `2154:12`, duplicate native-notification composition remained after the validated
+`prepareNativeNotification(payload)` path, including an obsolete validation call and a second
+`const copy` declaration. At `4665:4`, the settings callback passed to `initSshProject` lacked its
+separating comma before `loadCodexRelayBundle`, producing `Expected ")" but found loadCodexRelayBundle`.
+
+The repair keeps the validated prepared notification object as the only composition input, along
+with focus handling, force behavior, node-id click focus, notification retention, and asynchronous
+show/fail resolution. It removes only the obsolete duplicate validation/composition and its now-unused
+import. It restores the comma before `loadCodexRelayBundle` while preserving the tmux scrollback,
+terminal-word-separator, relay-bundle, and lead-pane-width callbacks. No adjacent SSH argument
+refactor was made. AWS, Cloudflare, hosted services, diagnostics, browser guests, updater, account,
+relay, and no-signing registrations remain untouched.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, audits, or UI captures. Read-only source scans inspected
+the notification helper types and the `initSshProject` argument boundary. The integration owner
+must evaluate the exact commit and follow-up GitHub Actions run before treating this repair as verified.
+
 ## 2026-08-27, opening merge-recovery repairs
 
 ### Renderer stylesheet boundary repair
