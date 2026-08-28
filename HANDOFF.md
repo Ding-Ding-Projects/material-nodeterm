@@ -14,8 +14,10 @@ The installed machine has several VS2022 instances. The user-local `MaterialPhon
 instance contains MSBuild v170 and the `14.44.35207` toolset, but its
 `VC\Tools\MSVC\14.44.35207\lib\spectre\x86` and `lib\spectre\x64` directories are absent. A
 separate shared-data `LibreOfficeMaterialTools\VS2022` instance has the same toolset version and
-real Spectre directories for `x86` and `x64`, and `vswhere -requires
-Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre` identifies that instance.
+real Spectre directories for `x86` and `x64`, and the combined `vswhere -requires` query for
+`Microsoft.VisualStudio.Workload.VCTools` plus
+`Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre` identifies that instance. Multiple
+IDs passed to `-requires` use all-components semantics unless `-requiresAny` is supplied.
 
 The previous bootstrap validated that a compatible instance existed, then exported only
 `GYP_MSVS_VERSION=2022` and `npm_config_msvs_version=2022`. `node-gyp` was therefore still free to

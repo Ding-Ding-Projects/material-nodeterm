@@ -178,7 +178,7 @@ function visualStudioTools(instance, fs, requiredComponentPaths, libraryArchitec
     installationVersion:
       typeof instance.installationVersion === 'string' ? instance.installationVersion : '0',
     displayName: instance.displayName || installationPath,
-    hasRequiredComponent: requiredComponentPaths.has(installationPath.toLowerCase()),
+    hasRequiredComponents: requiredComponentPaths.has(installationPath.toLowerCase()),
     toolsets
   }
 }
@@ -190,7 +190,7 @@ function compareVersionsNewestFirst(a, b) {
 function selectedCxxToolset(instances) {
   const candidates = instances.flatMap((instance) =>
     instance.toolsets
-      .filter((toolset) => toolset.hasSpectre && instance.hasRequiredComponent)
+      .filter((toolset) => toolset.hasSpectre && instance.hasRequiredComponents)
       .map((toolset) => ({ instance, toolset }))
   )
   candidates.sort(
@@ -231,7 +231,7 @@ function discoverInstances({
   programFilesX86,
   run,
   fs,
-  requiredComponentId,
+  requiredComponentIds,
   libraryArchitectures
 }) {
   const vswhere = join(
@@ -266,13 +266,14 @@ function discoverInstances({
   }
   const raw = enumerate(baseArgs, 'enumerate Visual Studio instances')
   // Real Spectre files alone do not prove MSBuild/the Windows SDK are present. vswhere's
-  // requirement filter is the installer-owned source of truth for the complete C++ workload.
-  const withRequiredComponent = enumerate(
-    [...baseArgs, '-requires', requiredComponentId],
-    `find instances containing ${requiredComponentId}`
+  // multiple -requires values use all-components semantics by default, so the workload and every
+  // architecture-specific Spectre component must belong to the same installation.
+  const withRequiredComponents = enumerate(
+    [...baseArgs, '-requires', ...requiredComponentIds],
+    `find instances containing all required components: ${requiredComponentIds.join(', ')}`
   )
   const requiredComponentPaths = new Set(
-    withRequiredComponent
+    withRequiredComponents
       .map((instance) => instance?.installationPath)
       .filter((path) => typeof path === 'string')
       .map((path) => path.toLowerCase())
@@ -395,7 +396,7 @@ export function ensureWindowsBuildToolchain(options = {}) {
       programFilesX86,
       run,
       fs,
-      requiredComponentId: config.workloadId,
+      requiredComponentIds: [config.workloadId, ...config.componentIds],
       libraryArchitectures: config.libraryArchitectures
     })
   } catch (error) {
@@ -599,7 +600,7 @@ export function ensureWindowsBuildToolchain(options = {}) {
       programFilesX86,
       run,
       fs,
-      requiredComponentId: config.workloadId,
+      requiredComponentIds: [config.workloadId, ...config.componentIds],
       libraryArchitectures: config.libraryArchitectures
     })
   } catch (error) {
@@ -613,7 +614,7 @@ export function ensureWindowsBuildToolchain(options = {}) {
   }
   const verified = selectedCxxToolset(after.instances)
   const installed =
-    verified?.toolset.hasSpectre === true && verified.instance.hasRequiredComponent === true
+    verified?.toolset.hasSpectre === true && verified.instance.hasRequiredComponents === true
   if (!installed) {
     emitFailure(report, [
       `Dependency : MSVC v143 ${config.libraryArchitectures.join('/')} Spectre-mitigated libraries`,
