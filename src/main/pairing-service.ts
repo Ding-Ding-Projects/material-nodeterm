@@ -35,10 +35,12 @@ import {
   type PublicDevice,
   type RelayPairingBlock
 } from './pairing-core'
-import type { PairingDoneResult, Settings } from '../shared/types'
-import { publicKeyToB64, type KeyPair } from './remote/e2ee'
-import type { DeviceRevokeResult, DeviceRevokeServerOutcome, Settings } from '../shared/types'
-import { renameAtomic, tempNameFor } from '../core/fs-atomic'
+import type {
+  DeviceRevokeResult,
+  DeviceRevokeServerOutcome,
+  PairingDoneResult,
+  Settings
+} from '../shared/types'
 import { publicKeyToB64, deriveSharedKey, encrypt, decrypt, type KeyPair } from './remote/e2ee'
 import { hostIdFromPublicKeyB64 } from './remote/relay-id'
 import { getDeviceId } from '../core/device-id'
@@ -276,6 +278,8 @@ async function readAgentJson(): Promise<Record<string, unknown>> {
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('agent.json must contain a JSON object.')
+  }
+
 /**
  * Remove agent.json temps no writer in THIS process owns: the legacy fixed `agent.json.tmp`
  * (written by builds from before per-call names) and any `agent.json.<pid>.<seq>[.<uuid>].tmp`
@@ -307,6 +311,8 @@ async function sweepStaleAgentTmp(): Promise<void> {
   } catch {
     // A dir we cannot read is not a reason to fail (or skip) the write below.
   }
+}
+
   const obj = parsed as Record<string, unknown>
   if ('devices' in obj && !Array.isArray(obj.devices)) {
     throw new Error('agent.json "devices" must be an array when present.')
@@ -832,29 +838,10 @@ export function createPairingService(
         // unchanged, and the mint still reads this same value.
         const phoneDeviceId =
           typeof body.deviceId === 'string' && body.deviceId.trim() ? body.deviceId.trim() : deviceId
-        // One unit, and queued behind any in-flight revoke: a pairing that interleaves with one
-        // would either append onto the inode the revoke is about to rename over, or lose its
-        // agent.json entry to the revoke's stale read.
-        await serialize(async () => {
-          await appendAuthorizedKey(rewriteKeyComment(publicKey, deviceId))
-          await persistDevice({
-            id: deviceId,
-            name,
-            token: agentToken,
-            pairedAt: Date.now(),
-            lastSeenAt: 0,
-            relayDeviceId: phoneDeviceId
-          })
-        })
         // Provision relay access for the phone when enabled + Pro. Any failure ⇒ LAN-only: we
         // never fail the pairing over a relay hiccup (the phone still got its SSH key installed).
         let relayFields: { relay?: RelayPairingBlock; relayDeviceToken?: string } = {}
         if (relayCtx) {
-          const phoneDeviceId =
-            typeof body.deviceId === 'string' && body.deviceId.trim()
-              ? body.deviceId.trim()
-              : deviceId
-          const minted = await mintRelayDevice(deps.apiBase, {
           const minted = await mintRelayDevice(relayDeps!.apiBase, {
             entitlement: relayCtx.entitlement,
             deviceId: phoneDeviceId,
@@ -888,7 +875,8 @@ export function createPairingService(
             name,
             token: agentToken,
             pairedAt: Date.now(),
-            lastSeenAt: 0
+            lastSeenAt: 0,
+            relayDeviceId: phoneDeviceId
           })
           await testHooks.afterDevicePersisted?.()
           // stop() and a superseding start poison this attempt synchronously. Re-check after the
