@@ -220,12 +220,6 @@ type ConfirmedProcessRun = (
 /** Narrow child-process seam for strict tmux probes/confirmed teardown. Production delegates to
  * the same bounded runner above; focused tests inject a stateful fake so hidden dual-backend
  * generations can be proven ended without source-scanning or platform-specific helper scripts. */
-type ConfirmedProcessRun = (
-  file: string,
-  args: readonly string[],
-  opts?: object
-) => Promise<unknown>
-
 /**
  * `runAsync`, with a payload written to the child's STDIN.
  *

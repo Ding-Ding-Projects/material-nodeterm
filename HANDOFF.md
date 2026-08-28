@@ -4224,7 +4224,7 @@ routes. No unrelated modules were changed.
 
 Changed files: `src/core/pty-manager.ts` and `HANDOFF.md`.
 
-This lane started from the fetched hui tip `bd2696e9e4ef3bd267b86ac9cf2756c57735f8a7`. No tests,
+This lane started from the fetched remote default-branch tip `bd2696e9e4ef3bd267b86ac9cf2756c57735f8a7`. No tests,
 checkers, lint, type checks, builds, packaging, reviews, audits, runtime interaction, or UI captures
 were run. Hosted verification remains required before the repair or the manual release is treated as
 verified.
