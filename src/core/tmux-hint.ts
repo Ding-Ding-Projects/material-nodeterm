@@ -2,6 +2,7 @@
 // the silent plain-shell fallback — terminals don't survive restarts and the mobile companion
 // can't attach — which users never discover on their own; the banner makes it visible and offers
 // a one-click install (run in a terminal node, gh-sign-in style).
+import { execCandidates } from './exec-path'
 
 export interface TmuxInstallHint {
   command: string
