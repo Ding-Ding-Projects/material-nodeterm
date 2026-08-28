@@ -4093,3 +4093,20 @@ Changed files: `src/core/settings-store.ts` and `HANDOFF.md`.
 This ultra-speed source lane intentionally ran no tests, lint, type checks, builds, packaging, reviews,
 audits, runtime interaction, or UI captures. The repair remains unverified by those checks until
 the coordinating owner integrates it and observes the resulting hosted workflow.
+
+# 2026-08-28, Codex identity proxy parser repair
+
+Release run `33131936526` reached the application build after the documentation guard completed and
+reported a malformed merge in `src/core/codex-identity-proxy.ts`: duplicate `SAFE_ACCOUNT_ID` and
+`SYSTEM_ACCOUNT_SCOPE` declarations, duplicate identity-signature and candidate-reader paths, and an
+unexpected export boundary. The repair keeps the account-scoped HMAC contract, system-scope legacy
+compatibility, thread-id and endpoint validation, canonical drive-rooted endpoint handling, atomic
+identity publication, collision-resistant temporary files, conflict handling, the relay-aware
+launcher, and both current root/account call shapes in one coherent implementation. It removes only
+the stale competing splice while retaining the newer proxy fallback and relay behavior.
+
+Changed files: `src/core/codex-identity-proxy.ts` and `HANDOFF.md`.
+
+This ultra-speed parser lane deliberately ran no tests, checkers, lint, type checks, builds, packaging,
+reviews, audits, runtime interaction, or UI captures. The coordinating owner must merge and observe the
+resulting hosted workflow before treating the release path as verified.
