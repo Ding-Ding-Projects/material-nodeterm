@@ -114,6 +114,28 @@
   unverified until the parent integration lane completes its parser, type-check, build, packaging,
   and release-workflow checks. The ultra-speed pass does not run tests, reviews, accessibility or
   security checks, runtime interaction, or screen captures after activation.
+
+- Load pull requests for the attach guide through the typed `pull-request.list` capability with
+  bounded pagination and provider head-ref facts. Open an attached chip or frame pill in the in-app
+  Markdown detail and review surface, with an explicit secondary link to GitHub. Partial and
+  unavailable provider states remain visible. No tests, lint, typecheck, builds, packaging, reviews,
+  audits, runtime interaction, or captures were run in this ultra-speed lane.
+
+- Mark a pull-request list as partial when the provider continues beyond the three-page, 300-item
+  bound or when local result truncation occurs, even if the provider response omits its partial flag.
+
+- Add a guided attach and adopt surface for GitHub work items. Terminal and owning-frame context
+  menus now open a searchable provider-backed picker with a review step, exact frame adoption, and
+  explicit legacy-card conversion that preserves the complete record. No tests, type checks, lint,
+  builds, packaging, runtime interaction, reviews, audits, debugging, repairs, or captures were run
+  in this ultra-speed lane.
+
+- Replace newly created standalone GitHub work-item canvas nodes with compact issue and pull-request
+  attachments: chips stay on their exact session node, pills stay on the owning frame, and pull-request
+  frame adoption requires an exact match between provider head ref and app-owned worktree branch.
+  Existing detail nodes remain lossless legacy records. No tests, builds, packaging, runtime interaction,
+  reviews, audits, or captures were run in this ultra-speed lane.
+
 - Use a bounded Node HTTPS stream for the production immutable icon download, retaining the
   fetch-style injection seam for tests. The wrapper rejects redirects and invalid status or length,
   stops oversized or stalled responses, compares exact bytes, and reports each source-icon phase.

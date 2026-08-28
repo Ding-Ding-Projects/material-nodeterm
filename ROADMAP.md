@@ -66,6 +66,11 @@ later commit, since this file will not be kept in lockstep with every merge).
       intentionally omits tests, type checks, lint, reviews, accessibility and security checks,
       runtime interaction, and screen captures after activation.
 
+- [ ] GitHub work-item canvas attachments: compact actionable issue and pull-request chips on the
+      exact session node with owning-frame pills, exact branch adoption, and lossless legacy-card
+      degradation. Source is implemented on `feat/canvas-pr-chip-pill`; tests, builds, runtime
+      interaction, and captures remain intentionally unrun in the ultra-speed lane.
+
 - [ ] Easter egg catalog (#103): 60 local, bounded, accessible desktop surprises are implemented
       in `src/shared/easter-eggs.ts` and `src/renderer/components/EasterEggs.tsx`, with the
       cabinet and documentation in place. Runtime interaction, tests, builds, and captures remain

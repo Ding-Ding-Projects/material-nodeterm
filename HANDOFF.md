@@ -1,5 +1,21 @@
 # Handoff
 
+## 2026-08-27, duplicate Codex usage callback repair
+
+Release run `33130189125` reported a duplicate `codexAccounts` property in the object passed to
+`initClaudeUsage` at `src/main/index.ts:4394` and `src/main/index.ts:4399`. The earlier callback
+included remote accounts and resolved homes through `localCodexAccountHome`; the later
+`localCodexAccounts` callback is the current complete value because it excludes remote and pending
+accounts and resolves each local managed account through `codexHomeFor`.
+
+The repair removes only the earlier duplicate property. The complete local account callback and
+all neighboring usage, mirror, remote usage, and shutdown wiring remain unchanged.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, audits, or UI captures under the ultra-speed repair
+boundary. The coordinating owner must evaluate the exact commit and follow-up GitHub Actions run
+before treating this repair as verified.
+
 ## 2026-08-27, shutdown-chain parser repair
 
 Release run `33129445887` at `1c62698a7243f153c102afa6f3a7b683a6822edb` reported an application-build
@@ -103,6 +119,33 @@ This lane intentionally ran no tests, checkers, lint, type checks, builds, packa
 execution, runtime interaction, reviews, audits, or UI captures. Read-only source scans inspected
 the browser registration and unregistration boundaries. The integration owner must evaluate the
 exact commit and follow-up GitHub Actions run before treating this repair as verified.
+
+## 2026-08-27, GitHub work-item canvas attachments
+
+This lane is implemented on `feat/canvas-pr-chip-pill` from `61afa6a19c7f159780073eb91efa2dbefd463420`.
+GitHub issues and pull requests now have a compact attachment data shape. An attached session node
+renders one accessible actionable chip, and its owning group frame renders a pill from the same
+record. A pull request can be adopted by a frame only when its provider `headRef` exactly equals the
+frame's app-owned worktree branch. No pane text, title, command text, or terminal output is used to
+infer ownership.
+
+The standalone `github-work-item` catalog row was removed, so new creation cannot produce a detached
+issue or pull-request node. Existing persisted nodes remain readable as full detail cards, and their
+records are not discarded. The compact attachment fields are persisted through `CanvasNodeState` and
+normalized at the load and save seams. Desktop and Server Edition continue to share the same
+portable data shape and provider-authored Markdown detail renderer.
+
+Changed paths include `src/shared/github-work-items.ts`, `src/shared/types.ts`,
+`src/shared/node-catalog.ts`, `src/renderer/state/workspace.ts`,
+`src/renderer/nodes/GitHubWorkItemAttachment.tsx`, `src/renderer/nodes/TerminalNode.tsx`,
+`src/renderer/nodes/GroupNode.tsx`, `src/renderer/canvas/Canvas.tsx`,
+`src/renderer/styles.css`, `docs/features/integrations/github-work-items.md`,
+`docs/features/integrations/README.md`, `CHANGELOG.md`, and this handoff.
+
+No tests, type checks, lint, builds, packaging, runtime interaction, reviews, audits, debugging,
+repairs, or UI captures were run in the ultra-speed lane. The feature branch is ready for the owning
+integration task to review, commit, and push. The mobile companion remains an explicit bridge-parity
+follow-up because this lane changes the shared canvas projection only.
 
 ### Main-process keyboard interception repair
 
@@ -4243,3 +4286,40 @@ Changed files: `src/main/codex-relay-daemon.ts` and `HANDOFF.md`. No tests, chec
 checks, builds, packaging, installer execution, runtime interaction, reviews, audits, or UI
 captures were run in this lane. The coordinating owner must evaluate the exact merged commit and
 the resulting remote workflow before treating the release as recovered.
+
+# 2026-08-27, duplicate registerNode property repair
+
+Release run `33130189125` reported a duplicate `registerNode` property in the `hostBridge` object
+at `src/main/index.ts:4473`. The repair keeps the earlier complete callback, including the Windows
+default terminal profile routing, account colour calculation, and remote-node append behavior, and
+removes the later duplicate callback plus its now-misleading boundary comment. One callback now does
+one job, so the object literal no longer asks the parser to choose between identical menu entries.
+
+發佈流程喺 `src/main/index.ts:4473` 見到 `hostBridge` 有兩份 `registerNode`。今次保留完整嗰份，
+連埋 Windows default terminal profile、account colour 同 remote node 寫入路線，移除後面重複嗰份，
+等 parser 唔使再玩「邊份先係真身」嘅抽獎遊戲。
+
+Changed files: `src/main/index.ts` and `HANDOFF.md`. This ultra-speed repair lane deliberately ran
+no tests, lint, type checks, builds, packaging, reviews, audits, runtime interaction, or UI captures.
+The coordinating owner must merge and evaluate the resulting hosted workflow before calling the
+release path verified.
+
+# 2026-08-28, settings store parser repair
+
+Release run `33130189125` reported fatal parser errors in `src/core/settings-store.ts` at `73:8`
+for a duplicate `merged` declaration and at `320:10` for a second `saveNow` declaration after a
+truncated listener block. The file had accumulated two import sets, two merge implementations,
+two `saveChain` fields, and two competing persistence paths during reconciliation.
+
+The repair restores one coherent implementation. It keeps nested defaults for speech, Docker,
+model gateway, and shortcuts; named terminal profile normalization; legacy dictation, GPU,
+language, funny-level, accent, canvas, and profile migrations; serialized atomic persistence with
+unique owner-only temporary files; cache rollback on failed publication; listener callbacks after
+successful persistence; and best-effort local-history recording. No product behavior outside this
+settings store was changed.
+
+Changed files: `src/core/settings-store.ts` and `HANDOFF.md`.
+
+This ultra-speed source lane intentionally ran no tests, lint, type checks, builds, packaging, reviews,
+audits, runtime interaction, or UI captures. The repair remains unverified by those checks until
+the coordinating owner integrates it and observes the resulting hosted workflow.
