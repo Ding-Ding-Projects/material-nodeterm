@@ -62,7 +62,7 @@ export interface NextcloudManagedPanelProps {
  * pickers, fixed operations, and a closed host action union. It never accepts Compose text, image
  * names, entrypoints, shell commands, or secret values from the renderer.
  */
-export function NextcloudManagedPanel({ intent, binding, onIntentChange, onBindingChange }: NextcloudManagedPanelProps): React.JSX.Element {
+export function NextcloudManagedPanel({ nodeId, intent, binding, onIntentChange, onBindingChange }: NextcloudManagedPanelProps): React.JSX.Element {
   const { ts } = useI18n()
   const copy = (key: string, fallback: string): string => ts(`nextcloudManaged.${key}`, fallback)
   const operationSearch = useRegexSearchField()
