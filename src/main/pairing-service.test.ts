@@ -232,6 +232,10 @@ function postWire(port: number, body: unknown): Promise<HttpResponse> {
   })
 }
 
+async function post(port: number, body: unknown): Promise<string> {
+  return (await postWire(port, body)).text
+}
+
 function sealRequest(
   hostKey: string,
   body: unknown
