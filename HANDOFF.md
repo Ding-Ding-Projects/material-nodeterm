@@ -1,5 +1,21 @@
 # Handoff
 
+## 2026-08-27, QEMU installer spawn retry repair
+
+The pinned QEMU resource bootstrap now creates its temporary installer with exclusive ownership and
+removes that file from a `finally` block on every post-creation path. An existing path is never
+overwritten or removed, so cleanup cannot delete a file created by another process.
+
+Before a child process starts, transient `EACCES`, `EPERM`, and `EBUSY` spawn errors are retried at
+most three times with 50 ms and 100 ms delays. A child that starts and exits nonzero remains a
+terminal installer failure and is never retried. The fixed manifest URL, SHA-512 validation,
+shell-free `/S` and `/D=` arguments, extraction validation, QEMU version, size disclosure, and
+unsigned packaging policy are unchanged. The direct feature record is
+`docs/features/integrations/linux-iso-vm.md`.
+
+This lane did not run a build, packaging, test, lint, type-check, review, audit, runtime
+interaction, or capture workflow. The 180 MB installer was not executed.
+
 ## 2026-08-28, parser recovery build handoff and QEMU packaging blocker
 
 The combined parser-recovery branch currently ends at
