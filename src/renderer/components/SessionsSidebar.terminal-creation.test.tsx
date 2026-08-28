@@ -6,6 +6,7 @@ import type { NodeTerminalApi, Project } from '@shared/types'
 import { SessionProvider, type WorkspaceSession } from '../session/session'
 import { useProjects } from '../state/projects'
 import { useSettings } from '../state/settings'
+import { useWorktrees } from '../state/worktrees'
 import { SessionsSidebar } from './SessionsSidebar'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -48,6 +49,7 @@ afterEach(() => {
 describe('SessionsSidebar terminal creation', () => {
   it('keeps the project plus button a default-only one-click action', () => {
     useProjects.setState({ projects: [project], activeProjectId: project.id })
+    useWorktrees.setState({ repoRootByProject: { [project.id]: 'C:/projects/default' } })
     const onAddToProject = vi.fn<(projectId: string) => void>()
     host = document.createElement('div')
     document.body.appendChild(host)
@@ -81,12 +83,12 @@ describe('SessionsSidebar terminal creation', () => {
     )
 
     const add = host.querySelector<HTMLButtonElement>(
-      'button[title="New terminal in this project"]'
+      'button[title="Add a node to this project"]'
     )
     expect(add).not.toBeNull()
     act(() => add?.click())
 
     expect(onAddToProject).toHaveBeenCalledOnce()
-    expect(onAddToProject).toHaveBeenCalledWith(project.id)
+    expect(onAddToProject).toHaveBeenCalledWith(project.id, expect.objectContaining({ clientX: 0, clientY: 0 }))
   })
 })
