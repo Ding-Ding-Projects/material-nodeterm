@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Keep post-build installer verification bound to the source identity captured before managed
+  QEMU and AWS resource bootstraps. The standalone verifier now validates that recorded identity
+  from icon metadata instead of misclassifying the build's own generated resources as source edits.
+
+  Package 後面嘅 installer verification 而家用 bootstrap 前已記錄嘅 source identity；唔會再將
+  build 自己生成嘅 QEMU 同 AWS resource 當成 source edit 而誤拒。
+
 - Extract the SHA-512-verified QEMU NSIS archive with the 7-Zip executable bundled by the declared
   packaging dependency, instead of executing the downloaded setup. The extractor path is fixed,
   never comes from PATH, and is exercised with the real pinned archive before packaging.

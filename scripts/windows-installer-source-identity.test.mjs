@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolveSourceIdentity, readReleaseIdentity } from './windows-installer.mjs'
+import { immutableIconUrl, readReleaseIdentity, resolveSourceIdentity, sourceIdentityFromIconMetadata } from './windows-installer.mjs'
 
 /**
  * `resolveSourceIdentity` is what stops a release being packaged from something other than the
@@ -80,5 +80,26 @@ describe('resolveSourceIdentity', () => {
     } finally {
       rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
+  })
+})
+
+describe('sourceIdentityFromIconMetadata', () => {
+  const sourceSha = 'a'.repeat(40)
+  const repository = 'Ding-Ding-Projects/material-nodeterm'
+  const metadata = {
+    schemaVersion: 1,
+    sourceSha,
+    repository,
+    iconUrl: immutableIconUrl(repository, sourceSha),
+    sha256: 'b'.repeat(64),
+    frames: [16, 24, 32, 48, 64, 128, 256],
+  }
+
+  it('reuses the validated pre-bootstrap identity for standalone package verification', () => {
+    expect(sourceIdentityFromIconMetadata(metadata)).toEqual({ sourceSha, repository })
+  })
+
+  it('refuses malformed metadata rather than accepting an arbitrary standalone identity', () => {
+    expect(() => sourceIdentityFromIconMetadata({ ...metadata, sourceSha: 'not-a-sha' })).toThrow(/source SHA|commit SHA/i)
   })
 })

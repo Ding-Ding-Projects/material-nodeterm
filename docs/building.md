@@ -235,6 +235,9 @@ the same version as `package.json`:
      local-only commit fails rather than embedding an unreachable URL. Squirrel's vendor
      `Update.exe` remains vendor-branded because the pinned builder exposes no supported
      resource-edit hook;
+   - source identity is captured before managed QEMU and AWS resource bootstraps create their
+     generated payloads. Later package verification reuses that validated identity from the icon
+     metadata, so it does not mistake the build's own resources for uncommitted source;
    - Windows PowerShell must report exact Authenticode status `NotSigned`; every other status,
      an empty result, or a probe error fails closed;
    - reports the artifact's full path and its **SHA-256**, and (best-effort, if `git` is

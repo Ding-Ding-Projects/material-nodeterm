@@ -672,6 +672,15 @@ export function validateIconMetadata(value) {
   return { schemaVersion, sourceSha, repository: parsedRepository, iconUrl, sha256: digest, frames }
 }
 
+/**
+ * The build records this identity before it materializes verified bundled resources. Standalone
+ * post-build validation must reuse that evidence rather than treating those resources as source.
+ */
+export function sourceIdentityFromIconMetadata(value) {
+  const metadata = validateIconMetadata(value)
+  return validateSourceIdentity({ sourceSha: metadata.sourceSha, repository: metadata.repository })
+}
+
 async function writeMetadataAtomic(file, metadata) {
   await mkdir(path.dirname(file), { recursive: true })
   const temporary = `${file}.${randomUUID()}.tmp`
@@ -967,7 +976,10 @@ async function main(argv) {
     return
   }
   if (command === 'assert-package' && args.length === 2) {
-    const result = await assertPackagedIconContract(path.resolve(args[0]), path.resolve(args[1]))
+    const metadataFile = path.resolve(args[1])
+    const metadata = JSON.parse(await readFile(metadataFile, 'utf8'))
+    const sourceIdentity = sourceIdentityFromIconMetadata(metadata)
+    const result = await assertPackagedIconContract(path.resolve(args[0]), metadataFile, REPO_ROOT, { sourceIdentity })
     console.log(`verified unsigned packaged PE identity and immutable iconUrl ${result.iconUrl}`)
     return
   }

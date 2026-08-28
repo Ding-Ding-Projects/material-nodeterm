@@ -136,9 +136,10 @@ later commit, since this file will not be kept in lockstep with every merge).
 - [ ] **Release recovery:** the QEMU packaging bootstrap now extracts the verified NSIS archive
       with a fixed bundled 7-Zip executable instead of executing the downloaded setup, and uses a
       finite transient-lock retry for the extractor while preserving the first operational failure
-      through cleanup. Its focused retry guard was proven red then green. A real BAT-packaged
-      installer, manual `v0.4.121` publication, the hosted Node-runtime repair, and the following
-      automatic release remain pending.
+      through cleanup. Post-build installer verification now reuses its pre-bootstrap identity so
+      generated resource payloads cannot masquerade as source edits. Its focused retry guard was
+      proven red then green. A real BAT-packaged installer, manual `v0.4.121` publication, the
+      hosted Node-runtime repair, and the following automatic release remain pending.
 
 - [ ] **Codex crash-recovery continuation, downstream issue #198:** bounded encrypted one-packet-per-node
       provider-event state, typed IPC and preload boundaries, verified provider start and next-turn
