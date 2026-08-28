@@ -66,6 +66,7 @@ import { registerAwsResourceIpc } from '../core/aws-resource-register-ipc'
 import { registerAwsResourceManagersIpc } from '../core/aws-resource-managers'
 import { AwsWizardModelService } from '../core/aws-wizard/service'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
+import { registerRepositoryGraphIpc } from '../core/repository-graph-register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../core/calendar/register-ipc'
 import { registerCdkHandlers } from './aws/cdk-manager'
@@ -75,6 +76,7 @@ import { registerHomeAssistantControlIpc } from '../core/home-assistant-control/
 import { registerHomeAssistantSensorIpc } from '../core/home-assistant-sensor/register-ipc'
 import { registerCloudflareTunnelIpc } from '../core/cloudflare/register-ipc'
 import { registerWindowsDiagnosticsIpc } from '../core/windows-diagnostics'
+import { registerVeraCryptIpc } from '../core/veracrypt/register-ipc'
 import { registerCloudflareZeroTrustIpc } from '../core/cloudflare-zero-trust/service'
 import { AtomicJsonArrayStore } from '../core/atomic-json-store'
 import { TimerOccurrenceService } from '../core/timer-service'
@@ -1542,6 +1544,15 @@ app.whenReady().then(async () => {
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
+  scheduledSettingsRuntime.store.setHistoryRecorder(async (_before, after, change) => {
+    await localHistoryStore.record({
+      domain: 'scheduled-settings',
+      filename: 'scheduled-settings.json',
+      content: JSON.stringify(after, null, 2),
+      label: change.label,
+      action: change.action
+    })
+  })
   const projectArchives = new ProjectArchiveService(localHistoryStore, undefined, () => plannerRuntime.store.get().schedules)
   // One core registrar owns provider accounts, credential references, OAuth callbacks, and local
   // bindings for both shells. Import never calls these handlers, so opening a project cannot start
@@ -1807,11 +1818,16 @@ app.whenReady().then(async () => {
   })
   registerLocalHistoryHandlers(corePlatform, {
     historyStore: localHistoryStore,
-    domainFilenames: { settings: 'settings.json' },
+    domainFilenames: { settings: 'settings.json', 'scheduled-settings': 'scheduled-settings.json' },
     restoreHandlers: {
       settings: async (content: string, sha: string) => {
         const parsed = JSON.parse(content) as Settings
         await settingsStore.applyRestoredSettings(parsed, `Restored settings to ${sha.slice(0, 7)}`)
+      },
+      'scheduled-settings': async (content: string) => {
+        const parsed = JSON.parse(content)
+        const result = await scheduledSettingsRuntime.store.save(parsed)
+        if (!result.ok) throw new Error(result.error ?? 'Could not restore scheduled settings.')
       }
     }
   })
@@ -2278,6 +2294,7 @@ app.whenReady().then(async () => {
   const nodeDependencyService = registerNodeDependencyIpc(corePlatform)
   const awsWizardModels = new AwsWizardModelService(nodeDependencyService)
   registerOllamaIpc(corePlatform)
+  registerRepositoryGraphIpc(corePlatform, { projectTargetInfo: (projectId) => workspaceStore.projectTargetInfo(projectId) })
   registerOpenWebUiHosting(getMainWindow, app.getPath('userData'))
   minecraftServers = registerMinecraftIpc(corePlatform).manager
   registerAwsIdentityIpc(corePlatform, {
@@ -2301,6 +2318,7 @@ app.whenReady().then(async () => {
   registerHomeAssistantSensorIpc(corePlatform)
   registerCloudflareTunnelIpc(corePlatform, cloudflareCoreManagers)
   registerWindowsDiagnosticsIpc()
+  registerVeraCryptIpc(corePlatform)
   registerCloudflareZeroTrustIpc(corePlatform)
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)

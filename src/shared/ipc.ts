@@ -283,6 +283,20 @@ export const IPC = {
   wslDelete: 'wsl:delete',
   /** Desktop and Server Edition host snapshot for the read-only Windows diagnostics node. */
   windowsDiagnosticsSnapshot: 'windows-diagnostics:snapshot',
+  // Existing file-hosted VeraCrypt container management. Password, PIM, keyfiles, and hidden
+  // volume protection stay inside VeraCrypt's own native prompt and never cross this boundary.
+  veracryptAvailability: 'veracrypt:availability',
+  veracryptFavorites: 'veracrypt:favorites',
+  veracryptSaveFavorite: 'veracrypt:save-favorite',
+  veracryptRemoveFavorite: 'veracrypt:remove-favorite',
+  veracryptPreflight: 'veracrypt:preflight',
+  veracryptMount: 'veracrypt:mount',
+  veracryptRefresh: 'veracrypt:refresh',
+  veracryptExplore: 'veracrypt:explore',
+  veracryptUnmount: 'veracrypt:unmount',
+  veracryptWipeCache: 'veracrypt:wipe-cache',
+  veracryptCancel: 'veracrypt:cancel',
+  veracryptOperation: 'veracrypt:operation',
   contextUpdate: 'context:update',
   contextEnsure: 'context:ensure',
   // Team presence (docs/team-presence.md). `presence:hello` is a REQUEST: its response tells the
@@ -885,6 +899,14 @@ export const IPC = {
   /** main/server → renderer: a streamed chat token/finish/error for the session named in the
    *  payload. One shared channel (not per-session) — the renderer filters by sessionId. */
   ollamaChatStream: 'ollama:chat-stream',
+  // Project-scoped repository graph. Derived indexes remain host-local; only safe graph intent
+  // and bounded, provenance-rich snapshots cross the renderer boundary.
+  repositoryGraphInspect: 'repository-graph:inspect',
+  repositoryGraphRefresh: 'repository-graph:refresh',
+  repositoryGraphCancel: 'repository-graph:cancel',
+  repositoryGraphExport: 'repository-graph:export',
+  repositoryGraphOpenSource: 'repository-graph:open-source',
+  repositoryGraphProgress: 'repository-graph:progress',
   // Open WebUI hosting node. The renderer submits a closed operation shape; Docker context,
   // image, volume, archive, and provider secrets are validated and owned by the privileged host.
   openWebUiContexts: 'open-webui:contexts',

@@ -3,7 +3,8 @@
 A persisted set of rules that automatically overlay the app's own appearance / customization
 settings for a date+time window — "dark theme after 22:00", "the presentation font on Fridays",
 "switch to the light theme while the office's `input_boolean.daytime` Home Assistant entity is
-on". Settings → **Schedule**.
+on". Settings → **Schedule**. Schema version 2 also supports transient saved-layout placement and
+appearance preset effects, both addressed by exact local identifiers.
 
 This document is the schema, the source contract, the timezone rules, precedence, fallback, and
 the security boundaries the feature has to hold. Code cross-references point at the actual files;
@@ -105,7 +106,7 @@ bounded-schema validation that a plain settings merge doesn't need.
 
 ```ts
 interface ScheduledSettingsFile {
-  version: 1
+  version: 2
   timezone: string        // IANA name, e.g. "Europe/London"
   rules: ScheduleRule[]
 }
@@ -117,8 +118,38 @@ interface ScheduleRule {
   window: ScheduleWindow
   source: ScheduleSource   // 'local' | 'api' | 'home-assistant' — see below
   values: SchedulableSettingsPatch
+  effects?: {
+    placement?: { projectId: string; canvasId: string; layoutId: string }
+    appearance?: { presetId: string; targetId: string }
+  }
 }
 ```
+
+### Transient placement and appearance effects
+
+An effect names one exact project, canvas, and saved layout, or one exact appearance preset and
+registered appearance target. The editor populates these choices from local project and appearance
+state. It never accepts an absolute path, arbitrary selector, or external target.
+
+Placement is applied only when the named project and canvas are already active. A schedule never
+navigates the project switcher or canvas navigator. The renderer captures the current geometry and
+viewport in memory, applies matching saved nodes, and restores the captured geometry when the rule
+ends or another rule wins. Missing nodes stay deleted, newly-created nodes stay present, and content
+edits are not replaced. While active, drag, resize, regroup, and tidy operations are refused with a
+non-blocking explanation.
+
+Appearance effects are emitted as a transient stylesheet layer after persistent element styles. The
+preset is not copied into `Settings.elementAppearance`, so deactivation removes only the temporary
+layer and restores persistent appearance exactly. Missing projects, canvases, layouts, presets, or
+targets produce an unavailable effect rather than a fallback to the focused element or root canvas.
+
+The renderer uses an epoch key composed of `projectId`, `canvasId`, and `layoutId`. A stale schedule
+callback or hydration result cannot apply after a newer rule or project switch has won.
+
+Schema 1 files remain readable. Their layouts migrate to `canvasId: "root"`, and rules retain their
+existing scalar values with no effects. A save writes schema 2. API responses remain limited to the
+versioned `settings` object, so an API cannot retarget a local project, canvas, layout, preset, or
+appearance element.
 
 Writes are atomic (temp file + rename, 0600), the same discipline `SettingsStore` uses for
 `settings.json`. A `save()` call is **re-validated in the store** before it ever reaches disk —
@@ -162,6 +193,9 @@ the whole schedule, and one malformed field within a rule never sinks the whole 
 drops that field back to "unset"). A rule with no `id` is dropped entirely: an id-less rule cannot
 be addressed by the editor, the Home Assistant token store, or the "which rule is active" push, so
 minting one silently would change what the file *means* rather than merely tolerate a defect.
+
+The schedule store records durable edits in the `scheduled-settings` local-history domain. Runtime
+activation and deactivation do not create history entries, because they are in-memory effects.
 
 ## Precedence: which rule wins
 

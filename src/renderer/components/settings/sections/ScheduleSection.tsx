@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useSettings } from '../../../state/settings'
 import { useScheduledSettings } from '../../../state/scheduledSettings'
+import { useProjects } from '../../../state/projects'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { FUNNY_LEVEL_MAX, FUNNY_LEVEL_MIN } from '@shared/i18n'
 import {
   newScheduleRule,
   validateScheduleWindow,
   type ScheduleRule,
+  type ScheduleRuleEffects,
   type ScheduleSource,
   type ScheduleWindow,
   type ScheduledSettingsFile,
@@ -15,6 +17,7 @@ import {
   type SchedulableSettingsPatch,
   type Weekday
 } from '@shared/scheduled-settings'
+import { ROOT_CANVAS_ID } from '@shared/multiverse-canvases'
 import { SettingsSection } from '../SettingsSection'
 import { SettingsText } from '../SettingsText'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
@@ -27,6 +30,9 @@ import { ThemeSelect } from '../ThemeSelect'
 import { uuid } from '@renderer/lib/uuid'
 import { cn } from '@renderer/ui/cn'
 import { Checkbox } from '@renderer/ui/md3'
+import { AnchoredRegexBuilder } from '../../regex/AnchoredRegexBuilder'
+import { useRegexSearchField } from '@renderer/lib/regex/useRegexSearchField'
+import { APP_CHROME_TARGETS } from '@renderer/lib/appearance/registry'
 
 const ROWS = {
   timezone: { title: 'Timezone', keywords: ['timezone', 'zone', 'clock', 'dst', 'daylight'] },
@@ -613,6 +619,156 @@ const VALUE_FIELDS: {
   }
 ]
 
+interface CanvasChoice {
+  id: string
+  title: string
+}
+
+function canvasChoices(project: ReturnType<typeof useProjects.getState>['projects'][number]): CanvasChoice[] {
+  return [
+    { id: ROOT_CANVAS_ID, title: project.name },
+    ...(project.multiverseCanvases ?? []).map((canvas) => ({ id: canvas.id, title: canvas.title })),
+    ...(project.childCanvases ?? []).map((canvas) => ({ id: canvas.id, title: canvas.title }))
+  ]
+}
+
+/** Local-only exact effect references. The search field belongs to this editor and is intentionally
+ * independent from the Settings page search. It is paired with the full anchored regex builder so
+ * a large project or appearance registry remains discoverable without changing target identity. */
+function EffectsEditor({
+  effects,
+  active,
+  onChange
+}: {
+  effects: ScheduleRuleEffects | undefined
+  active: boolean
+  onChange: (effects: ScheduleRuleEffects | undefined) => void
+}): React.JSX.Element {
+  const projects = useProjects((state) => state.projects.filter((project) => !project.closed))
+  const presets = useSettings((state) => state.settings.appearancePresets)
+  const appearanceEntries = useSettings((state) => state.settings.elementAppearance)
+  const search = useRegexSearchField({ mode: 'text' })
+  const searchRef = useRef<HTMLInputElement>(null)
+  const placement = effects?.placement
+  const appearance = effects?.appearance
+  const project = projects.find((candidate) => candidate.id === placement?.projectId)
+  const canvases = project ? canvasChoices(project) : []
+  const canvas = canvases.find((candidate) => candidate.id === placement?.canvasId)
+  const layouts = (project?.savedLayouts ?? []).filter((layout) => layout.canvasId === placement?.canvasId)
+  const appearanceTargets = useMemo(() => {
+    const registered = Object.entries(appearanceEntries).map(([id, entry]) => ({ id, label: entry.label || id }))
+    const known = new Map(APP_CHROME_TARGETS.map((target) => [target.id, { id: target.id, label: target.label }]))
+    for (const target of registered) known.set(target.id, target)
+    return [...known.values()]
+  }, [appearanceEntries])
+  const query = search.mode === 'regex' ? search.regex : null
+  const visible = (label: string): boolean => {
+    if (!search.value.trim()) return true
+    if (query) {
+      query.lastIndex = 0
+      return query.test(label)
+    }
+    return label.toLocaleLowerCase().includes(search.value.toLocaleLowerCase())
+  }
+  const changePlacement = (patch: Partial<NonNullable<ScheduleRuleEffects['placement']>>): void => {
+    const next = { ...(placement ?? { projectId: '', canvasId: ROOT_CANVAS_ID, layoutId: '' }), ...patch }
+    onChange({ ...(effects ?? {}), placement: next })
+  }
+  const clearPlacement = (): void => {
+    const next = { ...(effects ?? {}) }
+    delete next.placement
+    onChange(next.appearance ? next : undefined)
+  }
+  const changeAppearance = (patch: Partial<NonNullable<ScheduleRuleEffects['appearance']>>): void => {
+    const next = { ...(appearance ?? { presetId: '', targetId: '' }), ...patch }
+    onChange({ ...(effects ?? {}), appearance: next })
+  }
+  const clearAppearance = (): void => {
+    const next = { ...(effects ?? {}) }
+    delete next.appearance
+    onChange(next.placement ? next : undefined)
+  }
+  return (
+    <div className="space-y-3 rounded-xl border border-outline/30 bg-surface-container-low p-3">
+      <div className="flex items-end gap-2">
+        <label className="min-w-0 flex-1 text-[12px] font-medium text-muted">
+          Find projects, canvases, layouts, presets, or appearance targets
+          <input
+            ref={searchRef}
+            value={search.value}
+            onChange={(event) => search.setValue(event.target.value)}
+            className="mt-1 w-full rounded-xl border border-outline/50 bg-surface px-3 py-2 text-[13px] text-text"
+            placeholder="Plain text search"
+            aria-label="Search scheduled effect targets"
+          />
+        </label>
+        <AnchoredRegexBuilder search={search} fieldRef={searchRef} label="Regex builder for scheduled effect targets" />
+      </div>
+      {search.error ? <p className="text-[11px] text-[color:var(--warn)]" role="alert">{search.error}</p> : null}
+      <p className="text-[11px] leading-snug text-muted-2">
+        These references are local and exact. Activation never switches projects or canvases. If the
+        selected target is unavailable, the effect stays off until you choose a new exact target.
+      </p>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-2 rounded-lg border border-outline/20 p-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[12px] font-semibold text-text">Saved-layout placement</span>
+            {placement ? <Button variant="ghost" onClick={clearPlacement}>Clear</Button> : <Button variant="ghost" onClick={() => changePlacement({ projectId: projects[0]?.id ?? '', canvasId: ROOT_CANVAS_ID, layoutId: '' })} disabled={projects.length === 0}>Add</Button>}
+          </div>
+          {placement ? (
+            <>
+              <label className="block text-[11px] text-muted">Project
+                <Select value={placement.projectId} onChange={(event) => changePlacement({ projectId: event.target.value, canvasId: ROOT_CANVAS_ID, layoutId: '' })} aria-label="Scheduled placement project">
+                  <option value="">Choose a project</option>
+                  {projects.filter((candidate) => visible(candidate.name)).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+                </Select>
+              </label>
+              <label className="block text-[11px] text-muted">Canvas
+                <Select value={placement.canvasId} onChange={(event) => changePlacement({ canvasId: event.target.value, layoutId: '' })} aria-label="Scheduled placement canvas" disabled={!project}>
+                  <option value="">Choose a canvas</option>
+                  {canvases.filter((candidate) => visible(candidate.title)).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title}</option>)}
+                </Select>
+              </label>
+              <label className="block text-[11px] text-muted">Saved layout
+                <Select value={placement.layoutId} onChange={(event) => changePlacement({ layoutId: event.target.value })} aria-label="Scheduled placement saved layout" disabled={!canvas}>
+                  <option value="">Choose a layout</option>
+                  {layouts.filter((layout) => visible(layout.name)).map((layout) => <option key={layout.id} value={layout.id}>{layout.name}</option>)}
+                </Select>
+              </label>
+              {placement.layoutId && !layouts.some((layout) => layout.id === placement.layoutId) ? <p className="text-[11px] text-[color:var(--warn)]" role="status">This saved layout is unavailable for the selected canvas.</p> : null}
+            </>
+          ) : <p className="text-[11px] text-muted-2">No placement effect configured.</p>}
+        </div>
+        <div className="space-y-2 rounded-lg border border-outline/20 p-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[12px] font-semibold text-text">Appearance preset</span>
+            {appearance ? <Button variant="ghost" onClick={clearAppearance}>Clear</Button> : <Button variant="ghost" onClick={() => changeAppearance({ presetId: presets[0]?.id ?? '', targetId: appearanceTargets[0]?.id ?? '' })} disabled={presets.length === 0 || appearanceTargets.length === 0}>Add</Button>}
+          </div>
+          {appearance ? (
+            <>
+              <label className="block text-[11px] text-muted">Preset
+                <Select value={appearance.presetId} onChange={(event) => changeAppearance({ presetId: event.target.value })} aria-label="Scheduled appearance preset">
+                  <option value="">Choose a preset</option>
+                  {presets.filter((preset) => visible(preset.name)).map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+                </Select>
+              </label>
+              <label className="block text-[11px] text-muted">Exact appearance target
+                <Select value={appearance.targetId} onChange={(event) => changeAppearance({ targetId: event.target.value })} aria-label="Scheduled appearance target">
+                  <option value="">Choose a target</option>
+                  {appearanceTargets.filter((target) => visible(target.label)).map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}
+                </Select>
+              </label>
+              {appearance.presetId && !presets.some((preset) => preset.id === appearance.presetId) ? <p className="text-[11px] text-[color:var(--warn)]" role="status">This appearance preset is unavailable.</p> : null}
+              {appearance.targetId && !appearanceTargets.some((target) => target.id === appearance.targetId) ? <p className="text-[11px] text-[color:var(--warn)]" role="status">This appearance target is unavailable.</p> : null}
+            </>
+          ) : <p className="text-[11px] text-muted-2">No appearance effect configured.</p>}
+        </div>
+      </div>
+      {active ? <p className="text-[11px] font-medium text-accent" role="status">Active effect references are temporary and will restore the saved state when this rule ends.</p> : null}
+    </div>
+  )
+}
+
 function ValuesEditor({
   values,
   onChange
@@ -756,6 +912,11 @@ function RuleCard({
           <SettingsText>{rule.source.kind === 'api' ? 'Local fallback (before the first fetch)' : 'Apply while active'}</SettingsText>
         </p>
         <ValuesEditor values={rule.values} onChange={(values) => onPatch({ values })} />
+      </div>
+
+      <div>
+        <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-2"><SettingsText>Transient effects</SettingsText></p>
+        <EffectsEditor effects={rule.effects} active={isActive} onChange={(effects) => onPatch({ effects })} />
       </div>
     </div>
   )

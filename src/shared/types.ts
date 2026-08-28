@@ -456,6 +456,10 @@ export type NodeKind =
   | 'github-work-item'
   /** Read-only Windows host diagnostics, with no mutation controls. */
   | 'windows-diagnostics'
+  /** Desktop-only manager for existing file-hosted VeraCrypt containers. */
+  | 'veracrypt'
+  /** Project-scoped source and dependency graph, with host-local derived state. */
+  | 'repository-graph'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -1201,6 +1205,8 @@ export interface ProjectPortalState {
 export interface SavedCanvasLayout {
   id: string
   name: string
+  /** Root or child canvas identity. Legacy layouts migrate to `root`. */
+  canvasId: string
   createdAt: number
   updatedAt: number
   viewport: Viewport
@@ -4872,6 +4878,8 @@ export interface NodeTerminalApi {
   awsWizardModels: import('./aws-wizard').AwsWizardModelsApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Project-scoped semantic code and dependency graph with host-owned cache. */
+  repositoryGraph: import('./repository-graph').RepositoryGraphApi
   /** Guided local Open WebUI hosting with persistent volume and explicit provider setup. */
   openWebUi: import('./open-webui-hosting').OpenWebUiApi
   /** Guided Cloudflare managers — docs/features/integrations/cloudflare-core-managers.md. */
@@ -4930,6 +4938,8 @@ export interface NodeTerminalApi {
   wsl?: import('./wsl').WslApi
   /** Read-only host facts for the Windows diagnostics node. No mutation methods are exposed. */
   windowsDiagnostics: import('./windows-diagnostics').WindowsDiagnosticsApi
+  /** Existing file-hosted VeraCrypt containers. Server, relay, and mobile bridges return unsupported. */
+  veracrypt: import('./veracrypt').VeraCryptApi
   export: ExportApi
   history: LocalHistoryApi
   context: ContextApi

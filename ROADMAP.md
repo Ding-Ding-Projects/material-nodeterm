@@ -12,6 +12,14 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ---
 
+## VeraCrypt container management
+
+- [ ] **Issue #210, existing VeraCrypt containers:** the Windows desktop node, native credential
+      prompt, independently observed mount state, Explore, unmount, local favorites, cache wipe,
+      and unsupported non-desktop states are implemented on
+      `feat/veracrypt-mount-management-20260828`. Accelerated-lane tests, type checks, reviews,
+      runtime interaction, and captures remain intentionally unrun until a release-grade pass.
+
 ## Shipped and verified
 
 - [x] **Sanitized shared-instruction mirrors:** preserve project-specific guidance while keeping
@@ -156,9 +164,10 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 - [ ] **Canvas zones and saved layouts, issue #82 / upstream issue #394**: edge and corner drag
       previews, complete half, third, and quarter targets, and bounded named layout snapshots are
-      implemented in the source and project persistence path. Tests, type checks, lint, reviews,
-      built-artifact interaction, packaging, runtime verification, and captures remain pending
-      under the lane's ultra-speed boundary.
+      implemented in the source and project persistence path. Scheduled schema version 2 now adds
+      exact canvas identity plus transient saved-layout and appearance-target effects. Tests, type
+      checks, lint, reviews, built-artifact interaction, packaging, runtime verification, and
+      captures remain pending under the lane's ultra-speed boundary.
 - [ ] **AWS platform managers, issue #49**: ECR, ECS, EKS, RDS, database, VPC, Route 53, and cost
       operations are mounted on the existing shared AWS resource manager and AWS Shop. The node
       now carries typed previews, fixed argv with `shell: false`, bounded inputs and output,
@@ -607,3 +616,6 @@ intentionally unchecked because this task publishes the plan only.
 `node scripts/check-app-contract.mjs`, and `gh issue list` rather than trusting it silently once
 enough commits have landed since it was last written.*
 - [ ] GitHub issue and pull-request canvas work-item nodes, source implementation landed in `feat/github-pr-issue-canvas`; integration verification remains open.
+- [ ] **Project repository graph universe**: issue #213 implementation landed on an accelerated
+  lane with Code, Dependency, and Combined views, host-owned bounded indexing, provenance-aware
+  exports, and explicit runtime verification still pending.

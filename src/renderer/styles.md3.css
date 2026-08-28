@@ -3262,6 +3262,34 @@ button.term-node__title-text:focus-visible {
 .windows-diagnostics-node :is(button,input):focus-visible { outline:2px solid var(--md-primary); outline-offset:2px; }
 @media (max-width:620px) { .windows-diagnostics-node__tabs button { flex:1 1 140px; } .windows-diagnostics-node__row > div { grid-template-columns:1fr; } }
 
+/* ---- VeraCrypt file-container manager (docs/features/integrations/veracrypt.md) ---- */
+.veracrypt-node { display:flex; flex-direction:column; width:100%; height:100%; overflow:hidden; color:var(--md-on-surface,#f2f2f7); background:var(--md-surface-container); border:1px solid var(--md-outline-variant,#3a3a3c); border-radius:var(--md-shape-medium); }
+.veracrypt-node.selected { box-shadow:0 0 0 2px var(--md-primary,#0a84ff); }
+.veracrypt-node__body { display:flex; flex:1; flex-direction:column; gap:9px; min-height:0; padding:12px; overflow:auto; }
+.veracrypt-node__status,.veracrypt-node__note,.veracrypt-node__operation { margin:0; font-size:12px; line-height:1.4; overflow-wrap:anywhere; }
+.veracrypt-node__status { color:var(--md-primary,#0a84ff); }
+.veracrypt-node__status.is-error { color:var(--md-error,#ffb4ab); }
+.veracrypt-node__note { color:var(--md-on-surface-variant,#9a9a9e); }
+.veracrypt-node__field { display:grid; gap:5px; color:var(--md-on-surface-variant); font-size:12px; }
+.veracrypt-node__field select,.veracrypt-node__field input { min-height:38px; min-width:0; padding:6px 9px; color:inherit; background:var(--md-surface); border:1px solid var(--md-outline); border-radius:var(--md-shape-small); }
+.veracrypt-node__path-row { display:flex; gap:6px; min-width:0; }
+.veracrypt-node__path-row input { flex:1; }
+.veracrypt-node__path-row button,.veracrypt-node__actions button,.veracrypt-node__favorites button,.veracrypt-node__mounted button { min-height:38px; padding:6px 10px; color:var(--md-on-surface); background:var(--md-surface-container-high); border:1px solid var(--md-outline-variant); border-radius:var(--md-shape-small); cursor:pointer; }
+.veracrypt-node__actions { display:flex; flex-wrap:wrap; gap:7px; }
+.veracrypt-node__actions .primary { color:var(--md-on-primary); background:var(--md-primary); border-color:var(--md-primary); }
+.veracrypt-node__confirm { display:grid; gap:7px; padding:10px; color:var(--md-on-error-container); background:var(--md-error-container); border:1px solid var(--md-error); border-radius:var(--md-shape-small); }
+.veracrypt-node__confirm p { margin:0; overflow-wrap:anywhere; }
+.veracrypt-node__actions button:disabled { cursor:not-allowed; opacity:.55; }
+.veracrypt-node__checks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+.veracrypt-node__checks label { display:flex; align-items:center; gap:6px; min-height:32px; color:var(--md-on-surface-variant); }
+.veracrypt-node__favorites,.veracrypt-node__mounted { display:grid; gap:6px; padding-top:8px; border-top:1px solid var(--md-outline-variant); }
+.veracrypt-node__favorites h3,.veracrypt-node__mounted h3 { margin:0; font-size:13px; }
+.veracrypt-node__favorites button { text-align:left; overflow-wrap:anywhere; }
+.veracrypt-node__mounted article { display:grid; grid-template-columns:max-content minmax(0,1fr) max-content max-content; align-items:center; gap:7px; padding:7px; background:var(--md-surface-container-high); border-radius:var(--md-shape-small); }
+.veracrypt-node__mounted article span { min-width:0; overflow-wrap:anywhere; color:var(--md-on-surface-variant); font-size:11px; }
+.veracrypt-node :is(button,input,select):focus-visible { outline:2px solid var(--md-primary); outline-offset:2px; }
+@media (max-width:620px) { .veracrypt-node__checks { grid-template-columns:1fr; } .veracrypt-node__mounted article { grid-template-columns:max-content minmax(0,1fr); } .veracrypt-node__mounted article button { grid-row:2; } }
+
 /* ============================================================================================
    MD3: Kanban board (Board lane — design/v2/MD3 Board.dc.html)
 

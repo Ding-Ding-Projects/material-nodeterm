@@ -20,6 +20,42 @@
   16 of 16 green; type checking green with the documented sibling parity check skipped because its
   separate checkout is absent; external private-source scan green across 2,846 tracked files and the
   most recent commit. Re-run after the final diff before treating these figures as landed.
+## 2026-08-28, VeraCrypt container-manager lane, Issue #210
+
+The isolated branch `feat/veracrypt-mount-management-20260828` adds a Windows desktop node for
+existing file-hosted VeraCrypt containers. The service discovers a validated local executable,
+rejects non-regular container paths and occupied drive letters, invokes a fixed argument array with
+`shell: false`, leaves password, PIM, keyfile, and hidden-volume protection input to VeraCrypt's
+native prompt, and independently verifies the requested drive root before reporting success. The
+manager does not claim to enumerate pre-existing host mounts because VeraCrypt exposes no documented
+volume-list command.
+
+Changed files include `src/shared/veracrypt.ts`, `src/shared/ipc.ts`, `src/shared/types.ts`,
+`src/core/veracrypt/service.ts`, `src/core/veracrypt/register-ipc.ts`, `src/main/index.ts`,
+`src/server/index.ts`, `src/preload/index.ts`, `src/renderer/bridge/stubs.ts`,
+`src/renderer/bridge/relay-api.ts`, `src/renderer/nodes/VeraCryptNode.tsx`,
+`src/renderer/state/workspace.ts`, `src/renderer/canvas/Canvas.tsx`,
+`src/renderer/lib/reopenNode.ts`, `src/renderer/lib/nodeSizing.ts`,
+`src/renderer/styles.md3.css`, `src/shared/node-catalog.ts`,
+`docs/features/integrations/veracrypt.md`, `docs/features/integrations/README.md`,
+`CHANGELOG.md`, `ROADMAP.md`, and this handoff.
+
+The route stores only safe machine-local favorites. Server Edition, relay sessions, and mobile
+companion surfaces report unsupported rather than using another computer's VeraCrypt installation.
+Tests, type checks, lint, reviews, audits, runtime interaction, and screenshots are intentionally
+unrun in the accelerated lane. Build and package results must be recorded below after the pinned
+candidate is committed.
+
+### Accelerated delivery evidence
+
+The source candidate `6d31eb520ddaf3231d94a1162c7f980fbe98daa8` completed
+`C:\Users\cntow\Documents\GitHub\material-nodeterm-worktrees\ylc-veracrypt-20260828\build.bat /s`
+with exit code `0`. It produced the main, preload, renderer, and session-host output under `out/`.
+The subsequent `build-installer.bat /s` run was pinned to the same SHA and stopped before
+Squirrel.Windows packaging because the existing immutable installer-icon URL returned HTTP `404`.
+No installer output, `RELEASES`, or `.nupkg` was produced. The failed preflight generated only
+build inputs, which were removed without changing tracked resources. Tests, type checks, lint,
+reviews, audits, runtime interaction, and screenshots remain intentionally unrun.
 
 ## 2026-08-28, published v0.4.123 and continued repair state
 
@@ -4946,3 +4982,49 @@ The coordinating owner must exercise parsing, type checking, building, and the r
 flow before integrating this feature branch. The similarly numbered eneskirca/nodeterm PR #198 is
 a separate merged paste-injection security change and was inspected only to avoid confusing the
 two records.
+# 2026-08-28, scheduled saved-layout and appearance effects, issue #211
+
+This isolated feature lane implements scheduled settings schema version 2. `SavedCanvasLayout`
+records an exact `canvasId`, with legacy layouts migrating to `root`. Schedule rules now carry
+local-only exact placement and appearance targets. The external API response remains limited to
+validated scalar settings and cannot retarget local project state.
+
+The renderer applies placement only when the named project and canvas are already active. It keeps
+an in-memory geometry and viewport snapshot, refuses drag, resize, regroup, tidy, and saved-layout
+operations while placement is active, and restores only surviving controlled-node geometry when the
+effect ends. Content changes, newly-created nodes, and user deletions survive. Appearance presets
+are emitted through a transient stylesheet layer and never persisted as element styles. A composed
+project, canvas, and layout key fences stale callbacks.
+
+Durable schedule edits are recorded in the `scheduled-settings` local-history domain. Runtime effect
+activation and deactivation create no history entries. The Schedule settings section now provides
+guided local project, canvas, layout, preset, and registered-target pickers with an adjacent regex
+builder and explicit unavailable-state copy.
+
+Changed files: `src/shared/scheduled-settings.ts`, `src/shared/types.ts`, `src/core/workspace-files.ts`,
+`src/core/scheduled-settings-store.ts`, `src/core/scheduled-settings-service.ts`, `src/main/index.ts`,
+`src/renderer/lib/nodeLayouts.ts`, `src/renderer/lib/appearance/apply.ts`,
+`src/renderer/components/appearance/AppearanceStyleInjector.tsx`,
+`src/renderer/components/settings/sections/ScheduleSection.tsx`, `src/renderer/canvas/Canvas.tsx`,
+`docs/scheduled-settings.md`, `docs/uh-feature-inventory.md`, `CHANGELOG.md`, and `ROADMAP.md`.
+
+This accelerated lane intentionally runs no tests, type checks, lint, reviews, audits, accessibility
+checks, security checks, runtime interaction, or screenshots. The required Windows build and
+Squirrel.Windows packaging commands remain to be run against the committed candidate. No external
+issue, discussion, release, or default-branch integration is changed by this lane.
+## 2026-08-28, repository graph universe, issue #213
+
+Implemented the project-scoped repository graph lane on `feat/repository-graph-universe-20260828`.
+The shared contract is in `src/shared/repository-graph.ts`; `src/core/repository-graph-service.ts`
+performs bounded host-owned TypeScript/JavaScript and manifest indexing with source fingerprints,
+previous-snapshot retention, cancellation, progress, provenance, confidence, and JSON, JSONL, CSV,
+TSV, Markdown, HTML, GraphML, and DOT exports. IPC and Server Edition wiring live in
+`src/core/repository-graph-register-ipc.ts`, `src/shared/ipc.ts`, `src/preload/index.ts`,
+`src/renderer/bridge/ws-bridge.ts`, and `src/renderer/bridge/stubs.ts`. The project node and Node
+Catalog entry are in `src/renderer/nodes/RepositoryGraphNode.tsx`, `src/renderer/canvas/Canvas.tsx`,
+`src/renderer/state/workspace.ts`, `src/renderer/lib/nodeSizing.ts`, and
+`src/shared/node-catalog.ts`.
+
+Tests, type checks, lint, reviews, accessibility checks, security checks, runtime interaction, and
+screenshots were intentionally not run in the accelerated lane. Build and packaging remain the
+next required commands for this candidate.

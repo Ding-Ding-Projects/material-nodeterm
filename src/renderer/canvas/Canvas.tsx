@@ -128,6 +128,7 @@ import OpenWebUiHostingNode from '../nodes/OpenWebUiHostingNode'
 import ShopNode from '../nodes/ShopNode'
 import TorrentNode from '../nodes/TorrentNode'
 import WindowsDiagnosticsNode from '../nodes/WindowsDiagnosticsNode'
+import VeraCryptNode from '../nodes/VeraCryptNode'
 import { AwsUniversePortalNode } from '../nodes/AwsUniversePortalNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
@@ -137,6 +138,7 @@ import WildDimSumNode from '../nodes/WildDimSumNode'
 import WebNode from '../nodes/WebNode'
 import AwsResourceNode from '../nodes/AwsResourceNode'
 import GitHubWorkItemNode from '../nodes/GitHubWorkItemNode'
+import RepositoryGraphNode from '../nodes/RepositoryGraphNode'
 import { GitHubWorkItemAttachmentDialog } from '../nodes/GitHubWorkItemAttachmentDialog'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import TimerNode from '../nodes/TimerNode'
@@ -750,6 +752,8 @@ import {
   createOpenWebUiNode,
   createVirtualMachineNode,
   createWindowsDiagnosticsNode,
+  createVeraCryptNode,
+  createRepositoryGraphNode,
   createGitLabHostingNode,
   createCloudflareCoreManagersNode,
   SERVICE_NODE_LABELS,
@@ -793,6 +797,7 @@ import type { CodexAccount } from '@shared/codex-account'
 import { Dock } from '../components/Dock'
 import { TabBar } from '../components/TabBar'
 import type { SavedCanvasLayout } from '@shared/types'
+import type { SchedulePlacementTarget } from '@shared/scheduled-settings'
 import { setFocusNodeHandler } from '../nodes/focus-handler'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
@@ -1900,6 +1905,14 @@ export function Canvas() {
   ])
   const viewportRef = useRef<Viewport>({ x: 0, y: 0, zoom: 1 })
   const nodesRef = useRef<CanvasNode[]>(nodes)
+  /** Snapshot for one active scheduled placement. Only geometry is restored, so content edits,
+   * newly-created nodes, and user deletions survive effect teardown. */
+  const scheduledPlacementRef = useRef<{
+    key: string
+    target: SchedulePlacementTarget
+    nodeGeometry: Map<string, { position: { x: number; y: number }; size: { width: number; height: number }; parentId?: string; collapsed?: boolean }>
+    viewport: Viewport
+  } | null>(null)
   // Group drill-through keeps the complete parent canvas in memory while React Flow renders only
   // the selected group's direct children. The refs let autosave merge the subset without dropping
   // siblings, and keep the return path independent of render timing.
@@ -2039,6 +2052,56 @@ export function Canvas() {
 
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const activeProject = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId))
+  const activeScheduledPlacement = useScheduledSettings((s) => s.active?.active?.effects?.placement)
+
+  const restoreScheduledPlacement = useCallback(() => {
+    const prior = scheduledPlacementRef.current
+    if (!prior) return
+    const restored = nodesRef.current.map((node) => {
+      const geometry = prior.nodeGeometry.get(node.id)
+      if (!geometry) return node
+      return {
+        ...node,
+        position: { ...geometry.position },
+        size: { ...geometry.size },
+        ...(geometry.parentId ? { parentId: geometry.parentId } : { parentId: undefined }),
+        ...(geometry.collapsed === undefined ? {} : { collapsed: geometry.collapsed })
+      }
+    })
+    setNodes(restored)
+    setViewport(prior.viewport)
+    scheduledPlacementRef.current = null
+  }, [setNodes, setViewport])
+
+  /** Apply a placement only when the exact project and canvas are already active. No schedule
+   * callback is allowed to navigate the user's project or canvas. A renderer epoch key prevents a
+   * stale rule from reapplying after a project switch or a newer rule wins. */
+  useEffect(() => {
+    const target = activeScheduledPlacement
+    const currentCanvasId = activeProject ? projectCanvasView(activeProject).id : null
+    const exactTarget = !!target && target.projectId === activeProjectId && target.canvasId === currentCanvasId
+    const key = target ? `${target.projectId}|${target.canvasId}|${target.layoutId}` : ''
+    const prior = scheduledPlacementRef.current
+    if (prior && (!exactTarget || prior.key !== key)) restoreScheduledPlacement()
+    if (!exactTarget || !target || !activeProject || scheduledPlacementRef.current) return
+    const layout = activeProject.savedLayouts?.find(
+      (candidate) => candidate.id === target.layoutId && candidate.canvasId === target.canvasId
+    )
+    if (!layout) return
+    const nodeGeometry = new Map(
+      nodesRef.current.map((node) => [node.id, {
+        position: { ...node.position },
+        size: { width: node.size.width, height: node.size.height },
+        ...(node.parentId ? { parentId: node.parentId } : {}),
+        ...(node.collapsed !== undefined ? { collapsed: node.collapsed } : {})
+      }])
+    )
+    scheduledPlacementRef.current = { key, target, nodeGeometry, viewport: { ...viewportRef.current } }
+    const applied = applySavedLayout(flowToNodeStates(nodesRef.current), layout)
+    if (applied.changed) setNodes(nodeStatesToFlow(applied.nodes))
+    setViewport(layout.viewport)
+  }, [activeProject, activeProjectId, activeScheduledPlacement, restoreScheduledPlacement, setNodes, setViewport])
+
   const githubBoard = useGitHubIssues((s) => (activeProjectId ? s.projects[activeProjectId] : undefined))
   const githubAttachmentItems = useMemo<GitHubWorkItem[]>(() => {
     const repository = activeProject?.kanban?.github?.repository
@@ -2273,6 +2336,8 @@ export function Canvas() {
       'cloudflare-tunnel': withNodeBoundary(ServiceNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode),
       'windows-diagnostics': withNodeBoundary(WindowsDiagnosticsNode),
+      veracrypt: withNodeBoundary(VeraCryptNode),
+      'repository-graph': withNodeBoundary(RepositoryGraphNode),
       awsidentity: withNodeBoundary(ServiceNode),
       'gitlab-hosting': withNodeBoundary(GitLabHostingNode),
       'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
@@ -4226,6 +4291,7 @@ export function Canvas() {
         // first commit these changes still describe the outgoing project's canvas.
         keepAliveFromRef.current
       )
+      const placementLocked = scheduledPlacementRef.current !== null
       const managed = changes.filter((c) => {
         if ('id' in c && ghostIds.has(c.id)) return false
         // A real deletion ends the node's keep-alive entry too — the merge deliberately falls
@@ -4268,6 +4334,7 @@ export function Canvas() {
         // changes at the canvas boundary rather than relying only on `draggable: false`.
         if ('id' in c) {
           const target = nodesRef.current.find((node) => node.id === c.id)
+          if (placementLocked && (c.type === 'position' || c.type === 'dimensions')) return false
           if (target && (target.type === 'shop' || target.data.nonDeletable === true) && (c.type === 'position' || c.type === 'dimensions')) return false
         }
         return true
@@ -5936,6 +6003,8 @@ export function Canvas() {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
             if (catalogEntry.id === 'windows-diagnostics') return createWindowsDiagnosticsNode(index, center)
+            if (catalogEntry.id === 'veracrypt') return createVeraCryptNode(index, center)
+            if (catalogEntry.id === 'repository-graph') return createRepositoryGraphNode(index, center)
             if (catalogEntry.id === 'gitlab-hosting') return createGitLabHostingNode(index, center)
             if (catalogEntry.id === 'nextcloud-hosting') return createServiceNode('nextcloud-aio', index, center)
             if (catalogEntry.id === 'nextcloud-managed-hosting') return createServiceNode('nextcloud-managed', index, center)
@@ -9582,6 +9651,10 @@ export function Canvas() {
   }, [markDirty])
 
   const restoreSavedLayout = useCallback((layout: SavedCanvasLayout) => {
+    if (scheduledPlacementRef.current) {
+      setNotice({ kind: 'info', text: 'Saved-layout placement is active. Geometry changes are temporarily unavailable.' })
+      return
+    }
     const applied = applySavedLayout(flowToNodeStates(nodesRef.current), layout)
     if (!applied.changed) {
       setNotice({ kind: 'info', text: `Layout "${layout.name}" is already active.` })
@@ -9608,12 +9681,14 @@ export function Canvas() {
   }, [markDirty])
 
   const handleNodeDragStart = useCallback((_event: unknown, node: CanvasNode) => {
+    if (scheduledPlacementRef.current) return
     draggingRef.current = true
     zoneDragNodeRef.current = canSnapToZone([node.id]) ? node.id : null
     setZonePreview(null)
   }, [canSnapToZone])
 
   const handleNodeDrag = useCallback((event: unknown, node: CanvasNode) => {
+    if (scheduledPlacementRef.current) return
     if (zoneDragNodeRef.current !== node.id) return
     const input = event as {
       clientX?: number
@@ -9649,6 +9724,12 @@ export function Canvas() {
   }, [getViewport])
 
   const handleNodeDragStop = useCallback((_event: unknown, node: CanvasNode) => {
+    if (scheduledPlacementRef.current) {
+      zoneDragNodeRef.current = null
+      setZonePreview(null)
+      draggingRef.current = false
+      return
+    }
     const preview = zonePreview
     if (zoneDragNodeRef.current === node.id && preview) {
       const wrap = flowWrapRef.current?.getBoundingClientRect()
@@ -9703,6 +9784,10 @@ export function Canvas() {
     return nodesRef.current.filter((n) => !n.parentId).length >= 2
   }, [])
   const arrangeAllNodes = useCallback(() => {
+    if (scheduledPlacementRef.current) {
+      setNotice({ kind: 'info', text: 'Saved-layout placement is active. Geometry changes are temporarily unavailable.' })
+      return
+    }
     if (isKanbanOpen(useProjects.getState().activeProjectId)) return
     const targets = nodesRef.current
       .filter((n) => !n.parentId)
@@ -9719,6 +9804,10 @@ export function Canvas() {
 
   const toggleCollapseNodes = useCallback(
     (ids: string[]) => {
+      if (scheduledPlacementRef.current) {
+        setNotice({ kind: 'info', text: 'Saved-layout placement is active. Geometry changes are temporarily unavailable.' })
+        return
+      }
       const set = new Set(ids)
       setNodes((ns) =>
         ns.map((n) => {
@@ -18195,8 +18284,18 @@ export function Canvas() {
           onNodeDragStart={handleNodeDragStart}
           onNodeDrag={handleNodeDrag}
           onNodeDragStop={handleNodeDragStop}
-          onSelectionDragStart={() => (draggingRef.current = true)}
+          onSelectionDragStart={() => {
+            if (scheduledPlacementRef.current) {
+              setNotice({ kind: 'info', text: 'Saved-layout placement is active. Geometry changes are temporarily unavailable.' })
+              return
+            }
+            draggingRef.current = true
+          }}
           onSelectionDragStop={() => {
+            if (scheduledPlacementRef.current) {
+              draggingRef.current = false
+              return
+            }
             draggingRef.current = false
             publisherRef.current?.flush()
             markDirty()

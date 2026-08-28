@@ -11,7 +11,54 @@
 import type { Settings } from './types'
 import { isFunnyLevel } from './i18n'
 
-export const SCHEDULED_SETTINGS_SCHEMA_VERSION = 1 as const
+export const SCHEDULED_SETTINGS_SCHEMA_VERSION = 2 as const
+
+/** Stable local references for transient renderer effects. These identifiers are intentionally
+ * opaque and never accepted from an external API response. A rule may point at one exact project,
+ * canvas, saved layout, appearance preset, and registered appearance target, but it can never
+ * switch the active project or canvas when the effect fires. */
+export interface SchedulePlacementTarget {
+  projectId: string
+  canvasId: string
+  layoutId: string
+}
+
+export interface ScheduleAppearanceTarget {
+  presetId: string
+  targetId: string
+}
+
+export interface ScheduleRuleEffects {
+  placement?: SchedulePlacementTarget
+  appearance?: ScheduleAppearanceTarget
+}
+
+const EFFECT_ID_MAX_LENGTH = 160
+
+function validEffectId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= EFFECT_ID_MAX_LENGTH && !/[\u0000-\u001f\u007f]/.test(value)
+}
+
+function normalizeEffectTarget(raw: unknown): ScheduleRuleEffects | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const source = raw as Record<string, unknown>
+  const placementRaw = source.placement
+  const appearanceRaw = source.appearance
+  const placement = placementRaw && typeof placementRaw === 'object' && !Array.isArray(placementRaw)
+    ? placementRaw as Record<string, unknown>
+    : undefined
+  const appearance = appearanceRaw && typeof appearanceRaw === 'object' && !Array.isArray(appearanceRaw)
+    ? appearanceRaw as Record<string, unknown>
+    : undefined
+  const result: ScheduleRuleEffects = {}
+  if (placement && validEffectId(placement.projectId) && validEffectId(placement.canvasId) && validEffectId(placement.layoutId)) {
+    result.placement = { projectId: placement.projectId, canvasId: placement.canvasId, layoutId: placement.layoutId }
+  }
+  if (appearance && validEffectId(appearance.presetId) && validEffectId(appearance.targetId)) {
+    result.appearance = { presetId: appearance.presetId, targetId: appearance.targetId }
+  }
+  return result.placement || result.appearance ? result : undefined
+}
 
 // ── What can be scheduled ───────────────────────────────────────────────────────────────────────
 
@@ -353,10 +400,12 @@ export interface ScheduleRule {
    *  is always whatever the source's last successful fetch produced (see `RuleSourceState` and
    *  `resolveActiveSchedule` below, and their caller in core/scheduled-settings-service.ts). */
   values: SchedulableSettingsPatch
+  /** Local-only transient renderer effects. External sources can provide values, never targets. */
+  effects?: ScheduleRuleEffects
 }
 
 export interface ScheduledSettingsFile {
-  version: 1
+  version: 2
   /** IANA timezone name, e.g. "Europe/London". Every rule's window is interpreted in this ONE
    *  timezone — not per-rule — so the whole schedule has a single, statable clock rather than each
    *  rule silently keeping whatever zone the machine that created it happened to be in. Defaults to
@@ -510,7 +559,8 @@ function normalizeRule(raw: unknown): ScheduleRule | null {
     enabled: enabled && normalizedSource.safeToEnable,
     window: normalizeWindow(r.window),
     source: normalizedSource.source,
-    values: normalizeSchedulableValues(r.values)
+    values: normalizeSchedulableValues(r.values),
+    effects: normalizeEffectTarget(r.effects)
   }
 }
 
@@ -600,6 +650,27 @@ export function validateScheduledSettingsFile(raw: unknown): string | null {
         return `"${rule.label || 'Untitled rule'}" has an invalid ${key} value.`
       }
     }
+    if (rule.effects !== undefined) {
+      if (!rule.effects || typeof rule.effects !== 'object' || Array.isArray(rule.effects)) {
+        return `"${rule.label || 'Untitled rule'}" has invalid transient effects.`
+      }
+      const effects = rule.effects as Record<string, unknown>
+      for (const key of Object.keys(effects)) {
+        if (key !== 'placement' && key !== 'appearance') return `"${rule.label || 'Untitled rule'}" has an unknown transient effect.`
+      }
+      const placement = effects.placement
+      if (placement !== undefined) {
+        if (!placement || typeof placement !== 'object' || Array.isArray(placement)) return `"${rule.label || 'Untitled rule'}" has an invalid placement target.`
+        const target = placement as Record<string, unknown>
+        if (!validEffectId(target.projectId) || !validEffectId(target.canvasId) || !validEffectId(target.layoutId)) return `"${rule.label || 'Untitled rule'}" has an invalid placement target.`
+      }
+      const appearance = effects.appearance
+      if (appearance !== undefined) {
+        if (!appearance || typeof appearance !== 'object' || Array.isArray(appearance)) return `"${rule.label || 'Untitled rule'}" has an invalid appearance target.`
+        const target = appearance as Record<string, unknown>
+        if (!validEffectId(target.presetId) || !validEffectId(target.targetId)) return `"${rule.label || 'Untitled rule'}" has an invalid appearance target.`
+      }
+    }
   }
   return null
 }
@@ -646,6 +717,7 @@ function ruleEffectiveValues(rule: ScheduleRule, states: RuleSourceStates): Sche
 export interface ResolvedSchedule {
   ruleId: string
   values: SchedulableSettingsPatch
+  effects?: ScheduleRuleEffects
 }
 
 /** The per-rule external-source status pushed to the renderer (a status dot + "last synced Ns ago"
@@ -686,7 +758,7 @@ export function resolveActiveSchedule(
     if (!rule.enabled) continue
     if (!scheduleWindowActiveAt(rule.window, epochMs, file.timezone)) continue
     if (!ruleSourceSatisfied(rule, states)) continue
-    return { ruleId: rule.id, values: ruleEffectiveValues(rule, states) }
+    return { ruleId: rule.id, values: ruleEffectiveValues(rule, states), effects: rule.effects }
   }
   return null
 }

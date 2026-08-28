@@ -544,6 +544,38 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'veracrypt',
+    nodeKind: 'veracrypt',
+    category: 'managers',
+    label: 'VeraCrypt containers',
+    description: 'Mount and manage existing file-hosted VeraCrypt containers through the native prompt.',
+    keywords: ['veracrypt', 'container', 'mount', 'unmount', 'drive', 'encryption'],
+    documentationPath: 'docs/features/integrations/veracrypt.md',
+    safeDefaults: {},
+    dependencies: ['veracrypt-desktop'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: alwaysAvailable
+  },
+  {
+    id: 'repository-graph',
+    nodeKind: 'repository-graph',
+    category: 'universes',
+    label: 'Repository graph universe',
+    description: 'Explore semantic code and dependency relationships for the active project with source provenance.',
+    keywords: ['repository', 'graph', 'code', 'dependencies', 'imports', 'exports', 'calls', 'references', 'inheritance', 'lockfile'],
+    documentationPath: 'docs/features/projects/repository-graph-universe.md',
+    safeDefaults: { repositoryGraphIntent: { version: 1, mode: 'combined', layout: 'hierarchical' } },
+    dependencies: ['typescript-compiler'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: (context) => context.sessionSource === 'relay'
+      ? { available: false, reason: 'Repository graph indexing runs on the source-owning host and is unavailable in a relay session.', dependencyIds: ['session-local-or-server'] }
+      : needsFolder(context)
+  },
+  {
     id: 'service:cloudflare-zero-trust',
     nodeKind: 'cloudflare-zero-trust',
     category: 'managers',
@@ -870,6 +902,8 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'service:freepbx', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:cloudflare-tunnel', state: 'current', scope: 'any', reason: 'typed Cloudflare Tunnel inventory and reviewed DNS adoption' },
   { id: 'windows-diagnostics', state: 'current', scope: 'any', reason: 'read-only host diagnostics with fixed queries' },
+  { id: 'veracrypt', state: 'current', scope: 'any', reason: 'existing file-hosted VeraCrypt container manager with native credential prompt' },
+  { id: 'repository-graph', state: 'current', scope: 'any', reason: 'project-scoped code and dependency graph with host-owned cache' },
   { id: 'service:cloudflare-zero-trust', state: 'current', scope: 'any', reason: 'typed Cloudflare manager node' },
   { id: 'service:awsidentity', state: 'current', scope: 'aws-universe', reason: 'guided AWS identity manager node' },
   { id: 'subagent', state: 'ephemeral', scope: 'none', reason: 'hook-derived render-only card' },

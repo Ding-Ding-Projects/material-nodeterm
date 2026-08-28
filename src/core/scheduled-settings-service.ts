@@ -377,7 +377,7 @@ export class ScheduledSettingsService {
     }
     return {
       computedAtMs: now,
-      active: resolved ? { ruleId: resolved.ruleId, values: resolved.values } : null,
+      active: resolved ? { ruleId: resolved.ruleId, values: resolved.values, effects: resolved.effects } : null,
       sources
     }
   }

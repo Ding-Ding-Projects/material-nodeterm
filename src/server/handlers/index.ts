@@ -13,6 +13,7 @@ import { AwsWizardModelService } from '../../core/aws-wizard/service'
 import { registerOllamaIpc } from '../../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
 import { registerTorrentIpc } from '../../core/torrent/register-ipc'
+import { registerRepositoryGraphIpc } from '../../core/repository-graph-register-ipc'
 import { registerVirtualMachineIpc } from '../../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../../core/calendar/register-ipc'
 import { registerCloudflareCoreManagersIpc } from '../../core/cloudflare-core-managers'
@@ -91,6 +92,10 @@ export function registerCoreHandlers(
   const nodeDependencyService = registerNodeDependencyIpc(platform)
   const awsWizardModels = new AwsWizardModelService(nodeDependencyService)
   registerOllamaIpc(platform)
+  registerRepositoryGraphIpc(platform, { projectTargetInfo: (projectId) => {
+    const info = deps.workspaceStore?.projectTargetInfo(projectId)
+    return info ? { cwd: info.cwd, ssh: info.ssh, name: info.name } : null
+  } })
   const { manager: minecraftServers } = registerMinecraftIpc(platform)
   registerTorrentIpc(platform)
   const { manager: virtualMachineManager } = registerVirtualMachineIpc(platform)

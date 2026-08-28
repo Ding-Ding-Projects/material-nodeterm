@@ -64,6 +64,7 @@ import { normalizeNodeIcon } from '@shared/node-icon'
 import { CLOUDFLARE_DEFAULT_INTENT, type CloudflarePortableIntent } from '@shared/cloudflare-core-managers'
 import { AWS_CORE_OPERATIONS, AWS_MANAGER_DEFAULT_INTENT, AWS_PLATFORM_OPERATIONS, type AwsManagerMode, type AwsManagerPortableIntent } from '@shared/aws-resource'
 import { sanitizeTunnelPortableIntent, type TunnelPortableIntent } from '@shared/tunnel-state'
+import type { VeraCryptMountOptions } from '@shared/veracrypt'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -112,6 +113,7 @@ const WINDOWS_DIAGNOSTICS_SIZE = { width: 760, height: 560 }
 const TIMER_SIZE = { width: 380, height: 360 }
 const ALARM_SIZE = { width: 380, height: 360 }
 const OPEN_WEBUI_SIZE = { width: 680, height: 560 }
+const VERACRYPT_SIZE = { width: 700, height: 560 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
@@ -159,6 +161,8 @@ export interface NodeData {
   /** User-chosen terminal-session mark, validated before entering or leaving live state. */
   icon?: import('@shared/node-icon').NodeIcon
   collapsed?: boolean
+  /** Existing VeraCrypt file-container mount intent. Credentials never enter node data. */
+  veracryptIntent?: VeraCryptMountOptions
   /** Native persisted Loop node fields (type='scheduler'). */
   loopTask?: string
   loopIntervalMs?: number
@@ -305,6 +309,8 @@ export interface NodeData {
   torrentMagnet?: string
   /** AWS Resource Explorer and Cloud Control safe portable intent. */
   awsManagerIntent?: AwsManagerPortableIntent
+  /** Safe project-scoped graph presentation intent. Source paths and derived indexes stay local. */
+  repositoryGraphIntent?: import('@shared/repository-graph').RepositoryGraphIntent
   /** Guided AWS manager operation intent, kept separate from Resource Explorer state. */
   awsResourceManagerIntent?: import('@shared/aws-resource-managers').AwsResourceManagerIntent
   /** Compact GitHub issue and pull-request attachments owned by this canvas node. */
@@ -1828,6 +1834,46 @@ export function createWindowsDiagnosticsNode(index: number, center?: { x: number
   }
 }
 
+/** Creates a desktop-only VeraCrypt manager node. The container is selected on the host at use
+ * time, and the portable node intent carries no credential or machine binding. */
+export function createVeraCryptNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('veracrypt'),
+    type: 'veracrypt',
+    position: placeAt(center, index, VERACRYPT_SIZE.width, VERACRYPT_SIZE.height),
+    width: VERACRYPT_SIZE.width,
+    height: VERACRYPT_SIZE.height,
+    style: { width: VERACRYPT_SIZE.width, height: VERACRYPT_SIZE.height },
+    data: {
+      title: 'VeraCrypt containers',
+      color: NODE_COLORS[(index + 3) % NODE_COLORS.length],
+      group: null,
+      veracryptIntent: undefined
+    }
+  }
+}
+
+const REPOSITORY_GRAPH_SIZE = { width: 760, height: 560 }
+
+/** Creates the project-scoped repository graph surface. The host resolves the project root by id,
+ * while this node persists only mode, filters, layout and expanded-id presentation intent. */
+export function createRepositoryGraphNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('repository-graph'),
+    type: 'repository-graph',
+    position: placeAt(center, index, REPOSITORY_GRAPH_SIZE.width, REPOSITORY_GRAPH_SIZE.height),
+    width: REPOSITORY_GRAPH_SIZE.width,
+    height: REPOSITORY_GRAPH_SIZE.height,
+    style: { width: REPOSITORY_GRAPH_SIZE.width, height: REPOSITORY_GRAPH_SIZE.height },
+    data: {
+      title: 'Repository graph',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      repositoryGraphIntent: { version: 1, mode: 'combined', query: '', expandedNodeIds: [], layout: 'hierarchical' }
+    }
+  }
+}
+
 /**
  * Creates an NSIS installer-builder node — a GUI for authoring a Windows NSIS installer script for
  * ANOTHER project. Not this app's own installer, which stays Squirrel.Windows (see CLAUDE.md's
@@ -2554,7 +2600,9 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   'linux-vm': true,
   'open-webui-hosting': true,
   'github-work-item': true,
-  'windows-diagnostics': true
+  'windows-diagnostics': true,
+  veracrypt: true,
+  'repository-graph': true
 }
 
 /**
@@ -2618,7 +2666,9 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   'linux-vm': LINUX_VM_SIZE,
   'open-webui-hosting': OPEN_WEBUI_SIZE,
   'github-work-item': GITHUB_WORK_ITEM_NODE_SIZE,
-  'windows-diagnostics': WINDOWS_DIAGNOSTICS_SIZE
+  'windows-diagnostics': WINDOWS_DIAGNOSTICS_SIZE,
+  veracrypt: VERACRYPT_SIZE,
+  'repository-graph': REPOSITORY_GRAPH_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and

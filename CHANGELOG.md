@@ -25,6 +25,32 @@
   普通公開字眼，改名後嘅 design component filename 亦唔再帶 private term。最新 scanner 對
   2,846 個 tracked files 同最近一個 commit 都係零 match。
 
+- Add the Windows VeraCrypt container manager node for existing file-hosted containers. The guided
+  route validates regular files and drive letters, launches a fixed `VeraCrypt.exe` argument array
+  with `shell: false`, leaves password, PIM, keyfile, and hidden-volume protection input to the
+  native VeraCrypt prompt, independently verifies mount and unmount state, and keeps favorites
+  local without credentials. Server Edition, relay sessions, and mobile companion surfaces report
+  an explicit unsupported state. Tests, type checks, lint, reviews, runtime interaction, and
+  screenshots remain intentionally unrun for the accelerated feature lane.
+
+  加入 Windows VeraCrypt container manager node，支援現有 file-hosted container。流程會驗證 regular
+  file 同 drive letter，用固定 `VeraCrypt.exe` arguments 加 `shell: false` 啟動；password、PIM、keyfile
+  同 hidden-volume protection 由 VeraCrypt 原生 prompt 處理，mount 同 unmount 會再獨立核實，favorite
+  只留喺本機而且唔會保存 credential。Server Edition、relay 同 mobile companion 會清楚顯示
+  unsupported。加速路線刻意未執行 tests、type checks、lint、reviews、runtime interaction 同 screenshots。
+
+- Extend scheduled settings to schema version 2. Existing files remain readable, saved layouts carry
+  an exact canvas identity, and rules can reference one exact project, canvas, saved layout, preset,
+  and appearance target. Placement and appearance are transient renderer effects with stale-epoch
+  protection, geometry-operation refusal, and restoration that preserves content, new nodes, and
+  user deletions. Schedule edits are recorded in the `scheduled-settings` local-history domain, while
+  runtime activation remains history-free. External API payloads cannot retarget local effects.
+
+  排程設定升級到 schema version 2。舊檔案照樣讀得到，saved layout 而家記住準確 canvas；規則可以
+  指定一個 project、canvas、layout、preset 同 appearance target。套用時只係暫時改 renderer，會
+  防止過期規則搶返控制權，鎖住幾何操作，完結後保留內容、新增節點同使用者刪除。排程編輯會
+  記入 `scheduled-settings` local-history domain，但運行中啟用效果唔會製造 history；外部 API
+  只可以供應設定值，唔可以改本機效果指向。
 - Fix packaged Windows startup after the file-converter pipeline added Sharp. The package now
   classifies Sharp and its native Windows binary as production dependencies, loads Sharp only when
   an image conversion needs it, and refuses any installer output that omits either runtime file.
@@ -3037,3 +3063,7 @@ or on GitHub's [tags](https://github.com/eneskirca/nodeterm/tags) and
 - Add first-class GitHub issue and pull-request canvas work-item nodes with safe persistence and
   shared API/account integration. Source-only implementation for upstream #462 and downstream #132;
   verification remains unrun.
+# Unreleased
+
+- Add the project repository graph universe with semantic TypeScript and JavaScript relationships,
+  explicit manifest adapters, bounded host-owned snapshots, stale protection, and portable exports.

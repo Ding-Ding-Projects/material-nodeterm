@@ -136,6 +136,9 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // silently replace that with this desktop's local snapshot; until a scoped host route exists,
     // keep the capability explicitly unavailable.
     windowsDiagnostics: stub.windowsDiagnostics,
+    // VeraCrypt is host-local desktop state. A relay guest never reaches the viewer's local
+    // installation and never requests the remote host's credential prompt.
+    veracrypt: stub.veracrypt,
     ...buildAgentApi(client), // onAgentStatus / onSubagentActivity — the host's agent hooks
     ...buildCanvasApi(client), // canvas sync against the host's reflector
     ...buildPresenceApi(client), // the host's presence hub
@@ -234,6 +237,7 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // Relay v1 has no remote-routed manager channel, so refuse rather than contacting the viewer.
     cloudflareZeroTrust: stub.cloudflareZeroTrust,
     ollama: stub.ollama,
+    repositoryGraph: stub.repositoryGraph,
     openWebUi: stub.openWebUi,
     // Tunnel credentials and provider state belong to the host machine. Relay v1 does not route
     // this inventory, so the viewer gets an explicit unsupported surface rather than querying its
