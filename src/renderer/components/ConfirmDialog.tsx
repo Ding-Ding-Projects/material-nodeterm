@@ -172,7 +172,6 @@ export function ConfirmDialog({
           {!alert && (
             <button className="confirm__btn" autoFocus={autoFocusButtons && danger} onClick={onCancel}>
               {cancelText}
-              {cancelLabel}
             </button>
           )}
           <button
