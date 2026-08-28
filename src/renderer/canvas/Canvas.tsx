@@ -12641,7 +12641,7 @@ export function Canvas() {
   // node beside the opener, roped to it (never a real OS popup; main denies that one).
   //
   // It is a canvas node again rather than a new tab, but the thing that made the original
-  // sibling-node behaviour a poke guy is fixed rather than reintroduced: every link click used to
+      // sibling-node behaviour a bug is fixed rather than reintroduced: every link click used to
   // mint a PERSISTED node, so a canvas quietly accumulated roped browsers nobody opened on
   // purpose and project.json grew with them. A temporary node is dropped by flowToNodeStates, so
   // closing it leaves nothing behind — which is exactly what a popup is — and the node's own

@@ -27,7 +27,7 @@
  * It also REPORTS (never fails on) how many article-to-article links resolve inside the bundle.
  * `docs/` already contains links to files that do not exist — failing on those would be failing
  * the build for a pre-existing condition, and the browser handles them as an honest
- * "not in this bundle" state with a route to the same file on the hui.
+ * "not in this bundle" state with a route to the same file on the GitHub repository.
  */
 import { readFileSync, existsSync } from 'node:fs'
 import { pathToFileURL, fileURLToPath } from 'node:url'

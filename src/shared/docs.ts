@@ -40,7 +40,7 @@ export type DocLinkTarget =
   | { kind: 'external'; href: string }
   /** A repo file this bundle does not carry (an article outside the bundled tree, a link to
    *  README.md, or a genuinely dangling path — `docs/` already contains two). Surfaced as an
-   *  honest "not in this bundle" state with a route to the same file on the hui, never as a
+ *  honest "not in this bundle" state with a route to the same file on GitHub, never as a
    *  click that appears to work and doesn't. */
   | { kind: 'missing'; path: string }
 
@@ -149,7 +149,7 @@ export function headingSlug(text: string): string {
       .toLowerCase()
       .replace(/[^\p{L}\p{N}\s-]/gu, '')
       // One hyphen per whitespace character, NOT per run: `docs/` anchors are written by hand to
-      // match how the same file renders on the hui, and GitHub's slugger substitutes each space
+  // match how the same file renders on GitHub, and GitHub's slugger substitutes each space
       // individually. Collapsing runs here would silently mis-target every heading that contains
       // punctuation between two words (`socket — why` → `socket-why`, not `socket--why`).
       .replace(/\s/g, '-')

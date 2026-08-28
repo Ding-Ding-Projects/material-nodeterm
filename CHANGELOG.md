@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- Add byte-identical sanitized shared-instruction blocks to `AGENTS.md` and `CLAUDE.md`, preserve
+  all project-specific guidance outside the managed markers, and add deterministic synchronization,
+  private-vocabulary validation, public-detail scanning, parity checks, sensitive-input refusal,
+  and failed-second-write rollback coverage. `AGENTS.md` now also makes the fork downstream-only:
+  no pull request creation or pull request comments against the canonical upstream repository.
+
+  `AGENTS.md` 同 `CLAUDE.md` 而家有 byte-identical sanitized shared-instruction blocks，原有
+  project-specific guidance 會留喺 managed markers 外面。同步、private-vocabulary validation、
+  public-detail scan、parity check、sensitive-input refusal，同第二次寫入失敗 rollback 都有
+  focused coverage。`AGENTS.md` 亦正式限制呢個 fork 只做 downstream 工作，唔會去 canonical
+  upstream 開 pull request 或留言。
+
+- Remove 73 legacy private-vocabulary occurrences from tracked public content while preserving
+  behavior. Public comments, tests, fixtures, documentation, design references, and compatibility
+  handling now use ordinary language, and the renamed design component no longer carries a private
+  term in its filename. The current private-source scanner reports zero matches across 2,846 tracked
+  files and the most recent commit.
+
+  清走 tracked public content 入面 73 個舊 private-vocabulary occurrences，同時保留原有行為。
+  Comments、tests、fixtures、documentation、design references 同 compatibility handling 而家都用
+  普通公開字眼，改名後嘅 design component filename 亦唔再帶 private term。最新 scanner 對
+  2,846 個 tracked files 同最近一個 commit 都係零 match。
+
 - Fix packaged Windows startup after the file-converter pipeline added Sharp. The package now
   classifies Sharp and its native Windows binary as production dependencies, loads Sharp only when
   an image conversion needs it, and refuses any installer output that omits either runtime file.

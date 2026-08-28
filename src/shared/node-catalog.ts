@@ -916,7 +916,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
 ]
 
 /** Completeness guard data is intentionally exact and red when a row is removed, duplicated, or
- * scoped incorrectly. Callers can surface these messages in a build Chut without guessing. */
+ * scoped incorrectly. Callers can surface these messages in a build gate without guessing. */
 export function validateNodeCatalogCompleteness(
   entries: readonly NodeCatalogEntry[] = NODE_CATALOG
 ): string[] {

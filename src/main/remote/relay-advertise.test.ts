@@ -13,7 +13,7 @@ let home = ''
 vi.mock('os', async (orig) => {
   const real = (await orig()) as typeof import('os')
   // relay-advertise freezes FILE from the default os export at module load. Patch both shapes so
-  // a failed mock cannot aim a Chut at the developer's real ~/.nodeterm directory.
+  // a failed mock cannot aim a gate at the developer's real ~/.nodeterm directory.
   const patched = { ...real, homedir: () => home }
   return { ...patched, default: patched }
 })

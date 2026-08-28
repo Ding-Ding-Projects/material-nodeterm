@@ -143,7 +143,7 @@ function stableStat(stat: import('fs').BigIntStats): string {
  * Stable identity carried into the disclosed inventory fingerprint. Volatile timestamps are
  * deliberately excluded here: `stableStat` already fences an entry while it is read, while the
  * content digest below must remain the fact that distinguishes same-size byte replacements. This
- * also keeps the byte-coverage Chut discriminating instead of letting a ctime change hide a missing
+   * also keeps the byte-coverage gate discriminating instead of letting a ctime change hide a missing
  * content hash.
  */
 function inventoryStat(stat: import('fs').BigIntStats): string {

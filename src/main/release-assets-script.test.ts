@@ -43,7 +43,7 @@ function crc32(value: Buffer): number {
   return (crc ^ 0xffffffff) >>> 0
 }
 
-/** Build the smallest standards-compliant stored ZIP so Chuts exercise real nupkg parsing. */
+  /** Build the smallest standards-compliant stored ZIP so gates exercise real nupkg parsing. */
 function storedZip(entries: Array<{ name: string; value: Buffer }>): Buffer {
   const locals: Buffer[] = []
   const centrals: Buffer[] = []

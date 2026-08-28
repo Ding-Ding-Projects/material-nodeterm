@@ -25,7 +25,7 @@ export interface ExistingSessionHostReadOptions {
   /** Paths derived independently from the caller's userDataDir. Never trust redirects in state. */
   expectedEndpoint: string
   expectedTokenPath: string
-  /** Deterministic filesystem seam for the failure-mode Chuts. */
+/** Deterministic filesystem seam for the failure-mode gates. */
   readText?: (filePath: string) => string
 }
 

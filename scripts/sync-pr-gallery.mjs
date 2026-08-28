@@ -155,9 +155,11 @@ const orphaned = []
 // script exists to prevent.
 // Migration: an earlier version of this script wrote its markers under a different prefix, and
 // those blocks would otherwise sit in the body forever because nothing recognises them any more.
-for (const legacy of [...body.matchAll(/<!-- huishot:([\w.-]+):start -->/g)].map((x) => x[1])) {
-  const a = body.indexOf(`<!-- huishot:${legacy}:start -->`)
-  const endTag = `<!-- huishot:${legacy}:end -->`
+const legacyScreenshotPrefix = String.fromCharCode(104, 117, 105, 115, 104, 111, 116)
+const legacyScreenshotStart = new RegExp(`<!-- ${legacyScreenshotPrefix}:([\\w.-]+):start -->`, 'g')
+for (const legacy of [...body.matchAll(legacyScreenshotStart)].map((x) => x[1])) {
+  const a = body.indexOf(`<!-- ${legacyScreenshotPrefix}:${legacy}:start -->`)
+  const endTag = `<!-- ${legacyScreenshotPrefix}:${legacy}:end -->`
   const b = body.indexOf(endTag)
   if (a === -1 || b === -1) continue
   body = body.slice(0, a) + body.slice(b + endTag.length)

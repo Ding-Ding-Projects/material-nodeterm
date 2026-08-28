@@ -117,7 +117,7 @@ export class Auth {
   private readonly ladderChallengeBudget = new UnlockLadderChallengeBudget()
   private readonly ladders = new Map<string, UnlockLadder>()
 
-  /** Compatibility/default-peer view used by direct callers and focused core Chuts. HTTP always
+/** Compatibility/default-peer view used by direct callers and focused core gates. HTTP always
    *  asks ladderFor(clientKey), so one peer cannot reset or answer another peer's climb. */
   get ladder(): UnlockLadder {
     return this.ladderFor(DEFAULT_CLIENT_KEY)

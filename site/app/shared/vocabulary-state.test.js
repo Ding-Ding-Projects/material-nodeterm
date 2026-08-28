@@ -311,7 +311,7 @@ test('the real renderer maps authored strings and preserves exact facts', () => 
   }
 })
 
-test('Day Teet Hui toasts map authored title, body, and sub fields while facts stay exact', () => {
+test('GitHub Pages toasts map authored title, body, and sub fields while facts stay exact', () => {
   const original = globalThis.localStorage
   globalThis.localStorage = storageFixture()
   try {
@@ -348,7 +348,7 @@ test('dim sum surprise marks its authored trolley title separately from factual 
   assert.equal(calls[0][4].subKind, 'fact')
 })
 
-test('persistent Day Teet Hui messages retain ownership through render, search, and export', () => {
+test('persistent GitHub Pages messages retain ownership through render, search, and export', () => {
   const original = globalThis.localStorage
   globalThis.localStorage = storageFixture()
   try {

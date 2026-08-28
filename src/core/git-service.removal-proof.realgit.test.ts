@@ -15,8 +15,8 @@ describe('GitService destructive worktree proof (real git)', () => {
   beforeEach(async () => {
     repo = await fs.mkdtemp(path.join(os.tmpdir(), 'nt-wt-proof-'))
     run('init')
-    run('config', 'user.email', 'chut@example.test')
-    run('config', 'user.name', 'Chut')
+  run('config', 'user.email', 'gate@example.test')
+  run('config', 'user.name', 'Gate')
     await fs.writeFile(path.join(repo, 'tracked.txt'), 'alpha\n')
     run('add', 'tracked.txt')
     run('commit', '-m', 'fixture')

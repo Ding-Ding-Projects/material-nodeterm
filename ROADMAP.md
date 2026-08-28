@@ -14,6 +14,13 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## Shipped and verified
 
+- [x] **Sanitized shared-instruction mirrors:** preserve project-specific guidance while keeping
+      one byte-identical managed public block in `AGENTS.md` and `CLAUDE.md`; validate canonical
+      private-vocabulary output when the private source exists; reject sensitive input; prove
+      missing-target, marker, parity, private-input, and second-write rollback failures; and keep
+      all project pull request activity in the downstream fork. The external canonical scanner also
+      reports zero private-vocabulary matches across the complete tracked public tree.
+
 - [ ] **Start-screen build provenance:** show the artifact-stamped package version and second-
       precision local updated time, with localized English, Cantonese, and bilingual labels. The
       stamped version remains visible without the optional runtime bridge, and invalid provenance

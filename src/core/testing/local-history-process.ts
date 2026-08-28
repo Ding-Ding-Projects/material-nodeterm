@@ -1,4 +1,4 @@
-// Real child-process fixture for local-history's cross-process transaction Chuts. Vitest bundles
+// Real child-process fixture for local-history's cross-process transaction gates. Vitest bundles
 // this entry with esbuild, then launches two ordinary Node processes against one data directory.
 
 import { promises as fs } from 'node:fs'

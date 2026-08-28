@@ -3,7 +3,7 @@
 // This lives in `src/shared` because main validates the same verbs the renderer executes, while the
 // web build cannot import the main-process model. `dispatchDestructiveControl` reads this set before
 // Canvas reaches its ordinary switch; write/close effects exist only behind the callbacks it gives
-// the confirmation UI. The behavior Chut iterates the exact set and proves neither effect runs
+// the confirmation UI. The behavior gate iterates the exact set and proves neither effect runs
 // before confirmation. A new member therefore turns red as an unsupported destructive verb until
 // its behavior is deliberately implemented in that dispatcher.
 //

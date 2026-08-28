@@ -2629,7 +2629,7 @@ button.term-node__title-text:focus-visible {
   background: color-mix(in srgb, var(--md-warning) 16%, transparent);
 }
 
-/* Alarm Clock node, all controls retain the Lang gui surface roles and touch-sized targets. */
+/* Alarm Clock node, all controls retain the Material Design 3 surface roles and touch-sized targets. */
 .alarm-clock-node { min-width: 340px; min-height: 300px; overflow: hidden; }
 .alarm-clock-node__glyph { font-size: 17px; margin-right: 5px; }
 .alarm-clock-node__body { display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow: auto; }

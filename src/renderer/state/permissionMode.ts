@@ -18,7 +18,7 @@ import { withPermissionMode } from '@shared/agents/approval-mode'
 /**
  * Every production surface that can start (or resume) an agent CLI.
  *
- * This is a closed inventory on purpose: the behavior Chut exercises every row under Kids mode,
+ * This is a closed inventory on purpose: the behavior gate exercises every row under Kids mode,
  * while the branded plan prevents a raw settings value from being handed to the command builders.
  * A new surface has to name itself here before it can obtain a production launch plan.
  */

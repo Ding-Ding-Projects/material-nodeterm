@@ -111,7 +111,7 @@ export function handleSquirrelStartup(deps: SquirrelStartupDependencies): boolea
   return true
 }
 
-/** Keep the production bootstrap decision behavior-testable without importing Electron in Chuts. */
+/** Keep the production bootstrap decision behavior-testable without importing Electron in gates. */
 export function beginDesktopStartup(
   deps: SquirrelStartupDependencies,
   loadApplication: () => void

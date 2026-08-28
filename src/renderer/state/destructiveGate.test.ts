@@ -1,6 +1,6 @@
 // The destructive gate is reachable from every surface, and the runtime GuardedAction registry
 // has an executable policy path for each member. This file used to scan source strings for a call
-// containing each action. Commented-out or dead code satisfied that Chut, so it proved presence,
+// containing each action. Commented-out or dead code satisfied that gate, so it proved presence,
 // not behavior. The planners below are the functions production dispatchers consume.
 
 import { describe, expect, it, beforeEach } from 'vitest'

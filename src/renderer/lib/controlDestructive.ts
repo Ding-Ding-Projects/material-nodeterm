@@ -80,7 +80,7 @@ export function dispatchDestructiveControl(
         // Own the restart lock in the behavior-level dispatcher, not in Canvas's injected effect.
         // That makes the confirmation boundary and the shared per-node exclusion one indivisible
         // contract: every confirmed write routed here is guarded, and the executable dispatcher
-        // Chut can prove the wiring without scanning a React component's source text.
+  // gate can prove the wiring without scanning a React component's source text.
         let actionReply: ControlActionReply | undefined
         const outcome = await guardConcurrentRestart(nodeId, async () => {
           actionReply = await dependencies.performWrite(nodeId, request.args.text ?? '')
@@ -99,7 +99,7 @@ export function dispatchDestructiveControl(
 
   // The closed DESTRUCTIVE_VERBS inventory currently leaves only `close` here. Refuse an unknown
   // future member until its behavior is deliberately added rather than guessing a destructive
-  // action. The dispatcher Chut iterates the shared set, so adding one turns it red immediately.
+  // action. The dispatcher gate iterates the shared set, so adding one turns it red immediately.
   if (request.verb !== 'close') {
     dependencies.reply({ ok: false, error: `unsupported destructive control verb: ${request.verb}` })
     return true

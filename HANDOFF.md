@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-08-28, sanitized shared-instruction mirrors
+
+- Added one generated, byte-identical sanitized shared-instruction block to `AGENTS.md` and
+  `CLAUDE.md` while preserving all project-specific guidance outside the managed markers.
+- Added `scripts/sync-agent-instruction-mirror.mjs` for check-only and standard-input write routes,
+  canonical private-vocabulary validation when the private source exists, public-detail scanning,
+  staged replacement, transient rename retry, and rollback when the second target write fails.
+- Expanded `scripts/check-instruction-mirror.mjs` and its focused suite to cover `CLAUDE.md`, exact
+  marker cardinality, required-section completeness, byte-identical parity, missing targets,
+  private and sensitive input refusal, and preservation of surrounding project guidance.
+- Added the downstream-only rule to `AGENTS.md`: do not open or comment on pull requests in the
+  canonical upstream repository. All project contribution activity stays in this fork.
+- Removed 73 legacy private-vocabulary matches across tracked public documentation, design files,
+  comments, test descriptions, fixture values, and compatibility code. The affected design component
+  was renamed to `design/pages/Nodeterm GitHub Pages.dc.html`; the legacy gallery-marker reader keeps
+  compatibility without storing the private term literally.
+- Verification at the uncommitted tree: Node `v24.19.0`; mirror check green; focused mirror suite
+  16 of 16 green; type checking green with the documented sibling parity check skipped because its
+  separate checkout is absent; external private-source scan green across 2,846 tracked files and the
+  most recent commit. Re-run after the final diff before treating these figures as landed.
+
 ## 2026-08-28, published v0.4.123 and continued repair state
 
 Release `v0.4.123` is published and non-draft. Its verified target is
@@ -7,7 +28,7 @@ Release `v0.4.123` is published and non-draft. Its verified target is
 digests recorded in the release notes. The release was produced by the queued hosted sequence;
 the later `main` repairs below are not claimed as part of that release.
 
-After that release target, the following commits were dewed to `main`, whose current hui ref is
+After that release target, the following commits were pushed to `main`, whose current Git remote ref is
 `1a91b1bb6c36202e218b15f2b8af6612ac29acad`:
 
 - `3f9c12823873e004abba78c026c5dec58c3de5d5` removes duplicate import fragments from core modules.
@@ -25,9 +46,9 @@ After that release target, the following commits were dewed to `main`, whose cur
 Focused evidence remains: status mirror 163 executed tests passed with 1 explicit skip, project
 icons 24 of 24, cache 9 of 9, endpoint tests 19 executed with 1 explicit POSIX-shell skip,
 remote context-tail 4 of 4, FAB menu 7 of 7, and continuation 5 of 5. The phone identity and
-Codex session-name real integration Chuts remain unverified because their bounded runs did not
+Codex session-name real integration gates remain unverified because their bounded runs did not
 reach terminal results. The full local suite remains red with 164 failed files, 763 failed tests,
-14 unhandled errors, 11,910 passed tests, and 260 skipped tests. The full node type Chut remains
+14 unhandled errors, 11,910 passed tests, and 260 skipped tests. The full node type gate remains
 red in other integration modules.
 
 The hosted Release run `33151725217` is still pending for `1a91b1bb6c36202e218b15f2b8af6612ac29acad`.
@@ -36,20 +57,20 @@ earlier `8727cf85e15eaba9d7d3b56ef11ce3d25baf5e2e`.
 
 ## 2026-08-28, renderer, remote-tail, hook, and cache repair batch
 
-The following task repairs are now dewed to `main`, with the hui ref matching the current tip
+The following task repairs are now pushed to `main`, with the Git remote ref matching the current tip
 `3f9c12823873e004abba78c026c5dec58c3de5d5`:
 
 - `e92218ffc58745f5d368b6a5286063e40a902dff` restores the FAB menu's settings and active-project
-  selectors and removes duplicate imports. Its focused Chut passes 7 of 7 tests.
+  selectors and removes duplicate imports. Its focused gate passes 7 of 7 tests.
 - `4873dc4b254a2731bd9aa871f9da529fa2018f25` updates remote context-tail fixtures to the current
-  `readTailWithSize` first-read contract. Its focused Chut passes 4 of 4 tests.
+  `readTailWithSize` first-read contract. Its focused gate passes 4 of 4 tests.
 - `23fe82ff233e1d61b7ee3e4fcd7ebe7cce873749` removes duplicate hook-server imports and repairs
   endpoint payload assembly.
 - `7579c9bec9125be31a4bfa82aad5690ab67be67d` aligns endpoint-file assertions with quoted v2
-  output and the Deen No permission model. The focused endpoint set passes 19 executed tests,
+  output and the Microsoft Windows permission model. The focused endpoint set passes 19 executed tests,
   with 1 explicit POSIX-shell skip because `/bin/sh` is unavailable on this host.
 - `4ebaadc50266c136ccf81d056e1052200d46cd9c` removes a duplicate cache publication call. The
-  cache Chut passes 9 of 9 tests.
+  cache gate passes 9 of 9 tests.
 - `a06b238dee516ac2eeb12cc52152866d4251c204` removes duplicate atomic-helper imports from the
   Codex hook and node-token writers.
 - `3f9c12823873e004abba78c026c5dec58c3de5d5` removes remaining duplicate import fragments from
@@ -58,12 +79,12 @@ The following task repairs are now dewed to `main`, with the hui ref matching th
 The complete node type-check remains red because unrelated duplicate declarations and integration
 type mismatches remain elsewhere in the codebase. The full local suite remains red with 164 failed
 files, 763 failed tests, 14 unhandled errors, 11,910 passed tests, and 260 skipped tests. These
-focused repairs do not claim that either broader Chut is green. The nested `upstream/nodeterm`
-checkout and the recovery Gerk Tong Hui remain preserved and untouched.
+focused repairs do not claim that either broader gate is green. The nested `upstream/nodeterm`
+checkout and the recovery Git worktree remain preserved and untouched.
 
 ## 2026-08-28, published release and final preservation state
 
-The current `main` tip is `c2acffb963468be3cb1f539e7e8a24f0cc1582d8`, and the hui ref matches it.
+The current `main` tip is `c2acffb963468be3cb1f539e7e8a24f0cc1582d8`, and the Git remote ref matches it.
 Release `v0.4.122` is published and non-draft at
 `https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v0.4.122`. It targets
 `28234e3bfdfe209f60a000b55b630ee53f1d79b7` and contains `RELEASES`, the full Squirrel.Windows
@@ -72,28 +93,28 @@ release notes. Release run `33148795793` completed the hosted Windows build, pac
 publication path. The release notes explicitly state that tests, type-checking, and lint did not
 run in that workflow.
 
-The focused settings repair Chut passes 14 of 14 tests after commits
+The focused settings repair gate passes 14 of 14 tests after commits
 `fa9d822189994910042803255d2c625211502191`, `93a0e9166887f92417ff798055d98e957071cd98`, and
 `c2acffb963468be3cb1f539e7e8a24f0cc1582d8`. The full local suite remains red with 164 failed
 files, 763 failed tests, 14 unhandled errors, 11,910 passed tests, and 260 skipped tests. Local
 type-checking also remains red with duplicate declarations, bridge mismatches, and related
-existing integration failures. No claim of a green full-suite or type-check Chut is made.
+existing integration failures. No claim of a green full-suite or type-check gate is made.
 
-The primary Gerk Tong Hui is otherwise 🧹. The nested `upstream/nodeterm` checkout remains
+The primary Git worktree is otherwise clean. The nested `upstream/nodeterm` checkout remains
 retained because it owns uncommitted bootstrap files: `build.bat`, `build-installer.bat`,
-`download-dependencies.bat`, and `dependencies.manifest.json`. The linked recovery Gerk Tong Hui
+`download-dependencies.bat`, and `dependencies.manifest.json`. The linked recovery Git worktree
 at `C:\Users\cntow\Documents\GitHub\material-nodeterm-worktrees\red-recovery-final-25ad9e10`
 also remains retained with its untracked `resources/qemu/.qemu-w64-29620.exe`. These are not
 task-owned cleanup candidates, so no deletion or forced integration was performed.
 
 The open issues scan found #198 and #11 still requiring separate product work. Issue #104 has
 the current release and settings-repair progress records. PR #463 has the same release milestone
-comment. The private vocabulary update is recorded separately in @uh and is not copied into this
+comment. The private vocabulary update is recorded separately in agent-global-memory repository and is not copied into this
 public document.
 
 ## 2026-08-28, settings persistence and filter crash repairs
 
-Two local runtime failures found by the full test run are repaired and dewed to `main`:
+Two local runtime failures found by the full test run are repaired and pushed to `main`:
 
 - `fa9d822189994910042803255d2c625211502191` imports React at runtime for `SettingsText` fragments
   and keeps the `{ settings, generation }` deferred-save envelope intact. The timer now dispatches
@@ -108,7 +129,7 @@ tracked; these two repairs are not a claim that the broader suite is green.
 
 ## 2026-08-28, current hosted release candidate
 
-The current `main` tip is `28234e3bfdfe209f60a000b55b630ee53f1d79b7`, and the hui ref matches it.
+The current `main` tip is `28234e3bfdfe209f60a000b55b630ee53f1d79b7`, and the Git remote ref matches it.
 This candidate includes the hosted elevated-toolchain-only bootstrap and the trailing-separator
 normalization needed when validating the selected Visual Studio installation.
 
@@ -125,11 +146,11 @@ run `33148795793` for this current candidate is pending behind the non-cancellin
 No hosted green verdict or new published release is claimed until one of those runs completes and
 its release, assets, hashes, and target commit are independently verified.
 
-The temporary installer-verification Gerk Tong Huis at `C:\mn-inst` and
+The temporary installer-verification Git worktrees at `C:\mn-inst` and
 `C:\Users\cntow\Documents\GitHub\material-nodeterm-worktrees\installer-verify-main-20260828`
-were removed after zero tracked diffs and successful ancestry proofs. The recovery Gerk Tong Hui
-with the retained failed QEMU temporary installer, all task and user-owned linked Gerk Tong Huis,
-and all unresolved jers remain preserved for the next owner.
+were removed after zero tracked diffs and successful ancestry proofs. The recovery Git worktree
+with the retained failed QEMU temporary installer, all task and user-owned linked Git worktrees,
+and all unresolved branches remain preserved for the next owner.
 
 ## 2026-08-28, hosted elevated-toolchain handoff
 

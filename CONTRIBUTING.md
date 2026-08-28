@@ -435,7 +435,7 @@ here has: not while the kanban board covers it, not while the user is typing.
 **Every agent launch carries a branded launch plan.** Add a new production surface to
 `AGENT_LAUNCH_SURFACES`, obtain its `ActiveAgentLaunchPlan` at the moment of launch, and pass that
 proof to `commandForAgentLaunch` / `createAgentNode`. Never thread a raw permission setting into a
-command builder: it skips the live CLI-version and Kids-mode gates. The funnel Chut executes every
+command builder: it skips the live CLI-version and Kids-mode gates. The funnel gate executes every
 inventory row and must distinguish both permissive inputs from the resulting manual CLI arguments.
 
 **Every node/session close goes through `renderer/lib/nodeDeletion.ts`.** That includes node-header
@@ -534,7 +534,7 @@ an existing `icons.tsx` glyph alone unless you are already touching that surface
 identity and cross the wire only after aggregation. Reconnect must await attach/pause/size restoration
 before ordinary requests, and transport or emulator backpressure must own tickets independent from
 renderer flow. Only `ENOENT` proves an ownership file absent, and a permanent node deletion may update
-the canvas only after the backing session-host kill acknowledges. Focused Chuts for this subsystem
+the canvas only after the backing session-host kill acknowledges. Focused gates for this subsystem
 must include co-attach, delayed response, socket-drop, and write-backpressure races; a happy-path mock
 does not exercise the contracts that keep persistent processes truthful.
 

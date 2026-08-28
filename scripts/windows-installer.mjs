@@ -447,8 +447,8 @@ const NON_PACKAGED_GITLINKS = new Set(['upstream/nodeterm'])
 export function requireCleanSourceStatus(status, readPair) {
   const changed = changedSourcePaths(status)
   if (changed === null) return
-  // The nested canonical source is a preserved Tow Fat used for comparison and upstream review,
-  // not a package input. Its own Gerk Tong Hui can stay active while this Oak Kay is packaged;
+  // The nested canonical source is a preserved submodule used for comparison and upstream review,
+  // not a package input. Its own Git worktree can stay active while this repository is packaged;
   // every product path and every untracked path remains subject to the strict dirty-tree refusal.
   const packagedChanged = changed.filter((path) => !NON_PACKAGED_GITLINKS.has(path))
   const unexpected = packagedChanged.filter((path) => !VERSION_BUMP_PATHS.has(path))

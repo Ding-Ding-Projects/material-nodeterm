@@ -1,6 +1,6 @@
-# Handoff — nodeterm Day Teet Hui (kindergarten edition)
+# Handoff — nodeterm GitHub Pages (kindergarten edition)
 
-**File:** `Nodeterm Day Teet Hui.dc.html` (one self-contained Design Component; opens
+**File:** `Nodeterm GitHub Pages.dc.html` (one self-contained Design Component; opens
 directly in a browser)
 **Assets:** `assets/mark.svg`, `assets/nodeterm.png`, `assets/hero.svg` — copied from
 `material-nodeterm/site/assets/`
@@ -118,7 +118,7 @@ target and the lockable surface all follow from it. Then either add its id to th
 ## Dropping it in
 
 The file is self-contained apart from the three assets and the font link. To ship it as
-the Pages site, copy `Nodeterm Day Teet Hui.dc.html` plus `assets/` into `site/`, rename
+the Pages site, copy `Nodeterm GitHub Pages.dc.html` plus `assets/` into `site/`, rename
 the HTML to `index.html`, and check the base path — this fork deploys under
 `/material-nodeterm/`, so keep every internal reference relative (all of them currently
 are; there is no root-absolute `href="/…"` in the file).

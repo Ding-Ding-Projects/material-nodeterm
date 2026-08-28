@@ -104,7 +104,7 @@ if (!attachPort && !existsSync(bin)) {
   process.exit(1)
 }
 // A failed process inventory is not an empty inventory. Abort before launch: treating it as []
-// makes every pre-existing matching process look new at cleanup and risks killing a Swiftie's app.
+  // makes every pre-existing matching process look new at cleanup and risks killing a user's app.
 const pidsBefore = new Set(attachPort ? [] : repoElectronPids({ root: ROOT }))
 const realHomeSentinelOptions = { home: homedir(), env: process.env }
 const realHomeBefore = attachPort

@@ -13,12 +13,21 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { execFile } from 'node:child_process'
+import { renameSync } from 'node:fs'
 import { promisify } from 'node:util'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { checkInstructionMirror } from './check-instruction-mirror.mjs'
+import {
+  MANAGED_BEGIN,
+  MANAGED_END,
+  REQUIRED_PUBLIC_SECTIONS,
+  extractManagedBody,
+  validateManagedBody,
+  writeManagedInstructionMirror
+} from './sync-agent-instruction-mirror.mjs'
 
 const execFileAsync = promisify(execFile)
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -41,13 +50,20 @@ const CLEAN_MIRROR = [
   ''
 ].join('\n')
 
+const CLEAN_MANAGED_BODY = REQUIRED_PUBLIC_SECTIONS.join('\n\n')
+
+function withManagedBlock(prefix, body = CLEAN_MANAGED_BODY) {
+  return `${prefix.trimEnd()}\n\n${MANAGED_BEGIN}\n${body}\n${MANAGED_END}\n`
+}
+
 let fixtures // root temp dir holding one subdirectory per fixture case
 
-async function makeFixture(name, readme, agents) {
+async function makeFixture(name, readme, agents, claude = agents) {
   const dir = path.join(fixtures, name)
   await mkdir(dir, { recursive: true })
   await writeFile(path.join(dir, 'README.md'), readme, 'utf8')
-  await writeFile(path.join(dir, 'AGENTS.md'), agents, 'utf8')
+  await writeFile(path.join(dir, 'AGENTS.md'), withManagedBlock(agents), 'utf8')
+  await writeFile(path.join(dir, 'CLAUDE.md'), withManagedBlock(claude), 'utf8')
   return dir
 }
 
@@ -69,7 +85,7 @@ afterAll(async () => {
 })
 
 describe('this repository', () => {
-  it('README.md and AGENTS.md both carry the labelled sanitized mirror, with no leak-pattern match', async () => {
+  it('carries the concise summary and identical full managed mirrors with no leak-pattern match', async () => {
     const { problems } = checkInstructionMirror(repoRoot)
     expect(problems).toEqual([])
     const run = await runChecker(repoRoot)
@@ -160,7 +176,88 @@ describe('mirror-presence goes red', () => {
     const dir = path.join(fixtures, 'missing-agents')
     await mkdir(dir, { recursive: true })
     await writeFile(path.join(dir, 'README.md'), CLEAN_MIRROR, 'utf8')
+    await writeFile(path.join(dir, 'CLAUDE.md'), withManagedBlock(CLEAN_MIRROR), 'utf8')
     const { problems } = checkInstructionMirror(dir)
     expect(problems.some((p) => p.file === 'AGENTS.md' && p.reason === 'missing file')).toBe(true)
+  })
+})
+
+describe('full managed mirror', () => {
+  it('fails when CLAUDE.md is missing', async () => {
+    const dir = await makeFixture('missing-claude', CLEAN_MIRROR, CLEAN_MIRROR)
+    await rm(path.join(dir, 'CLAUDE.md'))
+    const { problems } = checkInstructionMirror(dir)
+    expect(problems.some((p) => p.file === 'CLAUDE.md' && p.detail.includes('does not exist'))).toBe(true)
+  })
+
+  it('fails when the two managed bodies drift', async () => {
+    const changed = CLEAN_MANAGED_BODY.replace('### Publication boundary', '### Publication boundary\n\nDifferent text')
+    const dir = await makeFixture('managed-drift', CLEAN_MIRROR, CLEAN_MIRROR, CLEAN_MIRROR)
+    await writeFile(path.join(dir, 'CLAUDE.md'), withManagedBlock(CLEAN_MIRROR, changed), 'utf8')
+    const { problems } = checkInstructionMirror(dir)
+    expect(problems.some((p) => p.detail.includes('managed body differs'))).toBe(true)
+  })
+
+  it('fails on duplicate or partial managed markers', async () => {
+    const dir = await makeFixture('managed-markers', CLEAN_MIRROR, CLEAN_MIRROR)
+    await writeFile(
+      path.join(dir, 'CLAUDE.md'),
+      withManagedBlock(CLEAN_MIRROR) + `\n${MANAGED_BEGIN}\nextra\n`,
+      'utf8'
+    )
+    const { problems } = checkInstructionMirror(dir)
+    expect(problems.some((p) => p.detail.includes('exactly one complete managed instruction block'))).toBe(true)
+  })
+
+  it('refuses sensitive input before changing either target', async () => {
+    const dir = await makeFixture('managed-sensitive-write', CLEAN_MIRROR, CLEAN_MIRROR)
+    const beforeAgents = await readFile(path.join(dir, 'AGENTS.md'), 'utf8')
+    const beforeClaude = await readFile(path.join(dir, 'CLAUDE.md'), 'utf8')
+    const sensitive = `${CLEAN_MANAGED_BODY}\n\nDeploy to 192.168.50.99.`
+    expect(validateManagedBody(sensitive).some((problem) => problem.includes('IP address'))).toBe(true)
+    expect(() => writeManagedInstructionMirror(dir, sensitive)).toThrow(/IP address/)
+    const afterAgents = await readFile(path.join(dir, 'AGENTS.md'), 'utf8')
+    const afterClaude = await readFile(path.join(dir, 'CLAUDE.md'), 'utf8')
+    expect(afterAgents).toBe(beforeAgents)
+    expect(afterClaude).toBe(beforeClaude)
+  })
+
+  it('refuses a private-vocabulary body before changing either target', async () => {
+    const dir = await makeFixture('managed-private-write', CLEAN_MIRROR, CLEAN_MIRROR)
+    const beforeAgents = await readFile(path.join(dir, 'AGENTS.md'), 'utf8')
+    const beforeClaude = await readFile(path.join(dir, 'CLAUDE.md'), 'utf8')
+    const privateBody = `${CLEAN_MANAGED_BODY}\n\nprivate-term`
+    expect(() => writeManagedInstructionMirror(dir, privateBody, {
+      privateVocabularyValidator: (body) => body.includes('private-term') ? ['private-term'] : []
+    })).toThrow(/private vocabulary/)
+    expect(await readFile(path.join(dir, 'AGENTS.md'), 'utf8')).toBe(beforeAgents)
+    expect(await readFile(path.join(dir, 'CLAUDE.md'), 'utf8')).toBe(beforeClaude)
+  })
+
+  it('rolls back the first target when publishing the second target fails', async () => {
+    const dir = await makeFixture('managed-publish-rollback', CLEAN_MIRROR, CLEAN_MIRROR)
+    const beforeAgents = await readFile(path.join(dir, 'AGENTS.md'), 'utf8')
+    const beforeClaude = await readFile(path.join(dir, 'CLAUDE.md'), 'utf8')
+    let renames = 0
+    expect(() => writeManagedInstructionMirror(dir, `${CLEAN_MANAGED_BODY}\n\nNew reviewed rule.`, {
+      privateVocabularyValidator: () => [],
+      publishRename: (source, destination) => {
+        renames += 1
+        if (renames === 2) throw Object.assign(new Error('injected second publish failure'), { code: 'EIO' })
+        renameSync(source, destination)
+      }
+    })).toThrow(/injected second publish failure/)
+    expect(await readFile(path.join(dir, 'AGENTS.md'), 'utf8')).toBe(beforeAgents)
+    expect(await readFile(path.join(dir, 'CLAUDE.md'), 'utf8')).toBe(beforeClaude)
+  })
+
+  it('preserves surrounding project guidance while synchronizing the exact body', async () => {
+    const dir = await makeFixture('managed-write', CLEAN_MIRROR, `${CLEAN_MIRROR}\nAgent-only project guidance.`, `${CLEAN_MIRROR}\nClaude-only project guidance.`)
+    writeManagedInstructionMirror(dir, CLEAN_MANAGED_BODY, { privateVocabularyValidator: () => [] })
+    const agents = await readFile(path.join(dir, 'AGENTS.md'), 'utf8')
+    const claude = await readFile(path.join(dir, 'CLAUDE.md'), 'utf8')
+    expect(agents).toContain('Agent-only project guidance.')
+    expect(claude).toContain('Claude-only project guidance.')
+    expect(extractManagedBody(agents, 'AGENTS.md')).toBe(extractManagedBody(claude, 'CLAUDE.md'))
   })
 })

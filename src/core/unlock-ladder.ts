@@ -457,7 +457,7 @@ export class UnlockLadder {
   }
 
   private storeIssued(nonce: string, record: Omit<Issued, 'challengeReservation'>): boolean {
-    // A cryptographic collision is fantastically unlikely, but deterministic Chuts inject dice
+  // A cryptographic collision is fantastically unlikely, but deterministic gates inject dice
     // and accounting must remain exact even then.
     if (this.issued.has(nonce)) this.deleteIssued(nonce)
     const reservation = this.challengeBudget.tryReserve(record.expiresAt, this.now())

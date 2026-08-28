@@ -121,7 +121,7 @@ afterEach(async () => {
   for (const pty of livePtys) pty.destroy()
   livePtys.clear()
   // Let synchronous unsubscribe bookkeeping cancel every idle reconnect timer before its socket
-  // is torn down by the harness. A failed assertion must not leak a client into the next Chut.
+    // is torn down by the harness. A failed assertion must not leak a client into the next gate.
   await eventLoopTurn()
   for (const socket of openSockets) socket.destroy()
   openSockets.clear()

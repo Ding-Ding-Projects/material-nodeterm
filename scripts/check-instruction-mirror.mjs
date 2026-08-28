@@ -27,6 +27,10 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import {
+  checkManagedInstructionMirror,
+  loadCanonicalVocabularyValidator
+} from './sync-agent-instruction-mirror.mjs'
 
 // Hand-written per-file marker list. Every entry is a literal substring the file must contain.
 // The first two are the mirror label itself; the rest are the convention sections the sanitized
@@ -44,6 +48,7 @@ const MIRROR_MARKERS = [
 ]
 
 const MIRROR_FILES = ['README.md', 'AGENTS.md']
+const LEAK_SCAN_FILES = ['README.md', 'AGENTS.md', 'CLAUDE.md']
 
 // Private-detail leak patterns. Each is scanned over EVERY line of BOTH files (not only the
 // mirror section — a leak elsewhere in a public README is exactly as public). `allowed` names
@@ -103,7 +108,14 @@ export function checkInstructionMirror(repoRoot) {
       }
     }
 
-    const lines = text.split(/\r\n|\n|\r/)
+  }
+
+  // Privacy scanning covers every public instruction target, not only the two
+  // files that retain the older concise-summary marker contract.
+  for (const file of LEAK_SCAN_FILES) {
+    const abs = path.join(repoRoot, file)
+    if (!existsSync(abs)) continue
+    const lines = readFileSync(abs, 'utf8').split(/\r\n|\n|\r/)
     for (let i = 0; i < lines.length; i++) {
       for (const { name, re, allowed } of LEAK_PATTERNS) {
         // A fresh lastIndex per line: the shared regex objects carry /g state.
@@ -122,13 +134,29 @@ export function checkInstructionMirror(repoRoot) {
     }
   }
 
+  const managed = checkManagedInstructionMirror(repoRoot)
+  for (const detail of managed.problems) {
+    const file = detail.startsWith('CLAUDE.md') ? 'CLAUDE.md' : 'AGENTS.md'
+    problems.push({ file, line: 0, reason: 'managed instruction mirror', detail })
+  }
+
   return { problems }
 }
 
-function main() {
+async function main() {
   const here = path.dirname(fileURLToPath(import.meta.url))
   const repoRoot = process.argv[2] ?? path.join(here, '..')
   const { problems } = checkInstructionMirror(repoRoot)
+  const canonical = await loadCanonicalVocabularyValidator(repoRoot)
+  if (canonical) {
+    const { bodies } = checkManagedInstructionMirror(repoRoot)
+    for (const [file, body] of bodies) {
+      const leaks = canonical.validate(body)
+      if (leaks.length > 0) {
+        problems.push({ file, line: 0, reason: 'private vocabulary', detail: leaks.join(', ') })
+      }
+    }
+  }
   if (problems.length > 0) {
     console.error(`check-instruction-mirror: FAILED — ${problems.length} problem(s):`)
     for (const p of problems) {
@@ -138,9 +166,12 @@ function main() {
     return
   }
   console.log(
-    `check-instruction-mirror: OK — ${MIRROR_FILES.join(' and ')} both carry the labelled sanitized mirror (${MIRROR_MARKERS.length} markers each); no private-detail leak pattern matched.`
+    `check-instruction-mirror: OK — README.md and AGENTS.md carry the labelled summary; AGENTS.md and CLAUDE.md carry one identical complete managed block; no private-detail leak pattern matched.`
   )
+  if (!canonical) {
+    console.warn('check-instruction-mirror: SKIP — canonical private-vocabulary source is unavailable; public-detail and structural checks passed, but vocabulary currentness was not verified.')
+  }
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
-if (isMain) main()
+if (isMain) await main()

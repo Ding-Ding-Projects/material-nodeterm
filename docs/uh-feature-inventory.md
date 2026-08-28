@@ -89,7 +89,7 @@ and then never edited this file.
 | In-app documentation browser | `src/renderer/components/DocsBrowser.tsx` | `docs/features/help/README.md` | `scripts/check-docs-bundle.mjs` |
 | External-editor handoff | `src/core/vscode-detect.ts` | `docs/exports.md` | `src/core/vscode-detect.test.ts` |
 | Line count in every release | `scripts/count-lines.mjs` | `docs/ci-and-releases.md` | `scripts/release-notes.test.mjs` |
-| Sanitized instruction mirror | `scripts/check-instruction-mirror.mjs` | `scripts/check-instruction-mirror.mjs` (the script header is the documentation, same precedent as the vocabulary lock row) | `scripts/check-instruction-mirror.test.mjs` |
+| Sanitized instruction mirror | Full byte-identical managed blocks in `AGENTS.md` and `CLAUDE.md`, the concise `README.md` summary, and `scripts/sync-agent-instruction-mirror.mjs` | `scripts/sync-agent-instruction-mirror.mjs` and `scripts/check-instruction-mirror.mjs` headers document the private-export, public-review, synchronization, and check-only routes | `scripts/check-instruction-mirror.test.mjs` covers missing targets, required-section loss, parity drift, marker corruption, sensitive-input refusal, unchanged targets on refusal, and preservation of surrounding project guidance |
 
 ## Not applicable, with the reason
 
