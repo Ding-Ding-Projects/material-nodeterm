@@ -82,7 +82,6 @@ export function snapshotNode(
       { id: '__snapshot__', position: node.position, parentId: node.parentId },
       all
     ),
-    absolutePosition: absolutePosition({ id: '__snapshot__', position: node.position, parentId: node.parentId }, all),
     ...(node.parentId ? { parentId: node.parentId } : {}),
     ...(node.extent === 'parent' ? { extent: 'parent' as const } : {}),
     ...(size ? { size } : {}),
@@ -230,14 +229,6 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       const node = createTimerNode(0)
       return { ...node, data: { ...node.data, ...d, running: false, paused: false, elapsedMs: 0, lapsMs: [], occurrenceId: undefined, occurrenceState: 'scheduled' } }
     }
-    case 'diff':
-      return d.cwd && d.filePath ? createDiffNode(0, d.cwd, d.filePath, !!d.diffStaged, undefined, d.commitOid) : null
-    case 'web':
-      return createWebNode(0, { url: d.url, filePath: d.filePath })
-    case 'browser':
-      return createBrowserNode(0, d.url ?? '', undefined, d.partition)
-    case 'dino':
-      return createDinoNode(0, undefined, d.highScore ?? 0)
     default:
       return null
   }
