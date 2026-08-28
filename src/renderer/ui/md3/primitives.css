@@ -1176,8 +1176,6 @@
   .mdx-textarea,
   .mdx-input,
   .mdx-select {
-  .mdx-radio::after,
-  .mdx-progress__bar {
     transition: none;
   }
   .mdx-progress--indeterminate .mdx-progress__bar {
