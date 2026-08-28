@@ -7,6 +7,8 @@ import {
   workItemVisibleOnFrame
 } from '@shared/github-work-items'
 import { GitHubWorkItemDetailDialog } from './GitHubWorkItemDetailDialog'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 export interface GitHubWorkItemAttachmentProps {
   items?: readonly GitHubWorkItem[]
   nodeId?: string
@@ -34,6 +36,7 @@ function visibleItems({ items = [], nodeId, frameId, frameBranch }: GitHubWorkIt
 
 /** Compact, shared rendering for the node chip and its owning frame pill. */
 export function GitHubWorkItemAttachment(props: GitHubWorkItemAttachmentProps) {
+  const vocab = useVocabularyMapper()
   const [detail, setDetail] = useState<GitHubWorkItem | null>(null)
   const items = visibleItems(props)
   if (items.length === 0) return null
@@ -43,7 +46,7 @@ export function GitHubWorkItemAttachment(props: GitHubWorkItemAttachmentProps) {
       <div
         className={frame ? 'github-work-item-pill' : 'github-work-item-chip'}
         role="list"
-        aria-label={frame ? 'Pull requests and issues attached to this frame' : 'Pull requests and issues attached to this session'}
+        aria-label={vocab(frame ? 'Pull requests and issues attached to this frame' : 'Pull requests and issues attached to this session')}
       >
         {items.map((item) => {
         const displayState = githubWorkItemDisplayState(item)
@@ -56,14 +59,25 @@ export function GitHubWorkItemAttachment(props: GitHubWorkItemAttachmentProps) {
             type="button"
             className={`github-work-item-chip__item github-work-item-chip__item--${displayState}`}
             role="listitem"
-            title={`${item.repository} #${item.number}: ${title}`}
-            aria-label={`${kind} ${item.repository} #${item.number}, ${shortTitle}, ${STATE_LABELS[displayState]}. Open in-app review details.`}
+            title={mapOwnedSentence(vocab, [fact(item.repository), copy(' #'), fact(String(item.number)), copy(': '), fact(title)])}
+            aria-label={mapOwnedSentence(vocab, [
+              copy(kind),
+              copy(' '),
+              fact(item.repository),
+              copy(' #'),
+              fact(String(item.number)),
+              copy(', '),
+              fact(shortTitle),
+              copy(', '),
+              copy(STATE_LABELS[displayState]),
+              copy('. Open in-app review details.')
+            ])}
             onClick={() => setDetail(item)}
           >
-            <span className="github-work-item-chip__kind" aria-hidden="true">{kind}</span>
+            <span className="github-work-item-chip__kind" aria-hidden="true">{vocab(kind)}</span>
             <span className="github-work-item-chip__number">#{item.number}</span>
             <span className="github-work-item-chip__title">{shortTitle}</span>
-            <span className="github-work-item-chip__state">{STATE_LABELS[displayState]}</span>
+            <span className="github-work-item-chip__state">{vocab(STATE_LABELS[displayState])}</span>
           </button>
         )
         })}
