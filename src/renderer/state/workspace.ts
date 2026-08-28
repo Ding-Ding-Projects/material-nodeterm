@@ -56,14 +56,14 @@ import { ANNOTATION_DEFAULT_THICKNESS, normalizeAnnotationLabel, normalizeAnnota
 import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/universe-shop'
 import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
-import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
+import { TIMER_DEFAULT_DURATION_MS, type TimerMode, type TimerNodeData, type TimerOccurrenceState, type TimerSequenceStep } from '@shared/timer'
 import { normalizeAwsIdentityIntent } from '@shared/aws-identity'
 import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
 import type { PortableKioskPwaIntent } from '@shared/kiosk-pwa'
 import { normalizeNodeIcon } from '@shared/node-icon'
 import { CLOUDFLARE_DEFAULT_INTENT, type CloudflarePortableIntent } from '@shared/cloudflare-core-managers'
 import { AWS_CORE_OPERATIONS, AWS_MANAGER_DEFAULT_INTENT, AWS_PLATFORM_OPERATIONS, type AwsManagerMode, type AwsManagerPortableIntent } from '@shared/aws-resource'
-import type { TunnelPortableIntent } from '@shared/tunnel-state'
+import { sanitizeTunnelPortableIntent, type TunnelPortableIntent } from '@shared/tunnel-state'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -3036,7 +3036,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         gitlabHostingConfig: n.gitlabHostingConfig,
         nextcloudAioConfig: n.nextcloudAioConfig,
         homeAssistantIntent: n.homeAssistantIntent,
-        cloudflareTunnelIntent: n.cloudflareTunnelIntent,
+        cloudflareTunnelIntent: sanitizeTunnelPortableIntent(n.cloudflareTunnelIntent) ?? undefined,
         universeCanvasId: n.universeCanvasId,
         universeScope: n.universeScope,
         universeDepth: n.universeDepth,
@@ -3116,6 +3116,16 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
   // did not mention: it fell through to TERMINAL_SIZE and persisted at 640x440 silently. See
   // NODE_START_SIZE for why that is now a typecheck error instead.
   const sizeFor = (kind: NodeKind) => NODE_START_SIZE[kind] ?? TERMINAL_SIZE
+  const numberValue = (value: unknown): number | undefined => typeof value === 'number' && Number.isFinite(value) ? value : undefined
+  const booleanValue = (value: unknown): boolean | undefined => typeof value === 'boolean' ? value : undefined
+  const arrayValue = <T,>(value: unknown): T[] | undefined => Array.isArray(value) ? value as T[] : undefined
+  const textValue = (value: unknown): string | undefined => typeof value === 'string' ? value : undefined
+  const occurrenceStateValue = (value: unknown): TimerOccurrenceState | undefined =>
+    typeof value === 'string' && ['scheduled', 'running', 'paused', 'completed', 'missed'].includes(value)
+      ? value as TimerOccurrenceState
+      : undefined
+  const alarmToneValue = (value: unknown): TimerNodeData['alarmTone'] | undefined =>
+    value === 'bell' || value === 'chime' || value === 'silent' ? value : undefined
   return nodes
     // Temporary nodes (browser popups) are live canvas objects that were never asked to outlive
     // the session. Dropping them HERE rather than at each call site means every save path -- the
@@ -3150,23 +3160,23 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         loopNextRunAt: n.data.loopNextRunAt,
         loopLastRunAt: n.data.loopLastRunAt,
         loopTargetIds: n.data.loopTargetIds,
-        timerMode: n.data.timerMode,
-        timerDurationMs: n.data.timerDurationMs ?? (n.data as TimerNodeData).durationMs,
-        timerRemainingMs: n.data.timerRemainingMs ?? (n.data as TimerNodeData).remainingMs,
-        timerElapsedMs: n.data.timerElapsedMs ?? (n.data as TimerNodeData).elapsedMs,
-        timerRunning: n.data.timerRunning ?? (n.data as TimerNodeData).running,
-        timerPaused: n.data.timerPaused ?? (n.data as TimerNodeData).paused,
-        timerRepeatCount: n.data.timerRepeatCount ?? (n.data as TimerNodeData).repeatCount,
-        timerRepeatRemaining: n.data.timerRepeatRemaining ?? (n.data as TimerNodeData).repeatRemaining,
-        timerSequence: n.data.timerSequence ?? (n.data as TimerNodeData).sequence,
-        timerSequenceIndex: n.data.timerSequenceIndex ?? (n.data as TimerNodeData).sequenceIndex,
-        timerLapsMs: n.data.timerLapsMs ?? (n.data as TimerNodeData).lapsMs,
-        timerNextOccurrenceAt: n.data.timerNextOccurrenceAt ?? (n.data as TimerNodeData).nextOccurrenceAt,
-        timerOccurrenceId: n.data.timerOccurrenceId ?? (n.data as TimerNodeData).occurrenceId,
-        timerOccurrenceState: n.data.timerOccurrenceState ?? (n.data as TimerNodeData).occurrenceState,
-        timerAlarmEnabled: n.data.timerAlarmEnabled ?? (n.data as TimerNodeData).alarmEnabled,
-        timerAlarmTone: n.data.timerAlarmTone ?? (n.data as TimerNodeData).alarmTone,
-        timerMissedCount: n.data.timerMissedCount ?? (n.data as TimerNodeData).missedCount,
+        timerMode: typeof n.data.timerMode === 'string' ? n.data.timerMode as TimerMode : undefined,
+        timerDurationMs: numberValue(n.data.timerDurationMs ?? (n.data as TimerNodeData).durationMs),
+        timerRemainingMs: numberValue(n.data.timerRemainingMs ?? (n.data as TimerNodeData).remainingMs),
+        timerElapsedMs: numberValue(n.data.timerElapsedMs ?? (n.data as TimerNodeData).elapsedMs),
+        timerRunning: booleanValue(n.data.timerRunning ?? (n.data as TimerNodeData).running),
+        timerPaused: booleanValue(n.data.timerPaused ?? (n.data as TimerNodeData).paused),
+        timerRepeatCount: numberValue(n.data.timerRepeatCount ?? (n.data as TimerNodeData).repeatCount),
+        timerRepeatRemaining: numberValue(n.data.timerRepeatRemaining ?? (n.data as TimerNodeData).repeatRemaining),
+        timerSequence: arrayValue<TimerSequenceStep>(n.data.timerSequence ?? (n.data as TimerNodeData).sequence),
+        timerSequenceIndex: numberValue(n.data.timerSequenceIndex ?? (n.data as TimerNodeData).sequenceIndex),
+        timerLapsMs: arrayValue<number>(n.data.timerLapsMs ?? (n.data as TimerNodeData).lapsMs),
+        timerNextOccurrenceAt: numberValue(n.data.timerNextOccurrenceAt ?? (n.data as TimerNodeData).nextOccurrenceAt),
+        timerOccurrenceId: textValue(n.data.timerOccurrenceId ?? (n.data as TimerNodeData).occurrenceId),
+        timerOccurrenceState: occurrenceStateValue(n.data.timerOccurrenceState ?? (n.data as TimerNodeData).occurrenceState),
+        timerAlarmEnabled: booleanValue(n.data.timerAlarmEnabled ?? (n.data as TimerNodeData).alarmEnabled),
+        timerAlarmTone: alarmToneValue(n.data.timerAlarmTone ?? (n.data as TimerNodeData).alarmTone),
+        timerMissedCount: numberValue(n.data.timerMissedCount ?? (n.data as TimerNodeData).missedCount),
         alarmSchedule: n.data.alarmSchedule,
         alarmTimeZone: n.data.alarmTimeZone,
         alarmEnabled: n.data.alarmEnabled,
@@ -3178,8 +3188,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         hideFanout: n.data.hideFanout,
         parentId: n.parentId,
         shell: n.data.shell,
-        terminalProfileId: n.data.ssh ? undefined : n.data.terminalProfileId,
-        namedTerminalProfileId: n.data.ssh ? undefined : n.data.namedTerminalProfileId,
+        terminalProfileId: n.data.ssh ? undefined : textValue(n.data.terminalProfileId),
+        namedTerminalProfileId: n.data.ssh ? undefined : textValue(n.data.namedTerminalProfileId),
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
@@ -3191,10 +3201,10 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         gitlabHostingConfig: n.data.gitlabHostingConfig,
         nextcloudAioConfig: n.data.nextcloudAioConfig,
         homeAssistantIntent: n.data.homeAssistantIntent,
-        cloudflareTunnelIntent: n.data.cloudflareTunnelIntent,
+        cloudflareTunnelIntent: sanitizeTunnelPortableIntent(n.data.cloudflareTunnelIntent) ?? undefined,
         universeCanvasId: n.data.universeCanvasId,
         universeScope: n.data.universeScope,
-        universeDepth: n.data.universeDepth,
+        universeDepth: typeof n.data.universeDepth === 'number' ? n.data.universeDepth : undefined,
         nonDeletable: n.data.nonDeletable,
         shopSelection: n.data.shopSelection,
         torrentMagnet: n.data.torrentMagnet,
@@ -3209,8 +3219,10 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         // them. The shared-file boundary strips them in `stripSharedNodeExec`, while portable
         // content references continue into the transferable projection.
         filePath: n.data.filePath,
-        mediaAssets: n.data.mediaAssets?.map((reference) => ({ ...reference })),
-        mediaActiveAssetId: n.data.mediaActiveAssetId,
+        mediaAssets: Array.isArray(n.data.mediaAssets)
+          ? n.data.mediaAssets.map((reference) => ({ ...reference }))
+          : undefined,
+        mediaActiveAssetId: textValue(n.data.mediaActiveAssetId),
         wildDimSumDish: normalizePublicDimSumSelection(n.data.wildDimSumDish) ?? undefined,
         virtualMachineConfig: n.data.virtualMachineConfig,
         virtualMachineLocalPaths: n.data.virtualMachineLocalPaths,
