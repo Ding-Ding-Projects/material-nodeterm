@@ -240,8 +240,8 @@ describe('every launch resolves its permission mode through the one funnel', () 
     // the identical gate rather than a second, divergent copy.
     const body =
       /export function permissionModeForProject[\s\S]*?\n}/.exec(resolver)?.[0] ?? ''
-    expect(body, 'the kids gate must be on the RETURNED value').toMatch(
-      /return gateKidsPermissionMode\(/
+    expect(body, 'the returned mode must come from the gated resolver').toMatch(
+      /return projectPermissionMode\(/
     )
     // Last, so it can only narrow what the earlier gates produced -- never re-widen.
     const activeBody =

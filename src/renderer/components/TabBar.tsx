@@ -6,7 +6,7 @@ import { useAgentStatus } from '../state/agentStatus'
 import { useSettings } from '../state/settings'
 import { accountsForProject, sshAccountsHint, systemAccountDisplay } from '../state/workspace'
 import { useSshConn } from '../state/sshConn'
-import { sshAutoModeHint } from '../state/permissionMode'
+import { permissionModeForProject, sshAutoModeHint } from '../state/permissionMode'
 import { useSystemAccount } from '../state/systemAccount'
 import { sessionCount, sessionForProject, useProjectSession } from '../session/session'
 import { tabClickAction } from '../session/relay-tab'
@@ -113,7 +113,7 @@ export function TabBar({
   const [modeOpen, setModeOpen] = useState(false)
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
   // The mode a project without an override falls back to, shown in the "Use global (…)" entry.
-  const globalMode = useSettings((s) => s.settings.claudePermissionMode)
+  const globalMode = permissionModeForProject(projects.find((project) => project.id === menuId), 'claude')
   const systemLabelSetting = useSettings((s) => s.settings.systemAccountLabel)
   const systemEmail = useSystemAccount((s) => s.email)
   const systemLabel = systemAccountDisplay(systemLabelSetting, systemEmail)

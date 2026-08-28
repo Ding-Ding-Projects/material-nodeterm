@@ -28,6 +28,7 @@ import { useSettingsSearch } from '../context'
 import { projectSectionId } from '../project-settings-targets'
 import { matchesQuery, type SettingsSearchEntry } from '../search'
 import { useProjectSettings } from '../useProjectSettings'
+import { permissionModeForProject } from '../../../state/permissionMode'
 
 /**
  * Persists an identity/defaults edit. The store setters (`renameProject`, `setProjectColor`,
@@ -170,7 +171,7 @@ function EditableProjectSection({
   const settings = useProjectSettings(project.id)
   const appTheme = useAppTheme()
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
-  const globalMode = useSettings((s) => s.settings.claudePermissionMode)
+  const globalMode = permissionModeForProject(project, 'claude')
   const systemLabelSetting = useSettings((s) => s.settings.systemAccountLabel)
   const systemEmail = useSystemAccount((s) => s.email)
   const systemLabel = systemAccountDisplay(systemLabelSetting, systemEmail)
