@@ -35,8 +35,8 @@ export function AwsUniverseNavigator({ onNavigate, onCreate }: AwsUniverseNaviga
   const activePath = active ? awsUniverseCanvasPath(project, activeId) : [{
     id: AWS_UNIVERSE_ROOT_ID,
     title: project.name,
-    depth: 0 as const,
-    parentCanvasId: AWS_UNIVERSE_ROOT_ID as const,
+    depth: 0,
+    parentCanvasId: AWS_UNIVERSE_ROOT_ID,
     viewport: project.viewport,
     nodes: project.nodes
   }]

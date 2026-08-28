@@ -49,7 +49,7 @@ export function PortalLifecycleDialog({
   const [title, setTitle] = useState('')
   const [selectedParent, setSelectedParent] = useState(currentCanvasId)
   const [childId, setChildId] = useState('')
-  const entryAnchorRef = useRef<HTMLButtonElement>(null)
+  const entryAnchorRef = useRef<HTMLButtonElement | null>(null)
   const [entryPortal, setEntryPortal] = useState<PortablePortalV3 | null>(null)
   const [entryError, setEntryError] = useState<string | null>(null)
   const [entryBusy, setEntryBusy] = useState(false)

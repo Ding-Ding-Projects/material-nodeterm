@@ -13,6 +13,8 @@ import {
   type UniverseDoorEntrySubmission
 } from './universe-door-entry'
 
+export type { UniverseDoorEntrySubmission } from './universe-door-entry'
+
 export type UniverseDoorRole = 'entry' | 'return'
 export type UniverseNavigationSource = 'door' | 'tab' | 'palette' | 'history' | 'direct'
 

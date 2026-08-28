@@ -16,11 +16,12 @@ const row: SessionRowVM = {
   isAgent: false,
   statusKind: 'done',
   stateLabel: 'Finished',
+  statusRestored: false,
   unread: true,
   session: 'shell-1',
-  loop: null,
+  loop: undefined,
   usesContext: false,
-  sessionId: null,
+  sessionId: undefined,
   cwd: 'C:/projects/demo',
   sshHost: undefined
 }

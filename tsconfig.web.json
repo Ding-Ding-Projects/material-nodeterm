@@ -21,6 +21,13 @@
   "include": [
     "src/renderer/**/*",
     "src/shared/**/*",
+    "src/core/**/*",
+    "src/session-host/**/*",
     "src/preload/index.d.ts"
+  ],
+  "exclude": [
+    "src/core/**/*.test.ts",
+    "src/core/**/*.realwindows.test.ts",
+    "src/session-host/**/*.test.ts"
   ]
 }
