@@ -392,8 +392,8 @@ body {
   font-weight: 700;
   letter-spacing: 0.3px;
   text-transform: uppercase;
-  color: #30d158;
-  background: rgba(48, 209, 88, 0.16);
+  color: var(--md-success);
+  background: color-mix(in srgb, var(--md-success) 16%, transparent);
   border-radius: 5px;
   padding: 1px 5px;
 }
