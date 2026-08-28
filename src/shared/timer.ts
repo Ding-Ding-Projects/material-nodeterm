@@ -19,6 +19,7 @@ export interface TimerOccurrence {
 }
 
 export interface TimerNodeData {
+  [key: string]: unknown
   title: string
   color: string
   group: string | null
@@ -34,6 +35,7 @@ export interface TimerNodeData {
   sequenceIndex: number
   lapsMs: number[]
   nextOccurrenceAt?: number
+  occurrenceId?: string
   occurrenceState: TimerOccurrenceState
   alarmEnabled: boolean
   alarmTone: 'chime' | 'bell' | 'silent'
