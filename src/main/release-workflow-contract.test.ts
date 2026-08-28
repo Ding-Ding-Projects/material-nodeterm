@@ -92,6 +92,12 @@ describe('release workflow semantic contract', () => {
     expect(wrongNode.output).toMatch(/Setup Node must use the exact package\.json devEngines\.runtime\.version/i)
   })
 
+  it('rejects a release route that skips the selected VsDevCmd and Spectre bootstrap', () => {
+    const noBootstrap = check(replaceOnce(WORKFLOW, '        id: native_toolchain', '        id: native_toolchain_removed'))
+    expect(noBootstrap.status).toBe(1)
+    expect(noBootstrap.output).toMatch(/native toolchain bootstrap.*before npm ci/i)
+  })
+
   it('rejects a non-main guard that is weakened, non-failing, or moved after checkout', () => {
     const wrongBranch = check(
       replaceOnce(

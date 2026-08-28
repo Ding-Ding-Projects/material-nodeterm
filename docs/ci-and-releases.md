@@ -57,48 +57,53 @@ job:
    `v<package.json version>`. The version must be a stable `major.minor.patch` value; a run-number
    or prerelease suffix is refused because the Windows updater's `latest/download` feed must never
    point at a feature build masquerading as stable.
-6. **Verify stable version advancement before the build.** The release helper reads every hosted
+6. **Bootstrap the selected Windows native toolchain** before `npm ci`. The workflow uses the
+   repository's validated Visual Studio selector/installer, initializes its `VsDevCmd` environment,
+   confirms x64 Spectre libraries, and exports only the needed developer variables to later steps.
+   It does not disable Spectre mitigation or rely on whichever Visual Studio installation happens
+   to be first on the runner.
+7. **Verify stable version advancement before the build.** The release helper reads every hosted
    tag and release, rejects a non-newer version or a tag already owned by another commit, and binds
    this candidate to the exact source SHA. `0.4.0` is the candidate after `0.3.0`.
-7. **Install dependencies** — `npm ci`, which also runs the project's own `postinstall` hook
+8. **Install dependencies** — `npm ci`, which also runs the project's own `postinstall` hook
    (`scripts/patch-node-pty.mjs` + `electron-rebuild -f -w node-pty,smart-whisper` against
    this runner's Electron ABI). `windows-latest` already ships the Visual Studio Build Tools
    and Python that native module compilation needs; nothing extra is bootstrapped for that.
    If a future dependency needs a tool the runner image does not carry, add a check-then-
    install step here, immediately before it is needed.
-8. **Build and package through `npm run dist:win`.** The Windows-only wrapper runs the native
+9. **Build and package through `npm run dist:win`.** The Windows-only wrapper runs the native
    preflight, regenerates and proves the committed seven-frame ICO at an immutable source-SHA URL,
    clears stale generated output, builds the app and session host, invokes only the x64 Squirrel
    target with publishing disabled, then verifies the nuspec and Setup/app/stub PE resources.
-9. **Validate a real, complete Squirrel set** with `scripts/release-assets.mjs`: the exact
+10. **Validate a real, complete Squirrel set** with `scripts/release-assets.mjs`: the exact
    version/product Setup, legacy `node-terminal` full package, optional matching delta, exact
    `RELEASES`, no other output entry, semantic ID/version/title in every nupkg, and bidirectional
    RELEASES SHA-1/name/size agreement. It emits the exact name/size/SHA-256 manifest later checked
    against GitHub's hosted digests. The workflow also reruns the packaged icon/nuspec proof.
-10. **Verify the setup is genuinely unsigned** — Authenticode must report exactly `NotSigned`.
+11. **Verify the setup is genuinely unsigned** — Authenticode must report exactly `NotSigned`.
    An invalid, untrusted, or otherwise anomalous signature is not accepted as a synonym for
    unsigned (see [Signing](#signing) below).
-11. **Stage one draft release** for the stable tag. A retry reuses its existing draft; a retry of
+12. **Stage one draft release** for the stable tag. A retry reuses its existing draft; a retry of
    an already-successful run verifies the release tag still resolves to this run's exact commit,
    then validates every public asset name and byte size before exiting without touching them.
    This avoids `gh release upload --clobber`'s delete-before-replace behaviour ever operating on
    a public asset.
-12. **Upload only to the draft.** Unexpected leftovers from an older failed attempt are pruned,
+13. **Upload only to the draft.** Unexpected leftovers from an older failed attempt are pruned,
     and expected names are replaced with `--clobber`. Any failure leaves a private draft, never
     a public empty or partial release.
-13. **Generate the publication-ready release notes after upload** (`scripts/release-notes.mjs`, embedding
+14. **Generate the publication-ready release notes after upload** (`scripts/release-notes.mjs`, embedding
     `scripts/count-lines.mjs`'s report — see [Release notes content](#release-notes-content)).
-14. **Read the draft back and recheck version authority immediately before publication.** The
+15. **Read the draft back and recheck version authority immediately before publication.** The
     exact hosted asset inventory, draft/non-prerelease state, target/tag ownership, and stable
     version ordering must all still hold; this catches a newer stable release created while the
     build ran.
-15. **Publish once, explicitly as latest and non-prerelease**, then re-read the tag, release, and
+16. **Publish once, explicitly as latest and non-prerelease**, then re-read the tag, release, and
     latest-release view to prove the complete inventory and exact target survived the transition.
-16. **Record the post-publication completion boundary and finalize the notes.** Regenerate notes
+17. **Record the post-publication completion boundary and finalize the notes.** Regenerate notes
     with exact `Workflow started`, `Workflow completed`, and `Workflow duration` values, edit the
     same published release, then read it back and require exact body equality. A retry of an
     already-published release verifies those fields and changes nothing.
-17. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
+18. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
     the collection and the upload — so a failed run still leaves the packaged output, the
     generated notes, and the run context inspectable, without ever masking or reversing the
     real pass/fail verdict of the steps above it. Only explicitly safe paths are copied: the

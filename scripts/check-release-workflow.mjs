@@ -471,9 +471,25 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   // non-main refusal above still keeps every other ref out.
 
   const installAt = steps.findIndex((step) => logicalCommands(step?.run).includes('npm ci'))
+  const nativeToolchainAt = stepIndex(steps, 'native_toolchain')
+  const nativeToolchainCommands = logicalCommands(steps[nativeToolchainAt]?.run)
+  if (
+    nativeToolchainAt <= checkoutAt ||
+    nativeToolchainAt >= installAt ||
+    steps[nativeToolchainAt]?.shell !== 'pwsh' ||
+    !nativeToolchainCommands.includes('node scripts/ensure-windows-build-toolchain.mjs --silent --result-file $resultFile') ||
+    !nativeToolchainCommands.some((command) => /VsDevCmd\.bat/.test(command)) ||
+    !nativeToolchainCommands.some((command) => /GITHUB_ENV/.test(command)) ||
+    !nativeToolchainCommands.some((command) => /lib\\spectre\\x64/.test(command))
+  ) {
+    issues.push('native toolchain bootstrap must select VsDevCmd and Spectre libraries before npm ci')
+  }
+  const approvedPreInstallBootstrap = new Set([
+    'node scripts/ensure-windows-build-toolchain.mjs --silent --result-file $resultFile',
+  ])
   const dependencyBackedScriptSteps = steps.flatMap((step, index) =>
     logicalCommands(step?.run)
-      .filter((command) => /\bnode\s+scripts\//.test(command))
+      .filter((command) => /\bnode\s+scripts\//.test(command) && !approvedPreInstallBootstrap.has(command))
       .map((command) => ({ index, command })),
   )
   const preInstallScriptCalls = dependencyBackedScriptSteps.filter(({ index }) => index < installAt)

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Bootstrap the selected Visual Studio developer environment and x64 Spectre libraries in the
+  hosted release workflow before native dependency installation. This carries the same validated
+  toolchain selection used by the local BAT route into the hosted packaging process.
+
+  Hosted release workflow 而家會喺 native dependency install 前 bootstrap 已選定嘅 Visual
+  Studio developer environment 同 x64 Spectre libraries，將本地 BAT route 已驗證嘅 toolchain
+  selection 一齊帶入 hosted packaging。
+
 - Repair hosted release setup so `actions/setup-node` uses the exact Node `24.19.0` declared by
   `package.json`. The workflow contract now rejects any drift, release notes consume the already
   paginated prior release bodies to avoid a repeated dim-sum code name, and the next release
