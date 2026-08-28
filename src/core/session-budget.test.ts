@@ -20,6 +20,7 @@ const cfg = (over: Partial<SessionBudgetConfig> = {}): SessionBudgetConfig => ({
   maxIdle: 48,
   graceSec: 6 * 3600,
   batchMax: 8,
+  maxDetached: 48,
   swapFreeRatio: 0.2,
   swapAvailRatio: 0.25,
   psiFullAvg60: 10,
@@ -313,14 +314,14 @@ describe('hostUnderMemoryPressure', () => {
 describe('sessionBudgetConfig', () => {
   const memOf = (totalMb: number) => ({ availableMb: Math.round(totalMb / 2), totalMb })
 
-  it('defaults: 10% of RAM watermark (floor 1GB), grace 6h, batch 8', () => {
+  it('defaults: 10% of RAM watermark (floor 1GB), grace 24h, batch 8', () => {
     const c = sessionBudgetConfig({}, memOf(64_000), 0)
     expect(c).toEqual({
       disabled: false,
       minAvailableMb: 6400,
       maxIdle: 48,
       maxDetached: 33,
-      graceSec: 21_600,
+      graceSec: 86_400,
       batchMax: 8,
       swapFreeRatio: 0.2,
       swapAvailRatio: 0.25,
@@ -382,12 +383,12 @@ describe('sessionBudgetConfig', () => {
   // variable meant "do not let more than N of these pile up", and that intent outlives the rename —
   // silently reverting such a host to the default would be the rename quietly changing behaviour.
   it('the legacy MAX_DETACHED variable still sets the cap', () => {
-    expect(sessionBudgetConfig({ NODETERM_SESSION_MAX_DETACHED: '12' }, 64_000).maxIdle).toBe(12)
+    expect(sessionBudgetConfig({ NODETERM_SESSION_MAX_DETACHED: '12' }, null, 64_000).maxIdle).toBe(12)
   })
 
   it('the new MAX_IDLE variable wins when both are set', () => {
     const env = { NODETERM_SESSION_MAX_IDLE: '5', NODETERM_SESSION_MAX_DETACHED: '99' }
-    expect(sessionBudgetConfig(env, 64_000).maxIdle).toBe(5)
+    expect(sessionBudgetConfig(env, null, 64_000).maxIdle).toBe(5)
   })
 })
 
@@ -684,7 +685,7 @@ describe('sessionBudgetConfig with fractional env values', () => {
 
   it('junk and zero still fall back to the safe defaults on every key', () => {
     for (const v of ['abc', '', '0', '-3']) {
-      expect(cfg({ NODETERM_SESSION_GRACE_HOURS: v }).graceSec).toBe(6 * 3600)
+      expect(cfg({ NODETERM_SESSION_GRACE_HOURS: v }).graceSec).toBe(24 * 3600)
       expect(cfg({ NODETERM_SESSION_MAX_DETACHED: v }).maxIdle).toBe(48)
       expect(cfg({ NODETERM_SESSION_REAP_BATCH: v }).batchMax).toBe(8)
     }
