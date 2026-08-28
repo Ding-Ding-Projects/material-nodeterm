@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-08-28, browser lease constant export repair
+
+Release run `33132854413` reached the application build and reported duplicate declarations in
+`src/main/browser-lease.ts`: `INDICATOR_LINGER_MS` was declared at line 38 and exported again at
+line 42, while `LEASE_IDLE_MS` was declared at lines 29 and 41. The duplicate import of
+`DebuggerLike` was part of the same merge splice.
+
+The repair keeps `LEASE_IDLE_MS = 60_000` as the single lease timing constant, keeps the shared
+`@shared/browser-indicator` value as the single source for `INDICATOR_LINGER_MS`, and re-exports
+that shared value for existing main-process callers. It also leaves one coherent import set at the
+file header. Attach, detach, idle extension, child-session invalidation, viewport refresh, command
+rejection, ledger updates, and indicator ownership are otherwise unchanged.
+
+Changed files: `src/main/browser-lease.ts` and `HANDOFF.md`.
+
+This ultra-speed repair lane intentionally ran no tests, checkers, lint, type checks, builds,
+packaging, installer execution, runtime interaction, reviews, audits, or UI captures. The exact
+source diff is ready for the coordinating owner to integrate and evaluate through the follow-up
+hosted workflow. The original release-run failure is the evidence for the repair, not a post-repair
+verification result.
+
 ## 2026-08-28, VS2022 Spectre component selection repair
 
 The fresh `0.4.121` manual build from commit `9f3527b248cde672d24f8ed71cae4b081517bf18` ran
