@@ -67,6 +67,12 @@ states that reinstalling the same incomplete release cannot repair it, directs t
 repaired release, and confirms that settings and projects were not removed. Local paths and raw
 exception messages never enter that dialog.
 
+The asynchronous `app.whenReady()` registration chain has the same recovery boundary. A duplicate
+IPC owner or a rejected startup service cannot leave a windowless or black host process running:
+the chain reports the sanitized category in the native dialog and exits. Shared provider services
+own the portable-binding channels exactly once; the desktop shell does not register a competing
+copy after that shared registrar returns.
+
 **Windows auto-update.** Packaged Windows builds use Electron's built-in Squirrel updater. On
 launch and every six hours, it reads the stable release asset root at
 `https://github.com/Ding-Ding-Projects/material-nodeterm/releases/latest/download`, downloads a

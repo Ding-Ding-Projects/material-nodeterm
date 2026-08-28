@@ -9,6 +9,15 @@
   recovery instructions instead of exiting invisibly. The broken `0.4.142` package exited before
   opening a window with `MODULE_NOT_FOUND`.
 
+- Remove the duplicate portable-binding IPC registration that rejected the async desktop startup
+  chain before `createWindow()`, leaving a black host surface with no renderer. The shared provider
+  registrar is now the single owner. Any future asynchronous startup rejection uses the same native,
+  sanitized recovery dialog as an early module-load failure instead of becoming an unhandled promise.
+
+  移除重覆 portable-binding IPC registration。之前 async desktop startup 會喺 `createWindow()` 前
+  reject，只剩黑畫面同零 renderer。依家 shared provider registrar 係唯一 owner；之後任何 async
+  startup rejection 都會彈同一個安全 native recovery dialog，唔再變 unhandled promise。
+
   修正 file converter 加入 Sharp 後 Windows package 開唔到嘅問題。Sharp 同佢嘅 Windows native
   binary 而家正式當 production dependency，只有 image conversion 真係要用先載入；installer
   漏咗任何一件 runtime file 都會即刻拒絕。Early bootstrap 出事會彈 native recovery dialog，

@@ -74,7 +74,6 @@ import { registerHomeAssistantIpc } from '../core/home-assistant/register-ipc'
 import { registerHomeAssistantControlIpc } from '../core/home-assistant-control/register-ipc'
 import { registerHomeAssistantSensorIpc } from '../core/home-assistant-sensor/register-ipc'
 import { registerCloudflareTunnelIpc } from '../core/cloudflare/register-ipc'
-import { LocalNodeBindingStore, bindingActionStates, validateLocalNodeBinding } from '../core/portable-bindings'
 import { registerWindowsDiagnosticsIpc } from '../core/windows-diagnostics'
 import { registerCloudflareZeroTrustIpc } from '../core/cloudflare-zero-trust/service'
 import { AtomicJsonArrayStore } from '../core/atomic-json-store'
@@ -199,6 +198,10 @@ import {
 } from '../core/model-gateway-credentials'
 import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
 import { initUpdater } from './updater'
+import {
+  desktopBootstrapFailureDialog,
+  publicDesktopBootstrapFailure
+} from './squirrel-lifecycle'
 import { decryptArchive, encryptArchive, looksLikeEncryptedArchive } from '../core/project-archive-encryption'
 import { ArchiveUnlockGuard } from '../core/archive-unlock-guard'
 import { registerProviderServicesIpc } from '../core/provider-services'
@@ -1566,71 +1569,6 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.portableMediaDiscard, (_event, preparationId: unknown) =>
     typeof preparationId === 'string' ? portableMediaPreparations.delete(preparationId) : false
   )
-  const portableBindings = new LocalNodeBindingStore(app.getPath('userData'))
-  ipcMain.handle(IPC.portableBindingState, async (_event, input: unknown) => {
-    if (!input || typeof input !== 'object' || Array.isArray(input)) return []
-    const value = input as Record<string, unknown>
-    if (typeof value.nodeId !== 'string' || typeof value.featureId !== 'string' || typeof value.displayLabel !== 'string') return []
-    const bindings = await portableBindings.load()
-    const current = bindings[value.nodeId]
-    return bindingActionStates(
-      {
-        schemaVersion: 1,
-        featureId: value.featureId,
-        displayLabel: value.displayLabel,
-        requestedCapabilities: [],
-        safeSettings: {},
-        relationships: []
-      },
-      {
-        hasBinding: Boolean(current),
-        hasMatchingResource: Boolean(current),
-        canConfigure: true,
-        canDeploy: false,
-        hasMissingAssets: value.hasMissingAssets === true
-      }
-    ).map((state) => ({
-      nodeId: value.nodeId as string,
-      featureId: value.featureId as string,
-      displayLabel: value.displayLabel as string,
-      action: state.action,
-      enabled: state.enabled,
-      ...(state.reason ? { reason: state.reason } : {}),
-      bound: Boolean(current)
-    }))
-  })
-  ipcMain.handle(IPC.portableBindingApply, async (_event, input: unknown) => {
-    if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'Binding input is invalid.' }
-    const value = input as Record<string, unknown>
-    if (typeof value.nodeId !== 'string' || typeof value.action !== 'string') return { ok: false, error: 'Binding input is invalid.' }
-    if (value.action === 'leave-unbound') {
-      await portableBindings.remove(value.nodeId)
-      return { ok: true, state: 'unbound' as const }
-    }
-    if (!['configure', 'rebind', 'adopt', 'locate-asset'].includes(value.action)) {
-      return { ok: false, error: 'Deploy requires an explicit provider flow and is not performed by import.' }
-    }
-    try {
-      const binding = validateLocalNodeBinding({
-        nodeId: value.nodeId,
-        bindingVersion: 1,
-        providerOrHostIdentity: value.providerOrHostIdentity,
-        localResourceReferences: value.localResourceReferences,
-        credentialKeys: value.credentialKeys ?? [],
-        lastVerifiedAt: Date.now()
-      })
-      const snapshot = await portableBindings.snapshot()
-      try {
-        await portableBindings.apply(value.nodeId, binding)
-      } catch (error) {
-        await portableBindings.restore(snapshot)
-        throw error
-      }
-      return { ok: true, state: 'bound' as const }
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  })
   // The packaged extraResources directory in a production install, the repo root in dev (see
   // resolveServerDeploymentRoot's own doc comment; `build.extraResources` in package.json ships
   // the matching `server-deployment/` directory). Writable state (the generated .env password,
@@ -4813,6 +4751,16 @@ app.whenReady().then(async () => {
       createWindow()
     }
   })
+}).catch((error: unknown) => {
+  const publicFailure = publicDesktopBootstrapFailure(error)
+  console.error(publicFailure)
+  const failure = desktopBootstrapFailureDialog(error)
+  try {
+    dialog.showErrorBox(failure.title, failure.content)
+  } catch {
+    // The sanitized stderr line remains available when the operating system cannot show UI.
+  }
+  app.exit(1)
 })
 
 app.on('window-all-closed', () => {
