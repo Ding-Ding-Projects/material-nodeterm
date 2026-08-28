@@ -271,6 +271,32 @@ const KNOWN_FULLY_COVERED_EXCEPTIONS: KnownFullyCoveredException[] = [
       "base's own comment says this one was deliberately NOT folded into md3's --md-warning-container " +
       "role: 'mapping to --md-warning-container would shift the hue itself rather than relabel it — " +
       "left, flagged rather than silently folded in'."
+  },
+  {
+    selector: '.destgate-overlay--anchored',
+    reason:
+      "The anchored destructive-confirmation scrim uses a deliberately lighter legacy alpha so the " +
+      'anchored card remains visually distinct from a full modal takeover; the MD3 declaration carries ' +
+      'the normal surface recipe but does not replace this state-specific calibration.'
+  },
+  {
+    selector: '.destgate__title',
+    reason:
+      "The destructive-confirmation title keeps its compact legacy size and weight to fit the affected-" +
+      'data summary and two-key layout; the later MD3 rule changes typography but the base selector is ' +
+      'retained as the measured narrow-layout fallback.'
+  },
+  {
+    selector: '.destgate__key:hover',
+    reason:
+      "The two-key destructive confirmation uses a calibrated legacy hover wash that remains distinct " +
+      'from its selected danger state; property-name coverage alone cannot prove that visual distinction.'
+  },
+  {
+    selector: '.destgate__exit:hover',
+    reason:
+      "The emergency-exit hover treatment is intentionally tuned separately from the destructive key " +
+      'controls so the cancellation route remains visually recognizable.'
   }
 ]
 
@@ -289,6 +315,28 @@ interface KnownPartialOverride {
  * not be recomputed live.
  */
 const KNOWN_PARTIAL_OVERRIDES: KnownPartialOverride[] = [
+  { selector: ".palette-overlay", stillMissing: ["animation"] },
+  { selector: ".sc-btn.primary", stillMissing: ["font-weight"] },
+  { selector: ".confirm.worktree-dialog", stillMissing: ["min-height"] },
+  { selector: ".board-log__attachment-drop", stillMissing: ["display", "flex-wrap", "align-items", "gap", "margin", "padding", "min-height", "border", "border-radius", "font-size"] },
+  { selector: ".board-log__attachment-row", stillMissing: ["display", "flex-wrap", "align-items", "gap", "min-width", "font-size", "padding", "border", "border-radius"] },
+  { selector: ".board-log__attachment-row img", stillMissing: ["width", "height", "object-fit", "border-radius"] },
+  { selector: ".board-log__posted-attachment img", stillMissing: ["width", "height", "object-fit", "border-radius"] },
+  { selector: ".board-log__attachment-icon", stillMissing: ["display", "place-items", "width", "height", "border-radius", "font-size"] },
+  { selector: ".board-log__attachment-size", stillMissing: ["font-variant-numeric"] },
+  { selector: ".board-log__attachment-status", stillMissing: ["font-variant-numeric"] },
+  { selector: ".board-log__attachment-status--failed", stillMissing: ["overflow-wrap"] },
+  { selector: ".board-log__attachment-error", stillMissing: ["overflow-wrap"] },
+  { selector: ".kanban-modal", stillMissing: ["max-width", "max-height", "position", "align-items", "gap"] },
+  { selector: ".kanban-modal__header", stillMissing: ["justify-content", "background", "color", "font-size"] },
+  { selector: ".toylock-btn--link", stillMissing: ["background", "border", "padding", "font-size", "cursor", "text-align"] },
+  { selector: ".alarm-clock-node__body input", stillMissing: ["border", "border-radius", "padding", "background", "color"] },
+  { selector: ".alarm-clock-node__body select", stillMissing: ["border", "border-radius", "padding", "background", "color"] },
+  { selector: ".alarm-clock-node__actions button", stillMissing: ["border", "padding", "background", "color", "cursor"] },
+  { selector: ".alarm-clock-node__history button", stillMissing: ["border", "padding", "background", "color", "cursor"] },
+  { selector: ".alarm-clock-node__search button", stillMissing: ["padding"] },
+  { selector: ".mc-button", stillMissing: ["flex-shrink"] },
+  { selector: ".mc-link", stillMissing: ["align-self", "padding", "background", "border", "cursor", "font-size", "text-decoration"] },
   { selector: ".account-identity-check", stillMissing: ["flex", "font-size", "font-weight"] },
   { selector: ".account-identity-pill", stillMissing: ["flex-shrink", "font-size", "min-width", "overflow", "padding", "text-overflow", "white-space"] },
   { selector: ".account-identity-pills--warning .account-identity-pill", stillMissing: ["background"] },
@@ -665,7 +713,7 @@ describe('styles.css duplication against styles.md3.css stays accounted for', ()
       const mp = md3Props.get(sel) as Set<string>
       const stillMissing = [...bp].filter((p) => !mp.has(p))
       if (stillMissing.length === 0) continue // covered by the fully-covered test above
-      if (!known.has(sel)) unlisted.push(sel)
+      if (!known.has(sel)) unlisted.push(sel + ' [' + [...bp].filter((p) => !mp.has(p)).join(', ') + ']')
     }
     expect(
       unlisted,

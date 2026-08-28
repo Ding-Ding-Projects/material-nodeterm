@@ -14136,8 +14136,6 @@ button.group-node__setup:disabled {
   cursor: pointer;
 }
 .toylock-btn:hover { background: rgba(var(--tint-rgb), 0.12); }
-.toylock-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.toylock-btn--primary { background: var(--accent, #0a84ff); border-color: transparent; color: #fff; }
 .toylock-btn--primary:hover { filter: brightness(1.08); }
 .toylock-btn--sm { padding: 3px 9px; font-size: 11.5px; }
 .toylock-btn--link {
