@@ -240,7 +240,11 @@ export async function readPortableMediaBytes(collected: PortableMediaCollected, 
     bytes = collected.data.byteLength
   } else if (collected.source) {
     for await (const chunk of collected.source.open(signal)) {
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array)
+      const buffer = Buffer.isBuffer(chunk)
+        ? chunk
+        : typeof chunk === 'string'
+          ? Buffer.from(chunk, 'utf8')
+          : Buffer.from(chunk as Uint8Array)
       bytes += buffer.byteLength
       if (bytes > PORTABLE_MEDIA_LIMITS.maxAssetBytes) return fail(`Portable media changed beyond its byte limit: ${collected.sourceName}`)
       chunks.push(buffer)

@@ -256,7 +256,9 @@ export async function validatePortableProjectV3Entries(
 export async function sha256Hex(data: Uint8Array): Promise<string> {
   const cryptoApi = globalThis.crypto
   if (!cryptoApi?.subtle) throw new PortableProjectV3Error('hash', 'SHA-256 is unavailable in this platform context.')
-  const hash = await cryptoApi.subtle.digest('SHA-256', data)
+  const owned = new Uint8Array(data.byteLength)
+  owned.set(data)
+  const hash = await cryptoApi.subtle.digest('SHA-256', owned)
   return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 

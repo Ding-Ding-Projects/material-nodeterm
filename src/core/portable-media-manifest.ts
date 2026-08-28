@@ -115,7 +115,7 @@ export function validatePortableMediaManifest(value: unknown): PortableMediaMani
   const assets = manifest.assets.map((asset) => { validatePortableMediaAsset(asset); return { id: asset.id, kind: asset.kind, mime: asset.mime, extension: cleanExtension(asset.extension), bytes: asset.bytes, sha256: asset.sha256, ...(asset.label !== undefined ? { label: cleanLabel(asset.label) } : {}), ...(asset.width !== undefined ? { width: asset.width } : {}), ...(asset.height !== undefined ? { height: asset.height } : {}), ...(asset.durationMs !== undefined ? { durationMs: asset.durationMs } : {}), ...(asset.frames !== undefined ? { frames: asset.frames } : {}), ...(asset.unresolved ? { unresolved: true } : {}) } })
   const omissions = manifest.omissions.map((omission) => {
     if (!omission || typeof omission !== 'object' || Array.isArray(omission)) return fail('Portable media omission is not an object.')
-    exactKeys(omission as Record<string, unknown>, OMISSION_KEYS, 'omission')
+    exactKeys(omission as unknown as Record<string, unknown>, OMISSION_KEYS, 'omission')
     return { assetId: omission.assetId, decision: omission.decision, reason: omission.reason, detail: omission.detail }
   })
   return createPortableMediaManifest(assets, omissions)
