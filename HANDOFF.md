@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-08-27, shutdown-chain parser repair
+
+Release run `33129445887` at `1c62698a7243f153c102afa6f3a7b683a6822edb` reported an application-build
+failure at `src/main/index.ts:4889:1`: `ERROR: Unexpected ')'`. The shutdown callback contained
+duplicate confirmation comments and nested quit-confirmation conditionals from a merge splice, so
+the final `speechService.shutdown().finally(() => app.quit())` chain reached the `app.on` closing
+parenthesis without a coherent callback boundary.
+
+The repair keeps every shutdown operation, including widget disposal, graceful server stop, virtual
+machine disposal, HUD teardown, scheduled-settings and planner shutdown, power-assertion disposal,
+workspace watcher disposal, setup-service disposal, SSH disconnect, app-private agent stop, askpass
+stop, browser backend stop, the bounded SIGTERM exit fallback, remote workspace flush, pty shutdown,
+and speech-service shutdown. It removes only the duplicate confirmation residue and restores one
+coherent `shouldConfirmQuit()` boundary before the shutdown sequence, leaving the final callback
+closure valid. No unrelated startup or registration code was changed.
+
+This lane intentionally ran no tests, lint, type checks, builds, packaging, installer execution,
+runtime interaction, reviews, audits, or UI captures. Read-only source and history inspection was
+used to locate the shutdown boundary. The integration owner must evaluate the exact commit and the
+follow-up GitHub Actions run before treating this repair as verified.
+
 ## 2026-08-27, notification preparation and relay argument punctuation repair
 
 Release run `33128741581` at `7117d7bc97b6a7a7f83f0d4607d30a018b741922` passed all repository,
