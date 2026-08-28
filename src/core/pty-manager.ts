@@ -1,4 +1,4 @@
-import { tmuxWordSeparatorsLine } from '@shared/word-separators'
+import { DEFAULT_WORD_SEPARATORS, tmuxWordSeparatorsLine } from '@shared/word-separators'
 import os from 'os'
 import fs from 'fs'
 import path from 'path'
@@ -252,28 +252,6 @@ function runWithStdin(file: string, args: readonly string[], input: string): Pro
   return p as unknown as Promise<unknown>
 }
 
-// Minimal tmux config so the user's ~/.tmux.conf never interferes. The tmux server
-// (under our socket) keeps sessions alive while no client is attached, which is what
-// gives us continuity across node remounts and full app restarts.
-//
-// The mouse is ON, i.e. TMUX owns scrolling and selection — this is the native behavior, and the
-// capabilities are deliberately NOT blanked, so the client uses the ALTERNATE screen (\e[?1049h).
-// A previous design took scrolling away from tmux (mouse off + `smcup@:rmcup@:indn@`, normal
-// screen, output flowing into the emulator's own scrollback, hydrated from `capture-pane` on
-// reattach) and it failed structurally: tmux is a screen PAINTER, not a stream — every redraw
-// (attach, resize, refresh) erases and repaints, so blank and duplicated rows leaked into the
-// emulator's scrollback (black bands, duplicated screens) and a full-screen TUI's input box
-// scrolled away with the text instead of staying put. Do not re-derive that: with the mouse on,
-// the wheel scrolls tmux's OWN history, the pane stays sticky, and there is nothing to hydrate.
-//
-// COPY: selection is tmux copy-mode, and the clipboard is reached via OSC 52 — `set-clipboard on`
-// plus `terminal-features ",*:clipboard"`. The `terminal-features` entry is the load-bearing one:
-// on tmux 3.2+ the old `terminal-overrides ',xterm*:Ms=\E]52;...'` route does NOT work (measured:
-// a copy emitted ZERO OSC 52 to the attached client with the `Ms=` override, and the correct
-// payload with `terminal-features`). The renderer's OSC 52 handler writes the system clipboard, so
-// this is the copy path on EVERY platform and over SSH — no `pbcopy` pipe (that was macOS-only,
-// and half of why copying was broken).
-export function tmuxConf(scrollback: number, wordSeparators: string): string {
 /**
  * Session-identity env names the LOCAL conf's `update-environment` carries on top of the stock +
  * gateway list (issue #419). The point is the REMOVAL half of update-environment's contract: the
@@ -297,10 +275,39 @@ export const ACCOUNT_SCOPE_UPDATE_ENV: readonly string[] = [
   ...CODEX_AUTH_ENV_STRIP
 ]
 
+// Minimal tmux config so the user's ~/.tmux.conf never interferes. The tmux server
+// (under our socket) keeps sessions alive while no client is attached, which is what
+// gives us continuity across node remounts and full app restarts.
+//
+// The mouse is ON, i.e. TMUX owns scrolling and selection — this is the native behavior, and the
+// capabilities are deliberately NOT blanked, so the client uses the ALTERNATE screen (\e[?1049h).
+// A previous design took scrolling away from tmux (mouse off + `smcup@:rmcup@:indn@`, normal
+// screen, output flowing into the emulator's own scrollback, hydrated from `capture-pane` on
+// reattach) and it failed structurally: tmux is a screen PAINTER, not a stream — every redraw
+// (attach, resize, refresh) erases and repaints, so blank and duplicated rows leaked into the
+// emulator's scrollback (black bands, duplicated screens) and a full-screen TUI's input box
+// scrolled away with the text instead of staying put. Do not re-derive that: with the mouse on,
+// the wheel scrolls tmux's OWN history, the pane stays sticky, and there is nothing to hydrate.
+//
+// COPY: selection is tmux copy-mode, and the clipboard is reached via OSC 52 — `set-clipboard on`
+// plus `terminal-features ",*:clipboard"`. The `terminal-features` entry is the load-bearing one:
+// on tmux 3.2+ the old `terminal-overrides ',xterm*:Ms=\E]52;...'` route does NOT work (measured:
+// a copy emitted ZERO OSC 52 to the attached client with the `Ms=` override, and the correct
+// payload with `terminal-features`). The renderer's OSC 52 handler writes the system clipboard, so
+// this is the copy path on EVERY platform and over SSH — no `pbcopy` pipe (that was macOS-only,
+// and half of why copying was broken).
 // LEAD-PANE WIDTH (issue #119): `leadPaneWidth` (settings.tmuxLeadPaneWidth) is OPT-IN and 0 by
 // default — `leadPaneHookLines` returns '' then, so the default conf is byte-identical to the
 // pre-feature output (pinned in tmux-conf.test.ts). See shared/tmux-lead-pane.ts for the story.
-export function tmuxConf(scrollback: number, leadPaneWidth: number = 0): string {
+export function tmuxConf(
+  scrollback: number,
+  wordSeparatorsOrLeadPaneWidth: string | number = DEFAULT_WORD_SEPARATORS,
+  leadPaneWidth: number = 0
+): string {
+  const wordSeparators =
+    typeof wordSeparatorsOrLeadPaneWidth === 'string' ? wordSeparatorsOrLeadPaneWidth : DEFAULT_WORD_SEPARATORS
+  const resolvedLeadPaneWidth =
+    typeof wordSeparatorsOrLeadPaneWidth === 'number' ? wordSeparatorsOrLeadPaneWidth : leadPaneWidth
   return `# auto-generated by node-terminal — do not edit
 set -g status off
 set -g mouse on
@@ -343,7 +350,7 @@ bind -T copy-mode    DoubleClick1Pane send-keys -X select-word \\; send-keys -X 
 bind -T copy-mode-vi DoubleClick1Pane send-keys -X select-word \\; send-keys -X copy-pipe-and-cancel
 bind -T copy-mode    TripleClick1Pane send-keys -X select-line \\; send-keys -X copy-pipe-and-cancel
 bind -T copy-mode-vi TripleClick1Pane send-keys -X select-line \\; send-keys -X copy-pipe-and-cancel
-${leadPaneHookLines(leadPaneWidth)}`
+${leadPaneHookLines(resolvedLeadPaneWidth)}`
 }
 
 /** Executable names that implement the tmux command surface, in preference order. */
@@ -1547,9 +1554,8 @@ export class PtyManager {
     if (!found) return
     this.confPath = path.join(platform().userDataDir, 'tmux.conf')
     try {
-      fs.writeFileSync(this.confPath, tmuxConf(this.getSettings().tmuxScrollback, this.getSettings().terminalWordSeparators))
       const s = this.getSettings()
-      fs.writeFileSync(this.confPath, tmuxConf(s.tmuxScrollback, s.tmuxLeadPaneWidth))
+      fs.writeFileSync(this.confPath, tmuxConf(s.tmuxScrollback, s.terminalWordSeparators, s.tmuxLeadPaneWidth))
     } catch {
       // If we can't write the config, stay on the plain-shell fallback.
       return

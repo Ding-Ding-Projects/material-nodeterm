@@ -4186,3 +4186,26 @@ The lane started from `origin/main` at `740969735cd5389eb9959c62ad1e466ed0964e7d
 lint, type checks, builds, packaging, reviews, audits, runtime interaction, or UI captures were run by
 the explicitly bounded repair lane. The coordinating owner must merge this repair and observe the hosted
 workflow before treating the release path as verified.
+
+# 2026-08-28, PTY manager tmux configuration boundary repair
+
+After the import repair landed, release run `33134794093` at commit
+`bd2696e9e4ef3bd267b86ac9cf2756c57735f8a7` reached `src/core/pty-manager.ts:292:0` and reported
+`Unexpected export`. The remaining malformed local construct had two `tmuxConf` declarations. The
+first declaration was truncated before its body, while the second declaration used `wordSeparators`
+without accepting it. The nearby `ensureTmux` path also wrote the configuration twice, so one write
+silently discarded either word-separator or lead-pane settings.
+
+The additive repair keeps one `tmuxConf` implementation. Its second argument accepts the existing
+word-separator form or the existing lead-pane-width form, and an optional third argument carries both
+settings together. The generated configuration now emits the validated word-separator line and the
+optional lead-pane hooks in one coherent result. `ensureTmux` takes one settings snapshot and writes
+one configuration, preserving the current PTY, SSH, relay, session-host, lifecycle, and shutdown
+routes. No unrelated modules were changed.
+
+Changed files: `src/core/pty-manager.ts` and `HANDOFF.md`.
+
+This lane started from the fetched hui tip `bd2696e9e4ef3bd267b86ac9cf2756c57735f8a7`. No tests,
+checkers, lint, type checks, builds, packaging, reviews, audits, runtime interaction, or UI captures
+were run. Hosted verification remains required before the repair or the manual release is treated as
+verified.
