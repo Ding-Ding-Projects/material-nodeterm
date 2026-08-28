@@ -4,6 +4,7 @@ import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { useActiveSessionApi } from '../session/session'
 import type { PortableBindingState } from '../../shared/types'
 import type { PortableBindingAction } from '../../shared/types'
 import type { ProviderAccountSummary, ProviderDescriptor, ProviderResourceSummary } from '../../shared/provider-services'
@@ -32,6 +33,7 @@ interface PortableBindingWizardProps {
  * opaque local binding after the user explicitly chooses Configure, Rebind, or Adopt.
  */
 export function PortableBindingWizard({ nodeId, featureId, displayLabel, anchorRef, hasMissingAssets, onClose }: PortableBindingWizardProps): React.JSX.Element {
+  const api = useActiveSessionApi()
   const [states, setStates] = useState<PortableBindingState[]>([])
   const [selected, setSelected] = useState<PortableBindingAction | null>(null)
   const [providers, setProviders] = useState<ProviderDescriptor[]>([])
@@ -52,7 +54,7 @@ export function PortableBindingWizard({ nodeId, featureId, displayLabel, anchorR
   useEffect(() => {
     let active = true
     void Promise.all([
-      window.nodeTerminal.workspace.portableBindings.state({ nodeId, featureId, displayLabel, hasMissingAssets }),
+      api.workspace.portableBindings.state({ nodeId, featureId, displayLabel, hasMissingAssets }),
       window.nodeTerminal.providerServices.catalog(),
       window.nodeTerminal.providerServices.accounts()
     ]).then(([nextStates, nextProviders, nextAccounts]) => {
@@ -61,7 +63,7 @@ export function PortableBindingWizard({ nodeId, featureId, displayLabel, anchorR
       if (active) setMessage('Binding choices could not be loaded. The project remains unbound.')
     })
     return () => { active = false }
-  }, [nodeId, featureId, displayLabel, hasMissingAssets])
+  }, [api, nodeId, featureId, displayLabel, hasMissingAssets])
 
   const visible = useMemo(() => states.filter((state) => search.test(`${bindingActionLabel(state.action)} ${state.reason ?? ''}`)), [states, search])
   const visibleAccounts = useMemo(() => accounts.filter((account) => accountSearch.test(`${account.providerLabel} ${account.displayName} ${account.externalAccountId} ${account.reason ?? ''}`)), [accounts, accountSearch])
@@ -97,7 +99,7 @@ export function PortableBindingWizard({ nodeId, featureId, displayLabel, anchorR
     if (!selected || !canSubmit) return
     setBusy(true)
     setMessage('Saving the local binding choice. No provider, process, or deployment is started by this action.')
-    const result = await window.nodeTerminal.workspace.portableBindings.apply({
+    const result = await api.workspace.portableBindings.apply({
       nodeId,
       action: selected,
       featureId,
