@@ -533,7 +533,7 @@ export function codexThreadIdentityHasLiveConflict(
 export function codexThreadIdentityHasLiveConflict(
   threadId: string,
   nodeIdOrLive: string | ((nodeId: string) => boolean),
-  liveOrRoot: ((nodeId: string) => boolean) | string,
+  liveOrRoot?: ((nodeId: string) => boolean) | string,
   root?: string
 ): boolean {
   const nodeId = typeof nodeIdOrLive === 'string' ? nodeIdOrLive : undefined
