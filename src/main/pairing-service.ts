@@ -309,7 +309,6 @@ async function sweepStaleAgentTmp(): Promise<void> {
     // A dir we cannot read is not a reason to fail (or skip) the write below.
   }
 }
-}
 
 /** Detect the machine's display name (macOS ComputerName, else hostname). */
 async function computerName(): Promise<string> {
