@@ -1,6 +1,5 @@
 import { mkdirSync, chmodSync, existsSync, writeFileSync, rmSync } from 'fs'
 import path from 'path'
-import { renameAtomicSync, tempNameFor } from '../fs-atomic'
 import { platform } from '../platform'
 import { isSafeNodeId } from './node-auth-token'
 import { renameAtomicSync, tempNameFor } from '../fs-atomic'

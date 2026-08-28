@@ -1,7 +1,6 @@
 import { randomBytes } from 'crypto'
 import { promises as fs } from 'fs'
 import path from 'path'
-import { renameAtomic, tempNameFor } from '../fs-atomic'
 import { platform } from '../platform'
 import { renameAtomic, tempNameFor } from '../fs-atomic'
 

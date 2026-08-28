@@ -25,7 +25,6 @@ import {
   unlinkSync
 } from 'fs'
 import { randomUUID } from 'crypto'
-import { renameAtomicSync } from '../../fs-atomic'
 import { buildManagedScript } from './managed-script'
 import {
   computeTrustedHash,
