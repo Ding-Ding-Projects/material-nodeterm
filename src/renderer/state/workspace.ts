@@ -2536,6 +2536,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   'nextcloud-aio': true,
   'nextcloud-managed': true,
   'gitlab-hosting': true,
+  'cloudflare-tunnel': true,
   'cloudflare-zero-trust': true,
   'cloudflare-core-managers': true,
   nsis: true,
