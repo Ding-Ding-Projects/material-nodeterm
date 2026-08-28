@@ -6,8 +6,8 @@ import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { MaterialSymbol } from '../MaterialSymbol'
 import { Progress, Tabs } from '../../ui/md3'
-import { ConfirmDialog } from '../ConfirmDialog'
 import { promptDialog } from '../promptDialog'
+import { openDestructiveGate } from '../../state/destructiveGate'
 
 export interface UniGetUiUniversePanelProps { onClose: () => void }
 
@@ -41,8 +41,10 @@ export function UniGetUiUniversePanel({ onClose }: UniGetUiUniversePanelProps): 
   const [payload, setPayload] = useState<unknown>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [pendingDestructive, setPendingDestructive] = useState<{ label: string; run: () => Promise<void> } | null>(null)
   const [packageOptions, setPackageOptions] = useState<Record<string, unknown>>({ wait: false, elevated: false, interactive: false, preRelease: false, skipHash: false })
+  const requestDestructive = useCallback((input: { label: string; run: () => Promise<void> }) => {
+    openDestructiveGate({ title: input.label, description: 'This action changes or removes UniGetUI state and cannot be undone through this panel.', affected: [input.label], confirmLabel: 'Confirm action', onConfirm: () => { void input.run() } })
+  }, [])
   const search = useRegexSearchField()
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -121,13 +123,12 @@ export function UniGetUiUniversePanel({ onClose }: UniGetUiUniversePanelProps): 
       {busy && <Progress value={null} label={vocab('Loading UniGetUI data')} />}
       {error && <p className="unigetui-universe__error" role="alert">{vocab('UniGetUI could not complete this request')}: {error}</p>}
       {isUnavailable && !busy && <p className="unigetui-universe__empty">{vocab('This Global Universe is unavailable until UniGetUI is installed and its local automation session is running.')}</p>}
-      {!isUnavailable && !busy && <PageActions api={api} page={page} vocab={vocab} onDestructive={setPendingDestructive} onPayload={setPayload} />}
+      {!isUnavailable && !busy && <PageActions api={api} page={page} vocab={vocab} onDestructive={requestDestructive} onPayload={setPayload} />}
       {!isUnavailable && !busy && (page === 'discover' || page === 'installed' || page === 'updates') && <PackageOptions value={packageOptions} onChange={setPackageOptions} vocab={vocab} />}
       {!isUnavailable && !busy && page === 'discover' && <DiscoverActions api={api} rows={rows} vocab={vocab} options={packageOptions} />}
-      {!isUnavailable && !busy && page !== 'discover' && rows.length > 0 && <DataRows api={api} page={page} rows={rows} vocab={vocab} options={packageOptions} onDestructive={setPendingDestructive} onPayload={setPayload} />}
+      {!isUnavailable && !busy && page !== 'discover' && rows.length > 0 && <DataRows api={api} page={page} rows={rows} vocab={vocab} options={packageOptions} onDestructive={requestDestructive} onPayload={setPayload} />}
       {!isUnavailable && !busy && page !== 'discover' && rows.length === 0 && <pre className="unigetui-universe__empty">{payload ? JSON.stringify(payload, null, 2) : vocab('No data was returned for this section.')}</pre>}
       {page === 'help' && <p className="unigetui-universe__help">{vocab('Package actions are delegated to UniGetUI through its public local automation interface. Credentials and manager state stay with UniGetUI.')} </p>}
-      {pendingDestructive && <ConfirmDialog message={pendingDestructive.label} onCancel={() => setPendingDestructive(null)} onConfirm={() => { const action = pendingDestructive.run; setPendingDestructive(null); void action() }} />}
     </aside>
   )
 }
