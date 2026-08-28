@@ -185,15 +185,17 @@ export class CloudflareTunnelHandoffService implements CloudflareTunnelHandoffAp
       const origin = (await this.origins(request.nodeId)).find((candidate) => candidate.id === request.originId)
       if (!origin) {
         state = { ...state, localHealth: healthResult(request.originId, 'unavailable', 'The selected local origin is no longer available.', null), reason: 'Choose a currently discovered local origin.' }
-        emit('local-health-failed', 0, state.reason)
-        return { ok: false, state, binding: null, error: state.reason }
+        const reason = state.reason ?? 'Choose a currently discovered local origin.'
+        emit('local-health-failed', 0, reason)
+        return { ok: false, state, binding: null, error: reason }
       }
       const health = await this.health(request.nodeId, request.originId)
       state = { ...state, localHealth: health }
       if (health.state !== 'healthy') {
         state = { ...state, reason: health.reason ?? 'Verify the local service health before exposing it.' }
-        emit('local-health-failed', 0, state.reason)
-        return { ok: false, state, binding: null, error: state.reason }
+        const reason = state.reason ?? 'Verify the local service health before exposing it.'
+        emit('local-health-failed', 0, reason)
+        return { ok: false, state, binding: null, error: reason }
       }
       const eligibility = canStartCloudflareHandoff(health, origin, intent, request)
       if (!eligibility.ok && !request.confirmExternalExposure) {
@@ -294,8 +296,9 @@ export class CloudflareTunnelHandoffService implements CloudflareTunnelHandoffAp
       }
       state = { ...state, external: 'unreachable', reason: external.reason ?? 'The tunnel and connector were created, but external reachability is not verified.' }
       await this.updateExternalState(request.nodeId, 'unreachable')
-      emit('partial', 0.9, state.reason)
-      return { ok: false, state, binding: storedBinding, error: state.reason }
+      const reason = state.reason ?? 'The tunnel and connector were created, but external reachability is not verified.'
+      emit('partial', 0.9, reason)
+      return { ok: false, state, binding: storedBinding, error: reason }
     } catch (error) {
       if (cancelled(controller.signal)) return this.cancelledResult(state, emit, storedBinding)
       const reason = messageFor(error)
@@ -317,7 +320,7 @@ export class CloudflareTunnelHandoffService implements CloudflareTunnelHandoffAp
   }
 
   private failedResult(raw: CloudflareTunnelHandoffRequest, reason: string, stage: CloudflareTunnelHandoffStage): CloudflareTunnelHandoffResult {
-    const fallbackIntent = raw?.intent && typeof raw.intent === 'object'
+    const fallbackIntent: CloudflareTunnelIntent = raw?.intent && typeof raw.intent === 'object'
       ? raw.intent as CloudflareTunnelIntent
       : { schemaVersion: 1, featureId: 'cloudflare-tunnel-handoff', serviceId: 'unknown', originId: 'unknown', hostnameHint: 'invalid.example', pathPrefix: '/', exposure: 'explicit-after-local-health', bindMode: 'private-origin' }
     const state = initialState(typeof raw?.nodeId === 'string' ? raw.nodeId : 'unknown', fallbackIntent, typeof raw?.originId === 'string' ? raw.originId : 'unknown')
