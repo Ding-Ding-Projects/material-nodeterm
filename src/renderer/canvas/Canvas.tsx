@@ -13174,10 +13174,10 @@ export function Canvas() {
                   args.prompt,
                   undefined,
                   tgAccount,
-                  tgMode,
                   // The TARGET project: its `.nodeterm/settings.json` launch override applies to
                   // what runs in it, not the caller's.
-                  target.id
+                  target.id,
+                  tgMode
                 )
             const w = (node.width as number) ?? 640
             const h = (node.height as number) ?? 440
