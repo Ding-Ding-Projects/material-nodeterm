@@ -69,6 +69,10 @@ import type { PortablePlannerDefinitions } from './portable-planner'
 import type { PlannerSchedule } from '../shared/planner-occurrences'
 import type { PortalRepairRecord } from './portal-lifecycle'
 
+function archiveExclusionReason(reason: PortableProjectOmission['reason']): ProjectArchiveExclusion['reason'] {
+  return reason === 'unknown-optional' ? 'unsupported' : reason
+}
+
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
 export * from './portable-canvas-projection'
@@ -565,9 +569,9 @@ export class ProjectArchiveService {
         workingFiles: (media?.files.length ?? 0) + boardAttachments.entries.length,
         workingBytes: includedMediaBytes,
         excluded: [
-          ...portable.manifest.omissions.map((item) => ({ path: item.path, reason: item.reason, detail: item.detail })),
+          ...portable.manifest.omissions.map((item) => ({ path: item.path, reason: archiveExclusionReason(item.reason), detail: item.detail })),
           ...mediaOmissions,
-          ...boardAttachments.omissions
+          ...boardAttachments.omissions.map((item) => ({ path: item.path, reason: archiveExclusionReason(item.reason), detail: item.detail }))
         ],
         excludedFiles: portable.manifest.omissions.length + mediaOmissions.length + boardAttachments.omissions.length,
         excludedBytes: 0
@@ -673,7 +677,7 @@ export class ProjectArchiveService {
       const imported = await importPortableProjectV3(bytes, opts as PortableProjectV3ImportOptions)
       const mediaOmissions: ProjectArchiveExclusion[] = [
         ...(imported.projection.media?.omissions.map((item) => ({ path: `assets/media/${item.assetId}`, reason: item.reason, detail: item.detail })) ?? []),
-        ...(imported.projection.media?.assets.filter((item) => item.unresolved).map((item) => ({ path: `assets/media/${item.assetId}`, reason: 'machine-local' as const, detail: 'Locate Later kept this media reference unresolved.' })) ?? [])
+        ...(imported.projection.media?.assets.filter((item) => item.unresolved).map((item) => ({ path: `assets/media/${item.id}`, reason: 'machine-local' as const, detail: 'Locate Later kept this media reference unresolved.' })) ?? [])
       ]
       return {
         project: imported.project,
@@ -683,7 +687,7 @@ export class ProjectArchiveService {
           repositoryNote: 'Schema 3 imported safe project intent only. No deployment, provider mutation, process launch, download, or local binding was performed.',
           workingFiles: imported.mediaFiles + imported.commentFiles,
           workingBytes: imported.mediaBytes + imported.commentBytes,
-          excluded: [...imported.omissions.map((item) => ({ path: item.path, reason: item.reason, detail: item.detail })), ...mediaOmissions],
+          excluded: [...imported.omissions.map((item) => ({ path: item.path, reason: archiveExclusionReason(item.reason), detail: item.detail })), ...mediaOmissions],
           excludedFiles: imported.omissions.length + mediaOmissions.length,
           excludedBytes: 0
         },
