@@ -10,7 +10,14 @@
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
+import {
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { dirname, join, resolve, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -171,7 +178,7 @@ function visualStudioTools(instance, fs, requiredComponentPaths, libraryArchitec
     installationVersion:
       typeof instance.installationVersion === 'string' ? instance.installationVersion : '0',
     displayName: instance.displayName || installationPath,
-    hasRequiredComponent: requiredComponentPaths.has(installationPath.toLowerCase()),
+    hasRequiredComponents: requiredComponentPaths.has(installationPath.toLowerCase()),
     toolsets
   }
 }
@@ -181,19 +188,50 @@ function compareVersionsNewestFirst(a, b) {
 }
 
 function selectedCxxToolset(instances) {
-  const instance = instances.find((candidate) => candidate.toolsets.length > 0)
-  if (!instance) return null
-  const toolset = [...instance.toolsets].sort((a, b) =>
-    compareVersionsNewestFirst(a.version, b.version)
-  )[0]
-  return { instance, toolset }
+  const candidates = instances.flatMap((instance) =>
+    instance.toolsets
+      .filter((toolset) => toolset.hasSpectre && instance.hasRequiredComponents)
+      .map((toolset) => ({ instance, toolset }))
+  )
+  candidates.sort(
+    (a, b) =>
+      compareVersionsNewestFirst(a.instance.installationVersion, b.instance.installationVersion) ||
+      compareVersionsNewestFirst(a.toolset.version, b.toolset.version)
+  )
+  return candidates[0] ?? null
+}
+
+function writeToolchainSelection(resultFile, selection, report) {
+  if (!resultFile) return true
+  const installationPath = selection?.instance?.installationPath
+  if (typeof installationPath !== 'string' || !win32.isAbsolute(installationPath)) {
+    emitFailure(report, [
+      'Dependency : selected Visual Studio 2022 installation',
+      'Constraint : a compatible absolute installation path is required by node-gyp',
+      'Source     : Visual Studio discovery and Spectre component validation',
+      'Error      : the compatible toolset selection did not include an absolute installation path'
+    ])
+    return false
+  }
+  try {
+    writeFileSync(resultFile, `${installationPath}\r\n`, 'utf8')
+    return true
+  } catch (error) {
+    emitFailure(report, [
+      'Dependency : selected Visual Studio 2022 installation handoff',
+      'Constraint : the normal user process must pass the validated path to node-gyp',
+      `Source     : ${resultFile}`,
+      `Error      : could not write the selection result: ${error.message}`
+    ])
+    return false
+  }
 }
 
 function discoverInstances({
   programFilesX86,
   run,
   fs,
-  requiredComponentId,
+  requiredComponentIds,
   libraryArchitectures
 }) {
   const vswhere = join(
@@ -228,13 +266,14 @@ function discoverInstances({
   }
   const raw = enumerate(baseArgs, 'enumerate Visual Studio instances')
   // Real Spectre files alone do not prove MSBuild/the Windows SDK are present. vswhere's
-  // requirement filter is the installer-owned source of truth for the complete C++ workload.
-  const withRequiredComponent = enumerate(
-    [...baseArgs, '-requires', requiredComponentId],
-    `find instances containing ${requiredComponentId}`
+  // multiple -requires values use all-components semantics by default, so the workload and every
+  // architecture-specific Spectre component must belong to the same installation.
+  const withRequiredComponents = enumerate(
+    [...baseArgs, '-requires', ...requiredComponentIds],
+    `find instances containing all required components: ${requiredComponentIds.join(', ')}`
   )
   const requiredComponentPaths = new Set(
-    withRequiredComponent
+    withRequiredComponents
       .map((instance) => instance?.installationPath)
       .filter((path) => typeof path === 'string')
       .map((path) => path.toLowerCase())
@@ -357,7 +396,7 @@ export function ensureWindowsBuildToolchain(options = {}) {
       programFilesX86,
       run,
       fs,
-      requiredComponentId: config.workloadId,
+      requiredComponentIds: [config.workloadId, ...config.componentIds],
       libraryArchitectures: config.libraryArchitectures
     })
   } catch (error) {
@@ -385,9 +424,12 @@ export function ensureWindowsBuildToolchain(options = {}) {
     ])
     return { code: ERROR_ACCESS_DENIED, changed: false }
   }
-  if (selectedCxx?.toolset.hasSpectre && selectedCxx.instance.hasRequiredComponent) {
+  if (selectedCxx) {
+    if (!writeToolchainSelection(options.resultFile, selectedCxx, report)) {
+      return { code: 1, changed: false }
+    }
     report.log(
-      `  Found Spectre-mitigated MSVC libraries in ${selectedCxx.toolset.version} - nothing to install.`
+      `  Found compatible Spectre-mitigated MSVC libraries in ${selectedCxx.toolset.version} at ${selectedCxx.instance.installationPath} - nothing to install.`
     )
     return { code: 0, changed: false }
   }
@@ -558,7 +600,7 @@ export function ensureWindowsBuildToolchain(options = {}) {
       programFilesX86,
       run,
       fs,
-      requiredComponentId: config.workloadId,
+      requiredComponentIds: [config.workloadId, ...config.componentIds],
       libraryArchitectures: config.libraryArchitectures
     })
   } catch (error) {
@@ -572,7 +614,7 @@ export function ensureWindowsBuildToolchain(options = {}) {
   }
   const verified = selectedCxxToolset(after.instances)
   const installed =
-    verified?.toolset.hasSpectre === true && verified.instance.hasRequiredComponent === true
+    verified?.toolset.hasSpectre === true && verified.instance.hasRequiredComponents === true
   if (!installed) {
     emitFailure(report, [
       `Dependency : MSVC v143 ${config.libraryArchitectures.join('/')} Spectre-mitigated libraries`,
@@ -583,15 +625,22 @@ export function ensureWindowsBuildToolchain(options = {}) {
     return { code: 1, changed: false }
   }
 
+  if (!writeToolchainSelection(options.resultFile, verified, report)) {
+    return { code: 1, changed: false }
+  }
+
   report.log('  Installed and verified the Spectre-mitigated MSVC libraries.')
   return { code: 0, changed: true }
 }
 
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : ''
 if (invokedPath && resolve(fileURLToPath(import.meta.url)).toLowerCase() === invokedPath.toLowerCase()) {
+  const resultFileIndex = process.argv.indexOf('--result-file')
+  const resultFile = resultFileIndex >= 0 ? process.argv[resultFileIndex + 1] : undefined
   const result = ensureWindowsBuildToolchain({
     silent: process.argv.includes('--silent'),
-    elevatedToolchainOnly: process.argv.includes('--elevated-toolchain-only')
+    elevatedToolchainOnly: process.argv.includes('--elevated-toolchain-only'),
+    resultFile
   })
   process.exitCode = result.code
 }
