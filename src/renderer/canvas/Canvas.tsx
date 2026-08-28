@@ -11873,7 +11873,7 @@ export function Canvas() {
             icon: <IconEditor />,
             onClick: () => void openFileDialog(at)
           },
-          ...(hasCwd
+          ...(addCtx.hasCwd
             ? [
                 {
                   label: 'New file…',
@@ -11884,7 +11884,7 @@ export function Canvas() {
             : []),
           // Stays flat-with-a-heading exactly as before whenever an agent row is an account
           // picker (Claude/Codex with ≥1 account); one row when a single agent is enabled.
-          ...paneMenuGroup('Agents', <IconAgent />, agentItems),
+          ...paneMenuGroup('Agents', <IconAgent />, agentCreationItems(at)),
           // Managers for things outside this app. A group with ONE row that opens a submenu,
           // rather than six product rows: six names spliced into an already long pane menu is the
           // clutter the menu filter exists to avoid, and a submenu still matches on its children’s
@@ -11954,7 +11954,7 @@ export function Canvas() {
               icon: <IconEditor />,
               onClick: () => void openFileDialog(at)
             },
-            ...(hasCwd
+            ...(addCtx.hasCwd
               ? [
                   {
                     label: 'New file…',
