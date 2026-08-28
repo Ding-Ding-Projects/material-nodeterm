@@ -148,10 +148,11 @@ describe('grok capabilities', () => {
     expect(AGENT_CONFIG.grok.argvPromptSeparator).toBe('--')
   })
 
-  it('is the ONLY agent that asks for a separator', () => {
+  it('only Grok and Devin ask for a separator', () => {
     // claude takes a positional too, but has no subcommand a one-word prompt could shadow — and
     // adding `--` there would change a command line that works today.
-    for (const id of BUILTIN_AGENT_IDS.filter((a) => a !== 'grok')) {
+    expect(AGENT_CONFIG.devin.argvPromptSeparator).toBe('--')
+    for (const id of BUILTIN_AGENT_IDS.filter((a) => a !== 'grok' && a !== 'devin')) {
       expect(AGENT_CONFIG[id].argvPromptSeparator, id).toBeUndefined()
     }
   })
