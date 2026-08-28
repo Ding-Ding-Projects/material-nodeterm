@@ -78,7 +78,6 @@ export function SettingsSection({
   } else if (!isActive) {
     return null
   }
-  const childQuery = forceVisible ? '' : (search.mode === 'text' ? search.query : search.pattern)
   return (
     <SettingsVocabularyContext.Provider value={resolvedVocabulary ?? null}>
     <section id={id} data-settings-section={id} className="space-y-6">
@@ -91,9 +90,6 @@ export function SettingsSection({
       <div className="divide-y divide-border/60 rounded-2xl border border-border bg-white/[0.02] px-6 shadow-sm [&>*]:py-5">
         <SettingsSearchContext.Provider value={search}>{children}</SettingsSearchContext.Provider>
       </div>
-      <SettingsSearchContext.Provider value={search}>
-        <div className="md3-settings-card">{children}</div>
-      </SettingsSearchContext.Provider>
       </section>
     </SettingsVocabularyContext.Provider>
   )

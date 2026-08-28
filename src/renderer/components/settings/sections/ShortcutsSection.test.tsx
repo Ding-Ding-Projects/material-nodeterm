@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { COMMAND_DEFINITIONS } from '@shared/keybindings'
 import { DEFAULT_SETTINGS } from '@shared/types'
@@ -7,15 +10,13 @@ import { ShortcutsSection, commitCandidate } from './ShortcutsSection'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-// jsdom reports a non-mac platform; the chips and the refusal messages are platform-formatted,
-// so pin macOS here — `isMacPlatform()` is read at call time, never captured at module load.
-Object.defineProperty(window.navigator, 'platform', { value: 'MacIntel', configurable: true })
+// The active delivery target is the Windows desktop surface, so shortcut chips use Ctrl notation.
 
 /** How many commands ship with NO chord on the pinned (mac) platform. COMPUTED, because the
  *  registry is a growing POOL: every unbound command added later would otherwise red these
  *  counts with a number that says nothing about the behavior under test. Overrides are absent in
  *  the cases below (or sanitized away), so the effective binding IS the mac default. */
-const UNASSIGNED = COMMAND_DEFINITIONS.filter((d) => d.defaultBindings.darwin.length === 0).length
+const UNASSIGNED = COMMAND_DEFINITIONS.filter((d) => d.defaultBindings.other.length === 0).length
 
 const setKb = (kb: unknown): void =>
   useSettings.setState({ settings: { ...DEFAULT_SETTINGS, keybindings: kb as never } })
@@ -31,7 +32,7 @@ let root: Root | null = null
 function rerender(query: string): void {
   act(() =>
     root!.render(
-      <SettingsSearchContext.Provider value={query}>
+      <SettingsSearchContext.Provider value={{ mode: 'text', query, pattern: '', flags: 'i' }}>
         <ShortcutsSection isActive={true} />
       </SettingsSearchContext.Provider>
     )
@@ -115,7 +116,7 @@ describe('ShortcutsSection rows', () => {
     expect(ids()).toEqual(COMMAND_DEFINITIONS.map((d) => d.id))
     const palette = row('app.commandPalette')
     expect(palette.textContent).toContain('Command palette')
-    expect([...palette.querySelectorAll('kbd')].map((k) => k.textContent)).toEqual(['⌘', 'K'])
+    expect([...palette.querySelectorAll('kbd')].map((k) => k.textContent)).toEqual(['Ctrl', 'K'])
   })
 
   it('shows an em-dash placeholder and a record button for an unbound command', () => {
@@ -145,7 +146,7 @@ describe('ShortcutsSection rows', () => {
     click(button('canvas.undo', 'Reset Undo')!)
     expect('canvas.undo' in kb()).toBe(false)
     expect([...row('canvas.undo').querySelectorAll('kbd')].map((k) => k.textContent)).toEqual([
-      '⌘',
+      'Ctrl',
       'Z'
     ])
   })
@@ -195,7 +196,7 @@ describe('ShortcutsSection rows', () => {
     expect(() => render()).not.toThrow()
     // The sanitized read path already discarded both, so the rows show their defaults…
     expect([...row('canvas.undo').querySelectorAll('kbd')].map((k) => k.textContent)).toEqual([
-      '⌘',
+      'Ctrl',
       'Z'
     ])
     // …and nothing claims they are overridden: no Modified badge, no Reset, and they are not
@@ -294,8 +295,8 @@ describe('ShortcutsSection rows', () => {
     expect(button('speech.dictation', 'Add a shortcut to Dictate')).toBeNull()
     // …and the chips show only the chord that is actually live.
     expect([...row('speech.dictation').querySelectorAll('kbd')].map((k) => k.textContent)).toEqual([
-      '⌘',
-      '⌥'
+      'Ctrl',
+      'Alt'
     ])
   })
 
@@ -414,7 +415,7 @@ describe('the filter rail', () => {
   // the global settings search has no idea what a command is bound to.
   it('finds a row by the chord shown on its chip', () => {
     render()
-    typeFilter('⌘K')
+    typeFilter('Ctrl+K')
     expect(ids()).toEqual(['app.commandPalette'])
   })
 
@@ -431,16 +432,16 @@ describe('per-chip removal', () => {
   it('drops exactly the chord whose × was clicked', () => {
     setKb({ 'canvas.undo': ['Cmd+Z', 'Cmd+Alt+Z'] })
     render()
-    click(button('canvas.undo', 'Remove ⌘⌥Z from Undo')!)
+    click(button('canvas.undo', 'Remove Ctrl+Alt+Z from Undo')!)
     expect(kb()['canvas.undo']).toEqual(['Cmd+Z'])
     // …and with one chord left there is nothing to remove: the last × would be a Disable in
     // disguise, and Disable has its own control.
-    expect(button('canvas.undo', 'Remove ⌘Z from Undo')).toBeNull()
+    expect(button('canvas.undo', 'Remove Ctrl+Z from Undo')).toBeNull()
   })
 
   it('offers no × on a single-binding row', () => {
     render()
-    expect(button('app.commandPalette', 'Remove ⌘K from Command palette')).toBeNull()
+    expect(button('app.commandPalette', 'Remove Ctrl+K from Command palette')).toBeNull()
   })
 
   // Dictate is capped at one visible chip (`dictationBinding()` reads the first binding only), so
