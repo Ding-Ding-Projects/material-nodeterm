@@ -77,7 +77,7 @@ describe('node renderer personal vocabulary boundaries', () => {
     expect(pendingLaunchSummaryText({ kind: 'agent', action: 'start', agentId: 'gemini' }, map)).toBe(
       'begin gemini'
     )
-    expect(pendingLaunchSummaryText({ kind: 'shell-command', command: 'echo exact' }, map)).toBe(
+    expect(pendingLaunchSummaryText({ kind: 'shell-command' }, map)).toBe(
       'the queued terminal command'
     )
   })

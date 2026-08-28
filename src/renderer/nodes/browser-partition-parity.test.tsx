@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '../state/workspace'
 import type { KanbanSession } from '../components/kanban/KanbanView'
+import { useProjects } from '../state/projects'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -36,11 +37,12 @@ vi.mock('../components/ContextMeter', () => ({ ContextMeter: () => null }))
 import BrowserNode from './BrowserNode'
 import { CardModal } from '../components/kanban/CardModal'
 
-function partitionFromCanvas(nodePartition: string | undefined): string | null {
+function partitionFromCanvas(profileId: string | undefined): string | null {
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
-  const data = { title: 'B', color: '#0a84ff', group: null, url: 'https://x.test/', partition: nodePartition }
+  useProjects.setState({ activeProjectId: 'test-project' })
+  const data = { title: 'B', color: '#0a84ff', group: null, url: 'https://x.test/', browserProfileId: profileId }
   act(() =>
     root.render(
       <ReactFlowProvider>
@@ -55,7 +57,7 @@ function partitionFromCanvas(nodePartition: string | undefined): string | null {
   return p
 }
 
-function partitionFromModal(sessionPartition: string | undefined): string | null {
+function partitionFromModal(profileId: string | undefined): string | null {
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
@@ -65,7 +67,7 @@ function partitionFromModal(sessionPartition: string | undefined): string | null
     color: '#0a84ff',
     kind: 'browser',
     url: 'https://x.test/',
-    partition: sessionPartition,
+    browserProfileId: profileId,
     spawn: {}
   }
   act(() =>
@@ -80,6 +82,8 @@ function partitionFromModal(sessionPartition: string | undefined): string | null
         onRename={vi.fn()}
         onEditSticky={vi.fn()}
         onBrowserNav={vi.fn()}
+        projectId="test-project"
+        onSetIcon={vi.fn()}
       />
     )
   )
@@ -96,9 +100,9 @@ afterEach(() => {
 
 describe('canvas + modal webviews for one node share one partition', () => {
   it('an agent-opened node: both mounts carry the identical named partition', () => {
-    const part = 'persist:nt-agent-browser-p1'
-    const canvas = partitionFromCanvas(part)
-    const modal = partitionFromModal(part)
+    const part = 'persist:browser-profile-test-project-profile-1'
+    const canvas = partitionFromCanvas('profile-1')
+    const modal = partitionFromModal('profile-1')
     expect(canvas).toBe(part)
     expect(modal).toBe(part)
     expect(canvas).toBe(modal)
