@@ -26,7 +26,12 @@ import type { CanvasNodeState, PendingLaunch } from '@shared/types'
  * spawn) is a running-app measurement recorded in the PR body, not a unit test.
  */
 
-const pending: PendingLaunch = { after: [], command: 'claude "do the thing"' }
+const pending: PendingLaunch = {
+  after: [],
+  launchId: 'cold-open-launch',
+  launch: { kind: 'shell-command', command: 'claude "do the thing"' },
+  command: 'claude "do the thing"'
+}
 
 const armedState: CanvasNodeState = {
   id: 'term-cold1',
@@ -64,13 +69,22 @@ describe('cold-open pin (b): an empty `after` is vacuously ready', () => {
     // No status entries, live set contains only the node itself — exactly the first render of a
     // freshly viewed project: nothing has reported anything yet.
     const ready = launchesToFire([node], {}, new Set(['term-cold1']))
-    expect(ready).toEqual([{ id: 'term-cold1', command: pending.command }])
+    expect(ready).toEqual([
+      { id: 'term-cold1', launchId: pending.launchId, launch: pending.launch }
+    ])
   })
 
   it('an armed node with an unmet dep is NOT fired (the empty-after case is special)', () => {
     const node: ArmedNode = {
       id: 'term-cold1',
-      data: { pendingLaunch: { after: ['dep-1'], command: pending.command } }
+      data: {
+        pendingLaunch: {
+          after: ['dep-1'],
+          launchId: pending.launchId,
+          launch: pending.launch,
+          command: pending.command
+        }
+      }
     }
     const ready = launchesToFire([node], {}, new Set(['term-cold1', 'dep-1']))
     expect(ready).toEqual([])

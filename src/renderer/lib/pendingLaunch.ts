@@ -99,6 +99,7 @@ export function launchesToFire(
     const p = n.data.pendingLaunch
     if (!p || !p.launchId) continue
     if (p.launch.kind === 'shell-command' && !p.launch.command) continue
+    if (p.awaitSetupGroup && setupDone && !setupDone(p.awaitSetupGroup)) continue
     if (p.after.every((d) => depSatisfied(d, status, live))) {
       out.push({ id: n.id, launchId: p.launchId, launch: p.launch })
     }

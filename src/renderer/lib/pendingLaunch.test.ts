@@ -126,7 +126,14 @@ describe('launchesToFire — awaitSetupGroup (a worktree whose setup script must
   const live = new Set(['a', 'c'])
   const armedForSetup = (id: string, groupId: string, after: string[] = []): ArmedNode => ({
     id,
-    data: { pendingLaunch: { after, command: `echo ${id}`, awaitSetupGroup: groupId } }
+    data: {
+      pendingLaunch: {
+        after,
+        launchId: `launch-${id}`,
+        launch: { kind: 'shell-command', command: `echo ${id}` },
+        awaitSetupGroup: groupId
+      }
+    }
   })
 
   it('holds the launch while the group’s setup run is not done', () => {
@@ -135,7 +142,7 @@ describe('launchesToFire — awaitSetupGroup (a worktree whose setup script must
 
   it('fires once the group’s setup run is done', () => {
     expect(launchesToFire([armedForSetup('c', 'g1')], {}, live, () => true)).toEqual([
-      { id: 'c', command: 'echo c' }
+      { id: 'c', launchId: 'launch-c', launch: { kind: 'shell-command', command: 'echo c' } }
     ])
   })
 
@@ -143,7 +150,7 @@ describe('launchesToFire — awaitSetupGroup (a worktree whose setup script must
     // Reached after an app restart: the run store is empty, and a node armed before the restart
     // would otherwise wait forever for a run nobody is going to report on again.
     expect(launchesToFire([armedForSetup('c', 'g1')], {}, live)).toEqual([
-      { id: 'c', command: 'echo c' }
+      { id: 'c', launchId: 'launch-c', launch: { kind: 'shell-command', command: 'echo c' } }
     ])
   })
 
@@ -164,13 +171,13 @@ describe('launchesToFire — awaitSetupGroup (a worktree whose setup script must
     expect(launchesToFire(node, { a: { state: 'done' } }, live, () => false)).toEqual([])
     // both
     expect(launchesToFire(node, { a: { state: 'done' } }, live, () => true)).toEqual([
-      { id: 'c', command: 'echo c' }
+      { id: 'c', launchId: 'launch-c', launch: { kind: 'shell-command', command: 'echo c' } }
     ])
   })
 
   it('leaves a node with no awaitSetupGroup alone even while some setup is running', () => {
     expect(launchesToFire([armed('c', [])], {}, live, () => false)).toEqual([
-      { id: 'c', command: 'echo c' }
+      { id: 'c', launchId: LAUNCH_ID, launch: { kind: 'shell-command', command: 'echo c' } }
     ])
   })
 })
