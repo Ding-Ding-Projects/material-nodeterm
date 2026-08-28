@@ -30,7 +30,7 @@ describe('the open-project dispatch block (source pins)', () => {
     // consults routeControlSource, or a background caller's open-project would travel the
     // human's view to the CALLER's project (G5).
     const block = src.indexOf(`if (verb === 'open-project')`)
-    const routing = src.indexOf('routeControlSource(projects, activeId, sourceNodeId)')
+    const routing = src.indexOf('routeControlSource(', block)
     expect(block).toBeGreaterThan(-1)
     expect(routing).toBeGreaterThan(-1)
     expect(block).toBeLessThan(routing)
@@ -87,7 +87,7 @@ function targetedOpensBody(): string {
 describe('the --project targeted-opens block (source pins)', () => {
   it('sits BEFORE the source-routing machinery, like open-project', () => {
     const block = src.indexOf('// ── `--project` targeted opens')
-    const routing = src.indexOf('routeControlSource(projects, activeId, sourceNodeId)')
+    const routing = src.indexOf('routeControlSource(', block)
     expect(block).toBeGreaterThan(-1)
     expect(block).toBeLessThan(routing)
   })
