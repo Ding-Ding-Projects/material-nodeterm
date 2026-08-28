@@ -5,6 +5,18 @@ import { IconEditor } from './icons'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useVocabularyCommands } from '../lib/personalVocabulary/useVocabularySurfaces'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { useSchoolMode } from '../state/schoolMode'
+import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
+
+/** These settings rows are an optional capability and must not exist in the palette while School
+ * mode is on or while its shared record has not been resolved. Keep the IDs exact: they are
+ * command identifiers, not user-facing copy, and filtering them here protects every caller. */
+const PERSONAL_VOCABULARY_COMMAND_IDS = new Set([
+  'open-personal-vocabulary',
+  'personal-vocabulary-status',
+  'clear-personal-vocabulary'
+])
 
 /**
  * A row's LIVE, inline control — a setting result renders its own switch/select rather than a
@@ -98,6 +110,13 @@ export function CommandPalette({
   const query = field.query
   const inputRef = useRef<HTMLInputElement>(null)
   const [active, setActive] = useState(0)
+  const vocab = useVocabularyMapper()
+  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
+  const vocabularyAllowed = schoolModeAllowsOptionalFeatures({
+    enabled: schoolModeEnabled,
+    hydrated: schoolModeHydrated
+  })
 
   const setQuery = (q: string): void => {
     field.setValue(q)
@@ -123,7 +142,10 @@ export function CommandPalette({
   //     a basename and a directory, and `extraCommands` are transcript hits whose label is the
   //     conversation's own text — file paths and quoted output, never app prose. `extraCommands`
   //     is also documented as pre-filtered and appended verbatim.
-  const vocabCommands = useVocabularyCommands(commands)
+  const visibleCommands = vocabularyAllowed
+    ? commands
+    : commands.filter((command) => !PERSONAL_VOCABULARY_COMMAND_IDS.has(command.id))
+  const vocabCommands = useVocabularyCommands(visibleCommands)
 
   const filtered = useMemo(
     () => vocabCommands.filter((c) => labelHit(c) || contentHit(c)).slice(0, 50),
@@ -140,14 +162,14 @@ export function CommandPalette({
         id: `file:${r.path}`,
         label: base,
         hint: dir,
-        section: 'Files',
+        section: vocab('Files'),
         icon: <IconEditor />,
         run: () => onOpenFile(r.path),
         onSecondary: onRevealFile ? () => onRevealFile(r.path) : undefined,
-        secondaryLabel: 'Reveal in Explorer'
+        secondaryLabel: vocab('Reveal in Explorer')
       }
     })
-  }, [fileIndex, onOpenFile, onRevealFile, query, field.mode])
+  }, [fileIndex, onOpenFile, onRevealFile, query, field.mode, vocab])
 
   const items = useMemo(
     () => [...filtered, ...fileCommands, ...(extraCommands ?? [])],
@@ -182,7 +204,9 @@ export function CommandPalette({
             className="palette__input"
             autoFocus
             spellCheck={false}
-            placeholder={field.mode === 'regex' ? 'Type a regex pattern…' : 'Type a command or name…'}
+            placeholder={
+              vocab(field.mode === 'regex' ? 'Type a regex pattern…' : 'Type a command or name…')
+            }
             value={field.value}
             onChange={(e) => {
               setQuery(e.target.value)
@@ -215,7 +239,7 @@ export function CommandPalette({
           {/* Size is a user choice, persisted (localStorage) — default is the bounded card. */}
           <button
             className="palette__size-toggle"
-            title={size === 'card' ? 'Expand to full window' : 'Collapse to bounded card'}
+            title={vocab(size === 'card' ? 'Expand to full window' : 'Collapse to bounded card')}
             onClick={toggleSize}
           >
             {size === 'card' ? '⤢' : '⤡'}
@@ -223,7 +247,7 @@ export function CommandPalette({
         </div>
         {field.error && <div className="palette__error">{field.error}</div>}
         <div className="palette__list">
-          {items.length === 0 && <div className="palette__empty">No matches</div>}
+          {items.length === 0 && <div className="palette__empty">{vocab('No matches')}</div>}
           {items.map((c, i) => (
             <PaletteRow
               key={c.id}
@@ -232,6 +256,8 @@ export function CommandPalette({
               showSection={c.section !== undefined && c.section !== items[i - 1]?.section}
               labelHit={labelHit(c)}
               contentHit={contentHit(c)}
+              outputMatchHint={vocab('found in output')}
+              inlineControlTitle={vocab('Click to change')}
               onHover={() => setActive(i)}
               onRun={() => run(c)}
               onSecondary={
@@ -266,6 +292,8 @@ function PaletteRow({
   showSection,
   labelHit,
   contentHit,
+  outputMatchHint,
+  inlineControlTitle,
   onHover,
   onRun,
   onSecondary
@@ -275,6 +303,8 @@ function PaletteRow({
   showSection: boolean
   labelHit: boolean
   contentHit: boolean
+  outputMatchHint: string
+  inlineControlTitle: string
   onHover: () => void
   onRun: () => void
   onSecondary?: () => void
@@ -303,13 +333,13 @@ function PaletteRow({
       <span className="palette__icon">{c.icon}</span>
       <span className="palette__label">{c.label}</span>
       {!labelHit && contentHit ? (
-        <span className="palette__hint">found in output</span>
+        <span className="palette__hint">{outputMatchHint}</span>
       ) : (
         (c.hint ?? c.note) && <span className="palette__hint">{c.hint ?? c.note}</span>
       )}
       {c.control && everVisible && !c.disabled && (
         <span className="palette__control" onClick={(e) => e.stopPropagation()}>
-          <InlineControl control={c.control} />
+          <InlineControl control={c.control} title={inlineControlTitle} />
         </span>
       )}
       {onSecondary && (
@@ -361,7 +391,7 @@ function PaletteRow({
  *  options on click) wired directly to the caller's setter. No local state: it always reflects
  *  whatever the originating store currently holds, exactly like the settings-page control it
  *  mirrors. */
-function InlineControl({ control }: { control: CommandControl }): React.JSX.Element {
+function InlineControl({ control, title }: { control: CommandControl; title: string }): React.JSX.Element {
   if (control.type === 'toggle') {
     return (
       <span
@@ -385,7 +415,7 @@ function InlineControl({ control }: { control: CommandControl }): React.JSX.Elem
       role="button"
       aria-label={control.ariaLabel}
       className="palette__cycle"
-      title="Click to change"
+      title={title}
       onClick={() => {
         const next = control.options[(idx + 1) % control.options.length]
         if (next) control.onChange(next.value)
