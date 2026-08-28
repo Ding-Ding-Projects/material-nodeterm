@@ -58,7 +58,7 @@ describe('a managed Claude account is not a Codex account (#345)', () => {
     // exactly what tells the two apart.
     const settings: Settings = {
       ...DEFAULT_SETTINGS,
-      codexAccounts: [{ id: CODEX_ACCT, label: 'work' }]
+      codexAccounts: [{ id: CODEX_ACCT, label: 'work', createdAt: 0 }]
     }
     const mgr = new PtyManager()
     mgr.init(() => settings)
@@ -95,7 +95,7 @@ describe('a managed Claude account is not a Codex account (#345)', () => {
 
   it('the agent-less `codex login` terminal STILL gets the managed Codex scope', async () => {
     mkdirSync(codexAccountHome(userDataDir, CODEX_ACCT), { recursive: true })
-    const res = await create({ accountId: CODEX_ACCT, persistKey: 'node-3' })
+    const res = await create({ codexAccountId: CODEX_ACCT, persistKey: 'node-3' })
     expect(res.unavailable).toBeUndefined()
     expect(spawned).toHaveLength(1)
     expect(spawned[0].env.CODEX_HOME).toBe(codexAccountHome(userDataDir, CODEX_ACCT))
@@ -103,7 +103,7 @@ describe('a managed Claude account is not a Codex account (#345)', () => {
   })
 
   it('a Codex AGENT node still fails closed on a missing managed home', async () => {
-    const res = await create({ agentId: 'codex', accountId: CODEX_ACCT, persistKey: 'node-4' })
+    const res = await create({ agentId: 'codex', codexAccountId: CODEX_ACCT, persistKey: 'node-4' })
     expect(res.unavailable).toBe('codex-account')
     expect(spawned).toHaveLength(0)
   })

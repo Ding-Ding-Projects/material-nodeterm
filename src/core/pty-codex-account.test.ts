@@ -7,7 +7,9 @@ import type { PtyCreateOptions, PtyCreateResult } from '../shared/types'
 import {
   codexAccountHome,
   codexUsageAccounts,
-  needsCodexAccountScope
+  needsCodexAccountScope,
+  isCodexScopeRefusal,
+  resolveCodexSessionScope
 } from './codex-accounts-core'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform, type FakePlatform } from './platform-fake'
@@ -137,15 +139,15 @@ describe('Codex spawn scope resolves fail-closed', () => {
   let userDataDir: string
 
   beforeEach(() => {
-    userDataDir = mkdtempSync(path.join(os.tmpdir(), 'nodeterm-codex-scope-'))
+    userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-codex-scope-'))
   })
   afterEach(() => {
-    rmSync(userDataDir, { recursive: true, force: true })
+    fs.rmSync(userDataDir, { recursive: true, force: true })
   })
 
   it('fails closed without spawning when an explicitly selected account home is missing', () => {
     // The short home is deliberately NOT created.
-    const scope = resolveCodexSessionScope(userDataDir, 'account-a', existsSync)
+    const scope = resolveCodexSessionScope(userDataDir, 'account-a', fs.existsSync)
     expect(isCodexScopeRefusal(scope)).toBe(true)
     expect(scope).toEqual({ unavailable: 'codex-account' })
     // Decision 2: the refusal must NOT be the system home under any key.
@@ -154,8 +156,8 @@ describe('Codex spawn scope resolves fail-closed', () => {
 
   it('spawns against only the selected managed home once it exists', () => {
     const home = codexAccountHome(userDataDir, 'account-a')
-    mkdirSync(home, { recursive: true })
-    const scope = resolveCodexSessionScope(userDataDir, 'account-a', existsSync)
+    fs.mkdirSync(home, { recursive: true })
+    const scope = resolveCodexSessionScope(userDataDir, 'account-a', fs.existsSync)
     expect(isCodexScopeRefusal(scope)).toBe(false)
     expect(scope).toEqual({ CODEX_HOME: home, NODETERM_CODEX_ACCOUNT_ID: 'account-a' })
   })
@@ -163,14 +165,14 @@ describe('Codex spawn scope resolves fail-closed', () => {
   it('uses explicit system scope instead of an inherited managed scope', () => {
     // No account id ⇒ system scope, and it ALWAYS resolves (never refuses), explicitly clearing
     // any managed NODETERM_CODEX_ACCOUNT_ID a parent process leaked in.
-    const scope = resolveCodexSessionScope(userDataDir, undefined, existsSync)
+    const scope = resolveCodexSessionScope(userDataDir, undefined, fs.existsSync)
     expect(isCodexScopeRefusal(scope)).toBe(false)
     expect(scope).toMatchObject({ NODETERM_CODEX_ACCOUNT_ID: '' })
     expect(path.isAbsolute((scope as { CODEX_HOME: string }).CODEX_HOME)).toBe(true)
   })
 
   it('refuses an unsafe explicit account id before touching the filesystem', () => {
-    expect(() => resolveCodexSessionScope(userDataDir, '../escape', existsSync)).toThrow(
+    expect(() => resolveCodexSessionScope(userDataDir, '../escape', fs.existsSync)).toThrow(
       'Invalid Codex account id'
     )
   })
