@@ -701,6 +701,7 @@ import {
   isModifierEventKey,
   matchesShortcut
 } from '@shared/shortcut'
+import { hintLabel } from '@shared/platform-utils'
 import { dispatchDestructiveControl } from '../lib/controlDestructive'
 import { canvasSyncTarget } from './collab-sync'
 import { receiveActiveEdgeMutation } from './team-edge-receive'
