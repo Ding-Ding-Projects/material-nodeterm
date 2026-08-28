@@ -7,6 +7,8 @@ import { useActiveSessionApi } from '../session/session'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { formatHostMessage, hostFact, hostText } from '../lib/personalVocabulary/hostMessage'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { openDestructiveGate } from '../state/destructiveGate'
 import { Radio } from '../ui/md3'
@@ -23,16 +25,35 @@ function bytes(value: number): string {
   return `${n >= 100 || i === 0 ? n.toFixed(0) : n.toFixed(1)} ${units[i]}`
 }
 
-function duration(seconds: number | null): string {
-  if (seconds === null || !Number.isFinite(seconds)) return 'Unknown'
+function duration(seconds: number | null, map?: VocabularyMapper): string {
+  if (seconds === null || !Number.isFinite(seconds)) return map?.('Unknown') ?? 'Unknown'
   if (seconds < 60) return `${Math.max(0, Math.round(seconds))}s`
   const minutes = Math.floor(seconds / 60)
   const hours = Math.floor(minutes / 60)
   return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`
 }
 
-function taskLabel(task: TorrentTaskState): string {
-  return task.name || (task.sourceKind === 'magnet' ? 'Magnet download' : 'Torrent file')
+type VocabularyMapper = (text: string) => string
+
+function taskLabel(task: TorrentTaskState, map: VocabularyMapper): string {
+  return task.name || map(task.sourceKind === 'magnet' ? 'Magnet download' : 'Torrent file')
+}
+
+function textWithFact(map: VocabularyMapper, before: string, fact: string, after = ''): string {
+  return formatHostMessage([hostText(before), hostFact(fact), hostText(after)], map)
+}
+
+function runtimeLabel(
+  runtime: { available: boolean; origin: string; detail: string | null } | null,
+  map: VocabularyMapper
+): string {
+  if (!runtime) return map('Checking WebTorrent runtime…')
+  if (runtime.available) return formatHostMessage([hostFact('WebTorrent '), hostFact(runtime.origin)], map)
+  return formatHostMessage([
+    hostFact('WebTorrent'),
+    hostText(' unavailable: '),
+    runtime.detail ? hostFact(runtime.detail) : hostText('runtime could not be loaded')
+  ], map)
 }
 
 const SEED_CHOICES: ReadonlyArray<{ id: TorrentSeedPolicy['kind']; label: string; description: string; policy: TorrentSeedPolicy }> = [
@@ -50,6 +71,7 @@ interface TorrentTaskCardProps {
 }
 
 function TorrentTaskCard({ task, busy, destination, torrent, run }: TorrentTaskCardProps): React.JSX.Element {
+  const map = useVocabularyMapper()
   const fileSearch = useRegexSearchField()
   const seedSearch = useRegexSearchField()
   const fileSearchRef = useRef<HTMLInputElement>(null)
@@ -59,17 +81,18 @@ function TorrentTaskCard({ task, busy, destination, torrent, run }: TorrentTaskC
     [task.files, fileSearch.mode, fileSearch.query, fileSearch.pattern, fileSearch.flags, fileSearch.error]
   )
   const visibleSeedChoices = useMemo(
-    () => SEED_CHOICES.filter((choice) => seedSearch.test(`${choice.label} ${choice.description}`)),
-    [seedSearch.mode, seedSearch.query, seedSearch.pattern, seedSearch.flags, seedSearch.error]
+    () => SEED_CHOICES.filter((choice) => seedSearch.test(`${map(choice.label)} ${map(choice.description)}`)),
+    [map, seedSearch.mode, seedSearch.query, seedSearch.pattern, seedSearch.flags, seedSearch.error]
   )
+  const label = taskLabel(task, map)
   const selectedCount = task.files.filter((file) => file.selected).length
   const canStart = !!task.destination && task.files.length > 0 && selectedCount > 0 && !busy
   const startReason = !task.destination
-    ? 'Choose a download folder and apply it to this task before starting.'
+    ? map('Choose a download folder and apply it to this task before starting.')
     : task.files.length === 0
-      ? 'Wait for torrent metadata before starting.'
+      ? map('Wait for torrent metadata before starting.')
       : selectedCount === 0
-        ? 'Select at least one file before starting.'
+        ? map('Select at least one file before starting.')
         : null
 
   const updatePolicy = (policy: TorrentSeedPolicy): void => {
@@ -80,47 +103,53 @@ function TorrentTaskCard({ task, busy, destination, torrent, run }: TorrentTaskC
     const trigger = event.currentTarget
     const rect = trigger.getBoundingClientRect()
     const opened = openDestructiveGate({
-      title: `Remove torrent task "${taskLabel(task)}"`,
-      description: 'This removes the machine-local task record and stops its WebTorrent handle. Downloaded files remain on disk. The task record cannot be restored.',
-      affected: [taskLabel(task)],
-      confirmLabel: 'Remove task',
+      title: textWithFact(map, 'Remove torrent task "', label, '"'),
+      description: map('This removes the machine-local task record and stops its WebTorrent handle. Downloaded files remain on disk. The task record cannot be restored.'),
+      affected: [label],
+      confirmLabel: map('Remove task'),
       anchor: { x: rect.left, y: rect.bottom },
       restoreFocusEl: trigger,
       onConfirm: () => { void run(() => torrent.remove(task.id)) }
     })
     if (!opened) {
-      window.dispatchEvent(new CustomEvent('nodeterm:toast', { detail: { kind: 'error', message: 'Another destructive confirmation is already open.' } }))
+      window.dispatchEvent(new CustomEvent('nodeterm:toast', { detail: { kind: 'error', message: map('Another destructive confirmation is already open.') } }))
     }
   }
 
   return (
-    <article className="torrent-node__task">
-      <div className="torrent-node__task-head"><strong>{taskLabel(task)}</strong><span>{task.status}</span></div>
-      <progress max={1} value={task.progress} aria-label={`${Math.round(task.progress * 100)} percent downloaded`} />
-      <div className="torrent-node__stats"><span>{Math.round(task.progress * 100)}%</span><span>{bytes(task.downloadedBytes)} / {bytes(task.totalBytes)}</span><span>{bytes(task.speedBytesPerSecond)}/s</span><span>{task.peers} peers</span><span>ETA {duration(task.etaSeconds)}</span></div>
+    <article className="torrent-node__task" aria-label={textWithFact(map, 'Torrent task: ', label)}>
+      <div className="torrent-node__task-head"><strong>{label}</strong><span>{task.status}</span></div>
+      <progress max={1} value={task.progress} aria-label={textWithFact(map, 'Downloaded ', String(Math.round(task.progress * 100)), '%')} />
+      <div className="torrent-node__stats"><span>{Math.round(task.progress * 100)}%</span><span>{bytes(task.downloadedBytes)} / {bytes(task.totalBytes)}</span><span>{bytes(task.speedBytesPerSecond)}/s</span><span>{textWithFact(map, '', String(task.peers), ' peers')}</span><span>{textWithFact(map, 'ETA ', duration(task.etaSeconds, map))}</span></div>
       {task.error && <p className="torrent-node__error" role="alert">{task.error}</p>}
 
       {task.files.length > 0 && (
         <details className="torrent-node__picker">
-          <summary>Files ({selectedCount} of {task.files.length} selected)</summary>
+          <summary>{formatHostMessage([
+            hostText('Files ('),
+            hostFact(String(selectedCount)),
+            hostText(' of '),
+            hostFact(String(task.files.length)),
+            hostText(' selected)')
+          ], map)}</summary>
           <div className="torrent-node__picker-search">
-            <label htmlFor={`${task.id}-file-search`}>Filter files</label>
+            <label htmlFor={`${task.id}-file-search`}>{map('Filter files')}</label>
             <input
               ref={fileSearchRef}
               id={`${task.id}-file-search`}
               value={fileSearch.value}
-              placeholder={fileSearch.mode === 'regex' ? 'Regex pattern' : 'Search file names and paths'}
+              placeholder={map(fileSearch.mode === 'regex' ? 'Regex pattern' : 'Search file names and paths')}
               onChange={(event) => fileSearch.setValue(event.target.value)}
             />
-            <AnchoredRegexBuilder search={fileSearch} fieldRef={fileSearchRef} label={`Regex builder for files in ${taskLabel(task)}`} />
+            <AnchoredRegexBuilder search={fileSearch} fieldRef={fileSearchRef} label={textWithFact(map, 'Regex builder for files in ', label)} />
           </div>
           {fileSearch.error && <p className="torrent-node__error" role="alert">{fileSearch.error}</p>}
           <div className="torrent-node__selection-actions">
-            <button type="button" disabled={busy || visibleFiles.length === 0} onClick={() => void run(() => torrent.chooseFiles(task.id, [...new Set([...task.files.filter((file) => file.selected).map((file) => file.path), ...visibleFiles.map((file) => file.path)])]))}>Select filtered</button>
-            <button type="button" disabled={busy || visibleFiles.length === 0} onClick={() => void run(() => torrent.chooseFiles(task.id, task.files.filter((file) => file.selected && !visibleFiles.some((visible) => visible.path === file.path)).map((file) => file.path)))}>Clear filtered</button>
+            <button type="button" disabled={busy || visibleFiles.length === 0} onClick={() => void run(() => torrent.chooseFiles(task.id, [...new Set([...task.files.filter((file) => file.selected).map((file) => file.path), ...visibleFiles.map((file) => file.path)])]))}>{map('Select filtered')}</button>
+            <button type="button" disabled={busy || visibleFiles.length === 0} onClick={() => void run(() => torrent.chooseFiles(task.id, task.files.filter((file) => file.selected && !visibleFiles.some((visible) => visible.path === file.path)).map((file) => file.path)))}>{map('Clear filtered')}</button>
           </div>
           <div className="torrent-node__files">
-            {visibleFiles.length === 0 ? <p className="torrent-node__empty">No files match this filter.</p> : visibleFiles.map((file) => (
+            {visibleFiles.length === 0 ? <p className="torrent-node__empty">{map('No files match this filter.')}</p> : visibleFiles.map((file) => (
               <label key={file.path}>
                 <input
                   type="checkbox"
@@ -137,24 +166,27 @@ function TorrentTaskCard({ task, busy, destination, torrent, run }: TorrentTaskC
       )}
 
       <details className="torrent-node__picker">
-        <summary>Seeding: {SEED_CHOICES.find((choice) => choice.id === task.seedPolicy.kind)?.label ?? 'Do not seed'}</summary>
+        <summary>{formatHostMessage([
+          hostText('Seeding: '),
+          hostText(SEED_CHOICES.find((choice) => choice.id === task.seedPolicy.kind)?.label ?? 'Do not seed')
+        ], map)}</summary>
         <div className="torrent-node__picker-search">
-          <label htmlFor={`${task.id}-seed-search`}>Find a seeding policy</label>
+          <label htmlFor={`${task.id}-seed-search`}>{map('Find a seeding policy')}</label>
           <input
             ref={seedSearchRef}
             id={`${task.id}-seed-search`}
             value={seedSearch.value}
-            placeholder={seedSearch.mode === 'regex' ? 'Regex pattern' : 'Search seeding policies'}
+            placeholder={map(seedSearch.mode === 'regex' ? 'Regex pattern' : 'Search seeding policies')}
             onChange={(event) => seedSearch.setValue(event.target.value)}
           />
-          <AnchoredRegexBuilder search={seedSearch} fieldRef={seedSearchRef} label={`Regex builder for seeding policies in ${taskLabel(task)}`} />
+          <AnchoredRegexBuilder search={seedSearch} fieldRef={seedSearchRef} label={textWithFact(map, 'Regex builder for seeding policies in ', label)} />
         </div>
         {seedSearch.error && <p className="torrent-node__error" role="alert">{seedSearch.error}</p>}
-        <div className="torrent-node__seed-options" role="radiogroup" aria-label={`Seeding policy for ${taskLabel(task)}`}>
-          {visibleSeedChoices.length === 0 ? <p className="torrent-node__empty">No seeding policies match this filter.</p> : visibleSeedChoices.map((choice) => (
+        <div className="torrent-node__seed-options" role="radiogroup" aria-label={textWithFact(map, 'Seeding policy for ', label)}>
+          {visibleSeedChoices.length === 0 ? <p className="torrent-node__empty">{map('No seeding policies match this filter.')}</p> : visibleSeedChoices.map((choice) => (
             <label key={choice.id}>
               <Radio name={`${task.id}-seed-policy`} checked={task.seedPolicy.kind === choice.id} disabled={busy} onChange={() => updatePolicy(choice.policy)} />
-              <span><strong>{choice.label}</strong><small>{choice.description}</small></span>
+              <span><strong>{map(choice.label)}</strong><small>{map(choice.description)}</small></span>
             </label>
           ))}
         </div>
@@ -162,13 +194,13 @@ function TorrentTaskCard({ task, busy, destination, torrent, run }: TorrentTaskC
 
       {startReason && task.status !== 'completed' && task.status !== 'cancelled' && <p className="torrent-node__hint">{startReason}</p>}
       <div className="torrent-node__task-actions">
-        {(task.status === 'queued' || task.status === 'metadata') && <button type="button" disabled={!canStart} onClick={() => void run(() => torrent.start(task.id))}>Start</button>}
-        {task.status === 'downloading' && <button type="button" disabled={busy} onClick={() => void run(() => torrent.pause(task.id))}>Pause</button>}
-        {task.status === 'paused' && <button type="button" disabled={!canStart} onClick={() => void run(() => torrent.resume(task.id))}>Resume</button>}
-        <button type="button" disabled={busy || task.status === 'completed' || task.status === 'cancelled'} onClick={() => void run(() => torrent.cancel(task.id))}>Cancel</button>
-        <button type="button" disabled={busy || (task.status !== 'failed' && task.status !== 'cancelled')} onClick={() => void run(() => torrent.retry(task.id))}>Retry</button>
-        <button type="button" disabled={busy || !!task.destination || !destination} onClick={() => void run(() => torrent.setDestination(task.id, destination))}>Use folder</button>
-        <button type="button" disabled={busy} onClick={requestRemove}>Remove task</button>
+        {(task.status === 'queued' || task.status === 'metadata') && <button type="button" disabled={!canStart} onClick={() => void run(() => torrent.start(task.id))}>{map('Start')}</button>}
+        {task.status === 'downloading' && <button type="button" disabled={busy} onClick={() => void run(() => torrent.pause(task.id))}>{map('Pause')}</button>}
+        {task.status === 'paused' && <button type="button" disabled={!canStart} onClick={() => void run(() => torrent.resume(task.id))}>{map('Resume')}</button>}
+        <button type="button" disabled={busy || task.status === 'completed' || task.status === 'cancelled'} onClick={() => void run(() => torrent.cancel(task.id))}>{map('Cancel')}</button>
+        <button type="button" disabled={busy || (task.status !== 'failed' && task.status !== 'cancelled')} onClick={() => void run(() => torrent.retry(task.id))}>{map('Retry')}</button>
+        <button type="button" disabled={busy || !!task.destination || !destination} onClick={() => void run(() => torrent.setDestination(task.id, destination))}>{map('Use folder')}</button>
+        <button type="button" disabled={busy} onClick={requestRemove}>{map('Remove task')}</button>
       </div>
     </article>
   )
@@ -177,6 +209,7 @@ function TorrentTaskCard({ task, busy, destination, torrent, run }: TorrentTaskC
 export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { updateNodeData } = useReactFlow()
   const api = useActiveSessionApi()
+  const map = useVocabularyMapper()
   const [tasks, setTasks] = useState<TorrentTaskState[]>([])
   const [destination, setDestination] = useState('')
   const [runtime, setRuntime] = useState<{ available: boolean; origin: string; detail: string | null } | null>(null)
@@ -207,8 +240,8 @@ export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode
   }, [api, id, load])
 
   const filteredTasks = useMemo(
-    () => tasks.filter((task) => taskSearch.test(`${taskLabel(task)} ${task.status} ${task.sourceKind}`)),
-    [tasks, taskSearch.mode, taskSearch.query, taskSearch.pattern, taskSearch.flags, taskSearch.error]
+    () => tasks.filter((task) => taskSearch.test(`${taskLabel(task, map)} ${task.status} ${task.sourceKind}`)),
+    [map, tasks, taskSearch.mode, taskSearch.query, taskSearch.pattern, taskSearch.flags, taskSearch.error]
   )
 
   const withBusy = useCallback(async (operation: () => Promise<unknown>): Promise<void> => {
@@ -217,12 +250,15 @@ export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode
     try {
       await operation()
     } catch (error) {
-      window.dispatchEvent(new CustomEvent('nodeterm:toast', { detail: { kind: 'error', message: error instanceof Error ? error.message : String(error) } }))
+      const detail = error instanceof Error ? error.message : String(error)
+      window.dispatchEvent(new CustomEvent('nodeterm:toast', {
+        detail: { kind: 'error', message: formatHostMessage([hostText('Torrent operation failed: '), hostFact(detail)], map) }
+      }))
     } finally {
       setBusy(false)
       void load()
     }
-  }, [busy, load])
+  }, [busy, load, map])
 
   const pickDestination = useCallback(async (): Promise<void> => {
     const chosen = await api.dialog.selectFolder()
@@ -254,33 +290,33 @@ export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode
       <div className={`term-node__header ${fill.className}${fill.filled ? ' term-node__header--filled' : ''}`} style={fill.style}>
         <EditableNodeTitle value={data.title} onChange={(title) => updateNodeData(id, { title })} emptyLabel="Torrent downloader" title="Click to rename" ariaLabel="Torrent downloader node name" rejectEmpty={false} />
         <span className="term-node__spacer" />
-        <button className="term-node__close" title="Refresh torrent tasks" onClick={() => void load()}>⟳</button>
+        <button className="term-node__close" title={map('Refresh torrent tasks')} aria-label={map('Refresh torrent tasks')} onClick={() => void load()}>⟳</button>
       </div>
       <div className="torrent-node__body nodrag nowheel">
         <div className="torrent-node__runtime" role="status">
-          {runtime ? runtime.available ? `WebTorrent ${runtime.origin}` : `WebTorrent unavailable: ${runtime.detail ?? 'runtime could not be loaded'}` : 'Checking WebTorrent runtime…'}
+          {runtimeLabel(runtime, map)}
         </div>
         <label className="torrent-node__field" htmlFor={`${id}-magnet`}>
-          <span>Magnet URI</span>
-          <input id={`${id}-magnet`} value={data.torrentMagnet ?? ''} spellCheck={false} placeholder="magnet:?xt=urn:btih:…" onChange={(event) => updateNodeData(id, { torrentMagnet: event.target.value })} />
+          <span>{map('Magnet URI')}</span>
+          <input id={`${id}-magnet`} aria-label={map('Magnet URI')} value={data.torrentMagnet ?? ''} spellCheck={false} placeholder="magnet:?xt=urn:btih:…" onChange={(event) => updateNodeData(id, { torrentMagnet: event.target.value })} />
         </label>
         <div className="torrent-node__actions">
-          <button type="button" disabled={!runtime?.available || !data.torrentMagnet?.trim() || busy} onClick={() => void inspectMagnet()}>Inspect magnet</button>
-          <button type="button" disabled={!runtime?.available || busy} onClick={() => void inspectTorrentFile()}>Inspect .torrent file</button>
+          <button type="button" disabled={!runtime?.available || !data.torrentMagnet?.trim() || busy} onClick={() => void inspectMagnet()}>{map('Inspect magnet')}</button>
+          <button type="button" disabled={!runtime?.available || busy} onClick={() => void inspectTorrentFile()}>{map('Inspect .torrent file')}</button>
         </div>
-        <p className="torrent-node__hint">Inspection reads metadata first. Choose files and a download folder, then start the task explicitly.</p>
+        <p className="torrent-node__hint">{map('Inspection reads metadata first. Choose files and a download folder, then start the task explicitly.')}</p>
         <div className="torrent-node__destination">
-          <label htmlFor={`${id}-destination`}>Download folder</label>
-          <input id={`${id}-destination`} value={destination} readOnly placeholder="Choose a destination folder" />
-          <button type="button" onClick={() => void pickDestination()}>Browse…</button>
+          <label htmlFor={`${id}-destination`}>{map('Download folder')}</label>
+          <input id={`${id}-destination`} aria-label={map('Download folder')} value={destination} readOnly placeholder={map('Choose a destination folder')} />
+          <button type="button" onClick={() => void pickDestination()}>{map('Browse…')}</button>
         </div>
         <div className="torrent-node__search">
-          <label htmlFor={`${id}-search`}>Tasks</label>
-          <input ref={taskSearchRef} id={`${id}-search`} value={taskSearch.value} placeholder={taskSearch.mode === 'regex' ? 'Regex pattern' : 'Search tasks'} onChange={(event) => taskSearch.setValue(event.target.value)} />
-          <AnchoredRegexBuilder search={taskSearch} fieldRef={taskSearchRef} label="Regex builder for torrent tasks" />
+          <label htmlFor={`${id}-search`}>{map('Tasks')}</label>
+          <input ref={taskSearchRef} id={`${id}-search`} value={taskSearch.value} placeholder={map(taskSearch.mode === 'regex' ? 'Regex pattern' : 'Search tasks')} onChange={(event) => taskSearch.setValue(event.target.value)} />
+          <AnchoredRegexBuilder search={taskSearch} fieldRef={taskSearchRef} label={map('Regex builder for torrent tasks')} />
         </div>
         {taskSearch.error && <p className="torrent-node__error" role="alert">{taskSearch.error}</p>}
-        {filteredTasks.length === 0 ? <p className="torrent-node__empty">No torrent tasks match this search. Inspect a magnet or torrent file to begin.</p> : filteredTasks.map((task) => (
+        {filteredTasks.length === 0 ? <p className="torrent-node__empty">{map('No torrent tasks match this search. Inspect a magnet or torrent file to begin.')}</p> : filteredTasks.map((task) => (
           <TorrentTaskCard key={task.id} task={task} busy={busy} destination={destination} torrent={api.torrent} run={withBusy} />
         ))}
       </div>
