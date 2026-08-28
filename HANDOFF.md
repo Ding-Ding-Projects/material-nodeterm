@@ -4036,3 +4036,23 @@ Changed files: `src/main/index.ts` and `HANDOFF.md`. This ultra-speed repair lan
 no tests, lint, type checks, builds, packaging, reviews, audits, runtime interaction, or UI captures.
 The coordinating owner must merge and evaluate the resulting hosted workflow before calling the
 release path verified.
+
+# 2026-08-28, settings store parser repair
+
+Release run `33130189125` reported fatal parser errors in `src/core/settings-store.ts` at `73:8`
+for a duplicate `merged` declaration and at `320:10` for a second `saveNow` declaration after a
+truncated listener block. The file had accumulated two import sets, two merge implementations,
+two `saveChain` fields, and two competing persistence paths during reconciliation.
+
+The repair restores one coherent implementation. It keeps nested defaults for speech, Docker,
+model gateway, and shortcuts; named terminal profile normalization; legacy dictation, GPU,
+language, funny-level, accent, canvas, and profile migrations; serialized atomic persistence with
+unique owner-only temporary files; cache rollback on failed publication; listener callbacks after
+successful persistence; and best-effort local-history recording. No product behavior outside this
+settings store was changed.
+
+Changed files: `src/core/settings-store.ts` and `HANDOFF.md`.
+
+This ultra-speed source lane intentionally ran no tests, lint, type checks, builds, packaging, reviews,
+audits, runtime interaction, or UI captures. The repair remains unverified by those checks until
+the coordinating owner integrates it and observes the resulting hosted workflow.
