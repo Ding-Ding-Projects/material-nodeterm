@@ -30,7 +30,7 @@ import type { PortableDoorConstructionV3 } from '@shared/door-construction'
 import { deletePortablePortal, navigatePortablePortal } from '../../core/portal-lifecycle'
 import { portableCanvasProjectionToProject, projectToPortableCanvasV3 } from '../../core/portable-canvas-projection'
 import type { ProjectCapability } from '@shared/project-capabilities'
-import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
+import { applyCanvasMutation, createProject, createShopNode, reorderGroupWithinParent } from './workspace'
 import { markWorkspaceDirty } from './workspaceDirty'
 
 interface ProjectsState {
@@ -426,7 +426,8 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     if (created.refused || !created.canvas || !created.shop) {
       return { reason: created.reason ?? 'The child canvas could not be created.' }
     }
-    const shop: CanvasNodeState = { ...created.shop, kind: 'shop' }
+    const { alarmSchedule: _alarmSchedule, ...portableShop } = created.shop
+    const shop: CanvasNodeState = { ...portableShop, kind: 'shop' } as CanvasNodeState
     const portalId = `portal-${created.canvas!.id}`
     const entryDoorId = `door-${created.canvas!.id}-entry`
     const returnDoorId = `door-${created.canvas!.id}-return`
@@ -486,7 +487,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     const id = nextAwsUniverseId(existing)
     let shop: CanvasNodeState
     try {
-      shop = createUniverseShopNode({ id, scope: 'aws-universe', depth: 1 }) as CanvasNodeState
+      shop = createShopNode(id, 'aws-universe', existing.length, undefined, { universeDepth: 1 }) as unknown as CanvasNodeState
     } catch (error) {
       return { reason: error instanceof Error ? error.message : 'The AWS Universe Shop could not be created.' }
     }
