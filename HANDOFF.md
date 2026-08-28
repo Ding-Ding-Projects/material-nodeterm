@@ -4411,3 +4411,43 @@ Changed files: `src/core/codex-identity-proxy.ts` and `HANDOFF.md`.
 This ultra-speed parser lane deliberately ran no tests, checkers, lint, type checks, builds, packaging,
 reviews, audits, runtime interaction, or UI captures. The coordinating owner must merge and observe the
 resulting hosted workflow before treating the release path as verified.
+
+# 2026-08-28, PR #203 identity proxy review follow-up
+
+Three concrete inline review findings from PR #203 were accepted and repaired in the same identity
+proxy lane:
+
+1. [Explicit root ignored by one overload](https://github.com/Ding-Ding-Projects/material-nodeterm/pull/203#discussion_r3877270497):
+   the `(threadId, nodeId, isNodeLive, root?)` overload now honors its explicit root.
+2. [Canonicalization write failure escaped the read contract](https://github.com/Ding-Ding-Projects/material-nodeterm/pull/203#discussion_r3877270518):
+   canonical endpoint rewrite, rename, and recursive reread failures now return `undefined`.
+3. [Quarantine filename was not collision-resistant](https://github.com/Ding-Ding-Projects/material-nodeterm/pull/203#discussion_r3877270542):
+   quarantine paths now use `tempNameFor` and remain separate from the final destination path, with
+   rollback and restoration preserved.
+
+Changed files: `src/core/codex-identity-proxy.ts` and `HANDOFF.md`.
+
+This follow-up deliberately ran no tests, builds, reviews, or UI captures. The coordinating owner
+must reconcile the repair with the current main branch, observe the hosted workflow, and verify the
+manual release path before making a release claim.
+
+# 2026-08-28, PTY manager import boundary repair
+
+Release run `33133756388` and build check `33133739506` stopped at
+`src/core/pty-manager.ts:42:2` with `Expected '}' but found remotePaneProcessArgs`. The file header
+contained a missing comma, a duplicated `remotePaneCursorArgs` import, and repeated import groups for
+the tmux naming, account, Codex account, and shared agent configuration modules. The same reconciliation
+splice left an obsolete `sendText` path referring to removed `localTmuxSendKeysArgs` and
+`remoteTmuxSendKeysArgs` helpers, plus an unmatched `try` block.
+
+The repair keeps one coherent import set with every helper still used by PTY, SSH, relay, remote pane
+process, cursor, termination, lifecycle, and shutdown paths. It removes only obsolete imports and the
+unreachable duplicate send path, leaving the current stdin-backed local and remote paste delivery,
+session-host delivery, framed-message delivery, and all existing lifecycle behavior intact.
+
+Changed files: `src/core/pty-manager.ts` and `HANDOFF.md`.
+
+The lane started from `origin/main` at `740969735cd5389eb9959c62ad1e466ed0964e7d`. No tests, checkers,
+lint, type checks, builds, packaging, reviews, audits, runtime interaction, or UI captures were run by
+the explicitly bounded repair lane. The coordinating owner must merge this repair and observe the hosted
+workflow before treating the release path as verified.
