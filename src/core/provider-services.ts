@@ -243,7 +243,7 @@ export class ProviderServices {
 
   async removeAccount(accountId: string): Promise<{ ok: true } | { ok: false; error: string }> {
     if (!OPAQUE_ID.test(accountId)) return { ok: false, error: 'Provider account id is invalid.' }
-    return this.accounts.mutate((entries) => {
+    return this.accounts.mutate<{ ok: true } | { ok: false; error: string }>((entries) => {
       const index = entries.findIndex((entry) => entry.meta.id === accountId)
       if (index < 0) return { changed: false, result: { ok: false as const, error: 'Provider account was not found.' } }
       entries.splice(index, 1)
