@@ -25,6 +25,7 @@ import {
   readCodexThreadRollout,
   relayedCodexSessionName,
   rememberCodexSessionName,
+  startCodexThreadAt,
   waitForCodexAppServer
 } from './codex-session-name'
 
