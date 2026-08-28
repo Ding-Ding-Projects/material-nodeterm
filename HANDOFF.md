@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-08-28, current hosted release candidate
+
+The current `main` tip is `28234e3bfdfe209f60a000b55b630ee53f1d79b7`, and the hui ref matches it.
+This candidate includes the hosted elevated-toolchain-only bootstrap and the trailing-separator
+normalization needed when validating the selected Visual Studio installation.
+
+The local source build remains verified, and the short-path local installer remains verified at
+`ce35a00571bbd1b7cbecf5def5df91967da7470b` with Setup SHA-256
+`c430569937b63c52f721e0a56dc886402ce034c59bb6ec83e6cf55ff6068c5dd`. The complete local Vitest
+suite remains red with 164 failed files, 763 failed tests, 14 unhandled errors, 11,910 passed
+tests, and 260 skipped tests. The focused release suite remains green at 33 of 33 tests, and
+`node scripts/check-release-workflow.mjs` passes.
+
+The prior hosted Release run `33148336972` failed because the elevated runner used the normal-user
+bootstrap mode. Release run `33148573073` for the next candidate is still in progress, and Release
+run `33148795793` for this current candidate is pending behind the non-cancelling release sequence.
+No hosted green verdict or new published release is claimed until one of those runs completes and
+its release, assets, hashes, and target commit are independently verified.
+
+The temporary installer-verification Gerk Tong Huis at `C:\mn-inst` and
+`C:\Users\cntow\Documents\GitHub\material-nodeterm-worktrees\installer-verify-main-20260828`
+were removed after zero tracked diffs and successful ancestry proofs. The recovery Gerk Tong Hui
+with the retained failed QEMU temporary installer, all task and user-owned linked Gerk Tong Huis,
+and all unresolved jers remain preserved for the next owner.
+
 ## 2026-08-28, hosted elevated-toolchain handoff
 
 The remote currently points `main` at `16f0b7e034eec228bb0138db3e0f63223221f622`. The follow-up
