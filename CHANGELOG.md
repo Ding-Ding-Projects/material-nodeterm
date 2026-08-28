@@ -17,13 +17,14 @@
 - Remove 73 legacy private-vocabulary occurrences from tracked public content while preserving
   behavior. Public comments, tests, fixtures, documentation, design references, and compatibility
   handling now use ordinary language, and the renamed design component no longer carries a private
-  term in its filename. The current private-source scanner reports zero matches across 2,846 tracked
-  files and the most recent commit.
+  term in its filename. After reconciliation with the latest feature integrations, the current
+  private-source scanner reports zero matches across 2,858 tracked files and the two most recent
+  commits.
 
   清走 tracked public content 入面 73 個舊 private-vocabulary occurrences，同時保留原有行為。
   Comments、tests、fixtures、documentation、design references 同 compatibility handling 而家都用
-  普通公開字眼，改名後嘅 design component filename 亦唔再帶 private term。最新 scanner 對
-  2,846 個 tracked files 同最近一個 commit 都係零 match。
+  普通公開字眼，改名後嘅 design component filename 亦唔再帶 private term。合入最新 feature
+  integrations 之後，scanner 對 2,858 個 tracked files 同最近兩個 commits 都係零 match。
 
 - Add the Windows VeraCrypt container manager node for existing file-hosted containers. The guided
   route validates regular files and drive letters, launches a fixed `VeraCrypt.exe` argument array

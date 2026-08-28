@@ -16,10 +16,13 @@
   comments, test descriptions, fixture values, and compatibility code. The affected design component
   was renamed to `design/pages/Nodeterm GitHub Pages.dc.html`; the legacy gallery-marker reader keeps
   compatibility without storing the private term literally.
-- Verification at the uncommitted tree: Node `v24.19.0`; mirror check green; focused mirror suite
-  16 of 16 green; type checking green with the documented sibling parity check skipped because its
-  separate checkout is absent; external private-source scan green across 2,846 tracked files and the
-  most recent commit. Re-run after the final diff before treating these figures as landed.
+- Verification after reconciliation with `origin/main`: Node `v24.19.0`; mirror check green;
+  focused mirror suite 16 of 16 green; site vocabulary suite 18 of 18 green; documentation bundle
+  green at 208 articles; external private-source scan green across 2,858 tracked files and the two
+  most recent commits. Type checking is red only in the newly merged repository-graph and VeraCrypt
+  source, and the separate sibling parity check remains skipped because its checkout is absent.
+  The isolated session-host suite remains pre-existing red at 2 failures and 8 passes; this task
+  changed only public comment wording in that file.
 ## 2026-08-28, VeraCrypt container-manager lane, Issue #210
 
 The isolated branch `feat/veracrypt-mount-management-20260828` adds a Windows desktop node for
