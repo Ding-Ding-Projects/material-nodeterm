@@ -1210,6 +1210,7 @@ describe('duplicateNode across every node kind', () => {
     video: 'video',
     web: 'web',
     browser: 'browser',
+    files: 'files',
     subagent: 'subagent',
     loop: 'loop',
     scheduler: 'scheduler',
@@ -1233,16 +1234,21 @@ describe('duplicateNode across every node kind', () => {
     torrent: 'torrent',
     'linux-vm': 'linux-vm',
     calendar: 'calendar',
+    alarm: 'alarm',
     'homeassistant-control': 'homeassistant-control',
     'awsidentity': 'awsidentity',
     'cloudflare-zero-trust': 'cloudflare-zero-trust',
     'cloudflare-core-managers': 'cloudflare-core-managers',
+    'cloudflare-tunnel': 'cloudflare-tunnel',
+    'nextcloud-managed': 'nextcloud-managed',
+    'open-webui-hosting': 'open-webui-hosting',
+    'github-work-item': 'github-work-item',
+    'windows-diagnostics': 'windows-diagnostics',
     'aws-universe': 'aws-universe',
     'aws-resource': 'aws-resource',
     'recovery-game': 'recovery-game',
     'homeassistant-sensor': 'homeassistant-sensor',
     'gitlab-hosting': 'gitlab-hosting',
-    nsis: 'nsis'
   }
   const ALL_KINDS = Object.keys(EXPECTED_PREFIX) as NodeKind[]
 
