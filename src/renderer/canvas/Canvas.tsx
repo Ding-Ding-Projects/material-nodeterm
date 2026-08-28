@@ -16802,7 +16802,7 @@ export function Canvas() {
       addTerminal,
       terminalProfileMenuChoices
     )
-    const catalogContext = {
+    const catalogContext: NodeCatalogAvailabilityContext = {
       sessionSource,
       hasProjectFolder: newFileHasCwd,
       isSshProject,

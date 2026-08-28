@@ -283,8 +283,6 @@ export interface NodeData {
   /** Access, Zero Trust, Workers, Pages, R2, D1 and Queues intent; account state stays local. */
   cloudflareZeroTrustIntent?: import('@shared/cloudflare-zero-trust').CloudflarePortableIntent
   homeAssistantIntent?: HomeAssistantNodeIntent
-  /** Safe Cloudflare Tunnel routing intent; provider and local runtime state stays machine-local. */
-  cloudflareTunnelIntent?: import('@shared/cloudflare-tunnel-handoff').CloudflareTunnelIntent
   /** Safe ownership metadata for a special-universe Shop node. */
   universeCanvasId?: string
   universeScope?: 'multiverse' | 'aws-universe'
@@ -305,6 +303,8 @@ export interface NodeData {
   torrentMagnet?: string
   /** AWS Resource Explorer and Cloud Control safe portable intent. */
   awsManagerIntent?: AwsManagerPortableIntent
+  /** Guided AWS manager operation intent, kept separate from Resource Explorer state. */
+  awsResourceManagerIntent?: import('@shared/aws-resource-managers').AwsResourceManagerIntent
   /** Compact GitHub issue and pull-request attachments owned by this canvas node. */
   githubWorkItems?: import('@shared/github-work-items').GitHubWorkItem[]
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
@@ -3020,6 +3020,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         shopSelection: (n as CanvasNodeState & { shopSelection?: string }).shopSelection,
         torrentMagnet: n.torrentMagnet,
         awsManagerIntent: n.awsManagerIntent,
+        awsResourceManagerIntent: n.awsResourceManagerIntent,
         serviceConnection: n.serviceConnection,
         cloudflareZeroTrustIntent: n.cloudflareZeroTrustIntent,
         cloudflareCoreIntent: n.cloudflareCoreIntent,
@@ -3174,6 +3175,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         shopSelection: n.data.shopSelection,
         torrentMagnet: n.data.torrentMagnet,
         awsManagerIntent: n.data.awsManagerIntent,
+        awsResourceManagerIntent: n.data.awsResourceManagerIntent,
         serviceConnection: n.data.serviceConnection,
         cloudflareZeroTrustIntent: n.data.cloudflareZeroTrustIntent,
         cloudflareCoreIntent: n.data.cloudflareCoreIntent,
