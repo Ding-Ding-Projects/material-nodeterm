@@ -4216,6 +4216,18 @@ The lane started from `origin/main` at `740969735cd5389eb9959c62ad1e466ed0964e7d
 lint, type checks, builds, packaging, reviews, audits, runtime interaction, or UI captures were run by
 the explicitly bounded repair lane. The coordinating owner must merge this repair and observe the hosted
 workflow before treating the release path as verified.
+# 2026-08-28, Codex session-name duplicate export repair
+
+The release candidate at `bd2696e9e4ef3bd267b86ac9cf2756c57735f8a7` contained two exported
+`rememberCodexSessionName` declarations in `src/core/codex-session-name.ts`, at lines 115 and 548.
+The repair removes only the earlier duplicate and retains the later relay-aware generation, which
+uses `isSafeThreadId` before caching a name. The retained implementation preserves the
+account-scoped cache key, blank-name handling, `readCodexThreadAt`, `readCodexSessionNameAt`,
+relay fallback, status snapshots, and existing callers.
+
+No tests, checkers, lint, type checks, builds, packaging, reviews, audits, runtime interaction, or
+UI captures were run in this repair lane. The source diff is ready for integration, but compilation
+and the manual release remain unverified until the coordinating build lane reruns its pinned build.
 
 # 2026-08-28, PTY manager tmux configuration boundary repair
 
