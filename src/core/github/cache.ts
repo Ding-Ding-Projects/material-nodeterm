@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { GitHubIssue } from '../../shared/github-issues'
-import { renameAtomic, tempNameFor } from '../fs-atomic'
 import { parseGitHubRepository } from './config'
 import { renameAtomic, tempNameFor } from '../fs-atomic'
 
@@ -295,7 +294,6 @@ export class GitHubIssueCache {
       await fs.writeFile(temporary, content, { encoding: 'utf-8', mode: 0o600 })
       await fs.chmod(temporary, 0o600)
       await renameReplacing(temporary, file)
-      await renameAtomic(temporary, file)
     } catch (error) {
       // A unique name never self-heals the way the fixed one did (the next write just reused it),
       // so a failed write has to remove its own temp — the more so as the two mutation saves in
