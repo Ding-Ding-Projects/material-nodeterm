@@ -123,8 +123,9 @@ export class CdkManager implements CdkApi {
         },
         shell: false,
         windowsHide: true,
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: 'pipe'
       })
+      child.stdin.end()
       if (requestId) this.active.set(requestId, child)
       let stdout = ''
       let stderr = ''
