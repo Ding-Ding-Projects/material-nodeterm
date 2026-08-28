@@ -82,7 +82,6 @@ import type {
 } from './password-manager'
 import type { AlarmOccurrence, AlarmRecurrence } from './alarm-clock'
 import type { PortableKioskPwaIntent } from './kiosk-pwa'
-import type { CodexAccount } from './codex-account'
 import type { ProjectIconPickResult } from './project-icon'
 import type {
   ModelDiscoveryResult,
@@ -609,7 +608,6 @@ export interface CanvasNodeState {
   /** alarm-only: local wall-clock schedule, timezone, and durable occurrence history. */
   alarmSchedule?: { recurrence: AlarmRecurrence; date?: string; time: string; weekdays?: number[]; monthDay?: number }
   alarmTimeZone?: string
-  alarmEnabled?: boolean
   alarmSnoozeMinutes?: number
   alarmSoundEnabled?: boolean
   alarmNarratorEnabled?: boolean
@@ -708,13 +706,10 @@ export interface CanvasNodeState {
   /** Cloudflare manager safe intent. Credentials and local bindings stay in the host overlay. */
   cloudflareCoreIntent?: import('./cloudflare-core-managers').CloudflarePortableIntent
   /** Cloudflare Tunnel route intent. Local observations and provider bindings stay outside project data. */
-  cloudflareTunnelIntent?: import('./tunnel-state').TunnelPortableIntent
+  cloudflareTunnelIntent?: import('./tunnel-state').TunnelPortableIntent | import('./cloudflare-tunnel-handoff').CloudflareTunnelIntent
   /** Home Assistant node presentation intent safe for schema 3. Hosts, instance ids, credentials,
    *  sessions, and entity caches stay in the machine-local service and binding overlay. */
   homeAssistantIntent?: import('./home-assistant').HomeAssistantNodeIntent
-  /** Safe Cloudflare Tunnel routing intent. Account, zone, tunnel, connector, credentials,
-   *  local origin, and process state remain in the machine-local binding overlay. */
-  cloudflareTunnelIntent?: import('./cloudflare-tunnel-handoff').CloudflareTunnelIntent
   /** GitLab hosting intent. Docker context, container, volumes, credentials, and process state stay local. */
   gitlabHostingConfig?: import('./gitlab-hosting').GitLabHostingConfig
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
@@ -1278,22 +1273,6 @@ export interface Project {
   capabilityAck?: import('./project-capability-consent').CapabilityAckMap
   /** Best dino-game score in this project — new dino nodes seed from it, so the record survives closing the node. */
   dinoHighScore?: number
-  /**
-   * Per-project capability switch: e.g. agents may drive browser nodes THEY opened in this
-   * project. GIT-SHARED (rides .nodeterm/project.json) and therefore hostile input — read it
-   * ONLY through `projectCapabilityGrantedFor` (@shared/project-capability-consent); the raw
-   * flag (`projectCapabilityFlagInFile`, @shared/project-capabilities) is a display-only read
-   * and is NEVER a grant by itself — see that module's header for why.
-   */
-  agentBrowserControl?: boolean
-  /**
-   * MACHINE-LOCAL record of what this machine's user answered when told about a git-shared
-   * capability switch (the one-time clone notice, @shared/project-capability-consent) — keyed
-   * by capability, valued 'kept' | 'declined'. Persisted on `IndexEntryV3.capabilityAck`,
-   * NEVER written into the shared project file (workspace-files.test.ts pins that the file
-   * bytes stay unchanged even when this is set).
-   */
-  capabilityAck?: import('./project-capability-consent').CapabilityAckMap
   /** Kanban task board — shared via .nodeterm/project.json like nodes. */
   kanban?: ProjectKanban
   /**
@@ -2650,10 +2629,6 @@ export interface Settings {
    *  the builtin default, byte-identical to before this setting existed. Keyed by builtin id only
    *  — custom agents already own their `launchCmd`. Local only: never present in the git-shared
    *  `.nodeterm/project.json` (see `src/shared/node-exec.ts`). */
-  agentLaunchCommands: Partial<Record<BuiltinAgentId, string>>
-  /** Managed Claude accounts (config-dir isolated). See ClaudeAccount. */
-  claudeAccounts: ClaudeAccount[]
-  /** Managed Codex accounts (CODEX_HOME/app-server isolated). See CodexAccount. */
   /** One gateway root + non-secret credential reference used by model-switch-capable harnesses. */
   modelGateway: ModelGatewaySettings
   /** Per-builtin-agent launch command overrides (Settings → Agents → Launch commands). The value
@@ -3857,7 +3832,6 @@ export interface ProviderUsage {
    * cannot be proven un-owned is never labelled un-owned. Rows are keyed by this so one account's
    * usage can never collapse into or be attributed to another (S6 §4.3, no mixing / fail-closed).
    */
-  accountId?: string
   updatedAt: number
   /**
    * 'unavailable' = not signed in / no subscription to report → hide this provider entirely.
