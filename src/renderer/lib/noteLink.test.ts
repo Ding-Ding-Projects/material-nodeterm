@@ -12,6 +12,13 @@ import {
 } from './noteLink'
 import type { CanvasNodeState } from '@shared/types'
 
+const contextLink = (id: string, source: string, target: string) => ({
+  id,
+  kind: 'context' as const,
+  source: { ref: 'node' as const, nodeId: source },
+  target: { ref: 'node' as const, nodeId: target }
+})
+
 const term = (contextCapable = false) => ({ kind: 'terminal', contextCapable })
 const sticky = () => ({ kind: 'sticky', contextCapable: false })
 
@@ -238,7 +245,7 @@ describe('buildBackgroundLinkMaps', () => {
     {
       id: 'p-active',
       nodes: [node({ id: 'a1', agentId: 'claude' }), node({ id: 'a2', agentId: 'codex' })],
-      bridges: [{ id: 'e0', source: 'a1', target: 'a2' }]
+      links: [contextLink('e0', 'a1', 'a2')]
     },
     {
       id: 'p-bg',
@@ -247,12 +254,9 @@ describe('buildBackgroundLinkMaps', () => {
         node({ id: 'b2', title: 'Gem', cwd: '/fit', agentId: 'gemini' }),
         node({ id: 'b3', kind: 'sticky', title: 'Note', text: 'remember this' })
       ],
-      bridges: [
-        { id: 'e1', source: 'b1', target: 'b2' },
-        { id: 'e2', source: 'b3', target: 'b1' }
-      ]
+      links: [contextLink('e1', 'b1', 'b2'), contextLink('e2', 'b3', 'b1')]
     },
-    { id: 'p-nolinks', nodes: [node({ id: 'c1' })], bridges: [] }
+    { id: 'p-nolinks', nodes: [node({ id: 'c1' })], links: [] }
   ]
 
   it('maps every project except the active one (React Flow owns that live)', () => {
@@ -288,7 +292,7 @@ describe('buildBackgroundLinkMaps', () => {
       {
         id: 'p-bg',
         nodes: [node({ id: 'm1', title: 'Manual', cwd: '/m' }), node({ id: 'm2', title: 'Also', cwd: '/m' })],
-        bridges: [{ id: 'e', source: 'm1', target: 'm2' }]
+        links: [contextLink('e', 'm1', 'm2')]
       }
     ]
     const map = buildBackgroundLinkMaps(
@@ -309,7 +313,7 @@ describe('buildBackgroundLinkMaps', () => {
   })
   it('drops edges whose endpoints are gone from the serialized nodes', () => {
     const map = buildBackgroundLinkMaps(
-      [{ id: 'p', nodes: [node({ id: 'z1' })], bridges: [{ id: 'e', source: 'z1', target: 'gone' }] }],
+      [{ id: 'p', nodes: [node({ id: 'z1' })], links: [contextLink('e', 'z1', 'gone')] }],
       null,
       () => undefined
     )
