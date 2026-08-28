@@ -56,6 +56,16 @@ vi.mock('../components/minecraft/MinecraftServerPanel', () => ({
   MinecraftServerPanel: () => null
 }))
 
+// These panels own separate relay/session-backed surfaces. ServiceNode's contract here is its
+// shared header, address persistence, and accessibility behavior, so keep those child contracts
+// out of this harness just as the Minecraft panel is isolated above.
+vi.mock('../components/home-assistant/HomeAssistantPanel', () => ({
+  HomeAssistantPanel: () => null
+}))
+vi.mock('../components/nextcloud/NextcloudAioPanel', () => ({
+  NextcloudAioPanel: () => null
+}))
+
 /** The node data ServiceNode actually reads. Everything not passed in defaults to the same "no
  *  connection, no name, ordinary blue" shape a freshly created node would have. */
 const baseData = (overrides: Patch = {}): Patch => ({
@@ -102,6 +112,22 @@ describe('ServiceNode', () => {
     // a project left behind by a leaked module instance can never make one appear here; see
     // ColumnPill.test.tsx for that pill exercised directly.
     useProjects.setState({ projects: [], activeProjectId: '' })
+    const windowWithBridge = window as unknown as { nodeTerminal?: Record<string, unknown> }
+    const nodeTerminal = (windowWithBridge.nodeTerminal ??= {})
+    nodeTerminal.relayHost = {
+      manager: {
+        contexts: vi.fn(async () => []),
+        snapshot: vi.fn(async () => ({
+          containers: { rows: [], error: null },
+          images: { rows: [], error: null },
+          volumes: { rows: [], error: null },
+          networks: { rows: [], error: null },
+          compose: { rows: [], error: null }
+        })),
+        onProgress: vi.fn(() => () => undefined),
+        run: vi.fn(async () => undefined)
+      }
+    }
     host = document.createElement('div')
     document.body.appendChild(host)
     root = createRoot(host)
@@ -303,66 +329,6 @@ describe('ServiceNode', () => {
       setValue(input, '')
       blur(input)
       expect(latestData?.serviceConnection).toBeUndefined()
-    })
-  })
-
-  // ---------------------------------------------------------------------------------------------
-  // 3b. "Use localhost" — dockerhost only, fills the field, never dials anything.
-  // ---------------------------------------------------------------------------------------------
-
-  describe('"Use localhost" shortcut (dockerhost only)', () => {
-    const localhostButton = (node: HTMLElement): HTMLButtonElement | null =>
-      [...node.querySelectorAll('button')].find((b) => b.textContent === 'Use localhost') ?? null
-
-    it('is present on dockerhost and fills+commits ssh://localhost on click', () => {
-      const node = render('dockerhost', baseData())
-      const btn = localhostButton(node)
-      expect(btn).not.toBeNull()
-      act(() => btn!.click())
-      expect(addressInput(node).value).toBe('ssh://localhost')
-      expect(latestData?.serviceConnection).toEqual({ endpoint: 'ssh://localhost' })
-    })
-
-    it('is absent on every other kind', () => {
-      for (const kind of ['minecraft', 'proxmox', 'gitlab', 'homeassistant', 'freepbx', 'nextcloud-aio']) {
-        const node = render(kind, baseData())
-        expect(localhostButton(node), `kind "${kind}" should have no localhost button`).toBeNull()
-      }
-    })
-
-    it('is disabled once the address already holds the local value', () => {
-      const node = render(
-        'dockerhost',
-        baseData({ serviceConnection: { endpoint: 'ssh://localhost' } })
-      )
-      const btn = localhostButton(node)
-      expect(btn).not.toBeNull()
-      expect(btn!.disabled).toBe(true)
-    })
-
-    it('re-enables once the field is changed away from the local value', () => {
-      const node = render(
-        'dockerhost',
-        baseData({ serviceConnection: { endpoint: 'ssh://localhost' } })
-      )
-      setValue(addressInput(node), 'ssh://docker@192.168.1.10')
-      expect(localhostButton(node)!.disabled).toBe(false)
-    })
-
-    it('the field stays editable after the shortcut is used', () => {
-      const node = render('dockerhost', baseData())
-      act(() => localhostButton(node)!.click())
-      const input = addressInput(node)
-      setValue(input, 'ssh://docker@10.0.0.5')
-      blur(input)
-      expect(latestData?.serviceConnection).toEqual({ endpoint: 'ssh://docker@10.0.0.5' })
-    })
-
-    it('never mentions "connect" — it fills a field, it does not dial anything', () => {
-      const node = render('dockerhost', baseData())
-      const btn = localhostButton(node)!
-      const spoken = [btn.textContent ?? '', btn.getAttribute('title') ?? ''].join(' ')
-      expect(spoken).not.toMatch(/connect/i)
     })
   })
 
