@@ -63,7 +63,8 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   awsidentity: 'https://sts.amazonaws.com',
   'cloudflare-zero-trust': 'https://api.cloudflare.com',
   'nextcloud-aio': 'http://127.0.0.1:8080',
-  'nextcloud-managed': 'http://127.0.0.1:18080'
+  'nextcloud-managed': 'http://127.0.0.1:18080',
+  'cloudflare-core-managers': 'https://api.cloudflare.com/client/v4'
 }
 
 /**
@@ -278,7 +279,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           />
         )}
 
-        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'cloudflare-tunnel' && kind !== 'awsidentity' && kind !== 'cloudflare-zero-trust' && kind !== 'nextcloud-aio' && kind !== 'nextcloud-managed' && kind !== 'open-webui-hosting' && kind !== 'gitlab-hosting' && kind !== 'cloudflare-core-managers' && (
+        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'cloudflare-tunnel' && kind !== 'awsidentity' && kind !== 'cloudflare-zero-trust' && kind !== 'nextcloud-aio' && kind !== 'nextcloud-managed' && kind !== 'cloudflare-core-managers' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>

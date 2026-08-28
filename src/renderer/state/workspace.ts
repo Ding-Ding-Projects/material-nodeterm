@@ -1644,7 +1644,8 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   awsidentity: 'AWS identity',
   'cloudflare-zero-trust': 'Cloudflare managers',
   'nextcloud-aio': 'Nextcloud AIO',
-  'nextcloud-managed': 'Managed Nextcloud'
+  'nextcloud-managed': 'Managed Nextcloud',
+  'cloudflare-core-managers': 'Cloudflare core managers'
 }
 
 /**
