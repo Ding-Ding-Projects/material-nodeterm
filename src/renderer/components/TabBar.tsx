@@ -20,6 +20,8 @@ import {
   type AgentPermissionMode
 } from '@shared/agents/config'
 import { bypassSandboxCaveat, permissionModeAgentsLabel } from '@shared/agents/approval-mode'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
 interface TabBarProps {
   onSwitch: (id: string) => void
@@ -54,9 +56,13 @@ interface TabBarProps {
  * the project → session binding is resolved at runtime by `sessionForProject`.
  */
 function TabSessionLabel({ projectId }: { projectId: string }) {
+  const vocab = useVocabularyMapper()
   const session = useProjectSession(projectId)
   return (
-    <span className="tab__session" title={`Session: ${session.label} (${session.status})`}>
+    <span
+      className="tab__session"
+      title={mapOwnedSentence(vocab, [copy('Session: '), fact(session.label), fact(` (${session.status})`)])}
+    >
       {session.label}
     </span>
   )
@@ -81,6 +87,7 @@ export function TabBar({
   onSetDefaultPermissionMode,
   onOpenProjectSettings
 }: TabBarProps) {
+  const vocab = useVocabularyMapper()
   // Select the raw array and filter in a memo, a `.filter()` inside the selector returns a
   // fresh array every store snapshot, which re-rendered the TabBar on EVERY projects change.
   const allProjects = useProjects((s) => s.projects)
@@ -295,8 +302,11 @@ export function TabBar({
                 title={
                   p.unavailable
                     ? sessionForProject(p.id).source === 'local'
-                      ? `${p.cwd ?? 'project'} is unavailable (folder missing or unreachable)`
-                      : `${p.name} disconnected, click to reconnect`
+                      ? mapOwnedSentence(vocab, [
+                          p.cwd ? fact(p.cwd) : copy('project'),
+                          copy(' is unavailable (folder missing or unreachable)')
+                        ])
+                      : mapOwnedSentence(vocab, [fact(p.name), copy(' disconnected, click to reconnect')])
                     : p.ssh
                       ? `${p.ssh.server.user}@${p.ssh.server.host}:${p.ssh.remoteCwd}`
                       : p.cwd || undefined
@@ -340,7 +350,10 @@ export function TabBar({
                 {multiSession && <TabSessionLabel projectId={p.id} />}
 
                 {unreadCount > 0 && (
-                  <span className="tab__badge" title={`${unreadCount} unread`}>
+                  <span
+                    className="tab__badge"
+                    title={mapOwnedSentence(vocab, [fact(String(unreadCount)), copy(' unread')])}
+                  >
                     {unreadCount}
                   </span>
                 )}
@@ -353,7 +366,7 @@ export function TabBar({
                   <button
                     className="tab__board-toggle"
                     title={commandTooltip(
-                      kanbanActive ? 'Canvas view' : 'Kanban view',
+                      vocab(kanbanActive ? 'Canvas view' : 'Kanban view'),
                       'view.kanbanToggle'
                     )}
                     onClick={(e) => {
@@ -367,7 +380,7 @@ export function TabBar({
                 {active && editingId !== p.id && (
                   <button
                     className="tab__caret"
-                    title="Project options"
+                    title={vocab('Project options')}
                     onClick={(e) => {
                       e.stopPropagation()
                       if (menuId === p.id) closeMenu()
@@ -381,7 +394,7 @@ export function TabBar({
             )
           })}
 
-          <button className="tab__add" title="New project" onClick={onOpenWelcome}>
+          <button className="tab__add" title={vocab('New project')} onClick={onOpenWelcome}>
             +
           </button>
         </div>
@@ -397,14 +410,14 @@ export function TabBar({
             style={{ top: menuFlip.top, left: menuFlip.left }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button onClick={() => startRename(menuProject.id, menuProject.name)}>Rename</button>
+            <button onClick={() => startRename(menuProject.id, menuProject.name)}>{vocab('Rename')}</button>
             <button
               onClick={() => {
                 onSetFolder(menuProject.id)
                 closeMenu()
               }}
             >
-              Set folder…
+              {vocab('Set folder…')}
             </button>
             <button
               onClick={() => {
@@ -412,7 +425,7 @@ export function TabBar({
                 closeMenu()
               }}
             >
-              Remote access…
+              {vocab('Remote access…')}
             </button>
             {menuAccounts.length > 0 && (
               <>
@@ -420,7 +433,7 @@ export function TabBar({
                   className={`tab-menu__group${acctOpen ? ' open' : ''}`}
                   onClick={() => setAcctOpen((v) => !v)}
                 >
-                  Default Claude account
+                  {vocab('Default Claude account')}
                   <span className="tab-menu__caret">▸</span>
                 </button>
                 {acctOpen && (
@@ -453,7 +466,7 @@ export function TabBar({
                     {menuAccountsHint && (
                       <button disabled title={menuAccountsHint}>
                         <span className="tab-menu__check" />
-                        No accounts on this host yet
+                        {vocab('No accounts on this host yet')}
                       </button>
                     )}
                   </div>
@@ -464,7 +477,7 @@ export function TabBar({
               className={`tab-menu__group${modeOpen ? ' open' : ''}`}
               onClick={() => setModeOpen((v) => !v)}
             >
-              Default permission mode
+              {vocab('Default permission mode')}
               <span className="tab-menu__caret">▸</span>
             </button>
             {modeOpen && (
@@ -481,7 +494,7 @@ export function TabBar({
                   <span className="tab-menu__check">
                     {menuProject.defaultPermissionMode ? '' : '✓'}
                   </span>
-                  Use global ({PERMISSION_MODE_LABELS[globalMode]})
+                  {vocab('Use global')} ({vocab(PERMISSION_MODE_LABELS[globalMode])})
                   {globalMode === 'auto' && menuAutoHint ? ' ⚠︎' : ''}
                 </button>
                 {ALL_PERMISSION_MODES.map((m) => (
@@ -502,7 +515,14 @@ export function TabBar({
                           // for codex the mode skips APPROVALS only: `--ask-for-approval never` does
                           // not touch `--sandbox`, which we deliberately leave alone, so "no
                           // permission checks" must not be read as "no sandbox either".
-                          `Skips every permission prompt. This override is saved in the project file (.nodeterm/project.json), so if you commit it, everyone who clones the repo runs their ${permissionModeAgentsLabel({ mode: 'bypassPermissions' })} sessions without permission checks too. ${bypassSandboxCaveat()}`.trim()
+                          mapOwnedSentence(vocab, [
+                            copy('Skips every permission prompt. This override is saved in the project file ('),
+                            fact('.nodeterm/project.json'),
+                            copy('), so if you commit it, everyone who clones the repo runs their '),
+                            fact(permissionModeAgentsLabel({ mode: 'bypassPermissions' })),
+                            copy(' sessions without permission checks too. '),
+                            fact(bypassSandboxCaveat())
+                          ]).trim()
                         : m === 'auto'
                           ? (menuAutoHint ?? undefined)
                           : undefined
@@ -516,8 +536,8 @@ export function TabBar({
                       {menuProject.defaultPermissionMode === m ? '✓' : ''}
                     </span>
                     {m === 'bypassPermissions' || (m === 'auto' && menuAutoHint)
-                      ? `${PERMISSION_MODE_LABELS[m]} ⚠︎`
-                      : PERMISSION_MODE_LABELS[m]}
+                      ? `${vocab(PERMISSION_MODE_LABELS[m])} ⚠︎`
+                      : vocab(PERMISSION_MODE_LABELS[m])}
                   </button>
                 ))}
               </div>
@@ -528,7 +548,7 @@ export function TabBar({
                 closeMenu()
               }}
             >
-              Project settings…
+              {vocab('Project settings…')}
             </button>
             <button
               onClick={() => {
@@ -536,7 +556,7 @@ export function TabBar({
                 closeMenu()
               }}
             >
-              Close project
+              {vocab('Close project')}
             </button>
           </div>,
           document.body
