@@ -1,5 +1,39 @@
 # Handoff
 
+## 2026-08-28, native child toolchain binding repair
+
+The fresh `0.4.121` build candidate at commit `43587f87390287bad0036ca20f91a37e2a44acd8` still
+reported `MSB8040` during `electron-rebuild` for `node-pty`, even though the root bootstrap logged
+the compatible VS2022 instance in shared-data `LibreOfficeMaterialTools\VS2022`. The child process
+actually invoked MSBuild from the user-local `MaterialPhoneToolchain\VS2022\MSBuild\Current\Bin`
+installation, whose `14.44.35207\lib\spectre\x86` and `lib\spectre\x64` directories are absent.
+
+The r3 dependency graph uses `node-gyp` `12.4.0`. Its `lib\configure.js` calls
+`findVisualStudio`, then overwrites `GYP_MSVS_OVERRIDE_PATH` with the path returned by that finder
+before writing `build\config.gypi`. Its `lib\build.js` consumes the generated
+`config.variables.msbuild_path`, so setting only `GYP_MSVS_OVERRIDE_PATH` before npm is not a
+reliable installation selector. The supported finder boundary is `VCINSTALLDIR`: r3's
+`lib\find-visualstudio.js` resolves its parent as the one installation to use. The selected
+instance's `Common7\Tools\VsDevCmd.bat` supplies that variable, `VSCMD_ARG_TGT_ARCH`,
+`VSCMD_ARG_HOST_ARCH`, `VSCMD_VER`, and `VCToolsInstallDir`.
+
+The repair updates `download-dependencies.bat` to call the selected instance's `VsDevCmd.bat` for
+the detected target architecture, verify that `VCINSTALLDIR` resolves back to the helper-selected
+installation, verify that `VCToolsInstallDir\lib\spectre\<architecture>` exists, and preserve the
+developer-environment values through the final `endlocal` handoff. It keeps
+`GYP_MSVS_OVERRIDE_PATH`, `GYP_MSVS_VERSION=2022`, and `npm_config_msvs_version=2022` as explicit
+process-local selectors. The helper's existing component and real-library checks remain the source
+of truth, and Spectre mitigation is not disabled.
+
+A narrow r3 discovery probe with `VCINSTALLDIR` set to the selected shared-data installation
+returned `versionYear=2022`, `toolset=v143`, and MSBuild under that same installation. The helper
+diagnostic also selected that installation with exit code `0`. No full build was rerun after this
+repair, so the child build result remains unverified.
+
+No tests, lint, type checks, full builds, packaging, reviews, audits, runtime interaction, or UI
+captures were run in this lane. No global npm or Visual Studio configuration was changed, and no
+public issue, pull request, release, tag, or cleanup mutation was performed.
+
 ## 2026-08-28, browser lease constant export repair
 
 Release run `33132854413` reached the application build and reported duplicate declarations in
