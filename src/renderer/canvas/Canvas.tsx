@@ -752,6 +752,7 @@ import {
   createGitLabHostingNode,
   createCloudflareCoreManagersNode,
   SERVICE_NODE_LABELS,
+  systemAccountDisplay,
   createVideoNode,
   createPhotoNode,
   createGalleryNode,
@@ -11493,7 +11494,7 @@ export function Canvas() {
                   accountSelected: !defaultAccountId,
                   icon: <AgentIcon agentId="claude" />,
                   shortcut: shortcutAgent === 'claude' ? ['⌘', '⇧', 'C'] : undefined,
-                  onClick: () => addAgentNode('claude', at, groupId, null)
+                  onClick: () => addAgentNode('claude', at, groupId, undefined)
                 },
                 ...accounts.map((a): MenuItem => ({
                   label: '',
