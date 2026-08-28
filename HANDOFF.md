@@ -4354,3 +4354,24 @@ This lane started from the fetched remote default-branch tip `bd2696e9e4ef3bd267
 checkers, lint, type checks, builds, packaging, reviews, audits, runtime interaction, or UI captures
 were run. Hosted verification remains required before the repair or the manual release is treated as
 verified.
+
+# 2026-08-28, pairing service parser repair
+
+The manual release candidate build at `04268871a09fb106bd32f9c5431da8fce2d7d678` stopped during the
+application build at `src/main/pairing-service.ts:406:0` with `Unexpected export`. The file also contained
+three duplicated import groups, a missing closing brace around the `readAgentJson` object-shape check,
+and two competing pairing persistence splices. The competing splice would append the authorized key and
+persist the device before the encrypted response and cancellation checks, then repeat both operations in
+the retained registry-first path.
+
+The repair keeps one import set, closes the object-shape check and the adjacent temporary-file helper at
+their intended boundaries, and retains the current encrypted response, single-use attempt claim,
+registry-first persistence, cancellation rollback, SSH authorization, relay provisioning, and test-hook
+barriers. `relayDeviceId` remains persisted on the retained device record and the relay mint still uses
+the validated dependency object. No behavior outside `src/main/pairing-service.ts` was changed.
+
+Changed files: `src/main/pairing-service.ts` and `HANDOFF.md`.
+
+This ultra-speed parser lane deliberately ran no tests, checkers, lint, type checks, builds, packaging,
+reviews, audits, runtime interaction, or UI captures. The repair and the manual release remain unverified
+until the coordinating owner integrates this commit and observes the hosted workflow.
