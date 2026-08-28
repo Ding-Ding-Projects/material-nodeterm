@@ -19,7 +19,16 @@ export const NODE_MIN_SIZES: Record<NodeKind, { width: number; height: number }>
   video: { width: 320, height: 200 },
   web: { width: 320, height: 200 },
   browser: { width: 360, height: 240 },
+  photo: { width: 320, height: 240 },
+  gallery: { width: 360, height: 280 },
+  'wild-dim-sum': { width: 360, height: 280 },
   files: { width: 280, height: 220 },
+  scheduler: { width: 320, height: 220 },
+  calendar: { width: 420, height: 320 },
+  authenticator: { width: 420, height: 360 },
+  annotation: { width: 180, height: 120 },
+  shop: { width: 360, height: 260 },
+  nsis: { width: 520, height: 420 },
   'homeassistant-control': { width: 460, height: 480 },
   'nextcloud-aio': { width: 520, height: 420 },
   'nextcloud-managed': { width: 520, height: 420 },
@@ -31,6 +40,23 @@ export const NODE_MIN_SIZES: Record<NodeKind, { width: number; height: number }>
   'gitlab-hosting': { width: 560, height: 360 },
   'aws-universe': { width: 320, height: 220 },
   'aws-resource': { width: 520, height: 420 }
+  , 'homeassistant-sensor': { width: 460, height: 360 }
+  , alarm: { width: 360, height: 260 }
+  , awsidentity: { width: 460, height: 360 }
+  , dockerhost: { width: 520, height: 420 }
+  , freepbx: { width: 520, height: 360 }
+  , gitlab: { width: 520, height: 360 }
+  , homeassistant: { width: 460, height: 360 }
+  , proxmox: { width: 520, height: 360 }
+  , minecraft: { width: 520, height: 420 }
+  , timer: { width: 320, height: 220 }
+  , 'open-webui-hosting': { width: 520, height: 420 }
+  , 'cloudflare-tunnel': { width: 520, height: 420 }
+  , 'cloudflare-zero-trust': { width: 520, height: 420 }
+  , 'cloudflare-core-managers': { width: 520, height: 420 }
+  , torrent: { width: 520, height: 420 }
+  , 'linux-vm': { width: 520, height: 420 }
+  , 'github-work-item': { width: 520, height: 360 }
 }
 
 export interface Rect {

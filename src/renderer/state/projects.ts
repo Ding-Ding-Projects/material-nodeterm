@@ -15,7 +15,6 @@ import type {
   Workspace
 } from '@shared/types'
 import type { ProjectIcon } from '@shared/project-icon'
-import type { ProjectCapability } from '@shared/project-capabilities'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
 import { applyEdgeMutation } from '@shared/canvas-mutations'
 import { collisionSeed, derivedProjectId } from '@shared/project-id'
@@ -31,8 +30,6 @@ import type { PortableDoorConstructionV3 } from '@shared/door-construction'
 import { deletePortablePortal, navigatePortablePortal } from '../../core/portal-lifecycle'
 import { portableCanvasProjectionToProject, projectToPortableCanvasV3 } from '../../core/portable-canvas-projection'
 import type { ProjectCapability } from '@shared/project-capabilities'
-import type { ProjectIcon } from '@shared/project-icon'
-import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
 import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
 import { markWorkspaceDirty } from './workspaceDirty'
 
