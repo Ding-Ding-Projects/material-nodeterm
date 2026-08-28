@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CdkDiffResult, CdkPortableBlueprint, CdkProjectFileSummary, CdkSynthesisResult, CdkTrustReview } from '@shared/cdk'
 import type { NodeTerminalApi } from '@shared/types'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
-import { useRegexSearchField } from '../../../lib/regex/useRegexSearchField'
-import { openDestructiveGate } from '../../../state/destructiveGate'
-import { useI18n } from '../../../lib/i18n'
-import { Button } from '../../../ui/Button'
-import { Input } from '../../../ui/Input'
+import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
+import { openDestructiveGate } from '../../state/destructiveGate'
+import { useI18n } from '../../lib/i18n'
+import { Button } from '../../ui/Button'
+import { Input } from '../../ui/Input'
 
 function requestId(): string {
   return `cdk-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
