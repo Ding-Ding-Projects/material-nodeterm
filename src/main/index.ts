@@ -1341,13 +1341,10 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  // Steal ⌘M / ⌘W / ⌘0 back from Electron's default application menu (minimize / close /
-  // resetZoom) and forward each to the renderer instead. The decision — and, importantly, what it
-  // must REFUSE — is in `keydown-intercept.ts`, where it can be pressed by a test. The first two
-  // are the user's effective `node.toggleMarkdown` / `node.close` bindings (⌘0 is not remappable).
-  // The two suspensions are separate thunks on purpose (see `installKeydownIntercepts`): the
-  // recorder suspends ALWAYS, the policy only while the mirror says a terminal has focus. Both are
-  // read per keystroke — the settings memo and the mirror both change under a live window.
+  // One before-input-event registration owns shortcut interception. The helper reads the current
+  // configurable bindings for every keystroke, applies the recorder and terminal-policy stand-downs,
+  // and keeps the fixed physical-code zoom behavior. Keeping this seam in one helper prevents an
+  // obsolete inline handler from competing with the current refusal and recording rules.
   installKeydownIntercepts(
     win,
     currentInterceptBindings,

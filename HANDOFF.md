@@ -1,6 +1,8 @@
 # Handoff
 
-## 2026-08-27, renderer stylesheet boundary repair
+## 2026-08-27, opening merge-recovery repairs
+
+### Renderer stylesheet boundary repair
 
 `src/renderer/styles.css` contained merge remnants inside the destructive confirmation styles. The
 `.destgate__head`, `.destgate__icon`, and `.destgate__actions` rules had been split by card-modal and
@@ -20,7 +22,47 @@ execution, runtime interaction, reviews, audits, or UI captures. No local CSS pa
 available, so the brace-balance result is syntax-adjacent evidence only. The integration owner must
 run the permitted build path and verify the exact combined commit.
 
-## 2026-08-27, opening merge-recovery repairs
+### Browser registration callback closure repair
+
+Release run `33128093384` at `61afa6a19c7f159780073eb91efa2dbefd463420` failed during the application
+build at `src/main/index.ts:1975:2` with `Unexpected ")"`. The `IPC.browserRegister` callback opened
+an arrow-function block, then closed only its nested `if (accepted ...)` block before the
+`ipcMain.on` closing parenthesis. The adjacent `IPC.browserUnregister` handler had its own complete
+callback boundary.
+
+The repair adds the one missing callback `}` at the correct indentation and preserves the
+`registerBrowserGuestRequest` call, its lookup and refusal callback, and the
+`browserUseBackend.register` arguments and behavior. No browser registration refactor or duplicate
+handler change was made. AWS, Cloudflare, hosted services, diagnostics, updater, account, relay,
+and no-signing registrations remain untouched.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, audits, or UI captures. Read-only source scans inspected
+the browser registration and unregistration boundaries. The integration owner must evaluate the
+exact commit and follow-up GitHub Actions run before treating this repair as verified.
+
+### Main-process keyboard interception repair
+
+Release run `33127262674` at `35f76e8fdb8a6921fc7dc2a3caf9ddb2d3ec93cb` passed both coverage checkers,
+packaging, provenance, and icon phases, then failed during the application build at
+`src/main/index.ts:1448:0` with `Expected ")" but found "app"`. The cause was an obsolete inline
+`win.webContents.on('before-input-event', ...)` block that lacked its closing `})`, immediately
+followed by the current `installKeydownIntercepts(...)` registration and a duplicated mid-sentence
+comment.
+
+The repair removes only the obsolete inline handler and stale rationale. It keeps one coherent
+comment and the current helper registration, including `currentInterceptBindings`, recorder
+stand-down, terminal-policy stand-down, and fixed physical-code zoom handling. Read-only occurrence
+checks showed that `matchesShortcut`, `isMacMain`, and `shouldHideOnClose` were used only by the
+deleted or superseded splice, so those imports and the unused modifier constant were removed. The
+current `closeAction`, `setMainWindow`, `getMainWindow`, `sendToMain`, and
+`createCrashReloadPolicy` uses remain. AWS, Cloudflare, hosted services, diagnostics, browser guests,
+updater, account, relay, and no-signing registrations were preserved.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, audits, or UI captures. Read-only source and history scans
+identified the duplicate registration boundary and import usage. The integration owner must evaluate
+the exact commit and the follow-up GitHub Actions run before treating this repair as verified.
 
 ### Main-process parser repair
 
@@ -42,7 +84,7 @@ unrelated refactor was used.
 This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
 execution, runtime interaction, reviews, audits, or UI captures. Read-only source and history scans
 were used to identify the exact duplicate splices. The integration owner must evaluate the exact
-commit and the follow-up remote workflow run before treating this repair as verified.
+commit and the follow-up GitHub Actions run before treating this repair as verified.
 
 ### Canvas notification inventory repair
 
