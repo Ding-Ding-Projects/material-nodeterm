@@ -106,6 +106,7 @@ function CookieProviderRow({
   statusKnown: boolean
   onChange: (stored: boolean) => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
   const save = async (next: string): Promise<void> => {
