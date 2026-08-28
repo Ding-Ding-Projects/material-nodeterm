@@ -111,7 +111,10 @@ jobs:
             $separator = $line.IndexOf('=')
             if ($separator -gt 0) { $values[$line.Substring(0, $separator)] = $line.Substring($separator + 1) }
           }
-          $expectedVcInstallDir = [IO.Path]::GetFullPath((Join-Path $installation 'VC'))
+          function Normalize-DirectoryPath([string]$value) {
+            return [IO.Path]::GetFullPath($value).TrimEnd([char[]]@('\', '/'))
+          }
+          $expectedVcInstallDir = Normalize-DirectoryPath (Join-Path $installation 'VC')
           if ([string]::IsNullOrWhiteSpace($values['VCINSTALLDIR'])) {
             # Some hosted Visual Studio images omit VCINSTALLDIR from VsDevCmd's emitted
             # environment even though the validated installation and its toolset are present.
@@ -123,13 +126,14 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($values['VSINSTALLDIR'])) {
             $values['VSINSTALLDIR'] = $installation
           }
-          $actualVcInstallDir = [IO.Path]::GetFullPath($values['VCINSTALLDIR'])
+          $actualVcInstallDir = Normalize-DirectoryPath $values['VCINSTALLDIR']
           if (-not $actualVcInstallDir.Equals($expectedVcInstallDir, [StringComparison]::OrdinalIgnoreCase)) {
             throw "VsDevCmd selected a different VCINSTALLDIR: expected $expectedVcInstallDir, got $actualVcInstallDir"
           }
-          $actualVsInstallDir = [IO.Path]::GetFullPath($values['VSINSTALLDIR'])
-          if (-not $actualVsInstallDir.Equals($installation, [StringComparison]::OrdinalIgnoreCase)) {
-            throw "VsDevCmd selected a different VSINSTALLDIR: expected $installation, got $actualVsInstallDir"
+          $expectedVsInstallDir = Normalize-DirectoryPath $installation
+          $actualVsInstallDir = Normalize-DirectoryPath $values['VSINSTALLDIR']
+          if (-not $actualVsInstallDir.Equals($expectedVsInstallDir, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "VsDevCmd selected a different VSINSTALLDIR: expected $expectedVsInstallDir, got $actualVsInstallDir"
           }
           foreach ($name in @('VCINSTALLDIR', 'VSINSTALLDIR', 'VCToolsInstallDir', 'VSCMD_VER', 'VSCMD_ARG_TGT_ARCH', 'VSCMD_ARG_HOST_ARCH', 'INCLUDE', 'LIB', 'LIBPATH', 'PATH')) {
             if ([string]::IsNullOrWhiteSpace($values[$name])) { throw "VsDevCmd did not set required environment value $name" }

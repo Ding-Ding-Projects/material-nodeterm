@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Normalize trailing directory separators before comparing the helper-selected and `VsDevCmd`
+  Visual Studio identities on hosted runners. Equivalent paths now remain equivalent while a
+  genuinely different installation is still rejected.
+
+  Hosted runner 比較 helper 選定同 VsDevCmd 回傳嘅 Visual Studio 路徑時會先處理尾部 directory
+  separator；同一條路唔會因為多個反斜線而誤拒，真係唔同 installation 仍然會拒絕。
+
 - Run the hosted Visual Studio bootstrap in its dedicated elevated-toolchain-only mode, matching
   the administrator token used by the hosted Windows runner while keeping npm and project lifecycle
   scripts outside that privileged helper.
