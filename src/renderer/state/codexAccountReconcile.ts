@@ -1,4 +1,4 @@
-import type { CodexAccount } from '@shared/codex-account'
+import type { CodexAccount } from '@shared/types'
 // S6 PR 8 — reconcile pending Codex accounts against the app-servers' live identity, without
 // trusting attacker-controlled settings fields. Based on @Corvin's #112
 // (`src/renderer/state/codexAccountReconcile.ts`).
