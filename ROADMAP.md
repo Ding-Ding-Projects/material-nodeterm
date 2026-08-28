@@ -609,3 +609,6 @@ intentionally unchecked because this task publishes the plan only.
 `node scripts/check-app-contract.mjs`, and `gh issue list` rather than trusting it silently once
 enough commits have landed since it was last written.*
 - [ ] GitHub issue and pull-request canvas work-item nodes, source implementation landed in `feat/github-pr-issue-canvas`; integration verification remains open.
+- [ ] **Project repository graph universe**: issue #213 implementation landed on an accelerated
+  lane with Code, Dependency, and Combined views, host-owned bounded indexing, provenance-aware
+  exports, and explicit runtime verification still pending.

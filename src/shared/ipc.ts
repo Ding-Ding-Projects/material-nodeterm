@@ -899,6 +899,14 @@ export const IPC = {
   /** main/server → renderer: a streamed chat token/finish/error for the session named in the
    *  payload. One shared channel (not per-session) — the renderer filters by sessionId. */
   ollamaChatStream: 'ollama:chat-stream',
+  // Project-scoped repository graph. Derived indexes remain host-local; only safe graph intent
+  // and bounded, provenance-rich snapshots cross the renderer boundary.
+  repositoryGraphInspect: 'repository-graph:inspect',
+  repositoryGraphRefresh: 'repository-graph:refresh',
+  repositoryGraphCancel: 'repository-graph:cancel',
+  repositoryGraphExport: 'repository-graph:export',
+  repositoryGraphOpenSource: 'repository-graph:open-source',
+  repositoryGraphProgress: 'repository-graph:progress',
   // Open WebUI hosting node. The renderer submits a closed operation shape; Docker context,
   // image, volume, archive, and provider secrets are validated and owned by the privileged host.
   openWebUiContexts: 'open-webui:contexts',

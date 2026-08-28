@@ -458,6 +458,8 @@ export type NodeKind =
   | 'windows-diagnostics'
   /** Desktop-only manager for existing file-hosted VeraCrypt containers. */
   | 'veracrypt'
+  /** Project-scoped source and dependency graph, with host-local derived state. */
+  | 'repository-graph'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -4876,6 +4878,8 @@ export interface NodeTerminalApi {
   awsWizardModels: import('./aws-wizard').AwsWizardModelsApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Project-scoped semantic code and dependency graph with host-owned cache. */
+  repositoryGraph: import('./repository-graph').RepositoryGraphApi
   /** Guided local Open WebUI hosting with persistent volume and explicit provider setup. */
   openWebUi: import('./open-webui-hosting').OpenWebUiApi
   /** Guided Cloudflare managers — docs/features/integrations/cloudflare-core-managers.md. */

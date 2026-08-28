@@ -22,6 +22,12 @@ build/icon.icns
 # and copied into the app by electron-builder's mac extraResources. Never committed.
 /resources/bin/
 
+# Release bootstrap payloads are generated outside Git by the installer build and are validated
+# again before packaging. Keeping them ignored prevents a failed packaging preflight from treating
+# cached QEMU or AWS CLI bytes as source changes.
+/resources/qemu/
+/resources/aws-cli-v2/
+
 .playwright-mcp/
 
 # concurrent-session worktrees / local agent state

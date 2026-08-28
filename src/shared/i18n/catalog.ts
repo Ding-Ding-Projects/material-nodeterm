@@ -352,6 +352,8 @@ export const CATALOG: Catalog = {
   'nodeCatalog.entry.sticky.description': { en: flat('Add an editable note that can carry project context.'), yue: flat('加張可以編輯、用嚟記低項目背景嘅筆記。') },
   'nodeCatalog.entry.group.label': { en: flat('Group frame'), yue: flat('群組框') },
   'nodeCatalog.entry.group.description': { en: flat('Add an empty frame for organizing related nodes.'), yue: flat('加個空框，整理相關節點。') },
+  'nodeCatalog.entry.repository-graph.label': { en: flat('Repository graph universe'), yue: flat('項目關係圖宇宙') },
+  'nodeCatalog.entry.repository-graph.description': { en: flat('Explore semantic code and dependency relationships for the active project with source provenance.'), yue: flat('用來源證據檢視目前項目嘅程式同依賴關係。') },
   'nodeCatalog.entry.annotation.label': { en: flat('Drawing annotation'), yue: flat('繪圖註解') },
   'nodeCatalog.entry.annotation.description': { en: flat('Arm the drawing tool, then drag a line or arrow with an optional label and editable thickness.'), yue: flat('啟用繪圖工具，再喺畫布拖出直線或箭嘴，仲可以加標籤同調校粗幼。') },
   'nodeCatalog.entry.browser.label': { en: flat('Browser'), yue: flat('瀏覽器') },

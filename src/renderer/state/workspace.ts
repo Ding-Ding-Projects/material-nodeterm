@@ -309,6 +309,8 @@ export interface NodeData {
   torrentMagnet?: string
   /** AWS Resource Explorer and Cloud Control safe portable intent. */
   awsManagerIntent?: AwsManagerPortableIntent
+  /** Safe project-scoped graph presentation intent. Source paths and derived indexes stay local. */
+  repositoryGraphIntent?: import('@shared/repository-graph').RepositoryGraphIntent
   /** Guided AWS manager operation intent, kept separate from Resource Explorer state. */
   awsResourceManagerIntent?: import('@shared/aws-resource-managers').AwsResourceManagerIntent
   /** Compact GitHub issue and pull-request attachments owned by this canvas node. */
@@ -1851,6 +1853,27 @@ export function createVeraCryptNode(index: number, center?: { x: number; y: numb
   }
 }
 
+const REPOSITORY_GRAPH_SIZE = { width: 760, height: 560 }
+
+/** Creates the project-scoped repository graph surface. The host resolves the project root by id,
+ * while this node persists only mode, filters, layout and expanded-id presentation intent. */
+export function createRepositoryGraphNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('repository-graph'),
+    type: 'repository-graph',
+    position: placeAt(center, index, REPOSITORY_GRAPH_SIZE.width, REPOSITORY_GRAPH_SIZE.height),
+    width: REPOSITORY_GRAPH_SIZE.width,
+    height: REPOSITORY_GRAPH_SIZE.height,
+    style: { width: REPOSITORY_GRAPH_SIZE.width, height: REPOSITORY_GRAPH_SIZE.height },
+    data: {
+      title: 'Repository graph',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      repositoryGraphIntent: { version: 1, mode: 'combined', query: '', expandedNodeIds: [], layout: 'hierarchical' }
+    }
+  }
+}
+
 /**
  * Creates an NSIS installer-builder node — a GUI for authoring a Windows NSIS installer script for
  * ANOTHER project. Not this app's own installer, which stays Squirrel.Windows (see CLAUDE.md's
@@ -2578,7 +2601,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   'open-webui-hosting': true,
   'github-work-item': true,
   'windows-diagnostics': true,
-  veracrypt: true
+  veracrypt: true,
+  'repository-graph': true
 }
 
 /**
@@ -2643,7 +2667,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   'open-webui-hosting': OPEN_WEBUI_SIZE,
   'github-work-item': GITHUB_WORK_ITEM_NODE_SIZE,
   'windows-diagnostics': WINDOWS_DIAGNOSTICS_SIZE,
-  veracrypt: VERACRYPT_SIZE
+  veracrypt: VERACRYPT_SIZE,
+  'repository-graph': REPOSITORY_GRAPH_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and

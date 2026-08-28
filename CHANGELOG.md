@@ -3040,3 +3040,7 @@ or on GitHub's [tags](https://github.com/eneskirca/nodeterm/tags) and
 - Add first-class GitHub issue and pull-request canvas work-item nodes with safe persistence and
   shared API/account integration. Source-only implementation for upstream #462 and downstream #132;
   verification remains unrun.
+# Unreleased
+
+- Add the project repository graph universe with semantic TypeScript and JavaScript relationships,
+  explicit manifest adapters, bounded host-owned snapshots, stale protection, and portable exports.
