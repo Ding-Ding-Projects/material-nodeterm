@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS } from '@shared/types'
 import { SHORTCUT_DEFS } from '@shared/shortcuts'
 import { shortcutKeyParts } from '@shared/shortcut'
 import { useSettings } from '../state/settings'
+import { setKeybindingOverride } from '../lib/keybindingOverrides'
 import { ShortcutsPanel } from './ShortcutsPanel'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -60,9 +61,7 @@ describe('ShortcutsPanel', () => {
     // Rebinding the palette shortcut re-renders the panel's badge on the next frame — no
     // reload, no re-open needed.
     await act(async () => {
-      useSettings.getState().update({
-        shortcuts: { ...useSettings.getState().settings.shortcuts, commandPalette: 'Cmd+Shift+P' }
-      })
+      setKeybindingOverride('app.commandPalette', ['Cmd+Shift+P'])
     })
     expect(renderedText()).toContain(badgeFor('Cmd+Shift+P'))
     expect(renderedText()).not.toContain(defaultBadge)

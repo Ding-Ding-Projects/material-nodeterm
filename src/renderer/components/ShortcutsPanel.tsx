@@ -57,13 +57,14 @@ function buildSections(dictationChord: string): { title: string; rows: Row[] }[]
       rows: [
         ...cmd('app.commandPalette', 'Command palette'),
         ...cmd('app.settings', 'Settings'),
-        ...cmd('app.shortcutsPanel', 'This shortcuts panel'),
-        ...cmd('panel.explorer', 'Explorer'),
+        ...cmd('app.shortcutsPanel', 'Shortcuts panel'),
+        ...cmd('app.reopenLastClosed', 'Reopen last closed'),
+        ...cmd('panel.explorer', 'Toggle explorer'),
         // `panel.sourceControl` used to be listed here AND in the Source Control section below —
         // one command, two rows, both showing the same chord. The section row ("Open Source
         // Control") is the one that belongs, so the General duplicate is gone.
-        ...cmd('view.kanbanToggle', 'Kanban board'),
-        ...cmd('panel.sessions', 'Pin the sessions sidebar'),
+        ...cmd('view.kanbanToggle', 'Toggle view mode'),
+        ...cmd('panel.sessions', 'Pin sessions sidebar'),
         // Desktop only: browsers own Cmd/Ctrl+1-9 for tab switching and a page cannot take it
         // back, so listing it in the Server Edition would promise a shortcut that never fires.
         ...(isBrowserRuntime() ? [] : [{ keys: [primary, '1-9'], label: 'Jump to project' }]),
@@ -78,7 +79,7 @@ function buildSections(dictationChord: string): { title: string; rows: Row[] }[]
       title: 'Canvas',
       rows: [
         ...cmd('node.newTerminal', 'New terminal'),
-        ...cmd('node.newAgent', 'New Claude Code'),
+        ...cmd('node.newAgent', 'New agent'),
         ...cmd('node.close', 'Close selected node'),
         ...cmd('canvas.deleteSelection', 'Delete selection'),
         // One row per direction rather than a single collapsed "⌘ ← → ↑ ↓": each is its own
@@ -91,7 +92,7 @@ function buildSections(dictationChord: string): { title: string; rows: Row[] }[]
         { keys: ['Left-drag'], label: 'Box-select (touch to select)' },
         { keys: ['Middle / Right-drag'], label: 'Pan the canvas' },
         { keys: ['Double-click'], label: 'Center & focus a node' },
-        ...cmd('view.focusMode', 'Focus mode (selected node fills the window)'),
+        ...cmd('view.focusMode', 'Toggle focus mode'),
         { keys: [primary, 'wheel'], label: 'Zoom in / out' },
         // Advertised on BOTH surfaces, unlike "Jump to project" above. ⌘1-9 is dropped there
         // because the browser RESERVES it (tab switching, un-preventable) for something unrelated;
@@ -118,7 +119,7 @@ function buildSections(dictationChord: string): { title: string; rows: Row[] }[]
       title: 'Source Control',
       rows: [
         ...cmd('panel.sourceControl', 'Open Source Control'),
-        ...cmd('scm.commit', 'Commit the staged changes')
+        ...cmd('scm.commit', 'Commit staged changes')
       ]
     }
   ]
