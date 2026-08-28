@@ -19,8 +19,8 @@ function platformFor(dir: string): CorePlatform {
     broadcast: vi.fn(),
     clientIds: () => [],
     openExternal: vi.fn(async () => undefined),
-    sealSecret: (value) => Buffer.from(value).map((byte) => byte ^ 0xa5),
-    unsealSecret: (value) => Buffer.from(value).map((byte) => byte ^ 0xa5)
+    sealSecret: (value) => Buffer.from(Buffer.from(value).map((byte) => byte ^ 0xa5)),
+    unsealSecret: (value) => Buffer.from(Buffer.from(value).map((byte) => byte ^ 0xa5))
   }
 }
 
@@ -91,7 +91,9 @@ describe('agent continuation packets', () => {
     await waitForPacket(service)
     expect(await service.ack('node-1')).toBe(true)
     expect(await service.preview('node-1')).not.toBeNull()
-    expect((await service.continue('node-1')).reason).toBe('provider-not-ready')
+    const notReady = await service.continue('node-1')
+    expect(notReady.ok).toBe(false)
+    if (!notReady.ok) expect(notReady.reason).toBe('provider-not-ready')
     ready = true
     const [first, second] = await Promise.all([service.continue('node-1'), service.continue('node-1')])
     expect(first.ok).toBe(true)
