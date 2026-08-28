@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { AgentPermissionMode } from '@shared/agents/config'
 import type {
   BrowserProfile,
+  BridgeLink,
   CanvasMutation,
   CanvasNodeState,
   Link,
@@ -152,7 +153,7 @@ interface ProjectsState {
   /** Replaces the named portable arrangements for a project. */
   setProjectSavedLayouts(id: string, savedLayouts: SavedCanvasLayout[]): void
   /** Writes the serialized canvas (nodes + viewport + unified links) back into a project. */
-  commitCanvas(id: string, nodes: CanvasNodeState[], viewport: Viewport, links?: Link[]): void
+  commitCanvas(id: string, nodes: CanvasNodeState[], viewport: Viewport, linksOrBridges?: Link[] | BridgeLink[], ropes?: BridgeLink[]): void
   /**
    * Applies ONE peer canvas mutation to a project's serialized nodes — the path for a project
    * that is loaded but NOT active (React Flow only holds the active project's nodes). Returns
@@ -788,26 +789,31 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     }))
   },
 
-  commitCanvas(id, nodes, viewport, links) {
+  commitCanvas(id, nodes, viewport, linksOrBridges, ropes) {
+    const legacyBridgeList = Array.isArray(linksOrBridges) && linksOrBridges.length > 0 &&
+      !('kind' in (linksOrBridges[0] as object))
+    const edgeSnapshot = ropes !== undefined || legacyBridgeList
+      ? { bridges: linksOrBridges as BridgeLink[], ropes: ropes ?? [] }
+      : { links: linksOrBridges as Link[] | undefined }
     set((s) => ({
       projects: s.projects.map((p) => {
         if (p.id !== id) return p
         if (!p.activeCanvasId) {
           const { bridges: _bridges, ropes: _ropes, ...rest } = p
-          return { ...rest, nodes, viewport, ...(links ? { links } : {}) }
+          return { ...rest, nodes, viewport, ...edgeSnapshot }
         }
         if (!p.multiverseCanvases?.some((canvas) => canvas.id === p.activeCanvasId)) {
           return {
             ...p,
             childCanvases: p.childCanvases?.map((canvas) => canvas.id === p.activeCanvasId && canvas.scope === 'aws-universe'
-              ? { ...canvas, nodes, viewport }
+              ? { ...canvas, nodes, viewport, ...('bridges' in edgeSnapshot ? { bridges: edgeSnapshot.bridges, ropes: edgeSnapshot.ropes } : {}) }
               : canvas)
           }
         }
         return {
           ...p,
           multiverseCanvases: p.multiverseCanvases?.map((canvas) => canvas.id === p.activeCanvasId
-            ? { ...canvas, nodes, viewport }
+            ? { ...canvas, nodes, viewport, ...('bridges' in edgeSnapshot ? { bridges: edgeSnapshot.bridges, ropes: edgeSnapshot.ropes } : {}) }
             : canvas)
         }
       })
