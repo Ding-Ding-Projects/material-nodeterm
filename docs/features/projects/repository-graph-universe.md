@@ -13,11 +13,12 @@ generated code, and unresolved module resolution remain visible as unresolved no
 
 ## Dependency view
 
-Explicit adapters cover npm, Yarn, pnpm, Bun, Python, Cargo, Go, Maven, Gradle, .NET, Ruby,
-Composer, Dart, Swift, CMake, vcpkg, Conan, containers, Compose, and `.gitmodules`. JSON manifests
-and line-oriented lock or manifest formats are bounded and produce package nodes with the adapter
-identity that supplied each edge. Unsupported or malformed records are listed in the omissions
-section, never converted into an empty successful graph.
+The adapter matrix names npm, Yarn, pnpm, Bun, Python, Cargo, Go, Maven, Gradle, .NET, Ruby,
+Composer, Dart, Swift, CMake, vcpkg, Conan, containers, Compose, and `.gitmodules`. This release
+only enables the TypeScript/JavaScript semantic adapters plus the exact `package.json` and
+`package-lock.json` JSON readers. Other rows remain visible as unavailable with a precise reason,
+because a generic quoted-line scan is not a faithful lockfile parser. Malformed records are listed
+in the omissions section, never converted into an empty successful graph.
 
 ## Truth and storage
 
