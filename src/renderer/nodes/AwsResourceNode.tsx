@@ -8,6 +8,7 @@ import {
   AWS_PLATFORM_OPERATION_LABELS,
   AWS_PLATFORM_SERVICES
 } from '@shared/aws-resource'
+import { AWS_MANAGER_DEFAULT_INTENT } from '@shared/aws-resource'
 import type {
   AwsManagerBinding,
   AwsManagerMode,
@@ -234,7 +235,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
   const updatePlatformInput = (key: string, value: string | number | boolean): void => {
     const next = { ...coreInput, [key]: value }
     setCoreInput(next)
-    persistIntent('platform-managers', { platformService, platformOperation: operation as AwsPlatformOperation, platformInput: next })
+    persistIntent('platform-managers', { platformService, platformOperation: operation as AwsPlatformOperation, platformInput: next as AwsManagerPortableIntent['platformInput'] })
   }
 
   const makePreview = async (): Promise<void> => {
