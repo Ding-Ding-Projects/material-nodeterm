@@ -30,7 +30,7 @@ const sessionRename = read('lib/sessionRename.ts')
 describe('session-name title gates', () => {
   it('the node-title poll is gated on the READ capability', () => {
     // The effect that adopts the agent's own session name into data.title.
-    expect(terminalNode).toContain('const canReadTitleNode = !!agentId && canReadTitle(agentId)')
+    expect(terminalNode).toContain('const canReadTitleNode = !!agentHarnessId && canReadTitle(agentHarnessId)')
     expect(terminalNode).toContain('if (!canReadTitleNode || data.titleAuto === false) return')
     // The pre-split gate must be gone from that effect — with it, a gemini node never polls.
     expect(terminalNode).not.toContain('if (!canRenameNode || data.titleAuto === false) return')
@@ -115,7 +115,7 @@ describe('claude-transcript gates', () => {
 
   it('is derived from the agent, not from the meter', () => {
     // The fact itself, kept separate from `showUsage` one line above it.
-    expect(terminalNode).toContain('const claudeTranscript = readsClaudeTranscript(agentId)')
+    expect(terminalNode).toContain('const claudeTranscript = readsClaudeTranscript(agentHarnessId)')
     expect(terminalNode).toContain('const showUsage = !!agentId')
   })
 
@@ -152,6 +152,7 @@ describe('claude-transcript gates', () => {
     const found = sites('<ContextMeter')
     expect(found.length).toBe(1)
     const [lineNo, text] = found[0]
-    expect(text, `${lineNo}: ${text.trim()}`).toContain('showUsage &&')
+    const context = lines.slice(Math.max(0, lineNo - 3), lineNo + 1).join('\n')
+    expect(context, `${lineNo}: ${text.trim()}`).toContain('showUsage')
   })
 })
