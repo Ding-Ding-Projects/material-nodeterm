@@ -19,6 +19,33 @@ execution, runtime interaction, reviews, audits, or UI captures. Read-only sourc
 the browser registration and unregistration boundaries. The integration owner must evaluate the
 exact commit and follow-up GitHub Actions run before treating this repair as verified.
 
+## 2026-08-27, GitHub work-item canvas attachments
+
+This lane is implemented on `feat/canvas-pr-chip-pill` from `61afa6a19c7f159780073eb91efa2dbefd463420`.
+GitHub issues and pull requests now have a compact attachment data shape. An attached session node
+renders one accessible actionable chip, and its owning group frame renders a pill from the same
+record. A pull request can be adopted by a frame only when its provider `headRef` exactly equals the
+frame's app-owned worktree branch. No pane text, title, command text, or terminal output is used to
+infer ownership.
+
+The standalone `github-work-item` catalog row was removed, so new creation cannot produce a detached
+issue or pull-request node. Existing persisted nodes remain readable as full detail cards, and their
+records are not discarded. The compact attachment fields are persisted through `CanvasNodeState` and
+normalized at the load and save seams. Desktop and Server Edition continue to share the same
+portable data shape and provider-authored Markdown detail renderer.
+
+Changed paths include `src/shared/github-work-items.ts`, `src/shared/types.ts`,
+`src/shared/node-catalog.ts`, `src/renderer/state/workspace.ts`,
+`src/renderer/nodes/GitHubWorkItemAttachment.tsx`, `src/renderer/nodes/TerminalNode.tsx`,
+`src/renderer/nodes/GroupNode.tsx`, `src/renderer/canvas/Canvas.tsx`,
+`src/renderer/styles.css`, `docs/features/integrations/github-work-items.md`,
+`docs/features/integrations/README.md`, `CHANGELOG.md`, and this handoff.
+
+No tests, type checks, lint, builds, packaging, runtime interaction, reviews, audits, debugging,
+repairs, or UI captures were run in the ultra-speed lane. The feature branch is ready for the owning
+integration task to review, commit, and push. The mobile companion remains an explicit bridge-parity
+follow-up because this lane changes the shared canvas projection only.
+
 ## 2026-08-27, main-process keyboard interception repair
 
 Release run `33127262674` at `35f76e8fdb8a6921fc7dc2a3caf9ddb2d3ec93cb` passed both coverage checkers,

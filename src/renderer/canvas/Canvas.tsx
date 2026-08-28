@@ -774,7 +774,6 @@ import {
   createWildDimSumNode,
   createWebNode,
   createAwsResourceNode,
-  createGitHubWorkItemNode,
   isVideoFile,
   duplicateNode,
   drillGroupChildren,
@@ -5913,7 +5912,6 @@ export function Canvas() {
             if (catalogEntry.id === 'kiosk-session' || catalogEntry.id === 'pwa-session') return null
             if (catalogEntry.id === 'web') return createWebNode(index, { url: '' }, center)
             if (catalogEntry.id === 'authenticator') return createAuthenticatorNode(index, center)
-            if (catalogEntry.id === 'github-work-item') return createGitHubWorkItemNode(index, center)
             if (catalogEntry.id === 'dino') return createDinoNode(index, center)
             if (catalogEntry.id === 'recovery-game') return createRecoveryGameNode(index, center)
             if (catalogEntry.id === 'loop') return createNativeLoopNode(index, center)

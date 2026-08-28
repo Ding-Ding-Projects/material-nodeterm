@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Replace newly created standalone GitHub work-item canvas nodes with compact issue and pull-request
+  attachments: chips stay on their exact session node, pills stay on the owning frame, and pull-request
+  frame adoption requires an exact match between provider head ref and app-owned worktree branch.
+  Existing detail nodes remain lossless legacy records. No tests, builds, packaging, runtime interaction,
+  reviews, audits, or captures were run in this ultra-speed lane.
+
 - Use a bounded Node HTTPS stream for the production immutable icon download, retaining the
   fetch-style injection seam for tests. The wrapper rejects redirects and invalid status or length,
   stops oversized or stalled responses, compares exact bytes, and reports each source-icon phase.

@@ -725,6 +725,8 @@ export interface CanvasNodeState {
   /** Linux ISO/disk selections stored only in the machine-local execution overlay. */
   virtualMachineLocalPaths?: import('./virtual-machine').VirtualMachineLocalPaths
   githubWorkItem?: import('./github-work-items').GitHubWorkItem
+  /** Compact issue and pull-request attachments owned by this node. */
+  githubWorkItems?: import('./github-work-items').GitHubWorkItem[]
   /**
    * service-kinds only, and MACHINE-LOCAL: where this node reaches its service. Stripped from
    * every project file we write and from every node arriving over the wire, then restored from the
