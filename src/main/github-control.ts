@@ -15,7 +15,6 @@ import {
   type GitHubTokenDocument
 } from '../core/github/token-document'
 import { renameAtomic, tempNameFor } from '../core/fs-atomic'
-import type { GitHubSecretStore } from '../core/github/credentials'
 import type { SecretStore } from '../core/secret-store'
 import type { GitHubSecretAvailability } from '../shared/github-issues'
 import { IPC } from '../shared/ipc'
@@ -32,10 +31,15 @@ export interface SafeStorageLike {
 
 export class GitHubSecretError extends Error {
   constructor(readonly code: 'invalid-token' | 'keyring-locked' | 'clear-incomplete') {
+    super(code)
+  }
+}
+
 type TokenDocument =
   | { version: 1; kind: 'safe-storage'; value: string }
   | { version: 1; kind: 'restricted-file'; token: string }
 
+/*
 export class SecretStoreError extends Error {
   constructor(readonly code: 'invalid-token' | 'keyring-locked') {
     super(code)
@@ -54,6 +58,7 @@ async function atomicWrite(
     encoding: 'utf8',
     mode: 0o600
   })
+} */
 function validToken(token: string): boolean {
   return token.trim() === token && token.length > 0 && token.length <= 4096 && !/[\r\n\0]/.test(token)
 }
@@ -154,11 +159,6 @@ export class ElectronSecretStore implements SecretStore {
     const current = await this.readDocumentSnapshot()
     if (current.document?.kind === 'safe-storage' && !this.canEncrypt()) {
       throw new GitHubSecretError('keyring-locked')
-  private async saveNow(token: string): Promise<void> {
-    if (!validToken(token)) throw new SecretStoreError('invalid-token')
-    const current = await this.readDocument()
-    if (current?.kind === 'safe-storage' && !this.canEncrypt()) {
-      throw new SecretStoreError('keyring-locked')
     }
     if (current.document?.kind === 'safe-storage') {
       // A syntactically valid envelope can still carry undecryptable keyring bytes. Preserve that
