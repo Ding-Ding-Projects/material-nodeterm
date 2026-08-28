@@ -60,7 +60,7 @@ import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type Recover
 import type { PortableKioskPwaIntent } from '@shared/kiosk-pwa'
 import { normalizeNodeIcon } from '@shared/node-icon'
 import { CLOUDFLARE_DEFAULT_INTENT, type CloudflarePortableIntent } from '@shared/cloudflare-core-managers'
-import { AWS_MANAGER_DEFAULT_INTENT, type AwsManagerMode, type AwsManagerPortableIntent } from '@shared/aws-resource'
+import { AWS_CORE_OPERATIONS, AWS_MANAGER_DEFAULT_INTENT, AWS_PLATFORM_OPERATIONS, type AwsManagerMode, type AwsManagerPortableIntent } from '@shared/aws-resource'
 import type { TunnelPortableIntent } from '@shared/tunnel-state'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
@@ -1548,7 +1548,7 @@ export function createAwsResourceNode(index: number, mode: AwsManagerMode = 'res
       title: mode === 'cloud-control' ? 'AWS Cloud Control' : mode === 'core-services' ? `${coreService?.toUpperCase() ?? 'AWS'} manager` : mode === 'cloudformation' ? 'AWS CloudFormation' : mode === 'cdk' ? 'AWS CDK' : mode === 'platform-managers' ? `${platformService?.toUpperCase() ?? 'AWS'} manager` : 'AWS Resource Explorer',
       color: '#ff9900',
       group: null,
-      awsManagerIntent: { ...AWS_MANAGER_DEFAULT_INTENT, mode, ...(coreService ? { coreService, coreOperation: import('@shared/aws-resource').AWS_CORE_OPERATIONS[coreService][0] } : {}), ...(platformService ? { platformService, platformOperation: import('@shared/aws-resource').AWS_PLATFORM_OPERATIONS.find((item) => item.startsWith(`${platformService}-`)) } : {}) }
+       awsManagerIntent: { ...AWS_MANAGER_DEFAULT_INTENT, mode, ...(coreService ? { coreService, coreOperation: AWS_CORE_OPERATIONS[coreService][0] } : {}), ...(platformService ? { platformService, platformOperation: AWS_PLATFORM_OPERATIONS.find((item) => item.startsWith(`${platformService}-`)) } : {}) }
     }
   }
 }

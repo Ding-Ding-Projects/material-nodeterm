@@ -103,7 +103,7 @@ function endpointUrl(value: string): string | null {
 }
 
 function profileDetail(profile: AwsProfileSummary): string {
-  const parts = [profile.source]
+  const parts: string[] = [profile.source]
   if (profile.identityCenterConfigured) parts.push('IAM Identity Center')
   if (profile.roleConfigured) parts.push('role')
   if (profile.mfaConfigured) parts.push('MFA')
