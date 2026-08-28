@@ -38,10 +38,9 @@ import {
   remotePaneOwnerArgs,
   remoteForegroundArgvArgs,
   remotePaneCursorArgs,
-  childArgs
+  childArgs,
   remotePaneProcessArgs,
-  remoteTerminateForegroundArgs,
-  remotePaneCursorArgs
+  remoteTerminateForegroundArgs
 } from './remote-ssh/control-master'
 import { probeAgentSockToPin } from './remote-ssh/agent-probe'
 import { parsePaneCursor } from './pane-cursor'
@@ -56,10 +55,6 @@ import { readSpawnResources, spawnResourceNote } from './spawn-resources'
 import { primePtyCeiling, ptyDevicesExhausted, readPtyDevices, spawnFailureHint, type PtyDevices } from './pty-devices'
 import { REAP_SWEEP_MS, shouldReap } from './pty-reap'
 import { ControlModeClient, type ControlSpawn } from './tmux-control-client'
-import { TMUX_SOCKET, sessionName, isSessionName, localTmuxSendKeysArgs, localTmuxEnterArgs } from './tmux-naming'
-import { encodeSendKeysHex } from './tmux-control'
-import { decideLeadPaneCorrection, resizeLeadPaneArgs } from '../shared/agents/team-pane-layout'
-import { bracketedInjection, sanitizePasteText } from './paste-injection'
 import {
   TMUX_SOCKET,
   sessionName,
@@ -69,6 +64,7 @@ import {
   runPasteDelivery
 } from './tmux-naming'
 import { encodeSendKeysHex } from './tmux-control'
+import { decideLeadPaneCorrection, resizeLeadPaneArgs } from '../shared/agents/team-pane-layout'
 import { releasePty, type ReleasablePty } from './pty-release'
 import { terminateWindowsProcessTree } from '../session-host/windows-process-tree'
 import { effectiveSize, type PtySize } from './pty-size'
@@ -83,7 +79,6 @@ import {
   resolveShellPath,
   shellPathNow
 } from './exec-path'
-import { AUTH_ENV_STRIP, accountTmuxEnvArgs, remoteAccountConfigDirAbs } from './claude-accounts-core'
 import {
   AUTH_ENV_STRIP,
   accountTmuxEnvArgs,
@@ -92,16 +87,19 @@ import {
 } from './claude-accounts-core'
 import {
   AUTH_ENV_STRIP as CODEX_AUTH_ENV_STRIP,
+  codexAccountHome,
   codexSessionEnv,
+  codexTmuxEnvArgs,
   isCodexScopeRefusal,
   needsCodexAccountScope,
+  remoteCodexHome,
+  remoteCodexTmuxEnvArgs,
   resolveCodexSessionScope
 } from './codex-accounts-core'
 import { NODE_ID_MAX, isSafeNodeId } from './remote-safety'
 import { presenceHub } from './presence/hub'
 import { codexLauncherDir, forgetCodexThreadIdentitiesForNode, installCodexLauncher } from './codex-identity-proxy'
 import { ensureNodeToken, ensureRemoteNodeToken, sweepNodeToken } from './agents/node-token-service'
-import { hasSharedIdentity, type AgentId } from '../shared/agents/config'
 import { quitWouldLoseWork } from './quit-risk'
 import { clearNode as clearNodeAgentStatus } from './agent-status-mirror'
 import { hasSharedIdentity, setCustomAgentBaseResolver, vanillaEnvStripPattern, type AgentId } from '../shared/agents/config'
@@ -143,14 +141,6 @@ import {
   type ResolvedWindowsTerminalProfile,
   type WindowsTerminalProfileResolver
 } from './windows-terminal-profiles'
-import {
-  codexAccountHome,
-  codexSessionEnv,
-  codexTmuxEnvArgs,
-  remoteCodexHome,
-  remoteCodexTmuxEnvArgs,
-  needsCodexAccountScope
-} from './codex-accounts-core'
 import type { ProjectSpawnOverrides, ProjectSpawnOverridesReader } from './project-spawn-overrides'
 
 // How often we snapshot a live tmux session's scrollback to disk, so a machine reboot (which
@@ -4170,16 +4160,6 @@ export class PtyManager {
     const target = sessionName(persistKey)
     const live = this.liveSessionForPersistKey(persistKey)
     const sshRemote = live?.sshRemote
-    if (sshRemote) {
-      const ssh = findSsh()
-      if (!ssh) return false
-      try {
-        await runAsync(ssh, remoteTmuxSendKeysArgs(sshRemote.conn, sshRemote.controlPath, target, text, enter))
-        return true
-      } catch {
-        return false
-      }
-    }
     // No local tmux: this machine persists sessions via the session-host backend instead (see
     // docs/windows-session-host.md). Its `sendKeys` needs no attached client, exactly like
     // tmux's own `send-keys -t <name>` below — the host looks the session up by NAME.
@@ -4189,27 +4169,12 @@ export class PtyManager {
         : false
     }
     try {
-      if (await this.bracketPasteRequested(target)) {
-        // Paste-aware target (agent TUIs, multiplexers like herdr): one atomic write — the
-        // text framed in paste markers plus the Enter — so the composer sees a definitive
-        // paste boundary and the Enter can never be re-chunked into the paste (issue #47).
-        await runAsync(this.tmuxPath, localTmuxSendKeysArgs(TMUX_SOCKET, target, bracketedInjection(text, enter)))
-        return true
-    try {
       if (sshRemote) {
         const ssh = findSsh()
         if (!ssh) return false
         const plan = remotePasteDelivery(sshRemote.conn, sshRemote.controlPath, target, text, enter)
         if (!plan) return true
         return await runPasteDelivery(plan, (args, input) => runWithStdin(ssh, args, input))
-      }
-      // No local tmux: this machine persists sessions via the session-host backend instead (see
-      // docs/windows-session-host.md). Its `sendKeys` needs no attached client, exactly like
-      // tmux's own `send-keys -t <name>` — the host looks the session up by NAME.
-      if (live?.sessionHost || !this.tmuxPath) {
-        return this.getSettings().tmuxEnabled && sessionHostSupported()
-          ? sessionHostSendKeys(target, text, enter)
-          : false
       }
       const tmuxPath = this.tmuxPath
       const plan = localPasteDelivery(TMUX_SOCKET, target, text, enter)
