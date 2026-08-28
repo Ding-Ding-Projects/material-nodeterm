@@ -773,12 +773,14 @@ export class SessionHostClient {
       }
       const socket = this.socket
       if (!socket) throw new Error('session-host: not connected')
+      const connectedSocket = socket as net.Socket
       try {
-        return await this.requestOnSocket(socket, request, onSuccess)
+        return await this.requestOnSocket(connectedSocket, request, onSuccess)
       } catch (error) {
         if (!(error instanceof SessionHostRequestNotDeliveredError)) throw error
-        if (attempt + 1 >= SESSION_HOST_RESEND_ATTEMPTS) throw error.original
-        undelivered = error
+        const deliveryError = error as SessionHostRequestNotDeliveredError
+        if (attempt + 1 >= SESSION_HOST_RESEND_ATTEMPTS) throw deliveryError.original
+        undelivered = deliveryError
       }
     }
   }
