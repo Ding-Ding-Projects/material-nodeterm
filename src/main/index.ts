@@ -4391,11 +4391,6 @@ app.whenReady().then(async () => {
     )
   const usageService = initClaudeUsage(win, {
     localAccounts: localClaudeAccountIds,
-    codexAccounts: () =>
-      codexUsageAccounts(
-        (settingsStore.get().codexAccounts ?? []).filter((account) => !account.host),
-        localCodexAccountHome
-      ),
     codexAccounts: localCodexAccounts,
     onCacheUpdate: () => {
       void flushAgentStatusMirror()
