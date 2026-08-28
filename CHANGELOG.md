@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a guided attach and adopt surface for GitHub work items. Terminal and owning-frame context
+  menus now open a searchable provider-backed picker with a review step, exact frame adoption, and
+  explicit legacy-card conversion that preserves the complete record. No tests, type checks, lint,
+  builds, packaging, runtime interaction, reviews, audits, debugging, repairs, or captures were run
+  in this ultra-speed lane.
+
 - Replace newly created standalone GitHub work-item canvas nodes with compact issue and pull-request
   attachments: chips stay on their exact session node, pills stay on the owning frame, and pull-request
   frame adoption requires an exact match between provider head ref and app-owned worktree branch.

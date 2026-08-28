@@ -15856,6 +15856,15 @@ body.focus-mode .dock:hover {
 .github-work-item-chip__item--needs-you .github-work-item-chip__state { color: var(--md-sys-color-tertiary); }
 .github-work-item-chip__item--passed .github-work-item-chip__state { color: var(--md-sys-color-primary); }
 .github-work-item-chip__item--failed .github-work-item-chip__state { color: var(--md-sys-color-error); }
+.github-work-item-attachment-dialog { width: min(640px, calc(100vw - 32px)); max-height: min(760px, calc(100vh - 32px)); overflow: auto; }
+.github-work-item-attachment-dialog__hint { margin: 0 0 12px; color: var(--md-sys-color-on-surface-variant); line-height: 1.45; }
+.github-work-item-attachment-dialog__list { display: grid; gap: 8px; max-height: 360px; overflow: auto; margin-top: 12px; }
+.github-work-item-attachment-dialog__item { display: grid; gap: 3px; width: 100%; min-height: 56px; padding: 10px 12px; color: var(--md-sys-color-on-surface); text-align: left; background: var(--md-sys-color-surface-container); border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; cursor: pointer; }
+.github-work-item-attachment-dialog__item:hover, .github-work-item-attachment-dialog__item:focus-visible, .github-work-item-attachment-dialog__item.is-selected { border-color: var(--md-sys-color-primary); background: var(--md-sys-color-secondary-container); outline: none; }
+.github-work-item-attachment-dialog__item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.github-work-item-attachment-dialog__item small { color: var(--md-sys-color-on-surface-variant); }
+.github-work-item-attachment-dialog__empty { padding: 18px 12px; color: var(--md-sys-color-on-surface-variant); background: var(--md-sys-color-surface-container); border-radius: 12px; }
+.github-work-item-attachment-dialog__review { display: grid; gap: 5px; margin-top: 12px; padding: 12px; color: var(--md-sys-color-on-surface); background: var(--md-sys-color-tertiary-container); border-radius: 12px; }
 @media (max-width: 720px) {
   .github-work-item-pill { left: 8px; right: 8px; max-width: none; transform: none; }
   .github-work-item-chip__title { font-size: 10px; }

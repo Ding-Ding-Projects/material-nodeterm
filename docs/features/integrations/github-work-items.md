@@ -20,6 +20,15 @@ Refresh is bounded and preserves the last safe snapshot when the account is offl
 permission. Open, comment, and navigation actions must use the existing reviewed operation catalog
 and its host-owned credential boundary.
 
+The session-node and owning-frame context menus expose **Attach GitHub work item…** when a real
+terminal target exists. The guide searches the provider-backed issue records already loaded for the
+active project, lets the user select one, and shows a review step before attaching it. The search is
+plain-text-first and has its own anchored full regex builder. A frame menu targets an actual terminal
+descendant and reports an honest empty state when the frame has no session to receive the attachment.
+Legacy standalone cards are also offered for explicit conversion. Conversion copies the complete
+normalized record to the session node, marks the old record with the same exact attachment identity,
+and hides only the old duplicate indicator, so no provider fields are discarded.
+
 Session relationships are never inferred from terminal or conversation text. The attached node id
 is explicit app-owned data. A frame may adopt a pull request only when its provider head ref exactly
 equals the app-owned worktree branch for that frame. Missing head-ref or branch data leaves adoption

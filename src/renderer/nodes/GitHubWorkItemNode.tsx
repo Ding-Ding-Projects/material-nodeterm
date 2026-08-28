@@ -4,6 +4,9 @@ import { GITHUB_WORK_ITEM_NODE_SIZE, type GitHubWorkItem } from '@shared/github-
 import { renderMarkdown } from '../lib/markdown'
 export default function GitHubWorkItemNode({ data, selected }: NodeProps<CanvasNode>) {
   const item = data.githubWorkItem as GitHubWorkItem
+  // A legacy detail node is retained in project data during explicit conversion, but once the
+  // exact attachment identity is recorded it must not remain as a second indicator elsewhere.
+  if (item.attachedNodeId) return null
   const kind = item.kind === 'pull-request' ? 'Pull request' : 'Issue'
   const html = item.bodyMarkdown ? renderMarkdown(item.bodyMarkdown) : ''
   return <div className={`github-work-item-node${selected ? ' selected' : ''}`} role="article" aria-label={`${kind} ${item.repository || 'repository'} #${item.number}`}>

@@ -137,6 +137,7 @@ import WildDimSumNode from '../nodes/WildDimSumNode'
 import WebNode from '../nodes/WebNode'
 import AwsResourceNode from '../nodes/AwsResourceNode'
 import GitHubWorkItemNode from '../nodes/GitHubWorkItemNode'
+import { GitHubWorkItemAttachmentDialog } from '../nodes/GitHubWorkItemAttachmentDialog'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import TimerNode from '../nodes/TimerNode'
 import AlarmClockNode from '../nodes/AlarmClockNode'
@@ -184,6 +185,7 @@ import {
   type NodeCatalogAvailabilityContext,
   type NodeCatalogEntry
 } from '@shared/node-catalog'
+import { canAdoptPullRequestOnFrame, isGitHubWorkItem, type GitHubWorkItem } from '@shared/github-work-items'
 import { NodeCreationCoordinator } from '../state/nodeCreationCoordinator'
 import { setUniverseShopCatalogRuntime } from '../state/universeShopCatalogProvider'
 import {
@@ -504,6 +506,7 @@ import {
   type ExplorerShowAction
 } from '../lib/explorerPin'
 import { useProjects } from '../state/projects'
+import { useGitHubIssues } from '../state/githubIssues'
 import { useAgentStatus } from '../state/agentStatus'
 import { useToyLocks } from '../state/toylocks'
 import { useSessionRelock } from '../state/useSessionRelock'
@@ -1649,6 +1652,11 @@ export function Canvas() {
     at?: { x: number; y: number }
     groupId?: string
   } | null>(null)
+  const [githubAttachment, setGithubAttachment] = useState<{
+    targetNodeId: string
+    frameId?: string
+    frameBranch?: string
+  } | null>(null)
   const [docsInitialPath, setDocsInitialPath] = useState<string | undefined>(undefined)
   const nodeCreationCoordinatorRef = useRef(new NodeCreationCoordinator())
   // Drives WorktreeDialog. `groupId` null = create the group frame around the new worktree;
@@ -2049,6 +2057,44 @@ export function Canvas() {
 
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const activeProject = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId))
+  const githubBoard = useGitHubIssues((s) => (activeProjectId ? s.projects[activeProjectId] : undefined))
+  const githubAttachmentItems = useMemo<GitHubWorkItem[]>(() => {
+    const repository = activeProject?.kanban?.github?.repository
+    const seen = new Set<string>()
+    const items: GitHubWorkItem[] = []
+    if (repository) {
+      for (const issue of Object.values(githubBoard?.pages ?? {}).flatMap((page) => page.items)) {
+        const key = `${repository}#${issue.number}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        items.push({
+          schemaVersion: 1,
+          kind: 'issue',
+          repository,
+          number: issue.number,
+          title: issue.title,
+          bodyMarkdown: issue.body,
+          state: issue.state,
+          author: null,
+          labels: issue.labels.map((label) => ({ name: label.name, color: label.color })),
+          createdAt: issue.createdAt,
+          updatedAt: issue.updatedAt,
+          htmlUrl: issue.htmlUrl,
+          sessionIds: [],
+          refreshState: githubBoard?.loading ? 'stale' : 'fresh'
+        })
+      }
+    }
+    for (const node of nodes) {
+      const legacy = node.type === 'github-work-item' ? node.data.githubWorkItem : undefined
+      if (!isGitHubWorkItem(legacy)) continue
+      const key = `${legacy.repository}#${legacy.number}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      items.push(legacy)
+    }
+    return items
+  }, [activeProject?.kanban?.github?.repository, githubBoard?.loading, githubBoard?.pages, nodes])
   const portalProjection = useMemo(() => {
     if (!activeProject) return null
     try {
@@ -10810,6 +10856,37 @@ export function Canvas() {
     return node.selected && selected.length > 0 ? selected : [node.id]
   }, [])
 
+  const attachGitHubWorkItem = useCallback((item: GitHubWorkItem) => {
+    const request = githubAttachment
+    if (!request) return
+    const adopted = request.frameId
+      ? canAdoptPullRequestOnFrame(item, request.frameBranch)
+      : false
+    const bound: GitHubWorkItem = {
+      ...item,
+      attachedNodeId: request.targetNodeId,
+      ...(request.frameId ? { owningGroupId: request.frameId } : {}),
+      binding: adopted ? 'adopted' : 'explicit'
+    }
+    setNodes((current) => current.map((node) => {
+      const key = `${bound.repository}#${bound.number}`
+      if (node.id === request.targetNodeId) {
+        const existing = node.data.githubWorkItems ?? []
+        const next = [...existing.filter((entry) => `${entry.repository}#${entry.number}` !== key), bound]
+        return { ...node, data: { ...node.data, githubWorkItems: next.slice(0, 100) } }
+      }
+      if (node.type === 'github-work-item' && node.data.githubWorkItem) {
+        const legacy = node.data.githubWorkItem
+        if (`${legacy.repository}#${legacy.number}` === key) {
+          return { ...node, data: { ...node.data, githubWorkItem: bound } }
+        }
+      }
+      return node
+    }))
+    markDirty()
+    setGithubAttachment(null)
+  }, [githubAttachment, markDirty, setNodes])
+
   /** `at` is where the menu was opened, in flow coordinates: every entry that SPAWNS a node
    *  (Duplicate / Branch / Transfer) puts it there, instead of somewhere the user never pointed. */
   const selectionItems = useCallback((ids: string[], at?: { x: number; y: number }): MenuItem[] => {
@@ -10818,8 +10895,30 @@ export function Canvas() {
     // Destructive/recovery rows (Delete, Restart agent, Branch/Transfer) are not hideable at all:
     // `isHidden` only answers for ids in its own inventory.
     const hidden = useSettings.getState().settings.hiddenNodeMenuItems
+    const target = ids.length === 1 ? nodesRef.current.find((node) => node.id === ids[0]) : undefined
+    let frameId: string | undefined
+    let frameBranch: string | undefined
+    let parentId = target?.parentId
+    const seenParents = new Set<string>()
+    while (parentId && !seenParents.has(parentId)) {
+      seenParents.add(parentId)
+      const parent = nodesRef.current.find((node) => node.id === parentId)
+      if (parent?.type === 'group') {
+        frameId = parent.id
+        frameBranch = parent.data.worktree?.branch
+        break
+      }
+      parentId = parent?.parentId
+    }
     return tidySeparators<MenuItem>([
       { type: 'label', label: ids.length > 1 ? `${ids.length} nodes` : '1 node' },
+      ...(target?.type === 'terminal'
+        ? ([{
+            label: 'Attach GitHub work item…',
+            icon: <IconKanban />,
+            onClick: () => setGithubAttachment({ targetNodeId: target.id, ...(frameId ? { frameId } : {}), ...(frameBranch ? { frameBranch } : {}) })
+          }] as MenuItem[])
+        : []),
       ...(ids.length === 2
         ? (() => {
             const firstAgent = agentIdOf(ids[0])
@@ -11791,6 +11890,18 @@ export function Canvas() {
         addSelectionToGroup(nodesRef.current as CanvasNode[], selectedIds, groupId) !==
           nodesRef.current
       const groupHidden = isHidden('group', useSettings.getState().settings.hiddenNodeMenuItems)
+      const frame = nodesRef.current.find((node) => node.id === groupId)
+      const frameSession = nodesRef.current.find((node) => {
+        if (node.type !== 'terminal') return false
+        let parent = node.parentId
+        const seen = new Set<string>()
+        while (parent && !seen.has(parent)) {
+          if (parent === groupId) return true
+          seen.add(parent)
+          parent = nodesRef.current.find((candidate) => candidate.id === parent)?.parentId
+        }
+        return false
+      })
       // The group frame has its own colors strip; it answers to the same "Colors" toggle as the
       // node menu, so hiding it in Settings hides it everywhere a right-click can reach it.
       return tidySeparators<MenuItem>([
@@ -11799,6 +11910,16 @@ export function Canvas() {
           label: 'New node from catalog…',
           icon: <IconShapes />,
           onClick: () => setNodeCatalog({ at, groupId })
+        },
+        {
+          label: 'Attach GitHub work item…',
+          icon: <IconKanban />,
+          disabled: !frameSession,
+          hint: frameSession ? 'Choose an existing provider-backed issue or pull request.' : 'Add a terminal to this frame before attaching a work item.',
+          onClick: () => {
+            if (!frameSession) return
+            setGithubAttachment({ targetNodeId: frameSession.id, frameId: groupId, frameBranch: frame?.data.worktree?.branch })
+          }
         },
         ...(canAddSelection && !groupHidden
           ? [
@@ -18795,6 +18916,17 @@ export function Canvas() {
             setDocsInitialPath(path)
             setDocsOpen(true)
           }}
+        />
+      )}
+      {githubAttachment && (
+        <GitHubWorkItemAttachmentDialog
+          open
+          targetNodeId={githubAttachment.targetNodeId}
+          frameId={githubAttachment.frameId}
+          frameBranch={githubAttachment.frameBranch}
+          items={githubAttachmentItems}
+          onClose={() => setGithubAttachment(null)}
+          onAttach={attachGitHubWorkItem}
         />
       )}
       {kioskPwaDialog && (
