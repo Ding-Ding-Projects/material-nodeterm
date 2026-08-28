@@ -35,6 +35,7 @@ vi.mock('@xterm/xterm', () => ({
         getLine: vi.fn()
       }
     }
+    options: Record<string, unknown> = {}
     dispose = vi.fn()
     write = vi.fn()
     resize = vi.fn()
@@ -42,6 +43,7 @@ vi.mock('@xterm/xterm', () => ({
     paste = vi.fn()
     loadAddon = vi.fn()
     open = vi.fn()
+    registerLinkProvider = vi.fn(() => ({ dispose: vi.fn() }))
     attachCustomKeyEventHandler = vi.fn()
     hasSelection = vi.fn(() => false)
     getSelection = vi.fn(() => '')
@@ -128,14 +130,18 @@ vi.mock('../../lib/personalVocabulary/useLocalizedVocabularyText', () => ({
 
 vi.mock('../../lib/projectJump', () => ({ liveProjectJumpTarget: () => null }))
 vi.mock('../../lib/transcriptGates', () => ({ readsClaudeTranscript: () => false }))
-vi.mock('@shared/agents/config', () => ({ reportsOwnCopy: () => false }))
+vi.mock('@shared/agents/config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/agents/config')>()),
+  reportsOwnCopy: () => false
+}))
 vi.mock('@shared/platform-utils', () => ({ isWindowsPlatform: () => true }))
 vi.mock('../FindBar', () => ({ FindBar: () => null }))
 
 vi.mock('../../nodes/TerminalNode', () => ({
   resolveSshRemote: vi.fn(async () => undefined),
   reportSshDrop: vi.fn(),
-  sshConnectionScope: vi.fn(() => 'ssh-scope')
+  sshConnectionScope: vi.fn(() => 'ssh-scope'),
+  owningProjectId: vi.fn(() => 'project-1')
 }))
 
 vi.mock('../../state/agentStatus', () => ({
