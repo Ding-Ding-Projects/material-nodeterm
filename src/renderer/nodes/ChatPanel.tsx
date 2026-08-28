@@ -7,6 +7,7 @@ import { chipFor } from '../lib/keybindingOverrides'
 import { E_UNSUPPORTED } from '@shared/rpc'
 import { TextArea } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { hintLabel } from '@shared/platform-utils'
 import { mapAroundExactFacts } from './nodeVocabulary'
 
 // Memoized bubble: marked+DOMPurify re-ran for EVERY message on each ChatPanel render (each

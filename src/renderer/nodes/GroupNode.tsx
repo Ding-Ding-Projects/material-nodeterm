@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NodeResizer, useReactFlow, useStore, type NodeProps } from '@xyflow/react'
-import { ungroupNodes, type CanvasNode } from '../state/workspace'
+import { NODE_COLORS, ungroupNodes, type CanvasNode } from '../state/workspace'
 import { useToyLocks } from '../state/toylocks'
 import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
 import { useProjects } from '../state/projects'
@@ -11,16 +11,11 @@ import { ColorMenu } from '../components/color/ColorMenu'
 import { alphaTint } from '../components/color/tint'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { GitHubWorkItemAttachment } from './GitHubWorkItemAttachment'
-
-export type WorktreeAction = 'merge' | 'remove' | 'unbind'
-export type WslAction = 'sleep' | 'wake' | 'delete' | 'unbind'
 import { NODE_MIN_SIZES } from '../lib/nodeSizing'
-import { NODE_COLORS, ungroupNodes, type CanvasNode } from '../state/workspace'
-import { useProjects } from '../state/projects'
-import { useWorktrees, WORKTREE_STATUS_POLL_MS } from '../state/worktrees'
 import { useProjectSetup } from '../state/projectSetup'
 
 export type WorktreeAction = 'merge' | 'remove' | 'unbind' | 'rerun-setup'
+export type WslAction = 'sleep' | 'wake' | 'delete' | 'unbind'
 
 /**
  * Worktree-action handler bridge. React Flow instantiates custom nodes itself, so we can't
