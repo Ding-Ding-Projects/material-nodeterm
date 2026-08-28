@@ -59,6 +59,7 @@ function renderFabMenu(
   act(() =>
     root?.render(
       <FabMenu
+        onOpenCatalog={() => {}}
         onAddTerminal={onAddTerminal}
         offersTerminalProfiles
         terminalProfileChoices={choices}
