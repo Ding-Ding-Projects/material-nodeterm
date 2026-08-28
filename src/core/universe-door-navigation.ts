@@ -6,7 +6,6 @@
  * and history shortcuts are refused here so every shell shares one policy.
  */
 
-import { validatePortableDoorConstruction, type PortableDoorConstructionV3 } from '../shared/door-construction'
 import {
   validateUniverseDoorEntrySubmission,
   validatePortableUniverseDoorEntry,

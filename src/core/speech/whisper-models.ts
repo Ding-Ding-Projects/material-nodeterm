@@ -2,12 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
 import { mkdir, open, readdir, rm, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { mkdir, readdir, rm, stat } from 'node:fs/promises'
-import { join } from 'node:path'
 import { renameAtomic } from '../fs-atomic'
 import { Writable } from 'node:stream'
 import { WHISPER_DOWNLOAD_BASE, WHISPER_MODELS, whisperModel } from '../../shared/speech'
-import { renameAtomic } from '../fs-atomic'
 
 /** A foreign fragment must be untouched while another desktop/server/container may still own it.
  * Ongoing downloads refresh their part's mtime as they write; a full day without modification
