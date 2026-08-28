@@ -1,5 +1,31 @@
 # Handoff
 
+## 2026-08-28, VeraCrypt container-manager lane, Issue #210
+
+The isolated branch `feat/veracrypt-mount-management-20260828` adds a Windows desktop node for
+existing file-hosted VeraCrypt containers. The service discovers a validated local executable,
+rejects non-regular container paths and occupied drive letters, invokes a fixed argument array with
+`shell: false`, leaves password, PIM, keyfile, and hidden-volume protection input to VeraCrypt's
+native prompt, and independently verifies the requested drive root before reporting success. The
+manager does not claim to enumerate pre-existing host mounts because VeraCrypt exposes no documented
+volume-list command.
+
+Changed files include `src/shared/veracrypt.ts`, `src/shared/ipc.ts`, `src/shared/types.ts`,
+`src/core/veracrypt/service.ts`, `src/core/veracrypt/register-ipc.ts`, `src/main/index.ts`,
+`src/server/index.ts`, `src/preload/index.ts`, `src/renderer/bridge/stubs.ts`,
+`src/renderer/bridge/relay-api.ts`, `src/renderer/nodes/VeraCryptNode.tsx`,
+`src/renderer/state/workspace.ts`, `src/renderer/canvas/Canvas.tsx`,
+`src/renderer/lib/reopenNode.ts`, `src/renderer/lib/nodeSizing.ts`,
+`src/renderer/styles.md3.css`, `src/shared/node-catalog.ts`,
+`docs/features/integrations/veracrypt.md`, `docs/features/integrations/README.md`,
+`CHANGELOG.md`, `ROADMAP.md`, and this handoff.
+
+The route stores only safe machine-local favorites. Server Edition, relay sessions, and mobile
+companion surfaces report unsupported rather than using another computer's VeraCrypt installation.
+Tests, type checks, lint, reviews, audits, runtime interaction, and screenshots are intentionally
+unrun in the accelerated lane. Build and package results must be recorded below after the pinned
+candidate is committed.
+
 ## 2026-08-28, published v0.4.123 and continued repair state
 
 Release `v0.4.123` is published and non-draft. Its verified target is

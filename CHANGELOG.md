@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Add the Windows VeraCrypt container manager node for existing file-hosted containers. The guided
+  route validates regular files and drive letters, launches a fixed `VeraCrypt.exe` argument array
+  with `shell: false`, leaves password, PIM, keyfile, and hidden-volume protection input to the
+  native VeraCrypt prompt, independently verifies mount and unmount state, and keeps favorites
+  local without credentials. Server Edition, relay sessions, and mobile companion surfaces report
+  an explicit unsupported state. Tests, type checks, lint, reviews, runtime interaction, and
+  screenshots remain intentionally unrun for the accelerated feature lane.
+
+  加入 Windows VeraCrypt container manager node，支援現有 file-hosted container。流程會驗證 regular
+  file 同 drive letter，用固定 `VeraCrypt.exe` arguments 加 `shell: false` 啟動；password、PIM、keyfile
+  同 hidden-volume protection 由 VeraCrypt 原生 prompt 處理，mount 同 unmount 會再獨立核實，favorite
+  只留喺本機而且唔會保存 credential。Server Edition、relay 同 mobile companion 會清楚顯示
+  unsupported。加速路線刻意未執行 tests、type checks、lint、reviews、runtime interaction 同 screenshots。
+
 - Fix packaged Windows startup after the file-converter pipeline added Sharp. The package now
   classifies Sharp and its native Windows binary as production dependencies, loads Sharp only when
   an image conversion needs it, and refuses any installer output that omits either runtime file.

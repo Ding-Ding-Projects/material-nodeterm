@@ -94,6 +94,7 @@ import { createSessionReaper } from '../core/session-budget'
 import { startSessionMemoryService, sshScopePredicate } from '../core/session-memory-service'
 import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
 import { registerWindowsDiagnosticsIpc } from '../core/windows-diagnostics'
+import { registerVeraCryptIpc } from '../core/veracrypt/register-ipc'
 import { startToyLockService } from '../core/toylocks/toylock-service'
 import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
 import { startUniverseDoorEntryService } from '../core/universe-door-entry-service'
@@ -766,6 +767,7 @@ export async function startServer(
     ownership: fileWslOwnershipStore(path.join(config.dataDir, 'wsl-owned-distributions.json'))
   })
   registerWindowsDiagnosticsIpc()
+  registerVeraCryptIpc(platform)
 
   // Toy locks + the built-in authenticator (docs/toy-locks.md, docs/authenticator.md). No
   // headless/relay-specific behaviour — the plain core-bound service, same as src/main/index.ts.

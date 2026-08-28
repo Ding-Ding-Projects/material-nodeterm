@@ -859,6 +859,20 @@ export function buildStubApi(): Omit<
     windowsDiagnostics: {
       snapshot: U('windowsDiagnostics.snapshot')
     },
+    veracrypt: {
+      availability: U('veracrypt.availability'),
+      favorites: U('veracrypt.favorites'),
+      saveFavorite: U('veracrypt.saveFavorite'),
+      removeFavorite: U('veracrypt.removeFavorite'),
+      preflight: U('veracrypt.preflight'),
+      mount: U('veracrypt.mount'),
+      refresh: U('veracrypt.refresh'),
+      explore: U('veracrypt.explore'),
+      unmount: U('veracrypt.unmount'),
+      wipeCache: U('veracrypt.wipeCache'),
+      cancel: U('veracrypt.cancel'),
+      onOperation: noopUnsub
+    },
     calendar: {
       status: U('calendar.status'),
       accounts: U('calendar.accounts'),

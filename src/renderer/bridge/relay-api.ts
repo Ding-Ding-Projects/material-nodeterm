@@ -136,6 +136,9 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // silently replace that with this desktop's local snapshot; until a scoped host route exists,
     // keep the capability explicitly unavailable.
     windowsDiagnostics: stub.windowsDiagnostics,
+    // VeraCrypt is host-local desktop state. A relay guest never reaches the viewer's local
+    // installation and never requests the remote host's credential prompt.
+    veracrypt: stub.veracrypt,
     ...buildAgentApi(client), // onAgentStatus / onSubagentActivity — the host's agent hooks
     ...buildCanvasApi(client), // canvas sync against the host's reflector
     ...buildPresenceApi(client), // the host's presence hub

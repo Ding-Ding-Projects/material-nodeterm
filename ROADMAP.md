@@ -12,6 +12,14 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ---
 
+## VeraCrypt container management
+
+- [ ] **Issue #210, existing VeraCrypt containers:** the Windows desktop node, native credential
+      prompt, independently observed mount state, Explore, unmount, local favorites, cache wipe,
+      and unsupported non-desktop states are implemented on
+      `feat/veracrypt-mount-management-20260828`. Accelerated-lane tests, type checks, reviews,
+      runtime interaction, and captures remain intentionally unrun until a release-grade pass.
+
 ## Shipped and verified
 
 - [ ] **Start-screen build provenance:** show the artifact-stamped package version and second-
