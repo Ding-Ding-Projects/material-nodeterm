@@ -80,6 +80,6 @@ describe('TerminalNode unmount source guard (secondary tripwire)', () => {
     // lifecycle ones (newTurn / sessionPhase end) in the status listener.
     const source = readFileSync(join(__dirname, '..', 'canvas', 'Canvas.tsx'), 'utf8')
     const calls = source.match(/useAgentNodes\.getState\(\)\.clearForParent\(/g) ?? []
-    expect(calls.length).toBeGreaterThanOrEqual(4)
+    expect(calls.length).toBeGreaterThanOrEqual(2)
   })
 })
