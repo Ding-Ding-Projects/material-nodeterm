@@ -39,7 +39,7 @@ export function DockerHostManagerPanel(): React.JSX.Element {
   const [volumeName, setVolumeName] = useState('nodeterm-data')
   const [networkName, setNetworkName] = useState('nodeterm-private')
   const [internalNetwork, setInternalNetwork] = useState(true)
-  const [selectedImage, setSelectedImage] = useState(DOCKER_GUIDED_IMAGES[0].ref)
+  const [selectedImage, setSelectedImage] = useState<(typeof DOCKER_GUIDED_IMAGES)[number]['ref']>(DOCKER_GUIDED_IMAGES[0].ref)
   const [selectedNetwork, setSelectedNetwork] = useState('none')
   const [readOnly, setReadOnly] = useState(true)
   const [execContainer, setExecContainer] = useState('')
