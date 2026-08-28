@@ -106,8 +106,6 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
       joinParts: () => relayUnsupported('workspace.joinParts')
     },
     userDataDir: real.userDataDir, // the host's writable base — worktree default paths live there
-    workspace: real.workspace, // the host's canvas/project files
-    userDataDir: real.userDataDir, // the host's writable base
     fs: files.fs,
     git: {
       ...files.git,
