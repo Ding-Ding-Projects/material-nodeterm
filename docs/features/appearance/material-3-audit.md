@@ -16,6 +16,10 @@ Every desktop row is reviewed against the shared Material Design 3 primitives an
 
 The concrete source remediations in this pass are:
 
+- `src/renderer/styles.css` restores the destructive confirmation destination-gate rule boundaries,
+  including anchored scrim, completion, action, exit, hover, and reduced-motion styling, while
+  retaining the adjacent card-modal and sticky-note selectors as standalone rules. Source parsing
+  remains pending the integration build because no CSS parser was available in this lane.
 - `src/renderer/ui/NumberField.tsx` now renders the shared `mdx-input mdx-number-field` recipe instead of legacy utility and palette classes.
 - `src/renderer/ui/md3/Radio.tsx` and `src/renderer/ui/md3/Progress.tsx` provide native, accessible, tokenized controls through the shared barrel.
 - Worktree, toy-lock, authenticator, and speech model choices use the shared radio primitive.

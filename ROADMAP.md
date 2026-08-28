@@ -37,6 +37,14 @@ later commit, since this file will not be kept in lockstep with every merge).
       branches inside one guarded operation, preserving the fail-closed ownership and adoption
       predicates; its single-file esbuild transform reports syntax-only success.
 
+      Renderer stylesheet merge remnants are now separated around the destructive confirmation
+      destination gate. Its anchored scrim, title, key, progress, completion, action, exit, hover,
+      and reduced-motion rules are restored, adjacent card-modal and sticky-note selectors remain
+      standalone, and ten additional missing declaration boundaries are closed. No CSS parser was
+      available in this lane, so build verification remains pending. The ultra-speed pass
+      intentionally omits tests, type checks, lint, reviews, accessibility and security checks,
+      runtime interaction, and screen captures after activation.
+
       Portable board-comment attachments now re-export the shared byte-derived detector through
       `src/core/board-attachments.ts`, so `src/core/portable-project-import.ts` retains one
       classification boundary while preserving path safety, MIME checks, attachment limits, and

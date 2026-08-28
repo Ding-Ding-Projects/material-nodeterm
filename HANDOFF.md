@@ -1,5 +1,25 @@
 # Handoff
 
+## 2026-08-27, renderer stylesheet boundary repair
+
+`src/renderer/styles.css` contained merge remnants inside the destructive confirmation styles. The
+`.destgate__head`, `.destgate__icon`, and `.destgate__actions` rules had been split by card-modal and
+sticky-note selectors, leaving the destination gate incomplete and causing the renderer stylesheet
+parse failure at `.destgate__actions`.
+
+The repair restores the destination gate from clean history at `8498eb32`, including the anchored
+scrim, title, hover, completion, exit, and reduced-motion rules. The card-modal resize, header, and
+rendered-markdown rules that were interleaved in the damaged range are retained as independent
+selectors. A full source scan also identified ten other merge-spliced declaration blocks, and their
+missing closing braces were restored at the exact selector boundaries without changing their
+declarations. The resulting brace count is balanced at 2,637 opening and 2,637 closing braces after
+comment removal.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, audits, or UI captures. No local CSS parser was installed or
+available, so the brace-balance result is syntax-adjacent evidence only. The integration owner must
+run the permitted build path and verify the exact combined commit.
+
 ## 2026-08-27, opening merge-recovery repairs
 
 ### Main-process parser repair
