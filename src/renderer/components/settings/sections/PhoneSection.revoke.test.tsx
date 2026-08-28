@@ -34,6 +34,7 @@ function stubBridge(result: DeviceRevokeResult | Error): void {
   })
   ;(window as unknown as { nodeTerminal: unknown }).nodeTerminal = {
     pairing: {
+      supported: true,
       start: vi.fn(),
       stop: vi.fn(async () => undefined),
       onDone: vi.fn(() => () => undefined),
@@ -176,6 +177,6 @@ describe('PhoneSection revoke feedback', () => {
     await act(async () => undefined)
 
     const text = await revokeFlow()
-    expect(text).toMatch(/try again/i)
+    expect(text).toMatch(/retry Revoke/i)
   })
 })
