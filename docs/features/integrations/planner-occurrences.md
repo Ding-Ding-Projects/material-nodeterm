@@ -38,7 +38,10 @@ before saving.
 
 The service starts with both Desktop and Server Edition boot, before any UI is attached. Closing the
 last browser tab or the Desktop title-bar window keeps the host alive while enabled schedules exist,
-so evaluation continues without an attached UI. Explicit application quit still stops the service.
+so evaluation continues without an attached UI. On Windows this is the only title-bar-close
+background-host exception; without an enabled schedule, the same close enters the complete bounded
+application shutdown path and releases every auxiliary window and application-owned process.
+Explicit application quit still stops the service.
 Each sweep advances a durable last-tick
 marker. A due instant older than two minutes is recorded as `missed`; a current due instant is
 `fired` and is delivered to the notification seams. A clock moving backwards advances the marker to

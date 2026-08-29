@@ -221,7 +221,14 @@ import {
   isValidPendingId,
   syntheticAnsweredEvent
 } from '../core/agents/pending-approvals'
-import { setMainWindow, getMainWindow, sendToMain, closeAction, createCrashReloadPolicy } from './main-window'
+import {
+  setMainWindow,
+  getMainWindow,
+  sendToMain,
+  closeAction,
+  shouldQuitHostOnWindowClose,
+  createCrashReloadPolicy
+} from './main-window'
 import {
   MENU_ITEM_ID_CLOSE,
   MENU_ITEM_ID_KANBAN,
@@ -1394,10 +1401,11 @@ function createWindow(): BrowserWindow {
       }
       return
     }
+    const hasEnabledPlannerSchedules = plannerRuntime.hasEnabledSchedules()
     // A title-bar close is a UI close, not an explicit host shutdown. When the planner owns an
-    // enabled schedule, let this window be destroyed and let window-all-closed keep the process
-    // alive. Menu Quit and app shutdown still reach before-quit and stop the planner normally.
-    if (!quitting && plannerRuntime.hasEnabledSchedules()) return
+    // enabled schedule, let this window be destroyed while the host remains available. Menu Quit
+    // and app shutdown still reach before-quit and stop the planner normally.
+    if (!quitting && hasEnabledPlannerSchedules) return
     // action === 'default': the window is really closing. On Windows/Linux the native title-bar
     // × reaches this directly (no app.quit() first), so the confirm gate must sit here too, not
     // only in before-quit — otherwise the window (and with it the only place to show a dialog)
@@ -1407,6 +1415,16 @@ function createWindow(): BrowserWindow {
       void confirmQuit(win).then((ok) => {
         if (ok) app.quit()
       })
+      return
+    }
+    // On Windows an auxiliary BrowserWindow can remain after the main window is destroyed, so
+    // `window-all-closed` is not a reliable quit trigger. Enter the normal bounded before-quit
+    // lifecycle now, which closes auxiliary windows, detaches persistent sessions, releases
+    // application-owned processes, and gives up the single-instance lock. The planner exception
+    // above remains the deliberate background-host route.
+    if (shouldQuitHostOnWindowClose(process.platform, quitting, hasEnabledPlannerSchedules)) {
+      e.preventDefault()
+      app.quit()
     }
   })
 

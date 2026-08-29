@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Fix the normal Windows title-bar close path so it enters the bounded application shutdown
+  lifecycle immediately instead of waiting for every auxiliary window to disappear. The shutdown
+  now closes the HUD, detaches persistent terminal clients, releases application-owned services and
+  child processes, and gives up the single-instance lock. An enabled planner schedule remains the
+  deliberate background-host exception, and explicit Quit still stops it normally.
+
+  修正 Windows 標題列關閉路徑：而家會即刻進入有上限嘅完整 application shutdown，唔再傻等所有
+  auxiliary window 自己消失。HUD、persistent terminal client、application-owned service、child
+  process 同 single-instance lock 都會正常收尾。只有已啟用 planner schedule 會照舊留喺背景，明確
+  Quit 仍然會正常停止佢。
+
 - Keep packaged Windows startup alive when WebTorrent's optional native uTP listener is refused.
   The packaged runtime now starts with uTP disabled while retaining TCP and DHT, and the torrent
   service contains asynchronous client errors instead of allowing an uncaught `error` event to
