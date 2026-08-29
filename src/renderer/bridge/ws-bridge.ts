@@ -956,6 +956,25 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+/** Typed AWS managers over the same core executor used by Desktop. The browser receives only
+ * operation metadata, resource records, and status events, never credentials or shell syntax. */
+export function buildAwsApi(client: RpcClient): Pick<NodeTerminalApi, 'aws'> {
+  return {
+    aws: {
+      catalog: () => client.request(IPC.awsCatalog) as ReturnType<NonNullable<NodeTerminalApi['aws']>['catalog']>,
+      forms: (service) => client.request(IPC.awsForms, service) as ReturnType<NonNullable<NodeTerminalApi['aws']>['forms']>,
+      inventory: (request) => client.request(IPC.awsInventory, request) as ReturnType<NonNullable<NodeTerminalApi['aws']>['inventory']>,
+      preview: (input) => client.request(IPC.awsPreview, input) as ReturnType<NonNullable<NodeTerminalApi['aws']>['preview']>,
+      execute: (input) => client.request(IPC.awsExecute, input) as ReturnType<NonNullable<NodeTerminalApi['aws']>['execute']>,
+      cancel: (operationId) => client.request(IPC.awsCancel, operationId) as ReturnType<NonNullable<NodeTerminalApi['aws']>['cancel']>,
+      bulkPreview: (input, ids) => client.request(IPC.awsBulkPreview, input, ids) as ReturnType<NonNullable<NodeTerminalApi['aws']>['bulkPreview']>,
+      bulkExecute: (input, ids) => client.request(IPC.awsBulkExecute, input, ids) as ReturnType<NonNullable<NodeTerminalApi['aws']>['bulkExecute']>,
+      status: () => client.request(IPC.awsStatus) as ReturnType<NonNullable<NodeTerminalApi['aws']>['status']>,
+      onEvent: (listener) => client.subscribe(IPC.awsEvent, listener as Listener)
+    }
+  }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1394,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildAwsApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

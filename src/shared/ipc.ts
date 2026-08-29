@@ -594,6 +594,18 @@ export const IPC = {
   // Shell → renderer: one multiplexed status/console stream, like ollama:chat-stream above.
   // Payload: MinecraftEvent. A listener filters to the instance id it owns.
   minecraftEvent: 'minecraft:event',
+  // Typed AWS service managers. The core owns the AWS CLI argv executor; renderer values are
+  // validated operation forms and never arbitrary shell or raw request strings.
+  awsCatalog: 'aws:catalog',
+  awsForms: 'aws:forms',
+  awsInventory: 'aws:inventory',
+  awsPreview: 'aws:preview',
+  awsExecute: 'aws:execute',
+  awsCancel: 'aws:cancel',
+  awsBulkPreview: 'aws:bulk-preview',
+  awsBulkExecute: 'aws:bulk-execute',
+  awsStatus: 'aws:status',
+  awsEvent: 'aws:event',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).

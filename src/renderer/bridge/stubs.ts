@@ -588,6 +588,18 @@ export function buildStubApi(): Omit<
       restoreBackup: U('minecraft.restoreBackup'),
       deleteBackup: U('minecraft.deleteBackup'),
       onEvent: noopUnsub
+    },
+    aws: {
+      catalog: U('aws.catalog'),
+      forms: U('aws.forms'),
+      inventory: U('aws.inventory'),
+      preview: U('aws.preview'),
+      execute: U('aws.execute'),
+      cancel: U('aws.cancel'),
+      bulkPreview: U('aws.bulkPreview'),
+      bulkExecute: U('aws.bulkExecute'),
+      status: U('aws.status'),
+      onEvent: noopUnsub
     }
   } satisfies Omit<
     NodeTerminalApi,

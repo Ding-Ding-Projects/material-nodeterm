@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-08-26, AWS service manager lane
+
+Issue #49 adds `src/shared/aws.ts`, `src/core/aws/{executor,manager,register-ipc}.ts`, the typed
+preload and Server Edition bridge channels, and `src/renderer/components/aws/AwsManagerPanel.tsx`.
+The panel covers ECR, ECS, EKS, RDS, database, VPC, Route 53, and cost operations with guided
+forms, attached plain-text search and Regex Builder, paginated inventory metadata, permission and
+partial states, previews, bulk selection previews, waiters, and streamed status events. The AWS
+executor uses argv-only `spawn` with `shell: false`; credential values never cross the renderer
+boundary or enter generated arguments. Relay sessions refuse the local AWS capability until a
+scoped host route exists.
+
+The `aws` service node is registered in the shared service-kind catalog and uses the same canvas
+creation, resize, collapse, rename, and persistence path as other service nodes. The integration
+article is `docs/features/integrations/aws-managers.md`, indexed from the integrations category.
+The offline documentation bundle needs regeneration by the parent lane after this article lands.
+
+This ultra-speed lane did not run tests, type checks, lint, security or accessibility checks,
+installer execution, runtime interaction checks, or UI captures. It made no commit or push. Full
+AWS CLI model-index coverage, provider fixtures, packaged runtime interaction, and release proof
+remain parent-lane verification work.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

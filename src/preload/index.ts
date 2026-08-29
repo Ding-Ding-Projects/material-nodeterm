@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { AwsEvent } from '../shared/aws'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -70,6 +71,7 @@ const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
+const subscribeAwsEvent = subscribe<[AwsEvent]>(IPC.awsEvent)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -942,6 +944,18 @@ const api: NodeTerminalApi = {
     restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
+  },
+  aws: {
+    catalog: () => ipcRenderer.invoke(IPC.awsCatalog),
+    forms: (service) => ipcRenderer.invoke(IPC.awsForms, service),
+    inventory: (request) => ipcRenderer.invoke(IPC.awsInventory, request),
+    preview: (input) => ipcRenderer.invoke(IPC.awsPreview, input),
+    execute: (input) => ipcRenderer.invoke(IPC.awsExecute, input),
+    cancel: (operationId) => ipcRenderer.invoke(IPC.awsCancel, operationId),
+    bulkPreview: (input, ids) => ipcRenderer.invoke(IPC.awsBulkPreview, input, ids),
+    bulkExecute: (input, ids) => ipcRenderer.invoke(IPC.awsBulkExecute, input, ids),
+    status: () => ipcRenderer.invoke(IPC.awsStatus),
+    onEvent: (listener) => subscribeAwsEvent(listener)
   }
 }
 

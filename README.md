@@ -110,7 +110,9 @@ Right-click to open a **terminal** or an **agent** node. Alongside them live **s
 browser views, annotations, and a family of **service managers** — Minecraft, Docker host,
 Proxmox, GitLab, Home Assistant and FreePBX — each an ordinary node you drag, colour, group and
 persist like any other, because a managed service is something you arrange beside the terminals
-working on it, not a modal you visit.
+working on it, not a modal you visit. The AWS manager node adds guided ECR, ECS, EKS, RDS, database,
+VPC, Route 53, and Cost Explorer operations with typed forms and reviewable execution previews;
+see [`docs/features/integrations/aws-managers.md`](./docs/features/integrations/aws-managers.md).
 
 **Group** nodes are real containers that nest inside each other and can bind to a git worktree, so
 every node created inside one inherits that worktree's directory. Quit the app and the persistent

@@ -11230,3 +11230,33 @@ button.term-node__title-text:focus-visible {
 .icon-menu__reset-btn {
   align-self: flex-start;
 }
+
+/* AWS manager: dense but touchable Material Design 3 form, inventory, preview, and status surfaces. */
+.aws-manager { display: flex; flex-direction: column; gap: 12px; padding: 16px; min-width: 0; color: var(--md-on-surface); background: var(--md-surface-container); border-radius: 16px; }
+.aws-manager__header, .aws-manager__toolbar, .aws-manager__actions { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.aws-manager__header { justify-content: space-between; }
+.aws-manager__header h2, .aws-manager h3 { margin: 0; }
+.aws-manager__header p, .aws-manager__operations p, .aws-manager__field small, .aws-manager__check small, .aws-manager__search small { display: block; color: var(--md-on-surface-variant); font-size: 12px; }
+.aws-manager__toolbar label, .aws-manager__field { display: flex; flex-direction: column; gap: 4px; min-width: 150px; flex: 1 1 180px; }
+.aws-manager input, .aws-manager select { min-height: 40px; padding: 8px 10px; border: 1px solid var(--md-outline); border-radius: 10px; background: var(--md-surface); color: inherit; }
+.aws-manager__toolbar button, .aws-manager__actions button, .aws-manager__preview button { min-height: 40px; padding: 8px 14px; border: 0; border-radius: 20px; background: var(--md-primary); color: var(--md-on-primary); cursor: pointer; }
+.aws-manager__search { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.aws-manager__search input { flex: 1 1 260px; }
+.aws-manager__search small { flex-basis: 100%; }
+.aws-manager__body { display: grid; grid-template-columns: minmax(230px, .8fr) minmax(280px, 1.2fr); gap: 16px; min-height: 180px; }
+.aws-manager__operations, .aws-manager__inventory, .aws-manager__preview { padding: 12px; border: 1px solid var(--md-outline-variant); border-radius: 12px; background: var(--md-surface); }
+.aws-manager__operations { display: flex; flex-direction: column; gap: 10px; }
+.aws-manager__inventory { overflow: auto; }
+.aws-manager__inventory ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.aws-manager__inventory li { padding: 8px 0; border-bottom: 1px solid var(--md-outline-variant); }
+.aws-manager__inventory li label { display: flex; gap: 8px; align-items: center; }
+.aws-manager__inventory li span { display: flex; flex-direction: column; min-width: 0; }
+.aws-manager__inventory li small { color: var(--md-on-surface-variant); }
+.aws-manager__check { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.aws-manager__check small { flex-basis: 100%; margin-left: 24px; }
+.aws-manager__status { margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.aws-manager__warning { color: var(--md-error); }
+.aws-manager__preview { display: flex; flex-direction: column; gap: 8px; }
+.aws-manager__preview code { overflow: auto; white-space: pre-wrap; word-break: break-word; padding: 8px; background: var(--md-surface-container-high); border-radius: 8px; }
+.aws-manager__events { padding: 8px 12px; border: 1px solid var(--md-outline-variant); border-radius: 10px; }
+@media (max-width: 700px) { .aws-manager__body { grid-template-columns: 1fr; } .aws-manager { padding: 10px; } }

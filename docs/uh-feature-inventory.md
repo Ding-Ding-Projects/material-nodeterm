@@ -101,6 +101,7 @@ and then never edited this file.
 | Feature | What is missing | Closes when | Notes |
 | --- | --- | --- | --- |
 | Status Hub | The registration half only. | `manual:the shared Hub is an external service; nothing in this repository can observe whether registration happened` | **Narrowed 2026-08-20, and the app half is now in the Shipped table above as its own contract row.** The surface shipped in `3e96ad78` — `src/renderer/components/StatusSurface.tsx`, `src/shared/project-status.ts`, `docs/status-surface.md`, 31 tests in `src/shared/project-status.test.ts`, and a `status-surface` row in `scripts/check-app-contract.mjs`. What remains is reporting *into* the shared Hub, which is a service outside this tree — hence the `manual:` predicate rather than a machine-checkable one. |
+| AWS service managers | The typed ECR, ECS, EKS, RDS, database, VPC, Route 53, and Cost Explorer lane is implemented, but its focused tests, generated offline bundle, and built-artifact evidence are still pending. | `manual:the ultra-speed lane must receive focused tests and packaged interaction evidence` | `src/core/aws/`, `src/shared/aws.ts`, `src/renderer/components/aws/AwsManagerPanel.tsx`, and `docs/features/integrations/aws-managers.md` provide the implementation and documented boundary. |
 
 ---
 

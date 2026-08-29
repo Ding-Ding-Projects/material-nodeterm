@@ -168,6 +168,9 @@ intentionally unchecked because this task publishes the plan only.
       skeleton, input, and output described by the installed CLI models.
 - [ ] Add AWS identity, SSO, role, MFA, Resource Explorer, Cloud Control, S3, EC2, IAM, STS,
       Lambda, CloudWatch, Logs, CloudFormation, CDK, container, database, networking, and cost tools.
+- [x] Add typed ECR, ECS, EKS, RDS, database, VPC, Route 53, and Cost Explorer manager forms,
+      paginated inventory, previews, waiters, bulk partial results, and status events. Full
+      packaged runtime and provider verification remains pending for the ultra-speed lane.
 - [ ] Add the generic all-service AWS GUI without a command textbox fallback.
 
 ### Hosting and Cloudflare

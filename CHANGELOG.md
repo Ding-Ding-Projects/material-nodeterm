@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the typed AWS ECR, ECS, EKS, RDS, database, VPC, Route 53, and Cost Explorer manager surface.
+  It uses guided forms, pagination metadata, permission and partial-result states, operation
+  previews, destructive confirmation, bulk summaries, waiters, and streamed status events. This
+  ultra-speed lane intentionally did not run tests, type checks, lint, security or accessibility
+  checks, installer execution, runtime interaction checks, or UI captures.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

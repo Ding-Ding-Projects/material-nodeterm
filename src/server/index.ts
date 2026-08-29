@@ -79,6 +79,7 @@ import { IPC } from '@shared/ipc'
 import { WhisperModelStore } from '../core/speech/whisper-models'
 import { SpeechService } from '../core/speech/speech-service'
 import { registerSpeechIpc } from '../core/speech/register-ipc'
+import { registerAwsIpc } from '../core/aws/register-ipc'
 import { isPremium, getStoredEntitlement } from '../core/license'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
 
@@ -219,6 +220,7 @@ export async function startServer(
   // Team presence (hello / cursor / focus / chat). The hub itself is joined per WebSocket in
   // ws.ts; this only registers the RPC surface. Presence is transient — nothing is persisted.
   presenceHub.registerIpc()
+  registerAwsIpc(platform)
 
   // WS backpressure: when a connection's socket send buffer fills while streaming pty
   // output, pause that tmux client so the OS pipe applies real backpressure (resumes below
