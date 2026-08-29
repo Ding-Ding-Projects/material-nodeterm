@@ -239,7 +239,7 @@ describe('release workflow semantic contract', () => {
     const wrongTarget = check(
       replaceOnce(
         WORKFLOW,
-        'run: npm run dist:win',
+        'run: npm run dist:win -- --require-published-source-icon',
         'run: npm run dist:linux',
       ),
     )

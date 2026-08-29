@@ -505,5 +505,11 @@ describe('Windows installer identity contract', () => {
       Object.defineProperty(response, 'url', { value: ICON_URL })
       return response
     })).rejects.toThrow(/do not match/)
+
+    await expect(downloadMatchingIcon(ICON_URL, SOURCE_ICON, async () => {
+      const response = new Response(null, { status: 404 })
+      Object.defineProperty(response, 'url', { value: ICON_URL })
+      return response
+    })).rejects.toThrow(/must return 200 without redirect; got 404/)
   })
 })

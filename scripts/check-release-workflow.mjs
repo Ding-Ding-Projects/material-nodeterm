@@ -579,7 +579,7 @@ export function validateReleaseWorkflow(workflow, packageJson) {
     issues.push('Squirrel.Windows MSI generation must be explicitly disabled')
   }
   if (
-    !packageCommands.includes('npm run dist:win') ||
+    !packageCommands.includes('npm run dist:win -- --require-published-source-icon') ||
     packageJson?.scripts?.['dist:win'] !== 'node scripts/windows-installer.mjs build'
   ) {
     issues.push('package step must use the exact guarded Windows installer wrapper')
