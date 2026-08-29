@@ -13,6 +13,10 @@ const ROWS = {
     title: 'Notify when a turn finishes in the background',
     keywords: ['notify', 'notification', 'claude', 'background', 'turn', 'done']
   },
+  agentInbox: {
+    title: 'Allow linked agents to signal inbox updates',
+    keywords: ['agent', 'linked', 'inbox', 'coordination', 'notify', 'automation']
+  },
   sound: {
     title: 'Play a sound when a turn finishes or needs you',
     keywords: ['sound', 'audio', 'sfx', 'effect', 'chime', 'beep', 'retro', '8-bit', 'chiptune', 'volume', 'mute', 'finished', 'needs you']
@@ -26,6 +30,7 @@ const ENTRIES = Object.values(ROWS)
 
 export function NotificationsSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const notifyOnClaudeDone = useSettings((s) => s.settings.notifyOnClaudeDone)
+  const agentInboxNotifications = useSettings((s) => s.settings.agentInboxNotifications)
   const soundEffects = useSettings((s) => s.settings.soundEffects)
   const soundVolume = useSettings((s) => s.settings.soundVolume)
   const mobilePushEnabled = useSettings((s) => s.settings.mobilePushEnabled)
@@ -79,6 +84,19 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
             </Button>
           </div>
         )}
+      </SearchableRow>
+      <SearchableRow {...ROWS.agentInbox}>
+        <FieldRow
+          label="Allow linked agents to signal inbox updates"
+          description="Lets an authenticated context-linked agent send a fixed, rate-limited prompt to check your configured coordination inbox. Arbitrary terminal writes still require approval."
+          control={
+            <Switch
+              checked={agentInboxNotifications}
+              ariaLabel="Linked agent inbox notifications"
+              onChange={(on) => update({ agentInboxNotifications: on })}
+            />
+          }
+        />
       </SearchableRow>
       <SearchableRow {...ROWS.sound}>
         <FieldRow

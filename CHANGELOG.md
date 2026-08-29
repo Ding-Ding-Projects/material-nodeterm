@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add authenticated linked-agent inbox notifications through `notify --node <id>`, with a fixed
+  application-owned prompt, persisted context-link authorization, idle-target protection, pair
+  rate limiting, unread actionable notification-center records, bounded local notification
+  persistence, and no transcript content in the notification payload. Tests, builds, packaging,
+  runtime interaction, and captures remain pending for lane 57 / issue #68.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

@@ -1,5 +1,33 @@
 # Handoff
 
+## 2026-08-26, linked-agent inbox notifications, lane 57 / issue #68
+
+Implemented the upstream PR #98 behavior independently on `feat/program-57`. The canvas-control
+core now accepts `notify --node <id>` and advertises it through both generated instruction surfaces.
+The renderer requires the opt-in `agentInboxNotifications` setting, authenticated context-capable
+source and target agents, a persisted bridge edge, an idle target, and the existing per-pair flow
+limit before submitting the application-owned fixed inbox-check prompt. Arbitrary text is rejected
+at the parser boundary and never reaches the target session.
+
+Successful delivery marks the target node unread and creates a deduplicated actionable notification
+with only stable project/node identifiers. The notification centre can open the target through the
+existing cross-project travel path, while the persistent notification projection omits runtime
+callbacks and transcript content. Notification history is now bounded and persisted in the local
+renderer store under `nodeterm.notifications.v1`; malformed records are ignored and the existing
+toast and bulk-action behavior remains available.
+
+Changed paths: `src/shared/types.ts`, `src/main/canvas-control-core.ts`,
+`src/renderer/state/notifications.ts`, `src/renderer/components/NotificationCenter.tsx`,
+`src/renderer/components/settings/sections/NotificationsSection.tsx`,
+`src/renderer/canvas/Canvas.tsx`, `src/renderer/styles.md3.css`, `docs/notifications.md`,
+`docs/features/agents/agent-support.md`, `docs/features/agents/README.md`,
+`site/docs/agent-support.html`, `site/docs/exports-and-history.html`, `ROADMAP.md`.
+
+This lane did not run tests, type checking, linting, security checks, builds, packaging, runtime
+interaction, or captures, and it did not create a commit or dew. The generated offline
+documentation bundle was not regenerated because this lane explicitly forbade builds; the next
+owner must run the supported docs bundle generator and review its output before integration.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

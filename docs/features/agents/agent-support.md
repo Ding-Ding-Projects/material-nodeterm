@@ -42,14 +42,18 @@ handles or stores your credentials itself; the agent CLI's own login flow does, 
 directory.
 
 **Context links** let two agent-capable nodes read each other's conversation transcript on
-demand by drawing a connection between them on the canvas — a pull, not a push: nothing is
-sent automatically, an agent has to ask for the linked context when it wants it.
+demand by drawing a connection between them on the canvas. Reading remains pull-based, but an
+authenticated linked agent can also send the fixed `notify --node <id>` inbox-check signal when the
+coordination context changes. The signal contains no transcript excerpt or caller-supplied text,
+and it is rate-limited per source-target pair.
 
 ## Configuration
 
 - **Settings → Agents** — default permission mode, agent hibernation (auto-exiting an idle,
   fully offscreen agent's CLI while keeping its shell and history, to save memory on very
   long-lived canvases), and the custom-agent list (command, label, color).
+- **Settings → Notifications** — enable linked-agent inbox signals. The setting is off by default,
+  and arbitrary terminal writes remain separately confirmation-gated.
 - Per-project — an override permission mode, so a project that genuinely needs broader
   permissions doesn't require changing your global default.
 - Per-node — which agent CLI launches, and (for Claude Code) which managed account.
@@ -66,6 +70,9 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - **A hook event never arrives** (the agent crashed, or hooks were never installed for it): the
   node's status simply never updates rather than being guessed. An unknown state is never
   treated as "finished" — that distinction matters for dependent nodes waiting on this one.
+- **A linked notification is refused** when the source is not authenticated, either endpoint is not
+  context-link-capable, the persisted bridge edge is absent, the target is busy, or the ten-second
+  pair limit is active. These are explicit refusals, not silent delivery claims.
 
 ## Security considerations
 
@@ -77,6 +84,9 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - Canvas control (an agent creating or managing nodes from inside its own session) is
   explicitly opt-in per environment and scoped to the session that requested it; an agent
   cannot control a canvas it wasn't given that capability in.
+- The inbox signal reuses the hook-server's authenticated source boundary and rechecks the persisted
+  context-link edge in the renderer. It never uses display-only ropes, mutable titles, or transcript
+  content as authorization or notification payload.
 
 ## Verification
 
@@ -89,6 +99,10 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - Connect two agent-capable nodes with a context link and confirm one can pull the other's
   transcript on request, and that a plain terminal or an agent outside the capability list is
   not offered the option.
+- Enable linked-agent inbox signals, invoke `notify --node <id>` from one linked agent, and confirm
+  the target receives only the fixed prompt, the target node becomes unread, and the notification
+  centre offers **Open agent** without showing transcript content. Repeat immediately to confirm
+  the pair rate limit and reload to confirm the safe actionable record persists.
 
 ## Suggested articles
 

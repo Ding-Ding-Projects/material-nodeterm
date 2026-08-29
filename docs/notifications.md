@@ -67,7 +67,7 @@ scales gently with body length so a longer message isn't cut off before it can b
 ## API
 
 ```ts
-import { notify } from '../state/notifications'
+import { notify } from '../lib/adhdNotify'
 
 notify({
   kind: 'success',
@@ -86,7 +86,9 @@ it has auto-dismissed from the corner.
 
 A real list, not a decorative log:
 
-- **Search** — a plain-text field over title + body.
+- **Search** — a plain-text field over title + body with an adjacent anchored regex builder for
+  deliberate regex matching. Invalid or unsafe patterns stay visible with an inline explanation
+  and do not hide the list.
 - **Filters** — All / Unread / one per kind, as toggle chips.
 - **Multi-select** — a checkbox per row, individually or via the honestly-scoped
   **"Select all (N)"** button (it always names exactly what it selects: everything currently
@@ -101,6 +103,58 @@ A real list, not a decorative log:
 - **Export** — click for Markdown, Shift-click for JSON. Exports the current selection when one
   exists, otherwise the notifications matching the active search + filter — **never** the whole
   unfiltered history, per the "bulk export honours the active filter" requirement.
+
+## Linked-agent inbox notifications
+
+An authenticated agent session may ask another context-linked agent to check its configured
+coordination inbox with the canvas-control command `notify --node <id>`. This is deliberately a
+separate signal from the persistent `send` mailbox: it carries no subject, body, transcript excerpt,
+or caller-supplied text. The application submits one fixed prompt:
+
+```text
+[nodeterm] A linked agent updated shared coordination context. Check your configured inbox before continuing.
+```
+
+The route is available only when **Settings → Notifications → Allow linked agents to signal inbox
+updates** is enabled. The source must be an authenticated, context-link-capable agent, the target
+must be another context-link-capable agent, and the pair must have a persisted context-link edge.
+Display-only lineage ropes do not authorize delivery. A target that is working, waiting, or blocked
+is left untouched so the signal cannot interrupt an active turn.
+
+Each source-target pair has a ten-second minimum interval and one in-flight delivery at a time.
+Successful delivery marks the target node unread and adds one actionable notification to the
+centre. The notification stores only the project and node identifiers plus fixed local copy, so it
+can survive a reload without retaining transcript text. **Open agent** returns to the target node,
+including when its project is currently closed. Duplicate events in the same ten-second window are
+coalesced into the existing notification instead of producing a second toast or unread item.
+
+The notification is informational and non-blocking. It never approves a terminal action, creates a
+mailbox message, reads linked context, or exposes the target's transcript. The target agent still
+chooses when to run its configured inbox command, and the fixed prompt is the only text submitted
+by this route.
+
+### Persistence and security
+
+Notification history is kept in the renderer's bounded local store under
+`nodeterm.notifications.v1`. Runtime action callbacks are not serialized. Reloaded actionable
+items retain a safe node destination and use the same focus route as other notification links.
+Malformed or oversized records are discarded without applying partial state, and the bounded history
+keeps the newest 300 entries. Notification exports omit runtime callbacks and contain no transcript
+content from this feature.
+
+The existing hook-server identity check authenticates the source before the renderer receives the
+request. The renderer then checks the live persisted bridge map and target capability again before
+writing. This two-sided check prevents a source from treating a control rope, a stale title, or an
+unrelated node as a context link.
+
+### Surfaces
+
+- **Desktop:** full delivery, persistence, target focus, and notification-centre action.
+- **Server Edition:** canvas control remains unavailable on this edition, so the page does not
+  pretend that this desktop-only command works there. Its notification centre still renders local
+  history records that exist in the browser.
+- **Mobile companion:** no new client protocol is introduced in this lane; phone push remains
+  governed by the existing agent-status mirror.
 
 ## Accessibility
 

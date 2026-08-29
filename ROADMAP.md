@@ -187,6 +187,14 @@ intentionally unchecked because this task publishes the plan only.
       account lanes.
 - [ ] Publish the new upstream pull request based on the final default branch with verified evidence.
 
+### Wave I, upstream parity and PR #422 split
+
+- [ ] **#68 / lane 57: linked-agent inbox notifications from upstream PR #98.** The fixed,
+      authenticated `notify --node <id>` route, persisted context-link check, unread actionable
+      notification record, local notification history, dedupe, settings toggle, and documentation
+      are implemented on `feat/program-57`. Tests, builds, packaging, runtime interaction, and
+      captures remain intentionally unrun in the ultra-speed lane, so this item stays unchecked.
+
 ## Deliberately not doing
 
 - Code signing for any installer or browser extension — permanent policy (`LICENSE`/CLAUDE.md);

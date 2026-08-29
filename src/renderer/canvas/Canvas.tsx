@@ -876,6 +876,12 @@ const ropeEdge = (id: string, source: string, target: string, color: string): Ed
   markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14 }
 })
 
+/** The only text that the linked-agent notification route may submit. Keeping this in the
+ * application, rather than accepting text from a control request, prevents the sender from
+ * turning a notification into prompt injection for the target session. */
+const LINKED_AGENT_INBOX_PROMPT =
+  '[nodeterm] A linked agent updated shared coordination context. Check your configured inbox before continuing.'
+
 /** A React Flow edge reduced to what is PERSISTED (and what goes on the wire). The decoration —
  *  color, markers, handles — is re-derived on every client from its own nodes, so it never travels. */
 const toBridgeLink = (e: Edge): BridgeLink => ({ id: e.id, source: e.source, target: e.target })
@@ -1060,6 +1066,7 @@ export function Canvas() {
   const [controlEdges, setControlEdges] = useState<Edge[]>([])
   const controlEdgesRef = useRef<Edge[]>([])
   controlEdgesRef.current = controlEdges
+  const agentNotifyInFlightRef = useRef(new Set<string>())
   const [dirty, setDirty] = useState(false)
   // Bumped only when a save finished with `dirty` still set (an edit raced it). It exists purely to
   // give the debounced-autosave effect a dependency that CHANGES in that case — `dirty` stays true
@@ -11260,6 +11267,86 @@ export function Canvas() {
             }
             return
           }
+          case 'notify': {
+            const targetId = args.node ?? ''
+            const projectId = ctlProject?.id ?? useProjects.getState().activeProjectId ?? ''
+            const settings = useSettings.getState().settings
+            if (!settings.agentInboxNotifications) {
+              reply({ ok: false, error: 'notify: linked-agent inbox notifications are disabled in Settings' })
+              return
+            }
+            const target = nodesRef.current.find((node) => node.id === targetId)
+            const sourceAgent = agentIdOf(sourceNodeId)
+            const targetAgent = agentIdOf(targetId)
+            if (
+              !target ||
+              target.type !== 'terminal' ||
+              !sourceAgent ||
+              !canContextLink(sourceAgent) ||
+              !targetAgent ||
+              !canContextLink(targetAgent)
+            ) {
+              reply({ ok: false, error: `notify: ${targetId} is not a context-link-capable agent` })
+              return
+            }
+            // Only persisted bridge edges authorize this route. Control ropes and the visual
+            // lineage graph are intentionally excluded, so an agent cannot manufacture access by
+            // opening a node or by observing a display-only edge.
+            const linked = linkEdgesRef.current.some(
+              (edge) =>
+                (edge.source === sourceNodeId && edge.target === targetId) ||
+                (edge.source === targetId && edge.target === sourceNodeId)
+            )
+            if (!linked) {
+              reply({ ok: false, error: `notify: ${targetId} is not context-linked to the source` })
+              return
+            }
+            const flow = checkFlow(sourceNodeId, targetId, Date.now())
+            if (!flow.ok) {
+              reply({ ok: false, error: `notify: rate limited; retry after ${flow.retryAfterMs}ms` })
+              return
+            }
+            const key = `${sourceNodeId}:${targetId}`
+            if (agentNotifyInFlightRef.current.has(key)) {
+              reply({ ok: false, error: 'notify: an inbox notification is already being delivered' })
+              return
+            }
+            const targetState = useAgentStatus.getState().byId[targetId]
+            if (targetState?.state === 'working' || targetState?.state === 'blocked' || targetState?.state === 'waiting') {
+              reply({ ok: false, error: 'notify: target agent is busy; retry when it is idle' })
+              return
+            }
+            agentNotifyInFlightRef.current.add(key)
+            try {
+              const delivered = await api.pty.sendText(targetId, LINKED_AGENT_INBOX_PROMPT)
+              if (!delivered) {
+                reply({ ok: false, error: 'notify: target agent inbox could not be reached' })
+                return
+              }
+              const now = Date.now()
+              noteSent(sourceNodeId, targetId, now)
+              // The signal is separate from transcript content: it records only a stable node
+              // destination and fixed copy, never the target's output or the sender's context.
+              useAgentStatus.getState().markUnread(targetId)
+              notify({
+                kind: 'info',
+                title: 'Linked agent inbox updated',
+                body: 'A linked agent was asked to check its configured coordination inbox.',
+                target: { nodeId: targetId, projectId },
+                dedupeKey: `linked-agent-inbox:${projectId}:${sourceNodeId}:${targetId}`
+              })
+              console.info('[canvas-control] linked agent inbox notification', {
+                sourceNodeId,
+                targetNodeId: targetId
+              })
+              reply({ ok: true, message: 'notified', result: { targetNodeId: targetId } })
+            } catch (error) {
+              reply({ ok: false, error: `notify: ${String(error)}` })
+            } finally {
+              agentNotifyInFlightRef.current.delete(key)
+            }
+            return
+          }
           case 'reply': {
             const original = agentMailbox().get(args.message ?? '')
             if (!original) {
@@ -13185,6 +13272,22 @@ export function Canvas() {
         secondaryLabel: 'Open in Settings'
       },
       {
+        id: 'setting-agent-inbox-notifications',
+        label: 'Allow linked agents to signal inbox updates',
+        hint: 'authenticated context link fixed prompt rate limited notification',
+        section: 'Settings',
+        icon: <IconGear />,
+        control: {
+          type: 'toggle',
+          checked: s.agentInboxNotifications,
+          ariaLabel: 'Allow linked agents to signal inbox updates',
+          onToggle: (v) => update({ agentInboxNotifications: v })
+        },
+        run: () => update({ agentInboxNotifications: !s.agentInboxNotifications }),
+        onSecondary: () => openSettingsTo('notifications', 'Allow linked agents'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
         id: 'setting-sound-effects',
         label: 'Play a sound when a turn finishes or needs you',
         section: 'Settings',
@@ -14431,6 +14534,7 @@ export function Canvas() {
       {notifCenterOpen && (
         <NotificationCenter
           onClose={() => setNotifCenterOpen(false)}
+          onGoToNode={travelToNode}
           onRequestBulkDelete={(ids, anchorEl) => {
             const rect = anchorEl.getBoundingClientRect()
             openDestructiveGate({

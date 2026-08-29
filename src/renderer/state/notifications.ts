@@ -9,17 +9,27 @@ import { create } from 'zustand'
  * history). `dismissedAt` is what separates "no longer a toast" from "gone" — the history panel
  * shows dismissed notifications too, exactly like a real notification centre.
  *
- * In-memory only (not persisted to localStorage): notifications commonly carry an `actions`
- * array of live closures (retry, undo, open) that cannot survive serialization, and unlike
- * settings this is transient UI state that legitimately resets on relaunch — the same call
- * `agentStatus` makes for its live `state` field.
+ * Safe notification metadata is persisted to localStorage so unread and actionable records
+ * survive a reload. Runtime `actions` are live closures and are deliberately omitted from that
+ * projection; stable node targets are used for restart-safe actions instead.
  */
 
 export type NotificationKind = 'info' | 'success' | 'progress' | 'warning' | 'error'
 
+export const NOTIFICATION_STORAGE_KEY = 'nodeterm.notifications.v1'
+const NOTIFICATION_STORAGE_CAP = 300
+const NOTIFICATION_DEDUPE_WINDOW_MS = 10_000
+
 export interface NotificationAction {
   label: string
   onClick: () => void
+}
+
+/** A safe, serializable destination for a notification action. Runtime callbacks are deliberately
+ * not persisted because closures can capture stale state and may contain private data. */
+export interface NotificationTarget {
+  nodeId: string
+  projectId?: string
 }
 
 export interface AppNotification {
@@ -40,6 +50,10 @@ export interface AppNotification {
    *  NOT derived from `dismissedAt`, because an ordinary user dismissal also sets that field and
    *  would otherwise be indistinguishable from a quieted delivery in the history panel. */
   deliveredSilently: boolean
+  /** Optional local destination for an actionable notification. Only stable ids are persisted. */
+  target?: NotificationTarget
+  /** Stable key used to coalesce duplicate events from multiple hook paths. */
+  dedupeKey?: string
 }
 
 export type PushNotificationInput = Omit<
@@ -47,6 +61,10 @@ export type PushNotificationInput = Omit<
   'id' | 'createdAt' | 'dismissedAt' | 'read' | 'deliveredSilently'
 > & {
   id?: string
+  target?: NotificationTarget
+  dedupeKey?: string
+  /** Coalescing window for a repeated event. Defaults to ten seconds when a key is supplied. */
+  dedupeWindowMs?: number
   /** Land in history without ever appearing as a toast — pushed already dismissed, still unread,
    *  still counted by the bell. Used by ADHD low stimulation (`lib/adhdNotify.ts`) to remove the
    *  interruption without removing the information. Set at construction rather than by pushing and
@@ -70,6 +88,67 @@ interface NotificationsState {
   clearAll(): void
 }
 
+function safeTarget(value: unknown): NotificationTarget | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const target = value as Partial<NotificationTarget>
+  if (typeof target.nodeId !== 'string' || !/^[A-Za-z0-9._-]{1,200}$/.test(target.nodeId)) return undefined
+  if (target.projectId !== undefined && (typeof target.projectId !== 'string' || !/^[A-Za-z0-9._-]{1,200}$/.test(target.projectId))) {
+    return undefined
+  }
+  return target.projectId ? { nodeId: target.nodeId, projectId: target.projectId } : { nodeId: target.nodeId }
+}
+
+function loadPersistedNotifications(): AppNotification[] {
+  if (typeof localStorage === 'undefined') return []
+  try {
+    const parsed = JSON.parse(localStorage.getItem(NOTIFICATION_STORAGE_KEY) ?? '[]') as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((value): value is Partial<AppNotification> => !!value && typeof value === 'object')
+      .map((value) => {
+        const kind = value.kind
+        const title = typeof value.title === 'string' ? value.title : ''
+        const body = value.body === undefined ? undefined : typeof value.body === 'string' ? value.body : undefined
+        if (!['info', 'success', 'progress', 'warning', 'error'].includes(String(kind)) || !title || title.length > 500) return null
+        if (body !== undefined && body.length > 4000) return null
+        if (typeof value.id !== 'string' || !/^[A-Za-z0-9._-]{1,200}$/.test(value.id)) return null
+        if (typeof value.createdAt !== 'number' || !Number.isFinite(value.createdAt)) return null
+        const dismissedAt = value.dismissedAt === null || value.dismissedAt === undefined || (typeof value.dismissedAt === 'number' && Number.isFinite(value.dismissedAt))
+          ? value.dismissedAt ?? null
+          : null
+        const target = safeTarget(value.target)
+        const dedupeKey = value.dedupeKey === undefined ? undefined : typeof value.dedupeKey === 'string' && value.dedupeKey.length <= 400 ? value.dedupeKey : undefined
+        return {
+          id: value.id,
+          kind: kind as NotificationKind,
+          title,
+          body,
+          createdAt: value.createdAt,
+          dismissedAt,
+          read: value.read === true,
+          autoDismissMs: value.autoDismissMs === null || (typeof value.autoDismissMs === 'number' && Number.isFinite(value.autoDismissMs)) ? value.autoDismissMs : null,
+          deliveredSilently: value.deliveredSilently === true,
+          target,
+          dedupeKey
+        } satisfies AppNotification
+      })
+      .filter((value): value is AppNotification => value !== null)
+      .slice(-NOTIFICATION_STORAGE_CAP)
+  } catch {
+    return []
+  }
+}
+
+function persistNotifications(items: AppNotification[]): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    const serializable = items.slice(-NOTIFICATION_STORAGE_CAP).map(({ actions: _actions, ...item }) => item)
+    localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(serializable))
+  } catch {
+    // Storage can be unavailable or full. The in-memory centre remains usable in that case.
+  }
+}
+
 /** Errors and warnings persist until dismissed; everything else times out on a sensible
  *  schedule that scales gently with how much there is to read. */
 function defaultAutoDismissMs(kind: NotificationKind, body?: string): number | null {
@@ -82,7 +161,7 @@ function defaultAutoDismissMs(kind: NotificationKind, body?: string): number | n
 /** History is capped so a long session doesn't grow this list forever — the oldest DISMISSED
  *  items are dropped first (a still-live toast is never silently removed out from under the
  *  user, however far the cap has to reach to find something droppable). */
-const HISTORY_CAP = 300
+const HISTORY_CAP = NOTIFICATION_STORAGE_CAP
 
 function trim(items: AppNotification[]): AppNotification[] {
   if (items.length <= HISTORY_CAP) return items
@@ -105,9 +184,16 @@ function freshId(): string {
 }
 
 export const useNotifications = create<NotificationsState>((set) => ({
-  items: [],
+  items: loadPersistedNotifications(),
   push(input) {
     const id = input.id ?? freshId()
+    const now = Date.now()
+    if (input.dedupeKey) {
+      const existing = useNotifications.getState().items.find(
+        (item) => item.dedupeKey === input.dedupeKey && now - item.createdAt >= 0 && now - item.createdAt < (input.dedupeWindowMs ?? NOTIFICATION_DEDUPE_WINDOW_MS)
+      )
+      if (existing) return existing.id
+    }
     const autoDismissMs =
       input.autoDismissMs !== undefined ? input.autoDismissMs : defaultAutoDismissMs(input.kind, input.body)
     const item: AppNotification = {
@@ -117,13 +203,15 @@ export const useNotifications = create<NotificationsState>((set) => ({
       body: input.body,
       actions: input.actions,
       autoDismissMs,
-      createdAt: Date.now(),
+      createdAt: now,
       // Already dismissed = in history, never a toast. `read` stays false either way: the bell
       // still says there is something to look at, which is what keeps "quieter" from becoming
       // "hidden".
-      dismissedAt: input.silent ? Date.now() : null,
+      dismissedAt: input.silent ? now : null,
       read: false,
-      deliveredSilently: input.silent === true
+      deliveredSilently: input.silent === true,
+      target: safeTarget(input.target),
+      dedupeKey: input.dedupeKey
     }
     set((s) => ({ items: trim([item, ...s.items]) }))
     return id
@@ -164,6 +252,11 @@ export const useNotifications = create<NotificationsState>((set) => ({
     set({ items: [] })
   }
 }))
+
+// Persist only the safe projection above. Runtime action callbacks are intentionally omitted, so
+// a restarted app can still show and act on a stable node target without serializing closures or
+// transcript data.
+useNotifications.subscribe((state) => persistNotifications(state.items))
 
 /** Convenience: push from anywhere without importing the store's setter shape. Used by
  *  non-React code (banners migrated to toasts, IPC-driven notices).
