@@ -62,6 +62,7 @@ import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerUniGetUiIpc } from '../core/unigetui/register-ipc'
 import { registerOpenWebUiHosting } from './open-webui-hosting'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
+import { registerDockerHostIpc } from '../core/docker-host/register-ipc'
 import { registerAwsIdentityIpc } from '../core/aws-identity'
 import { registerAwsResourceIpc } from '../core/aws-resource-register-ipc'
 import { registerAwsResourceManagersIpc } from '../core/aws-resource-managers'
@@ -2417,6 +2418,11 @@ app.whenReady().then(async () => {
   registerUniGetUiIpc(corePlatform)
   registerOpenWebUiHosting(getMainWindow, app.getPath('userData'))
   minecraftServers = registerMinecraftIpc(corePlatform).manager
+  registerDockerHostIpc(corePlatform, {
+    credentialVault: {
+      resolveSshServer: (serverId) => sshStore.list().find((server) => server.id === serverId) ?? null
+    }
+  })
   registerAwsIdentityIpc(corePlatform, {
     resolveAwsCli: async () => {
       const dependency = await nodeDependencyService.status('aws-cli-v2')
