@@ -107,20 +107,6 @@ function loadBuilderAutoUpdater(): typeof import('electron-updater')['autoUpdate
  * in every local build's log. Verifying the real feed is the job of a promoted package, which
  * carries no marker.
  */
-/**
- * The `nodeTermUpdates` marker a LOCAL package carries in its packaged package.json, injected by
- * the `dist*` scripts via electron-builder's `extraMetadata`. `release` does not set it, so a
- * promoted build is untouched and keeps updating itself.
- *
- * It exists because a locally packaged app is indistinguishable from a release at runtime —
- * `app.isPackaged` is true for both — so it polled the production feed for a version that was
- * never published there and logged a 404 on `latest*.yml` every six hours.
- *
- * The trade-off, stated plainly: a `dist*` package can no longer smoke-test the updater wiring
- * itself — a manual check there now answers "up to date" without going near the network. The old
- * behaviour at least proved the wiring was live, at the cost of a recurring 404 in every local
- * build's log. Verifying the real feed is the job of a `release` package, which carries no marker.
- */
 function packagedUpdateMode(): unknown {
   if (!app.isPackaged) return undefined
   try {
