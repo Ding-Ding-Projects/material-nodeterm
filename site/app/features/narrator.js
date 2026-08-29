@@ -8,6 +8,7 @@
 // single snapshot. No audio ever leaves the machine.
 
 import { registerSettingsCard } from '../core/engine.js'
+import { authoredPart, factPart } from '../core/input-dialog.js'
 import { VOICE_URI_FIELD } from '../shared/narrator-state.js'
 
 export function registerNarrator(store, deps, registerAction, registerBinding) {
@@ -19,7 +20,11 @@ export function registerNarrator(store, deps, registerAction, registerBinding) {
   })
   registerAction('narrator-try', (s, id, el, h) => {
     if (!s.state.narrate) h.save({ narrate: true }, 'Narrator enabled for preview')
-    h.speak('Hello ' + (s.state.nick || 'there') + '. This is the nodeterm playground.')
+    h.speak([
+      authoredPart('Hello '),
+      s.state.nick ? factPart(s.state.nick) : authoredPart('there'),
+      authoredPart('. This is the nodeterm playground.'),
+    ])
   })
 
   registerSettingsCard('narrator', {
@@ -31,7 +36,7 @@ export function registerNarrator(store, deps, registerAction, registerBinding) {
       { label: 'Read messages aloud', isToggle: true, action: 'narrator-toggle', on: s.narrate, toggleLabel: s.narrate ? 'On 🔊' : 'Off' },
       {
         label: 'Voice', isSelect: true, action: 'narrator-voice', value: s.voice,
-        options: [{ id: '', label: s.voices.length ? 'Whatever the browser picks' : 'No voices found yet…' }].concat(s.voices),
+        options: [{ id: '', label: s.voices.length ? 'Whatever the browser picks' : 'No voices found yet…' }].concat(s.voices.map((voice) => ({ ...voice, labelKind: 'fact' }))),
       },
       { label: 'Speed', isRange: true, commitOnChange: true, action: 'narrator-rate', min: 1, max: 5, value: s.rate },
       { label: 'Try it', isButton: true, action: 'narrator-try', toggleLabel: 'Say something' },
