@@ -1,6 +1,8 @@
 /* A single tiny, detached WebSocket relay shared by every local Codex node. It keeps the TUI
- * connected across Electron restarts while observing thread/resume on that node's own connection.
- * The authenticated Codex app-server remains shared per account; this is only a routing shim.
+ * connected through renderer and window restarts while observing thread/resume on that node's own
+ * connection. A graceful application quit stops the exact retained local child inside the bounded
+ * quit flush; persisted thread identity and the terminal backend own the next-launch handoff. The
+ * authenticated Codex app-server remains shared per account; this is only a routing shim.
  *
  * Adapted from @Corvin's `src/main/codex-relay-daemon.ts` in external PR #112 (S6 PR 4 slice). The
  * one deliberate divergence from the reference: cross-account rollout exposure does NOT re-implement
