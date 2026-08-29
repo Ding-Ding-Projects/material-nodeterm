@@ -294,9 +294,19 @@ export function initCodexAccounts(getSshManager?: () => SshProjectManager | unde
     }
   )
 
-  ipcMain.handle(IPC.codexAccountsSystemIdentity, (_event, ctx?: { projectId?: string }) => {
-    const remote = remoteFor(ctx)
-    return remote ? remote.mgr.remoteCodexAccountIdentity(remote.projectId) : accountIdentity()
+  ipcMain.handle(IPC.codexAccountsSystemIdentity, async (_event, ctx?: { projectId?: string }) => {
+    try {
+      const remote = remoteFor(ctx)
+      return remote ? await remote.mgr.remoteCodexAccountIdentity(remote.projectId) : accountIdentity()
+    } catch (error) {
+      // A remote identity read has no local substitute. When this shell has no connected SSH
+      // manager yet, return the honest unavailable value instead of borrowing this machine's
+      // identity; malformed context still propagates as a caller error.
+      if (error instanceof Error && error.message === 'SSH Codex account manager is unavailable') {
+        return null
+      }
+      throw error
+    }
   })
 
   ipcMain.handle(

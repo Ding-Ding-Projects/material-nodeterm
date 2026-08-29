@@ -83,7 +83,7 @@ describe('pty create: a local Codex spawn fails closed on a missing selected acc
 
   it('refuses (spawning nothing) when the explicitly selected managed home is missing', async () => {
     // The account home is deliberately NOT created.
-    const res = await create({ agentId: 'codex', accountId: 'acct-missing' })
+    const res = await create({ agentId: 'codex', codexAccountId: 'acct-missing' })
 
     expect(spawned).toHaveLength(0) // the whole point: no system-~/.codex shell wearing the switch id
     expect(res.unavailable).toBe('codex-account')
@@ -95,7 +95,7 @@ describe('pty create: a local Codex spawn fails closed on a missing selected acc
     const home = codexAccountHome(userDataDir, 'acct-real')
     mkdirSync(home, { recursive: true })
 
-    const res = await create({ agentId: 'codex', accountId: 'acct-real', persistKey: 'node-2' })
+    const res = await create({ agentId: 'codex', codexAccountId: 'acct-real', persistKey: 'node-2' })
 
     expect(res.unavailable).toBeUndefined()
     expect(res.sessionId).not.toBe('')
