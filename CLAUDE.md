@@ -68,7 +68,10 @@ sequential. node-gyp already invokes MSBuild with `/nodeReuse:false`; the wrappe
 `MSBUILDDISABLENODEREUSE=1` for every fresh attempt. At most three total attempts run, with
 one-second then two-second backoff, and only when the tail proves the observed MSBuild runtime
 failure (`InvalidProgramException`, regex-runner `AccessViolationException`, or the
-`Microsoft.Build.CPPTasks` no-implementation form). Ordinary source or linker failures return
+`Microsoft.Build.CPPTasks` no-implementation form, `MSB4018` plus the exact
+`StreamWriter..ctor(System.String, Boolean, System.Text.Encoding)` `MissingMethodException`, or
+`MSB4093` for either the `TLogReadFiles` parameter of `CL` or the `ContentFiles` parameter of
+`GenerateDesktopDeployRecipe` having no `"set"` accessor). Ordinary source or linker failures return
 immediately. Unmeasured CLR/JIT tuning switches are deliberately absent. After a successful rebuild
 the wrapper runs Electron as Node and requires both packages, so output paths alone never establish
 success.
@@ -3407,11 +3410,28 @@ for `node-pty` and `smart-whisper`, so optional native packages such as `bufferu
 `utf-8-validate`, and `utp-native` keep their installed prebuilds and cannot manufacture an
 unrelated compiler failure. MSBuild 17.14 can intermittently raise an internal CLR JIT
 `InvalidProgramException` or report a CPP task method with no implementation. Only those measured
-runtime signatures, plus an `AccessViolationException` in the same compiled-regex runner path, may
+runtime signatures, an `AccessViolationException` in the same compiled-regex runner path, the exact
+`System.IO.StreamWriter..ctor(System.String, Boolean, System.Text.Encoding)` missing-method form,
+and `MSB4093` naming either the `TLogReadFiles` parameter of `CL` or the `ContentFiles` parameter of
+`GenerateDesktopDeployRecipe` with no `"set"` accessor may
 consume the three-attempt budget. The one-second then two-second backoff separates fresh MSBuild
 processes. node-gyp's `/nodeReuse:false`, the wrapper's `MSBUILDDISABLENODEREUSE=1`, and explicit
 sequential module mode prevent process reuse or parallel modules from contaminating another attempt.
 A real C++ or linker diagnostic gets no retry.
+
+The installer application-build phase has its own narrower host-process boundary. A process status
+of exactly `3221226505` (`0xC0000409`) may run one fresh `npm run build:app` attempt after removing
+only partial `out/` and waiting one second. No other exit status is retryable. Source icon
+verification and `dist/windows-icon-contract.json` are completed before this phase and remain
+unchanged across the retry, so local icon mode never becomes published-icon proof and published mode
+never skips its immutable-source reachability check. Signing remains disabled throughout.
+
+Squirrel packaging must not run electron-builder's default native scan. Root
+`build.npmRebuild` stays `false` because postinstall already patches, rebuilds exactly `node-pty`
+and `smart-whisper`, and loads both under Electron. Enabling the builder scan recompiles unrelated
+optional native packages (`bufferutil`, `utf-8-validate`, and `utp-native`) and replaces the exact
+module boundary with discovery. `scripts/windows-installer-runtime-retry.test.mjs` enforces the
+manifest setting.
 
 The preflight placement means both root BAT entry points name the exact locked file and PID even on
 a machine that started with no Node on `PATH`. The old pre-dependency placement skipped the check

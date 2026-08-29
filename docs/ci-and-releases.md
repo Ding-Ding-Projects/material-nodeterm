@@ -90,6 +90,9 @@ job:
    and Python that native module compilation needs; nothing extra is bootstrapped for that.
    If a future dependency needs a tool the runner image does not carry, add a check-then-
    install step here, immediately before it is needed.
+   The later application-build phase retries once only if its fresh process exits with exact status
+   `0xC0000409`; it removes partial `out/` first and retains the same already-verified published icon
+   metadata. Every other application-build exit remains fatal.
 9. **Build and package through `npm run dist:win`.** The Windows-only wrapper runs the native
    preflight, regenerates and proves the committed seven-frame ICO at an immutable source-SHA URL,
    clears stale generated output, builds the app and session host through `build:app` (the release

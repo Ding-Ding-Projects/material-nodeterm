@@ -29,6 +29,10 @@ const FULL_SHA_RE = /^[0-9a-f]{40}$/
 const REPOSITORY_RE = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/
 const IMMUTABLE_ICON_PATH_RE = /^\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/[0-9a-f]{40}\/build\/icon[.]ico$/
 
+export const APPLICATION_BUILD_MAX_ATTEMPTS = 2
+export const APPLICATION_BUILD_RETRY_DELAY_MS = 1000
+export const APPLICATION_BUILD_TRANSIENT_EXIT_CODE = 0xc0000409
+
 export const WINDOWS_RELEASE_IDENTITY = Object.freeze({
   packageId: 'node-terminal',
   productName: 'nodeterm',
@@ -963,6 +967,51 @@ function run(command, args, options = {}) {
   }
 }
 
+export function isTransientApplicationBuildExitCode(exitCode) {
+  return Number.isInteger(exitCode) && (exitCode >>> 0) === APPLICATION_BUILD_TRANSIENT_EXIT_CODE
+}
+
+function waitForApplicationBuildRetry(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs))
+}
+
+export async function runApplicationBuildWithRetry({
+  build,
+  cleanOutput,
+  waitImpl = waitForApplicationBuildRetry,
+} = {}) {
+  if (typeof build !== 'function') fail('application build operation is required')
+  if (typeof cleanOutput !== 'function') fail('application build output cleanup is required')
+
+  for (let attempt = 1; attempt <= APPLICATION_BUILD_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await build()
+      return
+    } catch (error) {
+      const retryable = isTransientApplicationBuildExitCode(error?.exitCode)
+      if (!retryable || attempt >= APPLICATION_BUILD_MAX_ATTEMPTS) throw error
+
+      writeDiagnostic(
+        2,
+        `windows-installer: application build host runtime exited with ${error.exitCode} on attempt ${attempt}/${APPLICATION_BUILD_MAX_ATTEMPTS}; retrying in ${APPLICATION_BUILD_RETRY_DELAY_MS} ms with clean out/ and a fresh process`,
+      )
+      await cleanOutput()
+      await waitImpl(APPLICATION_BUILD_RETRY_DELAY_MS)
+    }
+  }
+}
+
+export async function cleanApplicationBuildOutput(root = REPO_ROOT) {
+  const resolvedRoot = path.resolve(root)
+  const output = path.join(resolvedRoot, 'out')
+  const relative = path.relative(resolvedRoot, output)
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    fail(`unsafe application build cleanup target ${output}`)
+  }
+  await rm(output, { recursive: true, force: true })
+  return output
+}
+
 /** Remove only the fixed generated trees whose stale contents could enter this package. */
 export async function cleanWindowsPackageOutputs(root = REPO_ROOT) {
   const resolvedRoot = path.resolve(root)
@@ -985,9 +1034,12 @@ async function buildWindowsInstaller(options = {}) {
   const metadataFile = path.join(REPO_ROOT, 'dist', 'windows-icon-contract.json')
   const squirrelOutput = path.join(REPO_ROOT, 'dist', 'squirrel-windows')
   await runStage('clean Windows package outputs', () => cleanWindowsPackageOutputs(REPO_ROOT))
-  // This route packages the already-built native modules and does not run npm ci or electron-rebuild.
-  // The strict preflight remains mandatory for `npm run rebuild`; this explicit mode only avoids
-  // treating an unrelated live relay as a file that this packaging route will replace.
+  // Postinstall already patches and rebuilds exactly node-pty + smart-whisper, then loads both
+  // under Electron as the ABI proof. package.json therefore keeps `npmRebuild: false`; letting
+  // electron-builder run its separate native scan rebuilds unrelated optional modules and discards
+  // that exact-module boundary. The strict preflight remains mandatory for `npm run rebuild`; this
+  // explicit mode only avoids treating an unrelated live relay as a file this packaging route
+  // will replace.
   await runStage('build preflight', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'check-build-preflight.mjs'), '--no-native-mutation'], { description: 'build preflight' }))
   const sourceIdentity = await runStage('source identity resolution', () => resolveSourceIdentity(REPO_ROOT))
   await runStage('pinned QEMU resource bootstrap', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'ensure-qemu-resources.mjs'), '--output', path.join(REPO_ROOT, 'resources', 'qemu')], { description: 'pinned QEMU resource bootstrap' }))
@@ -1005,7 +1057,10 @@ async function buildWindowsInstaller(options = {}) {
   // explicitly keeps out of the publishing job. Packaging integrity remains below: the wrapper
   // still clears stale output, freezes source identity, verifies the icon/PE contract, and checks
   // the exact Squirrel asset set after electron-builder returns.
-  await runStage('application build', () => run(process.execPath, [npmCli, 'run', 'build:app'], { description: 'application build' }))
+  await runStage('application build', () => runApplicationBuildWithRetry({
+    build: () => run(process.execPath, [npmCli, 'run', 'build:app'], { description: 'application build' }),
+    cleanOutput: () => cleanApplicationBuildOutput(REPO_ROOT),
+  }))
   const builderCli = await runStage('resolve electron-builder CLI', () => require.resolve('electron-builder/cli.js'))
   await runStage('electron-builder Squirrel packaging', () => run(
     process.execPath,

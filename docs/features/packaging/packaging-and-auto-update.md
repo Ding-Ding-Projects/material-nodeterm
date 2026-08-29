@@ -47,6 +47,21 @@ MSBuild runtime/JIT signature. Ordinary compiler errors fail immediately. Succes
 by an Electron-as-Node load of both packages, which proves the installed bindings match the runtime
 ABI rather than merely proving that files were written.
 
+Two later measured CLR metadata failures are equally narrow: `MSB4018` must pair the `CL` task with a
+`MissingMethodException` naming
+`System.IO.StreamWriter..ctor(System.String, Boolean, System.Text.Encoding)`, and `MSB4093` must name
+either the `TLogReadFiles` parameter of `CL` or the `ContentFiles` parameter of
+`GenerateDesktopDeployRecipe` with no `"set"` accessor.
+Neither a generic missing method nor a generic `MSB4093` consumes a retry. The application build has
+one separate retry for exact process status `0xC0000409`; it deletes only partial `out/`, waits one
+second, and starts a fresh process. Source-icon verification and its local-versus-published metadata
+remain fixed across that retry, and signing stays disabled.
+
+Squirrel packaging sets `build.npmRebuild` to `false`. The postinstall wrapper already owns the
+patched rebuild of exactly `node-pty` and `smart-whisper` and proves both under Electron. The
+electron-builder default would perform another discovery-based scan over unrelated optional native
+packages, discard the exact-module contract, and reopen the host-runtime failure surface.
+
 The supported Windows entry point is `npm run dist:win`. Its wrapper starts from a clean checkout,
 regenerates the committed seven-frame ICO, proves that the bytes match the current commit, derives
 an immutable raw URL from that full source SHA, and verifies the public download byte-for-byte.

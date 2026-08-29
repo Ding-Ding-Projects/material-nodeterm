@@ -165,6 +165,37 @@ describe('Electron native-module rebuild', () => {
     ).toBe(false)
     expect(
       isTransientMsbuildRuntimeFailure(
+        'Microsoft.CppCommon.targets(787,5): error MSB4018: The "CL" task failed unexpectedly.\n' +
+          "Microsoft.CppCommon.targets(787,5): error MSB4018: System.MissingMethodException: Method not found: 'Void System.IO.StreamWriter..ctor(System.String, Boolean, System.Text.Encoding)'."
+      )
+    ).toBe(true)
+    expect(
+      isTransientMsbuildRuntimeFailure(
+        'Microsoft.CppCommon.targets(907,9): error MSB4093: The "TLogReadFiles" parameter of the "CL" task cannot be written to because it does not have a "set" accessor.'
+      )
+    ).toBe(true)
+    expect(
+      isTransientMsbuildRuntimeFailure(
+        'Microsoft.CppBuild.targets(2604,21): error MSB4093: The "ContentFiles" parameter of the "GenerateDesktopDeployRecipe" task cannot be written to because it does not have a "set" accessor.'
+      )
+    ).toBe(true)
+    expect(
+      isTransientMsbuildRuntimeFailure(
+        'MSBuild stopped after System.MissingMethodException in application source'
+      )
+    ).toBe(false)
+    expect(
+      isTransientMsbuildRuntimeFailure(
+        'MSBuild error MSB4018: The "CL" task failed unexpectedly. System.MissingMethodException: System.IO.StreamWriter..ctor(System.IO.Stream, System.Text.Encoding, Int32, Boolean)'
+      )
+    ).toBe(false)
+    expect(
+      isTransientMsbuildRuntimeFailure(
+        'MSBuild error MSB4093: Required project property is missing'
+      )
+    ).toBe(false)
+    expect(
+      isTransientMsbuildRuntimeFailure(
         'MSBuild error C2039: member does not exist in native source'
       )
     ).toBe(false)
