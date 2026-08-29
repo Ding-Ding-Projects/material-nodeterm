@@ -408,6 +408,8 @@ import { APP_BAR_HEIGHT } from '../shared/layout'
 import { registerConfirmedRecycleIpc } from './confirmed-recycle-ipc'
 import { registerWindowsTerminalProfileIpc } from './windows-terminal-profiles'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
+import { createStartupHealthTracker } from './startup-health'
+import { settleShutdownWithin } from './bounded-shutdown'
 
 // Fail before Electron initializes any persistent service. mirror-publication loads node:sqlite
 // lazily so an incompatible embedded runtime reaches this clear diagnostic instead of an import
@@ -1240,6 +1242,8 @@ function createWindow(): BrowserWindow {
 
   // Register as the live main window (send-time resolution via getMainWindow/sendToMain).
   setMainWindow(win)
+  const startupHealth = createStartupHealthTracker()
+  startupHealth.record('window-created')
 
   // Team presence: this window is one peer. With nobody else connected the renderer draws nothing
   // (≤1 peer = zero cost); it matters when a phone joins over the relay, or when this desktop
@@ -1281,7 +1285,45 @@ function createWindow(): BrowserWindow {
   // past the budget the user decides. The tmux sessions all live in this process, so a reload
   // costs nothing but the canvas re-hydrating from the workspace store.
   const crashReload = createCrashReloadPolicy()
+  win.webContents.on('did-start-loading', () => {
+    startupHealth.record('load-started')
+  })
+  win.webContents.on('did-finish-load', () => {
+    startupHealth.record('load-finished')
+  })
+  win.webContents.on('did-fail-load', (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
+    if (!isMainFrame || quitting || win.isDestroyed()) return
+    startupHealth.record('load-failed')
+    // A failed file load otherwise leaves the user with the same blank frame as a dead renderer.
+    // Reuse the bounded crash budget so a missing packaged resource cannot create a reload loop.
+    const action = crashReload('launch-failed', Date.now())
+    if (action === 'reload') {
+      win.webContents.reload()
+    } else if (action === 'give-up') {
+      void dialog
+        .showMessageBox(win, {
+          type: 'error',
+          message: 'The window could not load',
+          detail: 'The interface did not finish loading. Your terminal sessions are still running.',
+          buttons: ['Reload', 'Not Now'],
+          defaultId: 0,
+          cancelId: 1
+        })
+        .then(({ response }) => {
+          if (response === 0 && !win.isDestroyed()) win.webContents.reload()
+        })
+    }
+  })
+  win.webContents.on('unresponsive', () => {
+    startupHealth.record('unresponsive')
+    console.warn('[startup] renderer became unresponsive.')
+  })
+  win.webContents.on('responsive', () => {
+    startupHealth.record('responsive')
+  })
   win.webContents.on('render-process-gone', (_event, details) => {
+    startupHealth.record('renderer-gone')
+    console.warn('[startup] renderer process ended.')
     ptyManager.dropClient(presenceId)
     // A dead renderer sends no disarm and no focus-lost report. The reloaded page mounts no
     // recorder and no terminal, so without this the user would come back to an app where ⌘W does
@@ -1307,10 +1349,16 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  win.on('ready-to-show', () => win.show())
+  win.on('ready-to-show', () => {
+    startupHealth.record('window-shown')
+    win.show()
+  })
   // The main window is a regular app window; establishing its Dock presence explicitly means the
   // later focusable:false Notch HUD panel can never leave the app looking like an accessory.
-  win.on('show', () => assertRegularDockPresence())
+  win.on('show', () => {
+    startupHealth.record('window-shown')
+    assertRegularDockPresence()
+  })
 
   // macOS: closing the window hides it instead of destroying it. The app deliberately
   // outlives its window (tmux sessions, hook server, updater); destroying the window
@@ -4880,10 +4928,12 @@ app.on('before-quit', (e) => {
   ])
   void Promise.race([flush, new Promise((r) => setTimeout(r, 1500))])
     // Then let whisper go. A dictation still transcribing when Electron tears down the main
-    // process's node env aborts the WHOLE app from inside the native addon (SIGABRT in
-    // Napi::ThreadSafeFunction::CallJS) — see SpeechService.shutdown. It needs its own budget
-    // because the 1500ms cap above is shorter than a transcription, and it costs nothing at
-    // all when dictation is idle, which is nearly always.
-    .then(() => speechService.shutdown())
+    // process's node env aborts the native addon (SIGABRT in Napi::ThreadSafeFunction::CallJS),
+    // so shutdown gets a bounded second pass. A native addon that never settles must not keep the
+    // whole application process alive after the user has already chosen Quit.
+    .then(() => settleShutdownWithin(speechService.shutdown()))
+    .then((result) => {
+      if (result !== 'completed') console.warn('[shutdown] speech service did not stop cleanly.')
+    })
     .finally(() => app.quit())
 })
