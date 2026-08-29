@@ -228,7 +228,9 @@ parallel release routes.
   behavior and icon and version resources are still written; signing and resource editing are
   separate controls. Do not add a certificate or signing script.
 - **`npm run rebuild`** matters on Windows: it rebuilds
-  `node-pty` (and `smart-whisper`) against Electron's ABI via `electron-rebuild`. The
+  `node-pty` and `smart-whisper` against Electron's ABI via `rebuild-electron-native.mjs`. The
+  wrapper passes the pair through `@electron/rebuild --only`, so unrelated detected native
+  packages are not recompiled, and it loads both packages under Electron before reporting success. The
   `patch-node-pty.mjs` step it runs first patches node-pty's **Windows ConPTY baton/handle race**
   (see `CLAUDE.md`) before the native module compiles — `src/main/node-pty-patch.test.ts`
   asserts the patch marker on the `conpty.cc` source path. (The script's former darwin

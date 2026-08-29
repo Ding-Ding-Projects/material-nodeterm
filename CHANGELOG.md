@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Limit Electron native rebuilds to the two packages the application actually loads through that
+  ABI: `node-pty` and `smart-whisper`. The previous `--which-module` option added those names to
+  the detected package walk, so unrelated optional native packages still compiled and could stop a
+  clean bootstrap. Their dependency install lifecycles are disabled because the root postinstall
+  owns their one required rebuild. The new wrapper uses `--only`, retries one proven MSBuild 17.14 runtime/JIT
+  failure once, including the measured regex-JIT access-violation form, fails ordinary compiler diagnostics immediately, and loads both required packages
+  under Electron before reporting success. The compiler gets one fair rematch, not an unlimited
+  tournament.
+
+  Electron native rebuild 而家只會處理 application 真正用嗰兩個 ABI package：`node-pty` 同
+  `smart-whisper`。舊有 `--which-module` 其實只係將兩個名加入自動偵測清單，其他 optional native
+  package 仍然會一齊編譯，乾淨 bootstrap 隨時俾無關項目攔住。兩個 dependency 自己嘅 install
+  lifecycle 亦會停用，交俾 root postinstall 負責唯一一次必要 rebuild。新 wrapper 改用 `--only`，只會對
+  已確認嘅 MSBuild 17.14 runtime/JIT 問題重試一次，包括實測 regex-JIT access violation；普通 compiler diagnostic 即刻失敗，成功後再用
+  Electron 真正載入兩個必要 package。編譯器有一次補考，唔係無限留班。
+
 - Prepare the deliberate `1.0.0` major source candidate. `package.json` and `package-lock.json`
   now agree on the candidate version, while publication, installer generation, and production
   runtime acceptance remain pending. Ordinary patch releases continue through the workflow planner;

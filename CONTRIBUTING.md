@@ -11,7 +11,7 @@ are accepted under that license.
 ## Getting set up
 
 ```bash
-npm install        # also patches + rebuilds node-pty against Electron's ABI (postinstall)
+npm install        # patches node-pty, rebuilds node-pty + smart-whisper, and proves both Electron ABI loads
 npm run dev        # dev mode with renderer HMR
 npm run typecheck  # tsc for both the node and web projects — the fastest correctness gate
 npm test           # vitest, unit + integration
@@ -163,6 +163,13 @@ need it too, and wire it in the same change.
   x86/x64 are always checked and ARM64 is added on ARM64 hosts. The BAT also ensures a supported
   per-user Python for node-gyp, with SHA-pinned fallbacks for machines without winget, and exports
   the verified interpreter through every node-gyp precedence channel.
+  Native rebuilding is intentionally limited to `node-pty` and `smart-whisper` through
+  `@electron/rebuild --only`. Do not replace it with `--which-module`: that option adds modules to
+  the detected walk, so unrelated optional native packages compile too. Both packages are denied
+  their own install lifecycle through `allowScripts` because the root postinstall owns the one
+  patched rebuild. The wrapper retries once
+  only for the measured MSBuild 17.14 runtime/JIT signatures and then loads both required packages
+  under Electron. Ordinary compiler failures are never retried or converted into success.
   The preflight names the PID holding a file and independently verifies the component, reporting
   both problems at once. Neither check can fail on macOS or Linux.
 

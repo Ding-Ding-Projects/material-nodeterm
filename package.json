@@ -19,6 +19,10 @@
   "license": "BUSL-1.1",
   "private": true,
   "main": "./out/main/index.js",
+  "allowScripts": {
+    "node-pty": false,
+    "smart-whisper": false
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "node scripts/check-vocabulary.mjs && node scripts/check-material-audit.mjs && node scripts/check-design-parity.mjs && node scripts/check-personal-vocabulary-coverage.mjs && node scripts/check-wsl-copy-coverage.mjs && node scripts/check-changelog.mjs && node scripts/check-docs-bundle.mjs && node scripts/check-uh-inventory.mjs && npm run build:app",
@@ -34,7 +38,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && node scripts/check-paste-frame-parity.mjs",
     "test": "vitest run",
     "test:unit": "vitest run test/remote",
-    "rebuild": "node scripts/check-build-preflight.mjs --native-mutation && node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper",
+    "rebuild": "node scripts/check-build-preflight.mjs --native-mutation && node scripts/patch-node-pty.mjs && node scripts/rebuild-electron-native.mjs",
     "server:build": "esbuild src/server/main.ts --bundle --platform=node --format=cjs --outfile=out/server/main.cjs --external:node-pty --external:ws --external:smart-whisper --tsconfig=tsconfig.node.json",
     "host:build": "esbuild src/session-host/host.ts --bundle --platform=node --format=cjs --outfile=out/session-host/host.cjs --external:node-pty --tsconfig=tsconfig.node.json",
     "server:start": "node out/server/main.cjs",
@@ -59,7 +63,7 @@
     "dist:linux": "npm run make-icon && npm run build && electron-builder --linux --publish never -c.extraMetadata.nodeTermUpdates=disabled",
     "dist:win": "node scripts/windows-installer.mjs build",
     "release": "npm run make-icon && npm run build && sh -c 'electron-builder --mac --arm64 --x64 --publish never; s=$?; npm run rebuild; exit $s'",
-    "postinstall": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper",
+    "postinstall": "node scripts/patch-node-pty.mjs && node scripts/rebuild-electron-native.mjs",
     "design:compare": "electron design/compare",
     "design:v2": "electron design/v2-preview",
     "prepare:qemu": "node scripts/ensure-qemu-resources.mjs --output resources/qemu",
