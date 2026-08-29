@@ -102,7 +102,9 @@ if [ -z "\${NODETERM_NODE_ID-}" ] && [ -n "\${CODEX_THREAD_ID-}" ]; then
         # The Node writer and its bounded legacy migration both persist this one POSIX spelling.
         # The generated resolver has no second interpretation path and consumes only that form.
         case "$nt_codex_endpoint" in /*) ;; *) nt_codex_endpoint="" ;; esac
-        case "$nt_codex_endpoint" in *[!A-Za-z0-9._/ -]*) nt_codex_endpoint="" ;; esac
+        # Keep the hyphen escaped and the whitespace explicit. Git for Windows sh rejects the
+        # tempting bracket form as an invalid range before it can run any command.
+        case "$nt_codex_endpoint" in *[!A-Za-z0-9._/[:space:]\-]*) nt_codex_endpoint="" ;; esac
         case "/$nt_codex_endpoint/" in */../*|*/./*) nt_codex_endpoint="" ;; esac
         if [ -n "$nt_codex_node" ] && [ -n "$nt_codex_endpoint" ]; then
           NODETERM_NODE_ID="$nt_codex_node"

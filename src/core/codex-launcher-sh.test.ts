@@ -291,7 +291,7 @@ describe('generated Codex launcher', () => {
   // filed under the right account. An empty id (the system account) reaches the handler as undefined.
   it('threads the managed account id through start (in the body, not on argv)', async () => {
     await callLauncher([], { NODETERM_CODEX_ACCOUNT_ID: 'acct-A' })
-    expect(started).toEqual([{ nodeId: 'node-1', cwd: fs.realpathSync(dir), accountId: 'acct-A' }])
+    expect(started).toEqual([{ nodeId: 'node-1', cwd: shCwd(fs.realpathSync(dir)), accountId: 'acct-A' }])
     // The account id is NOT on the codex command line.
     expect(codexArgv().join(' ')).not.toContain('acct-A')
   })

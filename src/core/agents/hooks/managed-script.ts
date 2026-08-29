@@ -140,7 +140,7 @@ export function buildManagedScript(
         ? codexThreadIdentityResolverSh(identityRoot)
         : defaultIdentityResolver()
   return [
-    ...(identityRoot ? [codexThreadIdentityResolverSh(identityRoot)] : []),
+    ...(identityResolver ? [identityResolver] : []),
     '# GATE FIRST, and drain stdin before bailing (issues #186/#187). Order is load-bearing twice:',
     '#  - The codex thread-identity prelude above may DERIVE the node id (and endpoint) from its',
     '#    thread id, so the gate cannot move above it — but nothing below needs to run for a',
