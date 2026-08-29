@@ -66,7 +66,7 @@ and then never edited this file.
 | Infinite colour picker + translator | `src/renderer/components/color/ColorPicker.tsx` | `docs/colour-picker.md` | `src/renderer/components/color/ColorPicker.test.tsx` |
 | App rename (display name only) | `src/renderer/components/settings/sections/AppIdentitySection.tsx` | `docs/app-rename.md` | `src/renderer/components/settings/sections/AppIdentitySection.test.tsx` |
 | App-logo customization + safe conversion | `src/renderer/components/settings/sections/AppIdentitySection.tsx` | `docs/app-logo.md` | `src/renderer/components/settings/sections/AppIdentitySection.test.tsx` |
-| Universal file converter | `src/core/converter/service.ts` | `docs/file-converter.md` | `src/core/converter/service.atomic-write.test.ts` |
+| Universal file converter | `src/core/converter/service.ts`, `src/renderer/components/converter/FileConverterPanel.tsx`, `src/renderer/nodes/ConverterNode.tsx` | `docs/file-converter.md` | `src/core/converter/service.atomic-write.test.ts` |
 | Local Ollama suite manager | `src/core/ollama/catalog-pure.ts` | `docs/ollama-manager.md` | `src/core/ollama/catalog-pure.test.ts` |
 | Project repository graph universe | `src/core/repository-graph-service.ts`, `src/renderer/nodes/RepositoryGraphNode.tsx`, `src/shared/repository-graph.ts` | `docs/features/projects/repository-graph-universe.md` | accelerated lane, focused test path `src/core/repository-graph-service.ts` is intentionally unrun, as are runtime captures |
 | Linux ISO VM node | `src/core/virtual-machine/manager.ts`, `src/renderer/nodes/VirtualMachineNode.tsx`, `dependencies.manifest.json`, `resources/qemu/README.md` | `docs/features/integrations/linux-iso-vm.md` | `src/core/virtual-machine/manager.test.ts` (written, not run in ultra-speed lane) |

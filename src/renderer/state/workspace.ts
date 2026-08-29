@@ -88,6 +88,7 @@ export const NODE_COLORS = [
 
 const TERMINAL_SIZE = { width: 640, height: 440 }
 const STICKY_SIZE = { width: 240, height: 200 }
+const CONVERTER_SIZE = { width: 760, height: 640 }
 const GROUP_SIZE = { width: 520, height: 360 }
 /** A fresh worktree group starts empty but exists to HOLD terminals/agents, and the default
  *  GROUP_SIZE (520×360) is smaller than a single terminal (600×400) — a dropped-in terminal would
@@ -1672,6 +1673,19 @@ export function createStickyNode(index: number, center?: { x: number; y: number 
   }
 }
 
+/** Creates a project-safe converter view. Queue items remain in the machine-local converter store. */
+export function createConverterNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('converter'),
+    type: 'converter',
+    position: placeAt(center, index, CONVERTER_SIZE.width, CONVERTER_SIZE.height),
+    width: CONVERTER_SIZE.width,
+    height: CONVERTER_SIZE.height,
+    style: { width: CONVERTER_SIZE.width, height: CONVERTER_SIZE.height },
+    data: { title: 'File converter', color: NODE_COLORS[index % NODE_COLORS.length], group: null }
+  }
+}
+
 /** Creates an unbound Home Assistant sensor display. Importing it performs no network action. */
 export function createHomeAssistantSensorNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
@@ -2607,6 +2621,7 @@ export function groupSelectedNodes(
 const NODE_KIND_TABLE: Record<NodeKind, true> = {
   terminal: true,
   authenticator: true,
+  converter: true,
   calendar: true,
   'homeassistant-control': true,
   timer: true,
@@ -2673,6 +2688,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
 const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   terminal: TERMINAL_SIZE,
   authenticator: AUTHENTICATOR_SIZE,
+  converter: CONVERTER_SIZE,
   calendar: CALENDAR_SIZE,
   'homeassistant-control': HOME_ASSISTANT_CONTROL_SIZE,
   timer: TIMER_SIZE,

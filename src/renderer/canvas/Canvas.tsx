@@ -100,6 +100,7 @@ import { GroupNode, setDrillHandler, setWorktreeActionHandler, setWslActionHandl
 import { DrillBreadcrumb } from '../components/DrillBreadcrumb'
 import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
+import ConverterNode from '../nodes/ConverterNode'
 import CalendarNode from '../nodes/CalendarNode'
 import HomeAssistantControlNode from '../nodes/HomeAssistantControlNode'
 import HomeAssistantSensorNode from '../nodes/HomeAssistantSensorNode'
@@ -752,6 +753,7 @@ import {
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createAuthenticatorNode,
+  createConverterNode,
   createCalendarNode,
   createHomeAssistantControlNode,
   createHomeAssistantSensorNode,
@@ -2342,6 +2344,7 @@ export function Canvas() {
       group: withNodeBoundary(GroupNode),
       annotation: withNodeBoundary(AnnotationNode),
       authenticator: withNodeBoundary(AuthenticatorNode),
+      converter: withNodeBoundary(ConverterNode),
       calendar: withNodeBoundary(CalendarNode),
       'homeassistant-control': withNodeBoundary(HomeAssistantControlNode),
       'homeassistant-sensor': withNodeBoundary(HomeAssistantSensorNode),
@@ -5930,6 +5933,18 @@ export function Canvas() {
       })
     },
     [setNodes, markDirty, emptyNodePos]
+  )
+
+  /** Adds the canvas-local file converter. Its queue is machine-local, while title, colour and placement persist. */
+  const addConverter = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createConverterNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
   )
 
   const addTrigger = useCallback(
@@ -11857,6 +11872,11 @@ export function Canvas() {
           onClick: () => addAuthenticator(at, groupId)
         },
         {
+          label: 'New file converter',
+          icon: <IconConvert />,
+          onClick: () => addConverter(at, groupId)
+        },
+        {
           label: 'New calendar',
           icon: <IconCalendar />,
           onClick: () => addCalendar(at, groupId)
@@ -12112,6 +12132,11 @@ export function Canvas() {
               label: 'New authenticator',
               icon: <IconLock />,
               onClick: () => addAuthenticator(at)
+            },
+            {
+              label: 'New file converter',
+              icon: <IconConvert />,
+              onClick: () => addConverter(at)
             },
             {
               label: 'New calendar',
@@ -17129,6 +17154,13 @@ export function Canvas() {
             run: () => addAuthenticator()
           },
           {
+            id: 'new-converter',
+            label: 'New file converter node',
+            hint: 'categorized adapter catalog files output folder queue progress cancellation VS Code',
+            icon: <IconConvert />,
+            run: () => addConverter()
+          },
+          {
             id: 'new-calendar',
             label: 'New calendar',
             icon: <IconCalendar />,
@@ -17475,6 +17507,8 @@ export function Canvas() {
           <IconEditor />
         ) : n.type === 'sticky' ? (
           <IconNote />
+        ) : n.type === 'converter' ? (
+          <IconConvert />
         ) : (
           <IconTerminal />
         )
