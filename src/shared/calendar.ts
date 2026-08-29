@@ -269,6 +269,6 @@ export function validateCalendarConfig(value: unknown): CalendarNodeConfig {
   const view: CalendarView = ['month', 'week', 'agenda'].includes(raw.view as string) ? (raw.view as CalendarView) : 'agenda'
   const accountId = typeof raw.accountId === 'string' && raw.accountId.length <= 160 ? raw.accountId : null
   const calendarId = typeof raw.calendarId === 'string' && raw.calendarId.length <= 160 ? raw.calendarId : null
-  const timezone = typeof raw.timezone === 'string' && raw.timezone.length <= 100 && !/[\u0000-\u001f]/.test(raw.timezone) ? raw.timezone : 'local'
+  const timezone = typeof raw.timezone === 'string' && raw.timezone.length <= 100 && !/[\u0000-\u001f]/.test(raw.timezone) ? validTimeZone(raw.timezone) : 'local'
   return { provider, view, accountId, calendarId, timezone, showWeekends: raw.showWeekends !== false, cacheEnabled: raw.cacheEnabled !== false }
 }
