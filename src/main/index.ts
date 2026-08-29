@@ -399,7 +399,7 @@ import { loadOrCreatePeerKeyPair } from './remote/peer-identity'
 import { initSshProject } from './remote-ssh/ssh-project'
 import { resyncProjectAgents, RESYNC_TRANSCRIPT_TAIL_BYTES } from './remote-ssh/agent-resync'
 import { setGitRemoteResolver, type GitRemoteRef } from '../core/remote-ssh/remote-git'
-import { SshFs, sshAppendArgs, sshTailArgs, sshSizeArgs, sshWriteArgs, sshWriteAttachmentArgs, sshReadAttachmentArgs, sshRemoveAttachmentArgs } from './ssh-fs'
+import { SshFs, sshAppendArgs, sshTailArgs, sshSizeArgs, sshWriteArgs, sshWriteBase64Args, sshRemoveAttachmentArgs, sshReadAttachmentArgs } from './ssh-fs'
 import { makeRemoteWorkspaceIO } from './remote-workspace-io'
 import {
   registerMediaScheme,
@@ -2521,19 +2521,21 @@ app.whenReady().then(async () => {
           },
           tail: async (p, lines) => {
             const { code, stdout } = await run(sshTailArgs(ref.conn, ref.controlPath, p, lines))
-            return code === 0 ? stdout : ''
+            if (code !== 0) throw new Error('board-log ssh tail failed')
+            return stdout
           },
-          writeAttachment: async (p, dataBase64) => {
-            const { code } = await run(sshWriteAttachmentArgs(ref.conn, ref.controlPath, p), dataBase64)
-            if (code !== 0) throw new Error('board attachment ssh write failed')
-          },
-          readAttachment: async (p) => {
-            const { code, stdout } = await run(sshReadAttachmentArgs(ref.conn, ref.controlPath, p, 6 * 1024 * 1024))
-            return code === 0 ? stdout.replace(/\s+/g, '') : null
+          saveAttachment: async (p, dataBase64, expectedBytes) => {
+            const { code } = await run(sshWriteBase64Args(ref.conn, ref.controlPath, p, expectedBytes), dataBase64)
+            if (code !== 0) throw new Error('board-log ssh attachment write failed')
           },
           removeAttachment: async (p) => {
             const { code } = await run(sshRemoveAttachmentArgs(ref.conn, ref.controlPath, p))
-            if (code !== 0) throw new Error('board attachment ssh remove failed')
+            if (code !== 0) throw new Error('board-log ssh attachment removal failed')
+          },
+          readAttachment: async (p) => {
+            const { code, stdout } = await run(sshReadAttachmentArgs(ref.conn, ref.controlPath, p))
+            if (code !== 0) throw new Error('board-log ssh attachment read failed')
+            return stdout.trim()
           }
         }
         const remotePath = boardLogRemotePath(ref.remoteCwd)
@@ -3281,7 +3283,7 @@ app.whenReady().then(async () => {
   const pushContextUpdate = (payload: unknown): void => {
     if (!win.isDestroyed()) win.webContents.send(IPC.contextUpdate, payload)
     // Feed the macOS Notch HUD the model name (keyed by sessionId; no-op off/non-darwin).
-    notchHudOnContextUpdate(payload as { sessionId?: string; model?: string; usedPercent?: number })
+    notchHudOnContextUpdate(payload as { sessionId?: string; agentId?: string; source?: string; model?: string; usedTokens?: number; windowTokens?: number; updatedAt?: number })
     // Feed the mirror's per-node context ring (mobile-usage-inbox). The context tail keys by
     // sessionId; map it back to the node via the raw-listener's nodeId↔sessionId association.
     const cw = payload as { sessionId?: string; usedPercent?: number; sourceKey?: string }
@@ -3299,6 +3301,8 @@ app.whenReady().then(async () => {
   const contextTail = createContextTail(pushContextUpdate, {
     provider: 'claude',
     sourceKey: 'claude:local',
+    agentId: 'claude',
+    source: 'local',
     onTaskNotification,
     onToolResult
   })
@@ -3313,6 +3317,8 @@ app.whenReady().then(async () => {
   const geminiContextTail = createContextTail(pushContextUpdate, {
     provider: 'gemini',
     sourceKey: 'gemini:local',
+    agentId: 'gemini',
+    source: 'local',
     parse: geminiContextParse
   })
   // Hand the gemini session-name reader its path authority (declared above the handlers that use
@@ -3321,6 +3327,8 @@ app.whenReady().then(async () => {
   const codexContextTail = createContextTail(pushContextUpdate, {
     provider: 'codex',
     sourceKey: 'codex:local',
+    agentId: 'codex',
+    source: 'local',
     parse: codexContextParse,
     onProviderEvent: (sessionId, lines) => {
       const nodeId = [...nodeContextSession.entries()].find(([, mapped]) => mapped === sessionId)?.[0]
@@ -3343,6 +3351,7 @@ app.whenReady().then(async () => {
   const remoteContextTail = createRemoteContextTail(win, remoteFile, {
     provider: 'claude',
     sourceKey: 'claude:remote',
+    agentId: 'claude',
     onTaskNotification,
     onToolResult
   })

@@ -1070,8 +1070,10 @@ export interface BoardLogEntry {
   kind: 'comment' | 'event'
   text?: string
   event?: BoardLogEvent
-  /** Content-addressed files copied into the project's portable attachment carrier. */
-  attachments?: import('./comment-attachments').BoardAttachmentRef[]
+  attachments?: import('./board-log-attachments').BoardLogAttachment[]
+  attachmentSessionId?: string
+  /** Non-sensitive integrity summary when one member of an imported attachment list was invalid. */
+  attachmentIssues?: string
 }
 
 /** Max chars kept for a comment's `text`. On an SSH project the whole JSON line becomes one
@@ -1093,6 +1095,8 @@ export interface BoardLogReadOpts {
 export interface BoardLogReadResult {
   entries: BoardLogEntry[]
   unsupported?: boolean
+  /** True when the log could not be read. It is distinct from a valid empty log. */
+  readFailed?: boolean
 }
 
 /** The board-log surface on `window.nodeTerminal`. Project-routed: the main/server side resolves
@@ -1145,18 +1149,13 @@ export interface LogApi {
 export interface BoardLogApi {
   /** Append one entry. Resolves `false` on any failure (unsupported project, fs/exec error). */
   append(projectId: string, entry: BoardLogEntry): Promise<boolean>
-  /** Append one comment and its files as one host-side transaction. Source paths are consumed and
-   * never persisted in the resulting entry. */
-  appendWithAttachments(
-    projectId: string,
-    entry: BoardLogEntry,
-    attachments: import('./comment-attachments').BoardAttachmentDraft[]
-  ): Promise<import('./comment-attachments').BoardLogAppendResult>
-  /** Re-read and integrity-check a posted attachment after restart. */
-  readAttachment(
-    projectId: string,
-    attachment: import('./comment-attachments').BoardAttachmentRef
-  ): Promise<import('./comment-attachments').BoardAttachmentReadResult>
+  /** Store bounded bytes in the project's portable attachment directory and return metadata. */
+  saveAttachment(projectId: string, upload: import('./board-log-attachments').BoardLogAttachmentUpload): Promise<import('./board-log-attachments').BoardLogAttachment | null>
+  createAttachmentSession(projectId: string): Promise<import('./board-log-attachments').BoardLogAttachmentSession | null>
+  /** Remove only unreferenced attachment ids from one upload session after a failed append. */
+  removeAttachments(projectId: string, sessionId: string, ids: string[]): Promise<boolean>
+  /** Read and re-check one attachment, returning bytes only after length and SHA-256 validation. */
+  readAttachment(projectId: string, attachment: import('./board-log-attachments').BoardLogAttachment): Promise<{ ok: true; dataBase64: string } | { ok: false; error: string }>
   /** Read the log newest-first (see BoardLogReadResult). */
   read(projectId: string, opts?: BoardLogReadOpts): Promise<BoardLogReadResult>
   /** Subscribe to change pushes for one project; returns an unsubscribe. */
@@ -4095,6 +4094,22 @@ export interface ContextWindowUsage {
   sourceEpoch: string
   /** Unix ms when this snapshot was produced, or null when no telemetry arrived. */
   updatedAt: number | null
+  /** Producer lifecycle epoch. Generations are comparable only within this epoch. */
+  epoch: string
+  /** Stable producer identity for lifecycle ordering, independent of wall-clock time. */
+  producerId: string
+  /** Monotonic lifecycle sequence within producerId. */
+  lifecycle: number
+  /** Monotonic producer incarnation ordering epochs within a provider/source process. */
+  incarnation: number
+  /** Provider identity that produced this reading, when the producer knows it. */
+  agentId: string
+  /** Local or host source identity, used to prevent cross-host cache reuse. */
+  source: string
+  /** Previously retired producer epochs for this session, bounded for delayed-read rejection. */
+  epochHistory: string[]
+  /** Previously observed producer identities, retained so old producers cannot replay forever. */
+  producerHistory: string[]
 }
 
 export interface ContextApi {
@@ -4106,7 +4121,7 @@ export interface ContextApi {
    * the continuing session is idle. `cwd` is a transcript-path fallback only.
    * `accountId` scopes resolution to a managed Claude account's transcript root (default `~/.claude`).
    */
-  ensure(sessionId: string, cwd?: string, accountId?: string, agentId?: string): void
+  ensure(sessionId: string, cwd?: string, accountId?: string, agentId?: string, nodeId?: string): void
 }
 
 /**

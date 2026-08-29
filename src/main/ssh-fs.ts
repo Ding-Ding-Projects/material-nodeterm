@@ -4,7 +4,6 @@
 // it — SSH projects default to a home-relative remoteCwd); write content goes on stdin (never
 // interpolated). check-ignore entry NAMES are bare filenames, so they stay posixQuote'd.
 import { childArgs } from '../core/remote-ssh/control-master'
-import crypto from 'node:crypto'
 import { posixQuote, quoteRemotePath, type SshConnection } from '../shared/ssh'
 import {
   buildHiddenDirExcludeGlobs,
@@ -44,6 +43,33 @@ export function sshWriteArgs(conn: SshConnection, cp: string, path: string): str
   // Per-call uniqueness is load-bearing: two app instances can write this remote path at once.
   return childArgs(conn, cp, remoteAtomicWrite(path).command)
 }
+
+function remoteNoLinkCheck(path: string): string {
+  return `nt_path=${quoteRemotePath(path)}; nt_rest="\${nt_path#\#/}"; nt_prefix=/; while [ -n "$nt_rest" ]; do nt_part="\${nt_rest%%/*}"; nt_rest="\${nt_rest#*/}"; [ "$nt_rest" = "$nt_part" ] && nt_rest=; nt_prefix="\${nt_prefix%/}/$nt_part"; test ! -L "$nt_prefix" || exit 1; done`
+}
+/** Same atomic stdin route for base64 attachment payloads, avoiding binary shell arguments. */
+export function sshWriteBase64Args(conn: SshConnection, cp: string, path: string, expectedBytes?: number): string[] {
+  const atomic = remoteAtomicWrite(path, { makeParent: false })
+  const parent = dirname(path)
+  const grand = dirname(parent)
+  // GNU uses -d while BSD/macOS uses -D. Probe help without consuming the payload, and reject
+  // symlink ancestors before mkdir so a project cannot redirect writes outside itself.
+  const temp = quoteRemotePath(atomic.temporaryPath)
+  const limit = Number.isSafeInteger(expectedBytes) ? expectedBytes : 4 * 1024 * 1024
+  const atomicDecode = atomic.command.replace(`cat > ${temp}`, `{ if [ "$(printf 'Tg==' | base64 -d 2>/dev/null)" = 'N' ]; then base64 -d; else base64 -D; fi; } > ${temp} && test "$(wc -c < ${temp})" -eq ${limit}`)
+  const encoded = `${remoteNoLinkCheck(path)} && test ! -L ${quoteRemotePath(grand)} && test ! -L ${quoteRemotePath(parent)} && mkdir -p ${quoteRemotePath(parent)} && ${atomicDecode}`
+  return childArgs(conn, cp, encoded)
+}
+export function sshRemoveAttachmentArgs(conn: SshConnection, cp: string, path: string): string[] {
+  const parent = dirname(path)
+  const grand = dirname(parent)
+  return childArgs(conn, cp, `${remoteNoLinkCheck(path)} && test ! -L ${quoteRemotePath(grand)} && test ! -L ${quoteRemotePath(parent)} && test ! -L ${quoteRemotePath(path)} && rm -f -- ${quoteRemotePath(path)}`)
+}
+export function sshReadAttachmentArgs(conn: SshConnection, cp: string, path: string): string[] {
+  const parent = dirname(path)
+  const grand = dirname(parent)
+  return childArgs(conn, cp, `${remoteNoLinkCheck(path)} && test ! -L ${quoteRemotePath(grand)} && test ! -L ${quoteRemotePath(parent)} && test ! -L ${quoteRemotePath(path)} && test $(wc -c < ${quoteRemotePath(path)}) -le 4194304 && base64 ${quoteRemotePath(path)}`)
+}
 export function sshMkdirArgs(conn: SshConnection, cp: string, path: string): string[] {
   return childArgs(conn, cp, `mkdir -p ${quoteRemotePath(path)}`)
 }
@@ -67,39 +93,6 @@ export function sshSizeArgs(conn: SshConnection, cp: string, path: string): stri
   return childArgs(conn, cp, `cat ${quoteRemotePath(path)} 2>/dev/null | wc -c`)
 }
 
-/** Write a bounded board attachment from base64 stdin using an atomic sibling temporary. */
-export function sshWriteAttachmentArgs(conn: SshConnection, cp: string, path: string): string[] {
-  const parent = dirname(path)
-  const temporary = `${parent}/.nodeterm-attachment-${crypto.randomUUID()}.tmp`
-  // BSD base64 uses -D while GNU and BusyBox use -d. openssl is the final common fallback. The
-  // probe consumes no input, so the actual payload remains on stdin for exactly one decoder.
-  const decoder = 'if base64 -d </dev/null >/dev/null 2>&1; then base64 -d; elif base64 -D </dev/null >/dev/null 2>&1; then base64 -D; elif command -v openssl >/dev/null 2>&1; then openssl base64 -d -A; else exit 127; fi'
-  const ancestors = [path, parent, dirname(parent), dirname(dirname(parent))]
-    .filter((value, index, all) => all.indexOf(value) === index)
-    .map((value) => `test ! -L ${quoteRemotePath(value)}`)
-    .join(' && ')
-  const command = `umask 077; ${ancestors} && mkdir -p -- ${quoteRemotePath(parent)} && { ${decoder} > ${quoteRemotePath(temporary)} && mv -f -- ${quoteRemotePath(temporary)} ${quoteRemotePath(path)}; status=$?; rm -f -- ${quoteRemotePath(temporary)}; exit "$status"; }`
-  return childArgs(conn, cp, command)
-}
-
-/** Read a board attachment as base64, bounded by the caller's decode budget. */
-export function sshReadAttachmentArgs(conn: SshConnection, cp: string, path: string, maxBytes: number): string[] {
-  const parent = dirname(path)
-  const ancestors = [path, parent, dirname(parent), dirname(dirname(parent))]
-    .filter((value, index, all) => all.indexOf(value) === index)
-    .map((value) => `test ! -L ${quoteRemotePath(value)}`)
-    .join(' && ')
-  return childArgs(conn, cp, `${ancestors} && test "$(wc -c < ${quoteRemotePath(path)} 2>/dev/null || echo 0)" -le ${Math.max(1, Math.trunc(maxBytes))} && base64 ${quoteRemotePath(path)}`)
-}
-
-export function sshRemoveAttachmentArgs(conn: SshConnection, cp: string, path: string): string[] {
-  const parent = dirname(path)
-  const ancestors = [path, parent, dirname(parent), dirname(dirname(parent))]
-    .filter((value, index, all) => all.indexOf(value) === index)
-    .map((value) => `test ! -L ${quoteRemotePath(value)}`)
-    .join(' && ')
-  return childArgs(conn, cp, `${ancestors} && rm -f -- ${quoteRemotePath(path)}`)
-}
 export function sshExistsArgs(conn: SshConnection, cp: string, path: string): string[] {
   return childArgs(conn, cp, `test -e ${quoteRemotePath(path)}`)
 }

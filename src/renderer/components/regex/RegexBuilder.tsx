@@ -32,6 +32,9 @@ export interface RegexBuilderProps {
   /** Optional "Done"/close action rendered as a footer button (the anchored popover shell also
    *  closes on Escape/outside-click, so this is a discoverable alternative, not the only exit). */
   onDone?: () => void
+  /** Anchored fields enter on the pattern itself, while the standalone workbench keeps its
+   *  palette filter neutral. */
+  autoFocusPattern?: boolean
 }
 
 /** Splices `token` into the pattern at the pattern field's current cursor/selection. Wrapping
@@ -64,7 +67,7 @@ const MATCH_PALETTE: Array<[string, string]> = [
   ['var(--md-success-container)', 'var(--md-on-success-container)']
 ]
 
-export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): React.JSX.Element {
+export function RegexBuilder({ value, onChange, onDone, autoFocusPattern = false }: RegexBuilderProps): React.JSX.Element {
   const vocab = useVocabularyMapper()
   const patternRef = useRef<HTMLInputElement>(null)
   const [sample, setSample] = useState('')
@@ -212,6 +215,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
           <span className="md3-regex-builder__slash">/</span>
           <input
             ref={patternRef}
+            autoFocus={autoFocusPattern}
             className="md3-regex-builder__pattern-input"
             value={value.pattern}
             spellCheck={false}

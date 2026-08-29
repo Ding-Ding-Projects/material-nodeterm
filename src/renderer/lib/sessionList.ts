@@ -18,6 +18,7 @@ export interface SessionNodeInput {
   agentId?: AgentId
   cwd?: string
   ssh?: SshConnection
+  sshRemoteTmux?: boolean
   /** Parent group node id when this node lives inside a canvas group frame. */
   parentId?: string
   icon?: NodeIcon
@@ -230,6 +231,9 @@ export interface SessionRowVM {
   loop?: { kind: 'loop' | 'schedule' | 'cron'; count: number }
   cwd?: string
   sshHost?: string
+  sshRemote?: boolean
+  /** Provider/source identity is mandatory so a cached reading can never use a bare session key. */
+  contextSource?: string
   sessionId?: string
   usesContext: boolean
   /** Populated only when the sidebar is grouped by status (rows are flattened across projects):
@@ -313,6 +317,8 @@ function toRow(
         : undefined,
     cwd: n.cwd,
     sshHost: n.ssh?.host,
+    sshRemote: !!n.sshRemoteTmux,
+    contextSource: n.sshRemoteTmux && n.ssh ? `${n.ssh.user}@${n.ssh.host}:${n.ssh.port ?? 22}` : 'local',
     sessionId: status?.sessionId,
     usesContext: n.agentId ? hasUsage(n.agentId) : false,
     // Only populated in status mode (flattened across projects); absent in project mode.

@@ -12,6 +12,7 @@ import type { NormalizedAgentEvent, AgentState } from '../shared/agents/normaliz
 import { PROMPT_MAX } from '../core/agent-status-mirror'
 import type { NodeStateChange, NodeNowChange, MirrorFile } from '../core/agent-status-mirror'
 import { WORKING_STALE_MS } from '@shared/agents/stale'
+import { CONTEXT_STALE_AFTER_MS, CONTEXT_TELEMETRY_MATRIX, contextPercentFromCounts, isContextSource } from '../shared/context-source'
 
 /** A node dropped once it's gone from the mirror AND has been idle longer than this. */
 export const HUD_STALE_DROP_MS = 6 * 60 * 60 * 1000
@@ -43,6 +44,11 @@ export interface HudRow {
   prompt?: string
   activity?: string
   contextPercent?: number
+  contextUsed?: number
+  contextTotal?: number
+  contextRemaining?: number
+  contextState?: 'healthy' | 'warning' | 'critical' | 'stale'
+  contextSource?: string
   subagents: HudSubagentRow[]
   /**
    * A finished turn the user has not looked at yet — the sessions sidebar's `unread` mark
@@ -99,6 +105,10 @@ interface NodeAccum {
   prompt?: string
   activity?: string
   contextPercent?: number
+  contextUsed?: number
+  contextTotal?: number
+  contextSource?: string
+  contextUpdatedAt?: number
   subagents: Map<string, HudSubagentRow>
   /** Last time anything about this node changed — orders rows + gates the stale drop. */
   updatedAt: number
@@ -148,8 +158,8 @@ export interface HudModel {
   applyMirrorFlush(doc: MirrorFile): void
   /** The normalized agent-event stream — the ONLY source of the user prompt + subagent grouping. */
   applyAgentEvent(ev: NormalizedAgentEvent): void
-  /** A context-update {sessionId, model, usedPercent} — the ONLY source of the model name. */
-  applyContextUpdate(p: { sessionId?: string; model?: string; usedPercent?: number }): void
+  /** A provider/source-qualified context update with validated counts, the only model source. */
+  applyContextUpdate(p: { sessionId?: string; agentId?: string; source?: string; model?: string; usedTokens?: number | null; windowTokens?: number | null; updatedAt?: number | null }): void
   /** Clear ONE node's done highlight (the user opened that row). Read is per row on purpose:
    *  a blanket "the panel was opened, so everything is read" loses sessions the user never saw. */
   noteFocus(nodeId: string): void
@@ -170,6 +180,7 @@ export function createHudModel(): HudModel {
   const nodes = new Map<string, NodeAccum>()
   // Model name arrives keyed by sessionId (context tail) — joined to a node via its sessionId.
   const modelBySession = new Map<string, string>()
+  const keyFor = (p: { sessionId?: string; agentId?: string; source?: string }): string => `${p.agentId ?? ''}\u0000${p.source ?? ''}\u0000${p.sessionId ?? ''}`
 
   function ensure(nodeId: string, ts: number): NodeAccum {
     let a = nodes.get(nodeId)
@@ -206,7 +217,7 @@ export function createHudModel(): HudModel {
   function applyNowChange(c: NodeNowChange): void {
     const a = ensure(c.nodeId, c.ts)
     if (c.activity !== undefined) a.activity = c.activity || undefined
-    if (typeof c.contextPercent === 'number') a.contextPercent = c.contextPercent
+    // Percent-only mirror hints are ignored. Context percentage comes from paired validated counts.
     a.updatedAt = c.ts
   }
 
@@ -277,13 +288,21 @@ export function createHudModel(): HudModel {
     }
   }
 
-  function applyContextUpdate(p: { sessionId?: string; model?: string; usedPercent?: number }): void {
-    if (!p.sessionId) return
-    if (p.model) modelBySession.set(p.sessionId, p.model)
-    if (typeof p.usedPercent === 'number') {
+  function applyContextUpdate(p: { sessionId?: string; agentId?: string; source?: string; model?: string; usedTokens?: number | null; windowTokens?: number | null; updatedAt?: number | null }): void {
+    if (!p.sessionId || !p.agentId || !p.source || !isContextSource(p.source)) return
+    const provider = p.agentId as keyof typeof CONTEXT_TELEMETRY_MATRIX
+    const kind = p.source === 'local' ? 'local' : 'host'
+    if (!(provider in CONTEXT_TELEMETRY_MATRIX) || !CONTEXT_TELEMETRY_MATRIX[provider][kind]) return
+    if (p.model) modelBySession.set(keyFor(p), p.model)
+    const percent = contextPercentFromCounts(p.usedTokens ?? null, p.windowTokens ?? null)
+    if (percent !== null) {
       for (const a of nodes.values()) {
-        if (a.sessionId === p.sessionId) {
-          a.contextPercent = p.usedPercent
+        if (a.sessionId === p.sessionId && a.agentId === p.agentId && (!a.contextSource || a.contextSource === p.source)) {
+          a.contextPercent = percent
+          a.contextSource = p.source
+          a.contextUpdatedAt = p.updatedAt ?? Date.now()
+          a.contextUsed = p.usedTokens ?? undefined
+          a.contextTotal = p.windowTokens ?? undefined
           break
         }
       }
@@ -342,7 +361,10 @@ export function createHudModel(): HudModel {
       // node's display to idle and back without that counting as "it changed".
       if (a.dismissedAt === a.state) continue
       a.dismissedAt = undefined
-      const model = a.sessionId ? modelBySession.get(a.sessionId) : undefined
+      const model = a.sessionId ? modelBySession.get(keyFor({ sessionId: a.sessionId, agentId: a.agentId, source: a.contextSource })) : undefined
+      const contextState = typeof a.contextPercent === 'number'
+        ? (a.contextUpdatedAt !== undefined && now - a.contextUpdatedAt > CONTEXT_STALE_AFTER_MS ? 'stale' : a.contextPercent > 85 ? 'critical' : a.contextPercent >= 60 ? 'warning' : 'healthy')
+        : undefined
       rows.push({
         row: {
           nodeId,
@@ -353,6 +375,11 @@ export function createHudModel(): HudModel {
           ...(a.prompt ? { prompt: a.prompt } : {}),
           ...(a.activity ? { activity: a.activity } : {}),
           ...(typeof a.contextPercent === 'number' ? { contextPercent: a.contextPercent } : {}),
+          ...(typeof a.contextUsed === 'number' ? { contextUsed: a.contextUsed } : {}),
+          ...(typeof a.contextTotal === 'number' ? { contextTotal: a.contextTotal } : {}),
+          ...(typeof a.contextUsed === 'number' && typeof a.contextTotal === 'number' ? { contextRemaining: Math.max(0, a.contextTotal - a.contextUsed) } : {}),
+          ...(contextState ? { contextState } : {}),
+          ...(a.contextSource ? { contextSource: a.contextSource } : {}),
           subagents: [...a.subagents.values()],
           // The latch, said out loud: a finished turn nobody has looked at. `noteFocus` / a
           // read-ack from the phone clears `doneSeen`, which retires the row entirely.

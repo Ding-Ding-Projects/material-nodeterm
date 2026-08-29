@@ -37,6 +37,18 @@ immediately, so nothing is lost by a transient state).
 card, plus automatic entries for column moves, assignment changes, and due-date changes. It's
 visible as a flyout on a canvas node and as the default-open right panel inside the card modal.
 
+Comments also accept a bounded attachment queue. **Add files** opens a multi-select picker, and
+the composer accepts drag-and-drop and pasted clipboard images. Each item is read before posting,
+classified from its bytes, shown with its size and state, and can be removed while it is waiting.
+Images with a bounded PNG header get a local preview; JPEG, GIF, audio, and video remain honest
+generic file cards until a bounded decoder path is available. All of them remain attachable.
+Posting stores the bytes below `.nodeterm/board-attachments/` and records only a project-relative
+reference, display name, media kind, byte length, and SHA-256 in the board-log entry. This means
+the existing project archive includes attachments without leaking machine-specific absolute paths.
+Each composer obtains a short-lived host-owned upload session. The host reserves at most 64 MB,
+serializes writes and append consumption, and reaps expired uncommitted blobs. Rollback can remove
+only ids owned by that session and never ids already referenced by a durable comment.
+
 ## Configuration
 
 - Board layout (columns, and which session is assigned to which column) is part of the
@@ -54,12 +66,26 @@ visible as a flyout on a canvas node and as the default-open right panel inside 
 - **A remote (relay) session**: the board log bridges to the host that owns the project rather
   than reading local files directly, since a relay tab has no local filesystem of its own to
   read a log from.
+- **An attachment cannot be read, exceeds 4 MB, or has an unsupported preview signature**:
+  the item stays in the queue with a visible failure or generic-file state. A failed read is not
+  treated as an absent file, and no comment is posted until every queued item is saved.
 
 ## Security considerations
 
 - Board activity (comments, moves) is stored in the same project-scoped location as the rest
   of a project's data — nothing about it is sent anywhere beyond the project's own storage
   path (local disk, or the SSH/relay host that actually owns the session).
+- Attachment bytes are bounded to 4 MB per item and 20 items per comment, use collision-safe
+  generated ids, and are validated again at the host boundary. Previews use local object URLs;
+  they never execute files, follow arbitrary URLs, or expose credentials and command text.
+  Existing ancestor links are rejected before and after directory creation. The final filesystem
+  replacement race cannot be eliminated portably without no-follow directory handles, so the
+  host rechecks immediately before each atomic publication and reports any resulting failure.
+- Queued and posted attachment collections each have independent plain-text-first search fields
+  with the anchored regex builder, result counts, select-all/invert controls, and bounded removal
+  or export actions. Search does not alter the underlying comment data.
+- Posted attachments intentionally expose a single safe **Download** action. There is no separate
+  in-app editor or opener, so the UI does not claim to open untrusted content inside the app.
 - The card modal reaches the exact same session the canvas node does, through the same
   transport — it doesn't open a second, less-authenticated path into a terminal.
 
@@ -71,6 +97,13 @@ visible as a flyout on a canvas node and as the default-open right panel inside 
   canvas and confirm the output is there — one session, two views.
 - Assign a member and a due date to a card, and confirm both appear in the board log as
   discrete, timestamped entries.
+- Select several files in a comment, remove one, drop another, and paste an image. Confirm each
+  state is announced, media previews are local, the post button waits for reads/uploads, and the
+  resulting `.nodeterm/board-attachments/` references survive a project archive round trip.
+
+This implementation lane did not run tests, type checking, builds, packaging, UI interaction,
+captures, or audits. Focused renderer, host-bridge, remote relay, and archive round-trip
+verification remains required before this feature can be called verified.
 
 ## Suggested articles
 

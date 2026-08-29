@@ -326,6 +326,7 @@ describe('projectSignalCounts', () => {
       stateLabel: 'Unknown',
       statusRestored: false,
       unread: false,
+      contextSource: 'local',
       usesContext: false,
       ...s
     }))

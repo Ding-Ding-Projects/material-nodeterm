@@ -53,8 +53,9 @@ conflated them. Grok has been a **billing usage provider** since main's `a2353f2
 `src/core/usage/grok-usage.ts` reads the CLI's own sign-in and reports weekly credits + monthly
 budget; it is registered in `usage-service.ts`'s provider list and has its own Settings → Usage row
 (`UsageSection.tsx`, `shared/usage-limits.ts`). That already works. `USAGE_CAPABLE` is the
-**per-node context-window meter** in the node header, which grok still has no numbers for — it is no
-longer a claude-only feature, though: codex and gemini joined on 2026-08-09. The one place the
+**per-node context-window meter** at the top edge of every agent card, which grok still has no
+verified numbers for and therefore renders as `unavailable` — it is no longer a claude-only feature,
+though: codex and gemini joined on 2026-08-09. The one place the
 two touch is `$GROK_HOME`: `grok-usage.ts`'s `grokHome()` now delegates to `grokHomeDir()` in
 `core/agents/grok-paths.ts`, so there is exactly one definition of that rule.
 
@@ -327,13 +328,13 @@ ai-name / comments).
 | In-place restart + cold-restore resume | yes | yes | N/A |
 | Canvas control | yes, via `~/.claude/skills` + the sh+curl shim (unverified) | **not wired at all** — `agent:control` has no server handler; pre-existing, unchanged by grok | N/A — no canvas |
 | Context links | **not implemented for grok** (§1) | not wired at all (`initContextLink` is never called from `src/server`) | N/A |
-| Context meter | **not implemented for grok** (§1) | the meter itself IS wired server-side (both shells create the per-agent tails — it is codex and gemini that use them, `docs/gemini-agent.md` §4); grok simply has no numbers to feed it on either surface | idem |
+| Context meter | the top-of-node progress surface is implemented, but Grok remains `unavailable` because no verified per-session used/total telemetry has been captured | the same explicit `unavailable` state; Codex and Gemini tails provide numbers for their own providers, while Grok has no verified pair to feed the meter | idem |
 | Managed accounts | **deliberately N/A** — accounts are a claude config-dir mechanism. `createAgentNode` never stamps an `accountId` onto a non-claude node, and `CLAUDE_CONFIG_DIR` is irrelevant to `~/.grok/hooks`. A grok node in a managed-account project must still report status (checklist 7) | idem | idem |
 | Brand logo | the **official** xAI mark, INLINED in `agentIcons.tsx` as `GrokMark` rather than shipped as an asset — it is a single monochrome path, so `fill="currentColor"` inherits the label colour and is correct in both themes. The other four marks are multi-colour and stay `<img src>` assets, where `currentColor` cannot inherit | same component, for free | the phone draws its own icons — **follow-up owed** |
 | Working indicator | the **brand mark, breathing** — no critter. Since 2026-08-09 this is a THREE-agent mechanism (grok, gemini, opencode) driven by one pure decision, `brandPulsePlan` in `lib/brandPulse.ts`, with a thin renderer per surface: `BrandPulse` for the React badge (`AgentMascot` no longer imports `GrokMark`) and `workingMascot` for the notch strip. Grok is the only `kind: 'inline'` case — its mark is a single monochrome path from `lib/grokMark.ts` (`createGrokMarkSvg` in the HUD) pulsing with a `currentColor` drop-shadow bloom; the other marks are multi-colour assets whose bloom takes the label colour instead of their own ink. One decision, so an agent is never two things on two surfaces. See docs/mascot-sprites.md | **N/A** — no notch there; the canvas badge indicator works | the phone has its own SwiftUI renderer |
 | Fullscreen TUI setting | **N/A** — grok runs full-screen by default, so `claude-tui.ts` has no grok analogue | idem | idem |
 | Deterministic hook-reply approvals (phone Approve/Deny) | **claude-only** — `pty-manager` arms `NODETERM_PERM_WAIT_SECS` only for claude, and grok does not subscribe `PermissionRequest` at all | idem | a grok node's approvals are not answerable from the phone |
-| Kanban card + card modal | badges and the 💬 comments panel work (derived from the same nodes and the same status store); the meter row has nothing to show for grok | same | the iOS board is a separate read/move mirror |
+| Kanban card + card modal | badges and the 💬 comments panel work (derived from the same nodes and the same status store); the meter row shows `unavailable` for Grok without inventing a percentage | same | the iOS board is a separate read/move mirror |
 
 ---
 

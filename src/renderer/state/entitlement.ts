@@ -116,7 +116,11 @@ export const useEntitlement = create<EntitlementState>((set, get) => {
     })
   }
   // Live updates from the main process (launch refresh, offline grace).
-  window.nodeTerminal.license.onChange(apply)
+  // Canvas can be imported before the preload bridge is attached (notably in an isolated
+  // renderer mount). Register the live listener when the namespace exists, rather than turning a
+  // bridge-ordering race into a module-evaluation crash. Calls that require the bridge still
+  // report their own unavailable result through the normal action paths below.
+  window.nodeTerminal?.license?.onChange?.(apply)
 
   // Follow the master switch AND every per-feature switch. Without this the toggles would only
   // take effect after some other licence event happened to re-run `apply` — i.e. they would look

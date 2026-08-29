@@ -9,6 +9,8 @@
 // (reference.md:236-237): that would be one hook process per chunk.
 import { geminiWindowFor } from './model-window'
 
+const MAX_CONTEXT_TOKENS = 100_000_000
+
 /** What a meter needs. `windowTokens: null` = we could not establish a TRUSTWORTHY window; show no
  *  meter rather than divide by a guess. */
 export interface AgentUsage {
@@ -82,7 +84,7 @@ export function geminiContextParse(
     const t = o.tokens as GeminiTokens | undefined
     if (!t || typeof t !== 'object') return null
     const input = t.input
-    if (typeof input !== 'number' || !Number.isFinite(input) || input <= 0) return null
+    if (typeof input !== 'number' || !Number.isSafeInteger(input) || input <= 0 || input > MAX_CONTEXT_TOKENS) return null
     const model = typeof o.model === 'string' && o.model ? o.model : null
     return { used: input, window: geminiWindowFor(model), model }
   })

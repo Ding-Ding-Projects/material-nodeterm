@@ -8,6 +8,8 @@
 // guessed from the model family (core/model-window.ts) and gemini's from its model id.
 import { latestJsonLineWhere, type AgentUsage } from './gemini-session'
 
+const MAX_CONTEXT_TOKENS = 100_000_000
+
 export type { AgentUsage }
 
 /** One of codex's two token blocks. `cached_input_tokens` is a SUBSET of `input_tokens`. */
@@ -52,11 +54,11 @@ export function pickCodexUsage(rollout: string | string[]): AgentUsage | null {
     const u = info?.last_token_usage as CodexTokenUsage | undefined
     if (!u || typeof u !== 'object') return null
     const input = u.input_tokens
-    if (typeof input !== 'number' || !Number.isFinite(input) || input <= 0) return null
+    if (typeof input !== 'number' || !Number.isSafeInteger(input) || input <= 0 || input > MAX_CONTEXT_TOKENS) return null
     const win = info?.model_context_window
     return {
       usedTokens: input,
-      windowTokens: typeof win === 'number' && Number.isFinite(win) && win > 0 ? win : null
+      windowTokens: typeof win === 'number' && Number.isSafeInteger(win) && win > 0 && win <= MAX_CONTEXT_TOKENS ? win : null
     }
   })
 }

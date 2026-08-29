@@ -37,6 +37,75 @@ function flat(text: string): FunnyVariants {
 }
 
 export const CATALOG: Catalog = {
+  'subagent.collapse': { en: flat('Collapse'), yue: flat('收埋') },
+  'subagent.openOutput': { en: flat('Open output'), yue: flat('打開輸出') },
+  'subagent.type': { en: flat('subagent'), yue: flat('subagent') },
+  'subagent.working': { en: flat('working'), yue: flat('工作中') },
+  'subagent.done': { en: flat('done'), yue: flat('完成') },
+  'subagent.workingOutput': { en: flat('Working... live output appears here'), yue: flat('工作中……即時輸出會喺呢度出現') },
+  'subagent.noOutput': { en: flat('No output.'), yue: flat('冇輸出。') },
+  'subagent.elapsed': { en: flat('{duration}'), yue: flat('{duration}') },
+  'subagent.tokens': { en: flat('↓ {tokens} tokens'), yue: flat('↓ {tokens} tokens') },
+  'subagent.tools': { en: flat('{count} tools'), yue: flat('{count} 個工具') },
+  // Context-window progress. Provider numbers are supplied by the caller, while state words and
+  // surrounding copy stay in the same language and funny-level pipeline as every other surface.
+  'contextMeter.state.known': { en: flat('reported'), yue: flat('已回報') },
+  'contextMeter.state.stale': { en: flat('stale'), yue: flat('過期') },
+  'contextMeter.state.unknown': { en: flat('unknown'), yue: flat('未知') },
+  'contextMeter.state.not-reported': { en: flat('not reported'), yue: flat('未有回報') },
+  'contextMeter.state.unavailable': { en: flat('unavailable'), yue: flat('未能提供') },
+  'contextMeter.title': { en: flat('Context window'), yue: flat('上下文視窗') },
+  'contextMeter.staleTelemetry': { en: flat('stale telemetry'), yue: flat('遙測過期') },
+  'contextMeter.updated': { en: flat('Updated {time}'), yue: flat('{time} 更新') },
+  'contextMeter.level.healthy': { en: flat('healthy'), yue: flat('健康') },
+  'contextMeter.level.warning': { en: flat('warning'), yue: flat('警告') },
+  'contextMeter.level.critical': { en: flat('critical'), yue: flat('危險') },
+  'contextMeter.contextState': {
+    en: ['Context: {state}', 'Context: {state}', 'Context: {state}', 'Context: {state}', 'Context: {state}, the meter is taking a tea break.'],
+    yue: ['上下文：{state}', '上下文：{state}', '上下文：{state}', '上下文：{state}', '上下文：{state}，個計數器去咗飲茶。']
+  },
+  'contextMeter.summary': {
+    en: ['Used {used} / {total} tokens · {remaining} remaining · {percent}%', 'Used {used} / {total} tokens · {remaining} remaining · {percent}%', 'Used {used} / {total} tokens · {remaining} remaining · {percent}%', 'Used {used} / {total} tokens · {remaining} remaining · {percent}%', 'Used {used} / {total} tokens · {remaining} remaining · {percent}%, the context cupboard has spoken.'],
+    yue: ['用咗 {used} / {total} tokens · 剩返 {remaining} · {percent}%', '用咗 {used} / {total} tokens · 剩返 {remaining} · {percent}%', '用咗 {used} / {total} tokens · 剩返 {remaining} · {percent}%', '用咗 {used} / {total} tokens · 剩返 {remaining} · {percent}%', '用咗 {used} / {total} tokens · 剩返 {remaining} · {percent}%——個上下文櫃已經出聲。']
+  },
+  'contextMeter.telemetryState': {
+    en: ['Telemetry: {state}', 'Telemetry: {state}', 'Telemetry: {state}', 'Telemetry: {state}', 'Telemetry: {state}, no guessing allowed.'],
+    yue: ['遙測：{state}', '遙測：{state}', '遙測：{state}', '遙測：{state}', '遙測：{state}，唔估數。']
+  },
+  'hud.you': { en: flat('You: '), yue: flat('你：') },
+  'hud.remove': { en: flat('Remove from HUD'), yue: flat('喺 HUD 移除') },
+  'hud.go': { en: flat('Go'), yue: flat('去') },
+  'hud.subagents': { en: flat('{count} subagents'), yue: flat('{count} 個 subagent') },
+  'hud.state.working': { en: flat('Working…'), yue: flat('工作中……') },
+  'hud.state.needsYou': { en: flat('Needs you'), yue: flat('等你處理') },
+  'hud.state.done': { en: flat('Finished'), yue: flat('完成') },
+  'hud.state.idle': { en: flat('Idle'), yue: flat('閒置') },
+  'kanban.comments.addFiles': { en: flat('Add files'), yue: flat('加入檔案') },
+  'kanban.comments.dropHint': { en: flat('Drop files here, paste an image, or attach any file'), yue: flat('拖放檔案、貼上圖片，或者加入任何檔案') },
+  'kanban.comments.post': { en: flat('Post comment'), yue: flat('發表留言') },
+  'kanban.comments.posting': { en: flat('Posting…'), yue: flat('發表中…') },
+  'kanban.comments.remove': { en: flat('Remove'), yue: flat('移除') },
+  'kanban.comments.reading': { en: flat('Reading file…'), yue: flat('讀取檔案中…') },
+  'kanban.comments.uploading': { en: flat('Uploading…'), yue: flat('上載中…') },
+  'kanban.comments.attached': { en: flat('Attached'), yue: flat('已加入') },
+  'kanban.comments.previewUnavailable': { en: flat('Media preview is unavailable; the file can still be attached.'), yue: flat('媒體預覽未能使用，檔案仍然可以加入。') },
+  'kanban.comments.open': { en: flat('Download'), yue: flat('下載') },
+  'kanban.comments.openAgain': { en: flat('Download again'), yue: flat('再次下載') },
+  'kanban.comments.integrityFailure': { en: flat('Unavailable or changed'), yue: flat('未能使用或已變更') },
+  'kanban.comments.searchQueued': { en: flat('Search queued attachments'), yue: flat('搜尋待加入檔案') },
+  'kanban.comments.searchPosted': { en: flat('Search comments and attachments'), yue: flat('搜尋留言及附件') },
+  'kanban.comments.selectAll': { en: flat('Select all shown'), yue: flat('選取所有顯示項目') },
+  'kanban.comments.invert': { en: flat('Invert shown'), yue: flat('反轉顯示項目') },
+  'kanban.comments.export': { en: flat('Export selected'), yue: flat('匯出已選項目') },
+  'kanban.comments.select': { en: flat('Select'), yue: flat('選取') },
+  'kanban.comments.previewLimit': { en: flat('Image preview exceeds the safe pixel limit; the file can still be attached.'), yue: flat('圖片預覽超出安全像素上限，檔案仍然可以加入。') },
+  'kanban.comments.previewDimensions': { en: flat('Image preview dimensions could not be checked safely; the file can still be attached.'), yue: flat('未能安全檢查圖片預覽尺寸，檔案仍然可以加入。') },
+  'kanban.comments.previewError': { en: flat('Image preview is unavailable; the file can still be attached.'), yue: flat('圖片預覽未能使用，檔案仍然可以加入。') },
+  'kanban.comments.mediaPreview': { en: flat('Media preview is unavailable; the file can still be attached.'), yue: flat('媒體預覽未能使用，檔案仍然可以加入。') },
+  'kanban.comments.fileReadError': { en: flat('The file could not be read.'), yue: flat('檔案未能讀取。') },
+  'kanban.comments.sessionError': { en: flat('Attachment upload session could not be created.'), yue: flat('未能建立附件上載工作階段。') },
+  'kanban.comments.saveError': { en: flat('The attachment could not be saved.'), yue: flat('附件未能儲存。') },
+  'kanban.comments.postError': { en: flat('The comment could not be saved. Attachments were rolled back.'), yue: flat('留言未能儲存，附件已回復。') },
   // ---------------------------------------------------------------------------------------
   // Settings navigation — group headings shown in the sidebar (SettingsSidebar.tsx). A group
   // heading is a category label, not a message, so it stays level-invariant.
@@ -1527,6 +1596,111 @@ export const CATALOG: Catalog = {
   'terminalProfiles.error.openCanvasToReopen': {
     en: flat('Open on canvas to reopen'),
     yue: flat('喺畫布開啟再重新打開')
+  },
+
+  // ---------------------------------------------------------------------------------------
+  // Agent context-link picker and handle descriptions. Provider labels remain factual; the
+  // surrounding copy follows the live language mode and both per-language funny levels.
+  // ---------------------------------------------------------------------------------------
+  'agentLink.handle.out': {
+    en: flat('Link out: drag to another context-capable agent node so they can read each other’s context'),
+    yue: flat('連出去：拖去另一個支援內容連結嘅代理節點，等佢哋可以互相讀取內容')
+  },
+  'agentLink.handle.in': {
+    en: flat('Link in: drop a link here to share context with this context-capable agent session'),
+    yue: flat('連入嚟：將連結放喺呢度，同呢個支援內容連結嘅代理階段分享內容')
+  },
+  'agentLink.handle.noteOut': {
+    en: flat('Link out: drag to a sticky note to attach it as context'),
+    yue: flat('連出去：拖去便利貼，將佢附加為內容')
+  },
+  'agentLink.handle.noteIn': {
+    en: flat('Link in: drop a sticky note link here to attach it as context'),
+    yue: flat('連入嚟：將便利貼連結放喺呢度，將佢附加為內容')
+  },
+  'agentLink.headerAction.title': {
+    en: flat('Link to another agent'),
+    yue: flat('連結另一個代理')
+  },
+  'agentLink.headerAction.aria': {
+    en: flat('Link {title} to another agent'),
+    yue: flat('將 {title} 連結到另一個代理')
+  },
+  'agentLink.dialog.title': {
+    en: [
+      'Link {source} to another agent',
+      'Pick an agent to link with {source}',
+      'Choose a context partner for {source}',
+      'Choose who {source} can read with',
+      'Pick {source}’s context buddy'
+    ],
+    yue: [
+      '將 {source} 連結到另一個代理',
+      '揀一個代理同 {source} 連結',
+      '為 {source} 揀一個內容夥伴',
+      '揀邊個可以同 {source} 互相讀取',
+      '幫 {source} 揀個內容拍檔'
+    ]
+  },
+  'agentLink.dialog.description': {
+    en: flat('Choose a context-capable agent. No transcript is sent automatically.'),
+    yue: flat('揀一個支援內容連結嘅代理。系統唔會自動傳送對話記錄。')
+  },
+  'agentLink.dialog.filter': {
+    en: flat('Filter link targets'),
+    yue: flat('篩選連結目標')
+  },
+  'agentLink.dialog.filterPlaceholder': {
+    en: flat('Filter agents…'),
+    yue: flat('篩選代理…')
+  },
+  'agentLink.dialog.filterPlaceholderRegex': {
+    en: flat('Filter agents… (regex)'),
+    yue: flat('篩選代理…（正則表達式）')
+  },
+  'agentLink.dialog.regexLabel': {
+    en: flat('Regex — agent link picker'),
+    yue: flat('正則表達式 — 代理連結選擇器')
+  },
+  'agentLink.dialog.targets': {
+    en: flat('Available agent link targets'),
+    yue: flat('可用代理連結目標')
+  },
+  'agentLink.dialog.empty': {
+    en: flat('No other context-capable agents are available.'),
+    yue: flat('目前沒有其他支援內容連結嘅代理。')
+  },
+  'agentLink.dialog.noMatch': {
+    en: flat('No agents match that filter.'),
+    yue: flat('冇代理符合呢個篩選。')
+  },
+  'agentLink.dialog.untitled': {
+    en: flat('Untitled agent'),
+    yue: flat('未命名代理')
+  },
+  'agentLink.dialog.cancel': {
+    en: flat('Cancel'),
+    yue: flat('取消')
+  },
+  'agentLink.result.stale': {
+    en: flat('That agent link is no longer available.'),
+    yue: flat('嗰個代理連結已經唔再可用。')
+  },
+  'agentLink.result.duplicate': {
+    en: flat('Those agents are already linked.'),
+    yue: flat('嗰兩個代理已經連結。')
+  },
+  'regex.trigger.openTitle': {
+    en: flat('Switch to regex and open the builder'),
+    yue: flat('切換到正則表達式並開啟建立器')
+  },
+  'regex.trigger.activeTitle': {
+    en: flat('Regex mode: open the builder'),
+    yue: flat('正則表達式模式：開啟建立器')
+  },
+  'regex.trigger.aria': {
+    en: flat('Open regex builder'),
+    yue: flat('開啟正則表達式建立器')
   },
 
   // ---------------------------------------------------------------------------------------

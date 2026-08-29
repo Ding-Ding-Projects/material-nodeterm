@@ -19,6 +19,11 @@ export interface HudRow {
   prompt?: string
   activity?: string
   contextPercent?: number
+  contextUsed?: number
+  contextTotal?: number
+  contextRemaining?: number
+  contextState?: 'healthy' | 'warning' | 'critical' | 'stale'
+  contextSource?: string
   subagents: HudSubagentRow[]
   /** A finished turn the user has not looked at yet (the sessions sidebar's `unread` mark) — the
    *  row's sort tier and its "Unread" badge. */

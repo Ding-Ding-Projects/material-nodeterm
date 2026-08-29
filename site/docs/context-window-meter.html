@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="source-article" content="docs/features/agents/context-window-meter.md" />
+    <meta name="source-article-sha256" content="9e496b804e1a6247a2bb10374e64e50bdbf776c0ba86f66b4f0c6ab61b67b5ae" />
+    <title>Context-window meter: nodeterm docs</title>
+    <meta name="description" content="Provider-owned context-window telemetry, explicit unknown states, and local-only progress reporting." />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-nav"><a href="./index.html">Docs</a> · <a href="./agent-support.html">Agent support</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Agents</p>
+      <h1>Context-window meter</h1>
+      <p>Every agent card carries a context-window progress track at its top edge, including resumed, grouped, minimized, restored, kanban, custom, and ephemeral subagent cards.</p>
+      <h2>Provider sources</h2>
+      <p>Claude Code reads assistant transcript usage and its model-family window. Codex reads <code>last_token_usage.input_tokens</code> with <code>model_context_window</code>. Gemini reads transcript <code>tokens.input</code> and its model-window resolver. Grok, opencode, custom agents, and ephemeral subagents remain explicit when no verified used and total pair exists.</p>
+      <h2>Honest states</h2>
+      <p>Known cards show used, total, remaining, and percentage. Other cards say unknown, not reported, stale, or unavailable. Healthy, warning, and critical threshold text accompanies the bar, so colour is never the only signal.</p>
+      <h2>Local and bounded</h2>
+      <p>Provider and source identity are part of the cache key. Producer epochs and lifecycle generations reject delayed readings, including readings from older lifecycles. Session locators use bounded indexes, remote deltas require a verified byte-size cursor and capped reads, and context telemetry stays in local application data rather than shared project files or exports.</p>
+      <p>Epochs use ordered <code>producerId:lifecycle</code> identities, not random per-reading values. A fresh producer may restart at generation one, while retired producer and epoch identities are rejected. Legacy cache records keyed only by a bare session id are discarded and never used as a runtime fallback. Remote retracking compares the host, port, ControlMaster path, transcript path, identity file, extra SSH arguments, and trusted-execution provenance.</p>
+      <p>The collapsed subagent minimum is calculated from its rendered context strip, header, task line, and metadata line, so resizing cannot hide the identifying content.</p>
+      <h2>Accessibility</h2>
+      <p>The progress track exposes an accessible value when numbers are known and a textual state when they are not. The detail surface is measured against the live anchor, chooses the available side without covering the initiating control, and respects reduced motion and narrow layouts.</p>
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+          <li><a href="./agent-support.html">Agent support</a></li>
+          <li><a href="./node-kinds.html">Node kinds</a></li>
+          <li><a href="./terminal-sessions.html">Terminal sessions and continuity</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

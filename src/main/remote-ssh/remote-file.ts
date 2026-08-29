@@ -10,8 +10,20 @@ export interface RemoteFileRef {
   path: string
 }
 
+export const MAX_REMOTE_FILE_BYTES = 512 * 1024 * 1024
+export const MAX_REMOTE_READ_BYTES = 1024 * 1024
+
+function boundedOffset(value: number): boolean {
+  return Number.isSafeInteger(value) && value >= 0 && value <= MAX_REMOTE_FILE_BYTES
+}
+
+function boundedReadSize(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0 && value <= MAX_REMOTE_READ_BYTES
+}
+
 export function tailFromOffsetArgs(conn: SshConnection, controlPath: string, path: string, offset: number): string[] {
-  return childArgs(conn, controlPath, `tail -c +${offset + 1} ${posixQuote(path)}`)
+  if (!boundedOffset(offset)) return []
+  return childArgs(conn, controlPath, `tail -c +${offset + 1} ${posixQuote(path)} | head -c ${MAX_REMOTE_READ_BYTES}`)
 }
 export function tailFromOffsetCappedArgs(
   conn: SshConnection,
@@ -20,11 +32,13 @@ export function tailFromOffsetCappedArgs(
   offset: number,
   maxBytes: number
 ): string[] {
+  if (!boundedOffset(offset) || !boundedReadSize(maxBytes)) return []
   // base64 wraps at 76 cols on GNU and not at all on BSD — the reader strips whitespace, so
   // no -w flag is used (macOS/BSD base64 has none).
   return childArgs(conn, controlPath, `tail -c +${offset + 1} ${posixQuote(path)} | head -c ${maxBytes} | base64`)
 }
 export function tailLastBytesArgs(conn: SshConnection, controlPath: string, path: string, bytes: number): string[] {
+  if (!boundedReadSize(bytes)) return []
   return childArgs(conn, controlPath, `tail -c ${bytes} ${posixQuote(path)}`)
 }
 
@@ -35,6 +49,7 @@ export function tailLastBytesWithSizeArgs(
   path: string,
   bytes: number
 ): string[] {
+  if (!boundedReadSize(bytes)) return []
   const quoted = posixQuote(path)
   return childArgs(
     conn,
@@ -65,12 +80,16 @@ export class RemoteFile {
     offset: number,
     maxBytes: number
   ): Promise<{ data: Buffer; newOffset: number }> {
+    if (!boundedOffset(offset) || !boundedReadSize(maxBytes)) return { data: Buffer.alloc(0), newOffset: offset }
     try {
       const { code, stdout } = await this.run(
         tailFromOffsetCappedArgs(ref.conn, ref.controlPath, ref.path, offset, maxBytes)
       )
       if (code !== 0) return { data: Buffer.alloc(0), newOffset: offset }
-      const data = Buffer.from(stdout.replace(/\s+/g, ''), 'base64')
+      const encoded = stdout.replace(/\s+/g, '')
+      if (encoded.length > Math.ceil(maxBytes / 3) * 4 + 8) return { data: Buffer.alloc(0), newOffset: offset }
+      const data = Buffer.from(encoded, 'base64')
+      if (data.length > maxBytes) return { data: Buffer.alloc(0), newOffset: offset }
       return { data, newOffset: offset + data.length }
     } catch {
       return { data: Buffer.alloc(0), newOffset: offset }
@@ -78,6 +97,7 @@ export class RemoteFile {
   }
 
   async readTail(ref: RemoteFileRef, bytes: number): Promise<string> {
+    if (!boundedReadSize(bytes)) return ''
     try {
       const { code, stdout } = await this.run(tailLastBytesArgs(ref.conn, ref.controlPath, ref.path, bytes))
       return code === 0 ? stdout : ''
@@ -91,14 +111,16 @@ export class RemoteFile {
     ref: RemoteFileRef,
     bytes: number
   ): Promise<{ data: Buffer; size: number } | null> {
+    if (!boundedReadSize(bytes)) return null
     try {
       const { code, stdout } = await this.run(tailLastBytesWithSizeArgs(ref.conn, ref.controlPath, ref.path, bytes))
       if (code !== 0) return null
       const newline = stdout.indexOf('\n')
       if (newline < 1) return null
       const size = Number(stdout.slice(0, newline).trim())
-      if (!Number.isSafeInteger(size) || size < 0) return null
+      if (!Number.isSafeInteger(size) || size < 0 || size > MAX_REMOTE_FILE_BYTES) return null
       const data = Buffer.from(stdout.slice(newline + 1).replace(/\s+/g, ''), 'base64')
+      if (data.length > bytes) return null
       return { data, size }
     } catch {
       return null

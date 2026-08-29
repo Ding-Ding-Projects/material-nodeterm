@@ -219,6 +219,10 @@ export const IPC = {
   /** Fire-and-forget: empty the ring. */
   logClear: 'log:clear',
   boardLogAppend: 'board-log:append',
+  boardLogSaveAttachment: 'board-log:save-attachment',
+  boardLogCreateAttachmentSession: 'board-log:create-attachment-session',
+  boardLogRemoveAttachments: 'board-log:remove-attachments',
+  boardLogReadAttachment: 'board-log:read-attachment',
   boardLogRead: 'board-log:read',
   /** Fire-and-forget ref-counted subscribe/unsubscribe: the first subscriber for a project starts
    *  the local fs.watch (or the desktop-ssh 5s poll); the last one stops it. */
@@ -365,8 +369,6 @@ export const IPC = {
   projectArchiveImport: 'project-archive:import',
   portableMediaPrepare: 'portable-media:prepare',
   portableMediaDiscard: 'portable-media:discard',
-  boardLogAppendWithAttachments: 'board-log:append-with-attachments',
-  boardLogReadAttachment: 'board-log:read-attachment',
   portableBindingState: 'portable-binding:state',
   portableBindingApply: 'portable-binding:apply',
   providerCatalog: 'provider-services:catalog',
