@@ -31,7 +31,7 @@
     <article class="doc-body">
       <p class="doc-kicker">Canvas</p>
       <h1>Node kinds</h1>
-      <p>Every object on the canvas is a React Flow custom node of one of five kinds: terminal, sticky, group, editor, or diff.</p>
+      <p>Every object on the canvas is a React Flow custom node. Alongside terminals, sticky notes, groups, editors, and diffs, the Files node keeps a searchable directory view beside the work.</p>
 
       <h2>Behaviour</h2>
       <ul>
@@ -40,6 +40,7 @@
           <li><strong>group</strong> — a real parent/child frame; frames can nest to any depth and can be bound to a git worktree, so every node created inside one inherits that worktree's path as its working directory.</li>
           <li><strong>editor</strong> — a Monaco code editor bound to a file path, with an image-preview mode for common image formats.</li>
           <li><strong>diff</strong> — a read-only Monaco diff view comparing a file's staged or unstaged changes.</li>
+          <li><strong>files</strong> — a persisted local, SSH, or relay directory listing with breadcrumbs, anchored regex filtering, selection, safe creation, and shared editor handoff.</li>
         </ul>
 
       <h2>Configuration</h2>

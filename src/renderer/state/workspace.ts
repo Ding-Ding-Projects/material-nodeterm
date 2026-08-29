@@ -56,6 +56,7 @@ const DINO_SIZE = { width: 600, height: 200 }
 const VIDEO_SIZE = { width: 640, height: 420 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
+const FILES_SIZE = { width: 340, height: 460 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
@@ -209,9 +210,9 @@ export interface NodeData {
    */
   sshRemoteTmux?: boolean
   /**
-   * editor-only: when true (an editor created in an SSH project), reads/writes/image-previews go to
-   * the project's REMOTE filesystem via `sshFs(projectId)` instead of the local fs. Persisted, so an
-   * SSH-project editor still routes to the remote fs after reopen.
+   * editor/files-only: when true (an editor or Files node created in an SSH project), reads,
+   * writes, previews, and directory listings go to the project's remote filesystem via
+   * `sshFs(projectId)` instead of the local fs. Persisted so reopen keeps the host boundary.
    */
   sshFs?: boolean
   /** annotation-only: 'line' or 'arrow' — see createAnnotationNode and AnnotationNode.tsx. */
@@ -907,6 +908,30 @@ export function createBrowserNode(
   }
 }
 
+/** Creates a persisted directory-listing node rooted at a project directory. */
+export function createFilesNode(
+  index: number,
+  cwd: string,
+  center?: { x: number; y: number },
+  sshFs?: boolean
+): CanvasNode {
+  return {
+    id: nextId('files'),
+    type: 'files',
+    position: placeAt(center, index, FILES_SIZE.width, FILES_SIZE.height),
+    width: FILES_SIZE.width,
+    height: FILES_SIZE.height,
+    style: { width: FILES_SIZE.width, height: FILES_SIZE.height },
+    data: {
+      title: cwd.split(/[\\/]/).filter(Boolean).pop() || '/',
+      color: '#ffd60a',
+      group: null,
+      cwd,
+      ...(sshFs ? { sshFs: true } : {})
+    }
+  }
+}
+
 /** Creates a diff editor node for a changed file (relative path + repo cwd). */
 export function createDiffNode(
   index: number,
@@ -1455,6 +1480,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   video: true,
   web: true,
   browser: true,
+  files: true,
   subagent: true,
   loop: true,
   scheduler: true,
@@ -1492,6 +1518,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   video: VIDEO_SIZE,
   web: WEB_SIZE,
   browser: BROWSER_SIZE,
+  files: FILES_SIZE,
   // Ephemeral kinds are never persisted (they are derived from live hook events), so these are
   // defensive floors rather than values a project.json will ever carry.
   subagent: TERMINAL_SIZE,

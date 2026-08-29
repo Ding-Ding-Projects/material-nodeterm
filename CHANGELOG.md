@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a first-class Files node for local, SSH, and relay project directories, with persisted
+  browsing, breadcrumbs, anchored regex search, selection and path-copy actions, safe file/folder
+  creation, drag navigation, and shared editor handoff. Portable project projections keep machine
+  paths out by storing relative Files intent; runtime and capture verification remain pending.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

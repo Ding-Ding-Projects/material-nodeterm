@@ -24,6 +24,7 @@ export interface FabMenuProps {
    *  lets it land where the pointer is rather than at the default placement. */
   onAddAuthenticator: () => void
   onAddDino: () => void
+  onAddFiles?: () => void
   onAddAgent: (agentId: AgentId, accountId?: string) => void
   onOpenFile: () => void
   onAddRemote: () => void
@@ -48,6 +49,7 @@ export function FabMenu({
   onAddLoop,
   onAddAuthenticator,
   onAddDino,
+  onAddFiles = () => undefined,
   onAddAgent,
   onOpenFile,
   onAddRemote,
@@ -271,6 +273,10 @@ export function FabMenu({
                 <button role="menuitem" onClick={pick(onAddDino)}>
                   <DinoIcon />
                   <span>Dino Game</span>
+                </button>
+                <button role="menuitem" onClick={pick(onAddFiles)}>
+                  <EditorIcon />
+                  <span>File Manager</span>
                 </button>
                 <button role="menuitem" onClick={pick(onOpenFile)}>
                   <EditorIcon />

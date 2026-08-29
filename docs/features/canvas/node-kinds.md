@@ -16,6 +16,7 @@ way, while each contributes its own body content and header actions.
 | **Group** | A real container node — other nodes can live *inside* it, and groups can nest inside groups. A group can optionally be bound to a git worktree, so every node created inside it inherits that worktree's directory. See [Source control & worktrees](../source-control/source-control-and-worktrees.md). |
 | **Editor** | A Monaco-based code editor bound to a file path, with save, dirty-state tracking, and a markdown preview toggle for `.md` files. Image files render as an `<img>` preview instead of source text. |
 | **Diff** | A read-only Monaco diff view comparing HEAD↔index (staged) or index↔working tree (unstaged) for a single file. |
+| **Files** | A persisted directory listing rooted at the project folder or its SSH host folder, with breadcrumbs, text/regex filtering, selection, and safe file handoff. |
 
 Two other things render *on* the canvas but are not persisted node kinds: **subagent cards**
 (ephemeral cards showing an agent's spawned subagents, connected by an edge to the parent
@@ -32,6 +33,9 @@ rather than an in-session loop).
   node's selected shell profile is snapshotted separately in this machine's `LocalNodeExec`
   overlay; it is not written to the shared project file. See
   [Windows shell profiles](../terminals/windows-shell-profiles.md).
+- Files nodes persist their safe relative project intent, position, title, and presentation. The
+  local absolute path is resolved from the project binding at load time. SSH nodes use the remote
+  project root and never send that host path to the local operating-system file manager.
 
 ## Failure modes
 
@@ -53,6 +57,10 @@ rather than an in-session loop).
   executed — this is why notes push to agent nodes with a clear one-shot message, not into
   plain terminals).
 
+- A Files node lists through the active session filesystem. An unreadable listing is reported as an
+  error, distinct from an empty folder or a filter with no matches; remote listings never offer a
+  local reveal action.
+
 ## Verification
 
 - Create one of each node kind from the canvas right-click menu, the bottom-dock **+** button,
@@ -61,6 +69,10 @@ rather than an in-session loop).
   data such as an editor's open file) survived exactly as it was.
 - Group a mix of node kinds together, collapse the group, and confirm its children stay bound
   to it through a drag, a resize, and an app restart.
+- Create a Files node from the pane menu, command palette, and navigation FAB. Browse, filter with
+  text and the anchored regex builder, select rows, copy paths, drag onto a folder, and open an
+  editor-capable file. Repeat with an SSH project and confirm no remote path reaches the local
+  file manager.
 
 ## Suggested articles
 

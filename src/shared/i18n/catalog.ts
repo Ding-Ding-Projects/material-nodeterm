@@ -37,6 +37,22 @@ function flat(text: string): FiveVariants {
 }
 
 export const CATALOG: Catalog = {
+  // Files node chrome. Dynamic paths and counts stay in the caller; these entries carry only
+  // localized labels and bounded explanations.
+  'files.node.title': { en: flat('Files'), yue: flat('檔案') },
+  'files.node.filter': { en: flat('Filter files'), yue: flat('篩選檔案') },
+  'files.node.loading': { en: flat('Loading folder…'), yue: flat('載入緊資料夾…') },
+  'files.node.empty': { en: flat('This folder is empty.'), yue: flat('呢個資料夾係空嘅。') },
+  'files.node.error': { en: flat('Could not read this folder.'), yue: flat('讀唔到呢個資料夾。') },
+  'files.node.noMatch': { en: flat('Nothing matches this filter.'), yue: flat('呢個篩選冇符合項目。') },
+  'files.node.remote': { en: flat('Remote folder'), yue: flat('遠端資料夾') },
+  'files.node.copyPaths': { en: flat('Copy paths'), yue: flat('複製路徑') },
+  'files.node.newFile': { en: flat('New file…'), yue: flat('新增檔案…') },
+  'files.node.newFolder': { en: flat('New folder…'), yue: flat('新增資料夾…') },
+  'files.node.noProjectFolder': {
+    en: flat('Open a project folder before browsing files.'),
+    yue: flat('先開啟專案資料夾，至可以瀏覽檔案。')
+  },
   // ---------------------------------------------------------------------------------------
   // Settings navigation — group headings shown in the sidebar (SettingsSidebar.tsx). A group
   // heading is a category label, not a message, so it stays level-invariant.

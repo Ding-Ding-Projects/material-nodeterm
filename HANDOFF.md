@@ -1,5 +1,23 @@
 # Handoff
 
+## 2026-08-26, Files node lane implementation
+
+Added the first-class Files node from upstream PR #294 to the renderer and canvas. The node is
+created from the pane menu, command palette, and navigation FAB; persists its directory and title;
+lists through the active local, SSH, or relay session filesystem; distinguishes loading, read
+failure, empty, and no-match states; and routes editor-capable files back through Canvas's shared
+file opener. It includes breadcrumbs, refresh/collapse/rename controls, local-only reveal, safe
+new-file/new-folder prompts, anchored regex filtering, keyboard selection, bulk path copying, and
+validated drag-to-folder navigation.
+
+The Files kind is included in node sizing, project serialization, and worktree displacement. SSH
+Files paths are converted to relative intent under the remote project root before writing the
+shared project projection, and resolved again from the destination SSH binding. No credential,
+process state, cache, or local editor application is persisted.
+
+This lane intentionally did not run tests, type checking, linting, builds, packaging, installer
+execution, UI interaction, or captures. Runtime and packaged-artifact evidence remain pending.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

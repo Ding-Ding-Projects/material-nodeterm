@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Files node — nodeterm docs</title>
+    <meta name="description" content="A persisted, searchable directory view for local and SSH project folders." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a><span aria-hidden="true">/</span><a href="./index.html">Docs</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Canvas</p>
+      <h1>Files node</h1>
+      <p>A directory view that stays on the canvas beside the terminals and agents using the same folder. It is a persisted canvas object, not a replacement for the Explorer drawer.</p>
+      <h2>Behaviour</h2>
+      <p>Create it from the pane menu, command palette, or navigation FAB. It starts at the active project folder, or at a bound worktree folder when created inside a worktree group. The header supports collapse, colour, rename, parent navigation, refresh, and close. Breadcrumbs stay clickable at deep paths.</p>
+      <h2>Search and actions</h2>
+      <p>The filter uses plain text by default. Its adjacent <code>.*</code> control opens the full anchored regex builder with flags and validation. Rows support keyboard selection, range selection, copy-path bulk action, and drag navigation onto folders. New-file and new-folder prompts use the shared traversal-safe path validator.</p>
+      <h2>Local and SSH projects</h2>
+      <p>Local projects list their local session filesystem. SSH projects list the project's host through the existing SSH filesystem, while relay projects list the peer session filesystem. Remote paths never reach a local file-manager reveal action. Editor-capable files return through the shared Canvas file route.</p>
+      <h2>Portability</h2>
+      <p>Project files retain safe relative Files intent and presentation. Absolute paths, credentials, process state, caches, and editor applications remain machine-local. The destination resolves the path from its own project or SSH root, and import performs no external action.</p>
+      <h2>Failure modes</h2>
+      <p>Loading, a read failure, an empty folder, and a filter with no matches are separate states. Invalid drag data and unsafe names are ignored or rejected without partial writes. A project without a folder does not guess a root.</p>
+      <h2>Suggested articles</h2>
+      <ul>
+        <li><a href="./node-kinds.html">Node kinds</a></li>
+        <li><a href="./canvas-lifecycle.html">Canvas &amp; node lifecycle</a></li>
+        <li><a href="./projects-and-tabs.html">Projects &amp; tabs</a></li>
+        <li><a href="./remote-ssh-projects.html">Remote &amp; SSH projects</a></li>
+      </ul>
+    </article>
+  </body>
+</html>

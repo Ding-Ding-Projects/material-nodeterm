@@ -38,6 +38,8 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  /** Files-node directory intent, always relative to the project or SSH root. */
+  relativePath?: string
 }
 
 export interface PortableRelationshipV3 {
@@ -86,7 +88,7 @@ const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'relativePath'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
@@ -140,7 +142,17 @@ function safeAppearance(value: unknown, depth = 0, seen = { count: 0 }): unknown
   return out
 }
 
-function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV3 {
+function relativeFilesPath(node: CanvasNodeState, root: string | undefined): string | undefined {
+  if (node.kind !== 'files' || typeof node.cwd !== 'string' || !root) return undefined
+  const base = root.replace(/\\/g, '/').replace(/\/+$/, '') || '/'
+  const value = node.cwd.replace(/\\/g, '/').replace(/\/+$/, '') || '/'
+  const prefix = base === '/' ? '/' : `${base}/`
+  if (value !== base && !value.startsWith(prefix)) return undefined
+  const relative = value === base ? '.' : value.slice(prefix.length)
+  return relative === '.' ? '.' : `./${relative}`
+}
+
+function projectNode(node: CanvasNodeState, strict = false, projectRoot?: string): PortableCanvasNodeV3 {
   if (!record(node)) throw new PortableProjectV3Error('manifest', 'Portable node is not an object.')
   if (strict) exactKeys(node, ALLOWED_NODE, 'node')
   if (!record(node.position)) throw new PortableProjectV3Error('manifest', 'Portable node position is invalid.')
@@ -159,6 +171,8 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.parentId !== undefined && typeof node.parentId !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node parent is invalid.')
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
+  const suppliedRelativePath = (node as CanvasNodeState & { relativePath?: unknown }).relativePath
+  if (strict && suppliedRelativePath !== undefined && (typeof suppliedRelativePath !== 'string' || !(suppliedRelativePath === '.' || suppliedRelativePath.startsWith('./')))) throw new PortableProjectV3Error('manifest', 'Portable Files path intent is invalid.')
   if (strict && node.browserTabs !== undefined && !Array.isArray(node.browserTabs)) throw new PortableProjectV3Error('manifest', 'Portable browser tabs must be an array.')
   if (node.collapsed !== undefined) out.collapsed = node.collapsed
   if (node.parentId !== undefined) out.parentId = text(node.parentId, 'parent id')
@@ -166,6 +180,11 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  const relativePath = (suppliedRelativePath as string | undefined) ?? relativeFilesPath(node, projectRoot)
+  if (relativePath !== undefined) {
+    if (!(relativePath === '.' || relativePath.startsWith('./'))) throw new PortableProjectV3Error('manifest', 'Portable Files path intent must be relative.')
+    out.relativePath = content(relativePath, 'Files path intent')
+  }
   if (node.browserTabs !== undefined) {
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
     out.browserTabs = node.browserTabs.map((tab) => { if (!record(tab)) throw new PortableProjectV3Error('manifest', 'Portable browser tab is invalid.'); exactKeys(tab, ALLOWED_TAB, 'browser tab'); const url = safeUrl(tab.url, 'browser tab URL'); return { id: text(tab.id, 'browser tab id'), ...(url ? { url } : {}), title: content(tab.title, 'browser tab title') } })
@@ -192,7 +211,8 @@ function relationships(project: Project): PortableRelationshipV3[] {
 
 /** Project only the portable presentation and safe intent fields. Forbidden live fields are never read. */
 export function projectToPortableCanvasV3(project: Project, input: PortableCanvasProjectionInput = {}): PortableCanvasProjectionV3 {
-  const nodes = project.nodes.map(projectNode).sort((a, b) => a.id.localeCompare(b.id))
+  const projectRoot = project.cwd ?? project.ssh?.remoteCwd
+  const nodes = project.nodes.map((node) => projectNode(node, false, projectRoot)).sort((a, b) => a.id.localeCompare(b.id))
   if (nodes.length > PORTABLE_CANVAS_LIMITS.maxNodes) throw new PortableProjectV3Error('entry-limit', 'Portable node count exceeds its bound.')
   const root: PortableCanvasV3 = { id: 'root', scope: 'root', title: text(project.name, 'project name'), order: 0, viewport: project.viewport, nodeIds: nodes.map((node) => node.id) }
   const children = (input.canvases ?? []).map((canvas) => ({ id: text(canvas.id, 'canvas id'), scope: canvas.scope, ...(canvas.parentCanvasId ? { parentCanvasId: text(canvas.parentCanvasId, 'parent canvas id') } : {}), title: text(canvas.title, 'canvas title'), order: finite(canvas.order, 'canvas order'), ...(canvas.viewport ? { viewport: { x: finite(canvas.viewport.x, 'viewport x'), y: finite(canvas.viewport.y, 'viewport y'), zoom: finite(canvas.viewport.zoom, 'viewport zoom') } } : {}), nodeIds: [...(canvas.nodeIds ?? [])].map((id) => text(id, 'canvas node id')).sort() }))

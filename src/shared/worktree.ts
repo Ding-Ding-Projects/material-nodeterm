@@ -328,6 +328,9 @@ export function displacedByWorktree(
       if (!under.has(n.id)) continue
       const cwd = typeof n.data?.cwd === 'string' ? n.data.cwd : undefined
       if (isInsideDir(cwd, worktreePath)) out.add(n.id)
+    } else if (n.type === 'files') {
+      const cwd = typeof n.data?.cwd === 'string' ? n.data.cwd : undefined
+      if (isInsideDir(cwd, worktreePath)) out.add(n.id)
     } else if (n.type === 'editor' || n.type === 'diff') {
       const filePath = typeof n.data?.filePath === 'string' ? n.data.filePath : undefined
       const cwd = typeof n.data?.cwd === 'string' ? n.data.cwd : undefined

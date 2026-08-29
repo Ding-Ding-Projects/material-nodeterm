@@ -99,6 +99,7 @@ import { DinoNode } from '../nodes/DinoNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
 import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
+import { FilesNode } from '../nodes/FilesNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import { normalizeAddress } from '../nodes/browserUrl'
@@ -566,6 +567,7 @@ import {
   createAgentNode,
   createCanvasControlTerminalNode,
   createBrowserNode,
+  createFilesNode,
   defaultBrowserTabs,
   createDinoNode,
   createDiffNode,
@@ -1802,6 +1804,7 @@ export function Canvas() {
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
+      files: withNodeBoundary(FilesNode),
       // The service family. One component for all six: they differ in what they manage, not in how
       // they behave as canvas objects, and React Flow hands each its own `type` so the component can
       // tell them apart without six registrations of six near-identical files.
@@ -4399,13 +4402,19 @@ export function Canvas() {
       const d = (e as CustomEvent<{ path: string }>).detail
       if (d?.path) revealProjectFile(d.path)
     }
+    const onTerminal = (e: Event): void => {
+      const d = (e as CustomEvent<{ cwd?: string }>).detail
+      if (d?.cwd) addTerminal(undefined, undefined, undefined, d.cwd)
+    }
     window.addEventListener('nodeterm:open-file', onOpen)
     window.addEventListener('nodeterm:reveal-file', onReveal)
+    window.addEventListener('nodeterm:open-terminal', onTerminal)
     return () => {
       window.removeEventListener('nodeterm:open-file', onOpen)
       window.removeEventListener('nodeterm:reveal-file', onReveal)
+      window.removeEventListener('nodeterm:open-terminal', onTerminal)
     }
-  }, [openFile, revealProjectFile])
+  }, [addTerminal, openFile, revealProjectFile])
 
   // Mic button on a terminal node's header (TerminalNode dispatches this — same
   // no-direct-line-to-canvas pattern as nodeterm:open-file above). Unlike toggleDictation's
@@ -4661,6 +4670,25 @@ export function Canvas() {
       markDirty()
     },
     [setNodes, markDirty, emptyNodePos]
+  )
+
+  /** Add a first-class Files node rooted in the active project or containing worktree. Paths are
+   * persisted as project content where safe, while SSH roots stay bound to the active host. */
+  const addFiles = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      const project = useProjects.getState().getProject(activeProjectId)
+      const cwd = cwdForNewNodeIn(groupId) ?? project?.ssh?.remoteCwd ?? project?.cwd
+      if (!cwd) {
+        setCopyError('This canvas has no folder yet. Open a project folder first.')
+        return
+      }
+      setNodes((nodes) => {
+        const node = createFilesNode(nodes.length, cwd, center ?? emptyNodePos(), !!project?.ssh)
+        return [...nodes, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [activeProjectId, createFilesNode, cwdForNewNodeIn, emptyNodePos, markDirty, parentInto, setCopyError, setNodes]
   )
 
   // Task 6: the Settings → Accounts "Add account" flow dispatches 'nodeterm:add-account-login'
@@ -8748,6 +8776,11 @@ export function Canvas() {
           icon: <IconLock />,
           onClick: () => addAuthenticator(at, groupId)
         },
+        {
+          label: 'New file manager',
+          icon: <IconExplorer />,
+          onClick: () => addFiles(at, groupId)
+        },
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
           ? []
@@ -8806,6 +8839,7 @@ export function Canvas() {
       addSticky,
       addAuthenticator,
       addNativeLoop,
+      addFiles,
       addToExistingGroup,
       groupSelection
     ]
@@ -8921,6 +8955,13 @@ export function Canvas() {
               label: 'New authenticator',
               icon: <IconLock />,
               onClick: () => addAuthenticator(at)
+            },
+            {
+              label: 'New file manager',
+              icon: <IconExplorer />,
+              disabled: !hasCwd,
+              hint: !hasCwd ? 'Open a project folder before browsing files.' : undefined,
+              onClick: () => addFiles(at)
             },
             {
               label: 'New NSIS installer…',
@@ -13009,6 +13050,9 @@ export function Canvas() {
             icon: <IconNote />,
             run: () => addSticky()
           },
+          ...(newFileHasCwd
+            ? [{ id: 'new-files', label: 'New file manager', icon: <IconExplorer />, run: () => addFiles() }]
+            : []),
           {
             id: 'new-loop',
             label: 'New Loop',
@@ -13375,6 +13419,7 @@ export function Canvas() {
     terminalProfileMenuChoices,
     addAgentNode,
     addSticky,
+    addFiles,
     addNsis,
     addNativeLoop,
     addDino,
@@ -13962,6 +14007,7 @@ export function Canvas() {
             onAddAuthenticator={() => addAuthenticator()}
             onAddLoop={addNativeLoop}
             onAddDino={addDino}
+            onAddFiles={() => addFiles()}
             onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
             onOpenFile={() => void openFileDialog()}
             onAddRemote={() =>

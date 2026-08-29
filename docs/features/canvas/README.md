@@ -4,6 +4,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
 
 - [Node kinds](./node-kinds.md) — terminal, agent, sticky, group, editor, and diff nodes, and
   what each one is for.
+- [Files node](./files-node.md) — a persisted, searchable directory view for local and SSH project
+  folders, with safe editor handoff and explicit host/path boundaries.
 - [Canvas & node lifecycle](./canvas-and-lifecycle.md) — how nodes mount, unmount, park, and
   release memory as you pan around a large canvas; context menus, undo/redo, and selection.
 - [Terminal sharpness under pan and zoom](./terminal-sharpness.md) — why terminal text goes soft on

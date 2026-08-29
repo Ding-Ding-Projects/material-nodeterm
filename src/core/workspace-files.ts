@@ -181,6 +181,21 @@ export function resolveNodes(nodes: CanvasNodeState[], root: string): CanvasNode
   })
 }
 
+/** SSH project roots use POSIX paths even when this renderer runs on Windows. Keep the Files
+ * node's directory as a relative portable intent without asking the host OS path module to
+ * compare two different path dialects. */
+function toPortableRemoteFiles(nodes: CanvasNodeState[], root: string): CanvasNodeState[] {
+  const base = root.replace(/\\/g, '/').replace(/\/+$/, '') || '/'
+  return nodes.map((node) => {
+    if (node.kind !== 'files' || typeof node.cwd !== 'string') return node
+    const value = node.cwd.replace(/\\/g, '/').replace(/\/+$/, '') || '/'
+    const prefix = base === '/' ? '/' : `${base}/`
+    if (value !== base && !value.startsWith(prefix)) return node
+    const relative = value === base ? '.' : value.slice(prefix.length)
+    return { ...node, cwd: relative === '.' ? '.' : `./${relative}` }
+  })
+}
+
 /**
  * The project as it is written to the SHARED file: content only.
  *
@@ -206,7 +221,12 @@ export function projectToFile(
   // The project file is a SHARED document (git, or the remote host). Exec-enabling node fields
   // (`shell`, `ssh.extraArgs`) never leave this machine in it — they ride the machine-local index
   // entry instead (`localNodeExec` / `IndexEntryV3.localExec`). See @shared/node-exec.
-  const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes)
+  // A Files node is a view of the project root, including for SSH projects whose project has no
+  // local cwd. Resolve the portable root from the remote binding too, so an absolute host path
+  // never leaks into the shared project projection.
+  const nodes = stripSharedNodeExec(
+    p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.ssh ? toPortableRemoteFiles(p.nodes, p.ssh.remoteCwd) : p.nodes
+  )
   const icon = sanitizeProjectIcon(p.icon)
   return {
     version: 1,
@@ -303,7 +323,10 @@ export function fileToProject(
     viewport: base.viewport ?? f.viewport ?? framingViewport(f.nodes),
     // applyLocalNodeExec DROPS whatever the file carried in the exec fields (it is not ours) and
     // re-attaches only what this machine typed. See @shared/node-exec.
-    nodes: applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec),
+    nodes: applyLocalNodeExec(
+      (base.cwd ?? base.ssh?.remoteCwd) ? resolveNodes(f.nodes, base.cwd ?? base.ssh!.remoteCwd) : f.nodes,
+      base.localExec
+    ),
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),

@@ -339,6 +339,9 @@ export type NodeKind =
   | 'video'
   | 'web'
   | 'browser'
+  // A persisted directory listing rooted at a local or SSH project folder. The path is a
+  // machine-local binding and is omitted from portable project projections.
+  | 'files'
   | 'subagent'
   | 'loop'
   | 'scheduler'

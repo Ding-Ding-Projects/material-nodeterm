@@ -57,6 +57,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **First-class Files node** — implementation now provides a persisted local/SSH directory node,
+      guarded path creation, anchored regex filtering, selection/copy actions, drag navigation,
+      editor handoff, and portable relative intent. Runtime interaction, full contract evidence,
+      and capture proof remain pending.
+
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification

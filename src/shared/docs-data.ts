@@ -8,6 +8,12 @@ import type { DocArticle } from './docs'
 
 export const DOC_ARTICLES: DocArticle[] = [
   {
+    path: "docs/features/canvas/files-node.md",
+    title: "Files node",
+    section: "Canvas",
+    body: "# Files node\\n\\nThe Files node is a persisted, searchable directory view for local, SSH, and relay project folders. It keeps loading, read failure, empty, and no-match states distinct; uses the anchored regex builder; supports selection, path copying, safe file and folder creation, drag navigation, and shared editor handoff. Remote paths never reach local file-manager actions. Portable project projections store relative intent and omit machine paths, credentials, process state, caches, and local editor applications.\\n"
+  },
+  {
     path: "docs/SERVER.md",
     title: "nodeterm Server Edition (Phase 2)",
     section: "Reference",
