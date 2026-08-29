@@ -12,7 +12,7 @@ import { render } from './core/render.js'
 import {
   applyTheme, toast, notify, log, save, undoEntry, removeHistoryEntries, toggleLock, unlockPanel,
   openMenu, closeMenu, menuDefs, openRx, closeRx, rxToggleMode, rxInsertToken, rxApply, rxPlain,
-  buildPaletteTargets, askConfirm, confirmCancel, confirmRun, refreshCodes, copyToClipboard, download,
+  buildPaletteTargets, askConfirm, confirmCancel, confirmRun, askInput, inputCancel, inputRun, refreshCodes, copyToClipboard, download,
   getRoom, allSettingsCards, registerListRoom, fmtWhen,
 } from './core/engine.js'
 import { registerFeatures } from './features/index.js'
@@ -271,6 +271,12 @@ root.addEventListener('click', (e) => {
     case 'confirm-run':
       confirmRun(store)
       return
+    case 'input-cancel':
+      if (e.target === el) inputCancel(store)
+      return
+    case 'input-run':
+      inputRun(store)
+      return
     case 'dismiss-toast':
       store.setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }), { persist: false })
       return
@@ -354,6 +360,10 @@ root.addEventListener('keydown', (e) => {
     const first = (store.paletteItemsCache || []).filter((p) => makeMatcher(store.state, 'palette', store.state.paletteQuery)(p.label + ' ' + p.hint))[0]
     if (first) first.run()
   }
+  if (e.key === 'Enter' && e.target.dataset && e.target.dataset.bind === 'inputDialogValue' && !store.state.inputDialog?.multiline) {
+    e.preventDefault()
+    inputRun(store)
+  }
 })
 
 document.addEventListener('keydown', (e) => {
@@ -379,7 +389,7 @@ export function registerBinding(name, fn) {
 }
 function runFeatureAction(name, id, el) {
   const fn = featureActions.get(name)
-  if (fn) fn(store, id, el, { toast: toastX, notify: (t, b, tag, ownership) => notify(store, t, b, tag, ownership), save: (p, n) => save(store, p, n), speak, applyTheme: () => applyTheme(store.state), askConfirm: (t, b, w, r) => askConfirm(store, t, b, w, r) })
+  if (fn) fn(store, id, el, { toast: toastX, notify: (t, b, tag, ownership) => notify(store, t, b, tag, ownership), save: (p, n) => save(store, p, n), speak, applyTheme: () => applyTheme(store.state), askConfirm: (t, b, w, r) => askConfirm(store, t, b, w, r), askInput: (options, run) => askInput(store, options, run) })
 }
 function runFeatureBind(name, id, value) {
   const fn = featureBindings.get(name)

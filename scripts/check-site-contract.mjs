@@ -674,6 +674,25 @@ if (cdnHits.length > 0) {
   }
 }
 
+// Feature-owned text entry must use the site's styled dialog surface. Native prompt() blocks the
+// document, bypasses the page's keyboard/focus contract, and cannot be captured or localized with
+// the rest of the surface. The shared lock prompts in main.js are a separate legacy boundary; the
+// three feature flows below are the explicit migrated set and must not regress.
+for (const file of [
+  'site/app/features/adhd-modes.js',
+  'site/app/features/appearance.js',
+  'site/app/features/school-mode.js',
+]) {
+  requireFileOmits(file, 'window.prompt(', 'Owned feature input dialog')
+  const source = readText(file) || ''
+  checkedCount += 1
+  if (!`${source}\nwindow.prompt('mutation')`.includes('window.prompt(')) {
+    fail(`Owned feature input dialog: mutation for ${file} was not observable`)
+  } else {
+    pass(`Owned feature input dialog: mutation for ${file} is rejected`)
+  }
+}
+
 // ---------------------------------------------------------------------
 // 8. No leftover design-tool scaffolding — the imported design.html is a
 //    proprietary <x-dc>/{{expr}}/support.js preview-harness template, not

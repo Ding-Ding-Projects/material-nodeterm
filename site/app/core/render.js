@@ -558,6 +558,26 @@ function renderConfirm(store) {
   </div>`
 }
 
+function renderInputDialog(store) {
+  const s = store.state
+  const d = s.inputDialog
+  if (!d) return ''
+  const control = d.multiline
+    ? `<textarea data-bind="inputDialogValue" data-focus-id="inputDialogValue" aria-label="${copyAttr(s, d.message || 'Input')}" rows="7">${esc(s.inputDialogValue || '')}</textarea>`
+    : `<input type="${attr(d.type || 'text')}" data-bind="inputDialogValue" data-focus-id="inputDialogValue" value="${attr(s.inputDialogValue || '')}" aria-label="${copyAttr(s, d.message || 'Input')}" />`
+  return `<div class="dialog-scrim is-center" data-action="input-cancel">
+    <div class="confirm-dialog input-dialog" role="dialog" aria-modal="true" aria-label="${copyAttr(s, d.title)}" data-stop-menu-close="1">
+      <h3>✍️ ${copy(s, d.title)}</h3>
+      <p>${copy(s, d.message)}</p>
+      ${control}
+      <div class="confirm-actions">
+        <button type="button" class="btn-plain" data-action="input-cancel">${copy(s, 'Cancel')}</button>
+        <button type="button" class="confirm-run is-ready" data-action="input-run">${copy(s, 'Continue')}</button>
+      </div>
+    </div>
+  </div>`
+}
+
 function renderToasts(store) {
   const s = store.state
   if (!s.toasts.length) return ''
@@ -583,5 +603,5 @@ function renderToasts(store) {
 export function render(store) {
   const s = store.state
   const body = s.view === 'hall' ? renderHall(store) : renderRoom(store)
-  return body + renderMenu(store) + renderRx(store) + renderPalette(store) + renderConfirm(store) + renderToasts(store)
+  return body + renderMenu(store) + renderRx(store) + renderPalette(store) + renderConfirm(store) + renderInputDialog(store) + renderToasts(store)
 }

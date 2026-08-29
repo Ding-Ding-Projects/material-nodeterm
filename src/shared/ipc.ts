@@ -911,7 +911,6 @@ export const IPC = {
   repositoryGraphRefresh: 'repository-graph:refresh',
   repositoryGraphCancel: 'repository-graph:cancel',
   repositoryGraphExport: 'repository-graph:export',
-  repositoryGraphOpenSource: 'repository-graph:open-source',
   repositoryGraphProgress: 'repository-graph:progress',
   // Machine-owned UniGetUI Global Universe. This surface never accepts an active project id,
   // because its state belongs to the local UniGetUI session rather than a project file.

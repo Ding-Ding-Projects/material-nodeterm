@@ -55,10 +55,10 @@ export function registerAdhdModes(store, deps, registerAction, registerBinding) 
   }
 
   registerAction('adhd-one-thing', (s, id, el, h) => {
-    const text = window.prompt('What is the one thing right now?', s.state.adhdOneThingText || '')
-    if (text === null) return
-    // Bounded so a pasted essay cannot become the page chrome.
-    h.save({ adhdOneThingText: String(text).slice(0, 200) }, 'ADHD modes')
+    h.askInput(
+      { title: 'One thing at a time', message: 'What is the one thing right now?', initial: s.state.adhdOneThingText || '', multiline: true },
+      (text) => h.save({ adhdOneThingText: String(text).slice(0, 200) }, 'ADHD modes'),
+    )
   })
 
   registerSettingsCard('adhd', {

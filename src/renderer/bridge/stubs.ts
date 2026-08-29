@@ -803,7 +803,6 @@ export function buildStubApi(): Omit<
       refresh: () => unsupported('repository graph'),
       cancel: () => Promise.resolve(false),
       export: () => unsupported('repository graph export'),
-      openSource: () => unsupported('repository graph source navigation'),
       onProgress: noopUnsub
     },
     // Trigger definitions are shared project data, but arm consent and delivery are host-local.

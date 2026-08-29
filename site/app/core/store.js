@@ -85,7 +85,7 @@ export function createStore() {
     convFrom: 'json', convTo: 'yaml', convIn: '[{"dish":"har gow","pieces":4},{"dish":"dan tat","pieces":2}]', convOut: '',
     convNote: 'Pick a shape and press Convert.', convBad: false,
     dataset: 'settings', lossPending: null, lossNote: 'Green shapes carry everything. Orange shapes lose something, and will tell you what.', lossBad: false,
-    confirm: null, confirmTyped: '',
+    confirm: null, confirmTyped: '', inputDialog: null, inputDialogValue: '',
     unlockVals: {}, unlocked: {}, locks: {},
     theme: 'day', lang: 'en', funnyEn: 10, funnyYue: 10, funnySchemaVersion: 2, emoji: true, bigText: false, sound: false,
     accent: '#ffd93d', nick: '', logo: '', preset: 'playground',

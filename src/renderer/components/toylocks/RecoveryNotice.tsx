@@ -12,8 +12,10 @@
 // Shown in the lock wizard, the unlock prompt, and Support Tickets' resolution - always with the
 // ACTUAL folder path, never a vague "app data" gesture. See docs/toy-locks.md.
 import { useEffect, useState } from 'react'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export function RecoveryNotice({ compact = false }: { compact?: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [dir, setDir] = useState<string | null>(null)
 
   useEffect(() => {
@@ -33,19 +35,19 @@ export function RecoveryNotice({ compact = false }: { compact?: boolean }): Reac
   return (
     <div className="toylock-recovery">
       <p className="toylock-recovery__disclaimer">
-        This lock is enforced by nodeterm, and the credential is stored in this computer's own
-        credential vault. It is not encryption: what is behind it stays readable on disk to anyone
-        who has this machine.
+        {vocab('This lock is enforced by nodeterm, and the credential is stored in this computer\'s own')}
+        {vocab('credential vault. It is not encryption: what is behind it stays readable on disk to anyone')}
+        {vocab('who has this machine.')}
       </p>
       {!compact && (
         <p className="toylock-recovery__how">
-          Locked out? Delete nodeterm's local application-data folder and every lock resets.
+          {vocab('Locked out? Delete nodeterm\'s local application-data folder and every lock resets.')}
         </p>
       )}
       <div className="toylock-recovery__path-row">
         <code className="toylock-recovery__path">{dir ?? '…'}</code>
         <button className="toylock-btn toylock-btn--sm" onClick={copy} disabled={!dir}>
-          Copy path
+          {vocab('Copy path')}
         </button>
       </div>
     </div>

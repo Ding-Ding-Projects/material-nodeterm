@@ -22,6 +22,7 @@
 // is deliberately nothing here that names it or explains its absence.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LadderAnswer, LadderChallenge, WhackHit } from '@shared/unlock-ladder-types'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 /**
  * How this panel reaches an engine. Two surfaces climb the same ladder against two different
@@ -60,6 +61,7 @@ export function UnlockLadderPanel({
   onCleared: () => void
   onDone: () => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const link = transport ?? toyLockLadderTransport(lockId ?? '')
   const [challenge, setChallenge] = useState<LadderChallenge | null>(null)
   const [budgetLeft, setBudgetLeft] = useState(0)
@@ -117,16 +119,16 @@ export function UnlockLadderPanel({
     [busy, lockId, transport, onCleared]
   )
 
-  if (!loaded) return <div className="toylock-ladder__note">Loading…</div>
+  if (!loaded) return <div className="toylock-ladder__note">{vocab('Loading…')}</div>
 
   if (!challenge) {
     return (
       <div className="toylock-ladder">
         <div className="toylock-ladder__note">
-          {message ?? 'No game is on offer right now — the clock is the way through.'}
+          {message ?? vocab('No game is on offer right now — the clock is the way through.')}
         </div>
         <button className="toylock-btn" onClick={onDone}>
-          Back to the password
+          {vocab('Back to the password')}
         </button>
       </div>
     )
@@ -156,11 +158,11 @@ export function UnlockLadderPanel({
         />
       )}
       <div className="toylock-ladder__foot">
-        Winning ends the wait — nothing more. You still need the password. {budgetLeft} skip
+        {vocab('Winning ends the wait — nothing more. You still need the password.')} {budgetLeft} {vocab('skip')}
         {budgetLeft === 1 ? '' : 's'} left this hour.
       </div>
       <button className="toylock-btn--link" onClick={onDone}>
-        No thanks, I will wait
+        {vocab('No thanks, I will wait')}
       </button>
     </div>
   )

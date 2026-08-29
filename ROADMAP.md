@@ -6,9 +6,11 @@ issues. A ticked item is implemented **and** verified — where it claims someth
 means captured from the real built artifact, not asserted from source. Anything unticked names
 its real state next to it rather than being silently omitted.
 
-Current package version: `0.4.3`. Suite at the current tip: 717 files / 8,852 tests, 0 failed
-(per `HANDOFF.md`'s 2026-08-20 pass — re-verify with `npm test` before trusting this number on a
-later commit, since this file will not be kept in lockstep with every merge).
+Current package version in `package.json`: `0.4.122`; the latest release tag is `v0.4.152`.
+The tree currently contains 989 test files. The Phase 0 `npm run typecheck` and `npm test`
+baselines are not yet recorded in this checkout because `node_modules` is absent and the pinned
+Node `24.19.0` runtime must be installed first. Do not treat the release tag or file count as a
+test verdict.
 
 ---
 
@@ -16,16 +18,14 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 - [ ] **Issue #210, existing VeraCrypt containers:** the Windows desktop node, native credential
       prompt, independently observed mount state, Explore, unmount, local favorites, cache wipe,
-      and unsupported non-desktop states are implemented on
-      `feat/veracrypt-mount-management-20260828`. Accelerated-lane tests, type checks, reviews,
+      and unsupported non-desktop states are implemented on `main`. Accelerated-lane tests, type checks, reviews,
       runtime interaction, and captures remain intentionally unrun until a release-grade pass.
 
 ## Shipped and verified
 
 - [ ] **Content-bound trigger scheduling:** desktop and Server Edition runtime wiring, guided
       editor, catalog and Canvas registration, local consent, bounded history, safe terminal and
-      agent delivery, localization, and documentation are implemented on
-      `feat/pak-mun-working-triggers-20260829`. Focused trigger tests are green; full typecheck,
+      agent delivery, localization, and documentation are implemented on `main`. Focused trigger tests are green; full typecheck,
       packaging, built-artifact interaction, and captures remain pending for the release-grade
       integration pass.
 
@@ -260,9 +260,9 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 - [ ] Desktop Material Design 3 and personal vocabulary reconciliation: the source audit and focused
   Material Design 3 fixes are present in the audit scripts and shared primitives. The Material Design 3 audit is green
-  with deliberate negative regressions. Personal-vocabulary coverage is intentionally red with
-  31 listed production surfaces still requiring direct mapper call-site wiring. Built-artifact
-  verification, general tests, and captures remain pending.
+  with deliberate negative regressions. Personal-vocabulary coverage is green with 1,332 assertions,
+  including explicit rows for the four new node or panel surfaces, ExportMenu, continuation review,
+  and the four unlock surfaces. Built-artifact verification, general tests, and captures remain pending.
 
 - [ ] **Desktop layout safety sweep** — viewport-bounded menus, flyouts, anchored popovers, dialogs,
       settings, onboarding, command palette, and documentation surfaces are repaired in

@@ -7,6 +7,7 @@ import type { ToyLockRecord } from '@shared/toylock'
 import { useToyLocks } from '../../state/toylocks'
 import { UnlockLadderPanel } from './UnlockLadder'
 import { PasswordField } from './PasswordField'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export function UnlockPrompt({
   record,
@@ -19,6 +20,7 @@ export function UnlockPrompt({
   onUnlocked: () => void
   onClose: () => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   // `password` carries a plain password OR a Windows PIN (same field on the wire — see
   // ToyLockVerifyInput); `code` carries a TOTP code. The combo kind (`password-totp`) is the only
   // one that reads both.
@@ -97,9 +99,9 @@ export function UnlockPrompt({
         style={{ top: Math.max(8, top), left: Math.max(8, left) }}
         role="dialog"
         aria-modal="false"
-        aria-label={`Unlock ${record.target.label}`}
+        aria-label={`${vocab('Unlock')} ${record.target.label}`}
       >
-        <div className="toylock-wizard__title">🔒 “{record.target.label}” is locked</div>
+        <div className="toylock-wizard__title">🔒 “{record.target.label}” {vocab('is locked')}</div>
         {needsPassword && (
           <PasswordField
             inputRef={inputRef}
