@@ -57,6 +57,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Cloudflare manager (issue #57)** — typed account, zone, DNS, SSL/TLS, ruleset, redirect,
+      cache, and analytics REST operations now have a local token vault, paginated discovery,
+      permission status, rate-limit metadata, redaction, partial snapshots, and destructive
+      previews. The desktop and Server Edition bridges and documentation are wired. Tests, builds,
+      packaging, runtime interaction, and captures were intentionally not run in this lane.
+
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification

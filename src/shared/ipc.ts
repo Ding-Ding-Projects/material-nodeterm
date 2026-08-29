@@ -658,5 +658,32 @@ export const IPC = {
   passwordManagerCredentialCode: 'password-manager:credential-code',
   /** Every credential in one manager as non-secret metadata. Closes the gap that left a
    *  credential from an earlier session visible only as a number. */
-  passwordManagerListCredentials: 'password-manager:list-credentials'
+  passwordManagerListCredentials: 'password-manager:list-credentials',
+  cloudflareTokenStatus: 'cloudflare:token-status',
+  cloudflareSaveToken: 'cloudflare:save-token',
+  cloudflareClearToken: 'cloudflare:clear-token',
+  cloudflareStatus: 'cloudflare:status',
+  cloudflarePermissions: 'cloudflare:permissions',
+  cloudflareAccounts: 'cloudflare:accounts',
+  cloudflareZones: 'cloudflare:zones',
+  cloudflareDnsRecords: 'cloudflare:dns-records',
+  cloudflareSslTls: 'cloudflare:ssl-tls',
+  cloudflareRulesets: 'cloudflare:rulesets',
+  cloudflareRedirects: 'cloudflare:redirects',
+  cloudflareAnalytics: 'cloudflare:analytics',
+  cloudflareDnsCreate: 'cloudflare:dns-create',
+  cloudflareDnsUpdate: 'cloudflare:dns-update',
+  cloudflareDnsDeletePreview: 'cloudflare:dns-delete-preview',
+  cloudflareDnsDelete: 'cloudflare:dns-delete',
+  cloudflareSslTlsUpdate: 'cloudflare:ssl-tls-update',
+  cloudflareRulesetCreate: 'cloudflare:ruleset-create',
+  cloudflareRulesetUpdate: 'cloudflare:ruleset-update',
+  cloudflareRulesetDeletePreview: 'cloudflare:ruleset-delete-preview',
+  cloudflareRulesetDelete: 'cloudflare:ruleset-delete',
+  cloudflareRedirectCreate: 'cloudflare:redirect-create',
+  cloudflareRedirectUpdate: 'cloudflare:redirect-update',
+  cloudflareRedirectDeletePreview: 'cloudflare:redirect-delete-preview',
+  cloudflareRedirectDelete: 'cloudflare:redirect-delete',
+  cloudflareCachePurgePreview: 'cloudflare:cache-purge-preview',
+  cloudflareCachePurge: 'cloudflare:cache-purge'
 } as const

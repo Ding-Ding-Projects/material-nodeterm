@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-08-26, Cloudflare manager lane, issue #57
+
+Implemented the bounded Cloudflare manager lane in `src/core/cloudflare/`, with typed account,
+zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics operations. The fixed HTTPS v4 REST
+client validates ids and input sizes, follows page metadata, distinguishes missing credentials,
+authorization, rate limiting, unreachable API, invalid responses, and missing resources, keeps a
+bounded retry-after value, and redacts provider error text. No arbitrary URL, method, request body,
+shell command, or GraphQL route is exposed.
+
+`CloudflareTokenVault` stores the API token below application data, sealing it through the desktop
+credential facility when available and reporting restricted-file storage on a headless shell. The
+manager retains only non-secret partial snapshots. Typed destructive operations require fresh
+resource previews, and cache purge requires an explicit scope preview. The desktop preload, Server
+Edition bridge, unsupported relay stub, Cloudflare panel, catalog, offline documentation bundle
+entry, documentation site article, integrations index, roadmap, and changelog were updated.
+
+This lane deliberately did not run tests, type checking, linting, security checks, builds,
+packaging, installer execution, runtime interaction, or captures. No commit or dew was made.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

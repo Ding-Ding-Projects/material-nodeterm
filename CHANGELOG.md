@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add the guided Cloudflare manager for accounts, zones, DNS, SSL/TLS, rulesets, redirects, cache
+  and analytics, with a local token vault, typed REST operations, pagination, permission status,
+  redacted rate-limit errors, partial snapshots, and destructive previews. Verification remains
+  intentionally pending in this implementation lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

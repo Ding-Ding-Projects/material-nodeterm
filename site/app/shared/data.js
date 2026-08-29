@@ -35,6 +35,7 @@ export const FEATURES = [
   { id: 'palette', icon: '✨', color: 'var(--orange)', title: 'Jump anywhere', body: 'A command box that hops to any block, project or action. Plus a file explorer and undo/redo.' },
   { id: 'update', icon: '⬆️', color: 'var(--green)', title: 'Keeps itself fresh', body: 'The app checks its own update feed and shows news right inside the window.' },
   { id: 'offline', icon: '📴', color: 'var(--blue)', title: 'Works with no internet', body: 'Projects save to a plain file next to your code, so you can share it or carry it to another machine.' },
+  { id: 'cloudflare', icon: '☁️', color: 'var(--orange)', title: 'Guided Cloudflare manager', body: 'Accounts, zones, DNS, SSL/TLS, rulesets, redirects, cache and analytics through typed, reviewable controls.' },
 ]
 
 export const DOCS = [
@@ -58,6 +59,7 @@ export const DOCS = [
   ['Terminal sessions & continuity', 'tmux, and the Windows session host', 'terminal-sessions'],
   ['Toy locks', 'a padlock for fun, not for safety', 'toy-locks'],
   ['Windows support', 'what works and what does not yet', 'windows-support'],
+  ['Cloudflare manager', 'accounts, zones, DNS, rulesets and analytics', 'cloudflare-manager'],
 ]
 
 // A hand-picked six from the design's dumpling list, kept to exactly the
@@ -105,6 +107,7 @@ export const COVERAGE = [
   ['Super-confirmation before anything destructive', 'type-the-word gate', 'done'],
   ['A real local file converter with honest unsupported cases', 'Turn-it-into lab', 'done'],
   ['Ollama browser with hardware-fit verdicts and a basket', 'Model shop room', 'done'],
+  ['Guided Cloudflare account, zone and DNS manager', 'Cloudflare manager room', 'partial'],
   ['The dim sum surprise, one visit in ten', 'Dim sum room', 'done'],
   ['School mode that forces plain English and hides the rest', 'Settings → School mode', 'done'],
   ['Narrator that reads the page out loud', 'Settings → Read it to me', 'done'],

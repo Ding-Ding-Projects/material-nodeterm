@@ -3798,6 +3798,8 @@ export interface NodeTerminalApi {
   ollama: import('./ollama').OllamaApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache and analytics manager. */
+  cloudflare: import('./cloudflare').CloudflareApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

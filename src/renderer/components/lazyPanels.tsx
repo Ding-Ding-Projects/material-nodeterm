@@ -77,3 +77,6 @@ export const OllamaManagerPanel = withSuspense(
 export const PasswordManagerPanel = withSuspense(
   lazy(() => import('./passwordManager/PasswordManagerPanel').then((m) => ({ default: m.PasswordManagerPanel })))
 )
+export const CloudflareManagerPanel = withSuspense(
+  lazy(() => import('./cloudflare/CloudflareManagerPanel').then((m) => ({ default: m.CloudflareManagerPanel })))
+)

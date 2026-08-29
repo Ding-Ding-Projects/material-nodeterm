@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloudflare manager — nodeterm docs</title>
+    <meta name="description" content="Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache and analytics management." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a><span aria-hidden="true">/</span><a href="./index.html">Docs</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Integrations</p>
+      <h1>Cloudflare manager</h1>
+      <p>The manager provides guided account, zone, DNS, SSL/TLS, ruleset, redirect, cache and analytics controls through Cloudflare's documented v4 REST API.</p>
+      <h2>Behaviour</h2>
+      <p>Accounts and zones are discovered with page metadata. DNS, ruleset and redirect lists are searchable. Every mutation uses a typed form. Destructive deletion and cache purge show a fresh reviewable preview before the request is sent.</p>
+      <h2>Local token storage</h2>
+      <p>The API token is entered through a password field and stays in the local credential vault. It is never included in a project export, renderer payload, log, or documentation record. A partial local snapshot retains only non-secret successful results.</p>
+      <h2>Failure modes</h2>
+      <p>Not configured, unauthorized, forbidden, rate limited, unreachable, invalid response, oversized response, and missing resource states remain distinct. Rate-limit retry timing is bounded and provider error text is redacted.</p>
+      <h2>Portability and security</h2>
+      <p>Project import performs no provider request or mutation. Cloudflare bindings, credentials, caches and runtime identifiers remain local, so another computer offers Configure or Leave Unbound instead of silently adopting an account.</p>
+      <h2>Verification</h2>
+      <p>This implementation lane intentionally did not run tests, type checks, linting, security checks, builds, packaging, installer execution, runtime interaction, or UI captures. Those checks remain required before a release claim.</p>
+      <section class="doc-suggested"><h2>Suggested articles</h2><ul><li><a href="./node-kinds.html">Node kinds</a></li><li><a href="./exports-and-history.html">Exports and history</a></li><li><a href="./language-modes.html">Language modes</a></li></ul></section>
+    </article>
+  </body>
+</html>

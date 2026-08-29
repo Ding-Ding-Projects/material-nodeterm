@@ -6,9 +6,10 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 
 | feature | status |
 | --- | --- |
-| [Service nodes](service-nodes.md) | implemented as canvas objects (Minecraft, Docker host, Proxmox, GitLab, Home Assistant, FreePBX); none of them dial anything yet |
+| [Service nodes](service-nodes.md) | implemented as canvas objects (Minecraft, Docker host, Proxmox, GitLab, Home Assistant, FreePBX); Cloudflare has a dedicated guided manager |
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |
+| [Cloudflare manager](cloudflare-manager.md) | account, zone, DNS, SSL/TLS, ruleset, redirect, cache and analytics controls |
 
 Planned, not yet researched here:
 

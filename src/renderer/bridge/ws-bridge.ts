@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { CloudflareApi } from '../../shared/cloudflare'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,41 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+/** Cloudflare manager over the authenticated Server Edition RPC. The server process owns the
+ * token vault and REST client, so no credential or provider URL ever enters this renderer. */
+export function buildCloudflareApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudflare'> {
+  const cloudflare: CloudflareApi = {
+    tokenStatus: () => client.request(IPC.cloudflareTokenStatus) as ReturnType<CloudflareApi['tokenStatus']>,
+    saveToken: (token) => client.request(IPC.cloudflareSaveToken, token) as ReturnType<CloudflareApi['saveToken']>,
+    clearToken: () => client.request(IPC.cloudflareClearToken) as ReturnType<CloudflareApi['clearToken']>,
+    status: () => client.request(IPC.cloudflareStatus) as ReturnType<CloudflareApi['status']>,
+    permissions: () => client.request(IPC.cloudflarePermissions) as ReturnType<CloudflareApi['permissions']>,
+    accounts: (page) => client.request(IPC.cloudflareAccounts, page) as ReturnType<CloudflareApi['accounts']>,
+    zones: (page) => client.request(IPC.cloudflareZones, page) as ReturnType<CloudflareApi['zones']>,
+    dnsRecords: (zoneId, page, search) => client.request(IPC.cloudflareDnsRecords, zoneId, page, search) as ReturnType<CloudflareApi['dnsRecords']>,
+    sslTlsSettings: (zoneId) => client.request(IPC.cloudflareSslTls, zoneId) as ReturnType<CloudflareApi['sslTlsSettings']>,
+    rulesets: (zoneId, page) => client.request(IPC.cloudflareRulesets, zoneId, page) as ReturnType<CloudflareApi['rulesets']>,
+    redirectRules: (zoneId, page) => client.request(IPC.cloudflareRedirects, zoneId, page) as ReturnType<CloudflareApi['redirectRules']>,
+    analytics: (zoneId, since, until) => client.request(IPC.cloudflareAnalytics, zoneId, since, until) as ReturnType<CloudflareApi['analytics']>,
+    createDnsRecord: (zoneId, input) => client.request(IPC.cloudflareDnsCreate, zoneId, input) as ReturnType<CloudflareApi['createDnsRecord']>,
+    updateDnsRecord: (zoneId, id, input) => client.request(IPC.cloudflareDnsUpdate, zoneId, id, input) as ReturnType<CloudflareApi['updateDnsRecord']>,
+    previewDeleteDnsRecord: (zoneId, id) => client.request(IPC.cloudflareDnsDeletePreview, zoneId, id) as ReturnType<CloudflareApi['previewDeleteDnsRecord']>,
+    deleteDnsRecord: (zoneId, id, preview) => client.request(IPC.cloudflareDnsDelete, zoneId, id, preview) as ReturnType<CloudflareApi['deleteDnsRecord']>,
+    updateSslTlsSetting: (zoneId, input) => client.request(IPC.cloudflareSslTlsUpdate, zoneId, input) as ReturnType<CloudflareApi['updateSslTlsSetting']>,
+    createRuleset: (zoneId, input) => client.request(IPC.cloudflareRulesetCreate, zoneId, input) as ReturnType<CloudflareApi['createRuleset']>,
+    updateRuleset: (zoneId, id, input) => client.request(IPC.cloudflareRulesetUpdate, zoneId, id, input) as ReturnType<CloudflareApi['updateRuleset']>,
+    previewDeleteRuleset: (zoneId, id) => client.request(IPC.cloudflareRulesetDeletePreview, zoneId, id) as ReturnType<CloudflareApi['previewDeleteRuleset']>,
+    deleteRuleset: (zoneId, id, preview) => client.request(IPC.cloudflareRulesetDelete, zoneId, id, preview) as ReturnType<CloudflareApi['deleteRuleset']>,
+    createRedirectRule: (zoneId, input) => client.request(IPC.cloudflareRedirectCreate, zoneId, input) as ReturnType<CloudflareApi['createRedirectRule']>,
+    updateRedirectRule: (zoneId, id, input) => client.request(IPC.cloudflareRedirectUpdate, zoneId, id, input) as ReturnType<CloudflareApi['updateRedirectRule']>,
+    previewDeleteRedirectRule: (zoneId, id) => client.request(IPC.cloudflareRedirectDeletePreview, zoneId, id) as ReturnType<CloudflareApi['previewDeleteRedirectRule']>,
+    deleteRedirectRule: (zoneId, id, preview) => client.request(IPC.cloudflareRedirectDelete, zoneId, id, preview) as ReturnType<CloudflareApi['deleteRedirectRule']>,
+    previewPurgeCache: (input) => client.request(IPC.cloudflareCachePurgePreview, input) as ReturnType<CloudflareApi['previewPurgeCache']>,
+    purgeCache: (preview) => client.request(IPC.cloudflareCachePurge, preview) as ReturnType<CloudflareApi['purgeCache']>
+  }
+  return { cloudflare }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1411,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildCloudflareApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

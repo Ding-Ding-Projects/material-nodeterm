@@ -942,6 +942,35 @@ const api: NodeTerminalApi = {
     restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
+  },
+  cloudflare: {
+    tokenStatus: () => ipcRenderer.invoke(IPC.cloudflareTokenStatus),
+    saveToken: (token) => ipcRenderer.invoke(IPC.cloudflareSaveToken, token),
+    clearToken: () => ipcRenderer.invoke(IPC.cloudflareClearToken),
+    status: () => ipcRenderer.invoke(IPC.cloudflareStatus),
+    permissions: () => ipcRenderer.invoke(IPC.cloudflarePermissions),
+    accounts: (page) => ipcRenderer.invoke(IPC.cloudflareAccounts, page),
+    zones: (page) => ipcRenderer.invoke(IPC.cloudflareZones, page),
+    dnsRecords: (zoneId, page, search) => ipcRenderer.invoke(IPC.cloudflareDnsRecords, zoneId, page, search),
+    sslTlsSettings: (zoneId) => ipcRenderer.invoke(IPC.cloudflareSslTls, zoneId),
+    rulesets: (zoneId, page) => ipcRenderer.invoke(IPC.cloudflareRulesets, zoneId, page),
+    redirectRules: (zoneId, page) => ipcRenderer.invoke(IPC.cloudflareRedirects, zoneId, page),
+    analytics: (zoneId, since, until) => ipcRenderer.invoke(IPC.cloudflareAnalytics, zoneId, since, until),
+    createDnsRecord: (zoneId, input) => ipcRenderer.invoke(IPC.cloudflareDnsCreate, zoneId, input),
+    updateDnsRecord: (zoneId, id, input) => ipcRenderer.invoke(IPC.cloudflareDnsUpdate, zoneId, id, input),
+    previewDeleteDnsRecord: (zoneId, id) => ipcRenderer.invoke(IPC.cloudflareDnsDeletePreview, zoneId, id),
+    deleteDnsRecord: (zoneId, id, preview) => ipcRenderer.invoke(IPC.cloudflareDnsDelete, zoneId, id, preview),
+    updateSslTlsSetting: (zoneId, input) => ipcRenderer.invoke(IPC.cloudflareSslTlsUpdate, zoneId, input),
+    createRuleset: (zoneId, input) => ipcRenderer.invoke(IPC.cloudflareRulesetCreate, zoneId, input),
+    updateRuleset: (zoneId, id, input) => ipcRenderer.invoke(IPC.cloudflareRulesetUpdate, zoneId, id, input),
+    previewDeleteRuleset: (zoneId, id) => ipcRenderer.invoke(IPC.cloudflareRulesetDeletePreview, zoneId, id),
+    deleteRuleset: (zoneId, id, preview) => ipcRenderer.invoke(IPC.cloudflareRulesetDelete, zoneId, id, preview),
+    createRedirectRule: (zoneId, input) => ipcRenderer.invoke(IPC.cloudflareRedirectCreate, zoneId, input),
+    updateRedirectRule: (zoneId, id, input) => ipcRenderer.invoke(IPC.cloudflareRedirectUpdate, zoneId, id, input),
+    previewDeleteRedirectRule: (zoneId, id) => ipcRenderer.invoke(IPC.cloudflareRedirectDeletePreview, zoneId, id),
+    deleteRedirectRule: (zoneId, id, preview) => ipcRenderer.invoke(IPC.cloudflareRedirectDelete, zoneId, id, preview),
+    previewPurgeCache: (input) => ipcRenderer.invoke(IPC.cloudflareCachePurgePreview, input),
+    purgeCache: (preview) => ipcRenderer.invoke(IPC.cloudflareCachePurge, preview)
   }
 }
 

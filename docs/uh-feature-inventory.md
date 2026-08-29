@@ -67,6 +67,7 @@ and then never edited this file.
 | App-logo customization + safe conversion | `src/renderer/components/settings/sections/AppIdentitySection.tsx` | `docs/app-logo.md` | `src/renderer/components/settings/sections/AppIdentitySection.test.tsx` |
 | Universal file converter | `src/core/converter/service.ts` | `docs/file-converter.md` | `src/core/converter/service.atomic-write.test.ts` |
 | Local Ollama suite manager | `src/core/ollama/catalog-pure.ts` | `docs/ollama-manager.md` | `src/core/ollama/catalog-pure.test.ts` |
+| Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache and analytics manager | `src/core/cloudflare/manager.ts` and `src/core/cloudflare/client.ts` | `docs/features/integrations/cloudflare-manager.md` | Not run in the ultra-speed implementation lane |
 | Tabbed navigation | `src/renderer/components/ProjectSwitcher.tsx` | `docs/features/projects/projects-and-tabs.md` | `src/renderer/state/projects.test.ts` |
 | Toy locks on every element | `src/core/secure-store.ts` | `docs/toy-locks.md` | `src/core/secure-store.test.ts` |
 | Unlock ladder | `src/core/unlock-ladder.ts` | `docs/unlock-ladder.md` | `src/core/unlock-ladder.test.ts` |
