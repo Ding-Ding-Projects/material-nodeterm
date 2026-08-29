@@ -570,6 +570,15 @@ export function buildStubApi(): Omit<
       chatStop: U('ollama.chatStop'),
       onChatStream: noopUnsub
     },
+    aws: {
+      status: U('aws.status'),
+      ensure: U('aws.ensure'),
+      repair: U('aws.repair'),
+      cancel: U('aws.cancel'),
+      models: U('aws.models'),
+      refreshModels: U('aws.refreshModels'),
+      onStatus: noopUnsub
+    },
     minecraft: {
       versions: U('minecraft.versions'),
       status: U('minecraft.status'),

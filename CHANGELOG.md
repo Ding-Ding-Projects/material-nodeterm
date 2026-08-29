@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the Windows x64 AWS CLI v2 manager with a pinned AWS user installer, exact SHA-256
+  verification, user-scoped unattended repair, cancellation, offline model-cache recovery, and
+  Bedrock foundation model inventory discovery.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

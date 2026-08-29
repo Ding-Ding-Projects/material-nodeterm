@@ -17,6 +17,7 @@ import { IPC } from '../../shared/ipc'
 import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
+import type { AwsApi } from '../../shared/aws'
 import type { MinecraftApi } from '../../shared/minecraft'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
@@ -922,6 +923,19 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+export function buildAwsApi(client: RpcClient): Pick<NodeTerminalApi, 'aws'> {
+  const aws: AwsApi = {
+    status: () => client.request(IPC.awsStatus) as ReturnType<AwsApi['status']>,
+    ensure: () => client.request(IPC.awsEnsure) as ReturnType<AwsApi['ensure']>,
+    repair: () => client.request(IPC.awsRepair) as ReturnType<AwsApi['repair']>,
+    cancel: () => client.request(IPC.awsCancel) as ReturnType<AwsApi['cancel']>,
+    models: () => client.request(IPC.awsModels) as ReturnType<AwsApi['models']>,
+    refreshModels: () => client.request(IPC.awsRefreshModels) as ReturnType<AwsApi['refreshModels']>,
+    onStatus: (listener) => client.subscribe(IPC.awsStatusChanged, listener as Listener)
+  }
+  return { aws }
+}
+
 /** Local Minecraft server create-and-manage (docs/minecraft-server-manager.md) — same core engine
  *  as desktop; the server process is the one downloading, spawning and owning `java`, exactly as
  *  main does. */
@@ -1374,6 +1388,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSpeechApi(client),
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
+    ...buildAwsApi(client),
     ...buildMinecraftApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),

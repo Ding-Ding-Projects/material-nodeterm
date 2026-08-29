@@ -8467,6 +8467,7 @@ button.term-node__title-text:focus-visible {
  * `.toylock-btn` callers, ConfirmDialog's `.confirm`, etc. all keep whatever they had before).
  * Scopes used here:
  *   .md3-ollama          -- OllamaManagerPanel's portal root (wraps .drawer.ollama + its ConfirmDialog)
+ *   .md3-aws             -- AwsCliManagerPanel's portal root (wraps .drawer.aws-cli)
  *   .md3-converter        -- FileConverterPanel's portal root (wraps .drawer.converter)
  *   .md3-authenticator    -- AuthenticatorSection's content root (wraps AddEntryForm, the entry
  *                            list, and TwoKeyExportGate when it's open)
@@ -8491,7 +8492,8 @@ button.term-node__title-text:focus-visible {
  * ------------------------------------------------------------------------------------------------- */
 
 .md3-ollama .drawer.ollama,
-.md3-converter .drawer.converter {
+.md3-converter .drawer.converter,
+.md3-aws .drawer.aws-cli {
   width: 640px;
   max-width: 94vw;
   background: var(--md-surface-container-low);
@@ -8502,21 +8504,24 @@ button.term-node__title-text:focus-visible {
 }
 
 .md3-ollama .drawer__head,
-.md3-converter .drawer__head {
+.md3-converter .drawer__head,
+.md3-aws .drawer__head {
   background: var(--md-surface-container);
   border-bottom: 1px solid var(--md-outline-variant);
   padding: 16px 20px;
 }
 
 .md3-ollama .drawer__head h2,
-.md3-converter .drawer__head h2 {
+.md3-converter .drawer__head h2,
+.md3-aws .drawer__head h2 {
   font-size: 16px;
   font-weight: 600;
   color: var(--md-on-surface);
 }
 
 .md3-ollama .drawer__close,
-.md3-converter .drawer__close {
+.md3-converter .drawer__close,
+.md3-aws .drawer__close {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -11230,3 +11235,81 @@ button.term-node__title-text:focus-visible {
 .icon-menu__reset-btn {
   align-self: flex-start;
 }
+
+/* AWS CLI v2 manager. The overlay paints its own surface and keeps long inventories
+ * scrollable so the status and model catalogue remain usable at narrow widths. */
+.md3-aws .aws-cli__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 10px 20px 0;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.md3-aws .aws-cli__tabs button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--md-shape-small) var(--md-shape-small) 0 0;
+  color: var(--md-on-surface-variant);
+  background: transparent;
+  cursor: pointer;
+}
+.md3-aws .aws-cli__tabs button[aria-selected='true'] {
+  color: var(--md-on-primary-container);
+  background: var(--md-primary-container);
+}
+.md3-aws .aws-cli__section {
+  padding: 20px;
+  overflow: auto;
+}
+.md3-aws .aws-cli__state,
+.md3-aws .aws-cli__search-row,
+.md3-aws .aws-cli__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.md3-aws .aws-cli__state--ready { color: var(--md-on-primary-container); }
+.md3-aws .aws-cli__state--failed { color: var(--md-error); }
+.md3-aws .aws-cli__facts {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+.md3-aws .aws-cli__facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border-radius: var(--md-shape-small);
+  background: var(--md-surface-container);
+}
+.md3-aws .aws-cli__facts dt { color: var(--md-on-surface-variant); }
+.md3-aws .aws-cli__facts dd { margin: 0; text-align: right; font-family: var(--font-mono); }
+.md3-aws .aws-cli__note { color: var(--md-on-surface-variant); line-height: 1.5; }
+.md3-aws .aws-cli__search-row input { flex: 1; min-width: 180px; }
+.md3-aws .aws-cli__progress {
+  height: 8px;
+  margin-top: 18px;
+  border-radius: var(--md-shape-full);
+  overflow: hidden;
+  background: var(--md-surface-container-highest);
+}
+.md3-aws .aws-cli__progress > div { height: 100%; background: var(--md-primary); transition: width 120ms linear; }
+.md3-aws .aws-cli__models {
+  display: grid;
+  gap: 8px;
+  max-height: 52vh;
+  overflow: auto;
+  padding: 0;
+  list-style: none;
+}
+.md3-aws .aws-cli__models li {
+  display: grid;
+  gap: 3px;
+  padding: 12px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container);
+}
+.md3-aws .aws-cli__models span { color: var(--md-on-surface-variant); font-size: 12px; }

@@ -75,6 +75,10 @@
         "to": "icon.png"
       },
       {
+        "from": "resources/aws",
+        "to": "aws"
+      },
+      {
         "from": "out/session-host",
         "to": "session-host"
       },

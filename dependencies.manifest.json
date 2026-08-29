@@ -46,6 +46,13 @@
       }
     }
   },
+  "awsCli": {
+    "version": "2.36.31",
+    "platform": "win32-x64",
+    "source": "https://awscli.amazonaws.com/AWSCLIV2-User-2.36.31.msi?src=script-exe",
+    "sha256": "300d490cebe7d89913acc0f7ca1c585032fd2a7f698e809d7ce9905614013acd",
+    "scope": "user"
+  },
   "visualStudioBuildTools": {
     "bootstrapper": {
       "url": "https://download.visualstudio.microsoft.com/download/pr/f7f5ecbc-83ca-4cf0-bdb2-aaf70efb6d97/e0b8ea16494b4a79c68da26773131562aefecc8d87f1923c24d579c7a72e0575/vs_BuildTools.exe",

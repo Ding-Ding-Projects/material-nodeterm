@@ -35,10 +35,12 @@ export const FEATURES = [
   { id: 'palette', icon: '✨', color: 'var(--orange)', title: 'Jump anywhere', body: 'A command box that hops to any block, project or action. Plus a file explorer and undo/redo.' },
   { id: 'update', icon: '⬆️', color: 'var(--green)', title: 'Keeps itself fresh', body: 'The app checks its own update feed and shows news right inside the window.' },
   { id: 'offline', icon: '📴', color: 'var(--blue)', title: 'Works with no internet', body: 'Projects save to a plain file next to your code, so you can share it or carry it to another machine.' },
+  { id: 'aws', icon: '☁️', color: 'var(--orange)', title: 'AWS CLI, verified locally', body: 'The Windows x64 manager installs the exact AWS CLI release for your user and keeps a stale-safe Bedrock model list offline.' },
 ]
 
 export const DOCS = [
   ['Agent support', 'Claude, Codex, Gemini, opencode, Grok', 'agent-support'],
+  ['AWS CLI v2 manager', 'verified Windows install and Bedrock models', 'aws-cli-manager'],
   ['Canvas & node lifecycle', 'how blocks are born and cleaned up', 'canvas-lifecycle'],
   ['Changelog viewer', 'the date picker and the commit links', 'changelog-viewer'],
   ['Dim sum surprise', 'the little treat that shows up one visit in ten', 'dim-sum-surprise'],

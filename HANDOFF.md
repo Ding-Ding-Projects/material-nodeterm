@@ -1459,3 +1459,18 @@ switcher and FAB menu on a real screen — nothing above substitutes for that. T
 the `.mc-console` styling defect and the two atomic-write violations found above are worth a
 one-line fix before the next release, since both are small, both are diagnosed, and neither
 requires touching anything MD3-specific to correct.
+
+## AWS CLI v2 lane, implementation pending integration
+
+The `feat/program-30` lane adds `src/shared/aws.ts`, `src/core/aws/manifest.ts`,
+`src/core/aws/service.ts`, `src/core/aws/dependency-manager-adapter.ts`,
+`src/core/aws/register-ipc.ts`, and the renderer panel at
+`src/renderer/components/aws/AwsCliManagerPanel.tsx`. The surface is Windows x64 only and never
+uses PATH as authority. It checks a packaged AWS installer resource first, then downloads the
+versioned official AWS user MSI, verifies SHA-256, installs unattended for the current user, and
+keeps a local model inventory cache for offline recovery. The pinned release is `2.36.31` with
+SHA-256 `300d490cebe7d89913acc0f7ca1c585032FD2A7F698E809D7CE9905614013ACD`.
+
+The IPC/preload/server/browser bridge wiring and Canvas Tools entry are included. The offline docs
+bundle still needs regeneration by the integration owner. This lane has not run tests, builds,
+packaging, captures, or installer interaction, so those remain unverified.

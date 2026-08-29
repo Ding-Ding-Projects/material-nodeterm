@@ -25,6 +25,7 @@ import type { HistoryFilters } from '../shared/local-history'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
+import type { AwsCliStatus } from '../shared/aws'
 import type { MinecraftEvent } from '../shared/minecraft'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
@@ -69,6 +70,7 @@ const subscribeOllamaPullSummary = subscribe<[Pick<PullQueueState, 'running' | '
 const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
+const subscribeAwsStatus = subscribe<[AwsCliStatus]>(IPC.awsStatusChanged)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
@@ -923,6 +925,15 @@ const api: NodeTerminalApi = {
     chatSend: (id, text) => ipcRenderer.invoke(IPC.ollamaChatSend, id, text),
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
+  },
+  aws: {
+    status: () => ipcRenderer.invoke(IPC.awsStatus),
+    ensure: () => ipcRenderer.invoke(IPC.awsEnsure),
+    repair: () => ipcRenderer.invoke(IPC.awsRepair),
+    cancel: () => ipcRenderer.invoke(IPC.awsCancel),
+    models: () => ipcRenderer.invoke(IPC.awsModels),
+    refreshModels: () => ipcRenderer.invoke(IPC.awsRefreshModels),
+    onStatus: (listener) => subscribeAwsStatus(listener)
   },
   minecraft: {
     versions: () => ipcRenderer.invoke(IPC.minecraftVersions),
