@@ -7,9 +7,11 @@
  * module acquiring filesystem or host capabilities.
  */
 
-import type { BridgeLink, CanvasNodeState, Project, Viewport } from '../shared/types'
-import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEMA_VERSION } from './portable-project-v3'
+import type { BridgeLink, CanvasNodeState, Project, Viewport, NodeKind, MediaAssetReference } from '../shared/types'
+import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEMA_VERSION, rejectDuplicateJsonKeys } from './portable-project-v3'
 import { sanitizeProjectIcon } from '../shared/project-icon'
+import type { PortableMediaManifest } from './portable-media-assets'
+import { validatePortableMediaManifest } from './portable-media-assets'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -38,6 +40,7 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  media?: MediaAssetReference[]
 }
 
 export interface PortableRelationshipV3 {
@@ -63,12 +66,15 @@ export interface PortableCanvasProjectionV3 {
   nodes: PortableCanvasNodeV3[]
   relationships: PortableRelationshipV3[]
   appearance?: Record<string, unknown>
+  media?: PortableMediaManifest
 }
 
 export interface PortableCanvasProjectionInput {
   /** Future child canvases may be supplied without changing the root Project type. */
   canvases?: Array<Omit<PortableCanvasV3, 'nodeIds'> & { nodeIds?: string[] }>
   appearance?: Record<string, unknown>
+  /** Project-owned media metadata. Source paths and machine bindings are never carried. */
+  media?: PortableMediaManifest
 }
 
 export const PORTABLE_CANVAS_LIMITS = {
@@ -81,15 +87,16 @@ export const PORTABLE_CANVAS_LIMITS = {
 } as const
 
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
-const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'appearance'])
+const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'appearance', 'media'])
 const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'media'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
+const ALLOWED_MEDIA_REF = new Set(['assetId', 'kind', 'displayName', 'extension', 'sha256', 'bytes', 'source', 'resolution'])
 const ALLOWED_RELATIONSHIP = new Set(['id', 'kind', 'source', 'target', 'order'])
 const ALLOWED_APPEARANCE = new Set(['theme', 'density', 'seedColor', 'fontFamily', 'fontSize', 'fontWeight', 'motion'])
 
@@ -111,6 +118,37 @@ function text(value: unknown, label: string): string {
 function content(value: unknown, label: string): string {
   if (typeof value !== 'string' || new TextEncoder().encode(value).byteLength > PORTABLE_CANVAS_LIMITS.maxStringBytes) throw new PortableProjectV3Error('manifest', `Portable ${label} exceeds its UTF-8 bound.`)
   return value
+}
+
+function mediaReferences(value: unknown): MediaAssetReference[] {
+  if (!Array.isArray(value) || value.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable media reference count exceeds its bound.')
+  return value.map((item) => {
+    if (!record(item)) throw new PortableProjectV3Error('manifest', 'Portable media reference is invalid.')
+    exactKeys(item, ALLOWED_MEDIA_REF, 'media reference')
+    if (typeof item.assetId !== 'string' || !/^[0-9a-f]{64}$/.test(item.assetId) ||
+        !['image', 'audio', 'video'].includes(String(item.kind)) ||
+        typeof item.displayName !== 'string' || item.displayName.length === 0 ||
+        new TextEncoder().encode(item.displayName).byteLength > 512 || /[\0\r\n\\/]/.test(item.displayName) ||
+        /^[a-z][a-z0-9+.-]*:/i.test(item.displayName)) {
+      throw new PortableProjectV3Error('manifest', 'Portable media reference metadata is invalid.')
+    }
+    if (item.sha256 !== undefined && (typeof item.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(item.sha256) || item.sha256 !== item.assetId)) throw new PortableProjectV3Error('hash', 'Portable media reference hash is invalid.')
+    if (item.bytes !== undefined && (!Number.isSafeInteger(item.bytes) || item.bytes < 0 || item.bytes > 2 * 1024 * 1024 * 1024)) throw new PortableProjectV3Error('raw-limit', 'Portable media reference size is invalid.')
+    if (item.source !== undefined && !['archive', 'local', 'ssh'].includes(String(item.source))) throw new PortableProjectV3Error('manifest', 'Portable media reference source is invalid.')
+    if (item.resolution !== undefined && !['unresolved', 'available', 'missing', 'invalid'].includes(String(item.resolution))) throw new PortableProjectV3Error('manifest', 'Portable media reference resolution is invalid.')
+    if (item.resolution === 'available' && (item.sha256 === undefined || item.bytes === undefined || item.source === undefined)) throw new PortableProjectV3Error('manifest', 'Available portable media references require hash, size, and a source carrier.')
+    if (item.resolution === 'unresolved' && item.source === 'archive') throw new PortableProjectV3Error('manifest', 'Unresolved portable media cannot claim an archive carrier.')
+    return {
+      assetId: item.assetId,
+      kind: item.kind as MediaAssetReference['kind'],
+      displayName: item.displayName,
+      ...(item.extension !== undefined ? { extension: typeof item.extension === 'string' && /^[a-z0-9]{1,16}$/i.test(item.extension) ? item.extension.toLowerCase() : (() => { throw new PortableProjectV3Error('manifest', 'Portable media reference extension is invalid.') })() } : {}),
+      ...(item.sha256 !== undefined ? { sha256: item.sha256 } : {}),
+      ...(item.bytes !== undefined ? { bytes: item.bytes } : {}),
+      ...(item.source !== undefined ? { source: item.source as MediaAssetReference['source'] } : {}),
+      ...(item.resolution !== undefined ? { resolution: item.resolution as MediaAssetReference['resolution'] } : {})
+    }
+  })
 }
 
 function finite(value: unknown, label: string): number {
@@ -170,6 +208,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
     out.browserTabs = node.browserTabs.map((tab) => { if (!record(tab)) throw new PortableProjectV3Error('manifest', 'Portable browser tab is invalid.'); exactKeys(tab, ALLOWED_TAB, 'browser tab'); const url = safeUrl(tab.url, 'browser tab URL'); return { id: text(tab.id, 'browser tab id'), ...(url ? { url } : {}), title: content(tab.title, 'browser tab title') } })
   }
+  if (node.media !== undefined) out.media = mediaReferences(node.media)
   return out
 }
 
@@ -200,7 +239,8 @@ export function projectToPortableCanvasV3(project: Project, input: PortableCanva
   const canvases = [root, ...children].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
   const icon = project.icon && sanitizeProjectIcon(project.icon)
   const portableIcon = icon?.type === 'emoji' ? { type: icon.type, name: icon.emoji } : icon ? { type: icon.type, name: icon.name } : undefined
-  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: relationships(project), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}) }
+  const media = input.media === undefined ? undefined : validatePortableMediaManifest(input.media)
+  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: relationships(project), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}) }
   if (result.relationships.length > PORTABLE_CANVAS_LIMITS.maxRelationships) throw new PortableProjectV3Error('entry-limit', 'Portable relationship count exceeds its bound.')
   return validatePortableCanvasProjectionV3(result)
 }
@@ -294,12 +334,66 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
   if (!canvasIds.has(value.rootCanvasId)) throw new PortableProjectV3Error('manifest', 'Portable root canvas is missing.')
   if (value.appearance !== undefined) safeAppearance(value.appearance)
   const normalizedRelationships = value.relationships.map((link) => ({ id: link.id, kind: link.kind as 'bridge' | 'rope', source: link.source, target: link.target, order: link.order }))
-  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: value.project.name, color: value.project.color, ...(icon ? { icon } : {}) }, rootCanvasId: value.rootCanvasId, canvases: normalizedCanvases, nodes: normalizedNodes, relationships: normalizedRelationships, ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}) }
+  const media = value.media === undefined ? undefined : validatePortableMediaManifest(value.media)
+  const referencedMedia = value.nodes.flatMap((node) => node.media ?? [])
+  if (referencedMedia.length > 0) {
+    if (!media) throw new PortableProjectV3Error('manifest', 'Portable node media references require a media manifest.')
+    const known = new Set([...media.assets.map((asset) => asset.id), ...media.omissions.map((omission) => omission.assetId)])
+    for (const reference of referencedMedia) if (!known.has(reference.assetId)) throw new PortableProjectV3Error('manifest', `Portable node references unknown media: ${reference.assetId}`)
+  }
+  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: value.project.name, color: value.project.color, ...(icon ? { icon } : {}) }, rootCanvasId: value.rootCanvasId, canvases: normalizedCanvases, nodes: normalizedNodes, relationships: normalizedRelationships, ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}) }
 }
 
 export function parsePortableCanvasProjectionV3(bytes: Uint8Array): PortableCanvasProjectionV3 {
   if (bytes.byteLength > PORTABLE_CANVAS_LIMITS.maxJsonBytes) throw new PortableProjectV3Error('raw-limit', 'Portable project.json exceeds its byte bound.')
-  try { return validatePortableCanvasProjectionV3(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))) } catch (error) { if (error instanceof PortableProjectV3Error) throw error; throw new PortableProjectV3Error('manifest', 'Portable project.json is not valid UTF-8 JSON.') }
+  try {
+    const source = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    rejectDuplicateJsonKeys(source)
+    return validatePortableCanvasProjectionV3(JSON.parse(source))
+  } catch (error) { if (error instanceof PortableProjectV3Error) throw error; throw new PortableProjectV3Error('manifest', 'Portable project.json is not valid UTF-8 JSON.') }
+}
+
+/** Hydrate only portable presentation and intent into a fresh runtime project. */
+export function portableCanvasProjectionToProject(
+  input: PortableCanvasProjectionV3,
+  base: { id: string; cwd?: string } = { id: 'imported-project' }
+): Project {
+  const value = validatePortableCanvasProjectionV3(input)
+  const nodes: CanvasNodeState[] = value.nodes.map((node) => ({
+    id: node.id,
+    kind: node.kind as NodeKind,
+    position: { ...node.position },
+    size: { ...node.size },
+    title: node.title,
+    color: node.color,
+    group: node.group,
+    ...(node.collapsed !== undefined ? { collapsed: node.collapsed } : {}),
+    ...(node.parentId !== undefined ? { parentId: node.parentId } : {}),
+    ...(node.tags ? { tags: [...node.tags] } : {}),
+    ...(node.text !== undefined ? { text: node.text } : {}),
+    ...(node.url !== undefined ? { url: node.url } : {}),
+    ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
+    ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
+    ...(node.media ? { media: node.media.map((reference) => ({ ...reference })) } : {})
+  }))
+  const bridgeLinks = value.relationships.filter((link) => link.kind === 'bridge').map((link) => ({ id: link.id, source: link.source, target: link.target }))
+  const ropeLinks = value.relationships.filter((link) => link.kind === 'rope').map((link) => ({ id: link.id, source: link.source, target: link.target }))
+  const icon = value.project.icon
+    ? value.project.icon.type === 'emoji'
+      ? { type: 'emoji' as const, emoji: value.project.icon.name }
+      : { type: 'material-symbol' as const, name: value.project.icon.name }
+    : undefined
+  return {
+    id: base.id,
+    name: value.project.name,
+    color: value.project.color,
+    ...(icon ? { icon } : {}),
+    viewport: value.canvases.find((canvas) => canvas.id === value.rootCanvasId)?.viewport ?? { x: 0, y: 0, zoom: 1 },
+    nodes,
+    ...(bridgeLinks.length > 0 ? { bridges: bridgeLinks } : {}),
+    ...(ropeLinks.length > 0 ? { ropes: ropeLinks } : {}),
+    ...(base.cwd ? { cwd: base.cwd } : {})
+  }
 }
 
 // Short aliases keep the schema seam convenient for archive callers while the explicit V3 names

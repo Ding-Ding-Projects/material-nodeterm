@@ -21,6 +21,7 @@
 
 import { deflateRawSync, inflateRawSync } from 'node:zlib'
 import { crc32, sanitizeZipPath } from '../shared/export/zip'
+import { portableArchivePathKey } from './portable-project-v3'
 
 export interface ContainerEntry {
   /** Relative path inside the archive, forward-slash separated. */
@@ -83,18 +84,24 @@ export function looksLikeContainer(bytes: Buffer): boolean {
  * change is a programmer error here, not user input, so it throws.
  */
 export function packContainer(entries: ContainerEntry[]): Buffer {
-  const now = dosDateTime(new Date())
+  // ZIP timestamps are framing metadata, not project content. A fixed DOS epoch keeps two
+  // archives byte-identical when their sorted payloads are identical.
+  const now = dosDateTime(new Date('1980-01-01T00:00:00Z'))
   const localChunks: Buffer[] = []
   const centralChunks: Buffer[] = []
   const seen = new Set<string>()
+  const folded = new Set<string>()
   let offset = 0
 
-  for (const entry of entries) {
+  for (const entry of [...entries].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) {
     if (sanitizeZipPath(entry.path) !== entry.path) {
       throw new Error(`Container entry path is not clean: ${entry.path}`)
     }
     if (seen.has(entry.path)) throw new Error(`Duplicate container entry: ${entry.path}`)
+    const key = portableArchivePathKey(entry.path)
+    if (folded.has(key)) throw new Error(`Case-colliding container entry: ${entry.path}`)
     seen.add(entry.path)
+    folded.add(key)
     const nameBytes = Buffer.from(entry.path, 'utf-8')
     if (nameBytes.length > MAX_NAME_BYTES) {
       throw new Error(`Container entry path is too long: ${entry.path}`)
@@ -176,7 +183,8 @@ export function openContainer(
   /** When given, only entries it approves are inflated and returned — a cheap PEEK (inspect reads
    *  the manifest alone). Structure and size budgets are still validated for every entry; the
    *  full-read pass (import) remains the gate that proves every byte inflates and checksums. */
-  pick?: (name: string) => boolean
+  pick?: (name: string) => boolean,
+  metadata?: Map<string, { compressedBytes: number; rawBytes: number; method: number }>
 ): Map<string, Buffer> {
   if (bytes.length > limits.maxArchiveBytes) {
     throw new Error(
@@ -214,6 +222,7 @@ export function openContainer(
   if (centralStart + centralSize > eocd) fail('central directory overruns the file')
 
   const out = new Map<string, Buffer>()
+  const folded = new Set<string>()
   let cursor = centralStart
   let totalDeclared = 0
   for (let n = 0; n < entryCount; n++) {
@@ -249,6 +258,11 @@ export function openContainer(
     const name = bytes.subarray(cursor + 46, cursor + 46 + nameLen).toString('utf-8')
     if (sanitizeZipPath(name) !== name || name.endsWith('/')) fail(`unsafe entry path: ${name}`)
     if (out.has(name)) fail(`duplicate entry: ${name}`)
+    let key: string
+    try { key = portableArchivePathKey(name) } catch { fail(`unsafe entry path: ${name}`) }
+    if (folded.has(key)) fail(`case-colliding entry path: ${name}`)
+    folded.add(key)
+    metadata?.set(name, { compressedBytes: compressedSize, rawBytes: uncompressedSize, method })
     if (pick && !pick(name)) {
       cursor += 46 + nameLen + extraLen + commentLen
       continue

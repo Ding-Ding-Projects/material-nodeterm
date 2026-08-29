@@ -89,6 +89,8 @@ import { generateCommitMessage, generateGroupName, generateTerminalName } from '
 import { initUpdater } from './updater'
 import { decryptArchive, encryptArchive, looksLikeEncryptedArchive } from '../core/project-archive-encryption'
 import { ArchiveUnlockGuard } from '../core/archive-unlock-guard'
+import { LocalNodeBindingStore, bindingActionStates, validateLocalNodeBinding, verifyLocalBindingResource } from '../core/portable-bindings'
+import { applyPortableMediaDecisions, collectPortableMedia, type PortableMediaOmission } from '../core/portable-media-assets'
 import { desktopBuildPaths } from './desktop-build-paths'
 import { applyWindowsSquirrelAppUserModelId } from './windows-squirrel-identity'
 import { fetchCheck } from '../core/check'
@@ -890,6 +892,75 @@ app.whenReady().then(async () => {
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
   const projectArchives = new ProjectArchiveService(localHistoryStore)
+  const portableBindings = new LocalNodeBindingStore(app.getPath('userData'))
+  const bindingBusy = new Set<string>()
+  ipcMain.handle(IPC.portableBindingState, async (_event, input: unknown) => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return []
+    const value = input as Record<string, unknown>
+    if (typeof value.nodeId !== 'string' || typeof value.featureId !== 'string' || typeof value.displayLabel !== 'string') return []
+    const bindings = await portableBindings.load()
+    const current = bindings[value.nodeId]
+    return bindingActionStates({
+      schemaVersion: 1,
+      featureId: value.featureId,
+      displayLabel: value.displayLabel,
+      requestedCapabilities: [],
+      safeSettings: {},
+      relationships: []
+    }, {
+      hasBinding: Boolean(current),
+      hasMatchingResource: Boolean(current),
+      canConfigure: true,
+      canDeploy: false,
+      hasMissingAssets: value.hasMissingAssets === true
+    }).map((state) => ({
+      nodeId: value.nodeId as string,
+      featureId: value.featureId as string,
+      displayLabel: value.displayLabel as string,
+      action: state.action,
+      enabled: state.enabled,
+      ...(state.reason ? { reason: state.reason } : {}),
+      bound: Boolean(current)
+    }))
+  })
+  ipcMain.handle(IPC.portableBindingApply, async (_event, input: unknown) => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'Binding input is invalid.' }
+    const value = input as Record<string, unknown>
+    if (typeof value.nodeId !== 'string' || typeof value.action !== 'string') return { ok: false, error: 'Binding input is invalid.' }
+    if (value.action === 'leave-unbound') {
+      await portableBindings.remove(value.nodeId)
+      return { ok: true, state: 'unbound' as const }
+    }
+    if (!['configure', 'rebind', 'adopt', 'locate-asset'].includes(value.action)) {
+      return { ok: false, error: 'This binding route requires an explicit local provider flow.' }
+    }
+    if (bindingBusy.has(value.nodeId)) return { ok: false, error: 'This binding action is already running.' }
+    bindingBusy.add(value.nodeId)
+    try {
+      const binding = validateLocalNodeBinding({
+        nodeId: value.nodeId,
+        bindingVersion: 1,
+        providerOrHostIdentity: value.providerOrHostIdentity,
+        localResourceReferences: value.localResourceReferences,
+        credentialKeys: value.credentialKeys ?? [],
+        lastVerifiedAt: Date.now()
+      })
+      const resource = (value.localResourceReferences as Record<string, unknown> | undefined)?.resource
+      if (typeof resource !== 'string' || !(await verifyLocalBindingResource(resource))) {
+        return { ok: false, error: 'The selected local resource is missing, not a regular path, or changed after selection.' }
+      }
+      const snapshot = await portableBindings.snapshot()
+      try { await portableBindings.apply(value.nodeId, binding) } catch (error) {
+        await portableBindings.restore(snapshot)
+        throw error
+      }
+      return { ok: true, state: 'bound' as const }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      bindingBusy.delete(value.nodeId)
+    }
+  })
   // The packaged extraResources directory in a production install, the repo root in dev (see
   // resolveServerDeploymentRoot's own doc comment; `build.extraResources` in package.json ships
   // the matching `server-deployment/` directory). Writable state (the generated .env password,
@@ -928,6 +999,12 @@ app.whenReady().then(async () => {
   // keyboard-driven second submit (or a second window) walks straight past a disabled button, and
   // two concurrent archive operations could interleave dialogs and history-domain writes.
   let projectArchiveBusy = false
+  let projectArchiveController: AbortController | null = null
+  ipcMain.handle(IPC.projectArchiveCancel, () => {
+    if (!projectArchiveController) return false
+    projectArchiveController.abort()
+    return true
+  })
   /** The working-copy vault document of a folder-less project, or undefined when it has none.
    *  A read failure counts as "no vault" only for a MISSING file; anything else propagates, because
    *  silently saving a project without the vault it has would be data loss wearing a success
@@ -966,7 +1043,7 @@ app.whenReady().then(async () => {
   const archiveUnlock = new ArchiveUnlockGuard({ schoolMode: () => schoolModeStore.get().enabled })
   ipcMain.handle(
     IPC.projectArchiveExport,
-    async (_event, project: import('../shared/types').Project, password?: string) => {
+    async (_event, project: import('../shared/types').Project, password?: string, options?: import('../shared/types').ProjectArchiveExportOptions) => {
     if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
     projectArchiveBusy = true
     try {
@@ -984,7 +1061,47 @@ app.whenReady().then(async () => {
       // its own files and is captured with the rest; passing it here too would put two copies in
       // one save file. See core/password-manager/vault-location.ts.
       const vault = project.cwd ? undefined : await readFolderlessVault(project.id)
-      const exported = await projectArchives.export(project, vault ? { vault } : {})
+      const mediaCandidates = options?.media ?? []
+      const settled = await Promise.allSettled(mediaCandidates.map((candidate) => collectPortableMedia(candidate.path, candidate.label)))
+      const collected = settled.flatMap((result, index) => result.status === 'fulfilled' ? [{ item: result.value, index }] : [])
+      const failedOmissions: PortableMediaOmission[] = settled.flatMap((result, index) => {
+        if (result.status === 'fulfilled' || mediaCandidates[index].decision === 'include') return []
+        return [{
+          assetId: randomUUID(),
+          decision: mediaCandidates[index].decision,
+          reason: result.status === 'rejected' ? 'missing' as const : 'validation-failed' as const,
+          detail: 'The selected source could not be read or validated; the archive keeps this explicit omission.'
+        }]
+      })
+      const decisions = new Map(collected.map(({ item, index }) => [item.asset.id, mediaCandidates[index].decision] as const))
+      const selected = applyPortableMediaDecisions(collected.map(({ item }) => item), decisions)
+      selected.omissions.push(...failedOmissions)
+      if (settled.some((result, index) => result.status === 'rejected' && mediaCandidates[index].decision === 'include')) {
+        throw new Error('An included media source could not be read or validated.')
+      }
+      const sidecars = (options?.sidecars ?? []).map((item) => {
+        if (typeof item.path !== 'string' || typeof item.dataBase64 !== 'string' || item.dataBase64.length > 44_739_242) {
+          throw new Error('Portable sidecar input is invalid or exceeds its byte bound.')
+        }
+        const data = Buffer.from(item.dataBase64, 'base64')
+        if (data.toString('base64').replace(/=+$/, '') !== item.dataBase64.replace(/=+$/, '')) {
+          throw new Error('Portable sidecar input is not valid base64.')
+        }
+        return { path: item.path, data }
+      })
+      const attachments = (options?.attachments ?? []).map((item) => {
+        if (typeof item.path !== 'string' || typeof item.dataBase64 !== 'string') throw new Error('Portable attachment input is invalid.')
+        const data = Buffer.from(item.dataBase64, 'base64')
+        if (data.toString('base64').replace(/=+$/, '') !== item.dataBase64.replace(/=+$/, '')) throw new Error('Portable attachment input is not valid base64.')
+        return { path: item.path, data }
+      })
+      const exported = await projectArchives.export(project, {
+        ...(vault ? { vault } : {}),
+        ...(selected.assets.length || selected.omissions.length ? { media: selected } : {}),
+        ...(options?.appearance ? { appearance: options.appearance } : {}),
+        ...(sidecars.length ? { sidecars } : {}),
+        ...(attachments.length ? { attachments } : {})
+      })
       // Encrypt the FINISHED container, never its entries: a ZIP's entry names alone would say
       // which repository travelled and what the project is called. See project-archive-encryption.ts.
       const bytes = password ? encryptArchive(exported.bytes, password) : exported.bytes
@@ -1007,6 +1124,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.projectArchiveImport, async (_event, opts?: { path?: string; password?: string }) => {
     if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
     projectArchiveBusy = true
+    projectArchiveController = new AbortController()
     try {
       // A password retry re-opens the file the FIRST call already found protected, by path: making
       // the user pick the same file again for every wrong password would be its own small cruelty.
@@ -1061,7 +1179,15 @@ app.whenReady().then(async () => {
         if (dest.canceled || !dest.filePaths[0]) return { ok: false, canceled: true }
         destination = dest.filePaths[0]
       }
-      const outcome = await projectArchives.import(raw, { destination })
+      const outcome = await projectArchives.import(raw, {
+        destination,
+        signal: projectArchiveController.signal,
+        onProgress: (progress) => {
+          for (const w of BrowserWindow.getAllWindows()) {
+            if (!w.isDestroyed()) w.webContents.send(IPC.projectArchiveProgress, progress)
+          }
+        }
+      })
       // The project id is minted by the import, so a carried vault can only be placed once it
       // exists. A folder-restoring import already got its vault back with the working files.
       if (outcome.vault) await restoreFolderlessVault(outcome.project.id, outcome.vault)
@@ -1075,6 +1201,7 @@ app.whenReady().then(async () => {
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     } finally {
+      projectArchiveController = null
       projectArchiveBusy = false
     }
   })

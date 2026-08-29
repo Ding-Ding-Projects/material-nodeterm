@@ -103,6 +103,7 @@ import { ServiceNode } from '../nodes/ServiceNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
+import PortableMediaNode from '../nodes/PortableMediaNode'
 import WebNode from '../nodes/WebNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import {
@@ -122,6 +123,8 @@ import {
 } from '../lib/adhdModes'
 import { TopAppBar } from '../components/TopAppBar'
 import { ProjectSwitcher } from '../components/ProjectSwitcher'
+import { PortableMediaDecisionDialog } from '../components/PortableMediaDecisionDialog'
+import type { PortableMediaCandidate } from '../../core/portable-media-assets'
 import { type MenuItem } from '../components/ContextMenu'
 import { devicePixelSnapOffset } from '../terminal/device-pixel-fit'
 import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
@@ -1800,6 +1803,9 @@ export function Canvas() {
       scheduler: withNodeBoundary(NativeLoopNode),
       dino: withNodeBoundary(DinoNode),
       video: withNodeBoundary(VideoNode),
+      photo: withNodeBoundary(PortableMediaNode),
+      audio: withNodeBoundary(PortableMediaNode),
+      gallery: withNodeBoundary(PortableMediaNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
       // The service family. One component for all six: they differ in what they manage, not in how
@@ -12525,7 +12531,56 @@ export function Canvas() {
   // ONE archive operation at a time. The ref is the real renderer-side guard (a keyboard-driven
   // second activation walks straight past a disabled menu row), the main process refuses re-entry
   // independently, and the menu rows read the same ref for their disabled state.
-  const projectArchiveBusyRef = useRef(false)
+const projectArchiveBusyRef = useRef(false)
+  const collectPortableSidecars = useCallback(async (projectId: string): Promise<{
+    sidecars?: Array<{ path: string; dataBase64: string }>
+    attachments?: Array<{ path: string; dataBase64: string }>
+  }> => {
+    const log = await api.boardLog.read(projectId, { all: true })
+    const sidecars: Array<{ path: string; dataBase64: string }> = []
+    const rawLog = api.boardLog.readRaw ? await api.boardLog.readRaw(projectId) : undefined
+    if (rawLog?.state === 'malformed') throw new Error(rawLog.error ?? 'Board history is malformed.')
+    if (rawLog?.state === 'ok' && rawLog.dataBase64) {
+      sidecars.push({ path: 'sidecars/.nodeterm/board-log.jsonl', dataBase64: rawLog.dataBase64 })
+    } else if (!rawLog && !log.unsupported && log.entries.length > 0) {
+      const text = log.entries.slice().reverse().map((entry) => JSON.stringify(entry)).join(String.fromCharCode(10)) + String.fromCharCode(10)
+      let binary = ''
+      for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte)
+      sidecars.push({ path: 'sidecars/.nodeterm/board-log.jsonl', dataBase64: btoa(binary) })
+    }
+    const attachments: Array<{ path: string; dataBase64: string }> = []
+    if (api.boardLog.readAttachment) {
+      for (const entry of log.entries) {
+        for (const attachment of entry.attachments ?? []) {
+          const result = await api.boardLog.readAttachment(projectId, attachment)
+          if (!result.ok) throw new Error(result.error)
+          attachments.push({ path: 'attachments/' + attachment.id + '.bin', dataBase64: result.dataBase64 })
+        }
+      }
+    }
+    return {
+      ...(sidecars.length ? { sidecars } : {}),
+      ...(attachments.length ? { attachments } : {})
+    }
+  }, [api])
+  const [portableMediaPrompt, setPortableMediaPrompt] = useState<{
+    candidates: PortableMediaCandidate[]
+    resolve: (requests: import('@shared/types').ProjectArchiveMediaRequest[] | null) => void
+  } | null>(null)
+  const requestPortableMediaDecisions = useCallback((project: Project): Promise<import('@shared/types').ProjectArchiveMediaRequest[] | null> => {
+    const candidates = project.nodes
+      .filter((node) => typeof node.filePath === 'string' && node.filePath.length > 0)
+      .map((node) => ({
+        assetId: node.id,
+        kind: node.kind === 'video' ? 'video' as const : 'image' as const,
+        label: node.title || node.filePath!.split(/[\\/]/).pop() || 'media',
+        sourceName: node.filePath!.split(/[\\/]/).pop() || 'media',
+        decision: 'include' as const,
+        sourcePath: node.filePath
+      }))
+    if (candidates.length === 0) return Promise.resolve([])
+    return new Promise((resolve) => setPortableMediaPrompt({ candidates, resolve }))
+  }, [])
   const exportProjectArchive = useCallback(
     async (projectId: string, password?: string) => {
       if (projectArchiveBusyRef.current) {
@@ -12543,18 +12598,15 @@ export function Canvas() {
         notify({
           kind: 'info',
           title: 'Saving project…',
-          body: `Packing "${project.name}" — canvas, history, repository and working files. A large repository can take a moment.`
+          body: `Packing "${project.name}" — canvas, history, selected media and sidecars. Large media can take a moment.`
         })
-        const result = await api.workspace.exportProject(project, password)
+        const mediaRequests = await requestPortableMediaDecisions(project)
+        if (mediaRequests === null) return
+        const sidecars = await collectPortableSidecars(projectId)
+        const result = await api.workspace.exportProject(project, password, { media: mediaRequests, ...sidecars })
         if (result.ok) {
-          // The archive packs the project's OWN git-tracked working files verbatim (see
-          // project-archive.ts), and a password-manager vault (core/password-manager/vault-store.ts)
-          // is deliberately a git-tracked sibling of project.json — so a vault the user committed
-          // travels inside the save file too, encrypted envelopes and all. That is by design (it is
-          // how the vault survives a clone on another machine), but it means the ONE save file is now
-          // exactly as sensitive as the vault's own password: whoever gets the file and the password
-          // gets every secret in it. Say so, every time a vault exists, whether locked or unlocked —
-          // "unlocked" here is only THIS process's cached key, never the presence of a vault.
+          // Schema 3 intentionally omits the password-manager vault. It stays on this machine and
+          // is recorded as an explicit credential omission in the archive manifest.
           let vaultKind: 'uninitialized' | 'locked' | 'unlocked' | 'unsupported' = 'uninitialized'
           try {
             vaultKind = (await api.passwordManager.status(projectId)).state.kind
@@ -12564,7 +12616,7 @@ export function Canvas() {
           }
           const vaultWarning =
             vaultKind === 'locked' || vaultKind === 'unlocked'
-              ? ' This project has a password-manager vault: its encrypted secrets travel inside this file too, and they are only as safe as the vault password.'
+              ? ' This project has a password-manager vault: it stays on this machine and is explicitly omitted from the portable file.'
               : ''
           notify({
             kind: vaultKind !== 'uninitialized' ? 'warning' : 'success',
@@ -12587,7 +12639,7 @@ export function Canvas() {
         projectArchiveBusyRef.current = false
       }
     },
-    [api, commitActiveToStore, writeDisk]
+    [api, collectPortableSidecars, commitActiveToStore, requestPortableMediaDecisions, writeDisk]
   )
 
   /**
@@ -14803,6 +14855,27 @@ export function Canvas() {
           is one z-0 stacking context, so nothing inside it could ever rise above the sidebar. The
           focused node's root is appended here imperatively by TerminalNode; the exit pill stays
           above it. Esc is deliberately NOT an exit key — it must reach the CLI in the pane. */}
+      {portableMediaPrompt && (
+        <PortableMediaDecisionDialog
+          candidates={portableMediaPrompt.candidates}
+          onDecisions={(decisions) => {
+            const requests = portableMediaPrompt.candidates.map((candidate) => ({
+              key: candidate.assetId,
+              path: candidate.sourcePath ?? '',
+              label: candidate.label,
+              decision: decisions.get(candidate.assetId) ?? 'include'
+            }))
+            const resolve = portableMediaPrompt.resolve
+            setPortableMediaPrompt(null)
+            resolve(requests)
+          }}
+          onCancel={() => {
+            const resolve = portableMediaPrompt.resolve
+            setPortableMediaPrompt(null)
+            resolve(null)
+          }}
+        />
+      )}
       <div id={FOCUS_SURFACE_ID} className={`focus-surface${focusedId ? ' is-active' : ''}`}>
         {focusedId && (
           <button className="focus-exit" title="Exit focus (⌘⇧F)" onClick={toggleFocusMode}>

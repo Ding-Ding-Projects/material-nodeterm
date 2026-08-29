@@ -8,6 +8,9 @@ import type {
   NodeTerminalApi,
   PairingDoneResult,
   Project,
+  ProjectArchiveProgress,
+  ProjectArchiveExportOptions,
+  PortableBindingState,
   PtyCreateOptions,
   PtyPressure,
   RecycledInfo,
@@ -174,8 +177,25 @@ const api: NodeTerminalApi = {
     splitIntoParts: (cwd: string, sizeValue: number, sizeUnit: 'KB' | 'MB' | 'GB') =>
       ipcRenderer.invoke(IPC.workspaceSplitIntoParts, cwd, sizeValue, sizeUnit),
     joinParts: (cwd: string) => ipcRenderer.invoke(IPC.workspaceJoinParts, cwd),
-    exportProject: (project: Project, password?: string) =>
-      ipcRenderer.invoke(IPC.projectArchiveExport, project, password),
+    portableBindings: {
+      state: (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }): Promise<PortableBindingState[]> =>
+        ipcRenderer.invoke(IPC.portableBindingState, input),
+      apply: (input: {
+        nodeId: string
+        action: import('../shared/types').PortableBindingAction
+        providerOrHostIdentity?: string
+        localResourceReferences?: Record<string, string | number | boolean>
+        credentialKeys?: string[]
+      }) => ipcRenderer.invoke(IPC.portableBindingApply, input)
+    },
+    onArchiveProgress: (cb: (event: ProjectArchiveProgress) => void) => {
+      const h = (_e: unknown, event: ProjectArchiveProgress) => cb(event)
+      ipcRenderer.on(IPC.projectArchiveProgress, h)
+      return () => ipcRenderer.removeListener(IPC.projectArchiveProgress, h)
+    },
+    cancelArchiveImport: () => ipcRenderer.invoke(IPC.projectArchiveCancel),
+    exportProject: (project: Project, password?: string, options?: ProjectArchiveExportOptions) =>
+      ipcRenderer.invoke(IPC.projectArchiveExport, project, password, options),
     importProject: (opts?: { path?: string; password?: string }) =>
       ipcRenderer.invoke(IPC.projectArchiveImport, opts),
     archiveLadderIssue: (filePath: string) =>
@@ -817,6 +837,8 @@ const api: NodeTerminalApi = {
   boardLog: {
     append: (projectId, entry) => ipcRenderer.invoke(IPC.boardLogAppend, projectId, entry),
     read: (projectId, opts) => ipcRenderer.invoke(IPC.boardLogRead, projectId, opts),
+    readAttachment: (projectId, attachment) => ipcRenderer.invoke(IPC.boardLogReadAttachment, projectId, attachment),
+    readRaw: (projectId) => ipcRenderer.invoke(IPC.boardLogReadRaw, projectId),
     onChanged: (projectId, cb) => {
       const ch = IPC.boardLogChanged(projectId)
       const handler = (): void => cb()

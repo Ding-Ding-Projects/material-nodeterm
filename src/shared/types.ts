@@ -337,6 +337,9 @@ export type NodeKind =
   | 'editor'
   | 'diff'
   | 'video'
+  | 'photo'
+  | 'audio'
+  | 'gallery'
   | 'web'
   | 'browser'
   | 'subagent'
@@ -425,6 +428,18 @@ export interface PendingLaunch {
   launch: TerminalLaunchIntent
 }
 
+/** Portable media metadata attached to a canvas node. Source is an opaque reference, never a path. */
+export interface MediaAssetReference {
+  assetId: string
+  kind: 'image' | 'audio' | 'video'
+  displayName: string
+  extension?: string
+  sha256?: string
+  bytes?: number
+  source?: 'archive' | 'local' | 'ssh'
+  resolution?: 'unresolved' | 'available' | 'missing' | 'invalid'
+}
+
 export interface CanvasNodeState {
   id: string
   kind: NodeKind
@@ -496,6 +511,8 @@ export interface CanvasNodeState {
   sshFs?: boolean
   // sticky-only
   text?: string
+  /** Content-addressed media references. Machine-local source paths never enter this record. */
+  media?: MediaAssetReference[]
   // dino-only: best score reached in the T-Rex Runner game.
   highScore?: number
   /**
@@ -762,6 +779,8 @@ export interface BoardLogEntry {
   kind: 'comment' | 'event'
   text?: string
   event?: BoardLogEvent
+  attachments?: import('./board-log-attachments').BoardLogAttachment[]
+  attachmentSessionId?: string
 }
 
 /** Max chars kept for a comment's `text`. On an SSH project the whole JSON line becomes one
@@ -784,6 +803,7 @@ export interface BoardLogReadResult {
   entries: BoardLogEntry[]
   unsupported?: boolean
 }
+export type BoardLogReadState = 'absent' | 'empty' | 'ok' | 'unreadable' | 'malformed'
 
 /** The board-log surface on `window.nodeTerminal`. Project-routed: the main/server side resolves
  *  the project to a local cwd, a desktop SSH connection, or unsupported. `append` is
@@ -804,6 +824,8 @@ export interface BoardLogApi {
   read(projectId: string, opts?: BoardLogReadOpts): Promise<BoardLogReadResult>
   /** Subscribe to change pushes for one project; returns an unsubscribe. */
   onChanged(projectId: string, cb: () => void): () => void
+  readAttachment?(projectId: string, attachment: import('./board-log-attachments').BoardLogAttachment): Promise<{ ok: true; dataBase64: string } | { ok: false; error: string }>
+  readRaw?(projectId: string): Promise<{ state: BoardLogReadState; dataBase64?: string; error?: string }>
 }
 
 /** A project is one canvas/page: its own nodes, viewport, and default working dir. */
@@ -1130,6 +1152,7 @@ export interface ProjectArchiveContents {
     | 'no-folder'
     | 'folder-missing'
     | 'not-in-archive'
+    | 'portable-projection'
   /** Plain-words caveat when `repository` is not 'git-bundle' (why, and what that means). */
   repositoryNote?: string
   /** Working files included under `files/` (count and raw bytes before compression). */
@@ -1142,9 +1165,51 @@ export interface ProjectArchiveContents {
   excludedBytes: number
 }
 
+/** Destination bindings are opaque machine-local choices, never portable project content. */
+export type PortableBindingAction = 'configure' | 'rebind' | 'adopt' | 'deploy' | 'locate-asset' | 'leave-unbound'
+export interface PortableBindingState {
+  nodeId: string
+  featureId: string
+  displayLabel: string
+  action: PortableBindingAction
+  enabled: boolean
+  reason?: string
+  bound: boolean
+}
+export interface PortableBindingApi {
+  state(input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }): Promise<PortableBindingState[]>
+  apply(input: {
+    nodeId: string
+    action: PortableBindingAction
+    providerOrHostIdentity?: string
+    localResourceReferences?: Record<string, string | number | boolean>
+    credentialKeys?: string[]
+  }): Promise<{ ok: true; state: 'bound' | 'unbound' } | { ok: false; error: string }>
+}
+export interface ProjectArchiveMediaRequest {
+  key: string
+  path: string
+  label: string
+  decision: 'include' | 'omit' | 'locate-later'
+}
+export interface ProjectArchiveExportOptions {
+  media?: ProjectArchiveMediaRequest[]
+  appearance?: Record<string, unknown>
+  sidecars?: Array<{ path: string; dataBase64: string }>
+  attachments?: Array<{ path: string; dataBase64: string }>
+}
+export interface ProjectArchiveProgress {
+  phase: 'reading' | 'validating' | 'migrating' | 'staging' | 'publishing' | 'completed' | 'cancelled'
+  progress: number
+  message: string
+}
+
 export interface WorkspaceApi {
   load(): Promise<Workspace>
   save(workspace: Workspace): Promise<void>
+  portableBindings: PortableBindingApi
+  onArchiveProgress(cb: (event: ProjectArchiveProgress) => void): () => void
+  cancelArchiveImport(): Promise<boolean>
   /** Reads <folder>/.nodeterm/project.json and returns the assembled Project (cwd resolved), or null. */
   probeFolder(folder: string): Promise<Project | null>
   /** True when `cwd`'s project is currently stored as sized parts + a manifest, rather than a
@@ -1172,7 +1237,8 @@ export interface WorkspaceApi {
     /** When given, the finished archive is wrapped whole in AES-256-GCM under a key derived from
      *  this password (core/project-archive-encryption.ts) and the file leaks nothing about the
      *  project — not its name, not its file list. Omitted ⇒ the historical plain container. */
-    password?: string
+    password?: string,
+    options?: ProjectArchiveExportOptions
   ): Promise<{
     ok: boolean
     path?: string

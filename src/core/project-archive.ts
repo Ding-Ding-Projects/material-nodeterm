@@ -42,10 +42,21 @@ import { freshProjectId } from '../shared/project-id'
 import { fileToProject, projectToFile, serializeProjectFile, type ProjectFileV1 } from './workspace-files'
 import { LocalHistoryStore } from './local-history'
 import { looksLikeContainer, openContainer, packContainer, type ContainerEntry } from './project-archive-container'
+import {
+  exportPortableProjectV3,
+  importPortableProjectV3,
+  looksLikePortableProjectV3
+} from './portable-project-import'
+import { projectToPortableCanvasV3, serializePortableCanvasProjectionV3 } from './portable-canvas-projection'
+import { createPortableMediaManifest, dedupePortableMediaCollected, type PortableMediaCollected, type PortableMediaOmission } from './portable-media-assets'
 
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
 export * from './portable-canvas-projection'
+export * from './portable-project-import'
+export * from './portable-bindings'
+export * from './portable-media-assets'
+export * from './portable-attachment-sessions'
 
 /** V1 JSON-text archives keep their historical cap. */
 const MAX_ARCHIVE_BYTES_V1 = 180 * 1024 * 1024
@@ -90,10 +101,11 @@ interface ArchiveManifestV2 {
 export interface ProjectArchiveExportResult {
   bytes: Buffer
   contents: ProjectArchiveContents
+  archiveVersion?: 3
 }
 
 export interface ProjectArchiveInspection {
-  archiveVersion: 1 | 2
+  archiveVersion: 1 | 2 | 3
   /** True when the archive carries working files / a repository and import therefore needs an
    *  empty destination folder before it can proceed. */
   needsDestination: boolean
@@ -111,18 +123,13 @@ export interface ProjectArchiveImportResult {
 }
 
 export interface ProjectArchiveExportOptions {
-  /**
-   * A folder-less project's password-manager vault, to travel inside the save file.
-   *
-   * Only for a project with no folder. A folder project's vault is already a file in its own
-   * directory and is captured with the rest of the working files, so passing it here would put two
-   * copies in one archive and leave import to guess which is current.
-   *
-   * The bytes are the vault document exactly as it sits on disk - every secret in it is already an
-   * AEAD envelope under the vault's OWN password, so this carries no plaintext. It does mean the
-   * save file is as sensitive as that password, which the export UI says out loud.
-   */
+  /** Legacy input retained for callers; schema 3 records an explicit credential omission instead
+   * of carrying vault bytes. */
   vault?: Buffer
+  media?: { assets: readonly PortableMediaCollected[]; omissions?: readonly PortableMediaOmission[] }
+  appearance?: Record<string, unknown>
+  sidecars?: readonly { path: string; data: Buffer }[]
+  attachments?: readonly { path: string; data: Buffer }[]
 }
 
 function isProjectFile(value: unknown): value is ProjectFileV1 {
@@ -313,6 +320,48 @@ export class ProjectArchiveService {
     project: Project,
     opts: ProjectArchiveExportOptions = {}
   ): Promise<ProjectArchiveExportResult> {
+    // Schema 3 is the portable write path. The V1/V2 writer below remains for legacy reads and
+    // historical fixtures, but new archives must not carry machine paths, credentials, or process
+    // hydration data.
+    const mediaAssets = opts.media ? dedupePortableMediaCollected(opts.media.assets) : []
+    const mediaManifest = opts.media ? createPortableMediaManifest(mediaAssets.map((item) => item.asset), opts.media.omissions) : undefined
+    const projection = projectToPortableCanvasV3(project, {
+      ...(opts.appearance ? { appearance: opts.appearance } : {}),
+      ...(mediaManifest ? { media: mediaManifest } : {})
+    })
+    const projectBytes = Buffer.from(serializePortableCanvasProjectionV3(projection))
+    await this.history.record({
+      domain: `project_${project.id}`,
+      filename: 'project.json',
+      content: new TextDecoder().decode(projectBytes),
+      label: `Exported portable project ${project.name}`,
+      action: 'updated'
+    })
+    const historyBundle = await this.history.exportBundle(`project_${project.id}`)
+    if (!historyBundle) throw new Error('The project history repository could not be bundled.')
+    const portable = await exportPortableProjectV3(project, {
+      historyBundle,
+      projection,
+      ...(opts.vault ? { omissions: [{ path: 'vault', reason: 'credential' as const, detail: 'Vault material remains on the source machine and is not portable.' }] } : {}),
+      ...(opts.media ? { media: { ...opts.media, assets: mediaAssets } } : {}),
+      ...(opts.appearance ? { appearance: opts.appearance } : {}),
+      ...(opts.sidecars ? { sidecars: opts.sidecars } : {}),
+      ...(opts.attachments ? { attachments: opts.attachments } : {})
+    })
+    return {
+      bytes: portable.bytes,
+      archiveVersion: 3,
+      contents: {
+        repository: 'portable-projection',
+        repositoryNote: 'Schema 3 carries safe canvas intent and local history only. Paths, credentials, provider state, processes, and machine-local bindings remain local.',
+        workingFiles: 0,
+        workingBytes: 0,
+        excluded: portable.manifest.omissions.map((item) => ({ path: item.path, reason: item.reason, detail: item.detail })),
+        excludedFiles: portable.manifest.omissions.length,
+        excludedBytes: 0
+      }
+    }
+    /*
     const exportedAt = new Date().toISOString()
     const snapshot = projectToFile(project, 0, exportedAt)
     const snapshotText = serializeProjectFile(snapshot)
@@ -373,11 +422,17 @@ export class ProjectArchiveService {
       )
     }
     return { bytes, contents: capture.contents }
+    */
   }
 
   /** Cheap peek: which schema, and does import need a destination folder first? */
   inspect(bytes: Buffer): ProjectArchiveInspection {
     if (!looksLikeContainer(bytes)) return { archiveVersion: 1, needsDestination: false }
+    if (looksLikePortableProjectV3(bytes)) {
+      const entries = openContainer(bytes, READ_LIMITS)
+      const manifest = JSON.parse(entries.get('manifest.json')!.toString('utf8')) as { project?: { name?: unknown } }
+      return { archiveVersion: 3, needsDestination: false, ...(typeof manifest.project?.name === 'string' ? { projectName: manifest.project.name } : {}) }
+    }
     let hasPayload = false
     const picked = openContainer(bytes, READ_LIMITS, (name) => {
       if (name === 'repo/repository.bundle' || name.startsWith('files/')) hasPayload = true
@@ -394,7 +449,11 @@ export class ProjectArchiveService {
     }
   }
 
-  async import(bytes: Buffer, opts: { destination?: string } = {}): Promise<ProjectArchiveImportResult> {
+  async import(bytes: Buffer, opts: {
+    destination?: string
+    signal?: AbortSignal
+    onProgress?: (event: { phase: string; progress: number; message: string }) => void
+  } = {}): Promise<ProjectArchiveImportResult> {
     if (!looksLikeContainer(bytes)) {
       const project = await this.importV1(bytes.toString('utf-8'))
       return {
@@ -407,6 +466,25 @@ export class ProjectArchiveService {
         )
       }
     }
+    if (looksLikePortableProjectV3(bytes)) return importPortableProjectV3(bytes, {
+      destination: opts.destination,
+      signal: opts.signal,
+      onProgress: opts.onProgress as ((event: import('./portable-project-import').PortableImportProgress) => void) | undefined,
+      history: this.history
+    }).then((result) => ({
+      project: result.project,
+      archiveVersion: 3 as const,
+      contents: {
+        repository: 'portable-projection' as const,
+        repositoryNote: 'Schema 3 import restores a fresh local project projection. Local bindings, credentials, processes, and machine paths were omitted.',
+        workingFiles: 0,
+        workingBytes: 0,
+        excluded: result.omissions.map((item) => ({ path: item.path, reason: item.reason, detail: item.detail })),
+        excludedFiles: result.omissions.length,
+        excludedBytes: 0
+      },
+      ...(result.stagedPath ? { restoredTo: result.stagedPath } : {})
+    }))
     return this.importV2(bytes, opts.destination)
   }
 

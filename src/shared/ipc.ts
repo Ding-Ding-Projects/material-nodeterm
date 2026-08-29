@@ -143,6 +143,8 @@ export const IPC = {
    *  (local cwd / desktop-ssh / unsupported) in core/board-log-handlers.ts. */
   boardLogAppend: 'board-log:append',
   boardLogRead: 'board-log:read',
+  boardLogReadAttachment: 'board-log:read-attachment',
+  boardLogReadRaw: 'board-log:read-raw',
   /** Fire-and-forget ref-counted subscribe/unsubscribe: the first subscriber for a project starts
    *  the local fs.watch (or the desktop-ssh 5s poll); the last one stops it. */
   boardLogSubscribe: 'board-log:subscribe',
@@ -251,6 +253,10 @@ export const IPC = {
   workspaceHasPartsManifest: 'workspace:has-parts-manifest',
   projectArchiveExport: 'project-archive:export',
   projectArchiveImport: 'project-archive:import',
+  portableBindingState: 'portable-binding:state',
+  portableBindingApply: 'portable-binding:apply',
+  projectArchiveProgress: 'project-archive:progress',
+  projectArchiveCancel: 'project-archive:cancel',
   /** The unlock ladder for a protected project file's password prompt — issue a challenge, and
    *  grade an answer core-side against its one-shot nonce. Never touches the password itself:
    *  clearing a rung ends the WAIT and nothing else (core/archive-unlock-guard.ts). */

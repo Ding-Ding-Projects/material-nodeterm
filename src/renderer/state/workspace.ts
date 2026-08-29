@@ -143,6 +143,7 @@ export interface NodeData {
   cwd?: string
   text?: string
   filePath?: string
+  media?: import('@shared/types').MediaAssetReference[]
   /**
    * editor/diff-only: true once this node's `filePath` was confirmed gone — e.g. a worktree
    * that contained it was removed (`displacedByWorktree` in @shared/worktree sweeps these up
@@ -847,6 +848,25 @@ export function createVideoNode(
   }
 }
 
+/** Create an archive-backed Photo, Audio, Video, or Gallery node from validated media references.
+ * Source paths remain runtime-only and are resolved by PortableMediaNode. */
+export function createPortableMediaNode(
+  kind: 'photo' | 'audio' | 'video' | 'gallery',
+  index: number,
+  media: import('@shared/types').MediaAssetReference[],
+  center?: { x: number; y: number }
+): CanvasNode {
+  const size = kind === 'gallery' ? { width: 760, height: 520 } : VIDEO_SIZE
+  return {
+    id: kind + '-' + uuid(),
+    type: kind,
+    position: center ?? { x: 40 + (index % 4) * 48, y: 40 + Math.floor(index / 4) * 48 },
+    width: size.width,
+    height: size.height,
+    data: { title: kind === 'gallery' ? 'Gallery' : media[0]?.displayName ?? kind, color: NODE_COLORS[index % NODE_COLORS.length], group: null, media }
+  } as CanvasNode
+}
+
 /** Creates a web (webview) node showing a live URL or a local html file. */
 export function createWebNode(
   index: number,
@@ -1453,6 +1473,9 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   editor: true,
   diff: true,
   video: true,
+  photo: true,
+  audio: true,
+  gallery: true,
   web: true,
   browser: true,
   subagent: true,
@@ -1490,6 +1513,9 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   editor: EDITOR_SIZE,
   diff: DIFF_SIZE,
   video: VIDEO_SIZE,
+  photo: VIDEO_SIZE,
+  audio: VIDEO_SIZE,
+  gallery: { width: 760, height: 520 },
   web: WEB_SIZE,
   browser: BROWSER_SIZE,
   // Ephemeral kinds are never persisted (they are derived from live hook events), so these are
@@ -1914,6 +1940,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         terminalProfileId: n.ssh ? undefined : n.terminalProfileId,
         cwd: n.cwd,
         text: n.text,
+        media: n.media,
         serviceLabel: n.serviceLabel,
         serviceConnection: n.serviceConnection,
         nsisSpec: n.nsisSpec,
@@ -1989,6 +2016,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         terminalProfileId: n.data.ssh ? undefined : n.data.terminalProfileId,
         cwd: n.data.cwd,
         text: n.data.text,
+        media: n.data.media,
         serviceLabel: n.data.serviceLabel,
         serviceConnection: n.data.serviceConnection,
         nsisSpec: n.data.nsisSpec,
