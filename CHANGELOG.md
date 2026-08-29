@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- Tighten Catalog and Shop ownership at every boundary. Child-canvas id, scope, depth, and anchor
+  placement now travel through the same creation coordinator, provider registration follows the
+  Canvas lifecycle, and provider updates reach mounted Shop nodes. Peer and import paths validate
+  deterministic Shop identity, owner metadata, event ids, parent chains, and ordinary-node
+  preservation. Localized visible-copy search, accessible descriptions, bounded project-scoped
+  ledgers, and runtime Shop Chuts were added. The focused source Chuts pass; the app contract Chut
+  still reports the pre-existing seven-document inventory gap, and no general typecheck, build,
+  package, runtime capture, commit, or dew was performed in this lane.
+
+- Add persisted child-canvas state and a real child-view route. Project save/load now preserves
+  validated child membership, depth, scope, and Shop identity. Catalog creation can append a child
+  canvas and its Shop atomically, the Canvas provides root return navigation and a scoped Catalog
+  action, and child-created nodes are recorded in their owning collection. The app-contract Chut is
+  now green after seven orphaned implementation and planning documents were explicitly classified.
+
+- Complete the child Canvas integration. Root and child React Flow membership is now filtered by
+  the active canvas, the child renders its actual Shop node and child-owned nodes in the shared
+  Canvas instance, and the door's scoped Catalog action returns to the root through the same route.
+  Child-plus-Shop creation marks the project dirty and persists through the normal write path only
+  after atomic success. Provider registration is project-keyed and lifecycle-scoped.
+
+- Add the unified Node Catalog and scope-bound universe Shops. Catalog rows share typed localized
+  metadata, safe defaults, documentation links, capability reasons, and explicit planned states.
+  User, automation, and peer creation retries carry one bounded immutable event id through a
+  collision-aware append boundary. Multiverse and AWS Universe children receive exactly one fixed
+  Shop anchor, while root canvases receive none; malformed imports, duplicate Shops, scope/depth
+  mismatches, and protected peer mutations fail closed. Focused source contracts pass: 8 tests in
+  3 files. Built-artifact, runtime, general typecheck, and capture verification remain pending.
+
 - Fix desktop renderer layout overflow across menus, flyouts, anchored popovers, dialogs, settings,
   onboarding, command palette, and documentation surfaces. Long localized and user-renamed values
   now wrap, dynamic collections scroll inside viewport-bounded surfaces, submenu flyouts are

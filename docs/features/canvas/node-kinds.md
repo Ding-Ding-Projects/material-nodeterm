@@ -16,6 +16,7 @@ way, while each contributes its own body content and header actions.
 | **Group** | A real container node — other nodes can live *inside* it, and groups can nest inside groups. A group can optionally be bound to a git worktree, so every node created inside it inherits that worktree's directory. See [Source control & worktrees](../source-control/source-control-and-worktrees.md). |
 | **Editor** | A Monaco-based code editor bound to a file path, with save, dirty-state tracking, and a markdown preview toggle for `.md` files. Image files render as an `<img>` preview instead of source text. |
 | **Diff** | A read-only Monaco diff view comparing HEAD↔index (staged) or index↔working tree (unstaged) for a single file. |
+| **Shop** | A fixed catalog anchor owned by a Multiverse or AWS Universe child canvas. It is not movable, groupable, duplicable, or deletable, and its entries stay scoped to that child canvas. |
 
 Two other things render *on* the canvas but are not persisted node kinds: **subagent cards**
 (ephemeral cards showing an agent's spawned subagents, connected by an edge to the parent

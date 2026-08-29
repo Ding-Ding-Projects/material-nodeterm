@@ -13,6 +13,7 @@ import type {
   CanvasNodeState,
   NavStop,
   Project,
+  ProjectCanvasState,
   ProjectKanban,
   Viewport,
   Workspace
@@ -72,6 +73,7 @@ export interface ProjectFileV1 {
    */
   viewport?: Viewport
   nodes: CanvasNodeState[]
+  childCanvases?: ProjectCanvasState[]
   bridges?: BridgeLink[]
   ropes?: BridgeLink[]
   /**
@@ -217,6 +219,7 @@ export function projectToFile(
     color: p.color,
     viewport: framingViewport(nodes),
     nodes,
+    ...(p.childCanvases ? { childCanvases: p.childCanvases.map((canvas) => ({ ...canvas, nodeIds: [...canvas.nodeIds] })) } : {}),
     ...(icon ? { icon } : {}),
     ...(p.bridges ? { bridges: p.bridges } : {}),
     ...(p.ropes ? { ropes: p.ropes } : {}),
@@ -258,6 +261,37 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
       typeof (p as BrowserProfile).color === 'string'
   )
   return cleaned.length > 0 ? cleaned : undefined
+}
+
+export function validChildCanvases(v: unknown): ProjectCanvasState[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const seen = new Set<string>()
+  const result: ProjectCanvasState[] = []
+  for (const value of v) {
+    if (!value || typeof value !== 'object') return undefined
+    const item = value as ProjectCanvasState
+    if (typeof item.id !== 'string' || !item.id || seen.has(item.id) || (item.scope !== 'multiverse' && item.scope !== 'aws-universe') || typeof item.parentCanvasId !== 'string' || !item.parentCanvasId || !Number.isInteger(item.depth) || item.depth < 1 || typeof item.title !== 'string' || !Number.isFinite(item.order) || !Array.isArray(item.nodeIds) || item.nodeIds.some((id) => typeof id !== 'string' || !id)) return undefined
+    seen.add(item.id)
+    result.push({ ...item, nodeIds: [...new Set(item.nodeIds)] })
+  }
+  const byId = new Map(result.map((item) => [item.id, item]))
+  for (const item of result) {
+    let parent = item.parentCanvasId
+    let measured = 1
+    const seenParents = new Set<string>()
+    while (parent !== 'root') {
+      if (seenParents.has(parent)) return undefined
+      seenParents.add(parent)
+      const next = byId.get(parent)
+      if (!next) return undefined
+      parent = next.parentCanvasId
+      measured += 1
+      if (measured > 4096) return undefined
+    }
+    if (item.depth !== measured) return undefined
+    if (item.scope === 'aws-universe' && item.parentCanvasId !== 'root') return undefined
+  }
+  return result
 }
 
 /**
@@ -304,6 +338,7 @@ export function fileToProject(
     // applyLocalNodeExec DROPS whatever the file carried in the exec fields (it is not ours) and
     // re-attaches only what this machine typed. See @shared/node-exec.
     nodes: applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec),
+    ...(validChildCanvases(f.childCanvases) ? { childCanvases: validChildCanvases(f.childCanvases) } : {}),
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),

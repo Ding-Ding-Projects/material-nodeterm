@@ -1046,6 +1046,45 @@ const FEATURES = [
     // profiles one. docs/assets/shots/capture-manifest.json does record `app-status-surface`, but
     // its method is plain CDP against the unpackaged out/ build, which is the exact route that
     // row's pending reason says cannot stand as packaged headless capture evidence.
+    id: 'node-catalog-universe-shops',
+    label: 'Unified Node Catalog and special-universe Shops',
+    files: [
+      'src/shared/node-catalog.ts',
+      'src/renderer/state/nodeCreationCoordinator.ts',
+      'src/core/universe-shop.ts',
+      'src/renderer/components/NodeCatalogDialog.tsx',
+      'src/renderer/nodes/ShopNode.tsx',
+      'src/renderer/components/UniverseCanvasView.tsx',
+      'src/renderer/canvas/Canvas.tsx'
+    ],
+    contentChecks: [
+      ['src/shared/node-catalog.ts', 'export function validateNodeCatalogCompleteness('],
+      ['src/renderer/state/nodeCreationCoordinator.ts', 'export class NodeCreationCoordinator'],
+      ['src/core/universe-shop.ts', 'export function repairUniverseShops('],
+      ['src/core/universe-shop.ts', 'export function createSpecialUniverseCanvas('],
+      ['src/core/universe-shop.ts', 'export class UniverseCanvasStore'],
+      ['src/renderer/state/projects.ts', 'createUniverseChild(projectId'],
+      ['src/renderer/components/UniverseCanvasView.tsx', 'export function UniverseCanvasView('],
+      ['src/renderer/components/NodeCatalogDialog.tsx', 'export function NodeCatalogDialog('],
+      ['src/renderer/nodes/ShopNode.tsx', 'export function ShopNode('],
+      ['src/renderer/canvas/Canvas.tsx', 'nodeCatalogShopProvider('],
+      ['src/renderer/canvas/Canvas.tsx', 'onOpenCatalog=']
+    ],
+    wired: { file: 'src/renderer/canvas/Canvas.tsx', symbol: 'NodeCatalogDialog' },
+    tests: [
+      ['src/shared/node-catalog.test.ts', "describe('unified node catalog contract'"],
+      ['src/renderer/state/nodeCreationCoordinator.test.ts', "describe('node creation coordinator contract'"],
+      ['src/core/universe-shop.test.ts', "describe('universe Shop contract'"],
+      ['src/renderer/nodes/ShopNode.test.tsx', "describe('ShopNode runtime surface'"],
+    ],
+    localizedCopy: {
+      status: 'verified',
+      files: ['src/shared/i18n/catalog.ts'],
+      contentChecks: [['src/shared/i18n/catalog.ts', "'nodeCatalog.title'"], ['src/shared/i18n/catalog.ts', "'universeShop.title'"]]
+    },
+    docs: ['docs/features/canvas/node-catalog.md', 'docs/features/integrations/aws-universe-shop.md'],
+  },
+  {
     id: 'status-surface',
     label: 'Status surface (project gates + recorded evidence)',
     files: [
@@ -1909,7 +1948,14 @@ const NON_FEATURE_DOCS = new Map([
   ['features/remote/README.md', 'remote-feature category index; SSH, server, and Docker-host articles are inventoried separately'],
   ['features/source-control/README.md', 'source-control documentation category index; the worktree article is inventoried separately'],
   ['features/speech/README.md', 'speech-documentation category index; dictation is inventoried separately'],
-  ['features/terminals/README.md', 'terminal-feature category index; continuity, profiles, and word separators are inventoried separately']
+  ['features/terminals/README.md', 'terminal-feature category index; continuity, profiles, and word separators are inventoried separately'],
+  ['features/appearance/desktop-clipping-inventory.md', 'implementation handoff inventory for the desktop layout sweep, not a standalone surface'],
+  ['features/dependencies/README.md', 'dependency-feature category index; dependency installation is tracked by its implementation row'],
+  ['features/dependencies/automatic-node-dependencies.md', 'dependency implementation detail behind the dependency installation row'],
+  ['features/projects/portable-canvas-projection.md', 'portable projection implementation detail behind project archive and canvas rows'],
+  ['features/projects/portable-schema3.md', 'portable schema implementation detail behind project archive and canvas rows'],
+  ['plans/2026-08-26-portable-node-universes-and-hosting-program.md', 'planning document for the Catalog and Shop implementation'],
+  ['plans/README.md', 'planning index, not a user-facing feature surface']
 ])
 
 {

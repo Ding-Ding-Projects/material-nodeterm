@@ -4,6 +4,7 @@
 
 import { acceptNewInboundNode, carryLocalNodeExec, sanitizeInboundNode } from './node-exec'
 import { REF_MAX_LEN } from './presence'
+import { isCreationEventId } from './node-catalog'
 import type { BridgeLink, CanvasEdgeKind, CanvasMutation, CanvasNodeState } from './types'
 
 /**
@@ -82,9 +83,17 @@ export function isCanvasMutation(value: unknown): value is CanvasMutation {
     return withinSizeLimit(m)
   }
   if (m.op !== 'upsert') return false
-  const node = m.node as { id?: unknown; position?: { x?: unknown; y?: unknown } } | undefined
+  const node = m.node as { id?: unknown; creationEventId?: unknown; kind?: unknown; position?: { x?: unknown; y?: unknown } } | undefined
   if (!node || typeof node !== 'object') return false
   if (!isRefId(node.id)) return false
+  if ('creationEventId' in node && node.creationEventId !== undefined && !isCreationEventId(node.creationEventId)) return false
+  if (node.kind === 'shop' && (
+    typeof (node as CanvasNodeState).universeCanvasId !== 'string' ||
+    ((node as CanvasNodeState).universeScope !== 'multiverse' && (node as CanvasNodeState).universeScope !== 'aws-universe') ||
+    typeof (node as CanvasNodeState).universeDepth !== 'number' ||
+    !(node as CanvasNodeState).nonDeletable ||
+    !isCreationEventId((node as CanvasNodeState).creationEventId)
+  )) return false
   const pos = node.position
   if (!pos || typeof pos !== 'object') return false
   if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return false
@@ -100,6 +109,14 @@ function withinSizeLimit(m: unknown): boolean {
   } catch {
     return false
   }
+}
+
+function isDeterministicShopId(node: CanvasNodeState): boolean {
+  if (typeof node.universeCanvasId !== 'string') return false
+  const base = `shop-${node.universeCanvasId}`
+  if (node.id === base) return true
+  const suffix = node.id.startsWith(`${base}-`) ? node.id.slice(base.length + 1) : ''
+  return suffix.length === 8 && [...suffix].every((char) => '0123456789abcdefABCDEF'.includes(char))
 }
 
 /**
@@ -202,7 +219,28 @@ export function applyCanvasMutation(
   // every caller here is applying something that came off the wire, and a silent no-op is the only
   // safe reading of "this list is not what that mutation is about".
   if (isEdgeMutation(m)) return states
-  if (m.op === 'remove') return states.filter((n) => n.id !== m.id)
+  if (m.op === 'remove') {
+    if (states.some((n) => n.id === m.id && n.kind === 'shop')) return states
+    return states.filter((n) => n.id !== m.id)
+  }
+  if (m.node.kind === 'shop') {
+    const shop = m.node as CanvasNodeState
+    if (
+      typeof shop.universeCanvasId !== 'string' ||
+      (shop.universeScope !== 'multiverse' && shop.universeScope !== 'aws-universe') ||
+    typeof shop.universeDepth !== 'number' ||
+      !Number.isInteger(shop.universeDepth) ||
+      shop.universeDepth < 1 ||
+      shop.group !== null ||
+    shop.nonDeletable !== true ||
+    !isDeterministicShopId(shop) ||
+    !isCreationEventId(shop.creationEventId)
+    ) return states
+    if (states.some((n) => n.id === m.node.id)) return states
+    const accepted = acceptNewInboundNode(m.node, options?.defaultTerminalProfileId)
+    return [...states, { ...accepted, title: 'Shop', group: null, nonDeletable: true }]
+  }
+  if (m.node.creationEventId && states.some((n) => n.creationEventId === m.node.creationEventId)) return states
   const idx = states.findIndex((n) => n.id === m.node.id)
   if (idx === -1)
     return [...states, acceptNewInboundNode(m.node, options?.defaultTerminalProfileId)]

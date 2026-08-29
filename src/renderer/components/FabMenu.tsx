@@ -28,6 +28,7 @@ export interface FabMenuProps {
   onOpenFile: () => void
   onAddRemote: () => void
   onConnectRemote: () => void
+  onOpenCatalog?: () => void
 }
 
 /**
@@ -51,7 +52,8 @@ export function FabMenu({
   onAddAgent,
   onOpenFile,
   onAddRemote,
-  onConnectRemote
+  onConnectRemote,
+  onOpenCatalog
 }: FabMenuProps) {
   const profileText = useLocalizedVocabularyText()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -182,6 +184,7 @@ export function FabMenu({
               </>
             ) : (
               <>
+                {onOpenCatalog ? <button role="menuitem" onClick={pick(onOpenCatalog)}><span aria-hidden="true">🧭</span><span>{profileText('nodeCatalog.title', 'Node Catalog')}</span></button> : null}
                 <button role="menuitem" onClick={pick(onAddTerminal)}>
                   <TerminalIcon />
                   <span>Terminal</span>

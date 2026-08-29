@@ -47,7 +47,7 @@ interface ScrollRequest {
   nonce: number
 }
 
-export function DocsBrowser(): JSX.Element {
+export function DocsBrowser({ initialPath }: { initialPath?: string }): JSX.Element {
   const { state, retry } = useDocsBundle()
   const articles = state.status === 'ready' ? state.articles : EMPTY_ARTICLES
 
@@ -77,8 +77,15 @@ export function DocsBrowser(): JSX.Element {
   // Land on a real article as soon as the bundle arrives.
   useEffect(() => {
     if (path !== null || articles.length === 0) return
-    setPath(byPath.has(DEFAULT_ARTICLE) ? DEFAULT_ARTICLE : articles[0].path)
-  }, [articles, byPath, path])
+    const requested = initialPath && byPath.has(initialPath) ? initialPath : DEFAULT_ARTICLE
+    setPath(byPath.has(requested) ? requested : articles[0].path)
+  }, [articles, byPath, initialPath, path])
+  useEffect(() => {
+    if (!initialPath || !byPath.has(initialPath)) return
+    setPath(initialPath)
+    setShowResults(false)
+    setOutside(null)
+  }, [byPath, initialPath])
 
   // --- search ---------------------------------------------------------------------------------
   // `test` changes identity on every keystroke, so it is read through a ref when the debounce

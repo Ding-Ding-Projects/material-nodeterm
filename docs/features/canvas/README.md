@@ -4,6 +4,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
 
 - [Node kinds](./node-kinds.md) — terminal, agent, sticky, group, editor, and diff nodes, and
   what each one is for.
+- [Unified Node Catalog](./node-catalog.md) — the typed registry, guided creation event, and
+  bounded placement rules shared by every catalog route.
 - [Canvas & node lifecycle](./canvas-and-lifecycle.md) — how nodes mount, unmount, park, and
   release memory as you pan around a large canvas; context menus, undo/redo, and selection.
 - [Terminal sharpness under pan and zoom](./terminal-sharpness.md) — why terminal text goes soft on

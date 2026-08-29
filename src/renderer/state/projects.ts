@@ -18,6 +18,7 @@ import { applyEdgeMutation } from '@shared/canvas-mutations'
 import { collisionSeed, derivedProjectId } from '@shared/project-id'
 import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
 import { markWorkspaceDirty } from './workspaceDirty'
+import { createSpecialUniverseCanvas, type SpecialUniverseScope } from '../../core/universe-shop'
 
 interface ProjectsState {
   projects: Project[]
@@ -94,6 +95,9 @@ interface ProjectsState {
   /** Replaces the project's browser-profile list (create/rename/remove all funnel through this).
    *  See `BrowserProfile` in @shared/types and `shared/browser-profiles.ts`. */
   setProjectBrowserProfiles(id: string, browserProfiles: BrowserProfile[]): void
+  createUniverseChild(projectId: string, input: { id: string; scope: SpecialUniverseScope; parentCanvasId: string; depth: number; title: string; order: number; viewport?: Viewport }, creationEventId: string): { refused: boolean; reason?: string; canvasId?: string; shopId?: string }
+  deleteUniverseChild(projectId: string, canvasId: string): { removed: boolean; refused: boolean; reason?: string }
+  appendUniverseChildNode(projectId: string, canvasId: string, nodeId: string): boolean
   /** Writes the serialized canvas (nodes + viewport + bridge links + control ropes) back into a project. */
   commitCanvas(
     id: string,
@@ -441,6 +445,37 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     }))
   },
 
+  createUniverseChild(projectId, input, creationEventId) {
+    const project = get().getProject(projectId)
+    if (!project) return { refused: true, reason: 'The owning project does not exist.' }
+    const existingNodes = project.nodes as unknown as import('../../core/portable-canvas-projection').PortableCanvasNodeV3[]
+    const result = createSpecialUniverseCanvas(input, existingNodes, creationEventId)
+    if (result.refused || !result.canvas || !result.shop) return { refused: true, reason: result.reason }
+    const child = { id: result.canvas.id, scope: result.canvas.scope, parentCanvasId: result.canvas.parentCanvasId!, depth: result.canvas.depth!, title: result.canvas.title, order: result.canvas.order, ...(result.canvas.viewport ? { viewport: result.canvas.viewport } : {}), nodeIds: [...result.canvas.nodeIds] }
+    set((s) => ({ projects: s.projects.map((candidate) => candidate.id === projectId ? { ...candidate, childCanvases: [...(candidate.childCanvases ?? []), child], nodes: [...candidate.nodes, result.shop as unknown as CanvasNodeState] } : candidate) }))
+    return { refused: false, canvasId: child.id, shopId: result.shop.id }
+  },
+
+  deleteUniverseChild(projectId, canvasId) {
+    const project = get().getProject(projectId)
+    const child = project?.childCanvases?.find((candidate) => candidate.id === canvasId)
+    if (!project || !child) return { removed: false, refused: true, reason: 'The child canvas does not exist.' }
+    if (project.childCanvases?.some((candidate) => candidate.parentCanvasId === canvasId)) return { removed: false, refused: true, reason: 'A child canvas with descendants cannot be deleted.' }
+    const ids = new Set(child.nodeIds)
+    if (project.nodes.some((node) => ids.has(node.id) && node.kind !== 'shop')) return { removed: false, refused: true, reason: 'The child canvas contains ordinary nodes and must be emptied first.' }
+    set((s) => ({ projects: s.projects.map((candidate) => candidate.id === projectId ? { ...candidate, childCanvases: candidate.childCanvases?.filter((entry) => entry.id !== canvasId), nodes: candidate.nodes.filter((node) => !ids.has(node.id)) } : candidate) }))
+    return { removed: true, refused: false }
+  },
+
+  appendUniverseChildNode(projectId, canvasId, nodeId) {
+    const project = get().getProject(projectId)
+    const child = project?.childCanvases?.find((entry) => entry.id === canvasId)
+    if (!project || !child || project.nodes.some((node) => node.id === nodeId && node.universeCanvasId !== canvasId)) return false
+    if (child.nodeIds.includes(nodeId)) return true
+    set((s) => ({ projects: s.projects.map((candidate) => candidate.id === projectId ? { ...candidate, childCanvases: candidate.childCanvases?.map((entry) => entry.id === canvasId ? { ...entry, nodeIds: [...entry.nodeIds, nodeId] } : entry) } : candidate) }))
+    return true
+  },
+
   commitCanvas(id, nodes, viewport, bridges, ropes) {
     set((s) => ({
       projects: s.projects.map((p) =>
@@ -489,7 +524,9 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) =>
         // An explicit rename means the user owns the name now: stop auto-tracking the session.
-        nodes.map((n) => (n.id === nodeId ? { ...n, title, titleAuto: false } : n))
+        nodes.map((n) => n.id === nodeId && n.kind !== 'shop' && n.nonDeletable !== true
+          ? { ...n, title, titleAuto: false }
+          : n)
       )
     }))
   },
@@ -505,7 +542,9 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   removeNode(projectId, nodeId) {
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) =>
-        nodes.filter((n) => n.id !== nodeId)
+        nodes.some((n) => n.id === nodeId && (n.kind === 'shop' || n.nonDeletable === true))
+          ? nodes
+          : nodes.filter((n) => n.id !== nodeId)
       )
     }))
   },
@@ -514,7 +553,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) => {
         const src = nodes.find((n) => n.id === nodeId)
-        if (!src) return nodes
+        if (!src || src.kind === 'shop' || src.nonDeletable === true) return nodes
         const copy = {
           ...src,
           id: `${src.kind}-${Math.random().toString(36).slice(2, 10)}`,
@@ -538,7 +577,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) => {
         const node = nodes.find((n) => n.id === nodeId)
-        if (!node) return nodes
+        if (!node || node.kind === 'shop' || node.nonDeletable === true) return nodes
         if ((node.parentId ?? null) === groupId) return nodes
         // A frame may be moved into another frame, but never into itself or its own subtree.
         if (groupId === nodeId || (groupId && stateIsDescendant(nodes, groupId, nodeId))) {
@@ -557,7 +596,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
         if (draggedId === beforeId) return nodes
         const dragged = nodes.find((n) => n.id === draggedId)
         const before = nodes.find((n) => n.id === beforeId)
-        if (!dragged || !before || dragged.kind === 'group') return nodes
+        if (!dragged || !before || dragged.kind === 'group' || dragged.kind === 'shop' || dragged.nonDeletable === true) return nodes
         const targetParent = before.parentId ?? null
         const moved =
           (dragged.parentId ?? null) === targetParent

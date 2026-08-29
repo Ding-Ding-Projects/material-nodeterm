@@ -7,6 +7,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | feature | status |
 | --- | --- |
 | [Service nodes](service-nodes.md) | implemented as canvas objects (Minecraft, Docker host, Proxmox, GitLab, Home Assistant, FreePBX); none of them dial anything yet |
+| [Universe Shops](aws-universe-shop.md) | one fixed, scope-bound catalog Shop for each Multiverse or AWS Universe child canvas |
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |
 

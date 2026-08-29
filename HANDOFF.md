@@ -1,5 +1,64 @@
 # Handoff
 
+## 2026-08-26, Shop refuter corrections
+
+The Shop and Catalog integration was tightened after source review. The project-aware provider is
+now registered and cleared in a Canvas lifecycle effect, with a subscription so mounted Shop nodes
+refresh when the provider changes. Shop-created catalog requests carry the owning child canvas id,
+scope, validated depth, and anchor placement into the shared creation coordinator instead of using
+root context. Catalog availability is evaluated with the canonical registry function and the same
+maximum-depth semantics used by the root picker. Shop search includes renderer-resolved localized
+labels and descriptions, and accessible descriptions now reference real elements.
+
+Peer and import paths now validate event ids, owner canvas, scope, depth, deterministic Shop ids,
+placement, and non-deletable metadata. A peer upsert cannot replace an ordinary node, a remove
+without the matching owner is refused, and active/inactive paths share the same Shop repair logic.
+Creation ledgers are bounded and canvas-scoped, and an ordinary node carrying a matching event id
+cannot consume a Shop event. Invalid repair states are returned as explicit refusals rather than
+silently discarded. Focused Shop runtime coverage now includes the localized list surface and the
+valid empty `<li>` state. `UniverseCanvasStore` provides an atomic child-canvas plus Shop lifecycle,
+navigation, and guarded deletion boundary for future project persistence wiring.
+
+The child-canvas state is now part of `Project.childCanvases` and `ProjectFileV1.childCanvases`.
+Workspace save/load round-trips child membership and Shop identity with validation of parent chains,
+depth, scope, and member ids. Canvas exposes a real child view with root return navigation and a
+scoped catalog action. Creating a child from the Catalog uses one event id and commits the child
+canvas plus Shop atomically; Shop-created child nodes are appended to the owning child collection.
+The app-contract Chut is green after classifying the seven previously orphaned implementation and
+planning documents with explicit reasons.
+
+The final integration also wires child membership into the active Canvas view. Root React Flow
+nodes are filtered away while a child is active, child nodes and its real Shop renderer remain in
+the same React Flow instance, and a scoped Catalog action is available from the child door. Child
+creation updates project state, marks the project dirty, writes through the normal persistence path,
+and activates the child only after the atomic child-plus-Shop result succeeds. Provider state is
+project-keyed, so changing projects cannot clear another Canvas instance's provider.
+
+## 2026-08-26, unified Node Catalog and universe Shop reconciliation
+
+Added a shared typed catalog and immutable creation coordinator. Catalog rows cover current,
+ephemeral, and planned capabilities, with explicit categories, safe defaults, documentation paths,
+scope/depth rules, localized-key derivation, and disabled reasons. Catalog-created nodes use a
+bounded collision-aware placement search and reuse one validated creation event id across retries.
+Legacy service, sticky, authenticator, loop, installer, dino, browser, web, agent, and account-login
+creation paths now cross the coordinator append boundary.
+
+Added fixed Shop support for Multiverse and AWS Universe child canvases. Portable projections retain
+depth and safe Shop ownership fields, repair missing or duplicate anchors on valid imported data,
+refuse malformed parent chains, preserve ordinary-node id collisions with deterministic suffixes,
+and reject Shop delete, duplicate, move, group, undo, and invalid peer mutations. The Shop renderer
+uses the shared catalog provider, local search, anchored regex access, localized text, visible
+disabled reasons, and a 44px interaction target. Root canvases do not own Shops.
+
+Changed files include `src/shared/node-catalog.ts`, `src/renderer/state/nodeCreationCoordinator.ts`,
+`src/core/universe-shop.ts`, `src/renderer/components/NodeCatalogDialog.tsx`,
+`src/renderer/nodes/ShopNode.tsx`, projection and mutation boundaries, workspace/project state,
+Canvas/FAB/DocsBrowser wiring, styles, feature docs, and the generated offline docs bundle.
+Focused source verification passed: `src/shared/node-catalog.test.ts`,
+`src/renderer/state/nodeCreationCoordinator.test.ts`, and `src/core/universe-shop.test.ts`, 8 tests
+across 3 files. The general suite, typecheck, build, packaging, runtime interaction, captures,
+review, and audit were not run in this lane.
+
 ## 2026-08-26, desktop layout safety sweep
 
 Implemented a source-driven clipping repair for the Windows desktop renderer on

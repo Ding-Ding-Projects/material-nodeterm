@@ -344,6 +344,8 @@ export type NodeKind =
   | 'scheduler'
   | 'dino'
   | 'annotation'
+  // Permanent catalog anchor owned by each Multiverse or AWS Universe child canvas.
+  | 'shop'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
   // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
@@ -428,6 +430,8 @@ export interface PendingLaunch {
 export interface CanvasNodeState {
   id: string
   kind: NodeKind
+  /** Immutable idempotency key for the user or automation event that created this node. */
+  creationEventId?: string
   position: { x: number; y: number }
   size: { width: number; height: number }
   title: string
@@ -439,6 +443,14 @@ export interface CanvasNodeState {
   titleAuto?: boolean
   color: string
   group: string | null
+  /** Safe ownership metadata for a node inside a special-universe child canvas. */
+  universeCanvasId?: string
+  universeScope?: 'multiverse' | 'aws-universe'
+  universeDepth?: number
+  /** True for the deterministic Shop anchor, not a security claim. */
+  nonDeletable?: boolean
+  /** Last safe catalog selection shown by a Shop, never a provider binding. */
+  shopSelection?: string
   /** Labels for organizing/filtering terminals. */
   tags?: string[]
   /** When true the node body is hidden (header-only). */
@@ -821,6 +833,9 @@ export interface Project {
   ssh?: { server: import('./ssh').SshConnection; remoteCwd: string }
   viewport: Viewport
   nodes: CanvasNodeState[]
+  /** Persisted child canvases owned by this project. Root nodes remain in `nodes`; child records
+   * carry their own membership and are saved atomically with the project document. */
+  childCanvases?: ProjectCanvasState[]
   /** Default managed Claude account for new Claude/chat nodes in this project. */
   defaultAccountId?: string
   /** Permission mode for new Claude TERMINAL (CLI) sessions in this project. SDK chat nodes are
@@ -890,6 +905,18 @@ export interface Project {
    * peer's disk, so it must never land in this client's workspace.json.
    */
   remote?: boolean
+}
+
+export type ProjectCanvasScope = 'multiverse' | 'aws-universe'
+export interface ProjectCanvasState {
+  id: string
+  scope: ProjectCanvasScope
+  parentCanvasId: string
+  depth: number
+  title: string
+  order: number
+  viewport?: Viewport
+  nodeIds: string[]
 }
 
 /** The full workspace written to / read from disk. */

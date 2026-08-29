@@ -57,6 +57,14 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Unified Node Catalog and universe Shops** — the shared typed catalog, immutable creation
+      coordinator, scope/depth validator, fixed Shop renderer, documentation, and focused source
+      contracts are implemented in this lane. Persisted child canvases, atomic child-plus-Shop
+      creation, owner-scoped Catalog routing, and a real child view are now wired. The focused
+      source and runtime Chuts pass 16 tests, and the app contract Chut is green. Full factory-route
+      audit, built-artifact interaction, and capture evidence remain pending. Child state now
+      persists through project save/load, and Canvas filters and renders the active child collection.
+
 - [ ] **Desktop layout safety sweep** — viewport-bounded menus, flyouts, anchored popovers, dialogs,
       settings, onboarding, command palette, and documentation surfaces are repaired in
       `src/renderer/styles.clipping.css`, `src/renderer/ui/AnchoredPopover.tsx`, and

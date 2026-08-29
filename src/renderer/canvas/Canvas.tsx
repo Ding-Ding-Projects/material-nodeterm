@@ -92,6 +92,7 @@ import { StickyNode } from '../nodes/StickyNode'
 import { GroupNode, setWorktreeActionHandler, setWslActionHandler } from '../nodes/GroupNode'
 import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
+import ShopNode from '../nodes/ShopNode'
 import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
@@ -134,6 +135,11 @@ import {
   EDIT_TAB_APPEARANCE_ACTION
 } from '../lib/projectMenuActions'
 import { CommandPalette, type Command } from '../components/CommandPalette'
+import { NodeCatalogDialog } from '../components/NodeCatalogDialog'
+import { UniverseCanvasView } from '../components/UniverseCanvasView'
+import { NODE_CATALOG, nodeCatalogAvailability, type NodeCatalogEntry } from '@shared/node-catalog'
+import { NodeCreationCoordinator } from '../state/nodeCreationCoordinator'
+import { nodeCatalogShopProvider, registerUniverseShopCatalog, type ShopCreationResult } from '../../core/universe-shop'
 import {
   IconAgent,
   IconAnnotationArea,
@@ -1366,6 +1372,10 @@ export function Canvas() {
   // move-into-group action). `ids` is the selection being moved; `groups` is the eligible-target
   // list computed at click time (only frames addSelectionToGroup would actually change).
   const [groupPicker, setGroupPicker] = useState<{ ids: string[]; groups: GroupPickerOption[] } | null>(null)
+  const [nodeCatalog, setNodeCatalog] = useState<{ at?: { x: number; y: number }; groupId?: string; universeCanvasId?: string; universeScope?: 'multiverse' | 'aws-universe'; universeDepth?: number } | null>(null)
+  const [docsInitialPath, setDocsInitialPath] = useState<string | undefined>(undefined)
+  const [activeUniverseCanvasId, setActiveUniverseCanvasId] = useState<string | null>(null)
+  const nodeCreationCoordinatorRef = useRef(new NodeCreationCoordinator())
   // Drives WorktreeDialog. `groupId` null = create the group frame around the new worktree;
   // set = bind an existing group (the group context menu). `at` is the pane cursor, if any.
   const [worktreeDialog, setWorktreeDialog] = useState<{
@@ -1656,6 +1666,7 @@ export function Canvas() {
   }, [getViewport, setViewport])
 
   const activeProjectId = useProjects((s) => s.activeProjectId)
+  const activeProjectRecord = useProjects((s) => s.projects.find((project) => project.id === s.activeProjectId))
   const activeProjectSettingsOverrides = useProjects(
     (s) => s.projects.find((p) => p.id === s.activeProjectId)?.settingsOverrides
   )
@@ -1717,6 +1728,11 @@ export function Canvas() {
     [terminalProfiles, profileText]
   )
   nodesRef.current = nodes
+  useEffect(() => setActiveUniverseCanvasId(null), [activeProjectId])
+  useEffect(() => {
+    // Hydration records persisted event ids without minting new creation events.
+    nodeCreationCoordinatorRef.current.remember(nodes)
+  }, [nodes])
   useEffect(() => {
     const onPrepareAgentFolder = (event: Event): void => {
       const nodeId = (event as CustomEvent<{ nodeId?: unknown }>).detail?.nodeId
@@ -1793,6 +1809,7 @@ export function Canvas() {
       group: withNodeBoundary(GroupNode),
       annotation: withNodeBoundary(AnnotationNode),
       authenticator: withNodeBoundary(AuthenticatorNode),
+      shop: withNodeBoundary(ShopNode),
       editor: withNodeBoundary(LazyEditorNode),
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
@@ -2097,7 +2114,13 @@ export function Canvas() {
       )
     : null
   const allNodes = useMemo(() => {
-    const base = ephemeralNodes.length ? [...nodes, ...ephemeralNodes] : nodes
+    const childIds = activeUniverseCanvasId
+      ? new Set(activeProjectRecord?.childCanvases?.find((canvas) => canvas.id === activeUniverseCanvasId)?.nodeIds ?? [])
+      : null
+    const scopedNodes = childIds
+      ? nodes.filter((node) => childIds.has(node.id))
+      : nodes.filter((node) => !node.data.universeCanvasId)
+    const base = ephemeralNodes.length ? [...scopedNodes, ...ephemeralNodes] : scopedNodes
     if (!adhdFocusId) return base
     // `as typeof n` keeps each element's own type: `base` is a union of canvas nodes and the
     // ephemeral subagent/loop nodes, and a bare object literal here widens it until <ReactFlow>
@@ -2114,7 +2137,7 @@ export function Canvas() {
             data: { ...n.data, adhdDimmed: true }
           } as typeof n)
     )
-  }, [nodes, ephemeralNodes, adhdFocusId])
+  }, [nodes, ephemeralNodes, adhdFocusId, activeProjectRecord, activeUniverseCanvasId])
 
   // Context-link edges, statically styled (no per-message activity in the pull model).
   const accent = settings.accent
@@ -3342,6 +3365,10 @@ export function Canvas() {
           else if (c.type === 'dimensions' && c.dimensions && c.resizing) store.setSize(c.id, c.dimensions)
           return false
         }
+        if ('id' in c) {
+          const target = nodesRef.current.find((node) => node.id === c.id)
+          if (target && (target.type === 'shop' || target.data.nonDeletable === true) && (c.type === 'position' || c.type === 'dimensions' || c.type === 'remove')) return false
+        }
         return true
       })
       onNodesChange(managed)
@@ -3976,7 +4003,7 @@ export function Canvas() {
           project?.ssh,
           terminalCreationOptionsFor(activeProjectId, effectiveProfileId)
         )
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        return nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node).nodes
       })
       markDirty()
     },
@@ -4570,7 +4597,7 @@ export function Canvas() {
     (kind: ServiceNodeKind, center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createServiceNode(kind, ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        return nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node).nodes
       })
       markDirty()
     },
@@ -4581,7 +4608,7 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createStickyNode(ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        return nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node).nodes
       })
       markDirty()
     },
@@ -4593,7 +4620,7 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createAuthenticatorNode(ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        return nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node).nodes
       })
       markDirty()
     },
@@ -4604,7 +4631,7 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createNativeLoopNode(ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        return nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node).nodes
       })
       markDirty()
     },
@@ -4617,7 +4644,7 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createNsisNode(ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        return nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node).nodes
       })
       markDirty()
     },
@@ -4634,7 +4661,7 @@ export function Canvas() {
           record,
           ...ns.filter((n) => n.type === 'dino').map((n) => (n.data.highScore as number) ?? 0)
         )
-        return [...ns, createDinoNode(ns.length, center ?? viewCenter(), liveBest)]
+        return nodeCreationCoordinatorRef.current.appendNode(ns, createDinoNode(ns.length, center ?? viewCenter(), liveBest)).nodes
       })
       markDirty()
     },
@@ -4646,7 +4673,7 @@ export function Canvas() {
       const input = await promptDialog({ message: 'Open web view — enter a URL:' })
       const url = input?.trim()
       if (!url) return
-      setNodes((ns) => [...ns, createWebNode(ns.length, { url }, center ?? emptyNodePos())])
+      setNodes((ns) => nodeCreationCoordinatorRef.current.appendNode(ns, createWebNode(ns.length, { url }, center ?? emptyNodePos())).nodes)
       markDirty()
     },
     [setNodes, markDirty, emptyNodePos]
@@ -4657,7 +4684,7 @@ export function Canvas() {
       // Open a blank browser node — the user types the URL in the node's own address bar (like a
       // browser's new tab). We deliberately don't use window.prompt: Electron doesn't support it
       // (it throws "prompt() is and will not be supported"), and a browser node doesn't need it.
-      setNodes((ns) => [...ns, createBrowserNode(ns.length, '', center ?? emptyNodePos())])
+      setNodes((ns) => nodeCreationCoordinatorRef.current.appendNode(ns, createBrowserNode(ns.length, '', center ?? emptyNodePos())).nodes)
       markDirty()
     },
     [setNodes, markDirty, emptyNodePos]
@@ -4693,19 +4720,10 @@ export function Canvas() {
         if (!project) return // defensive: mismatched/disconnected remote login — never spawn locally
         ssh = project.ssh
       }
-      setNodes((ns) => [
-        ...ns.map((n) => ({ ...n, selected: false })),
-        {
-          ...createAccountLoginNode(
-            accountId,
-            ns.length,
-            viewCenter(),
-            ssh,
-            terminalCreationOptionsFor(useProjects.getState().activeProjectId)
-          ),
-          selected: true
-        }
-      ])
+      setNodes((ns) => nodeCreationCoordinatorRef.current.appendNode(
+        ns.map((n) => ({ ...n, selected: false })),
+        { ...createAccountLoginNode(accountId, ns.length, viewCenter(), ssh, terminalCreationOptionsFor(useProjects.getState().activeProjectId)), selected: true }
+      ).nodes)
       markDirty()
       // The event fires from the full-screen Settings overlay — close it so the user actually
       // sees the login node (it spawns at viewCenter, selected). The defensive return above
@@ -4766,13 +4784,10 @@ export function Canvas() {
           }
         else return
       }
-      setNodes((ns) => [
-        ...ns.map((n) => ({ ...n, selected: false })),
-        {
-          ...createCodexAccountLoginNode(accountId, ns.length, viewCenter(), ssh),
-          selected: true
-        }
-      ])
+      setNodes((ns) => nodeCreationCoordinatorRef.current.appendNode(
+        ns.map((n) => ({ ...n, selected: false })),
+        { ...createCodexAccountLoginNode(accountId, ns.length, viewCenter(), ssh), selected: true }
+      ).nodes)
       markDirty()
       setSettingsOpen(false)
     }
@@ -4823,7 +4838,7 @@ export function Canvas() {
           activeAgentLaunchPlan('canvas-new-agent', agentId),
           terminalCreationOptionsFor(activeProjectId)
         )
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        return nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node).nodes
       })
       markDirty()
     },
@@ -5490,6 +5505,11 @@ export function Canvas() {
       const disclosedTargets = readCurrentTarget()
       if (!disclosedTargets || disclosedTargets.length !== requested.size) {
         options.onStale?.()
+        return false
+      }
+      if (disclosedTargets.some((target) => target.type === 'shop')) {
+        options.onRejected?.()
+        setNotice({ kind: 'error', text: 'The Shop is permanent for its universe and cannot be deleted.' })
         return false
       }
       const titles = options.titles ?? disclosedTargets.map((target) => target.title || target.id)
@@ -6653,6 +6673,10 @@ export function Canvas() {
       setNodes((ns) => {
         const sources = ns.filter((n) => set.has(n.id))
         if (!sources.length) return ns
+        if (sources.some((n) => n.type === 'shop' || n.data.nonDeletable === true)) {
+          setNotice({ kind: 'error', text: 'The Shop is the one fixed catalog for its universe and cannot be duplicated.' })
+          return ns
+        }
         const all = ns as FocusableNode[]
         const abs = sources.map((n) => absolutePosition(n as FocusableNode, all))
         const dx = at ? at.x - Math.min(...abs.map((p) => p.x)) : DUPLICATE_NUDGE
@@ -6664,7 +6688,7 @@ export function Canvas() {
       })
       markDirty()
     },
-    [setNodes, markDirty, placeSpawned]
+    [setNodes, markDirty, placeSpawned, setNotice]
   )
 
   // Reload a terminal in place: bump `respawnNonce`, which re-runs TerminalNode's lifecycle
@@ -8018,6 +8042,10 @@ export function Canvas() {
     // Destructive/recovery rows (Delete, Restart agent, Branch/Transfer) are not hideable at all:
     // `isHidden` only answers for ids in its own inventory.
     const hidden = useSettings.getState().settings.hiddenNodeMenuItems
+    const protectedSelection = ids.some((id) => {
+      const node = nodesRef.current.find((candidate) => candidate.id === id)
+      return node?.type === 'shop' || node?.data.nonDeletable === true
+    })
     return tidySeparators<MenuItem>([
       { type: 'label', label: ids.length > 1 ? `${ids.length} nodes` : '1 node' },
       ...((): MenuItem[] => {
@@ -8035,6 +8063,7 @@ export function Canvas() {
         const rootNodes = selectedNodes.filter((node) => rootSet.has(node.id))
         const groupable =
           rootNodes.length > 0 &&
+          !rootNodes.some((node) => node.type === 'shop' || node.data.nonDeletable === true) &&
           (ids.length === 1 || rootNodes.length > 1) &&
           new Set(rootNodes.map((node) => node.parentId ?? null)).size === 1
         // EVERY frame on the canvas this selection could actually be ADDED to — not only frames
@@ -8098,7 +8127,7 @@ export function Canvas() {
       ...(isHidden('duplicate', hidden)
         ? []
         : ([
-            { label: 'Duplicate', icon: <IconDuplicate />, onClick: () => duplicateNodes(ids, at) }
+            { label: 'Duplicate', icon: <IconDuplicate />, disabled: protectedSelection, hint: protectedSelection ? 'The Shop is permanent and cannot be duplicated.' : undefined, onClick: () => duplicateNodes(ids, at) }
           ] as MenuItem[])),
       // "Snap to zone" (issue #394 v1, ported): a single non-group, non-collapsed node only —
       // a multi-node selection or a group frame has no single rect to snap.
@@ -8712,6 +8741,7 @@ export function Canvas() {
       // node menu, so hiding it in Settings hides it everywhere a right-click can reach it.
       return tidySeparators<MenuItem>([
         { type: 'label', label: 'Group' },
+        { label: 'Node Catalog', icon: <IconGrid />, onClick: () => setNodeCatalog({ at, groupId }) },
         ...(canAddSelection && !groupHidden
           ? [
               {
@@ -8871,6 +8901,7 @@ export function Canvas() {
         // tidySeparators still wraps the result — a no-op while there are no bare rules here, but
         // cheap insurance if a future edit reintroduces one.
         items: tidySeparators<MenuItem>([
+          { label: 'Node Catalog', icon: <IconGrid />, onClick: () => setNodeCatalog({ at }) },
           // The terminal rows are deliberately NOT a group. "New terminal" is the action this menu
           // is opened for and owns ⌘T, so it must stay one click away — and "New terminal with
           // profile…" is itself a submenu, which cannot nest inside another. What was left of a
@@ -9333,6 +9364,91 @@ export function Canvas() {
         : NO_KANBAN_SESSIONS,
     [nodes, kanbanOpen]
   )
+
+  /** One typed executor for catalog rows. Legacy factories may remain for compatibility, but a
+   * catalog-created node crosses this immutable event and bounded placement boundary exactly once. */
+  const createCatalogNode = useCallback(
+    (entry: NodeCatalogEntry, creationEventId: string, options?: { terminalProfileId?: string; at?: { x: number; y: number }; groupId?: string; universeCanvasId?: string; universeScope?: 'multiverse' | 'aws-universe'; universeDepth?: number }): ShopCreationResult => {
+      const project = useProjects.getState().getProject(activeProjectId)
+      const availability = nodeCatalogAvailability(entry, {
+        sessionSource,
+        hasProjectFolder: !!(project?.cwd || project?.ssh?.remoteCwd),
+        isSshProject: !!project?.ssh,
+        hasRemoteConnection: useSshServers.getState().servers.length > 0,
+        supportsWindowsTerminalProfiles: offersTerminalProfiles,
+        universeScope: options?.universeScope ?? 'root',
+        universeId: options?.universeCanvasId,
+        universeDepth: options?.universeDepth ?? 0,
+        hasShopNode: options?.universeScope !== undefined
+      })
+      if (!availability.available) return { status: 'refused', creationEventId, reason: availability.reason }
+      const center = options?.at ?? emptyNodePos() ?? viewCenter() ?? { x: 120, y: 120 }
+      let result: ShopCreationResult = { status: 'refused', creationEventId, reason: 'Node creation did not run.' }
+      setNodes((existing) => {
+        const factory = (candidate: NodeCatalogEntry, index: number, at: { x: number; y: number }): CanvasNode | null => {
+          if (candidate.id === 'terminal') return createTerminalNode(index, project?.cwd, at, undefined, project?.ssh, terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId))
+          if (candidate.id.startsWith('agent:')) {
+            const agentId = candidate.id.slice(6) as AgentId
+            const settings = useSettings.getState().settings
+            const codexAccounts = codexAccountsForCanvas(settings.codexAccounts, project)
+            const account = agentId === 'claude'
+              ? resolveNewNodeAccount(undefined, project, settings.claudeAccounts)
+              : agentId === 'codex' && codexAccounts.length > 0
+                ? codexAccounts[0].id
+                : undefined
+            const accountSsh = agentId === 'codex' ? sshForCodexAccount(account) : undefined
+            const ssh = accountSsh ?? project?.ssh
+            return createAgentNode(agentId, index, ssh?.remoteCwd ?? project?.cwd, at, undefined, ssh, account, activeAgentLaunchPlan('catalog-new-agent', agentId), terminalCreationOptionsFor(activeProjectId))
+          }
+          if (candidate.id === 'sticky') return createStickyNode(index, at)
+          if (candidate.id === 'group') return createGroupNode(at, undefined, index)
+          if (candidate.id === 'browser') return createBrowserNode(index, '', at)
+          if (candidate.id === 'web') return createWebNode(index, { url: '' }, at)
+          if (candidate.id === 'authenticator') return createAuthenticatorNode(index, at)
+          if (candidate.id === 'dino') return createDinoNode(index, at)
+          if (candidate.id === 'loop') return createNativeLoopNode(index, at)
+          if (candidate.id === 'nsis') return createNsisNode(index, at)
+          if (candidate.id.startsWith('service:')) return createServiceNode(candidate.nodeKind as ServiceNodeKind, index, at)
+          return null
+        }
+        const appended = nodeCreationCoordinatorRef.current.append(existing, { entry, creationEventId, center, groupId: options?.groupId, projectId: activeProjectId ?? undefined, universeCanvasId: options?.universeCanvasId, universeScope: options?.universeScope, universeDepth: options?.universeDepth }, factory, parentInto)
+        result = { status: appended.result.error ? 'refused' : appended.result.duplicate ? 'duplicate' : appended.result.node ? 'created' : 'refused', creationEventId, nodeId: appended.result.node?.id, reason: appended.result.error }
+        if (appended.result.node && options?.universeCanvasId) useProjects.getState().appendUniverseChildNode(activeProjectId ?? '', options.universeCanvasId, appended.result.node.id)
+        if (appended.result.node && !appended.result.duplicate) markDirty()
+        return appended.nodes
+      })
+      return result
+    },
+    [activeProjectId, emptyNodePos, markDirty, offersTerminalProfiles, parentInto, sessionSource, setNodes, terminalCreationOptionsFor, viewCenter]
+  )
+  const createCatalogChild = useCallback((entry: NodeCatalogEntry, creationEventId: string) => {
+    const projectId = activeProjectId
+    if (!projectId) return
+    const scope = entry.id === 'aws-universe' ? 'aws-universe' as const : 'multiverse' as const
+    const id = `${scope}-${creationEventId.slice(-12)}`
+    const result = useProjects.getState().createUniverseChild(projectId, {
+      id, scope, parentCanvasId: 'root', depth: 1, title: entry.label, order: (useProjects.getState().getProject(projectId)?.childCanvases?.length ?? 0) + 1
+    }, creationEventId)
+    if (!result.refused && result.canvasId) {
+      setNodes(nodeStatesToFlow(useProjects.getState().getProject(projectId)?.nodes ?? []))
+      markDirty()
+      void writeDisk()
+      setActiveUniverseCanvasId(result.canvasId)
+    }
+  }, [activeProjectId, markDirty, setNodes, writeDisk])
+  useEffect(() => {
+    registerUniverseShopCatalog(nodeCatalogShopProvider((entry, context) => {
+      const catalogEntry = NODE_CATALOG.find((candidate) => candidate.id === entry.id)
+      if (catalogEntry) return createCatalogNode(catalogEntry, context.creationEventId, {
+        universeCanvasId: context.canvasId,
+        universeScope: context.scope,
+        universeDepth: context.depth,
+        at: context.placement
+      })
+      return { status: 'refused', creationEventId: context.creationEventId, reason: 'Catalog entry no longer exists.' }
+    }), activeProjectId ?? 'default')
+    return () => registerUniverseShopCatalog(null, activeProjectId ?? 'default')
+  }, [activeProjectId, createCatalogNode])
 
   // Create a node from the board's per-column "+ New" menu: it lands on the canvas (view
   // center) and, for a real column, is assigned there. The assignment is written directly —
@@ -12950,6 +13066,13 @@ export function Canvas() {
     )
     const cmds: Command[] = [
       {
+        id: 'node-catalog',
+        label: 'Node Catalog',
+        section: 'Create',
+        icon: <IconGrid />,
+        run: () => setNodeCatalog({ at: viewCenter() ?? undefined })
+      },
+      {
         id: 'new-term',
         label: 'New terminal',
         section: 'Create',
@@ -13405,6 +13528,7 @@ export function Canvas() {
     openSettingsTo,
     profileText,
     toggleFocusMode,
+    viewCenter,
     // Not read directly in this closure (the body reads `useSettings.getState().settings` fresh
     // on every call) — a dependency purely so a settings change while the palette is open
     // rebuilds the list and the inline toggle rows' `checked` stays live rather than frozen at
@@ -13424,6 +13548,11 @@ export function Canvas() {
 
   return (
     <div className="canvas-root">
+      {activeUniverseCanvasId && (() => {
+        const project = useProjects.getState().getProject(activeProjectId)
+        const child = project?.childCanvases?.find((canvas) => canvas.id === activeUniverseCanvasId)
+        return child ? <UniverseCanvasView canvas={child} nodes={project?.nodes ?? []} onExit={() => setActiveUniverseCanvasId(null)} onOpenCatalog={() => setNodeCatalog({ at: { x: 80, y: 80 }, groupId: undefined, universeCanvasId: child.id, universeScope: child.scope, universeDepth: child.depth })} /> : null
+      })()}
       <TopAppBar>
         <ProjectSwitcher
           onSwitch={switchProject}
@@ -13938,6 +14067,7 @@ export function Canvas() {
               void enterKidsModeFromRail()
             }}
             onAddTerminal={defaultTerminalCreationHandler(addTerminal)}
+            onOpenCatalog={() => setNodeCatalog({ at: viewCenter() ?? undefined })}
             offersTerminalProfiles={offersTerminalProfiles}
             terminalProfileChoices={terminalProfileMenuChoices}
             terminalProfileEmptyState={{
@@ -14424,9 +14554,32 @@ export function Canvas() {
       )}
       {docsOpen && (
         <div className="md3-docs-host">
-          <DocsBrowser />
+          <DocsBrowser initialPath={docsInitialPath} />
         </div>
       )}
+      <NodeCatalogDialog
+        open={nodeCatalog !== null}
+        onClose={() => setNodeCatalog(null)}
+        context={{
+          sessionSource,
+          hasProjectFolder: !!(useProjects.getState().getProject(activeProjectId)?.cwd || useProjects.getState().getProject(activeProjectId)?.ssh?.remoteCwd),
+          isSshProject: !!useProjects.getState().getProject(activeProjectId)?.ssh,
+          hasRemoteConnection: useSshServers.getState().servers.length > 0,
+          supportsWindowsTerminalProfiles: offersTerminalProfiles,
+          universeScope: nodeCatalog?.universeScope ?? 'root',
+          universeId: nodeCatalog?.universeCanvasId,
+          universeDepth: nodeCatalog?.universeDepth ?? 0,
+          hasShopNode: nodeCatalog?.universeScope !== undefined
+        }}
+        terminalProfileChoices={terminalProfileMenuChoices}
+        onCreate={(entry, creationEventId, options) => createCatalogNode(entry, creationEventId, { ...options, at: nodeCatalog?.at, groupId: nodeCatalog?.groupId, universeCanvasId: nodeCatalog?.universeCanvasId, universeScope: nodeCatalog?.universeScope, universeDepth: nodeCatalog?.universeDepth })}
+        onCreateChild={createCatalogChild}
+        onOpenDocumentation={(path) => {
+          setDocsInitialPath(path)
+          setDocsOpen(true)
+          setNodeCatalog(null)
+        }}
+      />
       {statusOpen && (
         <div className="md3-status-host">
           <StatusSurface />
