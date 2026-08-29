@@ -335,7 +335,12 @@ root.addEventListener('input', (e) => {
 })
 root.addEventListener('change', (e) => {
   const t = e.target
-  if (t.dataset && t.dataset.bindSelect) runFeatureBind(t.dataset.bindSelect, t.dataset.id, t.value)
+  if (t.dataset && t.dataset.bindFile) {
+    const file = t.files && t.files[0]
+    if (!file) return
+    if (file.size > 64 * 1024) { runFeatureBind('vocab-json', t.dataset.id, '{"invalid":"oversized"}'); return }
+    file.text().then((value) => runFeatureBind(t.dataset.bindFile, t.dataset.id, value)).catch(() => runFeatureBind(t.dataset.bindFile, t.dataset.id, '{"invalid":"unreadable"}'))
+  } else if (t.dataset && t.dataset.bindSelect) runFeatureBind(t.dataset.bindSelect, t.dataset.id, t.value)
   else if (t.dataset && t.dataset.bindTextChange) runFeatureBind(t.dataset.bindTextChange, t.dataset.id, t.value)
   else if (t.dataset && t.dataset.bindRangeChange) runFeatureBind(t.dataset.bindRangeChange, t.dataset.id, t.value)
   else if (t.dataset && t.dataset.bind) store.setState({ [t.dataset.bind]: t.value }, { persist: t.dataset.bind === 'vocab' || t.dataset.bind === 'nick' })

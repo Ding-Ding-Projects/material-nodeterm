@@ -46,7 +46,12 @@ export function applyReplacements(text, vocabText) {
   const raw = String(vocabText || '').trim()
   if (!raw) return text
   let out = String(text)
-  raw.split(/[,\n]/).forEach((pair) => {
+  let pairs = raw.split(/[,\n]/)
+  try {
+    const json = JSON.parse(raw)
+    if (json && json.version === 1 && json.entries && !Array.isArray(json.entries)) pairs = Object.entries(json.entries).map(([from, to]) => `${from}=${to}`)
+  } catch (_err) { /* legacy text route */ }
+  pairs.forEach((pair) => {
     const bits = pair.split('=')
     if (bits.length !== 2) return
     const from = bits[0].trim()

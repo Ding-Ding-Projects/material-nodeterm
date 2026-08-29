@@ -373,6 +373,8 @@ export type NodeKind =
   | 'gitlab'
   | 'homeassistant'
   | 'freepbx'
+  /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
+  | 'linux-vm'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -507,6 +509,10 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** Linux ISO VM settings stored in the shared project projection. */
+  virtualMachineConfig?: import('./virtual-machine').VirtualMachineConfig
+  /** Linux ISO/disk selections stored only in the machine-local execution overlay. */
+  virtualMachineLocalPaths?: import('./virtual-machine').VirtualMachineLocalPaths
   /**
    * service-kinds only, and MACHINE-LOCAL: where this node reaches its service. Stripped from
    * every project file we write and from every node arriving over the wire, then restored from the
@@ -3800,6 +3806,8 @@ export interface NodeTerminalApi {
   ollama: import('./ollama').OllamaApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** Local Linux ISO VM lifecycle — docs/features/integrations/linux-iso-vm.md. */
+  virtualMachine: import('./virtual-machine').VirtualMachineApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

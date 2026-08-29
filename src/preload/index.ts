@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
 
@@ -72,6 +73,7 @@ const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
+const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
 const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC.nodeDependencyState)
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
@@ -962,6 +964,21 @@ const api: NodeTerminalApi = {
     restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
+  },
+  virtualMachine: {
+    tools: () => ipcRenderer.invoke(IPC.virtualMachineTools),
+    status: (id) => ipcRenderer.invoke(IPC.virtualMachineStatus, id),
+    configure: (id, config, local) => ipcRenderer.invoke(IPC.virtualMachineConfigure, id, config, local),
+    createDisk: (id, folder) => ipcRenderer.invoke(IPC.virtualMachineCreateDisk, id, folder),
+    start: (id) => ipcRenderer.invoke(IPC.virtualMachineStart, id),
+    cancel: (id) => ipcRenderer.invoke(IPC.virtualMachineCancel, id),
+    stop: (id) => ipcRenderer.invoke(IPC.virtualMachineStop, id),
+    remove: (id) => ipcRenderer.invoke(IPC.virtualMachineRemove, id),
+    snapshot: (id, name) => ipcRenderer.invoke(IPC.virtualMachineSnapshot, id, name),
+    restore: (id, name) => ipcRenderer.invoke(IPC.virtualMachineRestore, id, name),
+    openDisplay: (id) => ipcRenderer.invoke(IPC.virtualMachineOpenDisplay, id),
+    reset: (id) => ipcRenderer.invoke(IPC.virtualMachineReset, id),
+    onEvent: (listener) => subscribeVirtualMachineEvent(listener)
   }
 }
 

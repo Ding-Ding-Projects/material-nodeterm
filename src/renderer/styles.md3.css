@@ -11446,3 +11446,26 @@ button.term-node__title-text:focus-visible {
 .icon-menu__reset-btn {
   align-self: flex-start;
 }
+
+/* Linux ISO VM node: guided controls, bounded content, and explicit unavailable-display state. */
+.virtual-machine-node { display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; color: var(--md-on-surface); background: var(--md-surface-container); border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-medium); }
+.virtual-machine-node.selected { outline: 2px solid var(--md-primary); outline-offset: 1px; }
+.virtual-machine-node__body { display: flex; flex: 1; flex-direction: column; gap: 9px; padding: 12px; overflow: auto; }
+.virtual-machine-node__note, .virtual-machine-node__hint, .virtual-machine-node__status, .virtual-machine-node__display { margin: 0; font-size: 11px; line-height: 1.4; }
+.virtual-machine-node__note, .virtual-machine-node__hint { color: var(--md-on-surface-variant); }
+.virtual-machine-node__field { display: flex; flex-direction: column; gap: 4px; color: var(--md-on-surface-variant, #9a9a9e); font-size: 11px; }
+.virtual-machine-node__path { display: flex; gap: 6px; align-items: stretch; }
+.virtual-machine-node__path button, .virtual-machine-node__actions button, .virtual-machine-node__snapshot button { min-height: 44px; padding: 0 10px; color: var(--md-on-primary-container); background: var(--md-primary-container); border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-small); cursor: pointer; }
+.virtual-machine-node__path button:disabled, .virtual-machine-node__actions button:disabled, .virtual-machine-node__snapshot button:disabled { opacity: .5; cursor: not-allowed; }
+.virtual-machine-node__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.virtual-machine-node__grid label { display: flex; flex-direction: column; gap: 4px; color: var(--md-on-surface-variant); font-size: 11px; }
+.virtual-machine-node__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--md-on-surface); font-size: 12px; }
+.virtual-machine-node__status { color: var(--md-primary); }
+.virtual-machine-node__status.is-error { color: var(--md-error); }
+.virtual-machine-node__progress { position: relative; min-height: 24px; overflow: hidden; display: flex; align-items: center; justify-content: center; border-radius: var(--md-shape-full); background: var(--md-surface-container-highest); color: var(--md-on-surface); }
+.virtual-machine-node__progress span { position: absolute; inset: 0 auto 0 0; background: var(--md-primary); }
+.virtual-machine-node__progress strong { position: relative; z-index: 1; font-size: 11px; }
+.virtual-machine-node__actions, .virtual-machine-node__snapshot { display: flex; gap: 6px; align-items: center; }
+.virtual-machine-node__snapshot .mdx-input { flex: 1; }
+.virtual-machine-node :is(button, input, select):focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+@media (max-width: 560px) { .virtual-machine-node__grid { grid-template-columns: 1fr; } .virtual-machine-node__actions, .virtual-machine-node__snapshot { flex-wrap: wrap; } }

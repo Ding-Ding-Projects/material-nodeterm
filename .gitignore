@@ -20,6 +20,11 @@ build/icon.png
 # and copied into the app by electron-builder's mac extraResources. Never committed.
 /resources/bin/
 
+# QEMU is fetched and verified into package resources at build time; binaries and generated
+# per-file proof stay out of source history while the README and manifest contract remain tracked.
+/resources/qemu/*.exe
+/resources/qemu/manifest.json
+
 .playwright-mcp/
 
 # concurrent-session worktrees / local agent state

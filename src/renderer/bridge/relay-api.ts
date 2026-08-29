@@ -116,6 +116,9 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     context: files.context,
     githubIssues: github.githubIssues,
     githubControl: local.githubControl,
+    // A relay tab must never launch a VM on the viewer's machine. VM paths and process state are
+    // machine-local; until a scoped relay route exists, keep this visibly unavailable.
+    virtualMachine: stub.virtualMachine,
     ...buildAgentApi(client), // onAgentStatus / onSubagentActivity — the host's agent hooks
     ...buildCanvasApi(client), // canvas sync against the host's reflector
     ...buildPresenceApi(client), // the host's presence hub

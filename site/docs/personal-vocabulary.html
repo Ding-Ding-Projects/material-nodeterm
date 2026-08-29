@@ -37,7 +37,7 @@
       <p>The upload control is visible even before a file exists, with distinct no-file, loaded, invalid, and cleared states. A file is validated <strong>completely</strong> before anything is applied — an invalid file never applies partially. Replacements are applied only at the user-facing prose text boundary (this site's central copy-rendering function), never to code, URLs, identifiers, or paths.</p>
 
       <h2>Configuration</h2>
-      <p>The schema is one version, bounded on every axis: a file-size cap, a maximum entry count, bounded key and value lengths, string-only values, and rejection of unsafe keys like <code>__proto__</code>. See the exact numbers in <code>site/app/shared/vocabulary-state.js</code>.</p>
+      <p>The upload uses one JSON schema version with bounded file size, entry count, key and value lengths, string-only replacement fields, and rejection of unsafe keys like <code>__proto__</code>. The legacy text box remains for compatibility, while the visible JSON file picker validates the complete payload before applying it. See the exact limits in <code>site/app/shared/vocabulary-state.js</code>.</p>
 
       <h2>Failure modes</h2>
       <p>A rejected file leaves the previous, still-valid vocabulary (if any) untouched and active — a bad upload never silently wipes out a working one.</p>

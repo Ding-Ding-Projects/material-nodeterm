@@ -377,6 +377,7 @@ function renderListRoom(store, room) {
 // -------------------------------------------------------------- settings ----
 function ctlHtml(cardId, ctl) {
   const label = `<label>${esc(ctl.label)}</label>`
+  if (ctl.isFile) return `<div class="ctl-row">${label}<input type="file" accept="${attr(ctl.accept || 'application/json,.json')}" data-bind-file="${attr(ctl.action)}" data-id="${attr(cardId)}" data-focus-id="ctl-${attr(cardId)}-${attr(ctl.action)}" aria-label="${attr(ctl.label)}" /></div>`
   if (ctl.isSelect) {
     return `<div class="ctl-row">${label}<select data-bind-select="${attr(ctl.action)}" data-id="${attr(cardId)}" aria-label="${attr(ctl.label)}">${(ctl.options || []).map((o) => `<option value="${attr(o.id)}" ${o.id === ctl.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></div>`
   }

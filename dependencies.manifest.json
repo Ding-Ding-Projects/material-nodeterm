@@ -101,5 +101,21 @@
         "libraryArchitectures": ["x86", "x64", "arm64"]
       }
     }
+  },
+  "qemu": {
+    "version": "10.1.0",
+    "platform": "windows-x64",
+    "source": "https://qemu.weilnetz.de/w64/2025/qemu-w64-setup-20250826.exe",
+    "checksumSource": "https://qemu.weilnetz.de/w64/2025/qemu-w64-setup-20250826.sha512",
+    "sha512": "5e6b88318ab1233e6d9cea187f657a8d69c5007fbaaee18c57383abbadf080c2731ccdcfe5c12b021b344b285b4bf2d69f6c80124714a2ac7d5f6a46b7297ccc",
+    "sourceRevision": "qemu-10.1.0-w64-20250826",
+    "license": { "spdx": "GPL-2.0-or-later", "redistributable": true, "notice": "See resources/qemu/README.md and the QEMU source distribution notices." },
+    "notices": ["resources/qemu/README.md"],
+    "installerSizeDisclosure": "approximately 172 MiB, verify Content-Length before accepting",
+    "payload": [
+      { "path": "qemu/qemu-system-x86_64.exe", "required": true },
+      { "path": "qemu/qemu-img.exe", "required": true }
+    ],
+    "notes": "The installer is downloaded only by the release dependency bootstrap, verified against the published SHA-512, and extracted into the package resources boundary. Runtime never falls back to PATH."
   }
 }

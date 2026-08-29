@@ -30,6 +30,7 @@ import { BUILTIN_AGENT_IDS, isPermissionMode } from './agents/config'
 import { sshExtraArgsEnableLocalExec } from './ssh'
 import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from './types'
 import type { NsisLocalPaths } from './nsis-form-types'
+import { normalizeVirtualMachineLocalPaths, safeVirtualMachinePath, type VirtualMachineLocalPaths } from './virtual-machine'
 
 /** Per-node exec values the LOCAL machine typed. Persisted only in the machine-local index. */
 export interface LocalNodeExec {
@@ -66,6 +67,8 @@ export interface LocalNodeExec {
    * person's disk paths appearing (or worse, being read) in everybody else's checkout.
    */
   nsisLocalPaths?: NsisLocalPaths
+  /** Linux ISO/disk selections, kept out of git-shared project files. */
+  virtualMachineLocalPaths?: VirtualMachineLocalPaths
 }
 
 /**
@@ -316,6 +319,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
     n.pendingLaunch === undefined &&
     n.serviceConnection === undefined &&
     n.nsisLocalPaths === undefined &&
+    n.virtualMachineLocalPaths === undefined &&
     n.ssh?.extraArgs === undefined &&
     n.ssh?.execTrusted === undefined
   )
@@ -326,6 +330,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   delete out.pendingLaunch
   delete out.serviceConnection
   delete out.nsisLocalPaths
+  delete out.virtualMachineLocalPaths
   if (out.ssh) {
     // `execTrusted` goes with the value it vouches for. It is a MACHINE-LOCAL provenance marker:
     // if it could ride a document or a wire frame, a hostile one would simply set it to true.
@@ -412,12 +417,14 @@ export function carryLocalNodeExec(
   const extraArgs = prev.ssh?.extraArgs
   const pendingLaunch = next.kind === 'terminal' ? clonePendingLaunch(prev.pendingLaunch) : undefined
   const nsisPaths = safeNsisLocalPaths(prev.nsisLocalPaths)
+  const vmPaths = normalizeVirtualMachineLocalPaths(prev.virtualMachineLocalPaths)
   if (
     prev.shell === undefined &&
     prev.terminalProfileId === undefined &&
     extraArgs === undefined &&
     pendingLaunch === undefined &&
-    nsisPaths === undefined
+    nsisPaths === undefined &&
+    Object.keys(vmPaths).length === 0
   )
     return next
   const out: CanvasNodeState = { ...next }
@@ -427,6 +434,7 @@ export function carryLocalNodeExec(
     out.ssh = { ...out.ssh, extraArgs, execTrusted: prev.ssh?.execTrusted }
   if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
   if (nsisPaths !== undefined) out.nsisLocalPaths = nsisPaths
+  if (Object.keys(vmPaths).length > 0) out.virtualMachineLocalPaths = vmPaths
   return out
 }
 
@@ -473,13 +481,16 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     if (conn) entry.serviceConnection = conn
     const nsisPaths = safeNsisLocalPaths(n.nsisLocalPaths)
     if (nsisPaths) entry.nsisLocalPaths = nsisPaths
+    const vmPaths = normalizeVirtualMachineLocalPaths(n.virtualMachineLocalPaths)
+    if (safeVirtualMachinePath(vmPaths.isoPath) || safeVirtualMachinePath(vmPaths.diskPath)) entry.virtualMachineLocalPaths = vmPaths
     if (
       entry.shell ||
       entry.terminalProfileId !== undefined ||
       entry.sshExtraArgs ||
       entry.pendingLaunch ||
       entry.serviceConnection ||
-      entry.nsisLocalPaths
+      entry.nsisLocalPaths ||
+      entry.virtualMachineLocalPaths
     )
       map[n.id] = entry
   }
@@ -518,6 +529,8 @@ export function applyLocalNodeExec(
     if (conn) out.serviceConnection = conn
     const nsisPaths = safeNsisLocalPaths(mine?.nsisLocalPaths)
     if (nsisPaths) out.nsisLocalPaths = nsisPaths
+    const vmPaths = normalizeVirtualMachineLocalPaths(mine?.virtualMachineLocalPaths)
+    if (safeVirtualMachinePath(vmPaths.isoPath) || safeVirtualMachinePath(vmPaths.diskPath)) out.virtualMachineLocalPaths = vmPaths
     return out
   })
 }
