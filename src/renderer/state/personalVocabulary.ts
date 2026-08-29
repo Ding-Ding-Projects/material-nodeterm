@@ -92,6 +92,15 @@ export const usePersonalVocabulary = create<PersonalVocabularyState>((set) => ({
       } catch {
         // A blocked storage area remains fail-closed in memory.
       }
+      // Hydration is a complete state transition. If a previously accepted cache was removed,
+      // corrupted, stale, or from an unsupported schema, retaining the live dictionary would let
+      // old replacements survive a failed restart validation. Clear the in-memory state at the
+      // same boundary as the invalid storage so the surface immediately returns to original text.
+      set({ status: 'no-file', entries: {}, entryCount: 0, loadedAt: null, lastError: null })
+      // Hydration is a complete state transition. If a previously accepted cache was removed,
+      // corrupted, stale, or from an unsupported schema, retaining the live dictionary would let
+      // old replacements survive a failed restart validation. Clear the in-memory state at the
+      // same boundary as the invalid storage so the surface immediately returns to original text.
     }
   },
 
