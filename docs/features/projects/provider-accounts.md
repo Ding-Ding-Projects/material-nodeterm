@@ -86,4 +86,3 @@ described as feature verification.
 - [Portable project schema 3](./portable-schema3.md)
 - [Password manager](./password-manager.md)
 - [Projects and tabs](./projects-and-tabs.md)
-
