@@ -27,6 +27,7 @@ import {
   flush as flushAgentStatusMirror
 } from '../../core/agent-status-mirror'
 import { IPC } from '../../shared/ipc'
+import { DurableOccurrenceService, FileDurableOccurrenceStore, durableOccurrenceFile, registerDurableOccurrenceHandlers } from '../../core/durable-occurrence-service'
 
 /** Register the Phase-3a handler surface (fs + git + commit) on the server platform.
  *  git.setActiveRemote is a local-only no-op here: it exists to arm SSH-project remote
@@ -44,7 +45,7 @@ export function registerCoreHandlers(
     settingsStore?: SettingsStore
     workspaceStore?: WorkspaceStore
   }
-): { gitService: GitService; minecraftServers: MinecraftServerManager } {
+): { gitService: GitService; minecraftServers: MinecraftServerManager; durableOccurrences: DurableOccurrenceService; durableOccurrencesReady: Promise<unknown> } {
   // Explorer downloads: mint a one-shot ticket over this (authenticated) channel; the transfer
   // itself is a plain HTTP GET the browser performs (src/server/download.ts). Statting here keeps
   // the URL honest about the name — a folder arrives as `<name>.tar.gz`.
@@ -78,6 +79,22 @@ export function registerCoreHandlers(
   // identical feature acting on the SERVER's own machine (docs/exports.md, docs/local-history.md).
   registerVsCodeHandlers(platform)
   const localHistoryStore = new LocalHistoryStore(platform.userDataDir)
+  const durableOccurrences = new DurableOccurrenceService({
+    store: new FileDurableOccurrenceStore(durableOccurrenceFile(platform.userDataDir)),
+    deliver: ({ occurrence }) => {
+      if (platform.clientIds().length === 0) return 'pending'
+      return 'delivered'
+    },
+    history: (label, snapshot) => localHistoryStore.record({
+      domain: 'durable_occurrences',
+      filename: 'durable-occurrences.json',
+      content: JSON.stringify(snapshot, null, 2),
+      label,
+      action: 'updated'
+    })
+  })
+  registerDurableOccurrenceHandlers(durableOccurrences)
+  const durableOccurrencesReady = durableOccurrences.start()
   deps.workspaceStore?.setProjectHistoryRecorder((project, content, change) =>
     localHistoryStore.record({
       domain: `project_${project.id}`,
@@ -185,5 +202,5 @@ export function registerCoreHandlers(
     buildMirrorUsage(usageService.snapshot(), deps.getSettings().claudeAccounts ?? [], Date.now())
   )
 
-  return { gitService, minecraftServers }
+  return { gitService, minecraftServers, durableOccurrences, durableOccurrencesReady }
 }

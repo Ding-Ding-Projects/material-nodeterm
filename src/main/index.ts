@@ -79,6 +79,7 @@ import { SettingsStore } from '../core/settings-store'
 import { SchoolModeStore } from '../core/school-mode'
 import { KidsModeStore } from '../core/kids-mode'
 import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
+import { DurableOccurrenceService, FileDurableOccurrenceStore, durableOccurrenceFile, registerDurableOccurrenceHandlers } from '../core/durable-occurrence-service'
 import { presenceHub } from '../core/presence/hub'
 import { SshStore } from './ssh-store'
 import { GitService } from '../core/git-service'
@@ -335,6 +336,7 @@ const settingsStore = new SettingsStore()
 const schoolModeStore = new SchoolModeStore()
 const kidsModeStore = new KidsModeStore()
 const scheduledSettingsRuntime = new ScheduledSettingsRuntime()
+let durableOccurrenceService: DurableOccurrenceService | null = null
 const sshStore = new SshStore()
 // One trusted catalog/resolver instance owns both public detection and private launch resolution.
 // The getter is evaluated at use time so a Settings save updates Custom availability immediately;
@@ -889,6 +891,22 @@ app.whenReady().then(async () => {
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
+  durableOccurrenceService = new DurableOccurrenceService({
+    store: new FileDurableOccurrenceStore(durableOccurrenceFile(app.getPath('userData'))),
+    deliver: ({ occurrence }) => {
+      if (corePlatform.clientIds().length === 0) return 'pending'
+      return 'delivered'
+    },
+    history: (label, snapshot) => localHistoryStore.record({
+      domain: 'durable_occurrences',
+      filename: 'durable-occurrences.json',
+      content: JSON.stringify(snapshot, null, 2),
+      label,
+      action: 'updated'
+    })
+  })
+  registerDurableOccurrenceHandlers(durableOccurrenceService)
+  await durableOccurrenceService.start()
   const projectArchives = new ProjectArchiveService(localHistoryStore)
   // The packaged extraResources directory in a production install, the repo root in dev (see
   // resolveServerDeploymentRoot's own doc comment; `build.extraResources` in package.json ships
@@ -3300,6 +3318,7 @@ app.on('before-quit', (e) => {
   minecraftServers?.requestGracefulStopAll()
   destroyNotchHud()
   const scheduledSettingsStop = scheduledSettingsRuntime.stop()
+  const durableOccurrenceStop = durableOccurrenceService?.stop() ?? Promise.resolve()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log honest.
   keepAwake?.dispose()
   workspaceWatcher.dispose()
@@ -3332,7 +3351,8 @@ app.on('before-quit', (e) => {
   const flush = Promise.allSettled([
     remoteWorkspaceIO.flush(),
     ptyManager.killAll(),
-    scheduledSettingsStop
+    scheduledSettingsStop,
+    durableOccurrenceStop
   ])
   void Promise.race([flush, new Promise((r) => setTimeout(r, 1500))])
     // Then let whisper go. A dictation still transcribing when Electron tears down the main

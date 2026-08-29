@@ -110,7 +110,22 @@ const RELAY_REQUEST_METHODS = new Set<string>([
   IPC.claudeCliCaps,
 
   // Needed only to derive host-side worktree defaults; explicitly remote in relay-api.ts.
-  IPC.appUserDataDir
+  IPC.appUserDataDir,
+  IPC.durableOccurrencesLoad,
+  IPC.durableOccurrencesSave,
+  IPC.durableOccurrencesReconcile,
+  IPC.durableOccurrencesClaim,
+  IPC.durableOccurrencesSnooze,
+  IPC.durableOccurrencesDismiss,
+  IPC.durableOccurrencesExport,
+  IPC.durableOccurrencesImport,
+  IPC.durableOccurrencesTimerTransition,
+  IPC.durableOccurrencesTimerLap,
+  IPC.durableOccurrencesTimerTick,
+  IPC.durableOccurrencesUpsertAlarm,
+  IPC.durableOccurrencesUpsertTimer,
+  IPC.durableOccurrencesRemoveSource,
+  IPC.durableOccurrencesAcknowledge
 ])
 
 const RELAY_CAST_METHODS = new Set<string>([
@@ -143,7 +158,8 @@ const RELAY_EVENT_CHANNELS = new Set<string>([
   IPC.presencePeer,
   // Peers need external project refreshes, but platform-electron scrubs the machine-local
   // execution overlay from the peer copy before this reviewed event leaves the host.
-  IPC.workspaceExternalChange
+  IPC.workspaceExternalChange,
+  IPC.durableOccurrencesChanged
 ])
 
 /** Session/project ids are suffixes in these subscription channels. Use the canonical builders to

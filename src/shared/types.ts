@@ -352,6 +352,8 @@ export type NodeKind =
   // persists a title and a colour and nothing else, because an entry id names a credential in
   // this machine's OS vault while project.json is git-shared. See AuthenticatorNode.tsx.
   | 'authenticator'
+  | 'alarm'
+  | 'timer'
   // The SERVICE family: one node per external thing this canvas can manage. They are ordinary
   // nodes — dragged, resized, coloured, grouped, persisted and deleted exactly like a terminal —
   // because a managed service is a thing you arrange on a canvas beside the terminals working on
@@ -572,6 +574,10 @@ export interface CanvasNodeState {
    *  `annotationRectFromPoints` (src/renderer/lib/annotation.ts) from the draw gesture; unaffected
    *  by a later resize, which just stretches the same diagonal to the new box. */
   annotationDir?: 'tl-br' | 'tr-bl'
+  /** Host-owned alarm projection identity. Its lifecycle is stored outside project.json. */
+  alarmId?: string
+  /** Canonical timer data; durable lifecycle timestamps remain host-owned. */
+  timerData?: import('./durable-occurrences').DurableTimerNodeData
 }
 
 /**
@@ -2440,6 +2446,27 @@ export interface ScheduledSettingsApi {
   ): () => void
 }
 
+/** Durable planner, alarm, and timer host surface. All mutations carry a generation so an old
+ * renderer cannot replace a newer host snapshot. */
+export interface DurableOccurrencesApi {
+  load(): Promise<import('./durable-occurrences').DurableOccurrenceLoadState>
+  save(snapshot: import('./durable-occurrences').DurableOccurrenceSnapshot, generation: number): Promise<{ ok: true; generation: number } | { ok: false; error: string }>
+  reconcile(wallMs?: number, monotonicMs?: number): Promise<void>
+  claim(id: string): Promise<import('./durable-occurrences').DurableDeliveryResult>
+  snooze(id: string, minutes: number): Promise<boolean>
+  dismiss(id: string): Promise<boolean>
+  exportSchedules(): Promise<{ filename: string; content: string }>
+  importSchedules(raw: unknown): Promise<{ ok: true; generation: number } | { ok: false; error: string }>
+  timerTransition(id: string, action: 'start' | 'pause' | 'resume' | 'cancel' | 'reset', wallMs?: number, monotonicMs?: number): Promise<import('./durable-occurrences').DurableTimerNode | null>
+  timerLap(id: string, wallMs?: number, monotonicMs?: number): Promise<number[] | null>
+  timerTick(wallMs?: number, monotonicMs?: number): Promise<void>
+  upsertAlarm(alarm: import('./durable-occurrences').DurableAlarmNode): Promise<{ ok: true; generation: number } | { ok: false; error: string }>
+  upsertTimer(timer: import('./durable-occurrences').DurableTimerNode): Promise<{ ok: true; generation: number } | { ok: false; error: string }>
+  removeSource(kind: 'planner' | 'alarm' | 'timer', id: string): Promise<{ ok: true; generation: number } | { ok: false; error: string }>
+  acknowledge(id: string, deliveryGeneration: number): Promise<boolean>
+  onChanged(listener: (snapshot: import('./durable-occurrences').DurableOccurrenceSnapshot) => void): () => void
+}
+
 /** A downloadable whisper model plus its on-disk status, as returned by `speech.models()`. */
 export interface SpeechModelInfo extends WhisperModelInfo {
   downloaded: boolean
@@ -3791,6 +3818,7 @@ export interface NodeTerminalApi {
   schoolMode: SchoolModeApi
   kidsMode: KidsModeApi
   scheduledSettings: ScheduledSettingsApi
+  durableOccurrences: DurableOccurrencesApi
   speech: SpeechApi
   /** Universal file converter — docs/file-converter.md. */
   converter: import('./converter').ConverterApi

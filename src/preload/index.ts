@@ -258,6 +258,24 @@ const api: NodeTerminalApi = {
     activeState: () => ipcRenderer.invoke(IPC.scheduledSettingsActiveState),
     onActiveChange: subscribeScheduledSettingsActive
   },
+  durableOccurrences: {
+    load: () => ipcRenderer.invoke(IPC.durableOccurrencesLoad),
+    save: (snapshot, generation) => ipcRenderer.invoke(IPC.durableOccurrencesSave, snapshot, generation),
+    reconcile: (wallMs, monotonicMs) => ipcRenderer.invoke(IPC.durableOccurrencesReconcile, wallMs, monotonicMs),
+    claim: (id) => ipcRenderer.invoke(IPC.durableOccurrencesClaim, id),
+    snooze: (id, minutes) => ipcRenderer.invoke(IPC.durableOccurrencesSnooze, id, minutes),
+    dismiss: (id) => ipcRenderer.invoke(IPC.durableOccurrencesDismiss, id),
+    exportSchedules: () => ipcRenderer.invoke(IPC.durableOccurrencesExport),
+    importSchedules: (raw) => ipcRenderer.invoke(IPC.durableOccurrencesImport, raw),
+    timerTransition: (id, action, wallMs, monotonicMs) => ipcRenderer.invoke(IPC.durableOccurrencesTimerTransition, id, action, wallMs, monotonicMs),
+    timerLap: (id, wallMs, monotonicMs) => ipcRenderer.invoke(IPC.durableOccurrencesTimerLap, id, wallMs, monotonicMs),
+    timerTick: (wallMs, monotonicMs) => ipcRenderer.invoke(IPC.durableOccurrencesTimerTick, wallMs, monotonicMs),
+    upsertAlarm: (alarm) => ipcRenderer.invoke(IPC.durableOccurrencesUpsertAlarm, alarm),
+    upsertTimer: (timer) => ipcRenderer.invoke(IPC.durableOccurrencesUpsertTimer, timer),
+    removeSource: (kind, id) => ipcRenderer.invoke(IPC.durableOccurrencesRemoveSource, kind, id),
+    acknowledge: (id, deliveryGeneration) => ipcRenderer.invoke(IPC.durableOccurrencesAcknowledge, id, deliveryGeneration),
+    onChanged: subscribe(IPC.durableOccurrencesChanged)
+  },
   githubIssues: {
     subscribe: (projectId) => ipcRenderer.invoke(IPC.githubIssuesSubscribe, { projectId }),
     unsubscribe: async (projectId) => {

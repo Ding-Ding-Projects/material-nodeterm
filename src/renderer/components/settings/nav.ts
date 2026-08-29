@@ -10,6 +10,7 @@ export type SettingsSectionId =
   | 'phone'
   | 'speech'
   | 'schedule'
+  | 'planner'
   | 'adhd-modes'
   | 'shortcuts'
   | 'agents'
@@ -90,6 +91,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'narrator', title: 'Narrator' },
       { id: 'speech', title: 'Speech' },
       { id: 'schedule', title: 'Schedule' },
+      { id: 'planner', title: 'Planner & alarms' },
       { id: 'adhd-modes', title: 'ADHD modes' },
       { id: 'shortcuts', title: 'Shortcuts' }
     ]

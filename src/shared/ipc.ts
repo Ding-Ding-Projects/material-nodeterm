@@ -345,6 +345,23 @@ export const IPC = {
   /** main/server → renderer broadcast: the resolved schedule changed (a new rule became active, an
    *  external source's fetch completed, or none apply anymore). Payload: ScheduledSettingsActiveState. */
   scheduledSettingsActiveChange: 'scheduled-settings:active-change',
+  /** Host-owned planner, alarm, and timer occurrence lifecycle. Renderer receives projections only. */
+  durableOccurrencesLoad: 'durable-occurrences:load',
+  durableOccurrencesSave: 'durable-occurrences:save',
+  durableOccurrencesReconcile: 'durable-occurrences:reconcile',
+  durableOccurrencesClaim: 'durable-occurrences:claim',
+  durableOccurrencesSnooze: 'durable-occurrences:snooze',
+  durableOccurrencesDismiss: 'durable-occurrences:dismiss',
+  durableOccurrencesExport: 'durable-occurrences:export',
+  durableOccurrencesImport: 'durable-occurrences:import',
+  durableOccurrencesChanged: 'durable-occurrences:changed',
+  durableOccurrencesTimerTransition: 'durable-occurrences:timer-transition',
+  durableOccurrencesTimerLap: 'durable-occurrences:timer-lap',
+  durableOccurrencesTimerTick: 'durable-occurrences:timer-tick',
+  durableOccurrencesUpsertAlarm: 'durable-occurrences:upsert-alarm',
+  durableOccurrencesUpsertTimer: 'durable-occurrences:upsert-timer',
+  durableOccurrencesRemoveSource: 'durable-occurrences:remove-source',
+  durableOccurrencesAcknowledge: 'durable-occurrences:acknowledge',
   sshList: 'ssh:list',
   sshSave: 'ssh:save',
   sshDelete: 'ssh:delete',

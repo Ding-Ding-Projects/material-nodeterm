@@ -141,6 +141,7 @@ export function buildStubApi(): Omit<
   | 'schoolMode'
   | 'kidsMode'
   | 'scheduledSettings'
+  | 'durableOccurrences'
   | 'toylock'
   | 'authenticator'
   | 'fs'

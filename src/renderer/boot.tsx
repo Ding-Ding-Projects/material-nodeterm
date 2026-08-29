@@ -15,6 +15,7 @@ import './styles.md3.css'
 import './ui/md3/primitives.css'
 import './tailwind.css'
 import './styles.clipping.css'
+import './styles.durable-occurrences.css'
 
 // Probe the local Claude CLI once, up front (never awaited — a launch is never blocked on it):
 // `--permission-mode auto` only exists in Claude Code >= 2.1.71, and until we know the version we

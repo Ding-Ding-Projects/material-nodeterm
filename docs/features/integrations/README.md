@@ -7,6 +7,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | feature | status |
 | --- | --- |
 | [Service nodes](service-nodes.md) | implemented as canvas objects (Minecraft, Docker host, Proxmox, GitLab, Home Assistant, FreePBX); none of them dial anything yet |
+| [Planner, alarm, and timer occurrences](planner-alarm-timer-occurrences.md) | host-owned durable intent, claims, outcomes, timezone reconciliation, and timer projections; source contracts covered, built-artifact evidence still pending |
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |
 

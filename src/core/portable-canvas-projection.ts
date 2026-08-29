@@ -38,6 +38,8 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  alarmId?: string
+  timerData?: Record<string, unknown>
 }
 
 export interface PortableRelationshipV3 {
@@ -86,7 +88,7 @@ const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'alarmId', 'timerData'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
@@ -140,6 +142,32 @@ function safeAppearance(value: unknown, depth = 0, seen = { count: 0 }): unknown
   return out
 }
 
+/** Bounded generic value copier for timer projections. Appearance has a deliberately narrow
+ * allowlist, while timerData has its own strict schema in shared/durable-occurrences.ts. The
+ * projection still rejects prototype keys and unbounded nested values without pretending timer
+ * lifecycle state is appearance data. */
+function safeTimerData(value: unknown, depth = 0, seen = { count: 0 }): unknown {
+  if (++seen.count > PORTABLE_CANVAS_LIMITS.maxNodes || depth > PORTABLE_CANVAS_LIMITS.maxDepth) throw new PortableProjectV3Error('manifest', 'Portable timer data exceeds its bounds.')
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    if (typeof value === 'string' && new TextEncoder().encode(value).byteLength > PORTABLE_CANVAS_LIMITS.maxStringBytes) throw new PortableProjectV3Error('manifest', 'Portable timer text exceeds its bound.')
+    return value
+  }
+  if (typeof value === 'number') return finite(value, 'timer value')
+  if (Array.isArray(value)) return value.map((item) => safeTimerData(item, depth + 1, seen))
+  if (!record(value)) throw new PortableProjectV3Error('manifest', 'Portable timer data contains an unsafe value.')
+  const out: Record<string, unknown> = {}
+  for (const key of Object.keys(value).sort()) {
+    if (UNSAFE_KEYS.has(key)) throw new PortableProjectV3Error('manifest', `Portable timer data contains an unsafe key: ${key}`)
+    out[text(key, 'timer key')] = safeTimerData(value[key], depth + 1, seen)
+  }
+  return out
+}
+
+function portableTimerData(value: Record<string, unknown>): Record<string, unknown> {
+  const allowed = ['timerMode', 'durationMs', 'repeatCount', 'sequence', 'alarmEnabled', 'alarmTone']
+  return Object.fromEntries(allowed.filter((key) => key in value).map((key) => [key, safeTimerData(value[key])]))
+}
+
 function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV3 {
   if (!record(node)) throw new PortableProjectV3Error('manifest', 'Portable node is not an object.')
   if (strict) exactKeys(node, ALLOWED_NODE, 'node')
@@ -159,6 +187,8 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.parentId !== undefined && typeof node.parentId !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node parent is invalid.')
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
+  if (strict && node.alarmId !== undefined && typeof node.alarmId !== 'string') throw new PortableProjectV3Error('manifest', 'Portable alarm id is invalid.')
+  if (strict && node.timerData !== undefined && (!record(node.timerData) || JSON.stringify(node.timerData).length > PORTABLE_CANVAS_LIMITS.maxStringBytes)) throw new PortableProjectV3Error('manifest', 'Portable timer data is invalid or too large.')
   if (strict && node.browserTabs !== undefined && !Array.isArray(node.browserTabs)) throw new PortableProjectV3Error('manifest', 'Portable browser tabs must be an array.')
   if (node.collapsed !== undefined) out.collapsed = node.collapsed
   if (node.parentId !== undefined) out.parentId = text(node.parentId, 'parent id')
@@ -166,6 +196,8 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.alarmId !== undefined) out.alarmId = text(node.alarmId, 'alarm id')
+  if (node.timerData !== undefined) out.timerData = portableTimerData(node.timerData as Record<string, unknown>)
   if (node.browserTabs !== undefined) {
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
     out.browserTabs = node.browserTabs.map((tab) => { if (!record(tab)) throw new PortableProjectV3Error('manifest', 'Portable browser tab is invalid.'); exactKeys(tab, ALLOWED_TAB, 'browser tab'); const url = safeUrl(tab.url, 'browser tab URL'); return { id: text(tab.id, 'browser tab id'), ...(url ? { url } : {}), title: content(tab.title, 'browser tab title') } })
