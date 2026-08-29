@@ -2,8 +2,8 @@
 //
 // Under Electron the preload already defines `window.nodeTerminal`; this module only runs when
 // it is absent (see main.tsx's bootstrap switch). It opens ONE WebSocket to `/ws`, speaks the
-// Task-1 RPC protocol (`parseRpcMessage` / `decodePtyData`), and rebuilds the three real
-// namespaces (`pty`, `workspace`, `settings`) over that socket. Every other namespace comes from
+// Task-1 RPC protocol (`parseRpcMessage` / `decodePtyData`), and rebuilds the core-bound
+// namespaces (`pty`, `workspace`, `settings`, `homeAssistant`) over that socket. Every other namespace comes from
 // `buildStubApi()` (Task 7) so the renderer boots without a full Electron preload.
 
 import {
@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { HomeAssistantApi } from '../../shared/home-assistant'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,29 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+/** Home Assistant is a real core-bound manager in the Server Edition too. The server process owns
+ * REST/WebSocket access to each configured instance and only sends redacted snapshots here. */
+export function buildHomeAssistantApi(client: RpcClient): Pick<NodeTerminalApi, 'homeAssistant'> {
+  const homeAssistant: HomeAssistantApi = {
+    list: () => client.request(IPC.homeAssistantList) as ReturnType<HomeAssistantApi['list']>,
+    create: (input) => client.request(IPC.homeAssistantCreate, input) as ReturnType<HomeAssistantApi['create']>,
+    update: (input) => client.request(IPC.homeAssistantUpdate, input) as ReturnType<HomeAssistantApi['update']>,
+    remove: (id) => client.request(IPC.homeAssistantRemove, id) as Promise<void>,
+    status: (id) => client.request(IPC.homeAssistantStatus, id) as ReturnType<HomeAssistantApi['status']>,
+    snapshot: (id) => client.request(IPC.homeAssistantSnapshot, id) as ReturnType<HomeAssistantApi['snapshot']>,
+    refresh: (id) => client.request(IPC.homeAssistantRefresh, id) as ReturnType<HomeAssistantApi['refresh']>,
+    connect: (id) => client.request(IPC.homeAssistantConnect, id) as ReturnType<HomeAssistantApi['connect']>,
+    disconnect: (id) => client.request(IPC.homeAssistantDisconnect, id) as Promise<void>,
+    setToken: (id, token) => client.request(IPC.homeAssistantSetToken, id, token) as Promise<void>,
+    tokenStatus: () => client.request(IPC.homeAssistantTokenStatus) as ReturnType<HomeAssistantApi['tokenStatus']>,
+    listBindings: (id) => client.request(IPC.homeAssistantBindings, id) as ReturnType<HomeAssistantApi['listBindings']>,
+    bind: (input) => client.request(IPC.homeAssistantBind, input) as ReturnType<HomeAssistantApi['bind']>,
+    unbind: (id) => client.request(IPC.homeAssistantUnbind, id) as Promise<void>,
+    onUpdate: (listener) => client.subscribe(IPC.homeAssistantUpdateEvent, listener as Listener)
+  }
+  return { homeAssistant }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1399,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildHomeAssistantApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

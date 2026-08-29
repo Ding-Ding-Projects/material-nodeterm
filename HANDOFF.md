@@ -1,5 +1,29 @@
 # Handoff
 
+## 2026-08-26, Home Assistant multi-instance client implementation
+
+Implemented the Home Assistant client lane in `src/core/home-assistant.ts` with shared contracts in
+`src/shared/home-assistant.ts`. It stores validated machine-local instances and bindings, keeps
+access tokens in the existing sealed-secret store, discovers state and entity registries plus
+services, devices, and areas over the documented REST API, and subscribes to `state_changed` over
+`/api/websocket`. Bounded response sizes, request deadlines, manual redirect handling, HTTPS or
+loopback URL validation, status/error states, reconnect backoff, and generation invalidation are
+included. The same registrar is wired through Desktop and Server Edition CorePlatform handlers,
+preload, and the Server Edition bridge. The Home Assistant service node now has a guided setup
+surface and a searchable entity list with an anchored regex builder.
+
+Added the feature article at
+[`docs/features/integrations/home-assistant-client.md`](docs/features/integrations/home-assistant-client.md),
+the documentation site page, category index entry, roadmap status, and changelog entry. Portable
+project files continue to exclude endpoints, tokens, bindings, registry caches, connection state,
+and host identity.
+
+This lane deliberately did not run tests, type checking, linting, builds, packaging, installer
+execution, runtime interaction, or captures. The generated offline documentation bundle still
+needs regeneration, and release verification still needs an isolated Home Assistant fixture for
+REST discovery, WebSocket reconnect, token rejection, stale-generation cancellation, and both
+shell boundaries. No commit or dew was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

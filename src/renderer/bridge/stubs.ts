@@ -1,6 +1,7 @@
 // Graceful non-terminal stub surface for the browser (Server Edition) build.
 //
 // The real namespaces (`pty`, `workspace`, `settings`, `schoolMode`, `scheduledSettings`,
+// `homeAssistant`,
 // `speech`, the fs/git/files/context group from `buildFilesApi`, and `dialog` from the in-app
 // `dialog-picker`) are provided by the ws-bridge; everything else here degrades benignly so the
 // renderer boots without a full Electron preload.
@@ -11,7 +12,7 @@
 // benign value, and everything else rejects with a coded error.
 //
 // The object is `satisfies Omit<NodeTerminalApi, 'pty' | 'workspace' | 'settings' |
-// 'scheduledSettings' | 'fs' | 'git' | 'files' | 'context' | 'boardLog' | 'dialog'>`, so the
+// 'scheduledSettings' | 'homeAssistant' | 'fs' | 'git' | 'files' | 'context' | 'boardLog' | 'dialog'>`, so the
 // TypeScript compiler is the completeness test: if `NodeTerminalApi` gains a member, this file
 // fails to typecheck until the stub is declared.
 
@@ -141,6 +142,7 @@ export function buildStubApi(): Omit<
   | 'schoolMode'
   | 'kidsMode'
   | 'scheduledSettings'
+  | 'homeAssistant'
   | 'toylock'
   | 'authenticator'
   | 'fs'
@@ -588,6 +590,23 @@ export function buildStubApi(): Omit<
       restoreBackup: U('minecraft.restoreBackup'),
       deleteBackup: U('minecraft.deleteBackup'),
       onEvent: noopUnsub
+    },
+    homeAssistant: {
+      list: U('homeAssistant.list'),
+      create: U('homeAssistant.create'),
+      update: U('homeAssistant.update'),
+      remove: U('homeAssistant.remove'),
+      status: U('homeAssistant.status'),
+      snapshot: U('homeAssistant.snapshot'),
+      refresh: U('homeAssistant.refresh'),
+      connect: U('homeAssistant.connect'),
+      disconnect: U('homeAssistant.disconnect'),
+      setToken: U('homeAssistant.setToken'),
+      tokenStatus: U('homeAssistant.tokenStatus'),
+      listBindings: U('homeAssistant.listBindings'),
+      bind: U('homeAssistant.bind'),
+      unbind: U('homeAssistant.unbind'),
+      onUpdate: noopUnsub
     }
   } satisfies Omit<
     NodeTerminalApi,
@@ -597,7 +616,8 @@ export function buildStubApi(): Omit<
     | 'settings'
     | 'schoolMode'
   | 'kidsMode'
-    | 'scheduledSettings'
+  | 'scheduledSettings'
+  | 'homeAssistant'
     | 'toylock'
     | 'authenticator'
     | 'passwordManager'

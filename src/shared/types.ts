@@ -3798,6 +3798,8 @@ export interface NodeTerminalApi {
   ollama: import('./ollama').OllamaApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** Home Assistant multi-instance REST/WebSocket manager. */
+  homeAssistant: import('./home-assistant').HomeAssistantApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

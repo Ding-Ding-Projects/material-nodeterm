@@ -7,16 +7,17 @@ import { safeServiceEndpoint } from '@shared/node-exec'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
+import { HomeAssistantPanel } from '../components/homeassistant/HomeAssistantPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 
 /**
- * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
- * and FreePBX. They differ in what they will eventually manage, not in how they behave as canvas
- * objects, so six near-identical components would be six copies of one rule waiting to drift.
+ * One component for the whole service family: Minecraft, Docker, Proxmox, GitLab, Home Assistant
+ * and FreePBX. They differ in what they manage, not in how they behave as canvas objects, so six
+ * near-identical components would be six copies of one rule waiting to drift.
  *
- * WHAT THIS DELIBERATELY DOES NOT DO for five of the six kinds, and why the emptiness is the point:
+ * WHAT THIS DELIBERATELY DOES NOT DO for four of the six kinds, and why the emptiness is the point:
  *
- * Docker/Proxmox/GitLab/Home Assistant/FreePBX are not connected to anything yet. CLAUDE.md is
+ * Docker/Proxmox/GitLab/FreePBX are not connected to anything yet. CLAUDE.md is
  * explicit that a control which is styled as operable while being inert is a defect rather than a
  * placeholder — "any icon, preview, mock window, toolbar control, card, tab, badge, illustration,
  * affordance ... presented as if it can be used must perform its labeled action". So there is no
@@ -28,11 +29,13 @@ import { EditableNodeTitle } from '../components/EditableNodeTitle'
  * rather than implying a connection. Storing where you would connect is a real, useful thing on
  * its own; pretending it connects would not be.
  *
- * `minecraft` IS the lane that wires a real connection — see `MinecraftServerPanel`
- * (docs/minecraft-server-manager.md). It runs a real local `java -jar server.jar` process on the
- * machine this shell is running on, not a remote connection reached through an address, so it
- * replaces the generic address field entirely rather than growing a fake "Connect" button beside
- * it. When a future lane wires one of the other five kinds, it follows the same pattern: real
+ * `minecraft` and `homeassistant` are the lanes that wire a real connection. See
+ * `MinecraftServerPanel` and `HomeAssistantPanel`
+ * (docs/minecraft-server-manager.md). Minecraft runs a real local `java -jar server.jar` process
+ * on the machine this shell is running on, not a remote connection reached through an address, so
+ * it replaces the generic address field entirely. Home Assistant manages configured remote or
+ * loopback instances through its own guided panel. When a future lane wires one of the other four
+ * kinds, it follows the same pattern: real
  * controls that do exactly what they say, added beside this honest copy rather than instead of it.
  */
 /**
@@ -226,8 +229,9 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
         </div>
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
+        {!collapsed && kind === 'homeassistant' && <HomeAssistantPanel nodeId={id} />}
 
-        {!collapsed && kind !== 'minecraft' && (
+        {!collapsed && kind !== 'minecraft' && kind !== 'homeassistant' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">Address</span>

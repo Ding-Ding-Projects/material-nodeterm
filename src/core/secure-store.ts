@@ -11,7 +11,7 @@
 // and nothing but this process' own user can read it at rest.
 
 import path from 'path'
-import { platform } from './platform'
+import { platform, type CorePlatform } from './platform'
 import {
   readAtomicFileSnapshot,
   withCrossProcessLock,
@@ -88,8 +88,7 @@ function serializeForFile<TResult>(file: string, operation: () => Promise<TResul
 
 /** Whether this platform can seal secrets at rest. Throws if it supplies exactly one of the two
  *  hooks — a shell must supply BOTH or NEITHER (programming error), matching node-auth-secret.ts. */
-function seals(): boolean {
-  const p = platform()
+function seals(p: CorePlatform): boolean {
   const hasSeal = typeof p.sealSecret === 'function'
   const hasUnseal = typeof p.unsealSecret === 'function'
   if (hasSeal !== hasUnseal) {
@@ -113,8 +112,8 @@ interface LoadedStore<TMeta> {
   revision: string
 }
 
-async function loadFile<TMeta extends { id: string }>(file: string): Promise<LoadedStore<TMeta>> {
-  const snapshot: AtomicFileSnapshot = await readAtomicFileSnapshot(file)
+async function loadFile<TMeta extends { id: string }>(file: string, maxBytes: number): Promise<LoadedStore<TMeta>> {
+  const snapshot: AtomicFileSnapshot = await readAtomicFileSnapshot(file, maxBytes)
   if (!snapshot.exists) return { entries: [], revision: snapshot.revision }
   const parsed = JSON.parse(snapshot.data.toString('utf8')) as StoreFile<TMeta>
   if (
@@ -127,23 +126,27 @@ async function loadFile<TMeta extends { id: string }>(file: string): Promise<Loa
 }
 
 export class SecureStore<TMeta extends { id: string }> {
-  constructor(private readonly filename: string) {}
+  constructor(
+    private readonly filename: string,
+    private readonly hostPlatform: CorePlatform = platform(),
+    private readonly maxBytes = 4 * 1024 * 1024
+  ) {}
 
   private file(): string {
-    return path.join(platform().userDataDir, this.filename)
+    return path.join(this.hostPlatform.userDataDir, this.filename)
   }
 
   /** Seal an arbitrary JSON-serializable secret payload (a password hash record, a TOTP secret +
    *  its algorithm/digits/period) into the base64 string a `SealedEntry.secretEnc` carries. */
   seal(payload: unknown): string {
     const json = Buffer.from(JSON.stringify(payload), 'utf8')
-    if (seals()) return platform().sealSecret!(json).toString('base64')
+    if (seals(this.hostPlatform)) return this.hostPlatform.sealSecret!(json).toString('base64')
     return json.toString('base64')
   }
 
   unseal<T>(secretEnc: string): T {
     const raw = Buffer.from(secretEnc, 'base64')
-    const json = seals() ? platform().unsealSecret!(raw) : raw
+    const json = seals(this.hostPlatform) ? this.hostPlatform.unsealSecret!(raw) : raw
     return JSON.parse(json.toString('utf8')) as T
   }
 
@@ -152,7 +155,7 @@ export class SecureStore<TMeta extends { id: string }> {
    *  rejects and remains untouched; callers must render it as unavailable, never as an empty list. */
   load(): Promise<SealedEntry<TMeta>[]> {
     const file = this.file()
-    return serializeForFile(file, async () => (await loadFile<TMeta>(file)).entries)
+    return serializeForFile(file, async () => (await loadFile<TMeta>(file, this.maxBytes)).entries)
   }
 
   save(entries: SealedEntry<TMeta>[]): Promise<void> {
@@ -193,7 +196,7 @@ export class SecureStore<TMeta extends { id: string }> {
     const file = this.file()
     return serializeForFile(file, () =>
       withCrossProcessLock(file, async (lease) => {
-        const loaded = await loadFile<TMeta>(file)
+        const loaded = await loadFile<TMeta>(file, this.maxBytes)
         const change = await mutation(loaded.entries)
         if (change.changed) {
           assertValidEntries<TMeta>(loaded.entries)

@@ -119,6 +119,10 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     ...buildAgentApi(client), // onAgentStatus / onSubagentActivity — the host's agent hooks
     ...buildCanvasApi(client), // canvas sync against the host's reflector
     ...buildPresenceApi(client), // the host's presence hub
+    // Home Assistant is machine-local state (endpoint, vault record, registry cache). Relay v1 has
+    // no scoped carrier for it, so never inherit the viewer's local manager into a host canvas. The
+    // explicit unsupported surface is safer than displaying or mutating the wrong instance.
+    homeAssistant: stub.homeAssistant,
     // `cliCaps` is REAL over the relay so the --permission-mode auto version gate probes the HOST's
     // claude CLI (a remote node launches on the host); `readTranscript` stays LOCAL (v1 degrade —
     // transcripts aren't relayed, so it reads this machine's; the only consumer reads the global api).

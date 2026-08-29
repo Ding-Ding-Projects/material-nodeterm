@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add the Home Assistant multi-instance client with validated HTTPS or loopback endpoints, local
+  registry discovery over REST and WebSocket, bounded reconnect and generation cancellation, local
+  entity bindings, and sealed access-token storage. This implementation lane intentionally has no
+  test, build, runtime interaction, or capture evidence yet.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

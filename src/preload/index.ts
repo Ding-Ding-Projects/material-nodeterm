@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { HomeAssistantSnapshot } from '../shared/home-assistant'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -70,6 +71,7 @@ const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
+const subscribeHomeAssistantUpdate = subscribe<[HomeAssistantSnapshot]>(IPC.homeAssistantUpdateEvent)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -942,6 +944,23 @@ const api: NodeTerminalApi = {
     restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
+  },
+  homeAssistant: {
+    list: () => ipcRenderer.invoke(IPC.homeAssistantList),
+    create: (input) => ipcRenderer.invoke(IPC.homeAssistantCreate, input),
+    update: (input) => ipcRenderer.invoke(IPC.homeAssistantUpdate, input),
+    remove: (id) => ipcRenderer.invoke(IPC.homeAssistantRemove, id),
+    status: (id) => ipcRenderer.invoke(IPC.homeAssistantStatus, id),
+    snapshot: (id) => ipcRenderer.invoke(IPC.homeAssistantSnapshot, id),
+    refresh: (id) => ipcRenderer.invoke(IPC.homeAssistantRefresh, id),
+    connect: (id) => ipcRenderer.invoke(IPC.homeAssistantConnect, id),
+    disconnect: (id) => ipcRenderer.invoke(IPC.homeAssistantDisconnect, id),
+    setToken: (id, token) => ipcRenderer.invoke(IPC.homeAssistantSetToken, id, token),
+    tokenStatus: () => ipcRenderer.invoke(IPC.homeAssistantTokenStatus),
+    listBindings: (id) => ipcRenderer.invoke(IPC.homeAssistantBindings, id),
+    bind: (input) => ipcRenderer.invoke(IPC.homeAssistantBind, input),
+    unbind: (id) => ipcRenderer.invoke(IPC.homeAssistantUnbind, id),
+    onUpdate: (listener) => subscribeHomeAssistantUpdate(listener)
   }
 }
 

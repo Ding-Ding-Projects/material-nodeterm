@@ -130,9 +130,36 @@ function revisionFor(data: Buffer): string {
   return `sha256:${data.length}:${createHash('sha256').update(data).digest('hex')}`
 }
 
-export async function readAtomicFileSnapshot(target: string): Promise<AtomicFileSnapshot> {
+async function readBoundedFile(target: string, maxBytes: number): Promise<Buffer> {
+  const before = await fs.stat(target)
+  if (!before.isFile() || before.size > maxBytes) throw new Error('Atomic file exceeds its byte limit')
+  const handle = await fs.open(target, 'r')
   try {
-    const data = await fs.readFile(target)
+    const chunks: Buffer[] = []
+    let total = 0
+    let position = 0
+    for (;;) {
+      const chunk = Buffer.alloc(Math.min(64 * 1024, maxBytes - total + 1))
+      const result = await handle.read(chunk, 0, chunk.length, position)
+      if (result.bytesRead === 0) break
+      total += result.bytesRead
+      if (total > maxBytes) throw new Error('Atomic file exceeds its byte limit')
+      chunks.push(chunk.subarray(0, result.bytesRead))
+      position += result.bytesRead
+    }
+    const after = await fs.stat(target)
+    if (!after.isFile() || after.size !== total || after.size > maxBytes) throw new Error('Atomic file changed while it was being read')
+    return Buffer.concat(chunks, total)
+  } finally {
+    await handle.close()
+  }
+}
+
+export async function readAtomicFileSnapshot(target: string, maxBytes?: number): Promise<AtomicFileSnapshot> {
+  try {
+    const data = maxBytes === undefined
+      ? await fs.readFile(target)
+      : await readBoundedFile(target, maxBytes)
     return { exists: true, data, revision: revisionFor(data) }
   } catch (error) {
     if (codeOf(error) === 'ENOENT') {

@@ -13264,6 +13264,26 @@ body.focus-mode .dock:hover {
   color: var(--md-error, #ff453a);
 }
 
+/* Home Assistant manager: instance records and registry rows are real controls, not a status
+   mock. The panel stays bounded inside a service node and lets long registries scroll locally. */
+.homeassistant-panel { gap: 10px; min-width: 0; }
+.homeassistant-panel__instances,
+.homeassistant-panel__entities { display: grid; gap: 6px; max-height: 180px; overflow: auto; }
+.homeassistant-panel__instance,
+.homeassistant-panel__entity { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; padding: 8px 10px; border: 1px solid var(--md-sys-color-outline-variant, #49454f); border-radius: 12px; background: var(--md-sys-color-surface-container, #211f26); color: var(--md-sys-color-on-surface, #e6e1e5); text-align: left; cursor: pointer; }
+.homeassistant-panel__instance:hover,
+.homeassistant-panel__entity:hover,
+.homeassistant-panel__instance.is-selected { background: var(--md-sys-color-secondary-container, #4a4458); }
+.homeassistant-panel__instance small { overflow: hidden; color: var(--md-sys-color-on-surface-variant, #cac4d0); text-overflow: ellipsis; white-space: nowrap; }
+.homeassistant-panel__entity strong { color: var(--md-sys-color-primary, #d0bcff); }
+.homeassistant-panel__form,
+.homeassistant-panel__search { display: grid; gap: 8px; }
+.homeassistant-panel__search-row { display: flex; align-items: center; gap: 6px; }
+.homeassistant-panel__search-row .service-node__input { min-width: 0; flex: 1; }
+.homeassistant-panel__counts { color: var(--md-sys-color-on-surface-variant, #cac4d0); font-size: 12px; }
+.homeassistant-panel__error { color: var(--md-sys-color-error, #ffb4ab); }
+.homeassistant-panel :is(button, input):focus-visible { outline: 2px solid var(--md-sys-color-primary, #d0bcff); outline-offset: 2px; }
+
 /* Minecraft server create-and-manage (docs/minecraft-server-manager.md). Reuses every
  * .service-node__* token above (field/input/note/state) and adds only what that shared surface
  * doesn't already have: buttons, a progress bar, and the console. */

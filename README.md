@@ -112,6 +112,12 @@ Proxmox, GitLab, Home Assistant and FreePBX — each an ordinary node you drag, 
 persist like any other, because a managed service is something you arrange beside the terminals
 working on it, not a modal you visit.
 
+The Home Assistant manager supports several independently configured instances. It discovers state
+and entity registries, services, devices, and areas over the documented REST API, then listens for
+live `state_changed` events over WebSocket. Endpoints and bindings are machine-local, while access
+tokens are kept in the host credential store. See
+[`docs/features/integrations/home-assistant-client.md`](./docs/features/integrations/home-assistant-client.md).
+
 **Group** nodes are real containers that nest inside each other and can bind to a git worktree, so
 every node created inside one inherits that worktree's directory. Quit the app and the persistent
 backend reattaches to the live session; reboot the machine and cold restore rebuilds the node,

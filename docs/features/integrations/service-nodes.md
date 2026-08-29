@@ -1,10 +1,9 @@
-# Service nodes (manager placeholders)
+# Service nodes (manager surfaces)
 
-Status: **implemented as canvas objects; not yet connected to anything.** This is the honest
-midpoint between "planned" and "working": the node exists, drags and resizes and persists like
-any other node, and it stores where it would reach a service — but nothing dials that address yet.
-Read this document alongside the "what does not work yet" section below before assuming a control
-does more than it says.
+Status: **implemented as canvas objects, with Home Assistant connected through its own manager
+surface.** Every node exists, drags and resizes and persists like any other node. Home Assistant
+also manages configured instances, reads registries, and receives live state updates. The other
+service kinds retain their documented storage-only boundary.
 
 ## The six kinds, and why one is called a manager and not a host
 
@@ -23,16 +22,15 @@ canvas right-click to spin up. A Proxmox node's whole job, once it does somethin
 window onto an installation that is already running somewhere. The same framing holds for the rest
 of the family in softer form: a `dockerhost` node manages a Docker daemon that is already running on
 some machine, a `gitlab` node manages a GitLab instance, `homeassistant` manages a running Home
-Assistant, and `freepbx` manages a running FreePBX box. `minecraft` is the closest thing to an
-exception — a Minecraft server is realistically something *this* app would help stand up in Docker —
-but the node itself, as shipped, is exactly as inert as its five siblings; see
+Assistant, and `freepbx` manages a running FreePBX box. `minecraft` and `homeassistant` have real
+manager panels, while the other service nodes retain their storage-only boundary; see
 [`minecraft-server.md`](minecraft-server.md) for the researched design of the part that would
 actually create one.
 
 None of the six kinds appear in `docs/features/integrations/README.md`'s old "planned, not yet
 researched" list by accident of naming — they are the same six products that list already named.
-What changed is that the canvas object for each now exists; the research and the real client work
-for most of them has not started.
+What changed is that the canvas object for each now exists, and the Home Assistant client now
+provides a real registry and live-update path. The other service clients remain future work.
 
 ## Creating one
 
