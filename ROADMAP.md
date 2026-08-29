@@ -22,6 +22,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## Shipped and verified
 
+- [ ] **Blank-screen startup recovery:** the shared desktop startup reporter classifies Electron's
+      duplicate handler registration without exposing an internal channel, shows the native
+      recovery dialog through an injected reporter, and exits with status 1 when dialog display
+      fails. Focused lifecycle coverage is green at 25 tests; packaged built-output launch and
+      runtime capture remain pending on the coordinating integration lane.
+
 - [x] **Sanitized shared-instruction mirrors:** preserve project-specific guidance while keeping
       one byte-identical managed public block in `AGENTS.md` and `CLAUDE.md`; validate canonical
       private-vocabulary output when the private source exists; reject sensitive input; prove

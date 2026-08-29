@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Fix blank desktop startup recovery for duplicate handler registration. The shared startup reporter
+  now publishes only the safe `DUPLICATE_HANDLER` category, shows a native recovery dialog without
+  exposing the internal channel name, and exits with status 1 even when dialog display fails.
+  Focused lifecycle coverage proves the recovery behavior and message redaction.
+
+  修正 duplicate handler registration 導致 desktop 開機白畫面嘅 recovery。共用 startup reporter
+  而家只會公開安全嘅 `DUPLICATE_HANDLER` category，會顯示 native recovery dialog 但唔會洩漏
+  internal channel name；就算 dialog 顯示失敗，仍然會用 status 1 結束。Focused lifecycle
+  coverage 已證明 recovery 行為同 message redaction。
+
 - Add byte-identical sanitized shared-instruction blocks to `AGENTS.md` and `CLAUDE.md`, preserve
   all project-specific guidance outside the managed markers, and add deterministic synchronization,
   private-vocabulary validation, public-detail scanning, parity checks, sensitive-input refusal,
