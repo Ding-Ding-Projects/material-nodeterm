@@ -6,6 +6,7 @@ import {
 } from './control-master'
 import { COMBINED_PANE_MARKER, PANE_OWNER_FMT, PS_FOREGROUND_FLAGS } from '../agents/pane-owner'
 import { accountTmuxEnvArgs } from '../claude-accounts-core'
+import { remoteTmuxPathPrologue } from '../../shared/ssh'
 
 /**
  * SECURITY REGRESSION TEST — remote command injection through a node id.
@@ -104,6 +105,32 @@ const PAYLOAD =
 const HOSTILE_CWD = '/srv/app;id;#'
 const HOSTILE_PROGRAM_ARGS = ['--resume', 'sess;id;#']
 
+/**
+ * The shell structure a line carries, as one comparable string. The interactive builder now
+ * DELIBERATELY emits structure of its own — the PATH-append prologue and the tmux-missing
+ * `if/else` fallback (issue #449) — so "zero unquoted metacharacters" is no longer the invariant.
+ * The invariant that survives is stronger where it matters: the structure is CONSTANT — byte-for-
+ * byte identical whatever the attacker-controlled values are. A payload that broke out of its
+ * quotes (or a replacement-pattern splice that inverted quote parity downstream) changes the
+ * structure and fails the comparison, exactly as `toEqual([])` failed before.
+ */
+const structureOf = (line: string): string => shellParse(line).unquotedMeta.join('')
+
+/** A benign twin of the pty-args call: same shape, harmless values. */
+const benignPtyStructure = (withEnv: boolean, program?: string, programArgs?: string[]): string =>
+  structureOf(
+    remoteTmuxPtyArgs(
+      conn,
+      '/s.sock',
+      'nt-n1',
+      '/home/u',
+      program,
+      programArgs,
+      withEnv ? remoteHookEnvArgs('/home/u/.nodeterm/hook-endpoint-p1.env', 'n1', '1', 'claude') : [],
+      withEnv ? '/home/u/.nodeterm/tmux.conf' : undefined
+    ).at(-1) as string
+  )
+
 describe('remoteTmuxPtyArgs: an attacker-controlled node id is DATA, never command structure', () => {
   it('the parser itself sees structure in an UNQUOTED payload (guards the assertion)', () => {
     // Without this the test could pass because the parser is blind rather than because the code
@@ -124,17 +151,22 @@ describe('remoteTmuxPtyArgs: an attacker-controlled node id is DATA, never comma
       '/home/u/.nodeterm/tmux.conf'
     )
     const cmd = args[args.length - 1]
-    const { argv, unquotedMeta } = shellParse(cmd)
-    // (a) nothing in the line is command structure any more.
-    expect(unquotedMeta).toEqual([])
+    const { argv } = shellParse(cmd)
+    // (a) the payload contributed NO command structure: the line's structure is byte-identical to
+    // a benign twin's (the constant prologue + fallback structure the builder itself emits).
+    expect(structureOf(cmd)).toBe(
+      benignPtyStructure(true, 'claude', ['--resume', 'sess-benign'])
+    )
     // (b) the payload is ONE argument, verbatim — tmux gets it as an env value, sh never sees it.
     expect(argv).toContain(`NODETERM_NODE_ID=${PAYLOAD}`)
     // (c) the region AFTER the splice is intact too: a replacement-pattern escape (`$'`) would
     // have dragged these inside the quotes and turned their `;` into command structure.
     expect(argv).toContain(HOSTILE_CWD)
     expect(argv).toContain('sess;id;#')
-    // and the command is still exactly one tmux invocation with the expected shape.
-    expect(argv.slice(0, 3)).toEqual(['tmux', '-L', 'nodeterm-rmt'])
+    // and the command still carries exactly one tmux invocation with the expected shape (the
+    // PATH prologue + tmux-missing fallback now precede it, so the head is indexOf, not slice).
+    const t = argv.lastIndexOf('tmux') // the guard's `command -v tmux` also carries the word
+    expect(argv.slice(t, t + 3)).toEqual(['tmux', '-L', 'nodeterm-rmt'])
     expect(argv.filter((a) => a === 'new-session')).toHaveLength(1)
     expect(argv).toContain('nt-n1')
   })
@@ -152,8 +184,9 @@ describe('remoteTmuxPtyArgs: an attacker-controlled node id is DATA, never comma
       remoteHookEnvArgs('/home/u/.nodeterm/hook-endpoint-p1.env', 'term-mabc-3', '1', "claude$'"),
       '/home/u/.nodeterm/tmux.conf'
     )
-    const { argv, unquotedMeta } = shellParse(args[args.length - 1])
-    expect(unquotedMeta).toEqual([])
+    const line = args[args.length - 1]
+    const { argv } = shellParse(line)
+    expect(structureOf(line)).toBe(benignPtyStructure(true))
     expect(argv).toContain("NODETERM_AGENT_ID=claude$'")
     expect(argv).toContain(HOSTILE_CWD)
   })
@@ -163,8 +196,15 @@ describe('remoteTmuxPtyArgs: an attacker-controlled node id is DATA, never comma
     const args = remoteTmuxPtyArgs(conn, '/s.sock', 'nt-n1', '/home/u', undefined, undefined, [
       ...accountTmuxEnvArgs('/home/u/.nodeterm/claude-accounts/a;id;b')
     ])
-    const { argv, unquotedMeta } = shellParse(args[args.length - 1])
-    expect(unquotedMeta).toEqual([])
+    const line = args[args.length - 1]
+    const { argv } = shellParse(line)
+    expect(structureOf(line)).toBe(
+      structureOf(
+        remoteTmuxPtyArgs(conn, '/s.sock', 'nt-n1', '/home/u', undefined, undefined, [
+          ...accountTmuxEnvArgs('/home/u/.nodeterm/claude-accounts/benign')
+        ]).at(-1) as string
+      )
+    )
     expect(argv).toContain('CLAUDE_CONFIG_DIR=/home/u/.nodeterm/claude-accounts/a;id;b')
   })
 
