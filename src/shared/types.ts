@@ -500,13 +500,16 @@ export interface CanvasNodeState {
   highScore?: number
   /**
    * service-kinds only: the display name the user gave this manager ("Home lab Proxmox", "Survival
-   * server"). This is the ONLY thing a service node persists, and the restraint is deliberate — the
+   * server"). This is the shared presentation state. GitLab also persists its safe catalog profile
+   * id, while the restraint remains deliberate — the
    * record travels in `.nodeterm/project.json` to every machine that clones the repository, so a
    * host, a username, a container id or a token here would be one person's environment appearing in
    * everybody else's checkout. The connection itself is machine-local and belongs beside
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** gitlab-only, GIT-SHARED: the safe id of the shipped CE/EE profile to configure on import. */
+  gitlabProfileId?: string
   /**
    * service-kinds only, and MACHINE-LOCAL: where this node reaches its service. Stripped from
    * every project file we write and from every node arriving over the wire, then restored from the
@@ -3798,6 +3801,8 @@ export interface NodeTerminalApi {
   ollama: import('./ollama').OllamaApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** GitLab Server CE/EE hosting — docs/features/remote/gitlab-server.md. */
+  gitlab: import('./gitlab').GitLabApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

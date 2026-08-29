@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-08-26, GitLab Server hosting lane
+
+Implemented the guided GitLab Server CE/EE hosting node in `src/shared/gitlab.ts`,
+`src/core/gitlab/server-manager.ts`, and `src/core/gitlab/register-ipc.ts`, with desktop and Server
+Edition registration, preload and browser bridge contracts, and a dedicated renderer panel wired
+from `ServiceNode`. The shipped catalog contains official GitLab 18.3.1 CE and EE images pinned by
+registry digest. The core owns Docker argv, the container identity, four persistent volumes, the
+private `127.0.0.1` binding, capacity and port preflight, protected secret-file creation, one-time
+initial credential handoff, readiness probing, backup, restore, update, rollback, stop, and a
+readiness-gated tunnel handoff seam. No arbitrary image, environment, Compose, entrypoint, or shell
+input is accepted.
+
+The shared project carries only safe node intent and display data. Runtime records, volume names,
+host ports, backup metadata, secret files, and credential handoff state remain in application data.
+The feature article, remote category index, generated offline article entry, documentation page,
+site catalog, roadmap, changelog, and this handoff were updated together.
+
+This ultra-speed lane deliberately did not run tests, type checks, lint, security or accessibility
+review, builds, packaging, installer execution, runtime interaction, or captures. No commit or dew
+was made by this lane, as requested. Issue #51 remains open for the parent integration and release
+evidence.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

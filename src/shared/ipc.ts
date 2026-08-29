@@ -594,6 +594,20 @@ export const IPC = {
   // Shell → renderer: one multiplexed status/console stream, like ollama:chat-stream above.
   // Payload: MinecraftEvent. A listener filters to the instance id it owns.
   minecraftEvent: 'minecraft:event',
+  // Guided local GitLab Server hosting. The core chooses the image and all Docker arguments from
+  // the shipped catalog; renderer inputs are edition/profile ids and bounded port values only.
+  gitlabCatalog: 'gitlab:catalog',
+  gitlabStatus: 'gitlab:status',
+  gitlabCreate: 'gitlab:create',
+  gitlabHandoffCredential: 'gitlab:handoff-credential',
+  gitlabBackupsList: 'gitlab:backups-list',
+  gitlabBackupCreate: 'gitlab:backup-create',
+  gitlabBackupRestore: 'gitlab:backup-restore',
+  gitlabUpdate: 'gitlab:update',
+  gitlabRollback: 'gitlab:rollback',
+  gitlabStart: 'gitlab:start',
+  gitlabStop: 'gitlab:stop',
+  gitlabTunnelHandoff: 'gitlab:tunnel-handoff',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).

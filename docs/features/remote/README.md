@@ -7,6 +7,8 @@ Two different ways nodeterm reaches a machine that isn't the one in front of you
 - [Server Edition](./server-edition.md) — the same renderer, self-hosted and served to any
   browser over plain HTTP/WebSocket.
 - [Docker host](./docker-host.md) — free encrypted project sharing through a Docker-hosted relay.
+- [GitLab Server](./gitlab-server.md) — guided CE/EE hosting with pinned official images, four
+  persistent volumes, readiness, backup, restore, update, rollback, and private-first binding.
 
 See also [Agents](../agents/README.md) for how agent hooks and permission modes work across an
 SSH connection, and [Packaging](../packaging/README.md) for how the headless notification host

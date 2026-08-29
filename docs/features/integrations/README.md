@@ -6,7 +6,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 
 | feature | status |
 | --- | --- |
-| [Service nodes](service-nodes.md) | implemented as canvas objects (Minecraft, Docker host, Proxmox, GitLab, Home Assistant, FreePBX); none of them dial anything yet |
+| [Service nodes](service-nodes.md) | implemented as canvas objects; GitLab Server has a guided private-first hosting profile, while the other service kinds remain manager surfaces |
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |
 
@@ -18,7 +18,8 @@ Planned, not yet researched here:
   fuller integration must extend that rather than open a second client.
 - **Docker** — the highest-value angle is exec-into-a-container as a real terminal node, since that
   is what this app already is.
-- **GitLab** — two halves: self-hosting Community Edition, and a Material client over its API. The
-  client half must reuse the existing Source Control panel rather than duplicate it.
+- **GitLab** — the Server CE/EE hosting half is implemented as a guided private-first profile in
+  [`gitlab-server.md`](../remote/gitlab-server.md). A separate API client remains future work and
+  must reuse the existing Source Control panel rather than duplicate it.
 - **FreePBX** — flagged as doubtful: containerising it is unofficial, and some modules are
   commercial, which collides with the rule that nothing is ever paid.

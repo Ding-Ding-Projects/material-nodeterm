@@ -7,6 +7,7 @@ import { safeServiceEndpoint } from '@shared/node-exec'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
+import { GitLabServerPanel } from '../components/gitlab/GitLabServerPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 
 /**
@@ -226,8 +227,15 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
         </div>
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
+        {!collapsed && kind === 'gitlab' && (
+          <GitLabServerPanel
+            nodeId={id}
+            profileIntent={data.gitlabProfileId}
+            onProfileIntent={(gitlabProfileId) => updateNodeData(id, { gitlabProfileId })}
+          />
+        )}
 
-        {!collapsed && kind !== 'minecraft' && (
+        {!collapsed && kind !== 'minecraft' && kind !== 'gitlab' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">Address</span>

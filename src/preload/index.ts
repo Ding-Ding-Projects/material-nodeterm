@@ -942,6 +942,20 @@ const api: NodeTerminalApi = {
     restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
+  },
+  gitlab: {
+    catalog: () => ipcRenderer.invoke(IPC.gitlabCatalog),
+    status: (id) => ipcRenderer.invoke(IPC.gitlabStatus, id),
+    create: (input) => ipcRenderer.invoke(IPC.gitlabCreate, input),
+    handoffCredential: (id) => ipcRenderer.invoke(IPC.gitlabHandoffCredential, id),
+    listBackups: (id) => ipcRenderer.invoke(IPC.gitlabBackupsList, id),
+    createBackup: (id) => ipcRenderer.invoke(IPC.gitlabBackupCreate, id),
+    restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.gitlabBackupRestore, id, backupId),
+    update: (id, profileId) => ipcRenderer.invoke(IPC.gitlabUpdate, id, profileId),
+    rollback: (id) => ipcRenderer.invoke(IPC.gitlabRollback, id),
+    start: (id) => ipcRenderer.invoke(IPC.gitlabStart, id),
+    stop: (id) => ipcRenderer.invoke(IPC.gitlabStop, id),
+    tunnelHandoff: (id) => ipcRenderer.invoke(IPC.gitlabTunnelHandoff, id)
   }
 }
 

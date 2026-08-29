@@ -1004,8 +1004,9 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
  * mobile-companion append path decide an incoming id may register as a real terminal session. A
  * service node borrowing that prefix would let a peer be persuaded to treat a manager as a shell.
  *
- * Nothing identifying is seeded into `data`. See `serviceLabel` on `CanvasNodeState` for why a host
- * must not live there.
+ * Nothing identifying is seeded into `data`. GitLab's optional profile id is a catalog intent only,
+ * not a host, credential, volume, or runtime identifier. See `serviceLabel` on `CanvasNodeState`
+ * for why machine details must not live there.
  */
 export function createServiceNode(
   kind: ServiceNodeKind,
@@ -1915,6 +1916,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        gitlabProfileId: n.gitlabProfileId,
         serviceConnection: n.serviceConnection,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
@@ -1990,6 +1992,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        gitlabProfileId: n.data.gitlabProfileId,
         serviceConnection: n.data.serviceConnection,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,

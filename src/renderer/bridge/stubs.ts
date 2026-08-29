@@ -588,6 +588,20 @@ export function buildStubApi(): Omit<
       restoreBackup: U('minecraft.restoreBackup'),
       deleteBackup: U('minecraft.deleteBackup'),
       onEvent: noopUnsub
+    },
+    gitlab: {
+      catalog: U('gitlab.catalog'),
+      status: U('gitlab.status'),
+      create: U('gitlab.create'),
+      handoffCredential: U('gitlab.handoffCredential'),
+      listBackups: U('gitlab.listBackups'),
+      createBackup: U('gitlab.createBackup'),
+      restoreBackup: U('gitlab.restoreBackup'),
+      update: U('gitlab.update'),
+      rollback: U('gitlab.rollback'),
+      start: U('gitlab.start'),
+      stop: U('gitlab.stop'),
+      tunnelHandoff: U('gitlab.tunnelHandoff')
     }
   } satisfies Omit<
     NodeTerminalApi,

@@ -11230,3 +11230,42 @@ button.term-node__title-text:focus-visible {
 .icon-menu__reset-btn {
   align-self: flex-start;
 }
+
+/* GitLab Server's guided node. The surface stays compact at the service-node minimum size and
+ * lets the page body scroll rather than clipping backup and recovery actions. */
+.gitlab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+}
+.gitlab-panel__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 12px;
+  background: var(--md-surface-container-low);
+}
+.gitlab-panel__section h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.gitlab-panel__search-row,
+.gitlab-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.gitlab-panel__search-row .service-node__input {
+  flex: 1 1 180px;
+}
+.gitlab-panel li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}

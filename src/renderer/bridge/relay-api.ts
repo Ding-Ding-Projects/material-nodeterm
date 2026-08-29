@@ -209,7 +209,10 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // server is ONE machine's filesystem/java/process table, and there is no remote-routed core
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG
     // machine (`...local` would run java on the VIEWER, not the host it joined).
-    minecraft: stub.minecraft
+    minecraft: stub.minecraft,
+    // GitLab provisioning is machine-local and intentionally not exposed through a relay guest.
+    // Keeping the explicit refusal prevents a remote tab from creating containers on the viewer.
+    gitlab: stub.gitlab
   } satisfies NodeTerminalApi
 
   return {

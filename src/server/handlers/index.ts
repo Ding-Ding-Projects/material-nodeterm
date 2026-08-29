@@ -9,6 +9,7 @@ import { registerFsHandlers } from '../../core/fs-handlers'
 import { registerConverterIpc } from '../../core/converter/register-ipc'
 import { registerOllamaIpc } from '../../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
+import { registerGitLabIpc } from '../../core/gitlab/register-ipc'
 import type { MinecraftServerManager } from '../../core/minecraft/server-manager'
 import { registerVsCodeHandlers } from '../../core/vscode-handlers'
 import { LocalHistoryStore } from '../../core/local-history'
@@ -71,6 +72,7 @@ export function registerCoreHandlers(
   registerConverterIpc(platform)
   registerOllamaIpc(platform)
   const { manager: minecraftServers } = registerMinecraftIpc(platform)
+  registerGitLabIpc(platform)
   // "Open in Visual Studio Code" + local settings history — same registrars the desktop shell
   // uses (src/main/index.ts), over the generic platform.handle seam, so the browser gets the
   // identical feature acting on the SERVER's own machine (docs/exports.md, docs/local-history.md).

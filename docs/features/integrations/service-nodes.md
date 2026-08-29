@@ -1,10 +1,8 @@
-# Service nodes (manager placeholders)
+# Service nodes (manager family)
 
-Status: **implemented as canvas objects; not yet connected to anything.** This is the honest
-midpoint between "planned" and "working": the node exists, drags and resizes and persists like
-any other node, and it stores where it would reach a service — but nothing dials that address yet.
-Read this document alongside the "what does not work yet" section below before assuming a control
-does more than it says.
+Status: **the generic service family is implemented as canvas objects, and GitLab Server now has a
+real guided hosting surface.** The remaining generic kinds still store where they would reach a
+service without dialing that address. Read the GitLab article for the one connected hosting profile.
 
 ## The six kinds, and why one is called a manager and not a host
 
@@ -15,8 +13,9 @@ Six new node kinds join the canvas's `NodeKind` union
 varies between them is a label and a starting size, and this codebase's most repeated lesson is
 that a duplicated rule drifts from its copies.
 
-Every one of the six is a **manager for something that already exists elsewhere**, not a thing this
-node hosts. That is deliberate and it is worth stating for Proxmox specifically, because it is the
+Most of the family is a **manager for something that already exists elsewhere**, not a thing this
+node hosts. GitLab Server is the deliberate hosting exception, because its node now owns a guided,
+private-first local container lifecycle. This is worth stating for Proxmox specifically, because it is the
 kind most likely to be misread: **Proxmox is a bare-metal hypervisor distribution.** You install it
 directly onto a physical machine's disk — it does not run inside Docker, and there is nothing for a
 canvas right-click to spin up. A Proxmox node's whole job, once it does something, is to be a
@@ -48,6 +47,19 @@ Proxmox from the top level anyway (see the sectioned/filterable pane-menu behavi
 
 There is currently no other creation path — no command-palette entry, no dock button — only the
 pane context menu.
+
+## GitLab Server hosting exception
+
+The `gitlab` kind opens the guided GitLab Server panel rather than the generic address form. It
+offers only the pinned CE and EE profiles from `src/shared/gitlab.ts`, performs Docker, port, and
+capacity preflight, and manages a private-first container with four persistent volumes. The panel
+also exposes one-time credential handoff, readiness, backup, restore, update, rollback, stop, and
+the readiness-gated tunnel handoff. The core owns the full Docker argv and secret-file path; the
+renderer cannot provide an image, environment, Compose document, entrypoint, or shell command.
+
+The remaining `dockerhost`, `proxmox`, `homeassistant`, and `freepbx` kinds continue to use the
+generic address surface until their own guided managers land. `minecraft` has its separate local
+server manager described in [`minecraft-server.md`](minecraft-server.md).
 
 ### What you get, and its starting size
 
