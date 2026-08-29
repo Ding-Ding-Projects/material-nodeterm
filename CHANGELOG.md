@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the AWS CLI v2 service and operation documentation index for issue #42. It parses installed
+  service, command, option, paginator, waiter, skeleton, input-shape, and output-shape models with
+  bounded limits, exact byte-derived revisions, explicit completeness and cache states, offline
+  reuse, official documentation links, local-help argv fallback, and an anchored regex-searchable
+  renderer panel. Wiring into AWS Universe operation execution and verification remain pending.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

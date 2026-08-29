@@ -163,9 +163,14 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add door-only Multiverse canvases to depth 8.
 - [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
 - [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
-- [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.
+- [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing. The model parser,
+      revisioned cache, offline fallback, and official documentation index are implemented in
+      `src/shared/aws-cli.ts` and `src/core/aws-cli/model-loader.ts`; packaging and verification
+      remain pending.
 - [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,
-      skeleton, input, and output described by the installed CLI models.
+      skeleton, input, and output described by the installed CLI models. The documentation index
+      panel is implemented in `src/renderer/components/aws/AwsCliDocsIndexPanel.tsx`; typed
+      operation execution remains a later lane.
 - [ ] Add AWS identity, SSO, role, MFA, Resource Explorer, Cloud Control, S3, EC2, IAM, STS,
       Lambda, CloudWatch, Logs, CloudFormation, CDK, container, database, networking, and cost tools.
 - [ ] Add the generic all-service AWS GUI without a command textbox fallback.

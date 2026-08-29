@@ -13518,3 +13518,93 @@ body.focus-mode .dock:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* AWS CLI documentation index --------------------------------------------------------------- */
+.aws-cli-index {
+  --aws-surface: var(--md-sys-color-surface-container, #211f26);
+  --aws-surface-high: var(--md-sys-color-surface-container-high, #2b2930);
+  --aws-outline: var(--md-sys-color-outline, #938f99);
+  --aws-primary: var(--md-sys-color-primary, #d0bcff);
+  position: fixed;
+  inset: 5vh 4vw;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--md-sys-color-on-surface, #e6e0e9);
+  background: var(--aws-surface);
+  border: 1px solid var(--aws-outline);
+  border-radius: 24px;
+  box-shadow: var(--md-sys-elevation-3, 0 8px 24px rgb(0 0 0 / 32%));
+}
+
+.aws-cli-index__header,
+.aws-cli-index__service-heading,
+.aws-cli-index__command-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.aws-cli-index__header { padding: 20px 24px 12px; border-bottom: 1px solid var(--aws-outline); }
+.aws-cli-index__header h2,
+.aws-cli-index__service-heading h3,
+.aws-cli-index__command-heading h4,
+.aws-cli-index__advanced h5 { margin: 0; }
+.aws-cli-index__subtitle,
+.aws-cli-index__service-heading p,
+.aws-cli-index__command p,
+.aws-cli-index__advanced p,
+.aws-cli-index__search span,
+.aws-cli-index__services small { color: var(--md-sys-color-on-surface-variant, #cac4d0); }
+.aws-cli-index__subtitle { margin: 4px 0 0; font-size: 0.86rem; }
+.aws-cli-index__header-actions,
+.aws-cli-index__command-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.aws-cli-index__header button,
+.aws-cli-index__command-actions button,
+.aws-cli-index__advanced-toggle,
+.aws-cli-index__command-tabs button,
+.aws-cli-index__services button { min-height: 40px; border: 1px solid var(--aws-outline); border-radius: 999px; color: inherit; background: transparent; cursor: pointer; }
+.aws-cli-index__header button,
+.aws-cli-index__command-actions button,
+.aws-cli-index__advanced-toggle { padding: 8px 14px; }
+.aws-cli-index__header button:hover,
+.aws-cli-index__header button:focus-visible,
+.aws-cli-index__command-actions button:hover,
+.aws-cli-index__command-actions button:focus-visible,
+.aws-cli-index__advanced-toggle:hover,
+.aws-cli-index__advanced-toggle:focus-visible,
+.aws-cli-index__command-tabs button:hover,
+.aws-cli-index__command-tabs button:focus-visible,
+.aws-cli-index__command-tabs button[aria-selected="true"],
+.aws-cli-index__services button:hover,
+.aws-cli-index__services button:focus-visible,
+.aws-cli-index__services button.is-selected { color: var(--md-sys-color-on-primary-container, #eaddff); background: var(--md-sys-color-primary-container, #4f378b); }
+.aws-cli-index__state { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 12px 24px; background: var(--aws-surface-high); font-size: 0.85rem; }
+.aws-cli-index__state span,
+.aws-cli-index__state strong { overflow-wrap: anywhere; }
+.aws-cli-index__search { display: grid; gap: 6px; padding: 12px 24px; }
+.aws-cli-index__search-row { display: flex; align-items: center; gap: 8px; }
+.aws-cli-index__search-row input { flex: 1; min-width: 0; min-height: 44px; padding: 8px 12px; color: inherit; background: transparent; border: 1px solid var(--aws-outline); border-radius: 12px; }
+.aws-cli-index__error { color: var(--md-sys-color-error, #ffb4ab) !important; }
+.aws-cli-index__body { display: grid; grid-template-columns: minmax(220px, 28%) minmax(0, 1fr); min-height: 0; flex: 1; }
+.aws-cli-index__services { min-height: 0; overflow: auto; padding: 12px; border-right: 1px solid var(--aws-outline); }
+.aws-cli-index__count { padding: 0 8px 8px; color: var(--md-sys-color-on-surface-variant, #cac4d0); font-size: 0.8rem; }
+.aws-cli-index__services button { display: grid; width: 100%; min-height: 56px; padding: 8px 12px; margin-bottom: 6px; text-align: left; }
+.aws-cli-index__services small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aws-cli-index__details { min-width: 0; overflow: auto; padding: 20px 24px 32px; }
+.aws-cli-index__service-heading p { margin: 4px 0 0; }
+.aws-cli-index__service-heading a,
+.aws-cli-index__command-actions a { color: var(--aws-primary); }
+.aws-cli-index__command-tabs { display: flex; gap: 8px; padding: 16px 0; overflow-x: auto; }
+.aws-cli-index__command-tabs button { flex: 0 0 auto; padding: 6px 12px; }
+.aws-cli-index__command { padding: 16px; background: var(--aws-surface-high); border-radius: 16px; }
+.aws-cli-index__command-heading code { display: block; margin-top: 6px; overflow-wrap: anywhere; }
+.aws-cli-index__facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.aws-cli-index__facts span { padding: 6px 10px; border: 1px solid var(--aws-outline); border-radius: 8px; font-size: 0.82rem; }
+.aws-cli-index__advanced { display: grid; gap: 18px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--aws-outline); }
+.aws-cli-index__advanced ul { padding-left: 22px; }
+.aws-cli-index__advanced li { margin: 8px 0; }
+@media (max-width: 760px) {
+  .aws-cli-index { inset: 2vh 2vw; border-radius: 16px; }
+  .aws-cli-index__header,
+  .aws-cli-index__service-heading,
+  .aws-cli-index__command-heading { flex-direction: column; }
+  .aws-cli-index__body { grid-template-columns: 1fr; }
+  .aws-cli-index__services { max-height: 30vh; border-right: 0; border-bottom: 1px solid var(--aws-outline); }
+}

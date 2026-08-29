@@ -1459,3 +1459,28 @@ switcher and FAB menu on a real screen — nothing above substitutes for that. T
 the `.mc-console` styling defect and the two atomic-write violations found above are worth a
 one-line fix before the next release, since both are small, both are diagnosed, and neither
 requires touching anything MD3-specific to correct.
+## 2026-08-26, AWS CLI model and documentation index, issue #42
+
+The `feat/program-31` Gerk Tong Hui now contains an isolated AWS CLI v2 model contract and loader:
+
+- `src/shared/aws-cli.ts` defines bounded service, command, option, paginator, waiter, skeleton,
+  input-shape, output-shape, completeness, revision, cache, search, and local-help contracts.
+- `src/core/aws-cli/model-loader.ts` discovers installed AWS CLI v2 and botocore model files from
+  platform roots or `AWS_CLI_DATA_DIR`, parses them with finite limits, derives an exact SHA-256
+  revision from accepted file bytes, and persists model metadata under the app's local data path.
+- `src/renderer/components/aws/AwsCliDocsIndexPanel.tsx` provides a searchable service and command
+  index with the existing anchored full regex builder, model facts, shape details, option choices,
+  paginator and waiter summaries, skeleton modes, official documentation links, and an allowlisted
+  local-help callback. `src/renderer/styles.css` contains its Material token-based responsive layout.
+- `docs/features/cloud/aws-cli-docs-index.md` and `docs/features/cloud/README.md` document behavior,
+  source coverage, cache and revision states, offline use, security boundaries, and verification
+  limits. The feature category is linked from `docs/features/README.md`.
+
+The parser does not execute AWS operations, read credential or profile files, or perform arbitrary
+documentation web discovery. A missing source, rejected file, invalid cache, unreadable cache, stale
+cache, and offline cache are distinct states. The UI never falls back to a blank operation textbox.
+
+This lane did not run tests, type checking, lint, builds, packaging, runtime operation execution,
+or captures, per the issue's ultra-speed boundary. The parent lane still needs to wire the panel and
+loader into the AWS Universe and bridge surfaces, then perform the separately scoped verification.
+No commit or dew was made by this lane.
