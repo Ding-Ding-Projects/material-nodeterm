@@ -205,6 +205,17 @@ const api: NodeTerminalApi = {
       return () => ipcRenderer.removeListener(IPC.serverDeploymentProgress, h)
     }
   },
+  cloudflare: {
+    tokenStatus: () => ipcRenderer.invoke(IPC.cloudflareTokenStatus),
+    setToken: (token: string | null) => ipcRenderer.invoke(IPC.cloudflareSetToken, token),
+    accounts: () => ipcRenderer.invoke(IPC.cloudflareAccounts),
+    zones: (accountId: string) => ipcRenderer.invoke(IPC.cloudflareZones, accountId),
+    targets: () => ipcRenderer.invoke(IPC.cloudflareTargets),
+    preflight: (plan) => ipcRenderer.invoke(IPC.cloudflarePreflight, plan),
+    apply: (plan) => ipcRenderer.invoke(IPC.cloudflareApply, plan),
+    rollback: () => ipcRenderer.invoke(IPC.cloudflareRollback),
+    status: () => ipcRenderer.invoke(IPC.cloudflareStatus)
+  },
   dialog: {
     selectFolder: () => ipcRenderer.invoke(IPC.dialogSelectFolder),
     selectFile: () => ipcRenderer.invoke(IPC.dialogSelectFile),

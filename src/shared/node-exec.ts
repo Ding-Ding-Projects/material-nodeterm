@@ -30,6 +30,7 @@ import { BUILTIN_AGENT_IDS, isPermissionMode } from './agents/config'
 import { sshExtraArgsEnableLocalExec } from './ssh'
 import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from './types'
 import type { NsisLocalPaths } from './nsis-form-types'
+import type { CloudflareTunnelLocalBinding } from './cloudflare-tunnel'
 
 /** Per-node exec values the LOCAL machine typed. Persisted only in the machine-local index. */
 export interface LocalNodeExec {
@@ -66,6 +67,8 @@ export interface LocalNodeExec {
    * person's disk paths appearing (or worse, being read) in everybody else's checkout.
    */
   nsisLocalPaths?: NsisLocalPaths
+  /** Cloudflare provider/host binding for a tunnel node, kept out of portable project files. */
+  cloudflareTunnelLocalBinding?: CloudflareTunnelLocalBinding
 }
 
 /**
@@ -182,6 +185,23 @@ export function safeNsisLocalPaths(value: unknown): NsisLocalPaths | undefined {
   // An empty, otherwise-empty record carries no information worth persisting.
   if (sourcePaths.length === 0 && out.licensePath === undefined && out.iconPath === undefined) {
     return undefined
+  }
+  return out
+}
+
+const SAFE_CLOUDFLARE_BINDING_ID = /^[A-Za-z0-9_.:-]{1,256}$/
+export function safeCloudflareTunnelLocalBinding(value: unknown): CloudflareTunnelLocalBinding | undefined {
+  if (!isRecord(value)) return undefined
+  const raw = value as Record<string, unknown>
+  if (![raw.accountId, raw.zoneId, raw.hostId, raw.targetId].every((v) => typeof v === 'string' && SAFE_CLOUDFLARE_BINDING_ID.test(v))) return undefined
+  if (typeof raw.port !== 'number' || !Number.isInteger(raw.port) || raw.port < 1 || raw.port > 65535) return undefined
+  if (typeof raw.originUrl !== 'string' || !/^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/.test(raw.originUrl)) return undefined
+  const out: CloudflareTunnelLocalBinding = {
+    accountId: raw.accountId, zoneId: raw.zoneId, hostId: raw.hostId, targetId: raw.targetId,
+    port: raw.port, originUrl: raw.originUrl
+  }
+  for (const key of ['tunnelId', 'dnsRecordId', 'connectorContainerId', 'tokenFilePath'] as const) {
+    if (typeof raw[key] === 'string' && raw[key].length <= 4096 && !/[\u0000-\u001f\u007f]/.test(raw[key])) out[key] = raw[key]
   }
   return out
 }
@@ -316,6 +336,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
     n.pendingLaunch === undefined &&
     n.serviceConnection === undefined &&
     n.nsisLocalPaths === undefined &&
+    n.cloudflareTunnelLocalBinding === undefined &&
     n.ssh?.extraArgs === undefined &&
     n.ssh?.execTrusted === undefined
   )
@@ -326,6 +347,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   delete out.pendingLaunch
   delete out.serviceConnection
   delete out.nsisLocalPaths
+  delete out.cloudflareTunnelLocalBinding
   if (out.ssh) {
     // `execTrusted` goes with the value it vouches for. It is a MACHINE-LOCAL provenance marker:
     // if it could ride a document or a wire frame, a hostile one would simply set it to true.
@@ -412,12 +434,14 @@ export function carryLocalNodeExec(
   const extraArgs = prev.ssh?.extraArgs
   const pendingLaunch = next.kind === 'terminal' ? clonePendingLaunch(prev.pendingLaunch) : undefined
   const nsisPaths = safeNsisLocalPaths(prev.nsisLocalPaths)
+  const cloudflareBinding = safeCloudflareTunnelLocalBinding(prev.cloudflareTunnelLocalBinding)
   if (
     prev.shell === undefined &&
     prev.terminalProfileId === undefined &&
     extraArgs === undefined &&
     pendingLaunch === undefined &&
-    nsisPaths === undefined
+    nsisPaths === undefined &&
+    cloudflareBinding === undefined
   )
     return next
   const out: CanvasNodeState = { ...next }
@@ -427,6 +451,7 @@ export function carryLocalNodeExec(
     out.ssh = { ...out.ssh, extraArgs, execTrusted: prev.ssh?.execTrusted }
   if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
   if (nsisPaths !== undefined) out.nsisLocalPaths = nsisPaths
+  if (cloudflareBinding !== undefined) out.cloudflareTunnelLocalBinding = cloudflareBinding
   return out
 }
 
@@ -473,13 +498,16 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     if (conn) entry.serviceConnection = conn
     const nsisPaths = safeNsisLocalPaths(n.nsisLocalPaths)
     if (nsisPaths) entry.nsisLocalPaths = nsisPaths
+    const cloudflareBinding = safeCloudflareTunnelLocalBinding(n.cloudflareTunnelLocalBinding)
+    if (cloudflareBinding) entry.cloudflareTunnelLocalBinding = cloudflareBinding
     if (
       entry.shell ||
       entry.terminalProfileId !== undefined ||
       entry.sshExtraArgs ||
       entry.pendingLaunch ||
       entry.serviceConnection ||
-      entry.nsisLocalPaths
+      entry.nsisLocalPaths ||
+      entry.cloudflareTunnelLocalBinding
     )
       map[n.id] = entry
   }
@@ -518,6 +546,8 @@ export function applyLocalNodeExec(
     if (conn) out.serviceConnection = conn
     const nsisPaths = safeNsisLocalPaths(mine?.nsisLocalPaths)
     if (nsisPaths) out.nsisLocalPaths = nsisPaths
+    const cloudflareBinding = safeCloudflareTunnelLocalBinding(mine?.cloudflareTunnelLocalBinding)
+    if (cloudflareBinding) out.cloudflareTunnelLocalBinding = cloudflareBinding
     return out
   })
 }

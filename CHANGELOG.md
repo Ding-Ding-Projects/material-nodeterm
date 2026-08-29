@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a guided one-click Cloudflare Tunnel node with typed account, zone, hostname, host,
+  discovered container, network, port, and origin selection; deny-first Access preflight; protected
+  token-file connector handoff; remote DNS/tunnel configuration; rollback and status reporting.
+  Tests, builds, packaging, and UI captures remain intentionally unrun for the ultra-speed lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

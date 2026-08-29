@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-08-26, one-click Cloudflare Tunnel wizard
+
+Issue #60 is implemented on `feat/program-49` in the isolated `C:\w\p49` Gerk Tong Hui. The lane
+adds a typed Cloudflare Tunnel API and state machine (`src/shared/cloudflare-tunnel.ts`,
+`src/core/cloudflare/`), a desktop structured Docker discovery and protected token-file connector
+runtime (`src/main/cloudflare-runtime.ts`), IPC and Server Edition bridge wiring, and the
+`CloudflareTunnelNode` canvas surface. The wizard selects account, zone, hostname, host, discovered
+container, network, port, and private origin. Preflight checks permission, hostname ownership,
+origin selection, private egress, and deny-first Access. Apply creates the remote tunnel and DNS
+route only after Access deny-first setup, and failures attempt rollback. Arbitrary ingress, shell,
+image, and environment input are not accepted.
+
+Only safe hostname and tunnel intent is project-portable. Provider ids, host/container/network
+bindings, ports, connector identifiers, and token-file paths stay machine-local. The token is kept
+in protected local storage and handed to cloudflared through a protected file, never an argument or
+environment variable. Server Edition exposes typed Cloudflare operations but honestly reports that
+it has no local connector runtime.
+
+The ultra-speed lane did not run tests, type checking, lint, security review, accessibility review,
+runtime interaction, builds, packaging, installer execution, or captures. No commit or dew was made
+by this lane. A successor must run the relevant checks before marking the roadmap item complete.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

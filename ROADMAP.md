@@ -177,7 +177,11 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
-- [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.
+- [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices. The
+      typed account/zone/hostname/origin wizard, deny-first Access plan, protected token-file
+      connector handoff, rollback state, and desktop/server bridge are implemented in
+      `src/shared/cloudflare-tunnel.ts`, `src/core/cloudflare/`, `src/main/cloudflare-runtime.ts`,
+      and `src/renderer/nodes/CloudflareTunnelNode.tsx`; verification remains pending.
 
 ### Clean-room features and upstream parity
 

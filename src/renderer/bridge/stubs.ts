@@ -137,6 +137,7 @@ export function buildStubApi(): Omit<
   | 'pty'
   | 'workspace'
   | 'serverDeployment'
+  | 'cloudflare'
   | 'settings'
   | 'schoolMode'
   | 'kidsMode'
@@ -588,12 +589,24 @@ export function buildStubApi(): Omit<
       restoreBackup: U('minecraft.restoreBackup'),
       deleteBackup: U('minecraft.deleteBackup'),
       onEvent: noopUnsub
+    },
+    cloudflare: {
+      tokenStatus: U('cloudflare.tokenStatus'),
+      setToken: U('cloudflare.setToken'),
+      accounts: U('cloudflare.accounts'),
+      zones: U('cloudflare.zones'),
+      targets: U('cloudflare.targets'),
+      preflight: U('cloudflare.preflight'),
+      apply: U('cloudflare.apply'),
+      rollback: U('cloudflare.rollback'),
+      status: U('cloudflare.status')
     }
   } satisfies Omit<
     NodeTerminalApi,
     | 'pty'
     | 'workspace'
     | 'serverDeployment'
+    | 'cloudflare'
     | 'settings'
     | 'schoolMode'
   | 'kidsMode'

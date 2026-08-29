@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { CloudflareTunnelApi } from '../../shared/types'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,22 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+/** Guided Cloudflare Tunnel manager. All remote mutations stay in the shared core service. */
+export function buildCloudflareApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudflare'> {
+  const cloudflare: CloudflareTunnelApi = {
+    tokenStatus: () => client.request(IPC.cloudflareTokenStatus),
+    setToken: (token) => client.request(IPC.cloudflareSetToken, token),
+    accounts: () => client.request(IPC.cloudflareAccounts),
+    zones: (accountId) => client.request(IPC.cloudflareZones, accountId),
+    targets: () => client.request(IPC.cloudflareTargets),
+    preflight: (plan) => client.request(IPC.cloudflarePreflight, plan),
+    apply: (plan) => client.request(IPC.cloudflareApply, plan),
+    rollback: () => client.request(IPC.cloudflareRollback),
+    status: () => client.request(IPC.cloudflareStatus)
+  }
+  return { cloudflare }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1392,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildCloudflareApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

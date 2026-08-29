@@ -66,6 +66,15 @@ import type {
   VaultStatus,
   VaultUnlockResult
 } from './password-manager'
+import type {
+  CloudflareAccount,
+  CloudflareOriginTarget,
+  CloudflarePreflightCheck,
+  CloudflareTunnelPlan,
+  CloudflareTunnelStatus,
+  CloudflareZone
+} from './cloudflare-tunnel'
+import type { CloudflareTunnelLocalBinding, CloudflareTunnelSpec } from './cloudflare-tunnel'
 
 /** Profile-switch replacement intent. The trusted core validates and re-resolves it before teardown. */
 export interface PtyRecycleTarget {
@@ -348,6 +357,8 @@ export type NodeKind =
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
   // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
   | 'nsis'
+  // Guided Cloudflare Tunnel exposure. Intent is portable; the provider/host binding is local.
+  | 'cloudflare-tunnel'
   // The built-in authenticator, as a node. A VIEW of this machine's own TOTP generators: it
   // persists a title and a colour and nothing else, because an entry id names a credential in
   // this machine's OS vault while project.json is git-shared. See AuthenticatorNode.tsx.
@@ -527,6 +538,10 @@ export interface CanvasNodeState {
    * identical reason (an absolute path is one person's disk layout). See `@shared/node-exec`.
    */
   nsisLocalPaths?: NsisLocalPaths
+  /** cloudflare-tunnel-only, safe project intent. */
+  cloudflareTunnelSpec?: CloudflareTunnelSpec
+  /** cloudflare-tunnel-only, machine-local binding restored from the workspace index. */
+  cloudflareTunnelLocalBinding?: CloudflareTunnelLocalBinding
   // editor / diff
   filePath?: string
   /**
@@ -1276,6 +1291,19 @@ export interface ServerDeploymentApi {
    *  at most one — `start()` dedupes concurrent callers onto a single run). Returns an
    *  unsubscribe function. */
   onProgress(cb: (stage: ServerDeploymentStage) => void): () => void
+}
+
+/** Guided Cloudflare Tunnel setup. The API exposes metadata and outcome only, never tunnel tokens. */
+export interface CloudflareTunnelApi {
+  tokenStatus(): Promise<{ configured: boolean }>
+  setToken(token: string | null): Promise<void>
+  accounts(): Promise<CloudflareAccount[]>
+  zones(accountId: string): Promise<CloudflareZone[]>
+  targets(): Promise<CloudflareOriginTarget[]>
+  preflight(plan: CloudflareTunnelPlan): Promise<CloudflarePreflightCheck[]>
+  apply(plan: CloudflareTunnelPlan): Promise<CloudflareTunnelStatus>
+  rollback(): Promise<CloudflareTunnelStatus>
+  status(): Promise<CloudflareTunnelStatus>
 }
 
 export interface DialogApi {
@@ -3786,6 +3814,7 @@ export interface NodeTerminalApi {
   terminalProfiles?: TerminalProfilesApi
   workspace: WorkspaceApi
   serverDeployment: ServerDeploymentApi
+  cloudflare: CloudflareTunnelApi
   dialog: DialogApi
   settings: SettingsApi
   schoolMode: SchoolModeApi

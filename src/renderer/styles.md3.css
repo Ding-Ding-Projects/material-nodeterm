@@ -2261,6 +2261,17 @@ button.term-node__title-text:focus-visible {
 .service-node__input {
   border-radius: var(--md-shape-sm);
 }
+
+/* Guided Cloudflare Tunnel manager.  The form stays dense enough for a canvas node while every
+   picker keeps its own searchable filter and anchored regex builder attached to the field. */
+.cloudflare-tunnel-node__body { display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+.cloudflare-tunnel-node__search-row { display: flex; align-items: center; gap: 6px; }
+.cloudflare-tunnel-node__search-row .service-node__input { flex: 1; min-width: 0; }
+.cloudflare-tunnel-node__details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.cloudflare-tunnel-node__policy, .cloudflare-tunnel-node__checks { display: grid; gap: 5px; padding: 10px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; background: var(--md-sys-color-surface-container); }
+.cloudflare-tunnel-node__policy span, .cloudflare-tunnel-node__checks small { color: var(--md-sys-color-on-surface-variant); }
+.cloudflare-tunnel-node__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cloudflare-tunnel-node__actions .mc-button { min-height: 36px; }
 .ctx-colors__rainbow.is-active {
   outline-color: var(--md-primary);
 }

@@ -25,6 +25,7 @@ import { useSettings } from './settings'
 import type { SessionSource } from '../session/session'
 import { supportsWindowsTerminalProfiles } from './terminal-profiles'
 import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
+import type { CloudflareTunnelLocalBinding, CloudflareTunnelSpec } from '@shared/cloudflare-tunnel'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -177,6 +178,8 @@ export interface NodeData {
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
    *  from the shared document and from inbound peers; see shared/node-exec.ts. */
   nsisLocalPaths?: NsisLocalPaths
+  cloudflareTunnelSpec?: CloudflareTunnelSpec
+  cloudflareTunnelLocalBinding?: CloudflareTunnelLocalBinding
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
   /**
@@ -938,6 +941,7 @@ export function createDiffNode(
 /** Creates a new sticky note. */
 const AUTHENTICATOR_SIZE = { width: 340, height: 260 }
 const NSIS_SIZE = { width: 460, height: 520 }
+const CLOUDFLARE_TUNNEL_SIZE = { width: 620, height: 720 }
 
 /**
  * A view of this machine's own TOTP generators, on the canvas.
@@ -1054,6 +1058,24 @@ export function createNsisNode(index: number, center?: { x: number; y: number })
       group: null,
       nsisSpec: defaultNsisSpec(),
       nsisLocalPaths: defaultNsisLocalPaths()
+    }
+  }
+}
+
+/** Creates a guided Cloudflare Tunnel node with portable intent only. */
+export function createCloudflareTunnelNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('cloudflare-tunnel'),
+    type: 'cloudflare-tunnel',
+    position: placeAt(center, index, CLOUDFLARE_TUNNEL_SIZE.width, CLOUDFLARE_TUNNEL_SIZE.height),
+    width: CLOUDFLARE_TUNNEL_SIZE.width,
+    height: CLOUDFLARE_TUNNEL_SIZE.height,
+    style: { width: CLOUDFLARE_TUNNEL_SIZE.width, height: CLOUDFLARE_TUNNEL_SIZE.height },
+    data: {
+      title: 'Cloudflare Tunnel',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      cloudflareTunnelSpec: { hostname: '', tunnelName: 'nodeterm tunnel', accessMode: 'deny-first' }
     }
   }
 }
@@ -1466,7 +1488,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
-  nsis: true
+  nsis: true,
+  'cloudflare-tunnel': true
 }
 
 /**
@@ -1505,7 +1528,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
-  nsis: NSIS_SIZE
+  nsis: NSIS_SIZE,
+  'cloudflare-tunnel': CLOUDFLARE_TUNNEL_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1580,6 +1604,9 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
       // paths are keyed on it (`releaseWorktreeBinding`). A second frame claiming the same
       // binding could remove the directory the ORIGINAL frame is still working in.
       worktree: undefined,
+      // Provider and connector bindings are machine-local and must not be copied to a second
+      // tunnel node, where they could target an unrelated hostname or container.
+      cloudflareTunnelLocalBinding: undefined,
       // Grants an agent control of this tab through the Browser Plugin. An agent propagates its
       // own grant when IT opens a popup; a user duplicating a node must not hand that authority
       // to a tab the agent never opened.
@@ -1918,6 +1945,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         serviceConnection: n.serviceConnection,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
+        cloudflareTunnelSpec: n.cloudflareTunnelSpec,
+        cloudflareTunnelLocalBinding: n.cloudflareTunnelLocalBinding,
         filePath: n.filePath,
         fileMissing: n.fileMissing,
         url: n.url,
@@ -1993,6 +2022,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         serviceConnection: n.data.serviceConnection,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
+        cloudflareTunnelSpec: n.data.cloudflareTunnelSpec,
+        cloudflareTunnelLocalBinding: n.data.cloudflareTunnelLocalBinding,
         filePath: n.data.filePath,
         fileMissing: n.data.fileMissing,
         url: n.data.url,
