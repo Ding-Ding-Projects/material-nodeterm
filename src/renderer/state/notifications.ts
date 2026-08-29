@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { NotifyPayload } from '../../shared/types'
+import { readLocal, writeLocal } from '../lib/localStore'
 
 /**
  * Non-blocking notification system — the store behind the corner-anchored toast stack
@@ -122,9 +123,8 @@ function safeTarget(value: unknown): NotificationTarget | undefined {
 }
 
 function loadPersistedNotifications(): AppNotification[] {
-  if (typeof localStorage === 'undefined') return []
   try {
-    const parsed = JSON.parse(localStorage.getItem(NOTIFICATION_STORAGE_KEY) ?? '[]') as unknown
+    const parsed = JSON.parse(readLocal(NOTIFICATION_STORAGE_KEY) ?? '[]') as unknown
     if (!Array.isArray(parsed)) return []
     return parsed
       .filter((value): value is Partial<AppNotification> => !!value && typeof value === 'object')
@@ -165,10 +165,9 @@ function loadPersistedNotifications(): AppNotification[] {
 }
 
 function persistNotifications(items: AppNotification[]): void {
-  if (typeof localStorage === 'undefined') return
   try {
     const serializable = items.slice(-NOTIFICATION_STORAGE_CAP).map(({ actions: _actions, ...item }) => item)
-    localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(serializable))
+    writeLocal(NOTIFICATION_STORAGE_KEY, JSON.stringify(serializable))
   } catch {
     // Storage can be unavailable or full. The in-memory centre remains usable in that case.
   }

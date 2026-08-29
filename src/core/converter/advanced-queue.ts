@@ -68,7 +68,7 @@ export class AdvancedPipelineQueue {
     } catch {
       // A corrupt snapshot is quarantined, never allowed to prevent the app starting.  The old
       // bytes remain available to support recovery inspection.
-      try { await fs.rename(this.file, `${this.file}.corrupt-${Date.now()}`) } catch { /* absent is normal */ }
+      try { await renameAtomic(this.file, `${this.file}.corrupt-${Date.now()}`) } catch { /* absent is normal */ }
       this.items = []
     }
   }

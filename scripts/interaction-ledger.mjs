@@ -15,6 +15,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
+import { renameAtomicSync } from './lib/rename-atomic.mjs'
 
 export const SCHEMA_VERSION = 1
 export const CHEAP_HEADLESS_ROUTE = 'cheap-lowlevel-headless'
@@ -475,8 +476,8 @@ export function promoteInteractionLedger(options) {
     for (const row of validated.clippingMatrix) fs.copyFileSync(row.screenshot.path, path.join(stagedShots, `${row.id}.png`), fs.constants.COPYFILE_EXCL)
     writeNewFile(stagedManifest, `${JSON.stringify(manifest, null, 2)}\n`)
     fs.mkdirSync(path.dirname(outFile), { recursive: true })
-    fs.renameSync(stagedShots, shotsDir)
-    fs.renameSync(stagedManifest, outFile)
+    renameAtomicSync(stagedShots, shotsDir)
+    renameAtomicSync(stagedManifest, outFile)
     fs.rmSync(transaction, { recursive: true, force: true })
   } catch (error) {
     fs.rmSync(transaction, { recursive: true, force: true })

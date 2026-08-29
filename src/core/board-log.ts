@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { createHash, randomUUID } from 'node:crypto'
 import { watch, type FSWatcher } from 'fs'
+import { renameAtomicSync } from './fs-atomic'
 import { BOARD_LOG_TEXT_MAX, type BoardLogEntry } from '@shared/types'
 import { BOARD_LOG_ATTACHMENT_LIMITS, validateBoardLogAttachmentUpload, validBoardLogAttachment, type BoardLogAttachment, type BoardLogAttachmentSession, type BoardLogAttachmentUpload } from '@shared/board-log-attachments'
 
@@ -218,7 +219,12 @@ export class BoardLogStore {
   private rotateIfLarge(file: string, incoming: number): void {
     try {
       if (fs.statSync(file).size + incoming <= MAX_BOARD_LOG_BYTES) return
-      fs.renameSync(file, `${file}.1`)
+      // The previous rotated generation is intentionally replaced. Remove it first so the
+      // Windows rename does not fail merely because the destination already exists; the shared
+      // retry helper still handles a transient scanner/indexer lock on the source or destination.
+      const rotated = `${file}.1`
+      fs.rmSync(rotated, { force: true })
+      renameAtomicSync(file, rotated)
     } catch {
       // Missing or temporarily unavailable logs remain appendable, and the append reports its
       // actual result rather than turning a best-effort rotation into a false success.
@@ -375,7 +381,11 @@ export class BoardLogStore {
     }
     let rotated = ''
     try { rotated = await fs.promises.readFile(`${this.localPath(cwd)}.1`, 'utf-8') } catch { /* absent */ }
-    return { entries: parseLines(rotated + raw, opts), failed: false }
+    // Parse generations independently. Concatenating raw bytes makes a malformed old tail (or a
+    // file without its final newline) consume the first record in the fresh generation. The
+    // current generation is always newer, so combine newest-first arrays and apply one read cap.
+    const entries = [...parseLines(raw, { all: true }), ...parseLines(rotated, { all: true })]
+    return { entries: opts.all ? entries : entries.slice(0, opts.cap ?? DEFAULT_CAP), failed: false }
   }
 
   /** Watch the log for changes; `cb` fires (debounced 250ms) on each change. Returns an unsub.
