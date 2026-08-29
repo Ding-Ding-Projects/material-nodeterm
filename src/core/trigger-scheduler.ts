@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises'
-import { mkdir } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { writeFileAtomic } from './fs-atomic'
 import { canonicalTriggerSpec, sanitizeTriggerSpec, type TriggerSchedule, type TriggerSpec, type TriggerRunOutcome, type TriggerRunReceipt, type TriggerStatus } from '../shared/trigger'
@@ -40,6 +40,8 @@ interface TriggerSlot {
 }
 
 const MINUTE = 60_000
+const HOUR = 60 * MINUTE
+const DAY = 24 * HOUR
 const DEFAULT_HISTORY = 200
 const TRIGGER_RUN_OUTCOMES: ReadonlySet<string> = new Set([
   'delivered', 'target-missing', 'target-unreadable', 'target-busy', 'target-unsupported',
@@ -47,7 +49,7 @@ const TRIGGER_RUN_OUTCOMES: ReadonlySet<string> = new Set([
 ])
 
 function traceId(): string {
-  return 'trigger-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
+  return `trigger-${randomUUID()}`
 }
 
 function scheduleIdentity(schedule: TriggerSchedule): string {
@@ -58,8 +60,12 @@ function scheduleIdentity(schedule: TriggerSchedule): string {
       : 'once:' + schedule.at
 }
 
-function fieldsFor(date: Date, timeZone: string): Record<string, number> {
-  const parts = new Intl.DateTimeFormat('en-US', {
+const timezoneFormatters = new Map<string, Intl.DateTimeFormat>()
+
+function formatterFor(timeZone: string): Intl.DateTimeFormat {
+  const cached = timezoneFormatters.get(timeZone)
+  if (cached) return cached
+  const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone,
     hour12: false,
     year: 'numeric',
@@ -68,11 +74,18 @@ function fieldsFor(date: Date, timeZone: string): Record<string, number> {
     hour: '2-digit',
     minute: '2-digit',
     weekday: 'short'
-  }).formatToParts(date)
+  })
+  timezoneFormatters.set(timeZone, formatter)
+  return formatter
+}
+
+function fieldsFor(date: Date, timeZone: string): Record<string, number> {
+  const parts = formatterFor(timeZone).formatToParts(date)
   const values: Record<string, string> = {}
   for (const part of parts) values[part.type] = part.value
   const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(values.weekday)
   return {
+    year: Number(values.year),
     minute: Number(values.minute),
     hour: Number(values.hour) % 24,
     day: Number(values.day),
@@ -81,30 +94,85 @@ function fieldsFor(date: Date, timeZone: string): Record<string, number> {
   }
 }
 
-function cronFieldMatches(value: number, source: string, min: number, max: number): boolean {
-  for (const rawPart of source.split(',')) {
-    const [rawRange, rawStep] = rawPart.split('/')
-    const step = rawStep === undefined ? 1 : Number(rawStep)
-    if (!Number.isInteger(step) || step <= 0) continue
-    const range = rawRange === '*' ? [min, max] : rawRange.split('-').map(Number)
-    if (range.length === 1 && Number.isInteger(range[0]) && value === range[0]) return true
-    if (range.length === 2 && Number.isInteger(range[0]) && Number.isInteger(range[1])) {
-      const [from, to] = range
-      if (from >= min && to <= max && value >= from && value <= to && (value - from) % step === 0) return true
-    }
-  }
-  return false
+interface CronField {
+  values: Set<number>
+  wildcard: boolean
 }
 
-function cronMatches(date: Date, expr: string, timeZone: string): boolean {
+function parseCronField(source: string, min: number, max: number): CronField | undefined {
+  const values = new Set<number>()
+  let wildcard = false
+  for (const rawPart of source.split(',')) {
+    const slashParts = rawPart.split('/')
+    if (slashParts.length > 2) return undefined
+    const [rawRange, rawStep] = slashParts
+    if (!rawRange) return undefined
+    const step = rawStep === undefined ? 1 : Number(rawStep)
+    if (!Number.isInteger(step) || step <= 0) return undefined
+    if (rawRange === '*') wildcard = true
+    const range = rawRange === '*' ? [min, max] : rawRange.split('-').map(Number)
+    if (range.length > 2 || !range.every((item) => Number.isInteger(item))) return undefined
+    const from = range[0]
+    const to = range.length === 2 ? range[1] : rawStep === undefined ? from : max
+    if (from < min || to > max || from > to) return undefined
+    for (let value = from; value <= to; value += step) values.add(value)
+  }
+  return values.size > 0 ? { values, wildcard } : undefined
+}
+
+interface ParsedCron {
+  minute: CronField
+  hour: CronField
+  day: CronField
+  month: CronField
+  weekday: CronField
+}
+
+function parseCron(expr: string): ParsedCron | undefined {
   const fields = expr.trim().split(/\s+/)
-  if (fields.length !== 5) return false
-  const value = fieldsFor(date, timeZone)
-  return cronFieldMatches(value.minute, fields[0], 0, 59) &&
-    cronFieldMatches(value.hour, fields[1], 0, 23) &&
-    cronFieldMatches(value.day, fields[2], 1, 31) &&
-    cronFieldMatches(value.month, fields[3], 1, 12) &&
-    cronFieldMatches(value.weekday, fields[4], 0, 6)
+  if (fields.length !== 5) return undefined
+  const minute = parseCronField(fields[0], 0, 59)
+  const hour = parseCronField(fields[1], 0, 23)
+  const day = parseCronField(fields[2], 1, 31)
+  const month = parseCronField(fields[3], 1, 12)
+  const weekday = parseCronField(fields[4], 0, 6)
+  if (!minute || !hour || !day || !month || !weekday) return undefined
+  return { minute, hour, day, month, weekday }
+}
+
+function cronDayMatches(value: Record<string, number>, cron: ParsedCron): boolean {
+  const dayOfMonth = cron.day.values.has(value.day)
+  const dayOfWeek = cron.weekday.values.has(value.weekday)
+  if (cron.day.wildcard && cron.weekday.wildcard) return true
+  if (cron.day.wildcard) return dayOfWeek
+  if (cron.weekday.wildcard) return dayOfMonth
+  return dayOfMonth || dayOfWeek
+}
+
+function calendarDay(value: Record<string, number>): string {
+  return `${value.year}-${value.month}-${value.day}`
+}
+
+/** Return the first minute of the next local calendar day, including across DST transitions. */
+function nextLocalDay(candidate: number, value: Record<string, number>, timeZone: string): number {
+  const currentDay = calendarDay(value)
+  let low = candidate
+  let high = candidate + 36 * HOUR
+  while (calendarDay(fieldsFor(new Date(high), timeZone)) === currentDay) high += DAY
+  while (high - low > MINUTE) {
+    const midpoint = low + Math.floor((high - low) / MINUTE / 2) * MINUTE
+    if (calendarDay(fieldsFor(new Date(midpoint), timeZone)) === currentDay) low = midpoint
+    else high = midpoint
+  }
+  return high
+}
+
+function nextValueDelta(value: number, field: CronField, min: number, max: number): number {
+  for (let candidate = value + 1; candidate <= max; candidate++) {
+    if (field.values.has(candidate)) return candidate - value
+  }
+  const first = [...field.values].sort((a, b) => a - b)[0]
+  return first === undefined ? max - value + 1 : max - value + 1 + first - min
 }
 
 export function nextTriggerOccurrence(schedule: TriggerSchedule, after: number, timeZone = 'UTC'): number | undefined {
@@ -113,10 +181,29 @@ export function nextTriggerOccurrence(schedule: TriggerSchedule, after: number, 
     return Number.isFinite(at) && at > after ? at : undefined
   }
   if (schedule.kind === 'interval') return after + schedule.everyMinutes * MINUTE
+  const cron = parseCron(schedule.expr)
+  if (!cron) return undefined
   const start = Math.floor(after / MINUTE) * MINUTE + MINUTE
   const end = start + 366 * 24 * 60 * MINUTE
-  for (let candidate = start; candidate <= end; candidate += MINUTE) {
-    if (cronMatches(new Date(candidate), schedule.expr, timeZone)) return candidate
+  for (let candidate = start; candidate <= end;) {
+    const value = fieldsFor(new Date(candidate), timeZone)
+    if (!cron.month.values.has(value.month)) {
+      candidate = nextLocalDay(candidate, value, timeZone)
+      continue
+    }
+    if (!cronDayMatches(value, cron)) {
+      candidate = nextLocalDay(candidate, value, timeZone)
+      continue
+    }
+    if (!cron.hour.values.has(value.hour)) {
+      candidate += Math.max(1, 60 - value.minute) * MINUTE
+      continue
+    }
+    if (!cron.minute.values.has(value.minute)) {
+      candidate += nextValueDelta(value.minute, cron.minute, 0, 59) * MINUTE
+      continue
+    }
+    return candidate
   }
   return undefined
 }

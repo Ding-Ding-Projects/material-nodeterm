@@ -46,6 +46,41 @@ describe('nextTriggerOccurrence', () => {
     const after = Date.parse('2026-08-29T12:00:00Z')
     expect(nextTriggerOccurrence({ kind: 'cron', expr: '5 8 * * *' }, after, 'UTC')).toBe(Date.parse('2026-08-30T08:05:00Z'))
   })
+
+  it('treats a bare stepped value as a range through the field maximum', () => {
+    const after = Date.parse('2026-08-29T12:00:00Z')
+    expect(nextTriggerOccurrence({ kind: 'cron', expr: '5/2 12 * * *' }, after, 'UTC')).toBe(
+      Date.parse('2026-08-29T12:05:00Z')
+    )
+    expect(nextTriggerOccurrence({ kind: 'cron', expr: '5/2 12 * * *' }, Date.parse('2026-08-29T12:05:00Z'), 'UTC')).toBe(
+      Date.parse('2026-08-29T12:07:00Z')
+    )
+  })
+
+  it('uses cron OR semantics when both day-of-month and day-of-week are restricted', () => {
+    const after = Date.parse('2026-08-30T00:00:00Z') // Sunday
+    expect(nextTriggerOccurrence({ kind: 'cron', expr: '0 0 1 * 1' }, after, 'UTC')).toBe(
+      Date.parse('2026-08-31T00:00:00Z') // Monday, even though it is not the first
+    )
+  })
+
+  it('jumps to the next local day without skipping midnight across a DST transition', () => {
+    const after = Date.parse('2026-03-08T04:01:00Z') // 23:01 on March 7 in New York
+    expect(nextTriggerOccurrence({ kind: 'cron', expr: '0 0 9 3 *' }, after, 'America/New_York')).toBe(
+      Date.parse('2026-03-09T04:00:00Z')
+    )
+  })
+
+  it('rejects a never-matching cron expression without scanning every minute of a year', () => {
+    const started = performance.now()
+    const result = nextTriggerOccurrence(
+      { kind: 'cron', expr: '0 0 30 2 *' },
+      Date.parse('2026-01-01T00:00:00Z'),
+      'UTC'
+    )
+    expect(result).toBeUndefined()
+    expect(performance.now() - started).toBeLessThan(250)
+  })
 })
 
 describe('TriggerScheduler', () => {
