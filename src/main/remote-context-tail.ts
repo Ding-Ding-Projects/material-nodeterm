@@ -140,22 +140,44 @@ export function createRemoteContextTail(
         // Advancing by the returned tail length would make the next read replay most of a large
         // transcript and could let stale lines win.
         const first = await remoteFile.readTailWithSize(t.ref, INITIAL_READ_CAP)
-        if (first) {
+        if (
+          first &&
+          Buffer.isBuffer(first.data) &&
+          first.data.length <= INITIAL_READ_CAP &&
+          Number.isSafeInteger(first.size) &&
+          first.size >= 0 &&
+          first.size <= MAX_REMOTE_FILE_BYTES &&
+          first.data.length <= first.size
+        ) {
           t.offset = first.size
           scan(sessionId, t, first.data.toString('utf-8'))
         }
       } else {
         const { data, newOffset } = await remoteFile.readFromCapped(t.ref, t.offset, INITIAL_READ_CAP)
-        t.offset = Math.min(MAX_REMOTE_FILE_BYTES, Math.max(t.offset, newOffset))
+        if (
+          !Buffer.isBuffer(data) ||
+          data.length > INITIAL_READ_CAP ||
+          !Number.isSafeInteger(newOffset) ||
+          newOffset < t.offset ||
+          newOffset > MAX_REMOTE_FILE_BYTES
+        ) {
+          return
+        }
+        t.offset = newOffset
         if (data.length) scan(sessionId, t, data.toString('utf8'))
       }
+    } catch {
+      // An injected/runtime adapter may reject or expose an incomplete surface. Keep the
+      // polling loop alive and preserve the last known usage instead of leaking a rejection
+      // from the fire-and-forget read started by track() or setInterval().
+      return
     } finally {
       t.reading = false
     }
 
     if (sessions.get(sessionId) !== t || t.epoch !== readEpoch) return
     // Reconcile the window every pass, same resolution as the local tail.
-    if (t.model) void resolveModelWindow(t.model)
+    if (t.model) void resolveModelWindow(t.model).catch(() => {})
     const window = cachedWindowFor(t.model)
 
     if (t.used > 0 && (t.used !== t.lastUsed || t.model !== t.lastModel || window !== t.lastWindow)) {
