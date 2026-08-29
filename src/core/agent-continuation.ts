@@ -249,6 +249,11 @@ export interface AgentContinuationService extends AgentContinuationApi {
 export function createAgentContinuationService(store = new AgentContinuationStore()): AgentContinuationService {
   const listeners = new Set<(packets: AgentContinuationPreview[]) => void>()
   const receiptWaiters = new Map<string, Set<() => void>>()
+  // Keep a monotonic receipt sequence per exact node/session. Delivery can resolve immediately
+  // after the provider has already emitted its next-turn event, so a waiter registered afterwards
+  // must still see that receipt. The sequence is scoped by the same key as the waiter, preventing
+  // another node or session from satisfying the clear condition.
+  const receiptSequences = new Map<string, number>()
   const retries = new Map<string, Promise<AgentContinuationResult>>()
 
   const notify = async (): Promise<void> => {
@@ -272,6 +277,7 @@ export function createAgentContinuationService(store = new AgentContinuationStor
     }
     if (event.phase === 'turn-start') {
       const key = `${event.nodeId}|${event.sessionId}`
+      receiptSequences.set(key, (receiptSequences.get(key) ?? 0) + 1)
       for (const resolve of receiptWaiters.get(key) ?? []) resolve()
       receiptWaiters.delete(key)
     }
@@ -294,8 +300,9 @@ export function createAgentContinuationService(store = new AgentContinuationStor
     }).then(() => notify()).catch(() => undefined)
   }
 
-  const waitForReceipt = (nodeId: string, sessionId: string): Promise<boolean> => {
+  const waitForReceipt = (nodeId: string, sessionId: string, sinceSequence: number): Promise<boolean> => {
     const key = `${nodeId}|${sessionId}`
+    if ((receiptSequences.get(key) ?? 0) > sinceSequence) return Promise.resolve(true)
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         receiptWaiters.get(key)?.delete(onReceipt)
@@ -372,10 +379,13 @@ export function createAgentContinuationService(store = new AgentContinuationStor
         if (!packet) return { ok: false, reason: 'not-found' }
         const deps = (service as AgentContinuationService & { _deps?: ContinueDeps })._deps
         if (!deps?.providerReady(nodeId, packet.sessionId)) return { ok: false, reason: 'provider-not-ready' }
+        const receiptBeforeDelivery = receiptSequences.get(`${nodeId}|${packet.sessionId}`) ?? 0
         if (!(await deps.deliver(nodeId, packet.sessionId, continuationPrompt(packet)))) {
           return { ok: false, reason: 'delivery-failed' }
         }
-        if (!(await waitForReceipt(nodeId, packet.sessionId))) return { ok: false, reason: 'receipt-timeout' }
+        if (!(await waitForReceipt(nodeId, packet.sessionId, receiptBeforeDelivery))) {
+          return { ok: false, reason: 'receipt-timeout' }
+        }
         try {
           await store.update(nodeId, () => undefined)
         } catch {

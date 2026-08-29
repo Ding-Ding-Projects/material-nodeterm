@@ -6,7 +6,9 @@ The desktop app keeps one bounded continuation packet per Codex node. The packet
 Codex provider hook events, not terminal scrollback. It contains a short progress summary, a
 bounded preview, the provider session id, and a warning that earlier side effects may already
 exist. A cold relaunch hydrates the packet and presents an anchored review card beside the owning
-node.
+node. The cold-relaunch decision carries an explicit continuation-review bit: it is set only when
+the new provider session is fresh and a packet is present. A successful provider resume does not
+show the card or submit the recovered prompt a second time.
 
 The card never injects text merely because it mounted. The user must explicitly choose **Review and
 continue**. The host first requires a verified Codex provider-start event for the same node and
@@ -39,11 +41,15 @@ scrollback as a substitute for provider events.
 
 ## Verification
 
-Focused tests are in `src/core/agent-continuation.test.ts`. They cover redaction, encrypted file
+Focused tests are in `src/core/agent-continuation.test.ts`,
+`src/renderer/terminal/agent-cold-relaunch.test.ts`, and
+`src/renderer/components/AgentContinuationReview.test.tsx`. They cover redaction, encrypted file
 creation, one-packet-per-node behaviour, acknowledgement without clearing, serialized retries,
-provider-readiness refusal, receipt-gated clearing, and malformed-provider isolation. The source
-and real packaged desktop flow remain unverified in the current ultra-speed lane. Tests, lint, type
-checks, builds, packaging, reviews, audits, runtime interaction, and screen captures were not run.
+provider-readiness refusal, delivery and receipt-timeout retention, exact node/session receipt
+matching, packet authentication tamper rejection, the fresh-only review bit, and the rule that
+mounting the review card never injects a prompt. The source and real packaged desktop flow remain
+unverified in the current lane. Tests, lint, type checks, builds, packaging, runtime interaction,
+reviews, audits, and screen captures were not run.
 
 ## Suggested articles
 

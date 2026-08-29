@@ -6,6 +6,8 @@ export type AgentColdRelaunchDecision =
       reconstructable: true
       command: string
       continuity: 'resume' | 'fresh'
+      /** True only when a fresh launch has a packet that the review surface should offer. */
+      continuationReview: boolean
     }
   | {
       reconstructable: false
@@ -21,6 +23,8 @@ export interface AgentColdRelaunchInput {
    *  commands), or undefined/null when unset. Wins over both the resumed and the fresh-start
    *  program — see `agentLaunchOverride` in state/workspace.ts, the one place it is read. */
   launchOverride?: string | null
+  /** Whether a persisted continuation packet exists for this node. */
+  continuationPacket?: boolean
 }
 
 export type AgentColdRelaunchRecoveryErrorCode =
@@ -35,7 +39,8 @@ export interface AgentColdRelaunchRecoveryError {
 }
 
 export type AgentColdRelaunchRecoveryResult =
-  { recovered: true } | { recovered: false; error: AgentColdRelaunchRecoveryError }
+  | { recovered: true; continuationReview: boolean }
+  | { recovered: false; error: AgentColdRelaunchRecoveryError }
 
 export function agentColdRelaunchRecoveryMessage(error: AgentColdRelaunchRecoveryError): string {
   switch (error.code) {
@@ -67,7 +72,8 @@ export function agentColdRelaunchDecision({
   priorSessionId,
   customLaunchCmd,
   sharedIdentity = false,
-  launchOverride
+  launchOverride,
+  continuationPacket = false
 }: AgentColdRelaunchInput): AgentColdRelaunchDecision {
   const builtin = agentConfig(agentId)
   if (builtin) {
@@ -75,12 +81,20 @@ export function agentColdRelaunchDecision({
     const resume = priorSessionId
       ? resumeCommand(agentId, priorSessionId, { sharedIdentity, base: override })
       : null
-    if (resume) return { reconstructable: true, command: resume, continuity: 'resume' }
+    if (resume) {
+      return {
+        reconstructable: true,
+        command: resume,
+        continuity: 'resume',
+        continuationReview: false
+      }
+    }
 
     return {
       reconstructable: true,
       command: override ?? agentLaunchProgram(agentId, builtin.launchCmd, sharedIdentity),
-      continuity: 'fresh'
+      continuity: 'fresh',
+      continuationReview: continuationPacket
     }
   }
 
@@ -91,7 +105,8 @@ export function agentColdRelaunchDecision({
   return {
     reconstructable: true,
     command: agentLaunchProgram(agentId, customLaunchCmd, sharedIdentity),
-    continuity: 'fresh'
+    continuity: 'fresh',
+    continuationReview: continuationPacket
   }
 }
 
@@ -144,5 +159,5 @@ export async function retryAgentColdRelaunch(
   }
 
   respawn()
-  return { recovered: true }
+  return { recovered: true, continuationReview: decision.continuationReview }
 }
