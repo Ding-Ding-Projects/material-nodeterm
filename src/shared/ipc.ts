@@ -195,6 +195,9 @@ export const IPC = {
   wslSleep: 'wsl:sleep',
   wslWake: 'wsl:wake',
   wslDelete: 'wsl:delete',
+  /** Windows desktop only: fixed, read-only native host diagnostics. */
+  windowsDiagnosticsRead: 'windows-diagnostics:read',
+  windowsDiagnosticsSnapshot: 'windows-diagnostics:snapshot',
   contextUpdate: 'context:update',
   contextEnsure: 'context:ensure',
   // Team presence (docs/team-presence.md). `presence:hello` is a REQUEST: its response tells the

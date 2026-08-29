@@ -182,6 +182,10 @@ intentionally unchecked because this task publishes the plan only.
 ### Clean-room features and upstream parity
 
 - [ ] Add clean-room browser, kiosk, PWA, proxy, and read-only diagnostics nodes.
+- [ ] **Read-only Windows diagnostics node (#66)** — implementation is present on
+      `feat/program-55` for drives, storage, services, startup, scheduled tasks, updates, network,
+      and event summaries. The ultra-speed lane intentionally has no Chut, package, runtime, or
+      HuiShot evidence yet; merge and release proof remain pending.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a read-only Windows diagnostics canvas node with bounded drives, storage, services, startup,
+  scheduled-task, update, network, and System event summaries. The current ultra-speed lane did
+  not run Chuts, packaging, runtime interaction, or HuiShots, so feature verification remains
+  pending.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

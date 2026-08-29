@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { WindowsDiagnosticKind } from '../shared/windows-diagnostics'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -545,6 +546,10 @@ const api: NodeTerminalApi = {
     sleep: (name: string) => ipcRenderer.invoke(IPC.wslSleep, name),
     wake: (name: string) => ipcRenderer.invoke(IPC.wslWake, name),
     delete: (name: string) => ipcRenderer.invoke(IPC.wslDelete, name)
+  },
+  windowsDiagnostics: {
+    read: (kind: WindowsDiagnosticKind) => ipcRenderer.invoke(IPC.windowsDiagnosticsRead, kind),
+    snapshot: () => ipcRenderer.invoke(IPC.windowsDiagnosticsSnapshot)
   },
   vscode: {
     detect: () => ipcRenderer.invoke(IPC.vscodeDetect),

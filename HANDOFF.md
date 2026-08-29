@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-08-26, read-only Windows diagnostics lane #66
+
+Implemented on `feat/program-55`: `src/core/windows-diagnostics.ts` runs fixed, bounded, native
+PowerShell reads for drives, physical storage, services, startup entries, scheduled tasks,
+installed updates, network adapters, and recent System events. `src/shared/windows-diagnostics.ts`
+defines the typed records and result sections. The native channels are
+`windows-diagnostics:read` and `windows-diagnostics:snapshot`; they are exposed through the desktop
+preload only and are intentionally absent from relay dispatch. The renderer adds
+`WindowsDiagnosticsNode.tsx`, with a tab for each category, local filtering, row counts, explicit
+empty versus failed states, scrollable tables, and a refresh action. Node title, colour, geometry,
+and relationships are the only project-persisted data; host records remain machine-local.
+
+Documentation was added at `docs/features/canvas/windows-diagnostics.md` and indexed from the
+canvas and feature indexes. Windows overview copy, `CHANGELOG.md`, and `ROADMAP.md` were updated.
+This lane intentionally did not run Chuts, type checks, lint, builds, packaging, installer
+execution, runtime interaction, accessibility checks, or HuiShots, and it made no commit or dew.
+The generated offline docs bundle still needs regeneration through its normal script before a
+release-grade merge.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

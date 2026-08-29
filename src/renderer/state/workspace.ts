@@ -937,6 +937,7 @@ export function createDiffNode(
 
 /** Creates a new sticky note. */
 const AUTHENTICATOR_SIZE = { width: 340, height: 260 }
+const WINDOWS_DIAGNOSTICS_SIZE = { width: 760, height: 520 }
 const NSIS_SIZE = { width: 460, height: 520 }
 
 /**
@@ -957,6 +958,24 @@ export function createAuthenticatorNode(index: number, center?: { x: number; y: 
     data: {
       title: 'Authenticator',
       color: NODE_COLORS[4] ?? NODE_COLORS[0],
+      group: null
+    }
+  }
+}
+
+/** Creates a read-only view of this machine's Windows diagnostics. Only presentation settings
+ * persist in the project file; the queried records are always loaded from the current machine. */
+export function createWindowsDiagnosticsNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('windows-diagnostics'),
+    type: 'windows-diagnostics',
+    position: placeAt(center, index, WINDOWS_DIAGNOSTICS_SIZE.width, WINDOWS_DIAGNOSTICS_SIZE.height),
+    width: WINDOWS_DIAGNOSTICS_SIZE.width,
+    height: WINDOWS_DIAGNOSTICS_SIZE.height,
+    style: { width: WINDOWS_DIAGNOSTICS_SIZE.width, height: WINDOWS_DIAGNOSTICS_SIZE.height },
+    data: {
+      title: 'Windows diagnostics',
+      color: NODE_COLORS[5] ?? NODE_COLORS[0],
       group: null
     }
   }
@@ -1448,6 +1467,7 @@ export function groupSelectedNodes(
 const NODE_KIND_TABLE: Record<NodeKind, true> = {
   terminal: true,
   authenticator: true,
+  'windows-diagnostics': true,
   sticky: true,
   group: true,
   editor: true,
@@ -1485,6 +1505,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
 const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   terminal: TERMINAL_SIZE,
   authenticator: AUTHENTICATOR_SIZE,
+  'windows-diagnostics': WINDOWS_DIAGNOSTICS_SIZE,
   sticky: STICKY_SIZE,
   group: GROUP_SIZE,
   editor: EDITOR_SIZE,

@@ -968,5 +968,31 @@ export const CATALOG: Catalog = {
   'announce.dismiss': {
     en: flat('Dismiss'),
     yue: flat('關閉')
-  }
+  },
+
+  // ---------------------------------------------------------------------------------------
+  // Read-only Windows diagnostics node (WindowsDiagnosticsNode.tsx). Dynamic host records stay
+  // verbatim; only the surrounding labels and recovery copy are localized.
+  // ---------------------------------------------------------------------------------------
+  'windowsDiagnostics.title': { en: flat('Windows diagnostics'), yue: flat('Windows 診斷') },
+  'windowsDiagnostics.snapshot': { en: flat('Read-only machine snapshot'), yue: flat('只讀主機快照') },
+  'windowsDiagnostics.notCaptured': { en: flat('Not captured yet'), yue: flat('未擷取') },
+  'windowsDiagnostics.captured': { en: flat('Captured {time}'), yue: flat('擷取於 {time}') },
+  'windowsDiagnostics.refresh': { en: flat('Refresh read-only diagnostics'), yue: flat('重新整理只讀診斷') },
+  'windowsDiagnostics.close': { en: flat('Close'), yue: flat('關閉') },
+  'windowsDiagnostics.filter': { en: flat('Filter {category}'), yue: flat('篩選 {category}') },
+  'windowsDiagnostics.filterPlaceholder': { en: flat('Type to filter this category'), yue: flat('輸入文字篩選呢個分類') },
+  'windowsDiagnostics.rowCount': { en: flat('{shown} of {total} rows'), yue: flat('{shown} / {total} 行') },
+  'windowsDiagnostics.noMatch': { en: flat('No {category} matched this filter.'), yue: flat('呢個篩選搵唔到 {category}。') },
+  'windowsDiagnostics.unavailable': { en: flat('Read-only Windows diagnostics are unavailable in this surface.'), yue: flat('呢個介面未能使用只讀 Windows 診斷。') },
+  'windowsDiagnostics.readFailed': { en: flat('Could not read Windows diagnostics. The machine was not changed.'), yue: flat('無法讀取 Windows 診斷。主機沒有被更改。') },
+  'windowsDiagnostics.note': { en: flat('This node reads local Windows state only. It does not change services, startup entries, tasks, updates, network settings, or event logs.'), yue: flat('呢個節點只會讀取本機 Windows 狀態，不會更改服務、啟動項目、工作、更新、網絡設定或事件記錄。') },
+  'windowsDiagnostics.category.drives': { en: flat('Drives'), yue: flat('磁碟機') },
+  'windowsDiagnostics.category.storage': { en: flat('Storage'), yue: flat('儲存裝置') },
+  'windowsDiagnostics.category.services': { en: flat('Services'), yue: flat('服務') },
+  'windowsDiagnostics.category.startup': { en: flat('Startup'), yue: flat('啟動項目') },
+  'windowsDiagnostics.category.scheduledTasks': { en: flat('Scheduled tasks'), yue: flat('排程工作') },
+  'windowsDiagnostics.category.updates': { en: flat('Updates'), yue: flat('更新') },
+  'windowsDiagnostics.category.network': { en: flat('Network'), yue: flat('網絡') },
+  'windowsDiagnostics.category.events': { en: flat('Event summary'), yue: flat('事件摘要') }
 }

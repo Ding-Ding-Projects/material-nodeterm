@@ -13,7 +13,7 @@ the deep architecture reference these articles are distilled from.
 | Category | What's in it |
 | --- | --- |
 | [Terminals](./terminals/README.md) | Real shells as nodes, persistent backends across app restarts, and cold restore after reboot. |
-| [Canvas](./canvas/README.md) | The pan/zoom surface, every node kind, and the terminal-node lifecycle. |
+| [Canvas](./canvas/README.md) | The pan/zoom surface, every node kind, the terminal-node lifecycle, and read-only Windows diagnostics. |
 | [Projects](./projects/README.md) | Projects as tabs, per-project canvases, persistence and folder binding. |
 | [Agents](./agents/README.md) | Claude Code, Codex, Gemini, opencode, Grok and custom agent CLIs as nodes. |
 | [Source control](./source-control/README.md) | The git panel, and git worktrees bound to canvas group frames. |

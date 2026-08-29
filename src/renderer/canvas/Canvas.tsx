@@ -100,6 +100,7 @@ import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents }
 import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
+import WindowsDiagnosticsNode from '../nodes/WindowsDiagnosticsNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
@@ -575,6 +576,7 @@ import {
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createAuthenticatorNode,
+  createWindowsDiagnosticsNode,
   createNsisNode,
   createStickyNode,
   createTerminalNode,
@@ -1026,6 +1028,7 @@ function StatusAwareMiniMap({ onNodeDoubleClick }: { onNodeDoubleClick: (node: N
 }
 
 export function Canvas() {
+  const windowsDiagnosticsAvailable = Boolean(window.nodeTerminal.windowsDiagnostics)
   // This canvas's core api (a context read — stable for the session, no store subscription).
   // For the local session it IS window.nodeTerminal, so every call resolves identically.
   const { api, source: sessionSource } = useSession()
@@ -1793,6 +1796,7 @@ export function Canvas() {
       group: withNodeBoundary(GroupNode),
       annotation: withNodeBoundary(AnnotationNode),
       authenticator: withNodeBoundary(AuthenticatorNode),
+      'windows-diagnostics': withNodeBoundary(WindowsDiagnosticsNode),
       editor: withNodeBoundary(LazyEditorNode),
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
@@ -4593,6 +4597,17 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createAuthenticatorNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addWindowsDiagnostics = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createWindowsDiagnosticsNode(ns.length, center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -8748,6 +8763,13 @@ export function Canvas() {
           icon: <IconLock />,
           onClick: () => addAuthenticator(at, groupId)
         },
+        {
+          label: 'New Windows diagnostics',
+          icon: <IconRemote />,
+          disabled: !windowsDiagnosticsAvailable,
+          hint: windowsDiagnosticsAvailable ? undefined : 'Available only in the Windows desktop.',
+          onClick: () => addWindowsDiagnostics(at, groupId)
+        },
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
           ? []
@@ -8805,6 +8827,8 @@ export function Canvas() {
       agentCreationItems,
       addSticky,
       addAuthenticator,
+      addWindowsDiagnostics,
+      windowsDiagnosticsAvailable,
       addNativeLoop,
       addToExistingGroup,
       groupSelection
@@ -8921,6 +8945,13 @@ export function Canvas() {
               label: 'New authenticator',
               icon: <IconLock />,
               onClick: () => addAuthenticator(at)
+            },
+            {
+              label: 'New Windows diagnostics',
+              icon: <IconRemote />,
+              disabled: !windowsDiagnosticsAvailable,
+              hint: windowsDiagnosticsAvailable ? undefined : 'Available only in the Windows desktop.',
+              onClick: () => addWindowsDiagnostics(at)
             },
             {
               label: 'New NSIS installer…',
@@ -9045,6 +9076,8 @@ export function Canvas() {
       agentCreationItems,
       addSticky,
       addAuthenticator,
+      addWindowsDiagnostics,
+      windowsDiagnosticsAvailable,
       addNsis,
       addNativeLoop,
       addDino,
@@ -13022,6 +13055,14 @@ export function Canvas() {
             run: () => addAuthenticator()
           },
           {
+            id: 'new-windows-diagnostics',
+            label: 'New Windows diagnostics',
+            icon: <IconRemote />,
+            disabled: !windowsDiagnosticsAvailable,
+            note: windowsDiagnosticsAvailable ? undefined : 'Available only in the Windows desktop.',
+            run: () => addWindowsDiagnostics()
+          },
+          {
             id: 'new-nsis',
             label: 'New NSIS installer…',
             icon: <IconEditor />,
@@ -13375,6 +13416,9 @@ export function Canvas() {
     terminalProfileMenuChoices,
     addAgentNode,
     addSticky,
+    addAuthenticator,
+    addWindowsDiagnostics,
+    windowsDiagnosticsAvailable,
     addNsis,
     addNativeLoop,
     addDino,
