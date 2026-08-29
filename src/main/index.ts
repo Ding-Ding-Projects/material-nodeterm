@@ -2003,6 +2003,7 @@ app.whenReady().then(async () => {
         browserGuests,
         webContentsId,
         nodeId,
+        undefined,
         surface,
         (id) => webContents.fromId(id) ?? null,
         // Loud, because the symptom otherwise is "popups from this node stopped opening" with

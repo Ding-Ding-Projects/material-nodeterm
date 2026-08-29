@@ -44,10 +44,16 @@ export async function resolveScreenshotPath(
   deps: ScreenshotPathDeps
 ): Promise<ResolvedScreenshotPath> {
   if (!projectCwd) return { ok: false, message: SCREENSHOT_NO_PROJECT_DIR }
+  // Tests and the server-side path seam may supply POSIX-style roots while running on Deen No.
+  // Real Deen No project paths are drive or UNC rooted, so selecting the POSIX helper only for a
+  // slash-rooted non-drive value preserves the caller's path dialect without weakening the jail.
+  const pathApi = process.platform === 'win32' && projectCwd.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(projectCwd)
+    ? path.posix
+    : path
   // A relative path resolves against the project cwd; an absolute path stays absolute (and is refused
   // below unless it already lands inside the project).
-  const abs = path.resolve(projectCwd, rawPath)
-  const parent = path.dirname(abs)
+  const abs = pathApi.resolve(projectCwd, rawPath)
+  const parent = pathApi.dirname(abs)
   let realBase: string
   let realParent: string
   try {
@@ -60,11 +66,12 @@ export async function resolveScreenshotPath(
   }
   // Separator-terminated prefix: `/proj-evil` must NOT pass the `/proj` check. Equality is the root
   // itself (a file written directly in the project dir).
-  const baseWithSep = realBase.endsWith(path.sep) ? realBase : realBase + path.sep
+  const separator = pathApi.sep
+  const baseWithSep = realBase.endsWith(separator) ? realBase : realBase + separator
   if (realParent !== realBase && !realParent.startsWith(baseWithSep)) {
     return { ok: false, message: SCREENSHOT_OUTSIDE_PROJECT }
   }
-  const target = path.join(realParent, path.basename(abs))
+  const target = pathApi.join(realParent, pathApi.basename(abs))
   // Belt against a final-component symlink planted at the exact target name pointing outside: a
   // plain writeFile would follow it. A missing file (ENOENT) is the normal case and passes.
   try {

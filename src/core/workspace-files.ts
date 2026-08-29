@@ -354,6 +354,8 @@ export function projectToFile(
     ...(p.portals && p.portals.length > 0 ? { portals: p.portals.map((portal) => ({ ...portal })) } : {}),
     ...(icon ? { icon } : {}),
     ...(links ? { links } : {}),
+    ...(p.bridges && p.bridges.length > 0 ? { bridges: p.bridges.map((bridge) => ({ ...bridge })) } : {}),
+    ...(p.ropes && p.ropes.length > 0 ? { ropes: p.ropes.map((rope) => ({ ...rope })) } : {}),
     ...(p.defaultPermissionMode ? { defaultPermissionMode: p.defaultPermissionMode } : {}),
     // Strict-normalised (literal true only, known keys only) and omitted when off — an off
     // capability adds no bytes to the committed file. `capabilityAck` is deliberately NOT here:
@@ -583,6 +585,8 @@ export function fileToProject(
     } : {}),
     ...(validPortals(f.portals) ? { portals: f.portals.map((portal) => ({ ...portal })) } : {}),
     ...(links ? { links } : {}),
+    ...(f.bridges && Array.isArray(f.bridges) ? { bridges: f.bridges.map((bridge) => ({ ...bridge })) } : {}),
+    ...(f.ropes && Array.isArray(f.ropes) ? { ropes: f.ropes.map((rope) => ({ ...rope })) } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),
     ...(base.settingsOverrides ? { settingsOverrides: base.settingsOverrides } : {}),
     // Machine-local, from the index entry ONLY: a file field named `breadcrumbs` is a forgery

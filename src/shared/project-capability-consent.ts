@@ -80,7 +80,7 @@ export function projectCapabilityGranted(s: CapabilityConsentState): boolean {
 /**
  * THE consumer-facing grant check: derives both halves (strict file flag, own-property answer)
  * from a Project-shaped object, so a consumer cannot pick the raw file flag by mistake. A future
- * feature wires e.g. `browserControlEnabled(projectId)` as
+ * a future browser consumer wires its project id through
  * `projectCapabilityGrantedFor(getProject(projectId), 'agentBrowserControl')` — one call, nothing
  * else.
  * from a Project-shaped object, so a consumer cannot pick the raw file flag by mistake (PR #213

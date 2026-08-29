@@ -240,7 +240,6 @@ export class BrowserSession {
       return Promise.reject(e)
     }
     this.extendLease()
-    return this.race(sendCdp(this.dbg, method, params, this.viewport(), sessionId))
     return this.race(sendCdp(this.dbg, method, params, this.currentCtx(), sessionId))
   }
 

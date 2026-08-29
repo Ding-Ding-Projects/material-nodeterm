@@ -1,4 +1,5 @@
 import os from 'os'
+import { sendCdp, type DebuggerLike } from './browser-cdp-send'
 
 export const BROWSER_USE_MAX_FRAME_BYTES = 8 * 1024 * 1024
 
@@ -6,11 +7,11 @@ export interface BrowserDebuggerLike {
   isAttached(): boolean
   attach(protocolVersion?: string): void
   detach(): void
-  sendCommand(
+  sendCommand: (
     method: string,
     commandParams?: Record<string, unknown>,
     sessionId?: string
-  ): Promise<unknown>
+  ) => Promise<unknown>
   on(
     event: 'message',
     listener: (
@@ -140,6 +141,7 @@ export class NodeTermBrowserUseRouter {
     sessionId: string
   }>()
   private readonly targetSessions = new Map<number, Map<string, string>>()
+  private readonly viewports = new Map<number, { width: number; height: number }>()
 
   constructor(
     private readonly nodeIdForSession: (
@@ -159,6 +161,7 @@ export class NodeTermBrowserUseRouter {
     const registration = this.guests.get(webContentsId)
     this.guests.delete(webContentsId)
     this.targetSessions.delete(webContentsId)
+    this.viewports.delete(webContentsId)
     if (registration) this.detachDebugger(webContentsId, registration.contents)
   }
 
@@ -363,11 +366,30 @@ export class NodeTermBrowserUseRouter {
     if (!cdpSessionId && typeof target.targetId === 'string') {
       cdpSessionId = this.targetSessions.get(tabId)?.get(target.targetId)
     }
-    return guest.contents.debugger.sendCommand(
+    const result = await sendCdp(
+      guest.contents.debugger as unknown as DebuggerLike,
       method,
       commandParams,
+      { viewport: this.viewports.get(tabId) ?? { width: 0, height: 0 } },
       cdpSessionId
     )
+    if (method === 'Page.getLayoutMetrics') {
+      const metrics = object(result)
+      const layout = object(metrics.cssLayoutViewport)
+      const visual = object(metrics.cssVisualViewport)
+      const width = typeof layout.clientWidth === 'number' && Number.isFinite(layout.clientWidth)
+        ? layout.clientWidth
+        : typeof visual.clientWidth === 'number' && Number.isFinite(visual.clientWidth)
+          ? visual.clientWidth
+          : 0
+      const height = typeof layout.clientHeight === 'number' && Number.isFinite(layout.clientHeight)
+        ? layout.clientHeight
+        : typeof visual.clientHeight === 'number' && Number.isFinite(visual.clientHeight)
+          ? visual.clientHeight
+          : 0
+      this.viewports.set(tabId, { width, height })
+    }
+    return result
   }
 
   private async attachTarget(
@@ -382,10 +404,10 @@ export class NodeTermBrowserUseRouter {
     const guest = this.requireTab(sessionId, tabId)
     this.attachDebugger(sessionId, guest.contents)
     const response = object(
-      await guest.contents.debugger.sendCommand('Target.attachToTarget', {
+      await sendCdp(guest.contents.debugger as unknown as DebuggerLike, 'Target.attachToTarget', {
         flatten: true,
         targetId
-      })
+      }, { viewport: this.viewports.get(tabId) ?? { width: 0, height: 0 } })
     )
     if (typeof response.sessionId === 'string') {
       const targets =
@@ -409,9 +431,9 @@ export class NodeTermBrowserUseRouter {
     const targets = this.targetSessions.get(tabId)
     const cdpSessionId = targets?.get(targetId)
     if (cdpSessionId) {
-      await guest.contents.debugger.sendCommand('Target.detachFromTarget', {
+      await sendCdp(guest.contents.debugger as unknown as DebuggerLike, 'Target.detachFromTarget', {
         sessionId: cdpSessionId
-      })
+      }, { viewport: this.viewports.get(tabId) ?? { width: 0, height: 0 } })
       targets?.delete(targetId)
     }
     return null
