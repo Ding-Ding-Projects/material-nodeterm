@@ -7,6 +7,7 @@ import { safeServiceEndpoint } from '@shared/node-exec'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
+import { OpenWebUiPanel } from '../components/open-webui/OpenWebUiPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 
 /**
@@ -47,7 +48,8 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   proxmox: 'https://proxmox.local:8006',
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
-  freepbx: 'https://pbx.local'
+  freepbx: 'https://pbx.local',
+  openwebui: 'http://127.0.0.1:3000'
 }
 
 /**
@@ -226,8 +228,9 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
         </div>
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
+        {!collapsed && kind === 'openwebui' && <OpenWebUiPanel nodeId={id} />}
 
-        {!collapsed && kind !== 'minecraft' && (
+        {!collapsed && kind !== 'minecraft' && kind !== 'openwebui' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">Address</span>

@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { OpenWebUiStatus } from '../shared/open-webui'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -942,6 +943,19 @@ const api: NodeTerminalApi = {
     restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
+  },
+  openWebUi: {
+    configure: (input) => ipcRenderer.invoke(IPC.openWebUiConfigure, input),
+    status: (id) => ipcRenderer.invoke(IPC.openWebUiStatus, id),
+    start: (id) => ipcRenderer.invoke(IPC.openWebUiStart, id),
+    stop: (id) => ipcRenderer.invoke(IPC.openWebUiStop, id),
+    listBackups: (id) => ipcRenderer.invoke(IPC.openWebUiBackupsList, id),
+    createBackup: (id) => ipcRenderer.invoke(IPC.openWebUiBackupCreate, id),
+    restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.openWebUiBackupRestore, id, backupId),
+    update: (id) => ipcRenderer.invoke(IPC.openWebUiUpdate, id),
+    rollback: (id) => ipcRenderer.invoke(IPC.openWebUiRollback, id),
+    tunnelHandoff: (id) => ipcRenderer.invoke(IPC.openWebUiTunnelHandoff, id),
+    onEvent: (listener) => subscribe<[OpenWebUiStatus]>(IPC.openWebUiEvent)(listener)
   }
 }
 

@@ -1,5 +1,29 @@
 # Handoff
 
+## 2026-08-26, Open WebUI hosting node, issue #54
+
+Implemented the Open WebUI hosting lane in the current `feat/program-43` Gerk Tong Hui. The new
+`openwebui` service kind uses a typed shared catalog and API (`src/shared/open-webui.ts`,
+`src/shared/hosting-catalog.ts`), a platform-free Docker lifecycle manager
+(`src/core/open-webui/manager.ts`) and shared RPC registration. Desktop preload and Server Edition
+bridges expose the same configure/status/start/stop/backup/restore/update/rollback/tunnel-handoff
+operations. The canvas panel offers discovered Docker contexts, bounded loopback port selection,
+existing local Ollama reuse, an OpenAI-compatible HTTPS provider option with opaque credential
+reference, health and honest first-user bootstrap states, persistent volume backup/restore and
+private-first tunnel handoff.
+
+The image is fixed to the official `ghcr.io/open-webui/open-webui:v0.8.3` release. No arbitrary
+image, command, entrypoint, Compose text, socket, or environment editor crosses the API. Docker
+argv is assembled only by the core manager. Project content carries safe display intent only;
+runtime config, volume, container state, provider reference, and generated data stay under local
+application data. The categorized article, offline docs bundle entry, site article, integration
+index, changelog, roadmap note, and this handoff are updated.
+
+This ultra-speed lane deliberately did not run tests, type checks, lint, security or accessibility
+checks, builds, packaging, installer execution, runtime interaction, or captures. The roadmap item
+therefore remains unchecked until release-grade evidence is produced. No commit or dew was made by
+this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

@@ -594,6 +594,20 @@ export const IPC = {
   // Shell → renderer: one multiplexed status/console stream, like ollama:chat-stream above.
   // Payload: MinecraftEvent. A listener filters to the instance id it owns.
   minecraftEvent: 'minecraft:event',
+  // Open WebUI hosting node (docs/features/integrations/open-webui-hosting.md). The image,
+  // command, entrypoint, and environment are fixed in core/open-webui; only typed safe intent
+  // crosses this seam.
+  openWebUiConfigure: 'open-webui:configure',
+  openWebUiStatus: 'open-webui:status',
+  openWebUiStart: 'open-webui:start',
+  openWebUiStop: 'open-webui:stop',
+  openWebUiBackupsList: 'open-webui:backups-list',
+  openWebUiBackupCreate: 'open-webui:backup-create',
+  openWebUiBackupRestore: 'open-webui:backup-restore',
+  openWebUiUpdate: 'open-webui:update',
+  openWebUiRollback: 'open-webui:rollback',
+  openWebUiTunnelHandoff: 'open-webui:tunnel-handoff',
+  openWebUiEvent: 'open-webui:event',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).

@@ -7,6 +7,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | feature | status |
 | --- | --- |
 | [Service nodes](service-nodes.md) | implemented as canvas objects (Minecraft, Docker host, Proxmox, GitLab, Home Assistant, FreePBX); none of them dial anything yet |
+| [Open WebUI hosting](open-webui-hosting.md) | implemented as a private-first typed Docker lifecycle with persistent volume, Ollama reuse, OpenAI-compatible provider, backup, restore, update, rollback, and tunnel handoff |
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |
 

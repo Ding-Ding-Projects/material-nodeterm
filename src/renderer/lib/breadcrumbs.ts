@@ -20,7 +20,8 @@ const KIND_LABEL: Partial<Record<NodeKind, string>> = {
   web: 'web',
   browser: 'browser',
   dino: 'dino',
-  group: 'group'
+  group: 'group',
+  openwebui: 'Open WebUI'
 }
 
 /** The subset of a node `recordBreadcrumb`/`buildNote` need — loose on purpose so callers can

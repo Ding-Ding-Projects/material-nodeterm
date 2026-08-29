@@ -373,6 +373,7 @@ export type NodeKind =
   | 'gitlab'
   | 'homeassistant'
   | 'freepbx'
+  | 'openwebui'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -385,7 +386,8 @@ export const SERVICE_NODE_KINDS = [
   'proxmox',
   'gitlab',
   'homeassistant',
-  'freepbx'
+  'freepbx',
+  'openwebui'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -3798,6 +3800,8 @@ export interface NodeTerminalApi {
   ollama: import('./ollama').OllamaApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** Guided local Open WebUI hosting — docs/features/integrations/open-webui-hosting.md. */
+  openWebUi: import('./open-webui').OpenWebUiApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

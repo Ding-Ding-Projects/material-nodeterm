@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Open WebUI hosting node — nodeterm docs</title>
+    <meta name="description" content="Private-first Open WebUI hosting with persistent data, existing Ollama reuse, backup, restore, update, rollback, and an explicit tunnel handoff." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a><span aria-hidden="true">/</span><a href="./index.html">Docs</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Integrations</p>
+      <h1>Open WebUI hosting node</h1>
+      <p>The node runs the official pinned image <code>ghcr.io/open-webui/open-webui:v0.8.3</code> on a private loopback port, with persistent data stored in a named Docker volume.</p>
+      <h2>Guided setup</h2>
+      <p>Choose a discovered Docker context and a bounded host port. Choose either reuse of an existing local Ollama API or an OpenAI-compatible HTTPS endpoint. The surface accepts no custom image, arbitrary command, entrypoint, Compose text, socket, or environment editor. An optional credential reference names the operating-system vault entry only; the key never enters the canvas or Docker arguments.</p>
+      <h2>Bootstrap and health</h2>
+      <p>Authentication stays enabled. After the local <code>/health</code> endpoint responds, the node reports “Ready for the first user” until somebody completes Open WebUI's own registration. nodeterm does not create an account or claim that registration happened.</p>
+      <h2>Persistent recovery</h2>
+      <p>Backup creates a dated, byte-sized copy of the volume. Restore, update, and rollback preserve an automatic copy before changing the container or its data. A failed action reports the concrete reason and leaves the recovery copy available.</p>
+      <h2>Private-first tunnel boundary</h2>
+      <p>The node never exposes a public port or creates a tunnel automatically. A separate handoff is enabled only after local health is ready, and returns the local URL to the guided tunnel flow.</p>
+      <h2>Portability</h2>
+      <p>Project files keep safe display intent only. Docker context, volume, container state, local URL, credentials, and runtime data remain local. Import performs no network request, image pull, process launch, deployment, or tunnel action.</p>
+      <h2>Verification note</h2>
+      <p>This ultra-speed lane intentionally did not run tests, type checks, lint, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or captures. Artifact and release verification must record that boundary honestly.</p>
+      <section class="doc-suggested"><h2>Suggested articles</h2><ul><li><a href="./server-edition.html">Server Edition and Docker</a></li><li><a href="../index.html">Local Ollama manager</a></li><li><a href="./remote-ssh-projects.html">Remote and SSH projects</a></li></ul></section>
+    </article>
+  </body>
+</html>

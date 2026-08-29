@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { OpenWebUiApi } from '../../shared/open-webui'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,24 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+/** Open WebUI hosting uses the same authenticated RPC bridge as the desktop preload. */
+export function buildOpenWebUiApi(client: RpcClient): Pick<NodeTerminalApi, 'openWebUi'> {
+  const openWebUi: OpenWebUiApi = {
+    configure: (input) => client.request(IPC.openWebUiConfigure, input) as ReturnType<OpenWebUiApi['configure']>,
+    status: (id) => client.request(IPC.openWebUiStatus, id) as ReturnType<OpenWebUiApi['status']>,
+    start: (id) => client.request(IPC.openWebUiStart, id) as ReturnType<OpenWebUiApi['start']>,
+    stop: (id) => client.request(IPC.openWebUiStop, id) as ReturnType<OpenWebUiApi['stop']>,
+    listBackups: (id) => client.request(IPC.openWebUiBackupsList, id) as ReturnType<OpenWebUiApi['listBackups']>,
+    createBackup: (id) => client.request(IPC.openWebUiBackupCreate, id) as ReturnType<OpenWebUiApi['createBackup']>,
+    restoreBackup: (id, backupId) => client.request(IPC.openWebUiBackupRestore, id, backupId) as ReturnType<OpenWebUiApi['restoreBackup']>,
+    update: (id) => client.request(IPC.openWebUiUpdate, id) as ReturnType<OpenWebUiApi['update']>,
+    rollback: (id) => client.request(IPC.openWebUiRollback, id) as ReturnType<OpenWebUiApi['rollback']>,
+    tunnelHandoff: (id) => client.request(IPC.openWebUiTunnelHandoff, id) as ReturnType<OpenWebUiApi['tunnelHandoff']>,
+    onEvent: (listener) => client.subscribe(IPC.openWebUiEvent, listener as Listener)
+  }
+  return { openWebUi }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1394,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildOpenWebUiApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

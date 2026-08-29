@@ -1802,16 +1802,17 @@ export function Canvas() {
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
-      // The service family. One component for all six: they differ in what they manage, not in how
+      // The service family. One component for all seven: they differ in what they manage, not in how
       // they behave as canvas objects, and React Flow hands each its own `type` so the component can
-      // tell them apart without six registrations of six near-identical files.
+      // tell them apart without seven registrations of seven near-identical files.
       nsis: withNodeBoundary(NsisInstallerNode),
       minecraft: withNodeBoundary(ServiceNode),
       dockerhost: withNodeBoundary(ServiceNode),
       proxmox: withNodeBoundary(ServiceNode),
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
-      freepbx: withNodeBoundary(ServiceNode)
+      freepbx: withNodeBoundary(ServiceNode),
+      openwebui: withNodeBoundary(ServiceNode)
     }),
     []
   )

@@ -588,6 +588,19 @@ export function buildStubApi(): Omit<
       restoreBackup: U('minecraft.restoreBackup'),
       deleteBackup: U('minecraft.deleteBackup'),
       onEvent: noopUnsub
+    },
+    openWebUi: {
+      configure: U('openWebUi.configure'),
+      status: U('openWebUi.status'),
+      start: U('openWebUi.start'),
+      stop: U('openWebUi.stop'),
+      listBackups: U('openWebUi.listBackups'),
+      createBackup: U('openWebUi.createBackup'),
+      restoreBackup: U('openWebUi.restoreBackup'),
+      update: U('openWebUi.update'),
+      rollback: U('openWebUi.rollback'),
+      tunnelHandoff: U('openWebUi.tunnelHandoff'),
+      onEvent: noopUnsub
     }
   } satisfies Omit<
     NodeTerminalApi,

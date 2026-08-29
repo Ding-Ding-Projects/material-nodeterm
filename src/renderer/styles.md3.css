@@ -2258,6 +2258,10 @@ button.term-node__title-text:focus-visible {
 .service-node :is(button, input):focus-visible {
   outline-color: var(--md-primary);
 }
+
+.open-webui-panel { background: var(--md-sys-color-surface-container); border-radius: var(--md-shape-medium, 12px); color: var(--md-sys-color-on-surface); padding: 12px; }
+.open-webui-panel .button-component { min-height: 40px; }
+.open-webui-panel__providers { border-color: var(--md-sys-color-outline); }
 .service-node__input {
   border-radius: var(--md-shape-sm);
 }

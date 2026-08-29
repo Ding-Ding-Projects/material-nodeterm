@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a guided Open WebUI hosting node with the official pinned image, persistent Docker volume,
+  existing Ollama reuse, OpenAI-compatible provider endpoint, honest first-user bootstrap and
+  health states, backup/restore, update/rollback, and private-first tunnel handoff. The ultra-speed
+  lane intentionally skipped tests, type checks, lint, security, accessibility, builds, packaging,
+  installer execution, runtime interaction, and captures.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.
