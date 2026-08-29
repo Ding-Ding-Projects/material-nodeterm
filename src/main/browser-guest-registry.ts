@@ -93,7 +93,31 @@ export function registerBrowserGuestRequest(
   surface: unknown,
   lookup: WebContentsLookup,
   onRefused: (details: BrowserGuestRegistrationRefusal) => void
+): boolean
+export function registerBrowserGuestRequest(
+  guests: Map<number, BrowserGuest>,
+  webContentsId: unknown,
+  nodeId: unknown,
+  _ownerNodeId: unknown,
+  surface: unknown,
+  lookup: WebContentsLookup,
+  onRefused: (details: BrowserGuestRegistrationRefusal) => void
+): boolean
+export function registerBrowserGuestRequest(
+  guests: Map<number, BrowserGuest>,
+  webContentsId: unknown,
+  nodeId: unknown,
+  surfaceOrOwner: unknown,
+  lookupOrSurface: unknown,
+  onRefusedOrLookup: unknown,
+  maybeOnRefused?: unknown
 ): boolean {
+  const legacyCall = typeof lookupOrSurface === 'function'
+  const surface = (legacyCall ? surfaceOrOwner : lookupOrSurface) as unknown
+  const lookup = (legacyCall ? lookupOrSurface : onRefusedOrLookup) as WebContentsLookup
+  const onRefused = (legacyCall ? onRefusedOrLookup : maybeOnRefused) as (
+    details: BrowserGuestRegistrationRefusal
+  ) => void
   const accepted = registerBrowserGuest(
     guests,
     webContentsId,
