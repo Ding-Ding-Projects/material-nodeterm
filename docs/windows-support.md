@@ -361,9 +361,11 @@ outside that branding gate because the pinned builder has no supported resource-
    `System.InvalidProgramException: JIT Compiler encountered an internal limitation` and a
    `Microsoft.Build.CPPTasks` method reported as having no implementation. The same broken compiled
    regex path has also raised `System.AccessViolationException`. These are not C++
-   diagnostics. The native rebuild wrapper retains a bounded diagnostic tail and retries one exact
-   runtime-signature failure once. A repeated runtime failure and every ordinary compiler or linker
-   failure remain fatal. The wrapper never broadens the module list during that retry.
+   diagnostics. The native rebuild wrapper retains a bounded diagnostic tail and permits three total
+   attempts, separated by one-second then two-second backoff, only for those exact runtime
+   signatures. It pins sequential modules and disables MSBuild node reuse through both node-gyp's
+   command line and the process environment. Exhausting the budget and every ordinary compiler or
+   linker failure remain fatal. The wrapper never broadens the module list during recovery.
 
 ## Testing generated POSIX shell
 

@@ -84,8 +84,9 @@ job:
 8. **Install dependencies** — `npm ci`, which also runs the project's own `postinstall` hook
    (`scripts/patch-node-pty.mjs` + `scripts/rebuild-electron-native.mjs` against this runner's
    Electron ABI). The wrapper uses `@electron/rebuild --only` for exactly `node-pty` and
-   `smart-whisper`, then loads both under Electron before it reports success. It retries once only
-   for the measured MSBuild runtime/JIT signatures. `windows-latest` already ships the Visual Studio Build Tools
+   `smart-whisper`, pins sequential module processing, and disables MSBuild node reuse. It permits
+   three total attempts with bounded backoff only for measured MSBuild runtime/JIT signatures, then
+   loads both packages under Electron before reporting success. `windows-latest` already ships the Visual Studio Build Tools
    and Python that native module compilation needs; nothing extra is bootstrapped for that.
    If a future dependency needs a tool the runner image does not carry, add a check-then-
    install step here, immediately before it is needed.

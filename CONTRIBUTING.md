@@ -167,9 +167,10 @@ need it too, and wire it in the same change.
   `@electron/rebuild --only`. Do not replace it with `--which-module`: that option adds modules to
   the detected walk, so unrelated optional native packages compile too. Both packages are denied
   their own install lifecycle through `allowScripts` because the root postinstall owns the one
-  patched rebuild. The wrapper retries once
-  only for the measured MSBuild 17.14 runtime/JIT signatures and then loads both required packages
-  under Electron. Ordinary compiler failures are never retried or converted into success.
+  patched rebuild. The wrapper runs modules sequentially with MSBuild node reuse disabled and allows
+  three total attempts with bounded backoff only for measured MSBuild 17.14 runtime/JIT signatures.
+  It then loads both required packages under Electron. Ordinary compiler failures are never retried
+  or converted into success.
   The preflight names the PID holding a file and independently verifies the component, reporting
   both problems at once. Neither check can fail on macOS or Linux.
 

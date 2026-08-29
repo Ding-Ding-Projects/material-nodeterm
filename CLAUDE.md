@@ -63,11 +63,15 @@ Both commands then call `scripts/rebuild-electron-native.mjs`. It invokes the lo
 used because it maps to `extraModules` and still rebuilds every detected native package. The wrapper
 owns both packages' native install lifecycles through explicit `allowScripts: false` entries, so
 `npm ci` does not compile either package once before the root postinstall compiles them again. It
-streams the full compiler output while retaining a bounded diagnostic tail. It retries once only
-when that tail proves the observed MSBuild runtime failure (`InvalidProgramException` or the
-regex-runner `AccessViolationException`, or the `Microsoft.Build.CPPTasks` no-implementation form), and ordinary source or linker failures
-return immediately. After a successful rebuild it runs Electron as Node and requires both packages,
-so a command is not successful merely because two output paths happen to exist.
+streams the full compiler output while retaining a bounded diagnostic tail. Modules are explicitly
+sequential. node-gyp already invokes MSBuild with `/nodeReuse:false`; the wrapper also sets
+`MSBUILDDISABLENODEREUSE=1` for every fresh attempt. At most three total attempts run, with
+one-second then two-second backoff, and only when the tail proves the observed MSBuild runtime
+failure (`InvalidProgramException`, regex-runner `AccessViolationException`, or the
+`Microsoft.Build.CPPTasks` no-implementation form). Ordinary source or linker failures return
+immediately. Unmeasured CLR/JIT tuning switches are deliberately absent. After a successful rebuild
+the wrapper runs Electron as Node and requires both packages, so output paths alone never establish
+success.
 
 `src/main/node-pty-patch.test.ts` asserts the marker is present in those sources, so a node-pty
 upgrade that silently drops the patch fails loudly. **If that test is red, your `node_modules` is
@@ -3403,8 +3407,11 @@ for `node-pty` and `smart-whisper`, so optional native packages such as `bufferu
 `utf-8-validate`, and `utp-native` keep their installed prebuilds and cannot manufacture an
 unrelated compiler failure. MSBuild 17.14 can intermittently raise an internal CLR JIT
 `InvalidProgramException` or report a CPP task method with no implementation. Only those measured
-runtime signatures, plus an `AccessViolationException` in the same compiled-regex runner path, get
-one retry; a real C++ or linker diagnostic gets none.
+runtime signatures, plus an `AccessViolationException` in the same compiled-regex runner path, may
+consume the three-attempt budget. The one-second then two-second backoff separates fresh MSBuild
+processes. node-gyp's `/nodeReuse:false`, the wrapper's `MSBUILDDISABLENODEREUSE=1`, and explicit
+sequential module mode prevent process reuse or parallel modules from contaminating another attempt.
+A real C++ or linker diagnostic gets no retry.
 
 The preflight placement means both root BAT entry points name the exact locked file and PID even on
 a machine that started with no Node on `PATH`. The old pre-dependency placement skipped the check
