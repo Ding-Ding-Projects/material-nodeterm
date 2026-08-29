@@ -9,19 +9,6 @@
 // appended in the SAME write, so the composer sees a definitive paste boundary and the Enter
 // can never be re-chunked into the paste. Apps that never requested bracketed paste keep the
 // legacy two-step delivery.
-//
-// MAINTENANCE — this file is a deliberately vendored duplicate.
-// The canonical implementation lives in `agent-whip/packages/paste-frame/src/index.ts`
-// (a sibling checkout, not a dependency of this repo). It was copied rather than shared
-// because material-nodeterm is a public repository and `agent-whip` is not published to any
-// registry, so a `file:`-protocol or path dependency would resolve on the machine that made
-// the copy and dangle for everyone else who clones this repo on its own.
-//
-// This is a mitigation, not the fix. `scripts/check-paste-frame-parity.mjs` (wired into
-// `npm run typecheck`) compares this file's normative content against agent-whip's copy
-// whenever that sibling checkout is present, and fails loudly the moment the two disagree.
-// The real fix is publishing `@agent-whip/paste-frame` to a registry once rights exist, at
-// which point this file is deleted and both projects depend on the one package.
 export const PASTE_START = '\x1b[200~'
 export const PASTE_END = '\x1b[201~'
 
@@ -34,9 +21,7 @@ export const PASTE_END = '\x1b[201~'
  * escape sequence the author chose. That is not only a human pasting a terminal transcript; the
  * canvas-control `write` verb hands an AGENT's text to the same framer, and the confirm dialog a
  * human approves it in renders ESC as nothing at all, so the escape is invisible to the approver.
- * The same shape is live in the herdr multiplexer (`api_helpers.rs`), so treat it as real. A
- * payload loaded from a file on disk reaches the same framer in agent-whip, which is the same
- * risk one level removed: whichever caller hands text to this framer, the guarantee must hold.
+ * The same shape is live in the herdr multiplexer (`api_helpers.rs`), so treat it as real.
  *
  * The rule is one line and it removes ESC (and its 8-bit C1 equivalent U+009B), not the marker
  * string:
@@ -65,24 +50,31 @@ export const PASTE_END = '\x1b[201~'
  * NOT in scope, and still open: a payload carrying `\r`/`\n` into a caller that believed it was
  * sending ONE line (`/rename <title>` built from an agent-supplied title). Newlines are legitimate
  * paste CONTENT — the multiline injection the tests pin depends on it — so that belongs at those
- * call sites, not here. agent-whip's profile validator is one such call site and rejects
- * multiline payloads there.
+ * call sites, not here.
  */
 export function sanitizePasteText(text: string): string {
   // eslint-disable-next-line no-control-regex
   return text.replace(/[\x1b\u009b]/g, '')
 }
 
-/** The single-write injection body for a bracketed-paste-aware target. */
-export function bracketedInjection(text: string, enter: boolean): string {
-  return PASTE_START + sanitizePasteText(text) + PASTE_END + (enter ? '\r' : '')
-}
-
 /**
- * The legacy two-step body, for a target that never requested bracketed paste. Returned as a pair
- * rather than a single string so a caller cannot accidentally concatenate them into one write and
- * believe it has bracketed-paste safety it does not have.
+ * DELETED: `bracketedInjection` (the JS-side paste framer).
+ *
+ * It composed `ESC[200~ + sanitized text + ESC[201~ + \r` for the agent-messaging envelope, which
+ * `sendFramedPayload` then pushed through `paste-buffer` WITHOUT `-p`. That worked on tmux ≤ 3.6,
+ * where a paste buffer's bytes reach the pane verbatim. tmux 3.7 changed the contract (CHANGES:
+ * "Pass paste buffer through vis(3) when pasting to prevent buffers containing for example the
+ * bracket end sequence causing issues"): every pasted byte now goes through
+ * `utf8_stravisx(VIS_SAFE|VIS_NOSLASH)`, which rewrites the ESC byte into the two PRINTABLE
+ * characters `^[`. Measured on tmux 3.7b (the exact version the macOS app bundles): the pane's app
+ * received literal `^[[200~ … ^[[201~` TEXT — no frame, so the message sat unsubmitted in the
+ * composer (issue #453). The `-S` flag that disables vis(3) is itself new in 3.7, so it cannot be
+ * the fix on older servers.
+ *
+ * The rule that replaces it is the one `sendText` already followed: WE never put an ESC byte into
+ * a paste buffer — tmux inserts the frame itself (`paste-buffer -p`, honoured since tmux 1.7,
+ * vis(3) is applied to the buffer CONTENT only, never to tmux's own markers) and the submit is a
+ * separate `send-keys Enter` in the same command list. See `localPasteDelivery` (tmux-naming.ts)
+ * and `PtyManager.sendEnvelope`. Do not reintroduce a JS-side framer: on every tmux ≥ 3.7 its
+ * output is mangled into visible text before the pane's app ever sees it.
  */
-export function legacyInjection(text: string, enter: boolean): { text: string; enter: string } {
-  return { text: sanitizePasteText(text), enter: enter ? '\r' : '' }
-}
