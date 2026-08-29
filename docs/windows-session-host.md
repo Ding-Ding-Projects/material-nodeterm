@@ -352,10 +352,20 @@ Mirrors tmux's server lifetime rule as closely as a different OS allows:
 
 - **Spawned detached, unref'd, `stdio: 'ignore'`, `windowsHide: true`**
   (`session-host-launcher.ts`) — survives the spawning app process exiting entirely.
-- In a **packaged** app, `process.execPath` is the Electron binary itself (there is no separate
-  `node` executable to shell out to), so the child is spawned with `ELECTRON_RUN_AS_NODE=1`,
-  which tells Electron to run as a plain Node process with no Chromium/BrowserWindow machinery.
-  Harmless on a real Node binary too (dev mode): unrecognized, ignored.
+- In a **packaged** app, the current Electron executable and complete `resources/session-host`
+  bundle are first copied through an atomic staging directory into the versioned stable runtime
+  `%LOCALAPPDATA%/node-terminal-session-host-runtime/app-<version>`. The completion marker binds the
+  executable size and host-bundle digest and requires the copied `node-pty` package. A corrupt or
+  partial existing runtime is refused rather than overwritten. The child then starts the stable
+  executable with `ELECTRON_RUN_AS_NODE=1`, which runs plain Node without Chromium or a window.
+  Squirrel can replace its own `app-*` directory without touching that mapped runtime.
+- The client probes the existing state, token, and pipe before resolving or staging any runtime.
+  A host from a previous app run therefore remains the owner and receives warm attachments rather
+  than being replaced during an upgrade.
+- **One-time legacy boundary:** a host that an older release already launched from a Squirrel
+  `app-*` directory cannot re-exec itself or transfer live ConPTY ownership. Do not terminate it for
+  Setup. Keep its sessions attachable and postpone a full Setup install until they end naturally;
+  every host launched after this change uses the stable runtime and no longer creates this lock.
 - A client disconnecting **detaches only** — the underlying `node-pty` process, and the
   `HostSession` holding it, are completely untouched. This is the entire point.
 - The app quitting detaches every client (the OS closes the sockets; the host's own `'close'`
