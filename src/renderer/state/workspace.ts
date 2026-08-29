@@ -1883,7 +1883,7 @@ export function createVeraCryptNode(index: number, center?: { x: number; y: numb
 const REPOSITORY_GRAPH_SIZE = { width: 760, height: 560 }
 
 /** Creates the project-scoped repository graph surface. The host resolves the project root by id,
- * while this node persists only mode, filters, layout and expanded-id presentation intent. */
+ * while this node persists only mode, filters and expanded-id presentation intent. */
 export function createRepositoryGraphNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
     id: nextId('repository-graph'),
@@ -1896,7 +1896,7 @@ export function createRepositoryGraphNode(index: number, center?: { x: number; y
       title: 'Repository graph',
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
-      repositoryGraphIntent: { version: 1, mode: 'combined', query: '', expandedNodeIds: [], layout: 'hierarchical' }
+      repositoryGraphIntent: { version: 1, mode: 'combined', query: '', expandedNodeIds: [] }
     }
   }
 }

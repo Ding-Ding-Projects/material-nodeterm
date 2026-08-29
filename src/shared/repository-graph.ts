@@ -76,6 +76,8 @@ export interface RepositoryGraphSnapshot {
   omissions: string[]
   createdAt: number
   previousFingerprint?: RepositoryGraphFingerprint
+  /** Content hashes keyed by root-relative path, used to reuse unchanged file graph slices. */
+  fileFingerprints?: Record<string, string>
 }
 
 export interface RepositoryGraphProgress {
@@ -113,7 +115,6 @@ export interface RepositoryGraphApi {
   refresh(input: RepositoryGraphRefreshInput): Promise<RepositoryGraphSnapshot>
   cancel(operationId: string): Promise<boolean>
   export(input: RepositoryGraphExportInput): Promise<RepositoryGraphExportResult>
-  openSource(projectId: string, location: RepositoryGraphSourceLocation): Promise<{ ok: true } | { ok: false; reason: string }>
   onProgress(listener: (progress: RepositoryGraphProgress) => void): () => void
 }
 
@@ -122,7 +123,6 @@ export interface RepositoryGraphIntent {
   mode: RepositoryGraphMode
   query?: string
   expandedNodeIds?: string[]
-  layout?: 'hierarchical' | 'force' | 'radial'
 }
 
 export const REPOSITORY_GRAPH_LIMITS: RepositoryGraphLimits = {
@@ -162,5 +162,5 @@ export function normalizeRepositoryGraphIntent(value: unknown): RepositoryGraphI
   const expandedNodeIds = Array.isArray(raw.expandedNodeIds)
     ? raw.expandedNodeIds.filter((item): item is string => typeof item === 'string' && item.length <= 240).slice(0, 2000)
     : []
-  return { version: 1, mode, query: typeof raw.query === 'string' ? raw.query.slice(0, 512) : '', expandedNodeIds, layout: raw.layout === 'force' || raw.layout === 'radial' ? raw.layout : 'hierarchical' }
+  return { version: 1, mode, query: typeof raw.query === 'string' ? raw.query.slice(0, 512) : '', expandedNodeIds }
 }
