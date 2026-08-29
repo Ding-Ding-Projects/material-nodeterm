@@ -94,7 +94,12 @@ async function listFiles(root: string, operation: Operation, onProgress: (done: 
 }
 
 function isManifestName(name: string): boolean {
-  return REPOSITORY_GRAPH_ADAPTERS.some((item) => item.patterns.some((pattern) => pattern === name || pattern.startsWith(`${name}.`) || pattern.includes('*') && new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*')}$`, 'u').test(name)))
+  // Semantic language adapters also advertise source-file globs. They must not turn every
+  // TypeScript or JavaScript file into a dependency manifest, otherwise a normal code snapshot
+  // is marked partial with "no bundled semantic adapter" for each source file.
+  return REPOSITORY_GRAPH_ADAPTERS
+    .filter((item) => item.kind === 'manifest' || item.kind === 'lockfile')
+    .some((item) => item.patterns.some((pattern) => pattern === name || pattern.startsWith(`${name}.`) || pattern.includes('*') && new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*')}$`, 'u').test(name)))
 }
 
 function nodeId(kind: string, label: string): string { return `${kind}:${label}` }
