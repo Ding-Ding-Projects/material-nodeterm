@@ -234,6 +234,7 @@
     "smart-whisper": "^0.8.1",
     "tweetnacl": "^1.0.3",
     "unzipper": "^0.12.5",
+    "webtorrent": "2.8.1",
     "ws": "^8.21.3",
     "zustand": "^4.5.7"
   },

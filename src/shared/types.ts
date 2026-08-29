@@ -373,6 +373,7 @@ export type NodeKind =
   | 'gitlab'
   | 'homeassistant'
   | 'freepbx'
+  | 'torrent'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -514,6 +515,8 @@ export interface CanvasNodeState {
    * reasons. It never carries a secret; see `ServiceConnection` in shared/node-exec.ts.
    */
   serviceConnection?: ServiceConnection
+  /** Torrent display intent only. Source paths, destinations and handles stay machine-local. */
+  torrentMagnet?: string
   /**
    * nsis-only, GIT-SHARED: the installer's description (app name, version, publisher, output
    * filename, install root, shortcut/uninstaller/compression choices). Nothing here names a
@@ -1282,7 +1285,7 @@ export interface DialogApi {
   /** Opens a native folder picker; returns the chosen path or null if cancelled. */
   selectFolder(): Promise<string | null>
   /** Opens a native file picker; returns the chosen path or null if cancelled. */
-  selectFile(): Promise<string | null>
+  selectFile(options?: { extensions?: string[] }): Promise<string | null>
   /** Opens a native MULTI-file picker (for the converter's "Add files…"); returns the chosen paths,
    *  null if cancelled. Electron only — the Server Edition has no native dialog and returns null;
    *  its FileConverterPanel uses a plain `<input type="file" multiple>` instead. */
@@ -3796,6 +3799,8 @@ export interface NodeTerminalApi {
   converter: import('./converter').ConverterApi
   /** Shared automatic dependency lifecycle for node-feature installers. */
   nodeDependencies: import('./node-dependencies').NodeDependenciesApi
+  /** Local bundled WebTorrent downloader; task state remains machine-local. See docs/features/torrents/. */
+  torrent: import('./torrent').TorrentApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */

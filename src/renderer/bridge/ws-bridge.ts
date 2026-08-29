@@ -19,6 +19,7 @@ import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
 import type { NodeDependenciesApi } from '../../shared/node-dependencies'
+import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -939,6 +940,31 @@ export function buildNodeDependenciesApi(client: RpcClient): Pick<NodeTerminalAp
   return { nodeDependencies }
 }
 
+/** Local torrent service over the authenticated Server Edition RPC. The server owns all handles,
+ * paths and network consent; the browser receives only redacted task snapshots. */
+export function buildTorrentApi(client: RpcClient): Pick<NodeTerminalApi, 'torrent'> {
+  const torrent: TorrentApi = {
+    runtime: () => client.request(IPC.torrentRuntime) as ReturnType<TorrentApi['runtime']>,
+    persistence: () => client.request(IPC.torrentPersistence) as ReturnType<TorrentApi['persistence']>,
+    list: (nodeId) => client.request(IPC.torrentList, nodeId) as ReturnType<TorrentApi['list']>,
+    inspect: (input) => client.request(IPC.torrentInspect, input) as ReturnType<TorrentApi['inspect']>,
+    add: (input) => client.request(IPC.torrentAdd, input) as ReturnType<TorrentApi['add']>,
+    chooseFiles: (id, paths) => client.request(IPC.torrentChooseFiles, id, paths) as ReturnType<TorrentApi['chooseFiles']>,
+    setDestination: (id, destination) => client.request(IPC.torrentSetDestination, id, destination) as ReturnType<TorrentApi['setDestination']>,
+    preflight: (id) => client.request(IPC.torrentPreflight, id) as ReturnType<TorrentApi['preflight']>,
+    start: (id, consent) => client.request(IPC.torrentStart, id, consent) as ReturnType<TorrentApi['start']>,
+    pause: (id) => client.request(IPC.torrentPause, id) as ReturnType<TorrentApi['pause']>,
+    resume: (id, consent) => client.request(IPC.torrentResume, id, consent) as ReturnType<TorrentApi['resume']>,
+    cancel: (id) => client.request(IPC.torrentCancel, id) as ReturnType<TorrentApi['cancel']>,
+    retry: (id, consent) => client.request(IPC.torrentRetry, id, consent) as ReturnType<TorrentApi['retry']>,
+    remove: (id) => client.request(IPC.torrentRemove, id) as ReturnType<TorrentApi['remove']>,
+    setSeedPolicy: (id, policy) => client.request(IPC.torrentSetSeedPolicy, id, policy) as ReturnType<TorrentApi['setSeedPolicy']>,
+    reconcile: () => client.request(IPC.torrentReconcile) as ReturnType<TorrentApi['reconcile']>,
+    onTask: (listener) => client.subscribe(IPC.torrentTask, listener as (payload: TorrentTaskState) => void)
+  }
+  return { torrent }
+}
+
 /** Local Minecraft server create-and-manage (docs/minecraft-server-manager.md) — same core engine
  *  as desktop; the server process is the one downloading, spawning and owning `java`, exactly as
  *  main does. */
@@ -1395,6 +1421,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSpeechApi(client),
     ...buildConverterApi(client),
     ...buildNodeDependenciesApi(client),
+    ...buildTorrentApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
     ...buildUsageApi(client),
@@ -1424,7 +1451,7 @@ export async function installWsBridge(): Promise<boolean> {
       const startDir = '/' // navigable up/down from root; the picker remembers nothing across calls in v1
       return {
         selectFolder: () => openDirectoryPicker({ mode: 'folder', startDir, list: api.fs.list }),
-        selectFile: () => openDirectoryPicker({ mode: 'file', startDir, list: api.fs.list }),
+        selectFile: (_options?: { extensions?: string[] }) => openDirectoryPicker({ mode: 'file', startDir, list: api.fs.list }),
         // No native multi-file dialog in the browser. FileConverterPanel checks isBrowserRuntime()
         // and uses a plain <input type="file" multiple> + files.saveUploadBlob instead of calling
         // this (falling back to saveUpload for API compatibility).

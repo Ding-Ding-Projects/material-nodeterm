@@ -45,6 +45,7 @@ import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
+import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
@@ -317,6 +318,7 @@ initPlatform(corePlatform)
 // live managed server to shut down gracefully. See requestGracefulStopAll's own doc comment for
 // why that call is synchronous and unawaited rather than joining the flush Promise.allSettled below.
 let minecraftServers: ReturnType<typeof registerMinecraftIpc>['manager'] | undefined
+let torrentService: ReturnType<typeof registerTorrentIpc>['service'] | undefined
 
 // Only hand the OS a URL with a vetted scheme. Blocks file://, smb://, and custom
 // protocol-handler schemes that could be smuggled in via remote announcement feeds or
@@ -1101,11 +1103,15 @@ app.whenReady().then(async () => {
   })
   registerLocalHistoryHandlers(corePlatform, {
     historyStore: localHistoryStore,
-    domainFilenames: { settings: 'settings.json' },
+    domainFilenames: { settings: 'settings.json', torrent: 'tasks.json' },
     restoreHandlers: {
       settings: async (content: string, sha: string) => {
         const parsed = JSON.parse(content) as Settings
         await settingsStore.applyRestoredSettings(parsed, `Restored settings to ${sha.slice(0, 7)}`)
+      },
+      torrent: async (content: string) => {
+        if (!torrentService) throw new Error('Torrent history is unavailable.')
+        await torrentService.restoreHistory(content)
       }
     }
   })
@@ -1471,6 +1477,7 @@ app.whenReady().then(async () => {
   registerNodeDependencyIpc(corePlatform)
   registerOllamaIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
+  torrentService = registerTorrentIpc(corePlatform, localHistoryStore).service
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({
@@ -1596,8 +1603,12 @@ app.whenReady().then(async () => {
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
   })
 
-  ipcMain.handle(IPC.dialogSelectFile, async () => {
-    const result = await dialog.showOpenDialog({ properties: ['openFile'] })
+  ipcMain.handle(IPC.dialogSelectFile, async (_event, options?: { extensions?: string[] }) => {
+    const extensions = Array.isArray(options?.extensions)
+      ? options.extensions.filter((value): value is string => typeof value === 'string' && /^[a-z0-9]{1,12}$/i.test(value)).slice(0, 8)
+      : []
+    const filters = extensions.length > 0 ? [{ name: 'Allowed files', extensions }] : undefined
+    const result = await dialog.showOpenDialog({ properties: ['openFile'], filters })
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
   })
 

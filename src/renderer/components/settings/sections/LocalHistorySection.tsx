@@ -6,6 +6,10 @@ const ROWS = {
   history: {
     title: 'Settings history',
     keywords: ['history', 'undo', 'restore', 'version', 'revert', 'audit', 'log', 'changelog']
+  },
+  torrentHistory: {
+    title: 'Torrent history',
+    keywords: ['torrent', 'download', 'history', 'pause', 'resume', 'selection', 'seeding']
   }
 }
 const ENTRIES = Object.values(ROWS)
@@ -21,6 +25,9 @@ export function LocalHistorySection({ isActive }: { isActive: boolean }): React.
     >
       <SearchableRow {...ROWS.history}>
         <LocalHistoryPanel domain="settings" title="Settings" />
+      </SearchableRow>
+      <SearchableRow {...ROWS.torrentHistory}>
+        <LocalHistoryPanel domain="torrent" title="Torrent" />
       </SearchableRow>
     </SettingsSection>
   )

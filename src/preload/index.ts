@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { TorrentTaskState } from '../shared/torrent'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
 
@@ -72,6 +73,7 @@ const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
+const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC.nodeDependencyState)
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
@@ -211,7 +213,7 @@ const api: NodeTerminalApi = {
   },
   dialog: {
     selectFolder: () => ipcRenderer.invoke(IPC.dialogSelectFolder),
-    selectFile: () => ipcRenderer.invoke(IPC.dialogSelectFile),
+    selectFile: (options?: { extensions?: string[] }) => ipcRenderer.invoke(IPC.dialogSelectFile, options),
     selectFiles: () => ipcRenderer.invoke(IPC.dialogSelectFiles)
   },
   settings: {
@@ -962,6 +964,25 @@ const api: NodeTerminalApi = {
     restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
+  },
+  torrent: {
+    runtime: () => ipcRenderer.invoke(IPC.torrentRuntime),
+    persistence: () => ipcRenderer.invoke(IPC.torrentPersistence),
+    list: (nodeId) => ipcRenderer.invoke(IPC.torrentList, nodeId),
+    inspect: (input) => ipcRenderer.invoke(IPC.torrentInspect, input),
+    add: (input) => ipcRenderer.invoke(IPC.torrentAdd, input),
+    chooseFiles: (id, paths) => ipcRenderer.invoke(IPC.torrentChooseFiles, id, paths),
+    setDestination: (id, destination) => ipcRenderer.invoke(IPC.torrentSetDestination, id, destination),
+    preflight: (id) => ipcRenderer.invoke(IPC.torrentPreflight, id),
+    start: (id, consent) => ipcRenderer.invoke(IPC.torrentStart, id, consent),
+    pause: (id) => ipcRenderer.invoke(IPC.torrentPause, id),
+    resume: (id, consent) => ipcRenderer.invoke(IPC.torrentResume, id, consent),
+    cancel: (id) => ipcRenderer.invoke(IPC.torrentCancel, id),
+    retry: (id, consent) => ipcRenderer.invoke(IPC.torrentRetry, id, consent),
+    remove: (id) => ipcRenderer.invoke(IPC.torrentRemove, id),
+    setSeedPolicy: (id, policy) => ipcRenderer.invoke(IPC.torrentSetSeedPolicy, id, policy),
+    reconcile: () => ipcRenderer.invoke(IPC.torrentReconcile),
+    onTask: (listener) => subscribeTorrentTask(listener)
   }
 }
 

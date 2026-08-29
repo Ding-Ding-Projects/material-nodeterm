@@ -176,7 +176,7 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
       const startDir = '/' // navigable up/down from the host root; no cross-call memory in v1
       return {
         selectFolder: () => openDirectoryPicker({ mode: 'folder', startDir, list: files.fs.list }),
-        selectFile: () => openDirectoryPicker({ mode: 'file', startDir, list: files.fs.list }),
+        selectFile: (_options?: { extensions?: string[] }) => openDirectoryPicker({ mode: 'file', startDir, list: files.fs.list }),
         // No host-side multi-file picker over the relay in v1 (the in-app browser above is
         // single-path only) — never fall back to a LOCAL multi-picker, which would pick paths on
         // the wrong machine. FileConverterPanel treats a null resolution as "not available here".
@@ -205,6 +205,9 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // host the same way `fs`/`git` are routed above.
     converter: stub.converter,
     ollama: stub.ollama,
+    // Torrent handles and destinations are host-local. Relay has no host-routed torrent RPC, so
+    // refuse the surface instead of accidentally using this viewer's desktop engine.
+    torrent: stub.torrent,
     // Same reasoning as converter/ollama immediately above: creating and running a Minecraft
     // server is ONE machine's filesystem/java/process table, and there is no remote-routed core
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG

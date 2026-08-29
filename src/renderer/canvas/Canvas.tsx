@@ -101,6 +101,7 @@ import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
+import TorrentNode from '../nodes/TorrentNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import WebNode from '../nodes/WebNode'
@@ -576,6 +577,7 @@ import {
   createSshTerminalNode,
   createAuthenticatorNode,
   createNsisNode,
+  createTorrentNode,
   createStickyNode,
   createTerminalNode,
   nodeSshFor,
@@ -1806,6 +1808,7 @@ export function Canvas() {
       // they behave as canvas objects, and React Flow hands each its own `type` so the component can
       // tell them apart without six registrations of six near-identical files.
       nsis: withNodeBoundary(NsisInstallerNode),
+      torrent: withNodeBoundary(TorrentNode),
       minecraft: withNodeBoundary(ServiceNode),
       dockerhost: withNodeBoundary(ServiceNode),
       proxmox: withNodeBoundary(ServiceNode),
@@ -4617,6 +4620,17 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createNsisNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addTorrent = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createTorrentNode(ns.length, center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -8932,6 +8946,11 @@ export function Canvas() {
               onClick: () => addNsis(at)
             },
             {
+              label: 'New torrent downloader',
+              icon: <IconConvert />,
+              onClick: () => addTorrent(at)
+            },
+            {
               label: 'New dino game',
               icon: <IconDino />,
               onClick: () => addDino(at)
@@ -9050,6 +9069,7 @@ export function Canvas() {
       addSticky,
       addAuthenticator,
       addNsis,
+      addTorrent,
       addNativeLoop,
       addDino,
       addBrowser,
@@ -13032,6 +13052,12 @@ export function Canvas() {
             run: () => addNsis()
           },
           {
+            id: 'new-torrent',
+            label: 'New torrent downloader',
+            icon: <IconConvert />,
+            run: () => addTorrent()
+          },
+          {
             id: 'new-dino',
             label: 'New dino game',
             icon: <IconDino />,
@@ -13380,6 +13406,7 @@ export function Canvas() {
     addAgentNode,
     addSticky,
     addNsis,
+    addTorrent,
     addNativeLoop,
     addDino,
     addWebView,

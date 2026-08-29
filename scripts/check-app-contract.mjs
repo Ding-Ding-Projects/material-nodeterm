@@ -273,6 +273,27 @@ const FEATURES = [
     docs: ['docs/features/integrations/minecraft-backups.md'],
   },
   {
+    id: 'torrent-downloader',
+    label: 'Bundled torrent downloader',
+    files: [
+      'src/shared/torrent.ts',
+      'src/core/torrent/service.ts',
+      'src/core/torrent/register-ipc.ts',
+      'src/renderer/nodes/TorrentNode.tsx',
+      'scripts/after-pack.cjs'
+    ],
+    contentChecks: [
+      ['src/shared/torrent.ts', 'WEBTORRENT_RUNTIME_DESCRIPTOR'],
+      ['src/shared/torrent.ts', 'validateTorrentBencode('],
+      ['src/shared/torrent.ts', 'buildTorrentExport('],
+      ['src/core/torrent/service.ts', 'class TorrentService'],
+      ['src/core/torrent/register-ipc.ts', 'registerTorrentIpc('],
+      ['scripts/after-pack.cjs', 'Packaged WebTorrent runtime is missing']
+    ],
+    tests: ['src/shared/torrent.test.ts', 'src/shared/torrent-localization.test.ts', 'src/core/torrent/service.test.ts', 'src/renderer/nodes/TorrentNode.contract.test.ts'],
+    docs: ['docs/features/torrents/torrent-downloader.md']
+  },
+  {
     id: 'group-picker',
     label: 'Group picker (move into group)',
     files: ['src/renderer/components/canvas/GroupPickerDialog.tsx'],

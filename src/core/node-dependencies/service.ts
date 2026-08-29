@@ -413,6 +413,9 @@ export class NodeDependencyService {
     try {
       record = await this.transition(entry, repair ? 'repairing' : 'checking', { error: null, resume: null })
       this.emitProgress(operationId, entry, record.state, 0, null, repair ? 'Checking the existing installation.' : 'Checking the dependency manifest.')
+      if (entry.installMode === 'bundled' && !entry.bundledSource) {
+        throw new Error('This dependency is bundled-only and has no installable source.')
+      }
       if (!repair && record.state === 'checking' && record.installPath) {
         aborted(controller.signal)
         const healthy = await this.probe(entry, record.installPath)
@@ -457,6 +460,9 @@ export class NodeDependencyService {
         record = await this.transition(entry, 'verifying', { archiveSha256: entry.sha256, resume: null })
         this.emitProgress(operationId, entry, 'verifying', 0, null, 'Reusing the verified dependency cache.')
       } else {
+        if (entry.installMode === 'bundled') {
+          throw new Error('Bundled dependency is missing or failed verification; refusing network installation.')
+        }
         await removeBestEffort(cachePath)
         archiveStage = path.join(this.cacheDir, `.${entry.id}.${process.pid}.${randomUUID()}.part`)
         record = await this.transition(entry, 'downloading', { resume: { operationId, phase: 'downloading', completedBytes: 0, totalBytes: null, canResume: false } })

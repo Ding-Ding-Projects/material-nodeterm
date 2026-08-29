@@ -11446,3 +11446,83 @@ button.term-node__title-text:focus-visible {
 .icon-menu__reset-btn {
   align-self: flex-start;
 }
+
+/* Torrent downloader node: bounded collections stay usable at narrow/high-scale layouts. */
+.torrent-node {
+  min-width: 440px;
+  background: var(--md-surface-container);
+}
+.torrent-node__body {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  min-height: 320px;
+  overflow: auto;
+}
+.torrent-node__runtime,
+.torrent-node__empty,
+.torrent-node__error,
+.torrent-node__regex,
+.torrent-node__task {
+  border-radius: 12px;
+  padding: 9px 11px;
+  background: var(--md-surface-container-high);
+}
+.torrent-node__runtime { font-size: 12px; color: var(--md-on-surface-variant); }
+.torrent-node__field,
+.torrent-node__consent,
+.torrent-node__destination,
+.torrent-node__search,
+.torrent-node__regex label { display: grid; gap: 5px; }
+.torrent-node__consent { grid-template-columns: auto 1fr; align-items: start; overflow-wrap: anywhere; }
+.torrent-node__field input,
+.torrent-node__destination input,
+.torrent-node__search input,
+.torrent-node__regex input {
+  min-height: 44px;
+  min-width: 0;
+  border: 1px solid var(--md-outline);
+  border-radius: 8px;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  padding: 0 9px;
+}
+.torrent-node__actions,
+.torrent-node__task-actions,
+.torrent-node__stats { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.torrent-node__actions button,
+.torrent-node__destination button,
+.torrent-node__search button,
+.torrent-node__task-actions button,
+.torrent-node__task-actions select {
+  min-height: 44px;
+  border: 0;
+  border-radius: 22px;
+  padding: 0 12px;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  cursor: pointer;
+}
+.torrent-node__actions button:disabled,
+.torrent-node__task-actions button:disabled { cursor: not-allowed; opacity: .5; }
+.torrent-node__destination { grid-template-columns: 1fr auto; align-items: end; }
+.torrent-node__destination label,
+.torrent-node__search label { grid-column: 1 / -1; }
+.torrent-node__search { grid-template-columns: 1fr auto; align-items: end; }
+.torrent-node__task-head,
+.torrent-node__stats { justify-content: space-between; gap: 8px; font-size: 12px; color: var(--md-on-surface-variant); }
+.torrent-node__task-head strong { color: var(--md-on-surface); overflow-wrap: anywhere; }
+.torrent-node__task progress { display: block; width: 100%; height: 8px; margin: 10px 0 7px; accent-color: var(--md-primary); }
+.torrent-node__files { display: grid; gap: 5px; max-height: 150px; overflow: auto; margin-top: 8px; }
+.torrent-node__files label { display: grid; grid-template-columns: auto 1fr auto; gap: 7px; align-items: center; min-height: 44px; font-size: 12px; }
+.torrent-node__files span { overflow-wrap: anywhere; }
+.torrent-node__files small { color: var(--md-on-surface-variant); }
+.torrent-node button:focus-visible,
+.torrent-node input:focus-visible,
+.torrent-node select:focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+@media (max-width: 600px) {
+  .torrent-node { min-width: 320px; }
+  .torrent-node__destination,
+  .torrent-node__search { grid-template-columns: 1fr; }
+  .torrent-node__stats { justify-content: flex-start; }
+}

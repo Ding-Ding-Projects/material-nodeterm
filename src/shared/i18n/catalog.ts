@@ -968,5 +968,73 @@ export const CATALOG: Catalog = {
   'announce.dismiss': {
     en: flat('Dismiss'),
     yue: flat('關閉')
-  }
+  },
+
+  // Torrent downloader node. Every visible product message has five voice variants in both
+  // languages; values such as paths, byte counts, hashes and peer counts stay caller-owned facts.
+  'torrent.title': { en: flat('Torrent downloader'), yue: flat('種子下載器') },
+  'torrent.rename': { en: flat('Click to rename'), yue: flat('撳一下改名') },
+  'torrent.nodeName': { en: flat('Torrent downloader node name'), yue: flat('種子下載器節點名稱') },
+  'torrent.runtime': { en: flat('WebTorrent'), yue: flat('WebTorrent') },
+  'torrent.magnet': { en: flat('Magnet URI'), yue: flat('Magnet URI') },
+  'torrent.destination': { en: flat('Download folder'), yue: flat('下載資料夾') },
+  'torrent.browse': { en: flat('Browse…'), yue: flat('瀏覽…') },
+  'torrent.addMagnet': { en: flat('Add magnet'), yue: flat('加入 Magnet') },
+  'torrent.chooseFile': { en: flat('Choose .torrent file'), yue: flat('揀 .torrent 檔案') },
+  'torrent.runtimeChecking': { en: flat('Checking WebTorrent runtime…'), yue: flat('正在檢查 WebTorrent 執行環境…') },
+  'torrent.runtimeUnavailable': { en: flat('WebTorrent unavailable'), yue: flat('WebTorrent 無法使用') },
+  'torrent.runtimeMissing': { en: flat('runtime could not be loaded'), yue: flat('無法載入執行環境') },
+  'torrent.networkConsent': {
+    en: [
+      'I understand this uses trackers, DHT, peers, my IP address, seeding, and the chosen destination.',
+      'I understand this transfer contacts trackers, DHT, peers, exposes my IP address, may seed, and writes to the chosen destination.',
+      'I understand the network contacts, IP exposure, seeding, and destination effects before adding this torrent.',
+      'I understand this magnet goes out to trackers, DHT, and peers, can expose my IP address, can seed, and uses the chosen destination.',
+      'I understand the whole peer-to-peer parade: trackers, DHT, peers, IP address, seeding, and the chosen destination.'
+    ],
+    yue: [
+      '我明白呢次傳輸會用 tracker、DHT、peers、我嘅 IP 位址、做種，同埋所揀嘅目的地。',
+      '我明白呢次傳輸會聯絡 tracker、DHT 同 peers，可能顯示我嘅 IP 位址、做種，並寫入所揀嘅目的地。',
+      '加入之前，我明白網絡聯絡、IP 顯示、做種同目的地嘅影響。',
+      '我明白呢個 magnet 會去 tracker、DHT 同 peers，可能顯示我嘅 IP 位址、做種，並使用所揀嘅目的地。',
+      '我明白成個 peer-to-peer 大巡遊：tracker、DHT、peers、IP 位址、做種，同埋所揀嘅目的地。'
+    ]
+  },
+  'torrent.tasks': { en: flat('Tasks'), yue: flat('工作項目') },
+  'torrent.search': { en: flat('Search torrent tasks'), yue: flat('搜尋種子工作項目') },
+  'torrent.regex': { en: flat('Regex for torrent tasks'), yue: flat('種子工作項目正則表達式') },
+  'torrent.noTasks': {
+    en: ['No torrent tasks yet. Add a magnet or choose a torrent file.', 'No transfers yet. Add a magnet or choose a torrent file.', 'Nothing is queued yet. Add a magnet or choose a torrent file.', 'The queue is empty. Add a magnet or choose a torrent file.', 'The queue is still waiting for its first little torrent adventure. Add a magnet or choose a torrent file.'],
+    yue: ['暫時未有種子工作項目。加入 magnet 或揀一個 torrent 檔案。', '暫時未有傳輸。加入 magnet 或揀一個 torrent 檔案。', '暫時未有排程。加入 magnet 或揀一個 torrent 檔案。', '個隊列仲係空白。加入 magnet 或揀一個 torrent 檔案。', '個隊列等緊第一次種子小冒險，加入 magnet 或揀一個 torrent 檔案啦。']
+  },
+  'torrent.exportDisclosure': { en: flat('Source URI, trackers, destination paths, peer addresses, and engine handles are omitted from every export format.'), yue: flat('所有匯出格式都會省略來源 URI、tracker、目的地路徑、peer 位址同執行引擎控制代碼。') },
+  'torrent.exportError': { en: flat('Could not export selected tasks.'), yue: flat('無法匯出所揀嘅工作項目。') },
+  'torrent.bulkResult': {
+    en: ['{action}: {succeeded} succeeded, {failed} skipped or failed.', '{action}: {succeeded} finished, {failed} skipped or failed.', '{action}: {succeeded} completed, {failed} need attention.', '{action}: {succeeded} made it through, {failed} did not.', '{action}: {succeeded} sailed through; {failed} got stuck in the peer-to-peer dim sum basket.'],
+    yue: ['{action}：{succeeded} 個成功，{failed} 個略過或失敗。', '{action}：{succeeded} 個完成，{failed} 個略過或失敗。', '{action}：{succeeded} 個完成，{failed} 個要留意。', '{action}：{succeeded} 個過關，{failed} 個未過。', '{action}：{succeeded} 個順利過海，{failed} 個喺 peer-to-peer 點心籠卡住。']
+  },
+  'torrent.bulk.pause': { en: flat('Pause selected'), yue: flat('暫停所揀項目') },
+  'torrent.bulk.resume': { en: flat('Resume selected'), yue: flat('繼續所揀項目') },
+  'torrent.bulk.cancel': { en: flat('Cancel selected'), yue: flat('取消所揀項目') },
+  'torrent.bulk.retry': { en: flat('Retry selected'), yue: flat('重試所揀項目') },
+  'torrent.bulk.remove': { en: flat('Remove selected'), yue: flat('移除所揀項目') },
+  'torrent.bulk.export': { en: flat('Export selected'), yue: flat('匯出所揀項目') },
+  'torrent.exportSummary': { en: flat('Export selected tasks (private fields omitted)'), yue: flat('匯出所揀工作項目（省略私隱欄位）') },
+  'torrent.status.queued': { en: flat('Queued'), yue: flat('已排程') },
+  'torrent.status.metadata': { en: flat('Metadata'), yue: flat('中繼資料') },
+  'torrent.status.downloading': { en: flat('Downloading'), yue: flat('下載中') },
+  'torrent.status.paused': { en: flat('Paused'), yue: flat('已暫停') },
+  'torrent.status.recoverable-paused': { en: flat('Recoverable paused'), yue: flat('可恢復暫停') },
+  'torrent.status.completed': { en: flat('Completed'), yue: flat('已完成') },
+  'torrent.status.seeding': { en: flat('Seeding'), yue: flat('做種中') },
+  'torrent.status.stopped': { en: flat('Stopped'), yue: flat('已停止') },
+  'torrent.status.cancelled': { en: flat('Cancelled'), yue: flat('已取消') },
+  'torrent.status.failed': { en: flat('Error'), yue: flat('錯誤') },
+  'torrent.files': { en: flat('Files'), yue: flat('檔案') },
+  'torrent.peers': { en: flat('peers'), yue: flat('peers') },
+  'torrent.eta': { en: flat('ETA'), yue: flat('預計時間') },
+  'torrent.seed.never': { en: flat('Do not seed'), yue: flat('不要做種') },
+  'torrent.seed.ratio': { en: flat('Seed to 1.0 ratio'), yue: flat('做種至 1.0 比率') },
+  'torrent.seed.minutes': { en: flat('Seed for 30 minutes'), yue: flat('做種 30 分鐘') },
+  'torrent.seed.indefinite': { en: flat('Seed indefinitely'), yue: flat('無限期做種') }
 }

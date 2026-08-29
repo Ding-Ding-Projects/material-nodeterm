@@ -25,6 +25,7 @@ import { useSettings } from './settings'
 import type { SessionSource } from '../session/session'
 import { supportsWindowsTerminalProfiles } from './terminal-profiles'
 import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
+import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -169,6 +170,8 @@ export interface NodeData {
   highScore?: number
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
+  /** torrent-only safe display intent. Machine-local tasks are looked up through the torrent API. */
+  torrentMagnet?: string
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
@@ -938,6 +941,7 @@ export function createDiffNode(
 /** Creates a new sticky note. */
 const AUTHENTICATOR_SIZE = { width: 340, height: 260 }
 const NSIS_SIZE = { width: 460, height: 520 }
+export const TORRENT_SIZE = { width: 620, height: 520 }
 
 /**
  * A view of this machine's own TOTP generators, on the canvas.
@@ -958,6 +962,25 @@ export function createAuthenticatorNode(index: number, center?: { x: number; y: 
       title: 'Authenticator',
       color: NODE_COLORS[4] ?? NODE_COLORS[0],
       group: null
+    }
+  }
+}
+
+/** Creates a torrent node. Only the safe display intent is persisted in the shared canvas state;
+ * task records, destinations and engine handles remain on the machine that owns the node. */
+export function createTorrentNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('torrent'),
+    type: 'torrent',
+    position: placeAt(center, index, TORRENT_SIZE.width, TORRENT_SIZE.height),
+    width: TORRENT_SIZE.width,
+    height: TORRENT_SIZE.height,
+    style: { width: TORRENT_SIZE.width, height: TORRENT_SIZE.height },
+    data: {
+      title: TORRENT_NODE_CATALOG_ENTRY.label,
+      color: NODE_COLORS[5] ?? NODE_COLORS[0],
+      group: null,
+      torrentMagnet: ''
     }
   }
 }
@@ -1466,7 +1489,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
-  nsis: true
+  nsis: true,
+  torrent: true
 }
 
 /**
@@ -1505,7 +1529,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
-  nsis: NSIS_SIZE
+  nsis: NSIS_SIZE,
+  torrent: TORRENT_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1915,6 +1940,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        torrentMagnet: n.torrentMagnet,
         serviceConnection: n.serviceConnection,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
@@ -1990,6 +2016,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        torrentMagnet: n.data.torrentMagnet,
         serviceConnection: n.data.serviceConnection,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,

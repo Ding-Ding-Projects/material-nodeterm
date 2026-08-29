@@ -13,6 +13,7 @@ import {
   createDiffNode,
   createStickyNode,
   createDinoNode,
+  createTorrentNode,
   isAccountLoginNode
 } from '@renderer/state/workspace'
 import { absolutePosition, type FocusableNode } from './nodeFocus'
@@ -96,7 +97,7 @@ export interface RecreateContext {
 }
 
 const COSMETIC_KEYS = [
-  'title', 'titleAuto', 'color', 'group', 'tags', 'collapsed', 'expandedHeight', 'shell'
+  'title', 'titleAuto', 'color', 'group', 'tags', 'collapsed', 'expandedHeight', 'shell', 'torrentMagnet'
 ] as const
 
 function withCosmetics(node: CanvasNode, data: NodeData): CanvasNode {
@@ -175,6 +176,8 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createBrowserNode(0, d.url ?? '', undefined, undefined, d.browserProfileId)
     case 'dino':
       return createDinoNode(0, undefined, d.highScore ?? 0)
+    case 'torrent':
+      return createTorrentNode(0)
     default:
       return null
   }

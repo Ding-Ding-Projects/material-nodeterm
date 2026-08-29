@@ -10,6 +10,7 @@ import { registerConverterIpc } from '../../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
+import { registerTorrentIpc } from '../../core/torrent/register-ipc'
 import type { MinecraftServerManager } from '../../core/minecraft/server-manager'
 import { registerVsCodeHandlers } from '../../core/vscode-handlers'
 import { LocalHistoryStore } from '../../core/local-history'
@@ -64,6 +65,7 @@ export function registerCoreHandlers(
       : undefined,
     localProjectCwd: deps.localProjectCwd
   })
+  const localHistoryStore = new LocalHistoryStore(platform.userDataDir)
 
   // Universal file converter + local Ollama suite manager + local Minecraft server create-and-
   // manage — the SAME registrars main/index.ts calls, over the SAME CorePlatform.handle seam, so
@@ -73,11 +75,11 @@ export function registerCoreHandlers(
   registerNodeDependencyIpc(platform)
   registerOllamaIpc(platform)
   const { manager: minecraftServers } = registerMinecraftIpc(platform)
+  const torrentService = registerTorrentIpc(platform, localHistoryStore).service
   // "Open in Visual Studio Code" + local settings history — same registrars the desktop shell
   // uses (src/main/index.ts), over the generic platform.handle seam, so the browser gets the
   // identical feature acting on the SERVER's own machine (docs/exports.md, docs/local-history.md).
   registerVsCodeHandlers(platform)
-  const localHistoryStore = new LocalHistoryStore(platform.userDataDir)
   deps.workspaceStore?.setProjectHistoryRecorder((project, content, change) =>
     localHistoryStore.record({
       domain: `project_${project.id}`,
@@ -116,12 +118,15 @@ export function registerCoreHandlers(
   }
   registerLocalHistoryHandlers(platform, {
     historyStore: localHistoryStore,
-    domainFilenames: { settings: 'settings.json' },
+    domainFilenames: { settings: 'settings.json', torrent: 'tasks.json' },
     restoreHandlers: {
       settings: async (content: string, sha: string) => {
         if (!deps.settingsStore) throw new Error('Settings history is unavailable.')
         const parsed = JSON.parse(content) as Settings
         await deps.settingsStore.applyRestoredSettings(parsed, `Restored settings to ${sha.slice(0, 7)}`)
+      },
+      torrent: async (content: string) => {
+        await torrentService.restoreHistory(content)
       }
     }
   })
