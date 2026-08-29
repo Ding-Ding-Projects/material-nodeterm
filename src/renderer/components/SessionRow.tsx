@@ -6,6 +6,8 @@ import { useSessionNaming } from '../state/sessionNaming'
 
 export interface SessionRowProps {
   row: SessionRowVM
+  /** Status-mode detail: relative age of live or display-only recovered workflow state. */
+  stateAgeLabel?: string
   onClick(): void
   onClose(): void
   onRename(title: string): void
@@ -29,6 +31,7 @@ function dirName(p?: string): string {
 
 export function SessionRow({
   row,
+  stateAgeLabel,
   onClick,
   onClose,
   onRename,
@@ -148,10 +151,16 @@ export function SessionRow({
             ×
           </button>
         </div>
-        {(row.cwd || row.sshHost) && (
+        {(row.projectName || row.cwd || row.sshHost || stateAgeLabel) && (
           <div className="ss-meta">
+            {row.projectName && <span className="ss-meta__project">{row.projectName}</span>}
             {row.sshHost && <span className="ss-meta__ssh">⇅ {row.sshHost}</span>}
             {row.cwd && <span className="ss-meta__cwd">{dirName(row.cwd)}</span>}
+            {stateAgeLabel && (
+              <span className="ss-meta__state-age">
+                {row.statusRestored ? `last known · ${stateAgeLabel}` : stateAgeLabel}
+              </span>
+            )}
           </div>
         )}
       </div>

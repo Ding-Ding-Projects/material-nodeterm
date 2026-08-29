@@ -24,7 +24,7 @@ export const FEATURES = [
   { id: 'nodes', icon: '🖥', color: 'var(--yellow)', title: 'Real terminals as blocks', body: 'Every block runs its own shell. Drag them, resize them, zoom out and see the whole map at once.' },
   { id: 'tmux', icon: '♻️', color: 'var(--green)', title: 'Nothing gets lost', body: 'tmux keeps your terminals — and whatever they were running — alive across restarts, even a full reboot.' },
   { id: 'projects', icon: '🗂', color: 'var(--blue)', title: 'Projects and tabs', body: 'Each project is its own canvas with its own folder. Reorder them, close them, bring them back from history.' },
-  { id: 'agents', icon: '🤖', color: 'var(--pink)', title: 'Robot helpers', body: 'Claude Code, Codex, Gemini, opencode, Grok and your own CLIs — one click each, with a live status badge.' },
+  { id: 'agents', icon: '🤖', color: 'var(--pink)', title: 'Robot helpers', body: 'Claude Code, Codex, Gemini, opencode, Grok and your own CLIs — one click each, with live status badges and restart-safe display continuity.' },
   { id: 'super', icon: '✦', color: 'var(--purple)', title: 'Helper superpowers', body: 'Link two helpers so they read each other, branch a conversation, or let a helper open new blocks for you.' },
   { id: 'editor', icon: '✏️', color: 'var(--orange)', title: 'Editor and diff blocks', body: 'A real code editor and a side-by-side diff sit right next to your shells. Image previews too.' },
   { id: 'git', icon: '⎇', color: 'var(--green)', title: 'Git without the fear', body: 'Stage, diff, branch, commit and push from a panel — plus one-step worktrees bound to a canvas frame.' },
@@ -39,6 +39,7 @@ export const FEATURES = [
 
 export const DOCS = [
   ['Agent support', 'Claude, Codex, Gemini, opencode, Grok', 'agent-support'],
+  ['Agent status recovery and sidebar grouping', 'display-only restart continuity and workflow sections', 'status-recovery-and-sidebar-grouping'],
   ['Canvas & node lifecycle', 'how blocks are born and cleaned up', 'canvas-lifecycle'],
   ['Changelog viewer', 'the date picker and the commit links', 'changelog-viewer'],
   ['Dim sum surprise', 'the little treat that shows up one visit in ten', 'dim-sum-surprise'],

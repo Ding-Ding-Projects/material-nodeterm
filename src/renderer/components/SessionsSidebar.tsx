@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   buildSessionList,
+  buildStatusList,
   groupCollapseKey,
   groupSessionCount,
   groupSessionRows,
@@ -10,6 +11,8 @@ import {
   projectHeadClickAction,
   projectSignalCounts,
   pruneCollapsedItems,
+  sessionStateAgeLabel,
+  type StatusSection,
   type GroupBucket,
   type SessionNodeInput
 } from '../lib/sessionList'
@@ -74,6 +77,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
   const { api } = useSession()
 
   const [filter, setFilter] = useState('')
+  const [statusNow, setStatusNow] = useState(() => Date.now())
   const [branches, setBranches] = useState<Record<string, string>>({})
   // Drag-to-group: the object being dragged, and the current drop target for highlighting.
   // A group drag also remembers its parent frame, so a sibling-reorder drop zone can refuse a
@@ -98,6 +102,8 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
   // sidebarAutoCollapse now only supplies the DEFAULT for a row nobody ever toggled.
   const autoCollapse = useSettings((s) => s.settings.sidebarAutoCollapse)
   const collapsedItems = useSettings((s) => s.settings.sidebarCollapsedItems)
+  const grouping = useSettings((s) => s.settings.sidebarGrouping)
+  const updateSettings = useSettings((s) => s.update)
 
   // Look up the current git branch for each project cwd (best-effort, cached). Gated on `open`
   // and caches a NEGATIVE result too — without the '' fallback a non-git cwd re-fired a git
@@ -132,6 +138,20 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
       open ? buildSessionList(projects, liveActiveNodes, activeProjectId, statusById, filter) : [],
     [open, projects, liveActiveNodes, activeProjectId, statusById, filter]
   )
+  const statusSections = useMemo(
+    () =>
+      open && grouping === 'status'
+        ? buildStatusList(projects, liveActiveNodes, activeProjectId, statusById, filter)
+        : [],
+    [open, grouping, projects, liveActiveNodes, activeProjectId, statusById, filter]
+  )
+
+  useEffect(() => {
+    if (!open || grouping !== 'status') return
+    setStatusNow(Date.now())
+    const timer = window.setInterval(() => setStatusNow(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [open, grouping])
 
   const projectCount = (g: (typeof groups)[number]): number =>
     g.groups.reduce((n, b) => n + groupSessionCount(b), 0) + g.ungrouped.length
@@ -236,6 +256,22 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
       </div>
     )
   }
+
+  const renderStatusRow = (row: (typeof statusSections)[number]['rows'][number]): JSX.Element => (
+    <div key={row.id} className="ss-rowdrop">
+      <SessionRow
+        row={row}
+        stateAgeLabel={sessionStateAgeLabel(row.statusUpdatedAt, statusNow)}
+        onClick={() => props.onFocusNode(row.id)}
+        onClose={() => props.onCloseSession(row.projectId!, row.id)}
+        onRename={(title) => props.onRenameSession(row.projectId!, row.id, title)}
+        onAiName={() => props.onAiNameSession(row.projectId!, row.id, row.cwd)}
+        onContextMenu={(e) => props.onRowContextMenu(e, row.projectId!, row.id)}
+        onDragStart={() => {}}
+        onDragEnd={() => {}}
+      />
+    </div>
+  )
 
   /**
    * One group frame's row and everything under it, recursively — this is what makes the sidebar
@@ -436,6 +472,27 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
         />
       </div>
 
+      <div className="ss-tabs" role="tablist" aria-label="Group sessions by">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={grouping === 'project'}
+          className={`ss-tab${grouping === 'project' ? ' is-active' : ''}`}
+          onClick={() => updateSettings({ sidebarGrouping: 'project' })}
+        >
+          Project
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={grouping === 'status'}
+          className={`ss-tab${grouping === 'status' ? ' is-active' : ''}`}
+          onClick={() => updateSettings({ sidebarGrouping: 'status' })}
+        >
+          Status
+        </button>
+      </div>
+
       <div
         className="sessions-sidebar__body"
         // The body's empty space is the project drag's "drop at the end" zone (headers
@@ -453,8 +510,24 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
           setDropProj(null)
         }}
       >
-        {groups.length === 0 && <div className="sessions-sidebar__empty">No sessions yet.</div>}
-        {groups.map((g) => {
+        {groups.length === 0 && grouping !== 'status' && <div className="sessions-sidebar__empty">No sessions yet.</div>}
+        {grouping === 'status' ? (
+          statusSections.length === 0 ? (
+            <div className="sessions-sidebar__empty">No sessions yet.</div>
+          ) : (
+            statusSections.map((section: StatusSection) => (
+              <div key={section.kind} className="ss-status">
+                <div className="ss-status__head">
+                  <span className={`ss-status__icon ss-status__icon--${section.kind}`} />
+                  <span className="ss-status__label">{section.label}</span>
+                  <span className="ss-status__count">{section.rows.length}</span>
+                </div>
+                <div className="ss-status__rows">{section.rows.map(renderStatusRow)}</div>
+              </div>
+            ))
+          )
+        ) : (
+        groups.map((g) => {
           const collapseKey = projectCollapseKey(g.projectId)
           // While filtering, never collapse — a collapsed project would hide its own matches.
           const isCollapsed = filter
@@ -599,7 +672,8 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
               )}
             </div>
           )
-        })}
+        })
+        )}
       </div>
     </aside>
   )

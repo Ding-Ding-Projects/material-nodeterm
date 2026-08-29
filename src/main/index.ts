@@ -142,6 +142,7 @@ import { startSessionMemoryService, sshScopePredicate } from '../core/session-me
 import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
 import { startToyLockService } from '../core/toylocks/toylock-service'
 import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
+import { registerAgentStatusHandlers } from '../core/agent-status-handlers'
 import { createMemoryPressureMonitor } from '../core/memory-pressure'
 import { createPtyPressureMonitor } from '../core/pty-pressure'
 import { registerPtmxLimitHandler } from './ptmx-limit'
@@ -1827,6 +1828,12 @@ app.whenReady().then(async () => {
   })
   // Mirror live agent status to <userData>/agent-status.json for the external mobile host agent.
   initAgentStatusMirror()
+  registerAgentStatusHandlers(corePlatform, {
+    accountIdForNode: (nodeId) => workspaceStore.getNode(nodeId)?.accountId,
+    // SSH transcripts belong to the host running the session. Do not inspect a same-id local file
+    // and present it as recovery evidence for a remote node.
+    isRemoteNode: (nodeId) => !!workspaceStore.sshProjectIdForNode(nodeId)
+  })
 
   /** The one display-title rule for everything the HOST sends out (push alerts, Live Activity
    *  updates, the notch capsule): the live session name unless the node was hand-renamed. */

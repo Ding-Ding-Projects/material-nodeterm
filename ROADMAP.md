@@ -181,6 +181,9 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Clean-room features and upstream parity
 
+- [ ] **#74 / lane 63** — Add display-only agent-state recovery across restarts and sidebar workflow
+      grouping. Implementation is present in the current task checkout; tests, builds,
+      packaging, runtime interaction, and captures remain pending.
 - [ ] Add clean-room browser, kiosk, PWA, proxy, and read-only diagnostics nodes.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and

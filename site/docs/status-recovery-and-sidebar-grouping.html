@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent status recovery and sidebar grouping — nodeterm docs</title>
+    <meta name="description" content="Display-only agent status recovery across restarts and workflow-state grouping in the sessions sidebar." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Agents</p>
+      <h1>Agent status recovery and sidebar grouping</h1>
+      <p>The application remembers a display-only last-known workflow state across restarts. The sessions sidebar can regroup sessions by workflow state without changing project order or canvas groups.</p>
+
+      <h2>Behaviour</h2>
+      <p>Live hook events remain authoritative for operation. On startup, supported local evidence is read from Claude and Gemini transcript tails or the Codex app-server status. Newer evidence can refresh the displayed state, but restored state never sends notifications, delivers messages, hibernates a process, or changes a session.</p>
+      <p>Choose Project or Status in the sidebar. Status view uses Waiting for your response, Done, Unknown, and Running sections. Unread remains a row-level notification marker, so it does not move a session into a separate workflow section.</p>
+
+      <h2>Persistence</h2>
+      <p>The choice is saved as <code>sidebarGrouping</code>. Project and canvas-group disclosure choices remain in <code>sidebarCollapsedItems</code>. The core stores the display ledger as <code>lastKnown</code> in the local <code>agent-status.json</code> file and removes it when the node is removed.</p>
+
+      <h2>Failure modes</h2>
+      <p>An unavailable transcript, malformed record, unsupported agent, unavailable Codex socket, or remote node produces no recovery evidence. The row stays Unknown or keeps its previous display-only value. A failed read is never interpreted as proof that a session finished.</p>
+
+      <h2>Security considerations</h2>
+      <p>The snapshot carries status, node and session identity, name, and a transition timestamp. It does not carry credentials, approval tickets, transcript contents, or verification proof. Recovery only reads local evidence and never launches or mutates a process.</p>
+
+      <h2>Verification</h2>
+      <p>The implementation is in the core recovery and mirror modules, the shared snapshot type, and the renderer status and sidebar modules. This lane intentionally did not run tests, type checks, builds, packaging, runtime interaction, accessibility checks, or captures. Release verification remains pending.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+          <li><a href="./agent-support.html">Agent support</a></li>
+          <li><a href="./terminal-sessions.html">Terminal sessions and continuity</a></li>
+          <li><a href="./projects-and-tabs.html">Projects and tabs</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

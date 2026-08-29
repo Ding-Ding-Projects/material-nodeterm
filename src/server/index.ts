@@ -81,6 +81,7 @@ import { SpeechService } from '../core/speech/speech-service'
 import { registerSpeechIpc } from '../core/speech/register-ipc'
 import { isPremium, getStoredEntitlement } from '../core/license'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
+import { registerAgentStatusHandlers } from '../core/agent-status-handlers'
 
 // Same env-override + default as src/core/check.ts / license.ts / src/main/telemetry.ts — each
 // shell derives it locally rather than sharing an import (src/server must not import src/main).
@@ -305,6 +306,9 @@ export async function startServer(
   // scripts → start the loopback hook server. The hook server binds its own port independent of
   // the main HTTP server below.
   initAgentStatusMirror()
+  registerAgentStatusHandlers(platform, {
+    accountIdForNode: (nodeId) => workspaceStore.getNode(nodeId)?.accountId
+  })
 
   // Keep every agent node's session name fresh in the mirror — including nodes no canvas has
   // mounted (the phone lists them all; see core/session-name-sweep.ts).

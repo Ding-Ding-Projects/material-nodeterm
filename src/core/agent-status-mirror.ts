@@ -5,13 +5,15 @@ import { platform } from './platform'
 import { publishMirrorGeneration, reserveMirrorGeneration } from './mirror-publication'
 import type { AgentId } from '@shared/agents/config'
 import type { AgentState, NormalizedAgentEvent } from '@shared/agents/normalize'
+import type { AgentStatusSnapshot, AgentStatusSnapshotEntry } from '@shared/agents/status-snapshot'
 import { WORKING_STALE_MS, isStaleWorking } from '@shared/agents/stale'
 
 /**
  * Mirrors the live per-node agent status to a small JSON file so an EXTERNAL reader (the
  * nodeterm mobile host agent) can render running/waiting/blocked/done badges without an IPC
- * connection into the renderer. This is a READ-ONLY side-channel: it never feeds back into the
- * app and never changes renderer behavior.
+ * connection into the renderer. The operational table remains a read-only side-channel, while a
+ * separate lifecycle-bound display ledger may be requested by the renderer after restart. That
+ * ledger never feeds notifications, message delivery, process control, or other safety decisions.
  *
  * The reduction here intentionally mirrors the renderer store `state/agentStatus.ts` for the
  * MAIN state only:
@@ -148,6 +150,8 @@ export interface MirrorFile {
       updatedAt: number
     }
   >
+  /** Lifecycle-bound display state. It is never used for liveness, notifications, or control. */
+  lastKnown?: AgentStatusSnapshot
   /** Host-level launch settings (permission mode, managed accounts). Additive/optional: absent
    *  on old files and whenever no settings provider is wired — the file shape is then byte-for-byte
    *  identical to before this block existed. */
@@ -445,6 +449,13 @@ export function filterMirrorForNodes(doc: MirrorFile, nodeIds: ReadonlySet<strin
     updatedAt: doc.updatedAt,
     nodes
   }
+  if (doc.lastKnown) {
+    const filtered: AgentStatusSnapshot = {}
+    for (const [id, entry] of Object.entries(doc.lastKnown)) {
+      if (nodeIds.has(id)) filtered[id] = entry
+    }
+    if (Object.keys(filtered).length > 0) out.lastKnown = filtered
+  }
   if (doc.inbox) {
     const inboxNodes: Record<string, InboxNodeNow> = {}
     for (const [id, n] of Object.entries(doc.inbox.nodes)) if (nodeIds.has(id)) inboxNodes[id] = n
@@ -466,7 +477,8 @@ export function buildFile(
   settings?: MirrorSettings,
   usage?: MirrorUsage,
   inbox?: MirrorInbox,
-  server?: MirrorServer
+  server?: MirrorServer,
+  remembered?: AgentStatusSnapshot
 ): MirrorFile {
   const out: MirrorFile = { v: 1, updatedAt: now, nodes: {} }
   for (const [id, e] of Object.entries(nodes)) {
@@ -481,6 +493,7 @@ export function buildFile(
       updatedAt: e.updatedAt
     }
   }
+  if (remembered && Object.keys(remembered).length > 0) out.lastKnown = remembered
   if (settings) out.settings = settings
   if (usage) out.usage = usage
   // Only attach a non-empty inbox — an empty one would gratuitously change the old-file shape.
@@ -579,6 +592,10 @@ function newestUnresolved(events: ReadonlyArray<InboxEvent>, nodeId: string): In
 // ---- Stateful singleton (production side) --------------------------------------------------
 
 const state = new Map<string, MirrorEntry>()
+// Display continuity is lifecycle-bound, while `state` above remains operational evidence with a
+// freshness horizon. Keeping these ledgers separate prevents a restored status from authorizing a
+// notification, process action, or message delivery after restart.
+const lastKnown = new Map<string, AgentStatusSnapshotEntry>()
 /** How often the stale-working sweep runs. The window it enforces is WORKING_STALE_MS. */
 const STALE_SWEEP_MS = 60_000
 let sweepTimer: ReturnType<typeof setInterval> | null = null
@@ -1050,7 +1067,7 @@ export function onMirrorFlush(cb: (doc: MirrorFile) => void): () => void {
 function loadPersisted(file: string): void {
   // Only seed empty memory — never clobber a live session (init runs once at boot, but guard so a
   // stray re-init can't wipe in-flight state).
-  if (state.size > 0 || inboxEvents.length > 0) return
+  if (state.size > 0 || lastKnown.size > 0 || inboxEvents.length > 0) return
   let doc: MirrorFile
   try {
     doc = JSON.parse(fs.readFileSync(file, 'utf-8')) as MirrorFile
@@ -1060,6 +1077,33 @@ function loadPersisted(file: string): void {
   if (!doc || typeof doc !== 'object') return
   const now = Date.now()
   try {
+    // Display continuity has no liveness horizon. Migrate old files from their live table when
+    // the additive ledger is absent, but never use this copy for operational decisions.
+    const remembered =
+      doc.lastKnown && typeof doc.lastKnown === 'object' ? doc.lastKnown : doc.nodes
+    if (remembered && typeof remembered === 'object') {
+      for (const [id, raw] of Object.entries(remembered)) {
+        if (!raw || typeof raw !== 'object') continue
+        const entry = raw as Partial<AgentStatusSnapshotEntry> & { updatedAt?: unknown }
+        const changedAt =
+          typeof entry.changedAt === 'number'
+            ? entry.changedAt
+            : typeof entry.updatedAt === 'number'
+              ? entry.updatedAt
+              : 0
+        if (!Number.isFinite(changedAt) || changedAt <= 0) continue
+        const status = entry.state
+        lastKnown.set(id, {
+          changedAt,
+          ...(status === 'working' || status === 'waiting' || status === 'blocked' || status === 'done'
+            ? { state: status }
+            : {}),
+          ...(typeof entry.agentId === 'string' ? { agentId: entry.agentId as AgentId } : {}),
+          ...(typeof entry.sessionId === 'string' ? { sessionId: entry.sessionId } : {}),
+          ...(typeof entry.name === 'string' && entry.name ? { name: entry.name } : {})
+        })
+      }
+    }
     // Main per-node state — apply the same expiry as buildFile so a stale "working" from a crashed
     // session isn't resurrected past its window. This is what lets `prevState` survive the restart.
     if (doc.nodes && typeof doc.nodes === 'object') {
@@ -1169,6 +1213,7 @@ export function recordAgentEvent(ev: NormalizedAgentEvent): NormalizedAgentEvent
   const prevState = prev?.state
   const next = reduceEntry(prev, ev, now)
   state.set(nodeId, next)
+  rememberStatus(nodeId, prev, next, ev, now)
   // reduceEntry held an unanswered `request_user_input` through its turn-end `done` — rewrite
   // the broadcast to what the reducer decided, so every consumer (canvas store, notch, phone)
   // agrees the node is still waiting rather than each re-deriving it from the raw done.
@@ -1183,6 +1228,43 @@ export function recordAgentEvent(ev: NormalizedAgentEvent): NormalizedAgentEvent
   // pendingId (approve/deny is wrong UX for a picker); an approval keeps ev.pendingId as-is.
   if (classification.kind === 'question') return { ...out, askKind: 'question', pendingId: undefined }
   return { ...out, askKind: 'approval' }
+}
+
+/** Update the lifecycle-bound display ledger from a live event without making it operational. */
+function rememberStatus(
+  nodeId: string,
+  before: MirrorEntry | undefined,
+  next: MirrorEntry,
+  ev: NormalizedAgentEvent,
+  now: number
+): void {
+  const remembered = lastKnown.get(nodeId)
+  let rememberedState = remembered?.state
+  let changedAt = remembered?.changedAt ?? now
+  const sameSession =
+    !remembered?.sessionId || !next.sessionId || remembered.sessionId === next.sessionId
+
+  if (ev.kind === 'session') {
+    const endedBeforeCompletion = ev.sessionPhase === 'end' && rememberedState !== 'done'
+    if (!sameSession || endedBeforeCompletion) {
+      rememberedState = undefined
+      changedAt = now
+    }
+  } else if (ev.kind === 'state') {
+    // A held-off or ignored rescue leaves the reducer's state clock unchanged and is not evidence.
+    const committed = !before || next.state !== before.state || next.updatedAt !== before.updatedAt
+    if (committed) {
+      if (rememberedState !== next.state || !sameSession) changedAt = now
+      rememberedState = next.state
+    }
+  }
+  lastKnown.set(nodeId, {
+    ...(rememberedState ? { state: rememberedState } : {}),
+    ...(next.agentId ? { agentId: next.agentId } : {}),
+    ...(next.sessionId ? { sessionId: next.sessionId } : {}),
+    ...(next.name || remembered?.name ? { name: next.name ?? remembered?.name } : {}),
+    changedAt
+  })
 }
 
 /**
@@ -1484,6 +1566,7 @@ export function recordContextUsage(nodeId: string, percent: number): void {
  */
 export function clearNode(nodeId: string): void {
   let changed = state.delete(nodeId)
+  if (lastKnown.delete(nodeId)) changed = true
   if (inboxNodes.delete(nodeId)) changed = true
   pendingQuestions.delete(nodeId)
   // History stays; unresolved cards for a gone node can never be answered → archive them.
@@ -1521,6 +1604,28 @@ export function setNodeSessionName(nodeId: string, name: string): boolean {
   const e = state.get(nodeId)
   if (!e || !name || e.name === name) return false
   state.set(nodeId, { ...e, name })
+  const remembered = lastKnown.get(nodeId)
+  if (remembered) lastKnown.set(nodeId, { ...remembered, name })
+  scheduleWrite()
+  return true
+}
+
+/** Return a defensive copy of the lifecycle-bound display-only status ledger. */
+export function agentStatusSnapshot(): AgentStatusSnapshot {
+  return Object.fromEntries(Array.from(lastKnown, ([id, entry]) => [id, { ...entry }]))
+}
+
+/** Apply newer external evidence to the display ledger without touching operational state. */
+export function applyRecoveredAgentStatus(
+  nodeId: string,
+  evidence: { state: AgentState; observedAt: number }
+): boolean {
+  const remembered = lastKnown.get(nodeId)
+  if (!remembered || evidence.observedAt <= remembered.changedAt) return false
+  const live = state.get(nodeId)
+  if (live && !live.restored && live.updatedAt >= evidence.observedAt) return false
+  if (remembered.state === evidence.state) return false
+  lastKnown.set(nodeId, { ...remembered, state: evidence.state, changedAt: evidence.observedAt })
   scheduleWrite()
   return true
 }
@@ -1608,6 +1713,8 @@ export function sweepStaleWorking(
   for (const [nodeId, e] of state) {
     if (!isStaleWorking(e.state, e.updatedAt, now, staleMs)) continue
     state.set(nodeId, { ...e, state: 'done' })
+    const remembered = lastKnown.get(nodeId)
+    if (remembered) lastKnown.set(nodeId, { ...remembered, state: undefined, changedAt: now })
     clearActivity(nodeId, now)
     swept.push(nodeId)
     fireNodeStateChange({
@@ -1645,7 +1752,16 @@ function scheduleWrite(): void {
 function buildCurrentMirror(generation?: number): MirrorFile {
   const now = Date.now()
   const inbox: MirrorInbox = { events: inboxEvents, nodes: Object.fromEntries(inboxNodes) }
-  const doc = buildFile(Object.fromEntries(state), now, undefined, safeSettings(), safeUsage(), inbox, safeServer())
+  const doc = buildFile(
+    Object.fromEntries(state),
+    now,
+    undefined,
+    safeSettings(),
+    safeUsage(),
+    inbox,
+    safeServer(),
+    agentStatusSnapshot()
+  )
   if (generation !== undefined) doc.generation = generation
   // Also drop expired entries from memory so the map itself can't grow without bound.
   for (const [id, e] of state) if (now - e.updatedAt > EXPIRE_MS) state.delete(id)
@@ -1703,6 +1819,7 @@ export async function flush(): Promise<void> {
 /** Reset all module state (in-memory map + config + listeners + inbox). Test-only. */
 export function _resetForTest(): void {
   state.clear()
+  lastKnown.clear()
   if (sweepTimer) clearInterval(sweepTimer)
   sweepTimer = null
   targetFile = null

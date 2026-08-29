@@ -597,6 +597,27 @@ const FEATURES = [
     docs: ['docs/features/agents/agent-support.md'],
   },
   {
+    id: 'agent-status-recovery',
+    label: 'Display-only agent status recovery and sidebar workflow grouping',
+    files: [
+      'src/core/agent-status-recovery.ts',
+      'src/core/agent-status-handlers.ts',
+      'src/core/agent-status-mirror.ts',
+      'src/shared/agents/status-snapshot.ts',
+      'src/renderer/state/agentStatus.ts',
+      'src/renderer/lib/sessionList.ts',
+      'src/renderer/components/SessionsSidebar.tsx'
+    ],
+    contentChecks: [
+      ['src/core/agent-status-recovery.ts', 'export async function recoverAgentStatusSnapshot('],
+      ['src/core/agent-status-handlers.ts', 'IPC.agentStatusSnapshot'],
+      ['src/renderer/lib/sessionList.ts', 'export function buildStatusList('],
+      ['src/renderer/components/SessionsSidebar.tsx', "role=\"tablist\" aria-label=\"Group sessions by\"" ]
+    ],
+    wired: { file: 'src/renderer/canvas/Canvas.tsx', symbol: 'agentStatusSnapshot' },
+    docs: ['docs/features/agents/status-recovery-and-sidebar-grouping.md']
+  },
+  {
     id: 'canvas',
     label: 'The canvas',
     files: ['src/renderer/canvas/Canvas.tsx'],

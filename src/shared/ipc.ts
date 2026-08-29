@@ -105,6 +105,8 @@ export const IPC = {
    *  Payload: `'warning' | 'critical'`. Re-fired at most once a minute — see core/memory-pressure. */
   appMemoryPressure: 'app:memory-pressure',
   agentStatus: 'agent:status',
+  /** Request a best-effort display-only status snapshot and runtime reconciliation. */
+  agentStatusSnapshot: 'agent:status-snapshot',
   /** Renderer → main/server: answer a held Claude permission hook (deterministic approvals).
    *  Payload: `{ nodeId, pendingId, decision: 'allow'|'deny' }`; resolves boolean. See
    *  docs/hook-reply-approvals.md. */

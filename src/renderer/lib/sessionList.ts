@@ -4,6 +4,7 @@ import type { NodeKind } from '@shared/types'
 import type { ProjectIcon } from '@shared/project-icon'
 import { hasUsage } from '@shared/agents/config'
 import type { SshConnection } from '@shared/ssh'
+import { relativeTime } from './relativeTime'
 
 export interface SessionNodeInput {
   id: string
@@ -26,14 +27,22 @@ export interface ProjectInput {
   nodes: SessionNodeInput[]
 }
 
-export type StatusKind = 'working' | 'attention' | 'done' | 'idle'
+export type StatusKind = 'working' | 'attention' | 'done' | 'unknown' | 'idle'
+
+/** Sidebar top-level grouping mode. */
+export type SidebarGrouping = 'project' | 'status'
 
 export const STATE_LABEL: Record<StatusKind, string> = {
   working: 'Running',
-  attention: 'Needs you',
+  attention: 'Waiting for your response',
   done: 'Done',
+  unknown: 'Unknown',
+  /** Legacy fixture compatibility; live rows now use Unknown for an unobserved state. */
   idle: 'Idle'
 }
+
+/** Fixed workflow section ordering. Read state is a row affordance, not a workflow bucket. */
+const STATUS_ORDER: StatusKind[] = ['attention', 'done', 'unknown', 'working']
 
 /** Disclosure key for a project row in the sessions tree. */
 export function projectCollapseKey(projectId: string): string {
@@ -149,8 +158,13 @@ export function sessionStatusKind(state: AgentNodeStatus['state']): StatusKind {
     case 'done':
       return 'done'
     default:
-      return 'idle'
+      return 'unknown'
   }
+}
+
+/** Relative age for a live or recovered status. Missing time remains genuinely unknown. */
+export function sessionStateAgeLabel(updatedAt: number | undefined, nowMs: number): string | undefined {
+  return updatedAt === undefined ? undefined : relativeTime(updatedAt, nowMs)
 }
 
 /**
@@ -172,6 +186,8 @@ export interface SessionRowVM {
   isAgent: boolean
   statusKind: StatusKind
   stateLabel: string
+  statusUpdatedAt?: number
+  statusRestored?: boolean
   unread: boolean
   session?: string
   loop?: { kind: 'loop' | 'schedule' | 'cron'; count: number }
@@ -179,6 +195,11 @@ export interface SessionRowVM {
   sshHost?: string
   sessionId?: string
   usesContext: boolean
+  /** Project ownership copied onto flattened status rows for scoped callbacks and context. */
+  projectId?: string
+  projectName?: string
+  projectColor?: string
+  projectIcon?: ProjectIcon
 }
 
 /** A canvas group frame, the sessions directly inside it, and the frames nested inside it. */
@@ -203,7 +224,11 @@ export interface SessionGroup {
   ungrouped: SessionRowVM[]
 }
 
-function toRow(n: SessionNodeInput, status: AgentNodeStatus | undefined): SessionRowVM {
+function toRow(
+  n: SessionNodeInput,
+  status: AgentNodeStatus | undefined,
+  project?: Pick<ProjectInput, 'id' | 'name' | 'color' | 'icon'>
+): SessionRowVM {
   const statusKind = sessionStatusKind(status?.state)
   return {
     id: n.id,
@@ -213,6 +238,8 @@ function toRow(n: SessionNodeInput, status: AgentNodeStatus | undefined): Sessio
     isAgent: !!n.agentId,
     statusKind,
     stateLabel: STATE_LABEL[statusKind],
+    statusUpdatedAt: status?.lastEventAt,
+    statusRestored: status?.restored,
     unread: !!status?.unread,
     session: status?.session,
     // A dismissed cron/schedule entry is retained as a fact (the hibernation guard reads it) but
@@ -224,7 +251,11 @@ function toRow(n: SessionNodeInput, status: AgentNodeStatus | undefined): Sessio
     cwd: n.cwd,
     sshHost: n.ssh?.host,
     sessionId: status?.sessionId,
-    usesContext: n.agentId ? hasUsage(n.agentId) : false
+    usesContext: n.agentId ? hasUsage(n.agentId) : false,
+    projectId: project?.id,
+    projectName: project?.name,
+    projectColor: project?.color,
+    projectIcon: project?.icon
   }
 }
 
@@ -321,4 +352,67 @@ export function buildSessionList(
   // Store order, NOT active-first: the sidebar mirrors the tab bar (both read the projects
   // array), and hoisting the active project to the top made every click reshuffle the list.
   return needle ? groups.filter((g) => g.groups.length > 0 || g.ungrouped.length > 0) : groups
+}
+
+/** One workflow-state section in the flattened sidebar view. */
+export interface StatusSection {
+  kind: StatusKind
+  label: string
+  rows: SessionRowVM[]
+}
+
+/**
+ * Flatten terminal rows across projects and regroup them by workflow state. Unread is retained on
+ * each row as a notification affordance, but never becomes a workflow bucket of its own. The
+ * active project's live nodes override persisted presentation without duplicating node ownership.
+ */
+export function buildStatusList(
+  projects: ProjectInput[],
+  liveActiveNodes: SessionNodeInput[] | null,
+  activeProjectId: string,
+  statusById: Record<string, AgentNodeStatus>,
+  filter: string
+): StatusSection[] {
+  const needle = filter.trim().toLowerCase()
+  const liveById = new Map((liveActiveNodes ?? []).map((node) => [node.id, node]))
+  const rows: SessionRowVM[] = []
+  const seen = new Set<string>()
+
+  for (const project of projects) {
+    for (const persisted of project.nodes) {
+      if (persisted.kind !== 'terminal' || seen.has(persisted.id)) continue
+      const node = project.id === activeProjectId ? liveById.get(persisted.id) ?? persisted : persisted
+      const row = toRow(node, statusById[node.id], project)
+      if (!needle || `${row.title} ${row.session ?? ''}`.toLowerCase().includes(needle)) rows.push(row)
+      seen.add(node.id)
+    }
+  }
+
+  // A newly created active node may not have reached the persisted project snapshot yet. Show it
+  // under the active project only, keeping status mode useful during the short save window.
+  const active = projects.find((project) => project.id === activeProjectId)
+  if (active) {
+    for (const node of liveActiveNodes ?? []) {
+      if (node.kind !== 'terminal' || seen.has(node.id)) continue
+      const row = toRow(node, statusById[node.id], active)
+      if (!needle || `${row.title} ${row.session ?? ''}`.toLowerCase().includes(needle)) rows.push(row)
+      seen.add(node.id)
+    }
+  }
+
+  const sections = new Map<StatusKind, SessionRowVM[]>()
+  for (const row of rows) {
+    const bucket = sections.get(row.statusKind) ?? []
+    bucket.push(row)
+    sections.set(row.statusKind, bucket)
+  }
+  return STATUS_ORDER
+    .map((kind) => ({
+      kind,
+      label: STATE_LABEL[kind],
+      rows: (sections.get(kind) ?? []).sort(
+        (a, b) => (b.statusUpdatedAt ?? 0) - (a.statusUpdatedAt ?? 0)
+      )
+    }))
+    .filter((section) => section.rows.length > 0)
 }

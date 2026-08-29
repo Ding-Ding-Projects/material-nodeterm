@@ -287,12 +287,22 @@ export function readCodexThreadAt(
   socketPath: string,
   threadId: string,
   timeoutMs = REQUEST_TIMEOUT_MS
-): Promise<{ id: string; name: string | null; path: string | null } | null> {
+): Promise<{
+  id: string
+  name: string | null
+  path: string | null
+  status?: { type?: unknown; activeFlags?: unknown }
+} | null> {
   if (!isSafeThreadId(threadId)) return Promise.resolve(null)
   return new Promise((resolve) => {
     let settled = false
     let ws: WebSocket
-    const finish = (value: { id: string; name: string | null; path: string | null } | null): void => {
+    const finish = (value: {
+      id: string
+      name: string | null
+      path: string | null
+      status?: { type?: unknown; activeFlags?: unknown }
+    } | null): void => {
       if (settled) return
       settled = true
       clearTimeout(timer)
@@ -335,13 +345,30 @@ export function readCodexThreadAt(
         finish({
           id: thread.id,
           name: typeof thread.name === 'string' && thread.name.trim() ? thread.name.trim() : null,
-          path: typeof thread.path === 'string' && path.isAbsolute(thread.path) ? thread.path : null
+          path: typeof thread.path === 'string' && path.isAbsolute(thread.path) ? thread.path : null,
+          status:
+            thread.status && typeof thread.status === 'object'
+              ? {
+                  type: thread.status.type,
+                  activeFlags: thread.status.activeFlags
+                }
+              : undefined
         })
       }
     })
     ws.once('error', () => finish(null))
     ws.once('close', () => finish(null))
   })
+}
+
+/** Read only the runtime status needed for display recovery, preserving the existing rollout API. */
+export async function readCodexStatusAt(
+  socketPath: string,
+  threadId: string,
+  timeoutMs = REQUEST_TIMEOUT_MS
+): Promise<{ status?: { type?: unknown; activeFlags?: unknown } } | null> {
+  const thread = await readCodexThreadAt(socketPath, threadId, timeoutMs)
+  return thread ? { status: thread.status } : null
 }
 
 export function readCodexAccountAt(

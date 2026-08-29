@@ -11916,7 +11916,7 @@ export function Canvas() {
       const t = (s ?? '').replace(/\s+/g, ' ').trim()
       return t.length <= max ? t : `${t.slice(0, max - 1)}…`
     }
-    return api.onAgentStatus((e: NormalizedAgentEvent) => {
+    const unsubscribe = api.onAgentStatus((e: NormalizedAgentEvent) => {
       const cs = useAgentStatus.getState()
       if (e.sessionId) cs.setSessionId(e.nodeId, e.sessionId)
       const agentLabel = agentConfig(e.agentId)?.label ?? 'Agent'
@@ -12058,7 +12058,7 @@ export function Canvas() {
         case 'session':
           if (e.sessionTitle) cs.setSession(e.nodeId, e.sessionTitle)
           if (e.sessionPhase === 'start') {
-            cs.setState(e.nodeId, undefined, e.agentId)
+            cs.setSessionBoundary(e.nodeId, 'start', e.agentId, e.sessionId)
             // A SessionStart is proof a CLI just LAUNCHED in that pane, so a hibernated flag on
             // this node is now false — our own `/exit` produces a SessionEnd, never a
             // SessionStart. This is the residual `setState`'s live-state self-heal cannot reach:
@@ -12070,7 +12070,7 @@ export function Canvas() {
             cs.setHibernated(e.nodeId, false)
           }
           if (e.sessionPhase === 'end') {
-            cs.setState(e.nodeId, undefined, e.agentId)
+            cs.setSessionBoundary(e.nodeId, 'end', e.agentId, e.sessionId)
             // In-session /loop dies with its session; cron (and scheduled cloud routines)
             // keep running after it — their cards stay until CronDelete / manual dismiss.
             const kind = cs.byId[e.nodeId]?.loop?.kind
@@ -12087,6 +12087,21 @@ export function Canvas() {
         void flushMailbox(e.nodeId)
       }
     })
+    // Subscribe first so a live hook event wins over the asynchronous display snapshot. The
+    // snapshot is deliberately display-only and cannot produce notifications or process actions.
+    let cancelled = false
+    void api
+      .agentStatusSnapshot()
+      .then((snapshot) => {
+        if (!cancelled) useAgentStatus.getState().hydrateSnapshot(snapshot)
+      })
+      .catch(() => {
+        // Older cores and disconnected sessions simply remain Unknown until live evidence arrives.
+      })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [api, flushMailbox])
 
   // Safety net for a lost Stop POST / crashed CLI: decay working entries that saw no hook

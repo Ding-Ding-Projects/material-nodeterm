@@ -6,6 +6,8 @@ built in; any other CLI can be added as a custom agent.
 - [Agent support](./agent-support.md) — the shared status model, hook-driven detection,
   permission modes, managed accounts, and the capability system that decides which agent gets
   which feature.
+- [Agent status recovery and sidebar grouping](./status-recovery-and-sidebar-grouping.md) —
+  display-only restart continuity and workflow-state sections in the sessions sidebar.
 
 See also [Canvas → Node kinds](../canvas/README.md) for the agent node itself,
 [Kanban](../kanban/README.md) for how agent status renders on a board card, and

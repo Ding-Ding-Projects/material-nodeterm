@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add display-only agent status recovery across restarts and a persisted Project/Status grouping
+  choice for the sessions sidebar. Recovery reads newer local transcript or Codex status evidence
+  when available, keeps unread as a row-level marker, and never drives notifications or process
+  control. Tests, builds, packaging, runtime interaction, and captures remain pending for this lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

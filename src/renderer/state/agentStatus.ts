@@ -2,6 +2,7 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { WORKING_STALE_MS } from '@shared/agents/stale'
 import type { AgentId } from '@shared/agents/config'
 import type { AgentState } from '@shared/agents/normalize'
+import type { AgentStatusSnapshot } from '@shared/agents/status-snapshot'
 import type { NodeTerminalApi } from '@shared/types'
 
 /**
@@ -37,6 +38,8 @@ import type { NodeTerminalApi } from '@shared/types'
 export interface AgentNodeStatus {
   /** Live activity; undefined = idle/unknown. */
   state?: AgentState
+  /** Display-only state restored from the core after restart. Live evidence clears this marker. */
+  restored?: true
   /**
    * When the LAST hook event asserted the current state (freshness, not transition time).
    * Never rendered — drives the done-holdoff guard, the stale-working sweeper, and the
@@ -151,6 +154,10 @@ export interface AgentStatusStore {
     pendingId?: string,
     verified?: boolean
   ): void
+  /** Merge display-only restart state without notifications, unread changes, or live side effects. */
+  hydrateSnapshot(snapshot: AgentStatusSnapshot): void
+  /** Apply a session boundary while retaining same-conversation display continuity. */
+  setSessionBoundary(id: string, phase: 'start' | 'end', agentId?: AgentId, sessionId?: string): void
   /** Clear `working` entries whose last event is older than `staleMs` (lost-Stop safety net). */
   sweepStaleWorking(staleMs?: number): void
   setSession(id: string, session: string): void
@@ -341,6 +348,7 @@ export function createAgentStatusSession(
         const samePendingWhileBlocked =
           state !== 'blocked' || (pendingId ?? prev.pendingId) === prev.pendingId
         if (
+          !prev.restored &&
           prev.state === state &&
           (agentId === undefined || prev.agentId === agentId) &&
           samePendingWhileBlocked
@@ -359,7 +367,8 @@ export function createAgentStatusSession(
         // The ONE place a state transition is recorded, so it is also the one place the idle
         // clock is stamped (the same-state fast path above deliberately does not touch it —
         // see `lastEventAt`).
-        const next = { ...prev, state, stateAt: now, lastEventAt: now }
+        const next: AgentNodeStatus = { ...prev, state, stateAt: now, lastEventAt: now }
+        delete next.restored
         // Written on the same edge the state is — the evidence describes THIS transition, and an
         // absent argument is not evidence.
         next.stateVerified = verified === true
@@ -416,13 +425,59 @@ export function createAgentStatusSession(
         return { byId }
       }),
 
+    hydrateSnapshot: (snapshot) =>
+      set((s) => {
+        let changed = false
+        const byId = { ...s.byId }
+        for (const [id, remembered] of Object.entries(snapshot)) {
+          const prev = byId[id] ?? EMPTY
+          // The live subscription is installed before the snapshot request. A live event that won
+          // that race must never be rewound by older display evidence.
+          if (prev.stateAt !== undefined && !prev.restored) continue
+          byId[id] = {
+            ...prev,
+            state: remembered.state,
+            restored: true,
+            stateAt: undefined,
+            lastEventAt: remembered.changedAt,
+            stateVerified: false,
+            pendingId: undefined,
+            ...(remembered.agentId ? { agentId: remembered.agentId } : {}),
+            ...(remembered.sessionId ? { sessionId: remembered.sessionId } : {}),
+            ...(remembered.name ? { session: remembered.name } : {})
+          }
+          changed = true
+        }
+        return changed ? { byId } : s
+      }),
+
+    setSessionBoundary: (id, phase, agentId, sessionId) =>
+      set((s) => {
+        const prev = s.byId[id] ?? EMPTY
+        const sameSession = !prev.sessionId || !sessionId || prev.sessionId === sessionId
+        const preserve = sameSession && (phase === 'start' ? prev.state !== undefined : prev.state === 'done')
+        const now = Date.now()
+        const next: AgentNodeStatus = {
+          ...prev,
+          state: preserve ? prev.state : undefined,
+          restored: true,
+          stateAt: undefined,
+          lastEventAt: preserve ? prev.lastEventAt : now,
+          stateVerified: false,
+          pendingId: undefined,
+          ...(agentId ? { agentId } : {}),
+          ...(sessionId ? { sessionId } : {})
+        }
+        return { byId: { ...s.byId, [id]: next } }
+      }),
+
     sweepStaleWorking: (staleMs = STALE_WORKING_MS) =>
       set((s) => {
         const now = Date.now()
         let changed = false
         const byId = { ...s.byId }
         for (const [id, v] of Object.entries(byId)) {
-          if (v.state === 'working' && now - (v.stateAt ?? 0) > staleMs) {
+          if (!v.restored && v.state === 'working' && now - (v.stateAt ?? 0) > staleMs) {
             byId[id] = { ...v, state: undefined, stateAt: now }
             changed = true
           }

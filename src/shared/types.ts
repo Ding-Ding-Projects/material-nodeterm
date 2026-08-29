@@ -1804,6 +1804,8 @@ export interface Settings {
    *  `project:<id>:group:<groupId>` (true = collapsed). Pruned on every write against the live
    *  tree, so a deleted frame or project cannot grow settings.json forever. */
   sidebarCollapsedItems: Record<string, boolean>
+  /** Sidebar grouping: project tree (default) or a flat workflow-status view. */
+  sidebarGrouping: 'project' | 'status'
   /** Fallback view for projects the user hasn't explicitly toggled (canvas or the kanban board).
    *  Personal machine-local preference; per-project explicit choices override it. */
   defaultProjectView: 'canvas' | 'kanban'
@@ -2199,6 +2201,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultNodeHeight: 440,
   sidebarAutoCollapse: true,
   sidebarCollapsedItems: {},
+  sidebarGrouping: 'project',
   defaultProjectView: 'canvas',
   canvasWidgets: {},
   panHoverDelay: 600,
@@ -3916,6 +3919,8 @@ export interface NodeTerminalApi {
   onUnreadClear(listener: (nodeId: string) => void): () => void
   /** Fires on each normalized agent hook event (working/done/waiting/subagent/…). Returns unsubscribe. */
   onAgentStatus(listener: (e: NormalizedAgentEvent) => void): () => void
+  /** Read display-only status continuity after restart. Never authorizes notifications or control. */
+  agentStatusSnapshot(): Promise<import('./agents/status-snapshot').AgentStatusSnapshot>
   /** Fires with live subagent transcript chunks while a subagent runs. Returns unsubscribe. */
   onSubagentActivity(listener: (e: SubagentActivity) => void): () => void
   /** Fires when an agent's `nodeterm` CLI requests a canvas action. Returns unsubscribe. */

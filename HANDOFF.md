@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-08-26, lane 63 display-only agent recovery and sidebar workflow grouping
+
+The current task checkout contains an implementation for issue #74 and upstream PR #421
+parity. `src/core/agent-status-mirror.ts` now keeps a lifecycle-bound `lastKnown` display ledger
+separate from operational evidence, and `src/core/agent-status-recovery.ts` reads newer local
+Claude/Gemini transcript or Codex app-server evidence without creating notifications, process
+control, message delivery, or other side effects. `agent-status-handlers.ts` exposes this through a
+shared Desktop and Server Edition read channel. The renderer hydrates the snapshot only as a
+display value and clears its restored marker on live state evidence.
+
+The sessions sidebar adds persisted Project and Status grouping. Status sections are Waiting for
+your response, Done, Unknown, and Running. Unread remains a row-level marker, so a finished unread
+session stays under Done. Existing project and canvas-group collapse choices remain persisted, and
+the status view includes project context and relative state age.
+
+Categorized documentation was added at `docs/features/agents/status-recovery-and-sidebar-grouping.md`
+and `site/docs/status-recovery-and-sidebar-grouping.html`, with the category index, site data,
+changelog, roadmap, and handoff updated. This lane intentionally did not run tests, type checks,
+lint, builds, packaging, runtime interaction, accessibility checks, or captures. No commit or push
+was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

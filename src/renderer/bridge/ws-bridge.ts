@@ -763,10 +763,17 @@ export function buildAgentApi(
   client: RpcClient
 ): Pick<
   NodeTerminalApi,
-  'onAgentStatus' | 'onSubagentActivity' | 'onUnreadClear' | 'answerPermission' | 'ackDone'
+  | 'onAgentStatus'
+  | 'onSubagentActivity'
+  | 'onUnreadClear'
+  | 'answerPermission'
+  | 'ackDone'
+  | 'agentStatusSnapshot'
 > {
   return {
     onAgentStatus: (listener) => client.subscribe(IPC.agentStatus, listener as Listener),
+    agentStatusSnapshot: () =>
+      client.request(IPC.agentStatusSnapshot) as Promise<import('@shared/agents/status-snapshot').AgentStatusSnapshot>,
     // Host swept a phone read-ack → drop this browser canvas's unread flag (external clear, no re-ack).
     onUnreadClear: (listener) => client.subscribe(IPC.agentUnreadClear, listener as Listener),
     onSubagentActivity: (listener) =>
