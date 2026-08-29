@@ -6,6 +6,8 @@ Cognition Devin are built in; any other CLI can be added as a custom agent.
 - [Agent support](./agent-support.md) — the shared status model, hook-driven detection,
   restart-safe display continuity, workflow-state sidebar grouping, permission modes, managed
   accounts, and the capability system that decides which agent gets which feature.
+- [Claude skill visibility](./claude-skills.md) — metadata-only discovery across local, managed,
+  and connected remote configuration scopes, with explicit missing and unavailable states.
 - [Usage-threshold account rotation](./usage-account-rotation.md) - opt-in account selection for
   new default Claude sessions when the active account reaches a configured usage threshold.
 - [Custom agent harnesses](./custom-agent-harness.md) — builtin capability inheritance, persisted

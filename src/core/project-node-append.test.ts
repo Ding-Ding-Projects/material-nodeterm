@@ -184,6 +184,18 @@ describe('appendProjectNode', () => {
     expect(plain.nodes[0].accountId).toBeUndefined()
   })
 
+  it('keeps a Codex phone registration in the Codex account namespace', () => {
+    const f = JSON.parse(
+      appendProjectNode(
+        baseFile([]),
+        { id: 'term-c-1', agentId: 'codex', accountId: '9f1c2b3d-4e5f-6071-8293-a4b5c6d7e8f9' },
+        NOW
+      )!
+    )
+    expect(f.nodes[0].codexAccountId).toBe('9f1c2b3d-4e5f-6071-8293-a4b5c6d7e8f9')
+    expect(f.nodes[0].accountId).toBeUndefined()
+  })
+
   it('refuses an unsafe accountId — it becomes a config-dir path segment', () => {
     // Refused whole, not written without the field: a node registered under the SYSTEM account is
     // the very wrong-identity bug accountId exists to prevent, and it would look like a success.

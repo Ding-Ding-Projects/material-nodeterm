@@ -26,6 +26,7 @@ import { DEFAULT_FUNNY_LEVEL, type FunnyLevel, type LanguageMode } from './i18n/
 import type { PortableDoorConstructionV3 } from './door-construction'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
+import type { ClaudeSkillsApi } from './claude-skills'
 import type { CalendarApi, CalendarNodeConfig } from './calendar'
 import type { HomeAssistantApi } from './home-assistant'
 import type { HomeAssistantControlApi, HomeAssistantControlConfig } from './home-assistant-control'
@@ -4319,6 +4320,8 @@ export interface ClaudeApi {
   /** Capabilities of the local Claude CLI (memoized in the shell; safe to call repeatedly).
    *  Never rejects — an unknown version resolves to the fail-open caps. */
   cliCaps(): Promise<ClaudeCliCaps>
+  /** Read-only metadata catalogue of local and connected Claude skill scopes. */
+  skills: ClaudeSkillsApi
   /**
    * Reads a Claude session's full transcript as flat searchable lines ([] if unavailable).
    * Resolves by `sessionId` when known (exact); otherwise falls back to `cwd` (durable —

@@ -23,6 +23,11 @@ import { isSafeRemoteHome } from '../../core/remote-safety'
 import { mediaCachePruneList, remoteMediaCacheName } from '../../core/remote-ssh/media-cache'
 import { allowMediaPath } from '../media-protocol'
 import { remoteAccountConfigDir, isSupportedClaudeVersion } from '../../core/claude-accounts-core'
+import {
+  parseRemoteClaudeSkillsOutput,
+  remoteClaudeSkillEntries,
+  type ClaudeSkillScope
+} from '../../core/claude-skills'
 import type { PushGrant } from '../../core/push-grants'
 import { REMOTE_GRANT_SCAN_CMD, parseRemoteGrants } from '../../core/remote-push-grants'
 import { supportsAutoPermissionMode, supportsFullscreenTui } from '../../shared/agents/config'
@@ -2046,6 +2051,41 @@ export class SshProjectManager {
       childArgs(c.conn, c.controlPath, `cat ${quoteRemotePath(file)} 2>/dev/null`)
     )
     return code === 0 && stdout ? stdout : null
+  }
+
+  /** Read only remote Claude skill folder names. SKILL.md contents never cross this boundary. */
+  async remoteClaudeSkills(
+    projectId: string,
+    accountId?: string
+  ): Promise<Pick<ClaudeSkillScope, 'state' | 'reason' | 'skills'>> {
+    const c = this.conns.get(projectId)
+    if (!c?.remoteHome) {
+      const parsed = parseRemoteClaudeSkillsOutput('UNAVAILABLE')
+      return { state: parsed.state, reason: parsed.reason, skills: remoteClaudeSkillEntries(parsed) }
+    }
+    if (accountId && !/^[A-Za-z0-9_-]+$/.test(accountId)) {
+      const parsed = parseRemoteClaudeSkillsOutput('UNAVAILABLE')
+      return { state: parsed.state, reason: 'The remote Claude account id is invalid.', skills: remoteClaudeSkillEntries(parsed) }
+    }
+    const configDir = accountId ? remoteAccountConfigDir(accountId) : `${c.remoteHome}/.claude`
+    const skillsDir = `${configDir}/skills`
+    const command = [
+      `if [ ! -d ${quoteRemotePath(skillsDir)} ]; then printf '%s\\n' MISSING;`,
+      `elif [ ! -r ${quoteRemotePath(skillsDir)} ]; then printf '%s\\n' UNAVAILABLE;`,
+      `else printf '%s\\n' OK; for nt_skill in ${quoteRemotePath(skillsDir)}/*; do`,
+      `[ -d "$nt_skill" ] || continue; [ -f "$nt_skill/SKILL.md" ] || continue;`,
+      `basename -- "$nt_skill"; done; fi`
+    ].join(' ')
+    try {
+      const result = await this.r.run(childArgs(c.conn, c.controlPath, command))
+      const parsed = result.code === 0
+        ? parseRemoteClaudeSkillsOutput(result.stdout)
+        : parseRemoteClaudeSkillsOutput('UNAVAILABLE')
+      return { state: parsed.state, reason: parsed.reason, skills: remoteClaudeSkillEntries(parsed) }
+    } catch {
+      const parsed = parseRemoteClaudeSkillsOutput('UNAVAILABLE')
+      return { state: parsed.state, reason: parsed.reason, skills: remoteClaudeSkillEntries(parsed) }
+    }
   }
 
   /** Delete a managed remote account's config dir (`rm -rf`). No-op when not connected. The id is

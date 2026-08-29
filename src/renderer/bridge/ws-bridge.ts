@@ -1789,7 +1789,10 @@ export function buildClaudeApi(client: RpcClient, stub: ClaudeApi): ClaudeApi {
     cliCaps: () =>
       (client.request(IPC.claudeCliCaps) as Promise<ClaudeCliCaps>).catch(
         () => UNKNOWN_CLAUDE_CLI_CAPS
-      )
+      ),
+    skills: {
+      list: () => client.request(IPC.claudeSkillsList) as ReturnType<ClaudeApi['skills']['list']>
+    }
   }
 }
 
