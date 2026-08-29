@@ -640,6 +640,30 @@ const FEATURES = [
     docs: ['docs/features/projects/portable-bindings.md', 'docs/features/projects/portable-schema3.md']
   },
   {
+    id: 'provider-accounts',
+    label: 'Provider accounts, vault references, and OAuth callbacks',
+    files: [
+      'src/shared/provider-accounts.ts',
+      'src/core/provider-accounts-service.ts',
+      'src/main/index.ts',
+      'src/server/index.ts',
+      'src/preload/index.ts',
+      'src/renderer/bridge/ws-bridge.ts',
+      'src/renderer/components/settings/sections/ProviderAccountsSection.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/provider-accounts.ts', 'export interface ProviderAccountsApi'],
+      ['src/core/provider-accounts-service.ts', 'export class ProviderAccountsService implements ProviderAccountsApi'],
+      ['src/core/provider-accounts-service.ts', 'export function registerProviderAccountsHandlers('],
+      ['src/main/index.ts', 'registerProviderAccountsHandlers(corePlatform)'],
+      ['src/server/index.ts', 'registerProviderAccountsHandlers(platform)'],
+      ['src/renderer/components/settings/sections/ProviderAccountsSection.tsx', 'export function ProviderAccountsSection('],
+    ],
+    settingsSection: 'provider-accounts',
+    wired: { file: 'src/renderer/components/settings/SettingsPage.tsx', symbol: 'ProviderAccountsSection' },
+    docs: ['docs/features/projects/provider-accounts.md'],
+  },
+  {
     // The sessions-sidebar project-header right-click menu and the project switcher's per-row
     // actions panel are two independently-typed menus that drifted apart (the switcher had no
     // archive save/open, the sidebar menu had no appearance editor). Both must consume the one
@@ -705,6 +729,56 @@ const FEATURES = [
     contentChecks: [['src/shared/agents/config.ts', 'BuiltinAgentId']],
     settingsSection: 'agents',
     docs: ['docs/features/agents/agent-support.md'],
+  },
+  {
+    id: 'claude-skill-visibility',
+    label: 'Claude skill visibility',
+    files: [
+      'src/shared/claude-skills.ts',
+      'src/core/claude-skills.ts',
+      'src/main/index.ts',
+      'src/main/remote-ssh/ssh-project.ts',
+      'src/server/handlers/index.ts',
+      'src/renderer/components/settings/sections/ClaudeSkillsSection.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/claude-skills.ts', 'export interface ClaudeSkillsApi'],
+      ['src/core/claude-skills.ts', 'export async function discoverLocalClaudeSkills('],
+      ['src/core/claude-skills.ts', 'export function parseRemoteClaudeSkillsOutput('],
+      ['src/renderer/components/settings/sections/ClaudeSkillsSection.tsx', 'export function ClaudeSkillsSection('],
+      ['src/main/index.ts', 'discoverLocalClaudeSkills('],
+      ['src/server/handlers/index.ts', 'discoverLocalClaudeSkills('],
+    ],
+    settingsSection: 'claude-skills',
+    wired: { file: 'src/renderer/components/settings/SettingsPage.tsx', symbol: 'ClaudeSkillsSection' },
+    tests: [['src/core/claude-skills.test.ts', "describe('Claude skill metadata boundary'"]],
+    docs: ['docs/features/agents/claude-skills.md'],
+  },
+  {
+    id: 'context-window-meter',
+    label: 'Context-window meter and progress telemetry',
+    files: [
+      'src/shared/context-source.ts',
+      'src/shared/types.ts',
+      'src/core/context-tail.ts',
+      'src/main/remote-context-tail.ts',
+      'src/renderer/state/contextWindow.ts',
+      'src/renderer/components/ContextMeter.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/types.ts', 'export interface ContextWindowUsage'],
+      ['src/shared/context-source.ts', 'export const CONTEXT_TELEMETRY_MATRIX'],
+      ['src/core/context-tail.ts', 'export function createContextTail('],
+      ['src/main/remote-context-tail.ts', 'export function createRemoteContextTail('],
+      ['src/renderer/state/contextWindow.ts', 'export const useContextWindow'],
+      ['src/renderer/components/ContextMeter.tsx', 'export function ContextMeter('],
+    ],
+    tests: [
+      ['src/core/context-tail.test.ts', "describe('parseLatestUsage'"],
+      ['src/main/remote-context-tail.test.ts', "describe('createRemoteContextTail'"],
+      ['src/renderer/state/contextWindow.test.ts', "describe('context producer admission'"],
+    ],
+    docs: ['docs/features/agents/context-window-meter.md'],
   },
   {
     id: 'linked-agent-inbox-notifications',
@@ -805,6 +879,18 @@ const FEATURES = [
     contentChecks: [['src/main/updater.ts', 'export function initUpdater']],
     settingsSection: 'updates',
     docs: ['docs/features/packaging/packaging-and-auto-update.md'],
+  },
+  {
+    id: 'interaction-ledger',
+    label: 'Built-artifact interaction evidence',
+    files: ['scripts/interaction-ledger.mjs', 'scripts/interaction-ledger.test.mjs'],
+    contentChecks: [
+      ['scripts/interaction-ledger.mjs', 'export function validateInteractionLedger('],
+      ['scripts/interaction-ledger.mjs', 'export function promoteInteractionLedger('],
+      ['scripts/interaction-ledger.mjs', 'export function createCheapHeadlessLaunchReceipt('],
+    ],
+    tests: [['scripts/interaction-ledger.test.mjs', "describe('interaction ledger validation'"]],
+    docs: ['docs/features/packaging/interaction-ledger.md'],
   },
   {
     id: 'language-modes',
@@ -1037,6 +1123,27 @@ const FEATURES = [
     contentChecks: [['src/renderer/components/color/ColorPicker.tsx', 'export function ColorPicker']],
     wired: { file: 'src/renderer/components/color/ColorField.tsx', symbol: 'ColorPicker' },
     docs: ['docs/colour-picker.md'],
+  },
+  {
+    id: 'design-reference-parity',
+    label: 'Checked-in design-reference parity inventory',
+    files: [
+      'design/v2/design-parity-inventory.json',
+      'design/v2-preview/main.js',
+      'scripts/design-parity-receipt.mjs',
+      'scripts/check-design-parity.mjs',
+      'docs/assets/design-parity/receipt-manifest.json',
+    ],
+    contentChecks: [
+      ['design/v2/design-parity-inventory.json', '"expectedReferenceCount": 10'],
+      ['design/v2-preview/main.js', 'MD3 ${screen}.dc.html'],
+      ['scripts/design-parity-receipt.mjs', 'export function validateDesignParityInventory('],
+      ['scripts/design-parity-receipt.mjs', 'export function runDesignParitySelfTest('],
+      ['scripts/check-design-parity.mjs', 'validateDesignParityReceipts('],
+      ['docs/assets/design-parity/receipt-manifest.json', '"pending-runtime"'],
+    ],
+    tests: [['scripts/design-parity-receipt.test.mjs', "describe('design parity inventory and receipts'"]],
+    docs: ['docs/features/appearance/design-reference-parity.md'],
   },
   {
     id: 'app-rename',
@@ -2204,6 +2311,7 @@ const NON_FEATURE_DOCS = new Map([
   ,['features/windows/README.md', 'Windows category index, with diagnostics inventoried separately']
   ,['features/windows/windows-diagnostics.md', 'open Windows diagnostics article, not a verified shipped feature']
   ,['plans/2026-08-26-material3-full-audit.md', 'historical implementation plan, not a user-facing surface']
+  ,['plans/2026-08-26-context-window-progress.md', 'historical implementation plan for the context-window meter, not a user-facing surface']
   ,['plans/2026-08-26-portable-node-universes-and-hosting-program.md', 'historical implementation plan, not a user-facing surface']
   ,['plans/README.md', 'planning category index, not a user-facing surface']
   ,['troubleshooting-codex-snap.md', 'troubleshooting guide for agent identity, covered by agent-support']
