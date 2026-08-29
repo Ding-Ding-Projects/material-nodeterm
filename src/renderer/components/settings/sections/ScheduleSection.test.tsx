@@ -62,7 +62,7 @@ describe('ScheduleSection Home Assistant credential actions', () => {
 
   const setStored = (stored: boolean): void => {
     useScheduledSettings.setState({
-      file: { version: 1, timezone: 'UTC', rules: [RULE] },
+      file: { version: 2, timezone: 'UTC', rules: [RULE] },
       hydrated: true,
       loadError: null,
       saveError: null,
@@ -83,7 +83,7 @@ describe('ScheduleSection Home Assistant credential actions', () => {
       scheduledSettings: {
         load: vi.fn(async () => ({
           ok: true,
-          file: { version: 1, timezone: 'UTC', rules: [RULE] },
+          file: { version: 2, timezone: 'UTC', rules: [RULE] },
           error: null
         })),
         activeState: vi.fn(async () => ({ computedAtMs: 1, active: null, sources: {} })),
@@ -180,7 +180,7 @@ describe('ScheduleSection Home Assistant credential actions', () => {
 
   it('publishes a pending owning rule before its immediate token mutation', async () => {
     setStored(false)
-    const next = { version: 1 as const, timezone: 'UTC', rules: [RULE] }
+    const next = { version: 2 as const, timezone: 'UTC', rules: [RULE] }
     useScheduledSettings.getState().update(next)
 
     await expect(

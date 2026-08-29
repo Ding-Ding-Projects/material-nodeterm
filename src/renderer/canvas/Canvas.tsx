@@ -2089,12 +2089,17 @@ export function Canvas() {
     const restored = nodesRef.current.map((node) => {
       const geometry = prior.nodeGeometry.get(node.id)
       if (!geometry) return node
+      const collapsed = geometry.collapsed ?? node.data.collapsed ?? false
+      const height = collapsed ? COLLAPSED_HEIGHT : geometry.size.height
       return {
         ...node,
         position: { ...geometry.position },
-        size: { ...geometry.size },
+        width: geometry.size.width,
+        height,
+        measured: undefined,
+        style: { ...node.style, width: geometry.size.width, height },
         ...(geometry.parentId ? { parentId: geometry.parentId } : { parentId: undefined }),
-        ...(geometry.collapsed === undefined ? {} : { collapsed: geometry.collapsed })
+        data: { ...node.data, collapsed, expandedHeight: geometry.size.height }
       }
     })
     setNodes(restored)
@@ -2120,9 +2125,14 @@ export function Canvas() {
     const nodeGeometry = new Map(
       nodesRef.current.map((node) => [node.id, {
         position: { ...node.position },
-        size: { width: node.size.width, height: node.size.height },
+        size: {
+          width: node.measured?.width ?? node.width ?? 0,
+          height: node.data.collapsed
+            ? (node.data.expandedHeight ?? node.measured?.height ?? node.height ?? 0)
+            : (node.measured?.height ?? node.height ?? 0)
+        },
         ...(node.parentId ? { parentId: node.parentId } : {}),
-        ...(node.collapsed !== undefined ? { collapsed: node.collapsed } : {})
+        ...(node.data.collapsed !== undefined ? { collapsed: node.data.collapsed } : {})
       }])
     )
     scheduledPlacementRef.current = { key, target, nodeGeometry, viewport: { ...viewportRef.current } }
@@ -9678,9 +9688,12 @@ export function Canvas() {
     if (!name) return
     const now = Date.now()
     const current = useProjects.getState().getProject(projectId)?.savedLayouts ?? []
+    const project = useProjects.getState().getProject(projectId)
+    if (!project) return
     const layout = captureSavedLayout(flowToNodeStates(nodesRef.current), viewportRef.current, {
       id: crypto.randomUUID(),
       name,
+      canvasId: projectCanvasView(project).id,
       createdAt: now,
       updatedAt: now
     })
