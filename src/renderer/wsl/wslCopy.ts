@@ -1,3 +1,5 @@
+import type { WslCreateStage } from '@shared/wsl'
+
 /**
  * The one WSL copy inventory. Each user-authored string has one catalogue id and one English
  * fallback, so the renderer cannot drift into a second ad-hoc id map or an unlocalised literal.
@@ -39,6 +41,13 @@ export const WSL_COPY = {
   of: { id: 'wsl.create.progress.of', fallback: 'of' },
   progressAria: { id: 'wsl.create.progress.aria', fallback: 'WSL creation phase progress' },
   progressValue: { id: 'wsl.create.progress.value', fallback: 'Step {step} of {steps}, {stage}. {detail}' },
+  stageValidating: { id: 'wsl.create.progress.stage.validating', fallback: 'validating' },
+  stageChecking: { id: 'wsl.create.progress.stage.checking', fallback: 'checking' },
+  stageInstalling: { id: 'wsl.create.progress.stage.installing', fallback: 'installing' },
+  stageRecording: { id: 'wsl.create.progress.stage.recording', fallback: 'recording' },
+  stageCompleted: { id: 'wsl.create.progress.stage.completed', fallback: 'completed' },
+  stageFailed: { id: 'wsl.create.progress.stage.failed', fallback: 'failed' },
+  stageCancelled: { id: 'wsl.create.progress.stage.cancelled', fallback: 'cancelled' },
   elapsed: { id: 'wsl.create.progress.elapsed', fallback: 'Elapsed time:' },
   seconds: { id: 'wsl.create.progress.seconds', fallback: 'seconds.' },
   installing: { id: 'wsl.create.progress.installing', fallback: 'Installing "{catalogue}" as "{name}" for operation {operationId}. Installation progress is reported by phase because wsl.exe provides no byte or percentage telemetry.' },
@@ -71,6 +80,19 @@ export function wslCopyKeyForFallback(value: string): WslCopyKey | undefined {
   return WSL_COPY_BY_FALLBACK.get(value)
 }
 
+export function wslStageCopyKey(stage: WslCreateStage): WslCopyKey {
+  const keys: Record<WslCreateStage, WslCopyKey> = {
+    validating: 'stageValidating',
+    checking: 'stageChecking',
+    installing: 'stageInstalling',
+    recording: 'stageRecording',
+    completed: 'stageCompleted',
+    failed: 'stageFailed',
+    cancelled: 'stageCancelled'
+  }
+  return keys[stage]
+}
+
 export interface WslAuthoredError {
   ownership: 'authored'
   copy: WslCopyKey
@@ -81,6 +103,8 @@ export interface WslExternalFactError {
   /** Complete external text, retained verbatim except for authored text around `facts`. */
   text: string
   facts: readonly string[]
+  /** Runtime values for an authored template, formatted before fact spans are preserved. */
+  params?: Readonly<Record<string, string>>
   /** Optional authored catalogue prefix rendered before the preserved external text. */
   authoredPrefix?: WslCopyKey
   /** Authored catalogue template used when the production error has a typed code. */

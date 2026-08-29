@@ -97,7 +97,7 @@ export function isWslCreateOperationId(value: unknown): value is string {
 }
 
 export type WslActionResult = { ok: true } | { ok: false; error: string }
-export type WslCreateResult = { ok: true; name: string } | { ok: false; error: string }
+export type WslCreateResult = { ok: true; name: string } | { ok: false; error: WslCreateError }
 
 export interface WslApi {
   /** Every installed distribution on this machine, this app's own and pre-existing ones alike.

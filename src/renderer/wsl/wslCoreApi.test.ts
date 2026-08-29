@@ -29,7 +29,10 @@ describe('resolveWslApi', () => {
     expect(await api.delete('anything')).toEqual({ ok: false, error: WSL_UNSUPPORTED_ERROR })
     expect(await api.create({ operationId: 'test', catalogueId: 'x', name: 'y' })).toEqual({
       ok: false,
-      error: WSL_UNSUPPORTED_ERROR
+      error: {
+        code: 'create-failed',
+        message: { id: 'failed', params: { error: WSL_UNSUPPORTED_ERROR }, facts: [WSL_UNSUPPORTED_ERROR] }
+      }
     })
   })
 })

@@ -1,7 +1,7 @@
 import type { CorePlatform } from '../core/platform'
 import type { FlowOwner } from '../core/pty-manager'
 import { UiSinkRegistry, type UiSink } from '../core/ui-sink-registry'
-import { E_NO_HANDLER, type RpcErr, type RpcOk, type RpcRequest } from '../shared/rpc'
+import { E_NO_HANDLER, rpcErrorDetails, type RpcErr, type RpcOk, type RpcRequest } from '../shared/rpc'
 
 // The sink interface + all of the per-(client, session) WS backpressure (pause/resume watermarks,
 // the WS_DROP_WATER ceiling, the drain sweep and the tmux resync) used to live in this file. It now
@@ -120,7 +120,11 @@ export class ServerPlatform implements CorePlatform {
     } catch (err) {
       return {
         t: 'res', id: req.id, ok: false,
-        error: { code: 'E_HANDLER', message: err instanceof Error ? err.message : String(err) }
+        error: {
+          code: 'E_HANDLER',
+          message: err instanceof Error ? err.message : String(err),
+          ...(rpcErrorDetails(err) ? { details: rpcErrorDetails(err) } : {})
+        }
       }
     }
   }

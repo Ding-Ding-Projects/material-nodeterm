@@ -35,6 +35,23 @@ describe('ServerPlatform', () => {
     expect(thrown).toMatchObject({ ok: false, error: { code: 'E_HANDLER', message: 'kapow' } })
   })
 
+  it('keeps typed catalogue error details on the Server RPC response', async () => {
+    const p = new ServerPlatform({ userDataDir: '/tmp/x', appVersion: '1.0.0' })
+    p.handle('catalogue', () => {
+      throw Object.assign(new Error('catalogue parse failed'), {
+        code: 'parse-failed', messageId: 'catalogueParseFailed', facts: ['wsl.exe'], detail: 'parser detail'
+      })
+    })
+    const ui = p.attach(fakeSink().sink)
+    const response = await p.dispatch(ui, { t: 'req', id: 5, method: 'catalogue', args: [] })
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'E_HANDLER', message: 'catalogue parse failed', details: {
+        code: 'parse-failed', messageId: 'catalogueParseFailed', facts: ['wsl.exe'], detail: 'parser detail'
+      } }
+    })
+  })
+
   it('cast runs on-listeners and ignores unknown methods silently', () => {
     const p = new ServerPlatform({ userDataDir: '/tmp/x', appVersion: '1.0.0' })
     const got: unknown[] = []
