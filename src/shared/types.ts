@@ -412,6 +412,7 @@ export type NodeKind =
   // persists a title and a colour and nothing else, because an entry id names a credential in
   // this machine's OS vault while project.json is git-shared. See AuthenticatorNode.tsx.
   | 'authenticator'
+  | 'converter'
   // A portable calendar view. Provider credentials and event cache stay in the core vault/local
   // data, while this node carries only safe selection intent.
   | 'calendar'

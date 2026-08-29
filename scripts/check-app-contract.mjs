@@ -1242,8 +1242,16 @@ const FEATURES = [
   {
     id: 'file-converter',
     label: 'Universal file converter',
-    files: ['src/renderer/components/converter/FileConverterPanel.tsx', 'src/core/converter/registry.ts'],
-    contentChecks: [['src/renderer/components/converter/FileConverterPanel.tsx', 'export function FileConverterPanel']],
+    files: [
+      'src/renderer/components/converter/FileConverterPanel.tsx',
+      'src/renderer/components/converter/AdapterCatalog.tsx',
+      'src/renderer/nodes/ConverterNode.tsx',
+      'src/core/converter/registry.ts'
+    ],
+    contentChecks: [
+      ['src/renderer/components/converter/FileConverterPanel.tsx', 'export function FileConverterPanel'],
+      ['src/renderer/nodes/ConverterNode.tsx', 'export default function ConverterNode']
+    ],
     wired: { file: 'src/renderer/canvas/Canvas.tsx', symbol: 'FileConverterPanel' },
     docs: ['docs/file-converter.md'],
   },

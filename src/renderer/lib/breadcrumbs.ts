@@ -22,7 +22,9 @@ const KIND_LABEL: Partial<Record<NodeKind, string>> = {
   calendar: 'calendar',
   'homeassistant-control': 'Home Assistant control',
   dino: 'dino',
-  group: 'group'
+  group: 'group',
+  authenticator: 'authenticator',
+  converter: 'file converter'
 }
 
 /** The subset of a node `recordBreadcrumb`/`buildNote` need — loose on purpose so callers can
