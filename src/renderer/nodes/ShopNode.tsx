@@ -12,6 +12,8 @@ import {
 import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapAroundExactFacts } from './nodeVocabulary'
 import { type CanvasNode } from '../state/workspace'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { appearanceId } from '../lib/appearance/registry'
@@ -40,6 +42,8 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
   const { updateNodeData } = useReactFlow()
   const api = useActiveSessionApi()
   const ts = useLocalizedVocabularyText()
+  const vocab = useVocabularyMapper()
+  const copy = (text: string, facts: readonly string[] = []): string => mapAroundExactFacts(text, facts, vocab)
   const search = useRegexSearchField({ mode: 'text' })
   const inputRef = useRef<HTMLInputElement>(null)
   const wizardAnchorRef = useRef<HTMLButtonElement>(null)
@@ -86,7 +90,7 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
       setWizardServices(services)
       if (services.length > 0) setWizardServiceId((current) => current || services[0].id)
     }).catch((error) => {
-      if (active) setWizardLoadError(error instanceof Error ? error.message : 'The current AWS model inventory could not be loaded.')
+      if (active) setWizardLoadError(error instanceof Error || typeof error === 'string' ? String(error) : copy('The current AWS model inventory could not be loaded.'))
     })
     return () => { active = false }
   }, [scope])
@@ -103,7 +107,7 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
       setWizardCommands(commands)
       setWizardCommandName((current) => commands.some((command) => command.name === current) ? current : (commands[0]?.name ?? ''))
     }).catch((error) => {
-      if (active) setWizardLoadError(error instanceof Error ? error.message : 'The selected AWS service commands could not be loaded.')
+      if (active) setWizardLoadError(error instanceof Error || typeof error === 'string' ? String(error) : copy('The selected AWS service commands could not be loaded.'))
     })
     return () => { active = false }
   }, [scope, wizardServiceId])
@@ -119,22 +123,24 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
   const wizardState = useMemo(() => {
     if (!wizardSource || scope !== 'aws-universe') return { definition: null, error: null }
     try { return { definition: buildAwsWizardDefinition(wizardSource), error: null } }
-    catch (error) { return { definition: null, error: error instanceof Error ? error.message : 'The AWS model source could not be used.' } }
+    catch (error) { return { definition: null, error: error instanceof Error || typeof error === 'string' ? String(error) : copy('The AWS model source could not be used.') } }
   }, [scope, wizardSource])
   const wizardDefinition = wizardState.definition
   const wizardError = wizardState.error ?? wizardLoadError
+  const entryUnavailableCopy = (entry: ShopCatalogEntry): string => entry.disabledReason
+    ?? ts(entry.disabledReasonKey ?? 'universeShop.entryUnavailable', 'This catalog entry is unavailable until its executor is available.')
 
   const loadSelectedWizard = (): void => {
     if (!wizardServiceId || !wizardCommandName) return
     setWizardLoadError(null)
     void window.nodeTerminal.awsWizardModels.source(wizardServiceId, wizardCommandName).then((source) => {
       if (!source) {
-        setWizardLoadError('The selected AWS operation is not present in the current model inventory.')
+        setWizardLoadError(copy('The selected AWS operation is not present in the current model inventory.'))
         return
       }
       setWizardSource(source)
       setWizardOpen(true)
-    }).catch((error) => setWizardLoadError(error instanceof Error ? error.message : 'The selected AWS operation model could not be loaded.'))
+    }).catch((error) => setWizardLoadError(error instanceof Error || typeof error === 'string' ? String(error) : copy('The selected AWS operation model could not be loaded.')))
   }
 
   const prepareGenericOperation = async (input: Record<string, unknown>): Promise<void> => {
@@ -151,7 +157,7 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
       setGenericPreview(await api.awsResource.preview(id, request))
       setGenericRequest(request)
     } catch (error) {
-      setWizardLoadError(error instanceof Error ? error.message : 'The modeled AWS operation could not be prepared.')
+      setWizardLoadError(error instanceof Error || typeof error === 'string' ? String(error) : copy('The modeled AWS operation could not be prepared.'))
     } finally {
       setGenericBusy(false)
     }
@@ -167,7 +173,7 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
       try {
         setGenericResult(await api.awsResource!.execute(id, operationId, { ...genericRequest, confirmed: true }))
       } catch (error) {
-        setWizardLoadError(error instanceof Error ? error.message : 'The modeled AWS operation failed.')
+        setWizardLoadError(error instanceof Error || typeof error === 'string' ? String(error) : copy('The modeled AWS operation failed.'))
       } finally {
         setGenericBusy(false)
       }
@@ -197,7 +203,7 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
     if (entry.available === false || !canvasId || !scope || !provider?.create || depth === null) return
     if (entry.id === 'aws-service') {
       if (!wizardServiceId || !wizardCommandName) {
-        setWizardLoadError('Choose an AWS service and operation from the current model inventory first.')
+        setWizardLoadError(copy('Choose an AWS service and operation from the current model inventory first.'))
         return
       }
       setChosen(entry.id)
@@ -226,7 +232,7 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
       className={`shop-node${selected ? ' selected' : ''}`}
       style={border.style}
       role="region"
-      aria-label={ts('universeShop.aria.label', 'Shop for {scope}', { scope: scopeLabel })}
+      aria-label={copy(`Shop for ${scopeLabel}`, [scopeLabel])}
       data-universe-shop="true"
       data-universe-shop-scope={scope}
       data-appearance-id={appearanceId('node', id)}
@@ -236,30 +242,30 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
         <span className="shop-node__icon" aria-hidden="true">⌘</span>
         <div>
           <h2 className="shop-node__title">{ts('universeShop.title', 'Shop')}</h2>
-          <p className="shop-node__scope">{ts('universeShop.scope', '{scope} catalog', { scope: scopeLabel })}</p>
+          <p className="shop-node__scope">{copy(`${scopeLabel} catalog`, [scopeLabel])}</p>
         </div>
-        <span className="shop-node__fixed" title={ts('universeShop.fixed.title', 'This Shop belongs to its universe and cannot be moved or deleted.')}>🔒</span>
+        <span className="shop-node__fixed" title={copy('This Shop belongs to its universe and cannot be moved or deleted.')}>🔒</span>
       </div>
       <div className="shop-node__body">
-        <p className="shop-node__description">{ts('universeShop.description', 'Choose a node to create in this universe. The catalog is scoped and stays local to this Shop.')}</p>
+        <p className="shop-node__description">{copy('Choose a node to create in this universe. The catalog is scoped and stays local to this Shop.')}</p>
         {scope === 'aws-universe' && (
           <div className="shop-node__aws-wizard-entry">
-            <label>Search AWS services
-              <div className="shop-node__aws-wizard-search"><input ref={wizardServiceSearchRef} value={wizardServiceSearch.value} onChange={(event) => wizardServiceSearch.setValue(event.target.value)} /><AnchoredRegexBuilder search={wizardServiceSearch} fieldRef={wizardServiceSearchRef} label="Regex for AWS service search" zIndex={96} /></div>
+            <label>{copy('Search AWS services', ['AWS'])}
+              <div className="shop-node__aws-wizard-search"><input ref={wizardServiceSearchRef} value={wizardServiceSearch.value} onChange={(event) => wizardServiceSearch.setValue(event.target.value)} aria-label={copy('Search AWS services', ['AWS'])} /><AnchoredRegexBuilder search={wizardServiceSearch} fieldRef={wizardServiceSearchRef} label={copy('Regex for AWS service search', ['AWS'])} zIndex={96} /></div>
             </label>
-            <select value={wizardServiceId} onChange={(event) => setWizardServiceId(event.target.value)} aria-label="Choose AWS service">
+            <select value={wizardServiceId} onChange={(event) => setWizardServiceId(event.target.value)} aria-label={copy('Choose AWS service', ['AWS'])}>
               {visibleWizardServices.map((service) => <option key={service.id} value={service.id}>{service.label} ({service.id})</option>)}
             </select>
-            <label>Search operations
-              <div className="shop-node__aws-wizard-search"><input ref={wizardCommandSearchRef} value={wizardCommandSearch.value} onChange={(event) => wizardCommandSearch.setValue(event.target.value)} /><AnchoredRegexBuilder search={wizardCommandSearch} fieldRef={wizardCommandSearchRef} label="Regex for AWS operation search" zIndex={96} /></div>
+            <label>{copy('Search operations')}
+              <div className="shop-node__aws-wizard-search"><input ref={wizardCommandSearchRef} value={wizardCommandSearch.value} onChange={(event) => wizardCommandSearch.setValue(event.target.value)} aria-label={copy('Search operations')} /><AnchoredRegexBuilder search={wizardCommandSearch} fieldRef={wizardCommandSearchRef} label={copy('Regex for AWS operation search', ['AWS'])} zIndex={96} /></div>
             </label>
-            <select value={wizardCommandName} onChange={(event) => setWizardCommandName(event.target.value)} aria-label="Choose AWS operation">
+            <select value={wizardCommandName} onChange={(event) => setWizardCommandName(event.target.value)} aria-label={copy('Choose AWS operation', ['AWS'])}>
               {visibleWizardCommands.map((command) => <option key={command.name} value={command.name}>{command.name}</option>)}
             </select>
-            <Button ref={wizardAnchorRef} type="button" variant="primary" disabled={!wizardServiceId || !wizardCommandName} onClick={loadSelectedWizard} title={!wizardServiceId || !wizardCommandName ? 'Choose an AWS service and operation from the current model inventory first.' : 'Open the typed AWS operation wizard'}>
-              Open typed AWS operation wizard
+            <Button ref={wizardAnchorRef} type="button" variant="primary" disabled={!wizardServiceId || !wizardCommandName} onClick={loadSelectedWizard} title={!wizardServiceId || !wizardCommandName ? copy('Choose an AWS service and operation from the current model inventory first.') : copy('Open the typed AWS operation wizard')}>
+              {copy('Open typed AWS operation wizard')}
             </Button>
-            <span role="status">{wizardServices.length ? 'Uses the current installed AWS model inventory.' : 'Loading the current AWS model inventory.'}</span>
+            <span role="status">{wizardServices.length ? copy('Uses the current installed AWS model inventory.') : copy('Loading the current AWS model inventory.')}</span>
           </div>
         )}
         <div className="shop-node__search-row">
@@ -311,14 +317,14 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
                   aria-pressed={chosen === entry.id}
                   onClick={() => choose(entry)}
                   aria-describedby={entry.available === false ? `${id}-entry-${entry.id}-note` : undefined}
-                  data-appearance-id={appearanceId('node', `${id}:shop-entry:${entry.id}`)}
-                  title={entry.available === false
-                    ? ts(entry.disabledReasonKey ?? 'universeShop.entryUnavailable', entry.disabledReason ?? 'This catalog entry is unavailable until its executor is available.')
-                    : ts(entry.descriptionKey, 'Catalog entry details')}
+                   data-appearance-id={appearanceId('node', `${id}:shop-entry:${entry.id}`)}
+                   title={entry.available === false
+                     ? entryUnavailableCopy(entry)
+                     : ts(entry.descriptionKey, 'Catalog entry details')}
                 >
                   <span className="shop-node__entry-label">{ts(entry.labelKey, 'Catalog entry')}</span>
                   <span className="shop-node__entry-kind">{entry.nodeKind}</span>
-                  {entry.available === false && <span id={`${id}-entry-${entry.id}-note`} className="shop-node__entry-disabled">{ts(entry.disabledReasonKey ?? 'universeShop.entryUnavailable', entry.disabledReason ?? 'This catalog entry is unavailable until its executor is available.')}</span>}
+                   {entry.available === false && <span id={`${id}-entry-${entry.id}-note`} className="shop-node__entry-disabled">{entryUnavailableCopy(entry)}</span>}
                 </button>
               </li>
             ))
@@ -349,20 +355,20 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
         </AnchoredPopover>
       )}
       {genericPreview && (
-        <section className="shop-node__aws-preview" aria-label="AWS operation preview">
-          <h3>Execution preview</h3>
+          <section className="shop-node__aws-preview" aria-label={copy('AWS operation preview', ['AWS'])}>
+          <h3>{copy('Execution preview')}</h3>
           <dl>
-            <div><dt>Service</dt><dd>{genericPreview.service}</dd></div>
-            <div><dt>Operation</dt><dd>{genericPreview.operation}</dd></div>
-            <div><dt>Profile</dt><dd>{genericPreview.profileName}</dd></div>
-            <div><dt>Region</dt><dd>{genericPreview.region}</dd></div>
-            <div><dt>Risk</dt><dd>{genericPreview.risk}</dd></div>
-            <div><dt>Pagination</dt><dd>{genericPreview.pagination}</dd></div>
+            <div><dt>{copy('Service')}</dt><dd>{genericPreview.service}</dd></div>
+            <div><dt>{copy('Operation')}</dt><dd>{genericPreview.operation}</dd></div>
+            <div><dt>{copy('Profile')}</dt><dd>{genericPreview.profileName}</dd></div>
+            <div><dt>{copy('Region')}</dt><dd>{genericPreview.region}</dd></div>
+            <div><dt>{copy('Risk')}</dt><dd>{genericPreview.risk}</dd></div>
+            <div><dt>{copy('Pagination')}</dt><dd>{genericPreview.pagination}</dd></div>
           </dl>
           <pre>{genericPreview.argv.join(' ')}</pre>
           <div className="shop-node__aws-actions">
-            <Button type="button" variant="primary" disabled={genericBusy} onClick={runGenericOperation}>Run modeled operation</Button>
-            {genericProgress?.phase === 'started' && api.awsResource && <Button type="button" onClick={() => void api.awsResource!.cancel(genericProgress.operationId)}>Cancel operation</Button>}
+            <Button type="button" variant="primary" disabled={genericBusy} onClick={runGenericOperation}>{copy('Run modeled operation')}</Button>
+            {genericProgress?.phase === 'started' && api.awsResource && <Button type="button" onClick={() => void api.awsResource!.cancel(genericProgress.operationId)}>{copy('Cancel operation')}</Button>}
           </div>
           {genericProgress && <p role="status">{genericProgress.phase}: {genericProgress.message}</p>}
           {genericResult && <div role="status"><p>{genericResult.summary}</p><pre>{JSON.stringify(genericResult.rows.slice(0, 20), null, 2)}</pre></div>}
