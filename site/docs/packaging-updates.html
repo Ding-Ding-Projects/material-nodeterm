@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Packaging &amp; auto-update — nodeterm docs</title>
+    <meta name="description" content="Windows uses its unsigned Squirrel packages and an honest indeterminate update card; stable releases are manual and main-only." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem('nodeterm-playground.v1') || '{}')
+          if (saved && saved.theme === 'night') document.documentElement.setAttribute('data-theme', 'night')
+          if (saved && saved.bigText) {
+            document.documentElement.style.fontSize = '19px'
+          }
+        } catch (_err) {
+          /* localStorage unavailable (private mode, etc.) -- falls back to the day palette */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Releases</p>
+      <h1>Packaging &amp; auto-update</h1>
+      <p>Windows builds ship as an unsigned Squirrel set: Setup.exe, RELEASES, and a full package. The installed app checks the stable GitHub Release in the background and never interrupts active work.</p>
+
+      <h2>Behaviour</h2>
+      <p>Windows uses Electron's built-in Squirrel updater. While a newer package downloads, the minimizable card shows an indeterminate state because Squirrel does not expose byte progress. Once ready, <strong>Restart to update</strong> is your explicit way to restart immediately and can run only once. A downloaded update may instead apply on the next normal app launch even when that button is unused. macOS and Linux deliberately retain their existing updater path.</p>
+
+      <h2>One-time 0.3.0 migration</h2>
+      <p>Windows 0.3.0 cannot discover 0.4.0: its updater expected NSIS metadata at the old generic feed, while the Windows release contains Squirrel packages, so a one-time manual 0.4.0 Setup is required. Closing 0.3.0 first is only the provisional recommendation. The final real-Windows proof must exercise Setup with the old app both closed and running, then publish the supported sequence.</p>
+
+      <h2>Release channel</h2>
+      <p>The stable feed is the project's latest GitHub Release asset root. Its authority is enforced when publishing: the workflow is manual-only, accepts only the main branch, and requires a newly advanced stable package version. Feature-branch and prerelease builds do not belong in the stable feed. Automatic publication is disabled; the workflow remains manually dispatchable, version 0.4.0 is only a candidate, and manual publication remains pending the real packaged transition interactions.</p>
+
+      <h2>Failure modes</h2>
+      <p>If the feed is offline or returns 404, nodeterm keeps the installed version running and retries scheduled checks normally. A check you request reports the error without blocking the app; it never turns a failed read into “no update exists.” Duplicate checks and restart requests are coalesced.</p>
+
+      <h2>Security considerations</h2>
+      <p>The Windows installer and updates are intentionally unsigned. Verify the GitHub Release's target commit, hashes, and complete Squirrel asset set. The updater delegates RELEASES selection to Squirrel instead of fetching a second policy copy that could disagree at install time.</p>
+
+      <h2>Surface scope</h2>
+      <p>The Server Edition has no desktop installer, and the separately maintained mobile companion does not consume Squirrel packages. This Windows desktop updater is therefore not applicable to those surfaces.</p>
+
+      <h2>Verification still pending</h2>
+      <p>Deterministic checks cover feed selection, version advancement, wrong-channel diagnostics, failure degradation, and one-shot immediate restart. Two real proofs remain distinct: production 0.3.0 to 0.4.0 must prove the one-time manual Setup migration, while a uniquely named 0.4.0-fixture.1 to .2 pair must prove the new updater through a loopback feed in a disposable Windows Sandbox or VM. The fixture's app versions keep the dots even though Squirrel normalizes its NuGet package names to 0.4.0-fixture1 and 0.4.0-fixture2. That proof must wait out first run, relaunch the dynamically located installed executable, verify Settings → Updates and executable/package version metadata plus settings persistence, quit the exact fixture process, then uninstall only that fixture identity.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./windows-support.html">Windows support</a></li>
+        <li><a href="./server-edition.html">Server Edition</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

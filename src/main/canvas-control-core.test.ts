@@ -1,0 +1,345 @@
+import { describe, it, expect } from 'vitest'
+import {
+  parseControlRequest,
+  isDestructiveVerb,
+  mergeCanvasControlBlock,
+  buildCanvasControlInstructions,
+  buildCanvasSkillBody
+} from './canvas-control-core'
+import { STRICT_CONTROL_VERBS } from '../core/agents/node-identity-policy'
+
+describe('parseControlRequest', () => {
+  it('accepts known verbs', () => {
+    expect(parseControlRequest('list', {})).toEqual({ verb: 'list', args: {} })
+    expect(parseControlRequest('open-claude', { count: '2' })).toEqual({
+      verb: 'open-claude',
+      args: { count: '2' }
+    })
+  })
+
+  it('rejects unknown verbs', () => {
+    expect(parseControlRequest('nuke', {})).toEqual({ error: 'Unknown verb: nuke' })
+  })
+
+  it('requires a target for write/close', () => {
+    expect(parseControlRequest('close', {})).toEqual({ error: 'close requires --node <id>' })
+    expect(parseControlRequest('write', { node: 'n1' })).toEqual({ error: 'write requires --text' })
+    expect(parseControlRequest('write', { node: 'n1', text: 'hi' })).toEqual({
+      verb: 'write',
+      args: { node: 'n1', text: 'hi' }
+    })
+  })
+
+  it('validates persistent inter-agent message verbs', () => {
+    expect(parseControlRequest('send', { node: 'n2', text: 'hello' })).toEqual({ error: 'send requires --subject' })
+    expect(parseControlRequest('send', { node: 'n2', subject: 'NOTICE', text: 'hello' })).toEqual({
+      verb: 'send', args: { node: 'n2', subject: 'NOTICE', text: 'hello' }
+    })
+    expect(parseControlRequest('reply', { message: 'msg-1' })).toEqual({ error: 'reply requires --text' })
+    expect(parseControlRequest('reply', { message: 'msg-1', text: 'ack' })).toEqual({
+      verb: 'reply', args: { message: 'msg-1', text: 'ack' }
+    })
+    expect(parseControlRequest('status', {})).toEqual({ error: 'status requires --message <id>' })
+    expect(parseControlRequest('status', { message: 'msg-1' })).toEqual({
+      verb: 'status', args: { message: 'msg-1' }
+    })
+    for (const verb of ['send', 'reply', 'status'] as const) expect(isDestructiveVerb(verb)).toBe(false)
+  })
+
+  it('requires a source for show verbs', () => {
+    expect(parseControlRequest('show-video', {})).toEqual({ error: 'show-video requires --path' })
+    expect(parseControlRequest('show-web', {})).toEqual({
+      error: 'show-web requires --url, --file or --html'
+    })
+  })
+
+  it('open-browser requires --url', () => {
+    expect(parseControlRequest('open-browser', {})).toEqual({ error: 'open-browser requires --url' })
+    expect(parseControlRequest('open-browser', { url: 'https://x.dev' })).toEqual({
+      verb: 'open-browser',
+      args: { url: 'https://x.dev' }
+    })
+  })
+  it('open-browser is not destructive', () => {
+    expect(isDestructiveVerb('open-browser')).toBe(false)
+  })
+
+  it('classifies destructive verbs', () => {
+    expect(isDestructiveVerb('write')).toBe(true)
+    expect(isDestructiveVerb('close')).toBe(true)
+    expect(isDestructiveVerb('open-claude')).toBe(false)
+    expect(isDestructiveVerb('show-image')).toBe(false)
+  })
+
+  it('group/arrange require --nodes; align also requires --edge', () => {
+    expect(parseControlRequest('group', {})).toEqual({ error: 'group requires --nodes <id,id>' })
+    expect(parseControlRequest('group', { nodes: 'a,b' })).toEqual({ verb: 'group', args: { nodes: 'a,b' } })
+    expect(parseControlRequest('arrange', {})).toEqual({ error: 'arrange requires --nodes <id,id>' })
+    expect(parseControlRequest('align', { nodes: 'a' })).toEqual({ error: 'align requires --edge' })
+    expect(parseControlRequest('align', { nodes: 'a', edge: 'left' })).toEqual({
+      verb: 'align',
+      args: { nodes: 'a', edge: 'left' }
+    })
+  })
+  it('link requires --to; --from is optional and it is not destructive', () => {
+    expect(parseControlRequest('link', {})).toEqual({ error: 'link requires --to <id,id>' })
+    expect(parseControlRequest('link', { to: 'n2,n3' })).toEqual({
+      verb: 'link',
+      args: { to: 'n2,n3' }
+    })
+    expect(parseControlRequest('link', { to: 'n2', from: 'n1' })).toEqual({
+      verb: 'link',
+      args: { to: 'n2', from: 'n1' }
+    })
+    // A context link is pull-only (nothing is pushed into the endpoints), so it never
+    // goes through the confirm dialog.
+    expect(isDestructiveVerb('link')).toBe(false)
+  })
+
+  it('verify requires --node and is not destructive (it only opens read-only reviewers)', () => {
+    expect(parseControlRequest('verify', {})).toEqual({ error: 'verify requires --node <id>' })
+    expect(parseControlRequest('verify', { node: 'n1', lenses: 'security,tests' })).toEqual({
+      verb: 'verify',
+      args: { node: 'n1', lenses: 'security,tests' }
+    })
+    expect(isDestructiveVerb('verify')).toBe(false)
+  })
+
+  it('open-agent requires --agent, and is not destructive', () => {
+    expect(parseControlRequest('open-agent', {})).toEqual({ error: 'open-agent requires --agent <id>' })
+    expect(parseControlRequest('open-agent', { agent: 'codex' })).toEqual({
+      verb: 'open-agent',
+      args: { agent: 'codex' }
+    })
+    expect(parseControlRequest('open-agent', { agent: 'codex', resume: '../bad' })).toEqual({
+      error: 'open-agent --resume requires a safe session id'
+    })
+    expect(parseControlRequest('open-agent', { agent: 'codex', resume: 'thread-a', count: '2' })).toEqual({
+      error: 'open-agent --resume opens exactly one session'
+    })
+    expect(parseControlRequest('open-agent', {
+      agent: 'codex', resume: 'thread-a', account: 'system'
+    })).toEqual({
+      verb: 'open-agent', args: { agent: 'codex', resume: 'thread-a', account: 'system' }
+    })
+    expect(isDestructiveVerb('open-agent')).toBe(false)
+  })
+
+  it('validates native Loop creation and management verbs', () => {
+    expect(parseControlRequest('create-loop', {})).toEqual({ error: 'create-loop requires --task' })
+    expect(parseControlRequest('create-loop', { task: '   ' })).toEqual({ error: 'create-loop requires --task' })
+    expect(parseControlRequest('create-loop', { task: 'Check queues', every: '15m', start: '' })).toEqual({
+      verb: 'create-loop',
+      args: { task: 'Check queues', every: '15m', start: '' }
+    })
+    expect(parseControlRequest('create-loop', { task: 'x', every: '30s' })).toEqual({
+      error: 'create-loop --every must be a positive interval such as 15m, 2h or 1d'
+    })
+    expect(parseControlRequest('create-loop', { task: 'x', every: '' })).toEqual({
+      error: 'create-loop --every must be a positive interval such as 15m, 2h or 1d'
+    })
+    expect(parseControlRequest('update-loop', { node: 'scheduler-1' })).toEqual({
+      error: 'update-loop requires at least one of --task, --title, --every or --to'
+    })
+    expect(parseControlRequest('update-loop', { node: 'scheduler-1', to: 'term-a,term-b' })).toEqual({
+      verb: 'update-loop', args: { node: 'scheduler-1', to: 'term-a,term-b' }
+    })
+    for (const verb of ['start-loop', 'pause-loop', 'run-loop', 'delete-loop', 'loop-status'] as const) {
+      expect(parseControlRequest(verb, {})).toEqual({ error: `${verb} requires --node <id>` })
+      expect(parseControlRequest(verb, { node: 'scheduler-1' })).toEqual({
+        verb, args: { node: 'scheduler-1' }
+      })
+    }
+    // delete-loop confirms through its dedicated dialog, not the shared write/close refusal path.
+    expect(isDestructiveVerb('delete-loop')).toBe(false)
+    expect(isDestructiveVerb('create-loop')).toBe(false)
+  })
+
+  it('prevents a legacy direct Codex resume from opening duplicate agent nodes', () => {
+    expect(parseControlRequest('open-terminal', {
+      cmd: 'codex resume thread-a', count: '2'
+    })).toEqual({ error: 'open-terminal Codex resume opens exactly one agent session' })
+    expect(parseControlRequest('open-terminal', {
+      cmd: 'codex resume thread-a', count: '1'
+    })).toEqual({
+      verb: 'open-terminal', args: { cmd: 'codex resume thread-a', count: '1' }
+    })
+    expect(parseControlRequest('open-terminal', {
+      cmd: 'echo codex resume thread-a', count: '2'
+    })).toEqual({
+      verb: 'open-terminal', args: { cmd: 'echo codex resume thread-a', count: '2' }
+    })
+    expect(parseControlRequest('open-terminal', {
+      cmd: 'codex resume\nthread-a', count: '2'
+    })).toEqual({
+      verb: 'open-terminal', args: { cmd: 'codex resume\nthread-a', count: '2' }
+    })
+  })
+
+  it('open-worktree requires --branch, close-worktree requires --group; neither destructive', () => {
+    expect(parseControlRequest('open-worktree', {})).toEqual({ error: 'open-worktree requires --branch <name>' })
+    expect(parseControlRequest('open-worktree', { branch: 'feat/x' })).toEqual({
+      verb: 'open-worktree',
+      args: { branch: 'feat/x' }
+    })
+    expect(parseControlRequest('close-worktree', {})).toEqual({ error: 'close-worktree requires --group <id>' })
+    expect(parseControlRequest('close-worktree', { group: 'g1' })).toEqual({
+      verb: 'close-worktree',
+      args: { group: 'g1' }
+    })
+    expect(isDestructiveVerb('open-worktree')).toBe(false)
+    expect(isDestructiveVerb('close-worktree')).toBe(false)
+  })
+
+  it('branch requires --node, and is not destructive', () => {
+    expect(parseControlRequest('branch', {})).toEqual({ error: 'branch requires --node <id>' })
+    expect(parseControlRequest('branch', { node: 'n1' })).toEqual({
+      verb: 'branch',
+      args: { node: 'n1' }
+    })
+    expect(isDestructiveVerb('branch')).toBe(false)
+  })
+
+  it('rename requires --node and --title, and is not destructive', () => {
+    expect(parseControlRequest('rename', {})).toEqual({ error: 'rename requires --node <id>' })
+    expect(parseControlRequest('rename', { node: 'n1' })).toEqual({ error: 'rename requires --title' })
+    expect(parseControlRequest('rename', { node: 'n1', title: 'Feature Development' })).toEqual({
+      verb: 'rename',
+      args: { node: 'n1', title: 'Feature Development' }
+    })
+    expect(isDestructiveVerb('rename')).toBe(false)
+  })
+
+  it('ungroup requires --group; move requires --nodes; neither is destructive', () => {
+    expect(parseControlRequest('ungroup', {})).toEqual({ error: 'ungroup requires --group <id>' })
+    expect(parseControlRequest('ungroup', { group: 'g1' })).toEqual({ verb: 'ungroup', args: { group: 'g1' } })
+    expect(parseControlRequest('move', {})).toEqual({ error: 'move requires --nodes <id,id>' })
+    // --group is optional on move (omitting it pulls the nodes out to the top level).
+    expect(parseControlRequest('move', { nodes: 'n1,n2' })).toEqual({ verb: 'move', args: { nodes: 'n1,n2' } })
+    expect(parseControlRequest('move', { nodes: 'n1', group: 'g2' })).toEqual({
+      verb: 'move',
+      args: { nodes: 'n1', group: 'g2' }
+    })
+    expect(isDestructiveVerb('ungroup')).toBe(false)
+    expect(isDestructiveVerb('move')).toBe(false)
+  })
+
+  it('board takes no required args and is not destructive', () => {
+    expect(parseControlRequest('board', {})).toEqual({ verb: 'board', args: {} })
+    expect(isDestructiveVerb('board')).toBe(false)
+  })
+
+  it('assign requires --node; --column/--before are optional and it is not destructive', () => {
+    expect(parseControlRequest('assign', {})).toEqual({ error: 'assign requires --node <id>' })
+    // No --column is valid: it means "back to Ungrouped".
+    expect(parseControlRequest('assign', { node: 'n1' })).toEqual({ verb: 'assign', args: { node: 'n1' } })
+    expect(parseControlRequest('assign', { node: 'n1', column: 'In Progress' })).toEqual({
+      verb: 'assign',
+      args: { node: 'n1', column: 'In Progress' }
+    })
+    // Moving a card is board metadata only — no session is touched, so no confirm dialog.
+    expect(isDestructiveVerb('assign')).toBe(false)
+  })
+
+  it('merges the canvas-control block idempotently, preserving other content', () => {
+    const block = buildCanvasControlInstructions('/tmp/nodeterm.sh')
+    const first = mergeCanvasControlBlock('# My own notes\n', block)
+    expect(first).toContain('# My own notes')
+    expect(first).toContain('nodeterm:manage-canvas:start')
+    expect(first).toContain('/tmp/nodeterm.sh')
+    // Re-merging (e.g. next app launch, updated verbs) replaces the block, not duplicates it.
+    const second = mergeCanvasControlBlock(first, buildCanvasControlInstructions('/new/nodeterm.sh'))
+    expect(second.match(/nodeterm:manage-canvas:start/g)).toHaveLength(1)
+    expect(second).toContain('/new/nodeterm.sh')
+    expect(second).not.toContain('/tmp/nodeterm.sh')
+    expect(second).toContain('# My own notes')
+  })
+
+  it('instructions cover the verb set and the confirm caveat', () => {
+    const body = buildCanvasControlInstructions('/tmp/nodeterm.sh')
+    for (const verb of ['list', 'open-agent', 'create-loop', 'update-loop', 'start-loop', 'pause-loop', 'run-loop', 'delete-loop', 'loop-status', 'spawn-team', 'group', 'ungroup', 'move', 'arrange', 'rename', 'send', 'reply', 'status', 'write', 'close', 'board', 'assign']) {
+      expect(body).toContain(verb)
+    }
+    expect(body.toLowerCase()).toContain('confirm')
+    expect(body).toContain('when an existing session id is known, you MUST pass it with `--resume`')
+    expect(body).toContain('prompt-only node plus a renamed title is a new conversation')
+    expect(body).toContain('open-agent --agent codex --resume <known-id>')
+    expect(body).toContain('Never use `write` as agent messaging')
+    expect(body).toContain('Loops start paused unless `--start` is explicit')
+
+    const skill = buildCanvasSkillBody('/tmp/nodeterm.sh')
+    expect(skill).toContain('when an existing session id is known, you MUST pass it with `--resume`')
+    expect(skill).toContain('prompt-only node plus a renamed title is a new conversation')
+    expect(skill).toContain('open-agent --agent codex --resume <known-id>')
+    expect(skill).toContain('For Codex, `--account system|<id>`')
+    expect(skill).toContain('New Loops are paused unless `--start`')
+    expect(skill).not.toContain("command. For Codex,\n  **Restore rule:**")
+  })
+
+  // The parser change in this commit's sibling is only half a fix: an agent that never learns the
+  // `=` form simply cannot express a value beginning with `--`, and the failure stays silent for it.
+  // So both agent-facing texts must carry the rule, not just one of them.
+  it('the skill text documents --flag=value and warns about values starting with --', () => {
+    const body = buildCanvasSkillBody('/x/shim.sh')
+    expect(body).toContain('--flag=value')
+    expect(body).toMatch(/starts? with `--`/)
+  })
+
+  it('the codex/gemini instructions carry the same rule', () => {
+    const body = buildCanvasControlInstructions('/tmp/nodeterm.sh')
+    expect(body).toContain('--flag=value')
+    expect(body).toMatch(/starts? with `--`/)
+  })
+
+  it('spawn-team requires --team and none of the layout verbs are destructive', () => {
+    expect(parseControlRequest('spawn-team', {})).toEqual({ error: 'spawn-team requires --team <json>' })
+    expect(parseControlRequest('spawn-team', { team: '[]' })).toEqual({ verb: 'spawn-team', args: { team: '[]' } })
+    for (const v of ['group', 'arrange', 'align', 'spawn-team'] as const) {
+      expect(isDestructiveVerb(v)).toBe(false)
+    }
+  })
+})
+
+/**
+ * `browser` is a real ControlVerb: its own deep shape (exactly one action, `--node`, the per-flag
+ * value rules, the timeout clamp) is decided ONCE by the pure `parseBrowserArgs`
+ * (src/core/browser-verb.ts) — this file only surfaces that verdict through the same { error }
+ * shape every other verb uses. `STRICT_CONTROL_VERBS` (src/core/agents/node-identity-policy.ts)
+ * is the SEPARATE, independently-tested gate that refuses an unverified caller before this
+ * function ever runs (hook-server.ts) — this file does not re-implement that check, it only
+ * documents that the bucket actually names the verb this file now recognizes, so the two halves
+ * of the boundary cannot silently drift apart (one naming a verb the other has never heard of).
+ */
+describe('the `browser` verb', () => {
+  it('is a real verb, and its shape is decided by parseBrowserArgs', () => {
+    expect(parseControlRequest('browser', {})).toEqual({ error: 'browser: --node <id> is required' })
+    expect(parseControlRequest('browser', { node: 'browser-1', read: 'title' })).toEqual({
+      verb: 'browser',
+      args: { node: 'browser-1', read: 'title' }
+    })
+    expect(parseControlRequest('browser', { node: 'browser-1', nav: 'javascript:alert(1)' })).toEqual({
+      error: 'browser: --nav needs an http(s) URL'
+    })
+    expect(parseControlRequest('browser', { node: 'browser-1' })).toEqual({
+      error:
+        'browser: pass exactly one action (--nav, --read, --click, --type, --press, --scroll, --wait, --screenshot or --cookies)'
+    })
+  })
+
+  it('is not destructive (it never deletes anything a confirmation dialog would guard)', () => {
+    expect(isDestructiveVerb('browser')).toBe(false)
+  })
+
+  it('is in the verified-only STRICT_CONTROL_VERBS bucket — the two halves of the boundary agree', () => {
+    expect(STRICT_CONTROL_VERBS.has('browser')).toBe(true)
+  })
+
+  it('is NOT yet documented to any agent (no drive session exists to execute it)', () => {
+    // There is no execution path for `browser` yet: no drive session, no renderer executor case
+    // in Canvas.tsx, so a call from an agent following the skill/AGENTS.md instructions would
+    // always fail. Advertising an always-failing verb is worse than omitting it; this pins that
+    // the docs stay silent about `browser` until the drive path lands.
+    expect(buildCanvasSkillBody('/x/shim.sh')).not.toContain('`browser ')
+    expect(buildCanvasControlInstructions('/tmp/nodeterm.sh')).not.toContain('`browser ')
+  })
+})

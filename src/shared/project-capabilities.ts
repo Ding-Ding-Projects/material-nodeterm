@@ -1,0 +1,99 @@
+/**
+ * Per-project capability switches — the FIRST of their kind in nodeterm (ported from upstream
+ * eneskirca/nodeterm's feat/project-capabilities, re-implemented against this fork's tree).
+ *
+ * Before this file, `Project` carried exactly two policy fields (defaultAccountId,
+ * defaultPermissionMode) and there was no per-project settings surface at all. A capability is a
+ * line in PROJECT_CAPABILITIES plus an entry in PROJECT_CAPABILITY_COPY — no persistence code
+ * changes and, critically, no second clone-notice implementation (see
+ * shared/project-capability-consent.ts / core/project-capability-consent.ts).
+ *
+ * THESE FIELDS LIVE IN .nodeterm/project.json, WHICH IS GIT-SHARED. That is a hazard to be handled,
+ * not noted: a hostile cloned repo ships e.g. `agentBrowserControl: true` and the clone's first
+ * agent turn would otherwise hold the capability. Two things make that survivable and BOTH are
+ * required:
+ *
+ *  1. The switch alone grants nothing. Every capability must additionally require state this app
+ *     run built and never persisted (the specific in-memory ledger/wiring is the consuming
+ *     feature's job — this module only decides whether the SWITCH is on; a cloned project.json
+ *     alone must never be sufficient for a consumer to act).
+ *  2. First use in a project the user has not personally switched on raises a one-time notice,
+ *     recorded MACHINE-LOCALLY (IndexEntryV3.capabilityAck), never in project.json.
+ *
+ * If (2) is ever dropped as friction, this field must move to a machine-local store. That is the
+ * trigger, written down where the decision is, not only in a design doc.
+ *
+ * `agentBrowserControl` is the first entry. It has no consuming feature in this fork yet (this
+ * fork has not ported agent-driven browser control) — the mechanism is what this port delivers:
+ * the key set, the copy, the strict read, the file round-trip, the clone notice and the Settings
+ * row. A future browser-control port consumes `projectCapabilityGrantedFor` exactly as documented
+ * in @shared/project-capability-consent; it must not reimplement any of this.
+ */
+export type ProjectCapability = 'agentBrowserControl'
+
+export const PROJECT_CAPABILITIES: readonly ProjectCapability[] = ['agentBrowserControl'] as const
+
+export interface ProjectCapabilityCopy {
+  label: string
+  description: string
+  /** Shown wherever the switch is set AND in the clone notice. Same wording class as the tab
+   *  menu's bypassPermissions title, so the two git-shared grants read alike. */
+  cloneWarning: string
+}
+
+export const PROJECT_CAPABILITY_COPY: Record<ProjectCapability, ProjectCapabilityCopy> = {
+  agentBrowserControl: {
+    label: 'Let agents drive browser nodes they open',
+    description:
+      'Agents in this project can navigate, read, click and type in browser nodes THEY opened — ' +
+      'never in browser nodes you opened. Any page an agent reads can try to steer it: a page can ' +
+      'contain instructions, and the same agent can navigate anywhere and type anywhere. Nodes an ' +
+      'agent opens use their own logged-out session, separate from your own browsing.',
+    cloneWarning:
+      'This setting is saved in the project file (.nodeterm/project.json), so if you commit it, ' +
+      'everyone who clones the repo gets it too.'
+  }
+}
+
+/**
+ * Is the capability's raw switch set in this project's shared file? STRICT `=== true`, own
+ * properties only: .nodeterm/project.json is hostile input — git-shared, hand-editable,
+ * auto-adopted (@shared/node-exec) — so `"true"`, `1`, `{}` and a prototype-inherited `true` are
+ * all off (see project-capabilities.test.ts).
+ *
+ * NEVER A GRANT CHECK. This reads the FILE BIT only and knows nothing of the clone notice: during
+ * the pending-notice window — and after a recorded decline — it answers `true` while the
+ * capability must refuse. It exists for exactly two kinds of caller: display (a Settings switch
+ * showing the file's state) and the notice decider's `enabledInFile` input. Grants go through
+ * `projectCapabilityGrantedFor` (@shared/project-capability-consent).
+ */
+export function projectCapabilityFlagInFile(
+  p: Partial<Record<ProjectCapability, unknown>> | undefined | null,
+  cap: ProjectCapability
+): boolean {
+  if (!p || !Object.prototype.hasOwnProperty.call(p, cap)) return false
+  return p[cap] === true
+}
+
+/** The capability half of a ProjectFileV1, normalised: known keys only, literal `true` only,
+ *  own properties only (no consent inherited through a prototype chain). */
+export function readProjectCapabilities(f: unknown): Partial<Record<ProjectCapability, true>> {
+  const out: Partial<Record<ProjectCapability, true>> = {}
+  if (!f || typeof f !== 'object') return out
+  for (const cap of PROJECT_CAPABILITIES) {
+    if (
+      Object.prototype.hasOwnProperty.call(f, cap) &&
+      (f as Record<string, unknown>)[cap] === true
+    )
+      out[cap] = true
+  }
+  return out
+}
+
+/** The spread `projectToFile` uses. Absent keys are omitted, so an off capability adds no bytes to
+ *  the committed file and no churn to anyone's git diff. */
+export function projectCapabilityFields(
+  p: Partial<Record<ProjectCapability, unknown>> | undefined | null
+): Partial<Record<ProjectCapability, true>> {
+  return readProjectCapabilities(p ?? {})
+}

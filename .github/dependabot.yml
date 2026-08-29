@@ -1,0 +1,55 @@
+version: 2
+updates:
+  # npm dependencies: weekly, grouped so one PR carries the routine bumps instead
+  # of a dozen. Security updates still come through as their own PRs immediately.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+      production-minor-patch:
+        dependency-type: production
+        update-types: [minor, patch]
+    # node-pty / electron are ABI-sensitive (postinstall rebuilds node-pty against
+    # Electron's ABI) — take those majors by hand, not on an auto-PR.
+    ignore:
+      - dependency-name: electron
+        update-types: [version-update:semver-major]
+      - dependency-name: node-pty
+        update-types: [version-update:semver-major]
+      # The @xterm family must move in LOCKSTEP, by hand: the addons reach into the core's
+      # internals, so an addon bump against an older core crashes at runtime with no compile
+      # error. addon-webgl 0.19.0 on the 5.5 core read `_core._store` (a 5.6+ field) in its
+      # dispose path and aborted the DOM-renderer restore — every context release left a
+      # renderer-less, permanently black terminal (the zoom-out blackout). Guarded by
+      # src/renderer/terminal/webgl-addon-pair.test.ts; upgrade the whole family together
+      # (next vehicle: the xterm 6.x major).
+      - dependency-name: "@xterm/*"
+      # react / react-dom must move in LOCKSTEP too, and dependabot cannot express that: it
+      # split the 18→19 major into two independent PRs (react+@types/react, react-dom+
+      # @types/react-dom), and each failed CI on its own — @types/react-dom@18.3.7 still
+      # requires @types/react ^18.0.0 while the sibling PR bumped @types/react to 19.x. A
+      # react major is a real migration (hooks/StrictMode/types), not an auto-mergeable bump —
+      # take it by hand, both packages and their @types in one PR.
+      - dependency-name: react
+        update-types: [version-update:semver-major]
+      - dependency-name: react-dom
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/react"
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/react-dom"
+        update-types: [version-update:semver-major]
+
+  # Keep the GitHub Actions pinned in the workflows current (security patches to
+  # checkout / setup-node / codeql-action land here).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5

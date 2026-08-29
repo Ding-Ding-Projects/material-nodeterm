@@ -1,0 +1,228 @@
+import { useEffect, useState } from 'react'
+import { useProjects } from '../../../state/projects'
+import { hostShareOptions } from '../../../lib/relayHostShare'
+import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
+import { SearchableRow } from '../SearchableRow'
+import { FieldRow } from '../FieldRow'
+import { Button } from '@renderer/ui/Button'
+import { CopyButton } from '@renderer/ui/CopyButton'
+import { Input } from '@renderer/ui/Input'
+import { Select } from '@renderer/ui/Select'
+import { useSettings } from '../../../state/settings'
+
+const ROWS = {
+  allow: { title: 'Allow remote access', keywords: ['remote', 'host', 'share', 'pairing', 'ssh'] },
+  connect: {
+    title: 'Connect to a host',
+    keywords: ['remote', 'connect', 'client', 'pairing', 'code']
+  }
+}
+const ENTRIES = Object.values(ROWS)
+
+export function RemoteSection({
+  isActive,
+  onClose
+}: {
+  isActive: boolean
+  onClose: () => void
+}): React.JSX.Element {
+  const projects = useProjects((s) => s.projects)
+  const activeProjectId = useProjects((s) => s.activeProjectId)
+  const [hostOffer, setHostOffer] = useState('')
+  const [hostBusy, setHostBusy] = useState(false)
+  const [remoteError, setRemoteError] = useState('')
+  const [clientCode, setClientCode] = useState('')
+  const [connecting, setConnecting] = useState(false)
+  const dockerHost = useSettings((s) => s.settings.dockerHost)
+  const updateSettings = useSettings((s) => s.update)
+  const [contexts, setContexts] = useState<Array<{ name: string; current: boolean; endpoint: string }>>([])
+  const [dockerStatus, setDockerStatus] = useState('Checking Docker contexts…')
+
+  useEffect(() => {
+    let live = true
+    window.nodeTerminal.relayHost.dockerContexts().then((found) => {
+      if (!live) return
+      setContexts(found)
+      setDockerStatus(found.length ? `${found.length} Docker context${found.length === 1 ? '' : 's'} available.` : 'No Docker contexts were found. Start Docker and retry.')
+    }).catch((error) => {
+      if (live) setDockerStatus(`Docker is unavailable: ${error instanceof Error ? error.message : String(error)}`)
+    })
+    return () => { live = false }
+  }, [])
+
+  const patchDocker = (patch: Partial<typeof dockerHost>) =>
+    updateSettings({ dockerHost: { ...dockerHost, ...patch } })
+
+  // Which project this host shares with the joiner. Default = the active project (hoisted first
+  // by hostShareOptions); the user can pick any other OPEN project before minting the offer.
+  const shareOptions = hostShareOptions(projects, activeProjectId)
+  const [shareId, setShareId] = useState('')
+  const effectiveShareId = shareOptions.some((o) => o.id === shareId)
+    ? shareId
+    : (shareOptions[0]?.id ?? '')
+  const sharedName = shareOptions.find((o) => o.id === effectiveShareId)?.name ?? ''
+  // HOST side — the NEW relay tunnel (`relayHost`). `start()` returns the single-use pairing offer;
+  // a connecting peer's approval + canvas sync are handled globally by Canvas (`relayHost.onPeerPending`
+  // / `relayHost.confirm`, and the CorePlatform seq-stamped reflector — no old canvas-mirror flag).
+  const startHosting = async () => {
+    setRemoteError('')
+    setHostBusy(true)
+    try {
+      const { offer } = await window.nodeTerminal.relayHost.start(effectiveShareId || undefined)
+      setHostOffer(offer)
+    } catch (err) {
+      setRemoteError((err as Error).message)
+      setHostBusy(false)
+    }
+  }
+  const stopHosting = async () => {
+    await window.nodeTerminal.relayHost.stop()
+    setHostOffer('')
+    setHostBusy(false)
+  }
+  // CLIENT side — hand the offer to Canvas, which runs the relay connect → SAS compare → open-tab
+  // flow (the same `connectOffer` the dock/palette "New Remote Connection" uses). We deliberately do
+  // NOT call `relayClient.connect` here, so the SAS handshake lives in exactly one place.
+  const connectToHost = () => {
+    const code = clientCode.trim()
+    if (!code) return
+    setRemoteError('')
+    setConnecting(true)
+    setClientCode('')
+    window.dispatchEvent(
+      new CustomEvent('nodeterm:open-remote-terminal', { detail: { offer: code } })
+    )
+    setConnecting(false)
+    onClose()
+  }
+  return (
+    <SettingsSection
+      id="remote"
+      title="Docker host"
+      description="Open terminals on a Docker host you own — end-to-end encrypted over the relay. Hosting and connecting are free. Configure the relay target globally or override it for the active project."
+      isActive={isActive}
+      searchEntries={ENTRIES}
+    >
+      <SearchableRow {...ROWS.allow}>
+        <div className="space-y-3">
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Allow remote access</SettingsText></h4>
+          <p className="text-sm text-muted" role="status">{dockerStatus}</p>
+          <FieldRow label="Docker context" control={
+            <Select className="w-72" value={dockerHost.context} onChange={(e) => patchDocker({ context: e.target.value })}>
+              <option value="">Current Docker context</option>
+              {contexts.map((context) => <option key={context.name} value={context.name}>{context.name}{context.current ? ' (current)' : ''}</option>)}
+            </Select>
+          } />
+          <FieldRow label="Container image" control={
+            <Select className="w-72" value={dockerHost.image} onChange={(e) => patchDocker({ image: e.target.value })}>
+              <option value="node:24-bookworm-slim">Node 24 · Debian slim</option>
+              <option value="ubuntu:24.04">Ubuntu 24.04</option>
+              <option value="debian:bookworm-slim">Debian Bookworm slim</option>
+            </Select>
+          } />
+          <FieldRow label="Project workspace" control={
+            <Select className="w-72" value={dockerHost.mountMode} onChange={(e) => patchDocker({ mountMode: e.target.value as 'readonly' | 'writable' })}>
+              <option value="readonly">Read-only (recommended)</option>
+              <option value="writable">Writable (deliberate)</option>
+            </Select>
+          } />
+          <FieldRow label="Network policy" control={
+            <Select className="w-72" value={dockerHost.network} onChange={(e) => patchDocker({ network: e.target.value as 'none' | 'bridge' })}>
+              <option value="none">No network (recommended)</option>
+              <option value="bridge">Docker bridge network</option>
+            </Select>
+          } />
+          <div className="grid gap-2 sm:grid-cols-3">
+            <label className="text-sm text-muted"><SettingsText>CPU limit</SettingsText><Input type="number" min={0.25} max={8} step={0.25} value={dockerHost.cpus} onChange={(e) => patchDocker({ cpus: Number(e.target.value) })} /></label>
+            <label className="text-sm text-muted"><SettingsText>Memory MB</SettingsText><Input type="number" min={256} max={16384} step={256} value={dockerHost.memoryMb} onChange={(e) => patchDocker({ memoryMb: Number(e.target.value) })} /></label>
+            <label className="text-sm text-muted"><SettingsText>PID limit</SettingsText><Input type="number" min={32} max={4096} step={32} value={dockerHost.pidsLimit} onChange={(e) => patchDocker({ pidsLimit: Number(e.target.value) })} /></label>
+          </div>
+          {hostOffer ? (
+              <div className="space-y-2">
+                <p className="text-sm text-muted">
+                  Sharing <strong className="text-text">{sharedName || 'this project'}</strong> —
+                  the joiner will see this project and can run commands on this Docker host. Share this
+                  pairing code with the other device (single use):
+                </p>
+                <FieldRow
+                  label="Pairing code"
+                  control={
+                    <Input
+                      className="w-72"
+                      readOnly
+                      value={hostOffer}
+                      onFocus={(e) => e.target.select()}
+                    />
+                  }
+                />
+                <div className="flex gap-2">
+                  <CopyButton text={hostOffer} label="Copy code" />
+                  <Button onClick={() => void stopHosting()}>Stop sharing</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {shareOptions.length > 1 ? (
+                  <FieldRow
+                    label="Project to share"
+                    control={
+                      <Select
+                        className="w-72"
+                        value={effectiveShareId}
+                        onChange={(e) => setShareId(e.target.value)}
+                      >
+                        {shareOptions.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name}
+                          </option>
+                        ))}
+                      </Select>
+                    }
+                  />
+                ) : (
+                  <p className="text-sm text-muted">
+                    Sharing <strong className="text-text">{sharedName || 'this project'}</strong> —
+                    the joiner sees this project and can run commands on this Docker host.
+                  </p>
+                )}
+                <Button disabled={hostBusy} onClick={() => void startHosting()}>
+                  {hostBusy ? 'Starting…' : 'Allow remote access'}
+                </Button>
+              </div>
+            )}
+        </div>
+      </SearchableRow>
+      <SearchableRow {...ROWS.connect}>
+        <div className="mt-4 space-y-3">
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Connect to a host</SettingsText></h4>
+          <FieldRow
+            label="Pairing code"
+            control={
+              <Input
+                className="w-72"
+                placeholder="paste the host's code"
+                value={clientCode}
+                onChange={(e) => setClientCode(e.target.value)}
+              />
+            }
+          />
+          <Button disabled={connecting || !clientCode.trim()} onClick={() => void connectToHost()}>
+            {connecting ? (
+              <>
+                <span className="ui-spinner" aria-hidden /> <SettingsText>Connecting…</SettingsText>
+              </>
+            ) : (
+              'Connect'
+            )}
+          </Button>
+          {remoteError ? (
+            <p className="text-sm" style={{ color: '#ff9f0a' }}>
+              {remoteError}
+            </p>
+          ) : null}
+        </div>
+      </SearchableRow>
+    </SettingsSection>
+  )
+}

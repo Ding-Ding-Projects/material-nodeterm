@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Language modes, funny levels &amp; emoji — nodeterm docs</title>
+    <meta name="description" content="This site's own language mode, two independent funny-level sliders, and a dialog-emoji toggle — all per-visitor, all local, all live: every other feature module on this site routes its own copy through this one." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem('nodeterm-playground.v1') || '{}')
+          if (saved && saved.theme === 'night') document.documentElement.setAttribute('data-theme', 'night')
+          if (saved && saved.bigText) {
+            document.documentElement.style.fontSize = '19px'
+          }
+        } catch (_err) {
+          /* localStorage unavailable (private mode, etc.) -- falls back to the day palette */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">This site</p>
+      <h1>Language modes, funny levels &amp; emoji</h1>
+      <p>This site's own language mode, two independent funny-level sliders, and a dialog-emoji toggle — all per-visitor, all local, all live: every other feature module on this site routes its own copy through this one.</p>
+
+      <h2>Behaviour</h2>
+      <p>Three language modes: English, playful Hong Kong-style Cantonese, and bilingual (English shown prominently, Cantonese shown as a compact secondary line, so it never crowds the layout). Two independent 1–5 funny-level sliders — one for English, one for Cantonese — because how playful you want the English to sound has nothing to do with how playful you want the Cantonese to sound.</p>
+        <p>The rule the whole feature is built around: the funny level changes <strong>voice</strong>, never <strong>facts</strong>. Every piece of copy on this site is one fixed fact string per language; a funny level only ever appends a short, clearly separate sentence after it — the fact itself is always present, verbatim, as the start of whatever gets rendered, in every category including errors and warnings. There is no exemption list.</p>
+
+      <h2>Configuration</h2>
+      <p>Set from the Language settings panel. The emoji toggle is independent of the funny-level system — it only adds a relevant, non-semantic emoji to dialog and message-box chrome, and it deliberately never touches buttons, field labels, or accessible names.</p>
+
+      <h2>Failure modes</h2>
+      <p>While School mode is on, this whole system is forced to plain English with no shaping — see the School mode article. A missing translation key logs a console warning and falls back to showing the raw key rather than crashing the page.</p>
+
+      <h2>Security considerations</h2>
+      <p>All of it is stored in this browser's own local storage; nothing is ever sent anywhere.</p>
+
+      <h2>Verification</h2>
+      <p>Because the fact string is always the untouched prefix of the shaped output, checking that the funny-level shaping never alters the fact is a matter of confirming the rendered string starts with the exact fact text at every level — a property that's checkable by inspection of <code>site/app/shared/i18n.js</code>.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./school-mode.html">School mode</a></li>
+        <li><a href="./personal-vocabulary.html">Personal vocabulary</a></li>
+        <li><a href="./narrator.html">Narrator</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

@@ -1,0 +1,836 @@
+/**
+ * Shared-identity spine for Codex canvas nodes.
+ *
+ * WHY: a Codex terminal node used to spawn a full `codex` process tree per node — one app-server
+ * each. A canvas with a dozen Codex nodes paid a dozen servers' worth of RAM for one account. With
+ * this, every node on a machine talks to ONE `codex app-server` and owns one THREAD inside it, and
+ * the node ↔ thread mapping is what survives resumes, in-pane restarts and app restarts.
+ *
+ * The mapping is a tiny file per thread under `<userDataDir>/codex-thread-nodes/`. It is read by
+ * generated POSIX sh (the hook prelude in `codex-thread-identity-sh.ts`), so it is a flat
+ * `key=value` text file — parsed as DATA, never sourced.
+ *
+ * WHY IT IS SIGNED: the records name a node id and a hook endpoint, and the hook prelude
+ * re-exports both into the agent's environment. An attacker who could write one of these files
+ * could aim a session's hook traffic at a node (or an endpoint) of their choosing. Every record
+ * therefore carries an HMAC over (threadId, nodeId, endpoint) keyed by the same restart-stable
+ * secret the hook server uses to mint per-node capabilities
+ * (`src/core/agents/node-auth-secret.ts` — sealed via safeStorage on the desktop, raw 0600 bytes on
+ * the Server Edition). Unsigned/mis-signed records are ignored, not repaired.
+ *
+ * Managed accounts add one validated scope directory above the thread id. Legacy unscoped system
+ * records remain readable, and a thread id found in more than one scope resolves only when every
+ * trusted record names the same node.
+ */
+import {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  unlinkSync,
+  writeFileSync
+} from 'fs'
+import { homedir } from 'os'
+import path from 'path'
+import { createHmac, timingSafeEqual } from 'crypto'
+import { platform } from './platform'
+import { renameAtomicSync } from './fs-atomic'
+
+/**
+ * How long the SERVER gives itself to mint a thread (`startCodexThreadAt`'s default).
+ *
+ * The launcher's own curl budget is derived from this and is deliberately LARGER
+ * (`CODEX_THREAD_START_CLIENT_MAX_S`), so the server is always the side that gives up first.
+ * Get that ordering backwards and a slow app-server produces the worst outcome available: curl
+ * quits, the launcher falls back to plain codex, and the server carries on to create a thread and
+ * write a record for it that nothing will ever resume.
+ */
+export const CODEX_THREAD_START_TIMEOUT_MS = 20_000
+const CODEX_THREAD_START_CLIENT_MAX_S = CODEX_THREAD_START_TIMEOUT_MS / 1000 + 10
+
+const SAFE_NODE_ID = /^[A-Za-z0-9._-]+$/
+const SAFE_ENDPOINT = /^\/[A-Za-z0-9._/ -]+$/
+const THREAD_ID_CHARSET = /^[A-Za-z0-9._-]+$/
+const MAX_THREAD_ID = 128
+const SAFE_ACCOUNT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+const SYSTEM_ACCOUNT_SCOPE = 'system'
+
+/**
+ * The one predicate for a thread id — the twin of `isSafeNodeId` (core/agents/node-auth-token.ts),
+ * for the same reason and against the same trap.
+ *
+ * The charset alone is NOT enough: `.` and `..` both MATCH `THREAD_ID_CHARSET`, and a thread id is
+ * a PATH SEGMENT under `codexThreadIdentityRoot()` (`<root>/<threadId>`, plus the `.<threadId>.…`
+ * tmp file beside it) as well as a signed field in the record. A `..` there resolves to the record
+ * dir's PARENT. The id is caller-supplied — it arrives on `/codex-thread/bind` as a form field and
+ * from a node's persisted state — so refuse `.` and `..` by name, refuse empty, refuse
+ * over-length, BEFORE the id ever reaches a path join or a hash.
+ *
+ * Exported and shared deliberately: the hook routes and `codex-session-name.ts` used to carry
+ * their own copies of the bare charset, and two copies of a rule is how one of them stays wrong.
+ */
+export function isSafeThreadId(id: string): boolean {
+  return (
+    typeof id === 'string' &&
+    id.length > 0 &&
+    id.length <= MAX_THREAD_ID &&
+    id !== '.' &&
+    id !== '..' &&
+    THREAD_ID_CHARSET.test(id)
+  )
+}
+
+let identityAuthSecret: Buffer | null = null
+
+/** Injected by the shell once, from the same keychain-backed secret the hook server signs with. */
+export function setCodexThreadIdentityAuthSecret(secret: Uint8Array): void {
+  if (secret.byteLength < 32) throw new Error('Invalid NodeTerm Codex identity-auth secret')
+  identityAuthSecret = Buffer.from(secret)
+}
+
+/** Test-only: forget the injected secret so a suite can assert the unavailable path. */
+export function resetCodexThreadIdentityAuthSecret(): void {
+  identityAuthSecret = null
+}
+
+export function codexThreadIdentityAvailable(): boolean {
+  return !!identityAuthSecret
+}
+
+/**
+ * Where the thread → node records live. Through `CorePlatform`, NOT `homedir()`: this is state the
+ * app owns, and the Server Edition's data dir is not `~`. The generated sh gets this exact path
+ * baked in (quoted), so the two never disagree.
+ */
+export function codexThreadIdentityRoot(): string {
+  return path.join(platform().userDataDir, 'codex-thread-nodes')
+}
+
+/** Remote/test compatibility when no CorePlatform has been initialized. Real shells initialize
+ * the platform before shared identity is probed, so production state remains app-owned. */
+function defaultIdentityRoot(): string {
+  try {
+    return codexThreadIdentityRoot()
+  } catch {
+    return path.join(homedir(), '.nodeterm', 'codex-thread-nodes')
+  }
+}
+
+function identitySignature(
+  threadId: string,
+  nodeId: string,
+  hookEndpoint: string,
+  accountId?: string
+): string {
+  if (!identityAuthSecret) throw new Error('NodeTerm Codex identity authentication is unavailable')
+  const payload = accountId
+    ? `${threadId}\0${accountId}\0${nodeId}\0${hookEndpoint}`
+    : `${threadId}\0${nodeId}\0${hookEndpoint}`
+  return createHmac('sha256', identityAuthSecret)
+    .update(payload)
+    .digest('base64url')
+}
+
+function constantTimeEqual(actual: string, expected: string): boolean {
+  const a = Buffer.from(actual)
+  const b = Buffer.from(expected)
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+
+function signatureMatches(
+  threadId: string,
+  identity: CodexThreadIdentity,
+  candidateScope?: string
+): boolean {
+  if (!identity.signature || !identityAuthSecret) return false
+  try {
+    const scope = identity.accountId || candidateScope
+    if (
+      scope &&
+      constantTimeEqual(
+        identity.signature,
+        identitySignature(threadId, identity.nodeId, identity.hookEndpoint, scope)
+      )
+    ) {
+      return true
+    }
+    // Pre-account records were signed without a scope. Keep them readable after the directory
+    // migration; scoped records never reach this leg because their accountId is non-empty.
+    return !identity.accountId && constantTimeEqual(
+      identity.signature,
+      identitySignature(threadId, identity.nodeId, identity.hookEndpoint)
+    )
+  } catch {
+    return false
+  }
+}
+
+export interface CodexThreadIdentity {
+  accountId: string
+  nodeId: string
+  hookEndpoint: string
+  signature: string
+}
+
+export function validCodexIdentity(nodeId: string, hookEndpoint: string): boolean {
+  return SAFE_NODE_ID.test(nodeId) && SAFE_ENDPOINT.test(hookEndpoint)
+}
+
+function parseCodexThreadIdentity(raw: string): CodexThreadIdentity {
+  const values: Record<string, string> = {}
+  for (const line of raw.split('\n')) {
+    const separator = line.indexOf('=')
+    if (separator < 1) continue
+    values[line.slice(0, separator)] = line.slice(separator + 1)
+  }
+  return {
+    accountId: values.accountId ?? '',
+    nodeId: values.nodeId ?? '',
+    hookEndpoint: values.endpoint ?? '',
+    signature: values.signature ?? ''
+  }
+}
+
+/** The record for a thread, or undefined when it is absent, malformed or badly signed. */
+export function readCodexThreadIdentity(
+  threadId: string,
+  root = defaultIdentityRoot()
+): CodexThreadIdentity | undefined {
+  if (!isSafeThreadId(threadId)) return undefined
+  let raw: string
+  try {
+    raw = readFileSync(path.join(root, threadId), 'utf8')
+  } catch {
+    return undefined
+  }
+  const identity = parseCodexThreadIdentity(raw)
+  if (!validCodexIdentity(identity.nodeId, identity.hookEndpoint)) return undefined
+  if (!signatureMatches(threadId, identity, SYSTEM_ACCOUNT_SCOPE)) return undefined
+  return identity
+}
+
+function accountScope(accountId?: string): string {
+  if (!accountId) return SYSTEM_ACCOUNT_SCOPE
+  if (!SAFE_ACCOUNT_ID.test(accountId)) throw new Error('Invalid NodeTerm Codex account identity')
+  return accountId
+}
+
+function identityFile(root: string, threadId: string, accountId?: string): string {
+  if (!isSafeThreadId(threadId)) throw new Error('Invalid NodeTerm Codex thread identity')
+  return path.join(root, accountScope(accountId), threadId)
+}
+
+function identityCandidates(
+  threadId: string,
+  root = defaultIdentityRoot()
+): Array<{ file: string; scope?: string }> {
+  const candidates: Array<{ file: string; scope?: string }> = [{ file: path.join(root, threadId) }]
+  try {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !SAFE_ACCOUNT_ID.test(entry.name)) continue
+      candidates.push({
+        file: path.join(root, entry.name, threadId),
+        scope: entry.name
+      })
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+  return candidates
+}
+
+function readIdentityCandidate(
+  candidate: { file: string; scope?: string },
+  requireSignature = true
+): CodexThreadIdentity | undefined {
+  try {
+    const identity = parseCodexThreadIdentity(readFileSync(candidate.file, 'utf8'))
+    if (candidate.scope ? identity.accountId !== candidate.scope : !!identity.accountId) {
+      throw new Error('Codex thread account binding is invalid')
+    }
+    if (!validCodexIdentity(identity.nodeId, identity.hookEndpoint)) {
+      throw new Error('Codex thread identity is invalid')
+    }
+    if (requireSignature && !signatureMatches(path.basename(candidate.file), identity, candidate.scope))
+      return undefined
+    return identity
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  }
+}
+
+/**
+ * Recover a persisted Codex thread owner after the Electron main process restarts.
+ * Browser-use requests carry the Codex thread/session id but no account id, so an equal
+ * thread id in multiple account scopes is deliberately treated as ambiguous. Duplicate
+ * legacy + scoped-system records for the same node remain safe and resolve to that node.
+ */
+export function resolveCodexThreadNodeIdentity(
+  threadId: string,
+  root = defaultIdentityRoot()
+): string | undefined {
+  if (!isSafeThreadId(threadId)) return undefined
+  let candidates: Array<{ file: string; scope?: string }>
+  try {
+    candidates = identityCandidates(threadId, root)
+  } catch {
+    return undefined
+  }
+
+  const owners = new Set<string>()
+  for (const candidate of candidates) {
+    try {
+      const identity = readIdentityCandidate(candidate, true)
+      if (!identity) continue
+      if (candidate.scope && identity.accountId !== candidate.scope) continue
+      if (!candidate.scope && identity.accountId) continue
+      if (!validCodexIdentity(identity.nodeId, identity.hookEndpoint)) continue
+      owners.add(identity.nodeId)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') continue
+    }
+  }
+  return owners.size === 1 ? owners.values().next().value : undefined
+}
+
+/** Write (or replace) the record for `threadId`, atomically. */
+function identityLocation(accountIdOrRoot?: string): {
+  root: string
+  accountId?: string
+  legacyLayout: boolean
+} {
+  if (accountIdOrRoot && path.isAbsolute(accountIdOrRoot)) {
+    return { root: accountIdOrRoot, legacyLayout: true }
+  }
+  if (accountIdOrRoot) accountScope(accountIdOrRoot)
+  return { root: defaultIdentityRoot(), accountId: accountIdOrRoot, legacyLayout: false }
+}
+
+export function writeCodexThreadIdentity(
+  threadId: string,
+  nodeId: string,
+  hookEndpoint: string,
+  accountIdOrRoot?: string
+): void {
+  if (!isSafeThreadId(threadId) || !validCodexIdentity(nodeId, hookEndpoint)) {
+    throw new Error('Invalid NodeTerm Codex thread identity')
+  }
+  const location = identityLocation(accountIdOrRoot)
+  const scope = accountScope(location.accountId)
+  const signature = identitySignature(
+    threadId,
+    nodeId,
+    hookEndpoint,
+    location.legacyLayout ? undefined : scope
+  )
+  const file = location.legacyLayout
+    ? path.join(location.root, threadId)
+    : identityFile(location.root, threadId, location.accountId)
+  const dir = path.dirname(file)
+  const tmp = path.join(dir, `.${threadId}.${process.pid}.${Date.now()}`)
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  let renamed = false
+  let quarantined: Array<{ source: string; quarantine: string }> = []
+  try {
+    writeFileSync(
+      tmp,
+      (location.legacyLayout ? '' : `accountId=${scope}\n`) +
+        `nodeId=${nodeId}\nendpoint=${hookEndpoint}\nsignature=${signature}\n`,
+      { encoding: 'utf8', mode: 0o600 }
+    )
+    if (!location.legacyLayout) {
+      quarantined = quarantineOtherCodexThreadIdentities(
+        location.root,
+        nodeId,
+        threadId,
+        scope,
+        tmp
+      )
+    }
+    renameAtomicSync(tmp, file)
+    renamed = true
+    discardQuarantinedCodexThreadIdentities(quarantined)
+  } catch (error) {
+    restoreQuarantinedCodexThreadIdentities(quarantined)
+    throw error
+  } finally {
+    if (!renamed) {
+      try {
+        unlinkSync(tmp)
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+}
+
+/**
+ * One canvas node owns one Codex conversation, and one conversation belongs to one node. A resume
+ * that would steal a thread from a node that is still LIVE is refused — the caller (the launcher)
+ * then falls back to a plain `codex`, which is a working session rather than two clients fighting
+ * over one thread. A STALE owner (node deleted, app restarted without it) is simply replaced.
+ */
+export function bindCodexThreadIdentity(
+  threadId: string,
+  nodeId: string,
+  hookEndpoint: string,
+  isNodeLive: (nodeId: string) => boolean,
+  accountIdOrRoot?: string
+): void {
+  if (!isSafeThreadId(threadId) || !validCodexIdentity(nodeId, hookEndpoint)) {
+    throw new Error('Invalid NodeTerm Codex thread identity')
+  }
+  const location = identityLocation(accountIdOrRoot)
+  if (location.legacyLayout) {
+    const existing = readCodexThreadIdentity(threadId, location.root)
+    if (existing && existing.nodeId !== nodeId && isNodeLive(existing.nodeId)) {
+      throw new Error('Codex thread is already bound to another live node')
+    }
+    if (existing && existing.nodeId === nodeId && existing.hookEndpoint === hookEndpoint) return
+    writeCodexThreadIdentity(threadId, nodeId, hookEndpoint, location.root)
+    return
+  }
+
+  const scopedFile = identityFile(location.root, threadId, location.accountId)
+  let targetMatches = false
+  for (const candidate of identityCandidates(threadId, location.root)) {
+    const existing = readIdentityCandidate(candidate)
+    if (!existing) continue
+    if (
+      candidate.file === scopedFile &&
+      existing.nodeId === nodeId &&
+      existing.hookEndpoint === hookEndpoint &&
+      signatureMatches(threadId, existing, candidate.scope)
+    ) {
+      targetMatches = true
+    }
+    if (existing.nodeId !== nodeId && isNodeLive(existing.nodeId)) {
+      throw new Error('Codex thread is already bound to another live node')
+    }
+  }
+  if (targetMatches) {
+    discardQuarantinedCodexThreadIdentities(
+      quarantineOtherCodexThreadIdentities(
+        location.root,
+        nodeId,
+        threadId,
+        accountScope(location.accountId)
+      )
+    )
+    return
+  }
+  writeCodexThreadIdentity(threadId, nodeId, hookEndpoint, location.accountId)
+}
+
+/**
+ * Drop every record naming `nodeId`, when that node is permanently deleted.
+ *
+ * Two reasons this is not just housekeeping. The directory would otherwise grow one file per
+ * thread forever, and — worse — a dead node's record keeps re-exporting its node id and hook
+ * endpoint into any tool shell that still carries the thread id, so a deleted node's identity
+ * outlives it. Keyed by node, not by thread, because the caller (`destroySession`) knows the node
+ * id and nothing else; the directory is one flat level, so the scan is a single readdir.
+ *
+ * Best effort throughout: a record we cannot read or remove must never fail a node deletion.
+ */
+export function forgetCodexThreadIdentitiesForNode(
+  nodeId: string,
+  root = defaultIdentityRoot()
+): void {
+  if (!SAFE_NODE_ID.test(nodeId)) return
+  const candidates: Array<{ file: string; scope?: string }> = []
+  try {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (entry.isFile() && isSafeThreadId(entry.name)) {
+        candidates.push({ file: path.join(root, entry.name) })
+        continue
+      }
+      if (!entry.isDirectory() || !SAFE_ACCOUNT_ID.test(entry.name)) continue
+      const scopedRoot = path.join(root, entry.name)
+      for (const thread of readdirSync(scopedRoot, { withFileTypes: true })) {
+        if (thread.isFile() && isSafeThreadId(thread.name)) {
+          candidates.push({ file: path.join(scopedRoot, thread.name), scope: entry.name })
+        }
+      }
+    }
+  } catch {
+    return
+  }
+  for (const candidate of candidates) {
+    // Reads through the signature check, so a record we do not trust is also one we do not delete.
+    let identity: CodexThreadIdentity | undefined
+    try {
+      identity = readIdentityCandidate(candidate)
+    } catch {
+      continue
+    }
+    if (identity?.nodeId !== nodeId) continue
+    try {
+      unlinkSync(candidate.file)
+    } catch {
+      /* nothing to forget */
+    }
+  }
+}
+
+/** Read-only preflight for an in-TUI resume. A stale owner may be replaced after the app-server
+ * succeeds; a different LIVE owner must block before the request reaches that server. */
+export function codexThreadIdentityHasLiveConflict(
+  threadId: string,
+  nodeId: string,
+  isNodeLive: (nodeId: string) => boolean
+): boolean {
+  if (!isSafeThreadId(threadId) || !SAFE_NODE_ID.test(nodeId)) return true
+  try {
+    for (const candidate of identityCandidates(threadId)) {
+      const existing = readIdentityCandidate(candidate)
+      if (existing && existing.nodeId !== nodeId && isNodeLive(existing.nodeId)) return true
+    }
+  } catch {
+    return true
+  }
+  return false
+}
+
+/** One canvas node owns one current Codex conversation. A successful replacement binding is the
+ * atomic lifecycle boundary: only then remove older mappings for that node and transferred thread.
+ * The source mapping remains intact if target launch fails. */
+function quarantineOtherCodexThreadIdentities(
+  root: string,
+  nodeId: string,
+  keepThreadId: string,
+  keepScope: string,
+  excludeFile?: string
+): Array<{ source: string; quarantine: string }> {
+  const candidates: Array<{ file: string; scope?: string }> = []
+  try {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (entry.isFile() && isSafeThreadId(entry.name)) {
+        // Pre-account builds persisted system mappings directly under the root and omitted the
+        // accountId field. Keep that storage shape unscoped during validation; treating it as a
+        // modern `system` record rejects every subsequent identity write with HTTP 503.
+        candidates.push({ file: path.join(root, entry.name) })
+        continue
+      }
+      if (!entry.isDirectory() || !SAFE_ACCOUNT_ID.test(entry.name)) continue
+      for (const thread of readdirSync(path.join(root, entry.name), {
+        withFileTypes: true
+      })) {
+        if (thread.isFile() && isSafeThreadId(thread.name)) {
+          candidates.push({
+            file: path.join(root, entry.name, thread.name),
+            scope: entry.name
+          })
+        }
+      }
+    }
+  } catch (error) {
+    throw new Error('Could not enumerate Codex thread identity mappings', {
+      cause: error
+    })
+  }
+  const quarantined: Array<{ source: string; quarantine: string }> = []
+  try {
+    for (const [index, candidate] of candidates.entries()) {
+      if (candidate.file === excludeFile) continue
+      if (
+        (candidate.scope ?? SYSTEM_ACCOUNT_SCOPE) === keepScope &&
+        path.basename(candidate.file) === keepThreadId
+      )
+        continue
+      const identity = readIdentityCandidate(candidate)
+      if (!identity) continue
+      if (identity.nodeId === nodeId || path.basename(candidate.file) === keepThreadId) {
+        const quarantine = `${candidate.file}.transfer-${process.pid}-${Date.now()}-${index}`
+        renameAtomicSync(candidate.file, quarantine)
+        quarantined.push({ source: candidate.file, quarantine })
+      }
+    }
+  } catch (error) {
+    for (const item of quarantined.reverse()) {
+      try {
+        renameAtomicSync(item.quarantine, item.source)
+      } catch {}
+    }
+    throw new Error('Could not atomically transfer Codex thread identity', {
+      cause: error
+    })
+  }
+  return quarantined
+}
+
+function restoreQuarantinedCodexThreadIdentities(
+  quarantined: Array<{ source: string; quarantine: string }>
+): void {
+  for (const item of [...quarantined].reverse()) renameAtomicSync(item.quarantine, item.source)
+}
+
+function discardQuarantinedCodexThreadIdentities(
+  quarantined: Array<{ source: string; quarantine: string }>
+): void {
+  // Active mappings were removed by rename. Hidden quarantine unlink is storage cleanup only;
+  // failure cannot reintroduce an owner or make exact thread-id resolution ambiguous.
+  for (const item of quarantined) {
+    try {
+      unlinkSync(item.quarantine)
+    } catch {}
+  }
+}
+
+export function codexLauncherDir(): string {
+  try {
+    return path.join(platform().userDataDir, 'codex-bin')
+  } catch {
+    return path.join(homedir(), '.nodeterm', 'bin')
+  }
+}
+
+export const CODEX_LAUNCHER_NAME = 'nodeterm-codex'
+
+export function codexLauncherPath(): string {
+  return path.join(codexLauncherDir(), CODEX_LAUNCHER_NAME)
+}
+
+/**
+ * The generated launcher.
+ *
+ * EVERY failure path here ends in `exec codex "$@"` — the caller's arguments untouched. That is
+ * the owner's decision and it follows the repo's own precedent (`gatePermissionMode`: an unknown
+ * or failed probe degrades to the bare command, never to a blocked launch). The upstream version
+ * of this script exited 69 "identity unavailable", which turns a missing app-server, an older
+ * `codex`, a stale tmux session or a locked-down `$HOME` into a DEAD node.
+ *
+ * The fallback is not silent: before exec'ing plain codex the script POSTs `/codex-thread/fallback`
+ * with a machine-readable reason, and the desktop marks the node. Nothing is ever written into the
+ * pane — text injected into an agent's terminal is prompt injection, which this repo forbids.
+ *
+ * `appServerStartCommand` is injected so the test suite can run this script for real under
+ * `/bin/sh` (the discipline `canvas-control-shim.test.ts` and `remote-claude-usage.test.ts` set).
+ */
+export function buildCodexLauncherScript(
+  appServerStartCommand = 'codex app-server daemon start >/dev/null 2>&1'
+): string {
+  return `#!/bin/sh
+# Generated by NodeTerm. Do not edit — it is rewritten on every launch.
+# Runs a Codex session against the ONE shared app-server, bound to this canvas node's thread.
+# Anything missing => plain 'codex' with the same arguments. A node that cannot get a managed
+# identity must still be a working node.
+
+nt_reason=''
+nt_node_token=''
+nt_fail() { nt_reason=$1; return 1; }
+
+nt_hook_curl() { curl "$@"; }
+if [ -n "\${NODETERM_HOOK_SOCK-}" ]; then
+  case "$NODETERM_HOOK_SOCK" in
+    /*) nt_hook_curl() { curl --unix-socket "$NODETERM_HOOK_SOCK" "$@"; } ;;
+    *) nt_reason=broker-unreachable ;;
+  esac
+fi
+
+# A path we are willing to source. Written with tr rather than a case bracket class because the
+# endpoint lives under the app's data dir, which on macOS contains a space ("Application Support")
+# — escaping a space inside a case pattern's bracket expression is exactly the kind of quoting
+# that reads fine and matches nothing.
+#
+# Accepts a POSIX absolute path (\`/...\`) OR a Windows drive-absolute one (\`C:\\...\` / \`C:/...\`):
+# this same script runs unmodified wherever a POSIX shell exists, including a Windows machine whose
+# default terminal shell the user has set to something sh-compatible (Git Bash, WSL), and there
+# \`CorePlatform.userDataDir\` — and so \`NODETERM_HOOK_ENDPOINT\` — is a native Windows path. Without
+# this branch every codex launch on such a machine failed \`nt_safe_path\` before ever reading the
+# endpoint file, permanently degrading to plain codex with no hook/thread integration at all,
+# silently. \`:\` and \`\\\` join the allowed charset only for that reason; POSIX behavior is
+# unchanged — a POSIX path never contains either, so the widened charset accepts nothing new there.
+nt_safe_path() {
+  case "\${1-}" in /*) ;; [A-Za-z]:[/\\\\]*) ;; *) return 1 ;; esac
+  [ "$(printf %s "$1" | tr -cd 'A-Za-z0-9._/\\\\: -')" = "$1" ]
+}
+
+# Runs in THIS shell, never a command substitution: it sources the endpoint file, and that file is
+# what carries the live hook port/token. Sourcing it in a subshell would leave both unset here and
+# every launch would "fall back" for the wrong reason.
+nt_preflight() {
+  case "\${NODETERM_NODE_ID-}" in ''|*[!A-Za-z0-9._-]*) nt_fail node-id-unavailable; return ;; esac
+  case "\${NODETERM_CODEX_ACCOUNT_ID-}" in
+    '') ;;
+    [A-Za-z0-9]*) ;;
+    *) nt_fail account-id-unavailable; return ;;
+  esac
+  case "\${NODETERM_CODEX_ACCOUNT_ID-}" in
+    *[!A-Za-z0-9._-]*) nt_fail account-id-unavailable; return ;;
+  esac
+  nt_safe_path "\${NODETERM_HOOK_ENDPOINT-}" || { nt_fail hook-endpoint-unavailable; return; }
+  [ -r "$NODETERM_HOOK_ENDPOINT" ] || { nt_fail hook-endpoint-unavailable; return; }
+  . "$NODETERM_HOOK_ENDPOINT" 2>/dev/null || { nt_fail broker-unreachable; return; }
+  case "\${NODETERM_HOOK_PORT-}" in ''|*[!0-9]*) nt_fail broker-unreachable; return ;; esac
+  case "\${NODETERM_HOOK_TOKEN-}" in ''|*[!A-Za-z0-9-]*) nt_fail broker-unreachable; return ;; esac
+  # The PER-NODE capability, read the way every other client reads it: the endpoint file (v2,
+  # sourced just above) advertises the directory, and the token is one 0600 file in it named for
+  # THIS node id — a lookup by name, never a scan, so a session can only ever present its own. It
+  # is deliberately NOT an env var any more: that channel put the credential on the tmux \`-e\`
+  # argv, world-readable on a stock Linux, and the credential's whole job is to prove WHICH node
+  # is calling.
+  #
+  # There is deliberately NO \$NODETERM_CODEX_NODE_TOKEN fallback. One shipped, for a session the
+  # previous build spawned, and it could never have worked: that build's value is the OLD
+  # derivation — base64url(HMAC(secret, nodeId)), no dot — which the current verifier reads as a
+  # foreign kid, i.e. \`legacy\`, and /codex-thread/{start,bind} demand \`verified\`. So it 403s and
+  # the launcher degrades anyway, one round-trip later. A pre-upgrade codex session runs plain
+  # codex until it is relaunched; that is the honest behaviour, not a regression from the fallback.
+  if [ -n "\${NODETERM_NODE_TOKEN_DIR-}" ]; then
+    nt_node_token=$(head -n 1 "$NODETERM_NODE_TOKEN_DIR/$NODETERM_NODE_ID" 2>/dev/null) || nt_node_token=''
+  fi
+  # The '.' IS the token: the wire shape is kid.mac (one derivation shared with /hook/*). A gate
+  # without the dot rejects every token this app mints and degrades every codex node to plain
+  # codex — silently, because falling back is what this script is built to do.
+  case "$nt_node_token" in
+    ''|*[!A-Za-z0-9._-]*) nt_fail node-token-unavailable; return ;;
+  esac
+  if [ "\${1-}" = resume ]; then
+    case "\${2-}" in ''|.|..|*[!A-Za-z0-9._-]*) nt_fail thread-id-unavailable; return ;; esac
+  fi
+  # The authoritative check runs FIRST and unchanged; the stat below only decides WHICH reason to
+  # report. Ordering it the other way would let a codex that no longer needs the standalone runtime
+  # fall back on a stat we had no business trusting more than the command itself.
+  #
+  # Two different facts wore one name before: an older CLI with no app-server at all, and a current
+  # CLI installed off a channel that ships no standalone runtime (npm, snap) — where the daemon
+  # refuses with "managed standalone Codex install not found at
+  # <CODEX_HOME>/packages/standalone/current/codex". Caps normally keeps that second case away from
+  # here entirely, but the pane resolves CODEX_HOME from its OWN environment (§8.5) and an install
+  # can be removed after boot, so the launcher still has to be able to say which it hit.
+  if ${appServerStartCommand}; then
+    return 0
+  fi
+  if [ -x "\${CODEX_HOME:-$HOME/.codex}/packages/standalone/current/codex" ]; then
+    nt_fail app-server-unavailable
+  else
+    nt_fail codex-standalone-missing
+  fi
+  return
+}
+
+# Best effort, and never fatal: tell the desktop this node is running plain codex, so the UI can
+# say so without the user reading a log. Sent WITHOUT the per-node capability on purpose — the
+# commonest thing it reports is that there was no capability to present. The server only trusts a
+# TOKENLESS report on the node it names (see the /codex-thread/fallback handler), so a session that does hold a
+# token cannot use this route to flag a sibling.
+nt_report_fallback() {
+  [ -n "\${NODETERM_HOOK_PORT-}" ] || return 0
+  [ -n "\${NODETERM_HOOK_TOKEN-}" ] || return 0
+  [ -n "\${NODETERM_NODE_ID-}" ] || return 0
+  printf 'header = "X-NodeTerm-Hook-Token: %s"\\n' "$NODETERM_HOOK_TOKEN" |
+    nt_hook_curl --silent --show-error --fail --max-time 3 --config - --request POST \\
+      --data-urlencode "nodeId=$NODETERM_NODE_ID" \\
+      --data-urlencode "reason=$1" \\
+      "http://localhost:\${NODETERM_HOOK_PORT-0}/codex-thread/fallback" >/dev/null 2>&1 || :
+}
+
+[ -n "$nt_reason" ] || nt_preflight "$@" || :
+if [ -n "$nt_reason" ]; then
+  nt_report_fallback "$nt_reason"
+  exec codex "$@"
+fi
+
+# $1 is the client budget in seconds; the rest is curl's. Start gets a budget LARGER than the
+# server's own (CODEX_THREAD_START_TIMEOUT_MS) so the server, not curl, is what times out — a curl
+# that quits first leaves behind a thread and a record nothing will ever resume.
+nt_post() {
+  nt_budget=$1
+  shift
+  printf 'header = "X-NodeTerm-Hook-Token: %s"\\nheader = "X-NodeTerm-Node-Token: %s"\\n' \\
+    "$NODETERM_HOOK_TOKEN" "$nt_node_token" |
+    nt_hook_curl --silent --show-error --fail --max-time "$nt_budget" --config - --request POST "$@"
+}
+
+# Relay registration receives the per-node capability on stdin, never argv or the environment.
+nt_register_relay() {
+  nt_safe_path "\${NODETERM_CODEX_RELAY_RUNTIME-}" || return 1
+  nt_safe_path "\${NODETERM_CODEX_RELAY_SCRIPT-}" || return 1
+  [ -x "$NODETERM_CODEX_RELAY_RUNTIME" ] && [ -r "$NODETERM_CODEX_RELAY_SCRIPT" ] || return 1
+  nt_relay_info=''
+  for nt_relay_attempt in 1 2 3; do
+    nt_relay_info=$(printf '%s\\n' "$nt_node_token" |
+      ELECTRON_RUN_AS_NODE=1 "$NODETERM_CODEX_RELAY_RUNTIME" "$NODETERM_CODEX_RELAY_SCRIPT" \\
+        register "$NODETERM_NODE_ID" "\${NODETERM_CODEX_ACCOUNT_ID-}" \\
+        "\${CODEX_HOME:-$HOME/.codex}/app-server-control/app-server-control.sock" \\
+        "$NODETERM_HOOK_ENDPOINT") && break
+    sleep 0.2
+  done
+  [ -n "$nt_relay_info" ] || return 1
+  nt_relay_url=$(printf '%s\\n' "$nt_relay_info" | sed -n '1p')
+  NODETERM_CODEX_RELAY_TOKEN=$(printf '%s\\n' "$nt_relay_info" | sed -n '2p')
+  case "$nt_relay_url" in ws://127.0.0.1:*/*) return 1 ;; ws://127.0.0.1:*) ;; *) return 1 ;; esac
+  [ -n "$NODETERM_CODEX_RELAY_TOKEN" ] || return 1
+  export NODETERM_CODEX_RELAY_TOKEN
+}
+
+if [ "\${1-}" = resume ]; then
+  if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then
+    if ! nt_post 20 --data-urlencode "nodeId=$NODETERM_NODE_ID" \\
+        --data-urlencode "threadId=\${2-}" \\
+        --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\
+        "http://localhost:\${NODETERM_HOOK_PORT-0}/codex-thread/expose" >/dev/null; then
+      nt_report_fallback thread-expose-refused
+      exec codex "$@"
+    fi
+    if ! nt_register_relay; then
+      nt_report_fallback relay-unavailable
+      exec codex "$@"
+    fi
+    exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"
+  fi
+  # Claim the caller-supplied thread for THIS node before Codex opens it. A refusal means another
+  # live node owns it; two clients on one thread is worse than one plain session, so we fall back.
+  if nt_post 20 --data-urlencode "nodeId=$NODETERM_NODE_ID" \\
+      --data-urlencode "threadId=\${2-}" \\
+      --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\
+      "http://localhost:\${NODETERM_HOOK_PORT-0}/codex-thread/bind" >/dev/null; then
+    exec codex --remote unix:// "$@"
+  fi
+  nt_report_fallback thread-bind-refused
+  exec codex "$@"
+fi
+
+if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then
+  if ! nt_register_relay; then
+    nt_report_fallback relay-unavailable
+    exec codex "$@"
+  fi
+  exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"
+fi
+
+nt_thread=$(nt_post ${CODEX_THREAD_START_CLIENT_MAX_S} \\
+  --data-urlencode "nodeId=$NODETERM_NODE_ID" \\
+  --data-urlencode "cwd=$PWD" \\
+  --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\
+  "http://localhost:\${NODETERM_HOOK_PORT-0}/codex-thread/start") || nt_thread=''
+nt_thread=$(printf %s "$nt_thread" | tr -d '\\r\\n')
+case "$nt_thread" in
+  ''|.|..|*[!A-Za-z0-9._-]*)
+    nt_report_fallback thread-start-failed
+    exec codex "$@"
+    ;;
+esac
+exec codex --remote unix:// resume "$nt_thread" "$@"
+`
+}
+
+/**
+ * Write the launcher and return its path, or null when it could not be installed (read-only home,
+ * no permission). Null is a first-class answer: it is what makes `codexIdentityCaps()` say "no"
+ * and every launch line stay the bare `codex` it has always been.
+ */
+export function installCodexLauncher(): string | null {
+  try {
+    const dir = codexLauncherDir()
+    const file = path.join(dir, CODEX_LAUNCHER_NAME)
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    writeFileSync(file, buildCodexLauncherScript(), { encoding: 'utf8', mode: 0o700 })
+    chmodSync(file, 0o700)
+    return file
+  } catch {
+    return null
+  }
+}

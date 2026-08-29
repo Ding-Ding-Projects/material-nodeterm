@@ -1,0 +1,296 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { existsSync, promises as fs } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { vi } from 'vitest'
+import { IPC } from '../shared/ipc'
+import {
+  ElectronGitHubSecretStore,
+  registerElectronGitHubControl,
+  type SafeStorageLike
+} from './github-control'
+
+let userDataDir: string
+
+beforeEach(async () => {
+  userDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'nt-electron-github-secret-'))
+})
+
+afterEach(async () => {
+  vi.restoreAllMocks()
+  await fs.rm(userDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+})
+
+function safeStorage(options: { available?: boolean; backend?: string } = {}): SafeStorageLike {
+  return {
+    isEncryptionAvailable: () => options.available ?? true,
+    getSelectedStorageBackend: () => options.backend ?? 'keychain',
+    encryptString: (value) => Buffer.from(`encrypted:${value}`, 'utf-8'),
+    decryptString: (value) => value.toString('utf-8').replace(/^encrypted:/, '')
+  }
+}
+
+describe('ElectronGitHubSecretStore', () => {
+  it('encrypts a token and reads it only inside the host', async () => {
+    const store = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    await store.save('github_pat_secret')
+
+    const raw = await fs.readFile(path.join(userDataDir, 'github-issues-token.json'), 'utf-8')
+    expect(raw).not.toContain('github_pat_secret')
+    expect(JSON.parse(raw)).toMatchObject({ version: 1, kind: 'safe-storage' })
+    expect(await store.readForHost()).toBe('github_pat_secret')
+    expect(store.availability).toBe('encrypted')
+  })
+
+  it('uses a restricted 0600 file for basic_text and reports the warning state', async () => {
+    const store = new ElectronGitHubSecretStore(userDataDir, safeStorage({ backend: 'basic_text' }))
+    await store.save('github_pat_secret')
+
+    expect(store.availability).toBe('restricted-file')
+    const mode = (await fs.stat(path.join(userDataDir, 'github-issues-token.json'))).mode & 0o777
+    // NTFS has no POSIX rwx triad — node's fs mode support on Windows only toggles the read-only
+    // attribute (0o600 always reports back as 0o666 there). The strongest available assertion on
+    // win32 is that the file was not left read-only.
+    if (process.platform === 'win32') expect(mode & 0o200).not.toBe(0)
+    else expect(mode).toBe(0o600)
+    expect(await store.readForHost()).toBe('github_pat_secret')
+  })
+
+  it('does not overwrite an encrypted token while the keyring is locked', async () => {
+    const unlocked = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    await unlocked.save('original-token')
+    const before = await fs.readFile(path.join(userDataDir, 'github-issues-token.json'), 'utf-8')
+
+    const locked = new ElectronGitHubSecretStore(userDataDir, safeStorage({ available: false }))
+    await expect(locked.save('replacement-token')).rejects.toMatchObject({ code: 'keyring-locked' })
+    expect(await fs.readFile(path.join(userDataDir, 'github-issues-token.json'), 'utf-8')).toBe(before)
+    await expect(locked.readForHost()).rejects.toMatchObject({ code: 'keyring-locked' })
+  })
+
+  it('rejects corrupt credential bytes on read and save without replacing the evidence', async () => {
+    const tokenFile = path.join(userDataDir, 'github-issues-token.json')
+    const corrupt = '{"version":1,"kind":"safe-storage","value":'
+    await fs.writeFile(tokenFile, corrupt, { encoding: 'utf-8', mode: 0o600 })
+    const store = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+
+    await expect(store.readForHost()).rejects.toMatchObject({ code: 'credential-unavailable' })
+    await expect(store.save('replacement-token')).rejects.toMatchObject({
+      code: 'credential-unavailable'
+    })
+    expect(await fs.readFile(tokenFile, 'utf-8')).toBe(corrupt)
+  })
+
+  it('rejects non-canonical safe-storage bytes before decrypt or replacement', async () => {
+    const tokenFile = path.join(userDataDir, 'github-issues-token.json')
+    const malformed = JSON.stringify({ version: 1, kind: 'safe-storage', value: 'not-base64' })
+    await fs.writeFile(tokenFile, malformed, { encoding: 'utf-8', mode: 0o600 })
+    const storage = safeStorage()
+    const decrypt = vi.spyOn(storage, 'decryptString')
+    const store = new ElectronGitHubSecretStore(userDataDir, storage)
+
+    await expect(store.readForHost()).rejects.toMatchObject({ code: 'credential-unavailable' })
+    await expect(store.save('replacement-token')).rejects.toMatchObject({
+      code: 'credential-unavailable'
+    })
+    expect(decrypt).not.toHaveBeenCalled()
+    expect(await fs.readFile(tokenFile, 'utf-8')).toBe(malformed)
+  })
+
+  it('rejects unreadable reads and saves, then recovers the shared queue for another store instance', async () => {
+    const tokenFile = path.join(userDataDir, 'github-issues-token.json')
+    const first = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    const second = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    await first.save('original-token')
+    const before = await fs.readFile(tokenFile, 'utf-8')
+    const realReadFile = fs.readFile
+    let canonicalReadFailures = 2
+    vi.spyOn(fs, 'readFile').mockImplementation((async (file: any, ...args: any[]) => {
+      if (String(file) === tokenFile && canonicalReadFailures > 0) {
+        canonicalReadFailures -= 1
+        throw Object.assign(new Error('EACCES: credential is unreadable'), { code: 'EACCES' })
+      }
+      return (realReadFile as any)(file, ...args)
+    }) as typeof fs.readFile)
+
+    await expect(first.readForHost()).rejects.toMatchObject({ code: 'EACCES' })
+    await expect(first.save('first-replacement')).rejects.toMatchObject({ code: 'EACCES' })
+    expect(await (realReadFile as any)(tokenFile, 'utf-8')).toBe(before)
+    await expect(second.save('second-replacement')).resolves.toBeUndefined()
+    vi.restoreAllMocks()
+    await expect(second.readForHost()).resolves.toBe('second-replacement')
+  })
+
+  it('clears only the stored token file', async () => {
+    const store = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    await store.save('github_pat_secret')
+    await store.clear()
+    expect(await store.readForHost()).toBeNull()
+  })
+})
+
+describe('ElectronGitHubSecretStore atomic write', () => {
+  const tokenFile = (): string => path.join(userDataDir, 'github-issues-token.json')
+
+  const tmpsLeft = async (): Promise<string[]> =>
+    (await fs.readdir(userDataDir)).filter((file) => file.endsWith('.tmp'))
+
+  // Nothing serializes `IPC.githubControlSaveToken`: the handler is reachable from the preload
+  // bridge (src/preload/index.ts) AND from a remote client over the ws bridge
+  // (src/renderer/bridge/ws-bridge.ts), and GitHubHostController.saveToken awaits a NETWORK
+  // validateToken before it calls secret.save (src/core/github/host.ts), so the overlap window is
+  // as wide as a round trip to github.com. One fixed `${file}.tmp` name means two writers share a
+  // single tmp file: one writer's rename publishes the other's half-written PAT, or moves the file
+  // out from under it entirely and the loser's rename fails.
+  it('overlapping token saves never reuse a tmp name (no torn write, no leftovers)', async () => {
+    const store = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    // The store's chain serializes its own mutations, so the writes arrive one after the other —
+    // UUID uniqueness protects writers the chain cannot see (a second app process or PID namespace
+    // on the same userDataDir) and the crash window between tmp-write and rename, so the distinct
+    // filesystem paths stay pinned here.
+    const long = `github_pat_${'a'.repeat(600)}`
+    const short = `github_pat_${'b'.repeat(7)}`
+    const tmps: string[] = []
+    const realWriteFile = fs.writeFile
+    vi.spyOn(fs, 'writeFile').mockImplementation((async (p: any, ...rest: any[]) => {
+      if (String(p).startsWith(tokenFile())) tmps.push(String(p))
+      return (realWriteFile as any)(p, ...rest)
+    }) as any)
+
+    await Promise.all([store.save(long), store.save(short)])
+    vi.restoreAllMocks()
+
+    expect(new Set(tmps).size).toBe(2) // each write owned its own tmp file
+    // One COMPLETE document won — parsing at all proves it is not a prefix of the other — and
+    // FIFO makes it the last call.
+    expect(JSON.parse(await fs.readFile(tokenFile(), 'utf-8')))
+      .toMatchObject({ version: 1, kind: 'safe-storage' })
+    expect(await store.readForHost()).toBe(short)
+    // …and no tmp survives: a leaked one here is a live PAT at 0600 that nothing overwrites.
+    expect(await tmpsLeft()).toEqual([])
+  })
+
+  it('a clear is never undone by an in-flight save — mutations run in call order', async () => {
+    const store = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    // Park the save's rename: unserialized, the clear's rm runs while the save sits between its
+    // tmp write and its rename — then the parked rename lands and resurrects the PAT the UI just
+    // reported cleared. Chained, the clear waits its turn and the last call is the last word.
+    const realRename = fs.rename
+    let delayed = false
+    vi.spyOn(fs, 'rename').mockImplementation((async (a: any, b: any) => {
+      if (String(b).startsWith(tokenFile()) && !delayed) {
+        delayed = true
+        await new Promise((r) => setTimeout(r, 50))
+      }
+      return (realRename as any)(a, b)
+    }) as any)
+
+    await Promise.all([store.save(`github_pat_${'c'.repeat(30)}`), store.clear()])
+    vi.restoreAllMocks()
+
+    expect(await store.readForHost()).toBeNull() // cleared means CLEARED
+    expect(existsSync(tokenFile())).toBe(false)
+  })
+
+  it('sweeps aged legacy litter but never a fresh temp merely because its pid differs', async () => {
+    const store = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    const legacy = `${tokenFile()}.tmp` // a build from before per-call tmp names
+    const foreign = `${tokenFile()}.${process.pid + 1}.7.tmp` // may be a second live process
+    const ours = `${tokenFile()}.${process.pid}.999.tmp`
+    for (const file of [legacy, foreign, ours]) {
+      await fs.writeFile(file, JSON.stringify({
+        version: 1, kind: 'restricted-file', token: 'stale-secret'
+      }), { encoding: 'utf-8', mode: 0o600 })
+    }
+    await fs.utimes(legacy, 0, 0)
+
+    await store.save('github_pat_fresh')
+
+    expect(await store.readForHost()).toBe('github_pat_fresh')
+    // The legacy path is decades old. The foreign temp is fresh and may belong to another live
+    // app in multi-instance mode, so its different pid is not permission to remove it.
+    expect(existsSync(legacy)).toBe(false)
+    expect(existsSync(foreign)).toBe(true)
+    expect(existsSync(ours)).toBe(true)
+  })
+
+  it('clear removes the canonical token but rejects while credential temps remain', async () => {
+    const store = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    await store.save('github_pat_secret')
+    for (const file of [`${tokenFile()}.tmp`, `${tokenFile()}.${process.pid + 1}.7.tmp`]) {
+      await fs.writeFile(file, JSON.stringify({
+        version: 1, kind: 'restricted-file', token: 'stale-secret'
+      }), { encoding: 'utf-8', mode: 0o600 })
+    }
+
+    await expect(store.clear()).rejects.toMatchObject({ code: 'clear-incomplete' })
+
+    expect(await store.readForHost()).toBeNull()
+    expect(existsSync(tokenFile())).toBe(false)
+    expect((await tmpsLeft()).sort()).toEqual([
+      `github-issues-token.json.${process.pid + 1}.7.tmp`,
+      'github-issues-token.json.tmp'
+    ].sort())
+
+    const recovered = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    await expect(recovered.save('recovered-token')).resolves.toBeUndefined()
+    await expect(recovered.readForHost()).resolves.toBe('recovered-token')
+  })
+
+  it('a failed rename removes its own temp and still rejects (a leaked temp here is a live PAT)', async () => {
+    const store = new ElectronGitHubSecretStore(userDataDir, safeStorage())
+    await store.save('original-token')
+    // EXDEV is the realistic one: the userData dir on another filesystem than the temp.
+    vi.spyOn(fs, 'rename').mockRejectedValueOnce(
+      Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), { code: 'EXDEV' })
+    )
+
+    await expect(store.save('replacement-token')).rejects.toThrow(/EXDEV/)
+    // A unique tmp name is never reused, so the failed write has to have cleaned up after itself.
+    expect(await tmpsLeft()).toEqual([])
+    // …and nothing was published: a failed save leaves the previously stored token in place.
+    expect(await store.readForHost()).toBe('original-token')
+  })
+})
+
+describe('registerElectronGitHubControl', () => {
+  it('accepts only the current local main window and wires every control action', async () => {
+    const handlers = new Map<string, (event: { sender: { id: number } }, ...args: any[]) => unknown>()
+    const view = {
+      control: { revision: 0, authProvider: 'auto' as const },
+      auth: {
+        selectedProvider: 'auto' as const,
+        activeProvider: null,
+        ghAuthenticated: false,
+        tokenPresent: false,
+        storage: 'encrypted' as const
+      }
+    }
+    const controller = {
+      status: vi.fn(async () => view),
+      approve: vi.fn(async () => view),
+      revoke: vi.fn(async () => view),
+      selectProvider: vi.fn(async () => view),
+      saveToken: vi.fn(async () => view),
+      clearToken: vi.fn(async () => view)
+    }
+    registerElectronGitHubControl(
+      { handle: (channel, handler) => handlers.set(channel, handler) },
+      () => 7,
+      controller
+    )
+    expect([...handlers.keys()].sort()).toEqual([
+      IPC.githubControlApprove,
+      IPC.githubControlClearToken,
+      IPC.githubControlRevoke,
+      IPC.githubControlSaveToken,
+      IPC.githubControlSelectProvider,
+      IPC.githubControlStatus
+    ].sort())
+    await expect(Promise.resolve().then(() =>
+      handlers.get(IPC.githubControlStatus)!({ sender: { id: 8 } }, 'p1')))
+      .rejects.toMatchObject({ code: 'E_FORBIDDEN' })
+    await expect(handlers.get(IPC.githubControlStatus)!({ sender: { id: 7 } }, 'p1'))
+      .resolves.toEqual(view)
+    expect(controller.status).toHaveBeenCalledWith('p1')
+  })
+})

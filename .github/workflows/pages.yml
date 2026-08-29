@@ -1,0 +1,50 @@
+name: Deploy Pages site
+
+# Publishes site/ to GitHub Pages. This is a pure static-file deploy: no build step, no
+# bundler, no npm dependency — the workflow uploads site/ exactly as it is committed. Per
+# this project's CI policy, workflows run NO tests and NO lint and nothing gates a release;
+# that applies here too, so this workflow has exactly three steps: configure Pages, upload
+# the artifact, deploy it.
+#
+# IMPORTANT — this repository is a fork. Upstream owns the custom domain, and a custom
+# domain verifies to exactly one repository, so this fork publishes at the GitHub Pages
+# project-path URL (https://<owner>.github.io/<repo>/), never at a bare root. Every internal
+# link and asset reference inside site/ MUST stay relative (./foo, foo/bar — never /foo) or
+# it 404s the moment it's served from that path prefix. See docs/site.md for the full story
+# and site/index.html's comments for where this is enforced.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site/ as the Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,167 @@
+# nodeterm Server Edition — one-command host.
+#
+#   ./host.sh          (macOS / Linux)      host.bat        (Windows)
+#
+# Those wrappers generate a password on first run and wait for the container to report healthy.
+# If you prefer to drive compose yourself:  docker compose up -d --build
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# THE SAFETY DECISION BAKED IN HERE, because it is the one that matters:
+#
+# The server refuses to bind a non-loopback address over plain HTTP (see resolveConfig in
+# src/server/config.ts) — plain HTTP on a public interface leaks the session cookie, and that
+# cookie is full access to every terminal on the host. The Dockerfile passes --insecure-http
+# because inside the compose network the traffic never touches a public interface.
+#
+# So the default `ports` mapping below binds to 127.0.0.1 ONLY. Out of the box this host is
+# reachable from the machine it runs on, and from anywhere else via an SSH tunnel:
+#
+#     ssh -N -L 8443:127.0.0.1:8443 you@your-host       then open http://127.0.0.1:8443
+#
+# To expose it publicly, do NOT change that binding to 0.0.0.0 — start the `tls` profile
+# instead, which puts Caddy in front with a real certificate. The app port remains available on
+# loopback for local health/debugging but is never the public listener:
+#
+#     NODETERM_DOMAIN=nodeterm.example.com docker compose --profile tls up -d --build
+#
+# For PRIVATE reach instead — only from devices on your own Tailscale network, with NO port
+# published to the host at all and no certificate to manage — start the `tailscale` profile
+# instead. It joins this container directly to your tailnet; see the Tailscale section of
+# docs/SERVER.md for the full walkthrough:
+#
+#     TS_AUTHKEY=tskey-auth-xxxx docker compose --profile tailscale up -d --build
+#
+# `tls` and `tailscale` serve different audiences (the public internet vs. your own private
+# network) and can be run independently or together.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+
+services:
+  nodeterm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nodeterm-server:local
+    container_name: nodeterm-server
+    restart: unless-stopped
+    environment:
+      # OPTIONAL, and empty by default on purpose.
+      #
+      # Leave it unset and the server boots UNCONFIGURED: it prints a one-time setup URL to the
+      # container log, and the first person to open that URL chooses their own password and can
+      # enrol a passkey. That is the better flow — the password is one the owner picked and
+      # typed, never a generated string that also sat in a file on disk.
+      #
+      # Set it only for an unattended deployment where nobody will read a log (a fleet rollout,
+      # a CI smoke test). It seeds FIRST boot only and is ignored once an account exists, so
+      # changing it later does nothing.
+      NODETERM_SERVER_PASSWORD: ${NODETERM_SERVER_PASSWORD:-}
+      NODETERM_DATA_DIR: /data
+      NODETERM_HOST: 0.0.0.0
+      NODETERM_PORT: "8443"
+      NODETERM_TOTP_SECRET_FILE: /run/secrets/nodeterm-totp
+    volumes:
+      # Auth, the canvas, settings and scrollback snapshots. Without a deliberately reused volume,
+      # a replacement/redeploy loses the password and workspace. A NAMED volume, not a bind mount:
+      # the container writes as its own user and a host-path mount invites permission mismatches.
+      - nodeterm-data:/data
+      # NODETERM_TOTP_SECRET_FILE_HOST lets a caller (the desktop app's one-click deployment
+      # service) point this at a writable location outside the project directory - a packaged
+      # install's project directory sits in a Squirrel version folder that is replaced wholesale
+      # on every update, and a secret bind-mounted from inside it would be silently lost on the
+      # next update. Unset (plain `docker compose up` / `host.bat`) keeps the historical
+      # project-directory-relative path.
+      - ${NODETERM_TOTP_SECRET_FILE_HOST:-./.nodeterm-server-totp}:/run/secrets/nodeterm-totp:ro
+    ports:
+      # Loopback-only on purpose — see the note at the top. Direct Compose users can override the
+      # host side, but the safety-focused host wrappers refuse any NODETERM_BIND other than this.
+      - "${NODETERM_BIND:-127.0.0.1}:${NODETERM_PUBLISH_PORT:-8443}:8443"
+    # The image already declares a HEALTHCHECK against /login (served without auth), so the
+    # wrappers can wait for "healthy" rather than sleeping and hoping.
+
+  # Real TLS, opt-in: `docker compose --profile tls up -d`. Caddy obtains and renews a
+  # certificate automatically for NODETERM_DOMAIN and speaks plain HTTP to nodeterm inside the
+  # compose network — exactly the reverse-proxy shape the server asks for.
+  caddy:
+    image: caddy:2-alpine
+    container_name: nodeterm-caddy
+    profiles: ["tls"]
+    restart: unless-stopped
+    depends_on:
+      - nodeterm
+    environment:
+      # Plain default, NOT `${NODETERM_DOMAIN:?...}`. Compose interpolates and validates EVERY
+      # service in the file before it decides which profiles are active, so a required-variable
+      # marker here aborted `docker compose up` for the default (no-profile) case as well —
+      # "required variable NODETERM_DOMAIN is missing" while starting a stack that does not use
+      # Caddy at all. The check that matters lives in host.sh --tls, which refuses before
+      # starting; and Caddy itself fails loudly on an empty site address.
+      NODETERM_DOMAIN: ${NODETERM_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  # Private network access, opt-in: `TS_AUTHKEY=... docker compose --profile tailscale up -d`.
+  # Joins THIS container's network namespace to a Tailscale sidecar (network_mode:
+  # service:nodeterm), so the app becomes reachable at this node's tailnet address on its own
+  # port (8443) from any device on your tailnet — no port published to the Docker host, and no
+  # public exposure at all. This is a network-reachability decision, not authentication: traffic
+  # still has to pass the app's own sign-in (see the Security model in docs/SERVER.md). Tailscale
+  # is the trust boundary for WHO can reach the port; the app's password/passkey is still what
+  # decides who can use it once they do.
+  tailscale:
+    image: tailscale/tailscale:stable
+    container_name: nodeterm-tailscale
+    profiles: ["tailscale"]
+    restart: unless-stopped
+    hostname: nodeterm
+    depends_on:
+      - nodeterm
+    environment:
+      # REQUIRED for this profile, and a SECRET: an auth key from
+      # https://login.tailscale.com/admin/settings/keys (a reusable, tagged key is easiest for a
+      # long-running host). Supply it via a real environment variable or an owner-only --env-file
+      # — never hardcode one here, never commit one, and it is never logged or printed by this
+      # compose file.
+      #
+      # Plain default, NOT `${TS_AUTHKEY:?...}` — same reason NODETERM_DOMAIN above avoids one:
+      # Compose interpolates and validates EVERY service in this file before it decides which
+      # profiles are active, so a required-variable marker here would abort a plain
+      # `docker compose up` (no profile, this service never even starts) too. Leaving it unset
+      # just starts an unauthenticated tailscaled that logs it needs a key — see the Tailscale
+      # section of docs/SERVER.md for how to confirm the node actually joined.
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_STATE_DIR: /var/lib/tailscale
+      # Kernel networking (a real tailscale0 interface in the shared netns below), not the
+      # userspace/SOCKS5 mode — that's what makes the app reachable by its own address, and it's
+      # why this service needs the capabilities/device just below.
+      TS_USERSPACE: "false"
+    volumes:
+      # Persists this node's Tailscale identity (its machine key) so a restart reconnects as the
+      # SAME device instead of re-registering as a new one and piling up duplicates in your
+      # tailnet's device list.
+      - tailscale-state:/var/lib/tailscale
+    # The minimum Tailscale documents for kernel-mode networking in a container: a TUN device to
+    # create the tailscale0 interface, and NET_ADMIN/NET_RAW to configure it and probe
+    # connectivity. Nothing broader (no --privileged, no host networking, no other devices).
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    # Shares nodeterm's network namespace instead of getting its own: nodeterm keeps listening on
+    # 0.0.0.0:8443 inside that namespace (already true today, for the loopback publish above), so
+    # once tailscale0 exists there the app is reachable at the tailnet address on the same port —
+    # with no `ports:` entry of its own and nothing new published to the Docker host.
+    network_mode: "service:nodeterm"
+
+volumes:
+  nodeterm-data:
+  caddy-data:
+  caddy-config:
+  tailscale-state:

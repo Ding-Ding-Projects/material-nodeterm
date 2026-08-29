@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Terminal sessions &amp; continuity — nodeterm docs</title>
+    <meta name="description" content="Terminal nodes use tmux or nodeterm's Windows session host to survive app restarts, with honest cold restore after a machine reboot ends the live process." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem('nodeterm-playground.v1') || '{}')
+          if (saved && saved.theme === 'night') document.documentElement.setAttribute('data-theme', 'night')
+          if (saved && saved.bigText) {
+            document.documentElement.style.fontSize = '19px'
+          }
+        } catch (_err) {
+          /* localStorage unavailable (private mode, etc.) -- falls back to the day palette */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Terminals · persistence</p>
+      <h1>Terminal sessions &amp; continuity</h1>
+      <p>Terminal nodes use a persistent backend instead of tying the live shell to the desktop window. macOS, Linux, and SSH sessions use tmux; stock Windows uses nodeterm's standalone session host. Both keep the live process running across an app close or crash. Neither keeps that process alive through a machine reboot.</p>
+
+      <h2>Behaviour</h2>
+      <p>On the tmux path, each terminal is created with <code>tmux new-session -A -D -s nt-&lt;nodeId&gt;</code> on a socket dedicated to nodeterm, using a generated <code>tmux.conf</code> so the user's own <code>~/.tmux.conf</code> never interferes. tmux owns its screen, mouse, and scrollback; OSC 52 carries copied text back to the system clipboard, including over SSH.</p>
+      <p>On stock Windows, one detached session-host process owns the real ConPTY plus a headless xterm buffer for each named session. Closing the app, switching projects, or releasing an off-screen terminal detaches the client without ending the process. Reopening the node or relaunching nodeterm reattaches and receives the reconstructed screen.</p>
+
+      <h2>Configuration</h2>
+      <ul>
+        <li>Scrollback length, persistent-backend support, and the offscreen-release timer are in Settings → tmux.</li>
+        <li>Settings → Shell on Windows selects the detected default profile. A selected profile is snapshotted per node, and explicit missing profiles fail closed instead of silently falling back.</li>
+        <li>With persistent support enabled, stock Windows selects the standalone session host when no usable native tmux exists. If persistence is disabled or unavailable, the app reports the non-persistent state instead of claiming continuity.</li>
+      </ul>
+
+      <h2>Failure modes</h2>
+      <p>A machine reboot kills the tmux server and the Windows session host, so every live session process is genuinely gone. On the next launch nodeterm reconstructs what it can instead of pretending otherwise: it replays a byte-capped scrollback snapshot and, for a resumable agent CLI, relaunches the agent against the remembered conversation id.</p>
+      <p>On Windows, an attach is provisional until authentication and the correlated host response succeed. A rejection remains non-persistent and does not open a plain shell or another profile as a substitute.</p>
+
+      <h2>Security considerations</h2>
+      <p>Persistent sessions run under the same user account as the app; there is no sandboxing beyond what the OS and shell provide. SSH-backed sessions run on the remote host's own tmux. The Windows session host authenticates local clients, while shell executable paths and arguments remain private to the trusted desktop core.</p>
+
+      <h2>Verification</h2>
+      <p>Resolver, spawn, protocol, reconnect, and fail-closed attach behaviour have focused automated coverage. Packaged Windows interaction and capture evidence for a long-running process across a full app relaunch remains pending until the required cheap headless installed-artifact run records it.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./node-kinds.html">Node kinds</a></li>
+        <li><a href="./agent-support.html">Agent support</a></li>
+        <li><a href="./canvas-lifecycle.html">Canvas &amp; node lifecycle</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

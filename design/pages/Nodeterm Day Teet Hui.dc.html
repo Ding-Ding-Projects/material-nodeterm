@@ -1,0 +1,1992 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>nodeterm — the terminal playground</title>
+<meta name="description" content="nodeterm for curious kids: terminals and robot helpers as blocks on a giant canvas. Search everything, build a regex, right-click anything." />
+<meta name="theme-color" content="#ffd93d" />
+<link rel="icon" href="assets/nodeterm.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin" />
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+:root{
+  color-scheme:light;
+  --paper:#fff6e2;--paper2:#fffdf7;--card:#ffffff;--sunk:#fff1cf;
+  --ink:#2c2036;--ink2:#5d5170;--faint:#8d829c;
+  --line:#2c2036;
+  --red:#ff5d5d;--orange:#ffa41b;--yellow:#ffd93d;--green:#3fce7f;--blue:#4dabf7;--purple:#9775fa;--pink:#ff8fc7;
+  --shadow:6px 6px 0 var(--line);--shadow-sm:4px 4px 0 var(--line);
+  --round:20px;--round-sm:12px;
+  --fun:'Baloo 2','Comic Sans MS','Chalkboard SE','Trebuchet MS',system-ui,sans-serif;
+  --body:'Nunito','Segoe UI',system-ui,-apple-system,sans-serif;
+  --mono:ui-monospace,'SF Mono','Cascadia Code',Consolas,monospace;
+}
+:root[data-theme='night']{
+  color-scheme:dark;
+  --paper:#241a45;--paper2:#2e2257;--card:#372a66;--sunk:#1e1638;
+  --ink:#fff6e2;--ink2:#d3c7f5;--faint:#a397cc;
+  --line:#120c26;
+  --yellow:#ffd93d;--red:#ff7b7b;--green:#5fe3a1;--blue:#74c0fc;--purple:#b197fc;--pink:#ffa8d4;--orange:#ffc078;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden;min-width:320px}
+h1,h2,h3,h4{font-family:var(--fun);letter-spacing:-.01em}
+a{color:var(--ink);text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:3px;text-decoration-color:var(--yellow)}
+a:hover{text-decoration-color:var(--pink)}
+input,select,textarea,button{font-family:var(--body);font-size:15px;color:var(--ink)}
+::placeholder{color:var(--faint)}
+:focus-visible{outline:4px solid var(--blue);outline-offset:2px;border-radius:8px}
+@keyframes pop{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes doorSwing{from{transform:rotateY(0deg)}to{transform:rotateY(-105deg)}}
+@keyframes doorShut{from{transform:rotateY(-105deg)}to{transform:rotateY(0deg)}}
+@keyframes shakeNo{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+@keyframes walkIn{from{opacity:0;transform:scale(1.25)}to{opacity:1;transform:scale(1)}}
+@keyframes hallIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+@keyframes glow{0%,100%{box-shadow:8px 8px 0 var(--line)}50%{box-shadow:8px 8px 0 var(--line),0 0 0 8px color-mix(in srgb,var(--yellow) 60%,transparent)}}
+@keyframes wiggle{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.001ms !important;transition-duration:.001ms !important}}
+</style>
+</helmet>
+
+<sc-if value="{{inHall}}" hint-placeholder-val="{{true}}">
+<div style="min-height:100vh;display:flex;flex-direction:column;background:linear-gradient(180deg,var(--paper) 0 60%,#c98f5a 60% 100%);animation:hallIn .3s ease">
+
+  <header style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;background:var(--paper2);border-bottom:5px solid var(--line)" onContextMenu="{{menuHeader}}">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="{{logoStyle}}"></span>
+      <span style="font-family:var(--fun);font-size:24px;font-weight:800">nodeterm school</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:0;flex:1 1 280px;min-width:220px;height:52px;background:var(--card);border:4px solid var(--line);border-radius:999px;box-shadow:var(--shadow-sm);overflow:hidden" onContextMenu="{{menuSearch}}">
+      <span aria-hidden="true" style="padding:0 6px 0 14px;font-size:20px">🔎</span>
+      <input type="search" value="{{qGlobal}}" onChange="{{setQGlobal}}" placeholder="Which room are you looking for?" aria-label="Search the whole school" style="flex:1;min-width:0;height:100%;border:0;background:transparent;outline:none;font-weight:700" />
+      <button type="button" onClick="{{rxGlobal}}" title="Build a pattern for this search box" aria-label="Regex builder for the school search" style="{{rxGlobalStyle}}">.*</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button type="button" onClick="{{openPalette}}" onContextMenu="{{menuGeneric}}" title="Magic jump box — Ctrl+Shift+F" style="height:52px;min-width:52px;padding:0 14px;border:4px solid var(--line);border-radius:999px;background:var(--purple);box-shadow:var(--shadow-sm);cursor:pointer;font-family:var(--fun);font-weight:800">✨ Jump</button>
+      <button type="button" onClick="{{toggleTheme}}" onContextMenu="{{menuGeneric}}" aria-label="Day or night" style="height:52px;min-width:52px;border:4px solid var(--line);border-radius:999px;background:var(--orange);box-shadow:var(--shadow-sm);cursor:pointer;font-size:20px">{{themeIcon}}</button>
+      <button type="button" onClick="{{goNotes}}" onContextMenu="{{menuGeneric}}" aria-label="Message box" style="position:relative;height:52px;min-width:52px;border:4px solid var(--line);border-radius:999px;background:var(--blue);box-shadow:var(--shadow-sm);cursor:pointer;font-size:20px">🔔<span style="{{bellStyle}}">{{bellCount}}</span></button>
+    </div>
+  </header>
+
+  <div style="padding:18px 16px 8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+    <div aria-hidden="true" style="font-size:46px;animation:bob 2.4s ease-in-out infinite">{{mascot}}</div>
+    <div style="flex:1 1 240px">
+      <h1 style="margin:0;font-size:clamp(24px,5vw,36px);font-weight:800">{{hallGreeting}}</h1>
+      <div style="font-family:var(--fun);font-size:13px;font-weight:800;display:inline-block;background:var(--yellow);border:3px solid var(--line);border-radius:999px;padding:1px 12px;margin-top:4px">the whole home page is right here — the doors are extra rooms</div>
+      <p style="margin:2px 0 0;font-size:15px;color:var(--ink2);text-wrap:pretty">{{hallSub}}</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:0;flex:0 1 300px;min-width:200px;height:50px;background:var(--card);border:4px solid var(--line);border-radius:999px;box-shadow:var(--shadow-sm);overflow:hidden" onContextMenu="{{menuRail}}">
+      <span aria-hidden="true" style="padding:0 4px 0 14px;font-size:18px">🚪</span>
+      <input type="search" value="{{qNav}}" onChange="{{setQNav}}" placeholder="Filter the doors…" aria-label="Filter the doors" style="flex:1;min-width:0;height:100%;border:0;background:transparent;outline:none;font-weight:700" />
+      <button type="button" onClick="{{rxNav}}" title="Build a pattern for the door filter" aria-label="Regex builder for the door filter" style="{{rxNavStyle}}">.*</button>
+    </div>
+  </div>
+
+  <div style="flex:1;padding:8px 16px 28px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:18px;max-width:1180px;margin:0 auto">
+      <sc-for list="{{doors}}" as="d" hint-placeholder-count="12">
+        <div style="{{d.slotStyle}}" onContextMenu="{{d.menu}}">
+          <button type="button" onClick="{{d.enter}}" aria-label="{{d.aria}}" style="{{d.frameStyle}}">
+            <span style="{{d.insideStyle}}">{{d.peek}}</span>
+            <span style="{{d.doorStyle}}">
+              <span style="{{d.plaqueStyle}}">{{d.icon}}</span>
+              <span style="position:absolute;left:10px;top:50%;width:12px;height:12px;border-radius:50%;border:3px solid var(--line);background:var(--yellow)"></span>
+              <span style="{{d.lockStyle}}">🔒</span>
+              <span style="{{d.badgeStyle}}">{{d.badge}}</span>
+            </span>
+          </button>
+          <div style="text-align:center;margin-top:8px;font-family:var(--fun);font-weight:800;font-size:15px">{{d.label}}</div>
+          <div style="text-align:center;font-size:12px;color:var(--ink2)">{{d.hint}}</div>
+        </div>
+      </sc-for>
+      <sc-if value="{{navEmpty}}" hint-placeholder-val="{{false}}">
+        <div style="grid-column:1/-1;padding:28px;text-align:center;font-weight:700;color:var(--ink2);background:var(--card);border:4px dashed var(--line);border-radius:var(--round)">No door has that name. Try the <strong>.*</strong> button next to the filter! 🔎</div>
+      </sc-if>
+    </div>
+
+    <div style="max-width:1180px;margin:26px auto 0;display:flex;flex-direction:column;gap:18px">
+      <div style="background:var(--card);border:5px solid var(--line);border-radius:28px;box-shadow:var(--shadow);padding:24px;position:relative;overflow:hidden">
+        <div aria-hidden="true" style="position:absolute;right:-34px;top:-34px;width:180px;height:180px;border-radius:50%;background:var(--yellow);opacity:.5"></div>
+        <div style="position:relative">
+          <div style="display:inline-block;font-family:var(--fun);font-weight:800;font-size:13px;background:var(--pink);border:3px solid var(--line);border-radius:999px;padding:2px 12px">a playground for your computer</div>
+          <h2 style="margin:10px 0 8px;font-size:clamp(28px,5.2vw,50px);line-height:1.04;font-weight:800">Your terminals are<br />blocks on a giant canvas.</h2>
+          <p style="margin:0 0 16px;max-width:620px;font-size:16px;color:var(--ink2);text-wrap:pretty">Every terminal is a block you can drag around. Robot helpers get their own blocks too, and they raise a hand when they need you. Nothing disappears when you close the lid.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <a href="https://github.com/eneskirca/nodeterm/releases" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;height:54px;padding:0 22px;border:4px solid var(--line);border-radius:999px;background:var(--green);box-shadow:var(--shadow-sm);font-family:var(--fun);font-weight:800;font-size:17px;text-decoration:none">⬇ Get nodeterm</a>
+            <a href="https://github.com/eneskirca/nodeterm" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;height:54px;padding:0 22px;border:4px solid var(--line);border-radius:999px;background:var(--card);box-shadow:var(--shadow-sm);font-family:var(--fun);font-weight:800;font-size:17px;text-decoration:none">👀 Peek at the code</a>
+            <span style="display:inline-flex;align-items:center;height:54px;padding:0 18px;border:4px dashed var(--line);border-radius:999px;font-family:var(--mono);font-size:13px">brew install --cask nodeterm</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px">
+        <sc-for list="{{statCards}}" as="s" hint-placeholder-count="4">
+          <div onContextMenu="{{s.menu}}" style="{{s.style}}">
+            <div style="font-size:30px" aria-hidden="true">{{s.icon}}</div>
+            <div style="font-family:var(--fun);font-size:26px;font-weight:800;line-height:1.1">{{s.value}}</div>
+            <div style="font-size:13px;color:var(--ink2)">{{s.note}}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div>
+        <h3 style="margin:0 0 12px;font-size:24px;font-weight:800">What's inside the box? <span style="font-size:14px;font-weight:600;color:var(--ink2)">{{featureCount}}</span></h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:14px">
+          <sc-for list="{{features}}" as="f" hint-placeholder-count="14">
+            <article onContextMenu="{{f.menu}}" style="{{f.style}}">
+              <div style="width:46px;height:46px;display:flex;align-items:center;justify-content:center;font-size:24px;border:3px solid var(--line);border-radius:14px;background:{{f.color}}">{{f.icon}}</div>
+              <h4 style="margin:10px 0 4px;font-size:17px;font-weight:700">{{f.title}}</h4>
+              <p style="margin:0;font-size:13.5px;color:var(--ink2);line-height:1.55">{{f.body}}</p>
+            </article>
+          </sc-for>
+          <sc-if value="{{featuresEmpty}}" hint-placeholder-val="{{false}}">
+            <div style="grid-column:1/-1;padding:26px;text-align:center;color:var(--faint)">Nothing matched that search. 🐛</div>
+          </sc-if>
+        </div>
+      </div>
+
+      <div>
+        <h3 style="margin:0 0 12px;font-size:24px;font-weight:800">How it goes 🚀</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
+          <div style="background:var(--yellow);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow-sm);padding:16px">
+            <div style="font-family:var(--fun);font-size:34px;font-weight:800;line-height:1">1</div>
+            <h4 style="margin:4px 0 4px;font-size:17px">Right-click the canvas</h4>
+            <p style="margin:0;font-size:13.5px;color:var(--ink2);line-height:1.55">Open a terminal, or a robot helper, wherever you want it. It becomes a block you can move.</p>
+          </div>
+          <div style="background:var(--blue);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow-sm);padding:16px">
+            <div style="font-family:var(--fun);font-size:34px;font-weight:800;line-height:1">2</div>
+            <h4 style="margin:4px 0 4px;font-size:17px">Lay it out in space</h4>
+            <p style="margin:0;font-size:13.5px;color:var(--ink2);line-height:1.55">Group blocks, label them, zoom out to see everything at once. The map stays put across restarts.</p>
+          </div>
+          <div style="background:var(--pink);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow-sm);padding:16px">
+            <div style="font-family:var(--fun);font-size:34px;font-weight:800;line-height:1">3</div>
+            <h4 style="margin:4px 0 4px;font-size:17px">Walk away, come back</h4>
+            <p style="margin:0;font-size:13.5px;color:var(--ink2);line-height:1.55">Close the lid, reboot the machine. Your terminals and your helpers are exactly where you left them.</p>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px">
+        <div style="background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow-sm);padding:16px">
+          <div style="font-size:26px" aria-hidden="true">🖥</div>
+          <h4 style="margin:6px 0 4px;font-size:17px">On your desk</h4>
+          <p style="margin:0;font-size:13.5px;color:var(--ink2);line-height:1.55">The app for macOS and Linux, with native window chrome and auto-update.</p>
+        </div>
+        <div style="background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow-sm);padding:16px">
+          <div style="font-size:26px" aria-hidden="true">🌍</div>
+          <h4 style="margin:6px 0 4px;font-size:17px">In any browser</h4>
+          <p style="margin:0;font-size:13.5px;color:var(--ink2);line-height:1.55">Server Edition serves the same canvas from your own machine, so you can reach it anywhere.</p>
+        </div>
+        <div style="background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow-sm);padding:16px">
+          <div style="font-size:26px" aria-hidden="true">📱</div>
+          <h4 style="margin:6px 0 4px;font-size:17px">In your pocket</h4>
+          <p style="margin:0;font-size:13.5px;color:var(--ink2);line-height:1.55">Scan one code and the same live session carries on in the iOS app.</p>
+        </div>
+      </div>
+
+      <div style="background:var(--purple);border:5px solid var(--line);border-radius:28px;box-shadow:var(--shadow);padding:24px;display:flex;gap:18px;flex-wrap:wrap;align-items:center">
+        <div aria-hidden="true" style="font-size:46px;animation:bob 2.6s ease-in-out infinite">🎮</div>
+        <div style="flex:1 1 240px">
+          <h3 style="margin:0 0 4px;font-size:24px;font-weight:800">Playroom: three little games</h3>
+          <p style="margin:0;font-size:14.5px;color:var(--ink2);line-height:1.55">Memory pairs, dumpling maths, and whack-a-block. All three keep score, and your best score is saved.</p>
+        </div>
+        <button type="button" onClick="{{goPlay}}" style="height:56px;padding:0 24px;border:4px solid var(--line);border-radius:999px;background:var(--yellow);box-shadow:var(--shadow-sm);cursor:pointer;font-family:var(--fun);font-weight:800;font-size:18px">🎮 Open the playroom</button>
+      </div>
+
+      <div style="background:var(--green);border:5px solid var(--line);border-radius:28px;box-shadow:var(--shadow);padding:26px;text-align:center">
+        <h3 style="margin:0 0 4px;font-size:clamp(24px,4.4vw,36px);font-weight:800">Stop hunting through tabs.</h3>
+        <p style="margin:0 0 16px;font-size:16px;color:var(--ink2)">Free, open source, and it works offline. macOS 12+ and Linux x64.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+          <a href="https://github.com/eneskirca/nodeterm/releases" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;height:56px;padding:0 26px;border:4px solid var(--line);border-radius:999px;background:var(--card);box-shadow:var(--shadow-sm);font-family:var(--fun);font-weight:800;font-size:18px;text-decoration:none">⬇ Download nodeterm</a>
+          <button type="button" onClick="{{copyBrew}}" style="height:56px;padding:0 22px;border:4px solid var(--line);border-radius:999px;background:var(--card);box-shadow:var(--shadow-sm);cursor:pointer;font-family:var(--mono);font-weight:700;font-size:14px">📋 brew install --cask nodeterm</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer style="border-top:5px solid var(--line);background:var(--paper2);padding:12px 16px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink2)">
+    <span>Everything you do stays in this browser. Nothing is sent anywhere.</span>
+    <div style="flex:1"></div>
+    <span>Right-click any door for its own little menu 🖱</span>
+  </footer>
+</div>
+</sc-if>
+
+<sc-if value="{{inRoom}}" hint-placeholder-val="{{false}}">
+<div style="min-height:100vh;display:flex;flex-direction:column;animation:walkIn .32s ease;background:var(--paper);background-image:radial-gradient(circle at 12% 8%, color-mix(in srgb,var(--yellow) 40%,transparent) 0 140px, transparent 141px),radial-gradient(circle at 88% 4%, color-mix(in srgb,var(--pink) 35%,transparent) 0 120px, transparent 121px),radial-gradient(circle at 78% 62%, color-mix(in srgb,var(--blue) 25%,transparent) 0 180px, transparent 181px)">
+
+  <header style="position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;background:var(--paper2);border-bottom:4px solid var(--line)" onContextMenu="{{menuHeader}}">
+    <div style="display:flex;align-items:center;gap:10px">
+      <img src="assets/mark.svg" alt="" width="34" height="34" style="border:3px solid var(--line);border-radius:12px;background:var(--yellow);padding:3px" />
+      <span style="font-family:var(--fun);font-size:24px;font-weight:800">nodeterm</span>
+      <span style="font-family:var(--fun);font-size:12px;font-weight:700;background:var(--green);border:3px solid var(--line);border-radius:999px;padding:1px 10px">v0.3.0</span>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:0;flex:1 1 300px;min-width:230px;height:52px;background:var(--card);border:4px solid var(--line);border-radius:999px;box-shadow:var(--shadow-sm);overflow:hidden" onContextMenu="{{menuSearch}}">
+      <span aria-hidden="true" style="padding:0 6px 0 14px;font-size:20px">🔎</span>
+      <input type="search" value="{{qGlobal}}" onChange="{{setQGlobal}}" placeholder="Search the whole playground…" aria-label="Search everything" style="flex:1;min-width:0;height:100%;border:0;background:transparent;outline:none;font-weight:600" />
+      <button type="button" onClick="{{rxGlobal}}" title="Open the regex builder for this search box" aria-label="Regex builder for the big search" style="{{rxGlobalStyle}}">.*</button>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button type="button" onClick="{{openPalette}}" onContextMenu="{{menuGeneric}}" title="Magic jump box — Ctrl+Shift+F" style="height:52px;min-width:52px;padding:0 14px;border:4px solid var(--line);border-radius:999px;background:var(--purple);box-shadow:var(--shadow-sm);cursor:pointer;font-family:var(--fun);font-weight:700">✨ Jump</button>
+      <button type="button" onClick="{{toggleTheme}}" onContextMenu="{{menuGeneric}}" aria-label="Switch between day and night" style="height:52px;min-width:52px;border:4px solid var(--line);border-radius:999px;background:var(--orange);box-shadow:var(--shadow-sm);cursor:pointer;font-size:20px">{{themeIcon}}</button>
+      <button type="button" onClick="{{goNotes}}" onContextMenu="{{menuGeneric}}" aria-label="Open the message box" style="position:relative;height:52px;min-width:52px;border:4px solid var(--line);border-radius:999px;background:var(--blue);box-shadow:var(--shadow-sm);cursor:pointer;font-size:20px">🔔<span style="{{bellStyle}}">{{bellCount}}</span></button>
+    </div>
+  </header>
+
+  <div style="flex:1;display:flex;align-items:stretch;min-height:0;flex-wrap:wrap">
+
+    <aside style="flex:1 1 230px;max-width:290px;display:flex;flex-direction:column;gap:10px;padding:14px;background:var(--paper2);border-right:4px solid var(--line)" onContextMenu="{{menuRail}}">
+      <button type="button" onClick="{{leaveRoom}}" onContextMenu="{{menuRail}}" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:52px;border:4px solid var(--line);border-radius:16px;background:var(--pink);box-shadow:var(--shadow-sm);cursor:pointer;font-family:var(--fun);font-weight:800;font-size:16px">🚪 Back to the hallway</button>
+      <button type="button" onClick="{{lockThisRoom}}" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:46px;border:3px solid var(--line);border-radius:14px;background:var(--sunk);cursor:pointer;font-weight:800;font-size:13.5px">{{roomLockLabel}}</button>
+      <div style="display:flex;align-items:center;gap:0;height:46px;background:var(--card);border:4px solid var(--line);border-radius:999px;overflow:hidden">
+        <span aria-hidden="true" style="padding:0 4px 0 12px;font-size:17px">🔍</span>
+        <input type="search" value="{{qNav}}" onChange="{{setQNav}}" placeholder="Find a room…" aria-label="Filter the room list" style="flex:1;min-width:0;height:100%;border:0;background:transparent;outline:none;font-weight:600;font-size:14px" />
+        <button type="button" onClick="{{rxNav}}" title="Open the regex builder for the room finder" aria-label="Regex builder for the room finder" style="{{rxNavStyle}}">.*</button>
+      </div>
+
+      <nav role="tablist" aria-label="Rooms" style="display:flex;flex-direction:column;gap:8px">
+        <sc-for list="{{navItems}}" as="n" hint-placeholder-count="9">
+          <button type="button" role="tab" onClick="{{n.go}}" onContextMenu="{{n.menu}}" style="{{n.style}}">
+            <span aria-hidden="true" style="font-size:20px">{{n.icon}}</span>
+            <span style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{n.label}}</span>
+            <span style="{{n.badgeStyle}}">{{n.badge}}</span>
+          </button>
+        </sc-for>
+        <sc-if value="{{navEmpty}}" hint-placeholder-val="{{false}}">
+          <div style="padding:14px;text-align:center;color:var(--faint);font-size:13px">No room matches that. Try the <strong>.*</strong> button!</div>
+        </sc-if>
+      </nav>
+
+      <div style="margin-top:auto;padding:12px;background:var(--sunk);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow-sm)">
+        <div style="font-family:var(--fun);font-size:14px;font-weight:700">Your stuff lives here 🧸</div>
+        <p style="margin:4px 0 8px;font-size:12px;color:var(--ink2);line-height:1.5">{{storageLine}}</p>
+        <button type="button" onClick="{{resetAll}}" style="width:100%;height:44px;border:3px solid var(--line);border-radius:999px;background:var(--red);cursor:pointer;font-family:var(--fun);font-weight:700">Start fresh</button>
+      </div>
+    </aside>
+
+    <main style="flex:1 1 420px;min-width:0;display:flex;flex-direction:column" onContextMenu="{{menuPanel}}">
+
+      <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;padding:18px 18px 14px;border-bottom:4px dashed var(--line)">
+        <div style="min-width:220px;flex:1 1 260px">
+          <div style="display:inline-block;font-family:var(--fun);font-size:12px;font-weight:700;background:var(--yellow);border:3px solid var(--line);border-radius:999px;padding:1px 12px">{{secKicker}}</div>
+          <h1 style="margin:6px 0 2px;font-size:clamp(26px,4.2vw,38px);font-weight:800">{{secTitle}}</h1>
+          <p style="margin:0;font-size:14px;color:var(--ink2);max-width:600px;text-wrap:pretty">{{secSub}}</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:0;flex:0 1 360px;min-width:220px;height:50px;background:var(--card);border:4px solid var(--line);border-radius:999px;box-shadow:var(--shadow-sm);overflow:hidden">
+          <span aria-hidden="true" style="padding:0 4px 0 14px;font-size:18px">🔎</span>
+          <input type="search" value="{{qSec}}" onChange="{{setQSec}}" placeholder="{{secSearchPlaceholder}}" aria-label="Search inside this room" style="flex:1;min-width:0;height:100%;border:0;background:transparent;outline:none;font-weight:600" />
+          <button type="button" onClick="{{rxSec}}" title="Open the regex builder for this room's search" aria-label="Regex builder for this room's search" style="{{rxSecStyle}}">.*</button>
+        </div>
+      </div>
+
+      <div style="flex:1;min-height:0;overflow:auto;padding:18px">
+
+        <sc-if value="{{isHome}}" hint-placeholder-val="{{true}}">
+          <div style="display:flex;flex-direction:column;gap:18px;animation:pop .2s ease">
+            <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;align-items:stretch">
+              <div style="grid-column:1/-1;background:var(--card);border:4px solid var(--line);border-radius:28px;box-shadow:var(--shadow);padding:24px;position:relative;overflow:hidden">
+                <div aria-hidden="true" style="position:absolute;right:-30px;top:-30px;width:170px;height:170px;border-radius:50%;background:var(--yellow);opacity:.55"></div>
+                <div style="position:relative">
+                  <div style="display:inline-block;font-family:var(--fun);font-weight:700;font-size:13px;background:var(--pink);border:3px solid var(--line);border-radius:999px;padding:2px 12px">a playground for your computer</div>
+                  <h2 style="margin:10px 0 8px;font-size:clamp(30px,5.4vw,52px);line-height:1.03;font-weight:800">Your terminals are<br />blocks on a giant canvas.</h2>
+                  <p style="margin:0 0 16px;max-width:600px;font-size:16px;color:var(--ink2);text-wrap:pretty">Every terminal is a block you can drag around. Robot helpers get their own blocks too, and they raise a hand when they need you. Nothing disappears when you close the lid.</p>
+                  <div style="display:flex;gap:10px;flex-wrap:wrap">
+                    <a href="https://github.com/eneskirca/nodeterm/releases" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;height:54px;padding:0 22px;border:4px solid var(--line);border-radius:999px;background:var(--green);box-shadow:var(--shadow-sm);font-family:var(--fun);font-weight:800;font-size:17px;text-decoration:none">⬇ Get nodeterm</a>
+                    <a href="https://github.com/eneskirca/nodeterm" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;height:54px;padding:0 22px;border:4px solid var(--line);border-radius:999px;background:var(--card);box-shadow:var(--shadow-sm);font-family:var(--fun);font-weight:800;font-size:17px;text-decoration:none">👀 Peek at the code</a>
+                  </div>
+                </div>
+              </div>
+              <sc-for list="{{statCards}}" as="s" hint-placeholder-count="4">
+                <div onContextMenu="{{s.menu}}" style="{{s.style}}">
+                  <div style="font-size:30px" aria-hidden="true">{{s.icon}}</div>
+                  <div style="font-family:var(--fun);font-size:26px;font-weight:800;line-height:1.1">{{s.value}}</div>
+                  <div style="font-size:13px;color:var(--ink2)">{{s.note}}</div>
+                </div>
+              </sc-for>
+            </section>
+
+            <section>
+              <h3 style="margin:0 0 10px;font-size:22px;font-weight:800">What's inside the box? <span style="font-size:14px;font-weight:600;color:var(--ink2)">{{featureCount}}</span></h3>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:14px">
+                <sc-for list="{{features}}" as="f" hint-placeholder-count="12">
+                  <article onContextMenu="{{f.menu}}" style="{{f.style}}">
+                    <div style="width:46px;height:46px;display:flex;align-items:center;justify-content:center;font-size:24px;border:3px solid var(--line);border-radius:14px;background:{{f.color}}">{{f.icon}}</div>
+                    <h4 style="margin:10px 0 4px;font-size:17px;font-weight:700">{{f.title}}</h4>
+                    <p style="margin:0;font-size:13.5px;color:var(--ink2);line-height:1.55">{{f.body}}</p>
+                  </article>
+                </sc-for>
+                <sc-if value="{{featuresEmpty}}" hint-placeholder-val="{{false}}">
+                  <div style="grid-column:1/-1;padding:26px;text-align:center;color:var(--faint)">Nothing matched that search. 🐛</div>
+                </sc-if>
+              </div>
+            </section>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isList}}" hint-placeholder-val="{{false}}">
+          <div style="animation:pop .2s ease">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+              <button type="button" onClick="{{selAll}}" onContextMenu="{{menuGeneric}}" style="height:44px;padding:0 14px;border:3px solid var(--line);border-radius:999px;background:var(--card);box-shadow:var(--shadow-sm);cursor:pointer;font-weight:700">{{selAllLabel}}</button>
+              <button type="button" onClick="{{selInvert}}" style="height:44px;padding:0 14px;border:3px solid var(--line);border-radius:999px;background:var(--card);box-shadow:var(--shadow-sm);cursor:pointer;font-weight:700">Flip picks</button>
+              <button type="button" onClick="{{bulkRemove}}" style="{{bulkStyle}}">{{bulkLabel}}</button>
+              <sc-for list="{{panelActions}}" as="a" hint-placeholder-count="1">
+                <button type="button" onClick="{{a.run}}" style="height:44px;padding:0 14px;border:3px solid var(--line);border-radius:999px;background:var(--yellow);box-shadow:var(--shadow-sm);cursor:pointer;font-weight:700">{{a.label}}</button>
+              </sc-for>
+              <div style="flex:1"></div>
+              <span style="font-size:13px;color:var(--ink2);font-weight:700">{{listMeta}}</span>
+            </div>
+
+            <sc-if value="{{hasDateFilter}}" hint-placeholder-val="{{false}}">
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding:12px;background:var(--sunk);border:4px solid var(--line);border-radius:var(--round)">
+                <span style="font-weight:700">📅 Between</span>
+                <input type="date" value="{{dateFrom}}" onChange="{{setDateFrom}}" aria-label="From date" style="height:44px;border:3px solid var(--line);border-radius:12px;background:var(--card);padding:0 10px" />
+                <span style="font-weight:700">and</span>
+                <input type="date" value="{{dateTo}}" onChange="{{setDateTo}}" aria-label="To date" style="height:44px;border:3px solid var(--line);border-radius:12px;background:var(--card);padding:0 10px" />
+                <button type="button" onClick="{{range30}}" style="height:44px;padding:0 12px;border:3px solid var(--line);border-radius:999px;background:var(--card);cursor:pointer;font-weight:700">30 days</button>
+                <button type="button" onClick="{{range90}}" style="height:44px;padding:0 12px;border:3px solid var(--line);border-radius:999px;background:var(--card);cursor:pointer;font-weight:700">90 days</button>
+                <button type="button" onClick="{{rangeAll}}" style="height:44px;padding:0 12px;border:3px solid var(--line);border-radius:999px;background:var(--card);cursor:pointer;font-weight:700">Everything</button>
+              </div>
+            </sc-if>
+
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+                <div onContextMenu="{{r.menu}}" onClick="{{r.click}}" style="{{r.style}}">
+                  <span style="{{r.checkStyle}}" aria-hidden="true">{{r.check}}</span>
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">
+                      <span style="font-family:var(--fun);font-size:17px;font-weight:700">{{r.title}}</span>
+                      <span style="{{r.tagStyle}}">{{r.tag}}</span>
+                      <span style="font-size:12px;color:var(--faint)">{{r.meta}}</span>
+                    </div>
+                    <div style="font-size:13.5px;color:var(--ink2);margin-top:2px;white-space:pre-wrap">{{r.body}}</div>
+                  </div>
+                  <span style="{{r.rightStyle}}">{{r.right}}</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{listEmpty}}" hint-placeholder-val="{{false}}">
+                <div style="padding:34px;text-align:center;color:var(--faint);background:var(--card);border:4px dashed var(--line);border-radius:var(--round)">{{emptyText}}</div>
+              </sc-if>
+            </div>
+
+            <p style="margin:14px 2px 0;font-size:12.5px;color:var(--ink2);max-width:760px;line-height:1.6">{{listFootnote}}</p>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isConverter}}" hint-placeholder-val="{{false}}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px;animation:pop .2s ease">
+            <div style="background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow);padding:14px">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+                <label style="flex:1 1 130px;font-weight:700;font-size:13px;display:flex;flex-direction:column;gap:4px">Turn this…
+                  <select value="{{convFrom}}" onChange="{{setConvFrom}}" style="height:46px;border:3px solid var(--line);border-radius:12px;background:var(--paper2);padding:0 8px;font-weight:600">
+                    <sc-for list="{{convFromOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.id}}">{{o.label}}</option></sc-for>
+                  </select>
+                </label>
+                <label style="flex:1 1 130px;font-weight:700;font-size:13px;display:flex;flex-direction:column;gap:4px">…into this
+                  <select value="{{convTo}}" onChange="{{setConvTo}}" style="height:46px;border:3px solid var(--line);border-radius:12px;background:var(--paper2);padding:0 8px;font-weight:600">
+                    <sc-for list="{{convToOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.id}}">{{o.label}}</option></sc-for>
+                  </select>
+                </label>
+              </div>
+              <textarea value="{{convIn}}" onChange="{{setConvIn}}" spellcheck="false" aria-label="Text to convert" placeholder="Paste something here…" style="width:100%;min-height:220px;border:3px solid var(--line);border-radius:var(--round-sm);background:var(--paper2);padding:12px;resize:vertical;font-family:var(--mono);font-size:13px"></textarea>
+              <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                <button type="button" onClick="{{convRun}}" style="height:48px;padding:0 20px;border:4px solid var(--line);border-radius:999px;background:var(--green);box-shadow:var(--shadow-sm);cursor:pointer;font-family:var(--fun);font-weight:800;font-size:16px">✨ Convert</button>
+                <button type="button" onClick="{{convDetect}}" style="height:48px;padding:0 16px;border:3px solid var(--line);border-radius:999px;background:var(--card);cursor:pointer;font-weight:700">Guess the type</button>
+                <button type="button" onClick="{{convClear}}" style="height:48px;padding:0 16px;border:3px solid var(--line);border-radius:999px;background:var(--card);cursor:pointer;font-weight:700">Wipe</button>
+              </div>
+              <div style="{{convNoteStyle}}">{{convNote}}</div>
+            </div>
+            <div style="background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                <strong style="font-family:var(--fun);font-size:18px">Out it comes</strong>
+                <div style="flex:1"></div>
+                <button type="button" onClick="{{convCopy}}" style="height:42px;padding:0 14px;border:3px solid var(--line);border-radius:999px;background:var(--blue);cursor:pointer;font-weight:700">Copy</button>
+                <button type="button" onClick="{{convDownload}}" style="height:42px;padding:0 14px;border:3px solid var(--line);border-radius:999px;background:var(--yellow);cursor:pointer;font-weight:700">Save</button>
+              </div>
+              <textarea value="{{convOut}}" readonly="readonly" spellcheck="false" aria-label="Converted result" style="width:100%;flex:1;min-height:220px;border:3px solid var(--line);border-radius:var(--round-sm);background:var(--paper2);padding:12px;resize:vertical;font-family:var(--mono);font-size:13px"></textarea>
+              <p style="margin:10px 0 0;font-size:12.5px;color:var(--ink2);line-height:1.6">Everything happens right here in your browser. Nothing is sent anywhere. Formats we can't do yet still show up in the list, greyed out, so you know they exist.</p>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isExport}}" hint-placeholder-val="{{false}}">
+          <div style="animation:pop .2s ease;display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px">
+            <div style="background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow);padding:14px">
+              <h3 style="margin:0 0 10px;font-size:19px">1 · Pick your pile</h3>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <sc-for list="{{datasets}}" as="d" hint-placeholder-count="3">
+                  <button type="button" onClick="{{d.pick}}" style="{{d.style}}">
+                    <span style="flex:1;text-align:left;font-weight:700">{{d.label}}</span>
+                    <span style="font-size:12px;color:var(--ink2)">{{d.count}}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow);padding:14px">
+              <h3 style="margin:0 0 10px;font-size:19px">2 · Pick a shape <span style="font-size:13px;color:var(--ink2)">{{formatCount}}</span></h3>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px">
+                <sc-for list="{{formats}}" as="f" hint-placeholder-count="9">
+                  <button type="button" onClick="{{f.run}}" title="{{f.hint}}" style="{{f.style}}">{{f.label}}</button>
+                </sc-for>
+              </div>
+              <div style="{{lossStyle}}">{{lossNote}}</div>
+              <sc-if value="{{lossPending}}" hint-placeholder-val="{{false}}">
+                <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                  <button type="button" onClick="{{lossConfirm}}" style="height:46px;padding:0 16px;border:4px solid var(--line);border-radius:999px;background:var(--orange);cursor:pointer;font-weight:800">Save it anyway</button>
+                  <button type="button" onClick="{{lossCancel}}" style="height:46px;padding:0 16px;border:3px solid var(--line);border-radius:999px;background:var(--card);cursor:pointer;font-weight:700">Never mind</button>
+                </div>
+              </sc-if>
+            </div>
+            <div style="background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow);padding:14px;grid-column:1/-1">
+              <h3 style="margin:0 0 10px;font-size:19px">3 · Have a look first 👀</h3>
+              <pre style="margin:0;max-height:280px;overflow:auto;background:var(--paper2);border:3px solid var(--line);border-radius:var(--round-sm);padding:12px;font-size:12.5px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono)">{{exportPreview}}</pre>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isPlay}}" hint-placeholder-val="{{false}}">
+          <div style="animation:pop .2s ease;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;align-items:start">
+
+            <section style="background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow);padding:16px" onContextMenu="{{menuGeneric}}">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <h3 style="margin:0;font-size:20px;flex:1">🧠 Memory pairs</h3>
+                <span style="font-family:var(--fun);font-weight:800;background:var(--yellow);border:3px solid var(--line);border-radius:999px;padding:1px 12px">{{memScore}}</span>
+              </div>
+              <p style="margin:6px 0 12px;font-size:13.5px;color:var(--ink2)">{{memMsg}}</p>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+                <sc-for list="{{memCards}}" as="c" hint-placeholder-count="16">
+                  <button type="button" onClick="{{c.flip}}" aria-label="{{c.aria}}" style="{{c.style}}">{{c.face}}</button>
+                </sc-for>
+              </div>
+              <button type="button" onClick="{{memReset}}" style="margin-top:12px;height:48px;padding:0 18px;border:4px solid var(--line);border-radius:999px;background:var(--green);box-shadow:var(--shadow-sm);cursor:pointer;font-family:var(--fun);font-weight:800;font-size:16px">🔄 New game</button>
+            </section>
+
+            <section style="background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow);padding:16px" onContextMenu="{{menuGeneric}}">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <h3 style="margin:0;font-size:20px;flex:1">🥟 Dumpling maths</h3>
+                <span style="font-family:var(--fun);font-weight:800;background:var(--pink);border:3px solid var(--line);border-radius:999px;padding:1px 12px">{{quizScore}}</span>
+              </div>
+              <p style="margin:6px 0 10px;font-size:13.5px;color:var(--ink2)">{{quizMsg}}</p>
+              <div style="background:var(--sunk);border:4px solid var(--line);border-radius:var(--round-sm);padding:16px;text-align:center;font-size:30px;line-height:1.35;word-break:break-word">{{quizDish}}</div>
+              <div style="margin-top:10px;font-family:var(--fun);font-size:20px;font-weight:800;text-align:center">{{quizQuestion}}</div>
+              <div style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));gap:8px">
+                <sc-for list="{{quizOptions}}" as="o" hint-placeholder-count="4">
+                  <button type="button" onClick="{{o.pick}}" style="{{o.style}}">{{o.label}}</button>
+                </sc-for>
+              </div>
+              <button type="button" onClick="{{quizNext}}" style="margin-top:12px;height:48px;padding:0 18px;border:3px solid var(--line);border-radius:999px;background:var(--card);cursor:pointer;font-weight:800">Skip this one</button>
+            </section>
+
+            <section style="background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow);padding:16px" onContextMenu="{{menuGeneric}}">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <h3 style="margin:0;font-size:20px;flex:1">⚡ Whack-a-block</h3>
+                <span style="font-family:var(--fun);font-weight:800;background:var(--blue);border:3px solid var(--line);border-radius:999px;padding:1px 12px">{{whackScore}}</span>
+              </div>
+              <p style="margin:6px 0 12px;font-size:13.5px;color:var(--ink2)">{{whackMsg}}</p>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+                <sc-for list="{{whackHoles}}" as="h" hint-placeholder-count="9">
+                  <button type="button" onClick="{{h.hit}}" aria-label="{{h.aria}}" style="{{h.style}}">{{h.face}}</button>
+                </sc-for>
+              </div>
+              <button type="button" onClick="{{whackStart}}" style="margin-top:12px;height:48px;padding:0 18px;border:4px solid var(--line);border-radius:999px;background:var(--orange);box-shadow:var(--shadow-sm);cursor:pointer;font-family:var(--fun);font-weight:800;font-size:16px">{{whackBtn}}</button>
+            </section>
+
+            <section style="background:var(--sunk);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow-sm);padding:16px;grid-column:1/-1">
+              <h3 style="margin:0 0 6px;font-size:19px">🏆 Best scores</h3>
+              <p style="margin:0 0 10px;font-size:13.5px;color:var(--ink2);line-height:1.6">{{bestLine}}</p>
+              <button type="button" onClick="{{clearScores}}" style="height:46px;padding:0 16px;border:3px solid var(--line);border-radius:999px;background:var(--red);cursor:pointer;font-weight:800">Clear my best scores</button>
+            </section>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isSettings}}" hint-placeholder-val="{{false}}">
+          <div style="animation:pop .2s ease;display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px;align-items:start">
+            <sc-for list="{{settingCards}}" as="c" hint-placeholder-count="6">
+              <section onContextMenu="{{c.menu}}" style="background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow);padding:16px">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span aria-hidden="true" style="font-size:24px">{{c.icon}}</span>
+                  <h3 style="margin:0;font-size:19px;flex:1">{{c.title}}</h3>
+                  <button type="button" onClick="{{c.lock}}" title="Put a toy lock on this box" style="height:40px;min-width:44px;border:3px solid var(--line);border-radius:999px;background:var(--sunk);cursor:pointer;font-size:16px">{{c.lockLabel}}</button>
+                </div>
+                <p style="margin:6px 0 12px;font-size:13.5px;color:var(--ink2);line-height:1.55">{{c.desc}}</p>
+                <sc-if value="{{c.locked}}" hint-placeholder-val="{{false}}">
+                  <div style="background:var(--sunk);border:4px dashed var(--line);border-radius:var(--round-sm);padding:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                    <span style="font-weight:700;font-size:13px">🔒 This box has its own password.</span>
+                    <input type="password" value="{{c.unlockValue}}" onChange="{{c.unlockChange}}" aria-label="Unlock password" style="flex:1 1 130px;height:44px;border:3px solid var(--line);border-radius:12px;background:var(--card);padding:0 10px" />
+                    <button type="button" onClick="{{c.unlock}}" style="height:44px;padding:0 14px;border:3px solid var(--line);border-radius:999px;background:var(--green);cursor:pointer;font-weight:700">Open</button>
+                  </div>
+                </sc-if>
+                <sc-if value="{{c.open}}" hint-placeholder-val="{{true}}">
+                  <div style="display:flex;flex-direction:column;gap:12px">
+                    <sc-for list="{{c.controls}}" as="ctl" hint-placeholder-count="3">
+                      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                        <label style="flex:1 1 140px;font-size:13.5px;font-weight:700">{{ctl.label}}</label>
+                        <sc-if value="{{ctl.isSelect}}" hint-placeholder-val="{{false}}">
+                          <select value="{{ctl.value}}" onChange="{{ctl.onChange}}" aria-label="{{ctl.label}}" style="flex:1 1 150px;height:46px;border:3px solid var(--line);border-radius:12px;background:var(--paper2);padding:0 8px;font-weight:600">
+                            <sc-for list="{{ctl.options}}" as="o" hint-placeholder-count="3"><option value="{{o.id}}">{{o.label}}</option></sc-for>
+                          </select>
+                        </sc-if>
+                        <sc-if value="{{ctl.isRange}}" hint-placeholder-val="{{false}}">
+                          <div style="flex:1 1 170px;display:flex;align-items:center;gap:10px">
+                            <input type="range" min="{{ctl.min}}" max="{{ctl.max}}" step="1" value="{{ctl.value}}" onChange="{{ctl.onChange}}" aria-label="{{ctl.label}}" style="flex:1;accent-color:var(--purple);height:32px" />
+                            <span style="font-family:var(--fun);font-size:20px;font-weight:800;width:26px;text-align:right">{{ctl.value}}</span>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ctl.isToggle}}" hint-placeholder-val="{{false}}">
+                          <button type="button" onClick="{{ctl.onToggle}}" role="switch" aria-checked="{{ctl.on}}" style="{{ctl.toggleStyle}}">{{ctl.toggleLabel}}</button>
+                        </sc-if>
+                        <sc-if value="{{ctl.isText}}" hint-placeholder-val="{{false}}">
+                          <input value="{{ctl.value}}" onChange="{{ctl.onChange}}" type="{{ctl.type}}" placeholder="{{ctl.placeholder}}" aria-label="{{ctl.label}}" style="flex:1 1 150px;height:46px;border:3px solid var(--line);border-radius:12px;background:var(--paper2);padding:0 10px" />
+                        </sc-if>
+                        <sc-if value="{{ctl.isColor}}" hint-placeholder-val="{{false}}">
+                          <div style="flex:1 1 170px;display:flex;gap:8px;flex-wrap:wrap">
+                            <sc-for list="{{ctl.swatches}}" as="sw" hint-placeholder-count="5">
+                              <button type="button" onClick="{{sw.pick}}" title="{{sw.name}}" aria-label="{{sw.name}}" style="{{sw.style}}"></button>
+                            </sc-for>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ctl.isButton}}" hint-placeholder-val="{{false}}">
+                          <button type="button" onClick="{{ctl.onToggle}}" style="{{ctl.toggleStyle}}">{{ctl.toggleLabel}}</button>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                    <p style="margin:0;font-size:12.5px;color:var(--ink2);line-height:1.6">{{c.note}}</p>
+                  </div>
+                </sc-if>
+              </section>
+            </sc-for>
+          </div>
+        </sc-if>
+
+      </div>
+    </main>
+  </div>
+
+  <footer style="border-top:4px solid var(--line);background:var(--paper2);padding:14px 18px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink2)">
+    <span>BUSL-1.1 licensed · © 2026 Enes Kirca</span>
+    <a href="https://github.com/eneskirca/nodeterm" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/eneskirca/nodeterm/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+    <a href="https://github.com/eneskirca/nodeterm/issues" target="_blank" rel="noopener">Help</a>
+    <div style="flex:1"></div>
+    <span>“Claude” and “Claude Code” are trademarks of Anthropic. nodeterm is not affiliated with or endorsed by Anthropic.</span>
+  </footer>
+</div>
+</sc-if>
+
+<sc-if value="{{menuOpen}}" hint-placeholder-val="{{false}}">
+  <div style="position:fixed;inset:0;z-index:80" onClick="{{closeMenu}}" onContextMenu="{{closeMenu}}">
+    <div role="menu" onClick="{{stop}}" style="{{menuStyle}}">
+      <div style="font-family:var(--fun);font-size:13px;font-weight:800;padding:0 4px 6px">{{menuTitle}}</div>
+      <div style="display:flex;align-items:center;gap:0;height:40px;background:var(--paper2);border:3px solid var(--line);border-radius:999px;overflow:hidden;margin-bottom:8px">
+        <span aria-hidden="true" style="padding:0 4px 0 10px">🔍</span>
+        <input value="{{menuQuery}}" onChange="{{setMenuQuery}}" placeholder="Filter this menu…" aria-label="Filter this right-click menu" style="flex:1;min-width:0;height:100%;border:0;background:transparent;outline:none;font-size:13px;font-weight:600" />
+        <button type="button" onClick="{{rxMenu}}" title="Regex builder for this menu filter" aria-label="Regex builder for this menu filter" style="{{rxMenuStyle}}">.*</button>
+      </div>
+      <div style="max-height:300px;overflow:auto;display:flex;flex-direction:column;gap:4px">
+        <sc-for list="{{menuItems}}" as="m" hint-placeholder-count="5">
+          <button type="button" role="menuitem" onClick="{{m.run}}" style="{{m.style}}">
+            <span aria-hidden="true" style="width:22px">{{m.icon}}</span>
+            <span style="flex:1;text-align:left">{{m.label}}</span>
+            <span style="font-size:11px;color:var(--faint)">{{m.hint}}</span>
+          </button>
+        </sc-for>
+        <sc-if value="{{menuEmpty}}" hint-placeholder-val="{{false}}">
+          <div style="padding:14px;text-align:center;color:var(--faint);font-size:12px">Nothing in this menu matches.</div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{rxOpen}}" hint-placeholder-val="{{false}}">
+  <div style="position:fixed;inset:0;z-index:90;background:rgba(20,10,40,.35)" onClick="{{rxClose}}">
+    <div role="dialog" aria-label="Regex builder" onClick="{{stop}}" style="{{rxStyle}}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <span aria-hidden="true" style="font-size:22px">🧩</span>
+        <strong style="font-family:var(--fun);font-size:19px">Pattern builder</strong>
+        <span style="font-size:12px;background:var(--yellow);border:3px solid var(--line);border-radius:999px;padding:0 10px;font-weight:700">{{rxTargetName}}</span>
+        <div style="flex:1"></div>
+        <button type="button" onClick="{{rxToggleMode}}" style="{{rxModeStyle}}">{{rxModeLabel}}</button>
+        <button type="button" onClick="{{rxClose}}" aria-label="Close the pattern builder" style="height:40px;min-width:44px;border:3px solid var(--line);border-radius:999px;background:var(--card);cursor:pointer;font-size:16px">✕</button>
+      </div>
+      <label style="font-size:13px;font-weight:700;display:block;margin-bottom:4px">Your pattern <span style="color:var(--faint);font-weight:600">(up to 200 letters)</span></label>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input value="{{rxPattern}}" onChange="{{setRxPattern}}" spellcheck="false" aria-label="Pattern" style="flex:1;height:46px;border:3px solid var(--line);border-radius:12px;background:var(--paper2);padding:0 10px;font-family:var(--mono)" />
+        <input value="{{rxFlags}}" onChange="{{setRxFlags}}" aria-label="Flags" style="width:70px;height:46px;border:3px solid var(--line);border-radius:12px;background:var(--paper2);padding:0 8px;text-align:center;font-family:var(--mono)" />
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        <sc-for list="{{rxTokens}}" as="t" hint-placeholder-count="10">
+          <button type="button" onClick="{{t.insert}}" title="{{t.hint}}" style="height:38px;padding:0 12px;border:3px solid var(--line);border-radius:999px;background:{{t.color}};cursor:pointer;font-weight:700;font-size:13px">{{t.label}}</button>
+        </sc-for>
+      </div>
+      <label style="font-size:13px;font-weight:700;display:block;margin-bottom:4px">Try it on some words</label>
+      <textarea value="{{rxSample}}" onChange="{{setRxSample}}" spellcheck="false" aria-label="Sample text" style="width:100%;min-height:76px;border:3px solid var(--line);border-radius:12px;background:var(--paper2);padding:10px;resize:vertical;font-family:var(--mono);font-size:13px"></textarea>
+      <div style="{{rxResultStyle}}">{{rxResult}}</div>
+      <sc-if value="{{rxHasGroups}}" hint-placeholder-val="{{false}}">
+        <div style="margin-top:8px;font-size:13px">
+          <div style="font-weight:700;margin-bottom:2px">Things it caught</div>
+          <sc-for list="{{rxGroups}}" as="g" hint-placeholder-count="2">
+            <div style="display:flex;gap:8px"><span style="font-weight:800;width:36px">{{g.n}}</span><span style="flex:1;word-break:break-all;font-family:var(--mono)">{{g.v}}</span></div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button type="button" onClick="{{rxApply}}" style="height:48px;padding:0 20px;border:4px solid var(--line);border-radius:999px;background:var(--green);box-shadow:var(--shadow-sm);cursor:pointer;font-family:var(--fun);font-weight:800;font-size:16px">Use this pattern</button>
+        <button type="button" onClick="{{rxPlain}}" style="height:48px;padding:0 16px;border:3px solid var(--line);border-radius:999px;background:var(--card);cursor:pointer;font-weight:700">Back to plain words</button>
+      </div>
+      <p style="margin:10px 0 0;font-size:11.5px;color:var(--ink2);line-height:1.55">The pattern and the sample are both length-capped and every test is wrapped, so a broken pattern tells you instead of freezing. That makes runaway patterns unlikely, not impossible — a real guarantee needs a worker with a stop-watch, which a page like this doesn't have.</p>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{paletteOpen}}" hint-placeholder-val="{{false}}">
+  <div style="position:fixed;inset:0;z-index:95;background:rgba(20,10,40,.45);display:flex;align-items:flex-start;justify-content:center;padding:8vh 16px" onClick="{{closePalette}}">
+    <div role="dialog" aria-label="Magic jump box" onClick="{{stop}}" style="width:min(660px,100%);background:var(--card);border:5px solid var(--line);border-radius:26px;box-shadow:10px 10px 0 var(--line);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:0;border-bottom:4px solid var(--line);height:60px;background:var(--purple)">
+        <span aria-hidden="true" style="padding:0 12px;font-size:22px">✨</span>
+        <input value="{{paletteQuery}}" onChange="{{setPaletteQuery}}" onKeyDown="{{paletteKey}}" placeholder="Where do you want to go?" aria-label="Magic jump box search" style="flex:1;min-width:0;height:100%;border:0;background:transparent;outline:none;font-size:17px;font-weight:700" />
+        <button type="button" onClick="{{rxPalette}}" title="Regex builder for the jump box" aria-label="Regex builder for the jump box" style="{{rxPaletteStyle}}">.*</button>
+      </div>
+      <div style="max-height:56vh;overflow:auto;padding:8px;display:flex;flex-direction:column;gap:6px">
+        <sc-for list="{{paletteItems}}" as="p" hint-placeholder-count="8">
+          <button type="button" onClick="{{p.run}}" style="{{p.style}}">
+            <span aria-hidden="true" style="width:26px;font-size:18px">{{p.icon}}</span>
+            <span style="flex:1;text-align:left;font-weight:700">{{p.label}}</span>
+            <span style="font-size:12px;color:var(--ink2)">{{p.hint}}</span>
+          </button>
+        </sc-for>
+        <sc-if value="{{paletteEmpty}}" hint-placeholder-val="{{false}}">
+          <div style="padding:26px;text-align:center;color:var(--faint)">Nothing found — try fewer letters, or the <strong>.*</strong> button.</div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{confirmOpen}}" hint-placeholder-val="{{false}}">
+  <div style="position:fixed;inset:0;z-index:96;background:rgba(20,10,40,.5);display:flex;align-items:center;justify-content:center;padding:16px">
+    <div role="alertdialog" aria-label="Are you sure?" style="width:min(520px,100%);background:var(--card);border:5px solid var(--line);border-radius:26px;box-shadow:10px 10px 0 var(--line);padding:18px">
+      <h3 style="margin:0 0 6px;font-size:22px">🛑 {{confirmTitle}}</h3>
+      <p style="margin:0 0 10px;font-size:14px;color:var(--ink2);line-height:1.6">{{confirmBody}}</p>
+      <pre style="margin:0 0 12px;max-height:150px;overflow:auto;background:var(--paper2);border:3px solid var(--line);border-radius:12px;padding:10px;font-size:12px;white-space:pre-wrap;font-family:var(--mono)">{{confirmPreview}}</pre>
+      <label style="font-size:13px;font-weight:700;display:block;margin-bottom:5px">Type <strong style="background:var(--yellow);border:2px solid var(--line);border-radius:6px;padding:0 6px">{{confirmWord}}</strong> to unlock the button</label>
+      <input value="{{confirmTyped}}" onChange="{{setConfirmTyped}}" aria-label="Confirmation word" style="width:100%;height:48px;border:3px solid var(--line);border-radius:12px;background:var(--paper2);padding:0 10px;margin-bottom:12px" />
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <button type="button" onClick="{{confirmCancel}}" style="height:48px;padding:0 18px;border:3px solid var(--line);border-radius:999px;background:var(--card);cursor:pointer;font-weight:700">Keep it</button>
+        <button type="button" onClick="{{confirmRun}}" style="{{confirmRunStyle}}">{{confirmRunLabel}}</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<div style="position:fixed;left:16px;bottom:16px;z-index:70;display:flex;flex-direction:column;gap:10px;max-width:min(360px,calc(100vw - 32px))">
+  <sc-for list="{{toasts}}" as="t" hint-placeholder-count="0">
+    <div role="status" style="{{t.style}}">
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <span aria-hidden="true" style="font-size:24px">{{t.icon}}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-family:var(--fun);font-weight:800;font-size:16px">{{t.title}}</div>
+          <div style="font-size:13px;color:var(--ink2);line-height:1.5">{{t.body}}</div>
+          <div style="font-size:12px;color:var(--faint);margin-top:2px">{{t.sub}}</div>
+        </div>
+        <button type="button" onClick="{{t.dismiss}}" aria-label="Close this message" style="border:0;background:transparent;cursor:pointer;font-size:16px;color:var(--faint)">✕</button>
+      </div>
+    </div>
+  </sc-for>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const LS = 'nodeterm.kids.v1'
+
+const FEATURES = [
+  { id: 'nodes', icon: '🖥', color: 'var(--yellow)', title: 'Real terminals as blocks', body: 'Every block runs its own shell. Drag them, resize them, zoom out and see the whole map at once.' },
+  { id: 'tmux', icon: '♻️', color: 'var(--green)', title: 'Nothing gets lost', body: 'tmux keeps your terminals — and whatever they were running — alive across restarts, even a full reboot.' },
+  { id: 'projects', icon: '🗂', color: 'var(--blue)', title: 'Projects and tabs', body: 'Each project is its own canvas with its own folder. Reorder them, close them, bring them back from history.' },
+  { id: 'agents', icon: '🤖', color: 'var(--pink)', title: 'Robot helpers', body: 'Claude Code, Codex, Gemini, opencode, Grok and your own CLIs — one click each, with a live status badge.' },
+  { id: 'super', icon: '✦', color: 'var(--purple)', title: 'Helper superpowers', body: 'Link two helpers so they read each other, branch a conversation, or let a helper open new blocks for you.' },
+  { id: 'editor', icon: '✏️', color: 'var(--orange)', title: 'Editor and diff blocks', body: 'A real code editor and a side-by-side diff sit right next to your shells. Image previews too.' },
+  { id: 'git', icon: '⎇', color: 'var(--green)', title: 'Git without the fear', body: 'Stage, diff, branch, commit and push from a panel — plus one-step worktrees bound to a canvas frame.' },
+  { id: 'kanban', icon: '🗃️', color: 'var(--yellow)', title: 'A board of live sessions', body: 'Every project is also a card board. The cards are the running sessions; drag them while they keep working.' },
+  { id: 'ssh', icon: '📡', color: 'var(--blue)', title: 'Someone else’s computer', body: 'Open a project on a remote machine over SSH. Terminals, files, git and the board all run over there.' },
+  { id: 'server', icon: '🌍', color: 'var(--pink)', title: 'Server Edition', body: 'The same canvas, self-hosted, in any browser — so you can reach your terminals from anywhere.' },
+  { id: 'voice', icon: '🎙', color: 'var(--purple)', title: 'Talk to your terminal', body: 'Hold a key, say it out loud, read what it heard, then press send. Your voice never leaves the machine.' },
+  { id: 'palette', icon: '✨', color: 'var(--orange)', title: 'Jump anywhere', body: 'A command box that hops to any block, project or action. Plus a file explorer and undo/redo.' },
+  { id: 'update', icon: '⬆️', color: 'var(--green)', title: 'Keeps itself fresh', body: 'The app checks its own update feed and shows news right inside the window.' },
+  { id: 'offline', icon: '📴', color: 'var(--blue)', title: 'Works with no internet', body: 'Projects save to a plain file next to your code, so you can share it or carry it to another machine.' },
+]
+
+const DOCS = [
+  ['Agent support', 'Claude, Codex, Gemini, opencode, Grok'],
+  ['Canvas & node lifecycle', 'how blocks are born and cleaned up'],
+  ['Changelog viewer', 'the date picker and the commit links'],
+  ['Dim sum surprise', 'the little treat that shows up one visit in ten'],
+  ['Exports, notifications & local history', 'ten shapes, one honest warning'],
+  ['Kanban board', 'live session cards'],
+  ['Language modes, funny levels & emoji', 'English, Cantonese, or both'],
+  ['Narrator', 'the page reads itself out loud'],
+  ['Node kinds', 'terminal, agent, sticky, group, editor, diff, web'],
+  ['Packaging & auto-update', 'how builds are made and shipped'],
+  ['Personal vocabulary', 'swap words for your own'],
+  ['Projects & tabs', 'one canvas per project'],
+  ['Remote & SSH projects', 'work on another machine'],
+  ['School mode', 'plain English, locked with a PIN'],
+  ['Server Edition', 'self-host it in a browser'],
+  ['Source control & worktrees', 'a git panel, and a branch per helper'],
+  ['Speech / dictation', 'on-device Whisper'],
+  ['Terminal sessions & continuity', 'tmux, and the Windows session host'],
+  ['Toy locks', 'a padlock for fun, not for safety'],
+  ['Windows support', 'what works and what does not yet'],
+]
+
+const CHANGELOG = [
+  { v: '0.3.0', date: '2026-08-12', sha: 'cd0441b', kind: 'Added', notes: 'build the bundled tmux with utf8proc (correct emoji widths)\nbundle a static tmux in the macOS app as the last-resort fallback' },
+  { v: '0.2.47', date: '2026-08-12', sha: '003f837', kind: 'Fixed', notes: 'the panel reads phys_footprint on macOS, not ps’s rss\nage the working park snapshot; correct the relay claim (#126)\nnever park-kill a working agent on a plain shell (#126)' },
+  { v: '0.2.46', date: '2026-08-12', sha: '90a8a29', kind: 'Added', notes: 'session memory panel with travel and kill\nsystem-resource pill beside the usage pill\nprocess-table reader and per-pane tree rollup' },
+  { v: '0.2.45', date: '2026-08-11', sha: '7c1e004', kind: 'Fixed', notes: 'restore the usage pill — the shell is SHARED, not the resource pill’s\nrecord hostDeviceId on entitled relay mints too' },
+  { v: '0.2.44', date: '2026-08-10', sha: '5ab93f2', kind: 'Added', notes: 'GitHub Issues on the kanban board, with two-way move, close and reopen sync' },
+]
+
+const DISHES = [
+  ['Har gow', '蝦餃', 'A pleated shrimp dumpling with a see-through skin.'],
+  ['Siu mai', '燒賣', 'An open-topped pork and shrimp parcel with a yellow wrapper.'],
+  ['Char siu bao', '叉燒包', 'A soft white bun that cracks open around sweet roast pork.'],
+  ['Cheung fun', '腸粉', 'Silky rice noodle rolls under a puddle of sweet soy.'],
+  ['Lo mai gai', '糯米雞', 'Sticky rice steamed inside a lotus leaf, unwrapped at the table.'],
+  ['Dan tat', '蛋撻', 'An egg tart in flaky pastry, best while it is still warm.'],
+]
+
+const OLLAMA = [
+  { id: 'llama3.2:1b', gb: 1.3, tag: 'q4_K_M', updated: '2026-06-02' },
+  { id: 'llama3.2:3b', gb: 2.0, tag: 'q4_K_M', updated: '2026-06-02' },
+  { id: 'qwen2.5-coder:7b', gb: 4.7, tag: 'q4_K_M', updated: '2026-05-19' },
+  { id: 'mistral:7b', gb: 4.4, tag: 'q4_0', updated: '2026-04-28' },
+  { id: 'gemma2:9b', gb: 5.4, tag: 'q4_K_M', updated: '2026-05-03' },
+  { id: 'deepseek-r1:14b', gb: 9.0, tag: 'q4_K_M', updated: '2026-07-11' },
+  { id: 'llama3.1:70b', gb: 40.0, tag: 'q4_K_M', updated: '2026-03-30' },
+]
+
+const COVERAGE = [
+  ['Three language modes + two silliness sliders', 'Settings → Words and jokes', 'done'],
+  ['Search bar on every surface', 'Header, sidebar, every room, every menu, the jump box', 'done'],
+  ['Regex builder anchored to every search', 'the .* button beside each field', 'done'],
+  ['Right-click menus everywhere, each with its own filter', 'header, sidebar, rooms, cards, rows, settings', 'done'],
+  ['Command palette on Ctrl+Shift+F that jumps to the exact thing', 'the ✨ Jump box', 'done'],
+  ['Appearance: colours, presets, export, import, reset', 'Settings → How it looks', 'done'],
+  ['App logo you can change, with reset', 'Settings → How it looks → Badge picture', 'done'],
+  ['Toy password locks on any box, each with its own password', 'the 🔒 button on every settings box', 'done'],
+  ['Built-in authenticator with pairing and live codes', 'Code maker room', 'done'],
+  ['Non-blocking messages with a place to read them all', 'toasts, and the Messages room', 'done'],
+  ['Bulk actions on every list with a preview before it runs', 'pick / flip picks / throw away', 'done'],
+  ['Export in every shape that can carry the data', 'Take it home room — ten shapes', 'done'],
+  ['Local version history you can put back', 'Time machine room', 'done'],
+  ['Changelog viewer with a date picker and commit links', 'What changed room', 'done'],
+  ['Scheduled settings', 'Settings → Timers', 'done'],
+  ['Guided forms', 'the add rows in Code maker, and the 1·2·3 export steps', 'done'],
+  ['Super-confirmation before anything destructive', 'type-the-word gate', 'done'],
+  ['A real local file converter with honest unsupported cases', 'Turn-it-into lab', 'done'],
+  ['Ollama browser with hardware-fit verdicts and a basket', 'Model shop room', 'done'],
+  ['The dim sum surprise, one visit in ten', 'Dim sum room', 'done'],
+  ['School mode that forces plain English and hides the rest', 'Settings → School mode', 'done'],
+  ['Narrator that reads the page out loud', 'Settings → Read it to me', 'done'],
+  ['Personal vocabulary swaps', 'Settings → My own words', 'done'],
+  ['Download-capture demonstration', 'Settings → Download demo', 'partial'],
+  ['Three working games that keep score', 'Playroom room', 'done'],
+  ['Little sounds on every win, miss and message', 'Settings → About you → Little sounds', 'done'],
+  ['A landing page that actually sells the app', 'the hallway page, under the doors', 'done'],
+  ['Works on a phone from 320px, no sideways scrolling', 'the whole page', 'done'],
+  ['Everything local: no CDN script, no analytics, no network calls', 'the whole page', 'partial'],
+]
+
+const FORMATS = [
+  { id: 'json', label: 'JSON', loss: '' },
+  { id: 'jsonl', label: 'JSONL', loss: '' },
+  { id: 'yaml', label: 'YAML', loss: '' },
+  { id: 'toml', label: 'TOML', loss: '' },
+  { id: 'xml', label: 'XML', loss: '' },
+  { id: 'csv', label: 'CSV', loss: 'CSV is a flat grid. Nested bits get squashed into text and each value forgets whether it was a number.' },
+  { id: 'tsv', label: 'TSV', loss: 'TSV is a flat grid too, and any tab inside a value has to become a space.' },
+  { id: 'md', label: 'Markdown', loss: 'A Markdown table is for reading. Long values get folded onto one line and cannot be loaded back.' },
+  { id: 'html', label: 'HTML', loss: 'HTML is for looking at. Turning it back into data is not something this page can promise.' },
+  { id: 'sql', label: 'SQL', loss: 'Every value is written as text, so numbers and true/false come back as strings.' },
+]
+
+const CONV_IN = [
+  { id: 'json', label: 'JSON' }, { id: 'jsonl', label: 'JSON Lines' }, { id: 'yaml', label: 'YAML (simple)' },
+  { id: 'csv', label: 'CSV' }, { id: 'tsv', label: 'TSV' }, { id: 'xml', label: 'XML' },
+  { id: 'base64', label: 'Base64 text' }, { id: 'hex', label: 'Hex text' }, { id: 'text', label: 'Plain text' },
+]
+const CONV_OUT = [
+  { id: 'json', label: 'JSON' }, { id: 'jsonl', label: 'JSON Lines' }, { id: 'yaml', label: 'YAML' }, { id: 'toml', label: 'TOML' },
+  { id: 'csv', label: 'CSV' }, { id: 'tsv', label: 'TSV' }, { id: 'xml', label: 'XML' }, { id: 'md', label: 'Markdown table' },
+  { id: 'html', label: 'HTML table' }, { id: 'sql', label: 'SQL inserts' }, { id: 'base64', label: 'Base64 text' }, { id: 'hex', label: 'Hex text' }, { id: 'text', label: 'Plain text' },
+]
+
+const SWATCHES = [
+  ['Sunshine', '#ffd93d'], ['Bubblegum', '#ff8fc7'], ['Sky', '#4dabf7'], ['Grape', '#9775fa'], ['Lime', '#3fce7f'], ['Tangerine', '#ffa41b'],
+]
+const PRESETS = {
+  playground: { name: 'Playground', accent: '#ffd93d', theme: 'day' },
+  bubblegum: { name: 'Bubblegum', accent: '#ff8fc7', theme: 'day' },
+  rocket: { name: 'Rocket night', accent: '#9775fa', theme: 'night' },
+  frog: { name: 'Frog pond', accent: '#3fce7f', theme: 'day' },
+}
+
+const RX_TOKENS = [
+  ['any letter', '\\w', 'var(--yellow)', 'One letter, digit or underscore'],
+  ['any digit', '\\d', 'var(--blue)', 'One number from 0 to 9'],
+  ['a space', '\\s', 'var(--green)', 'A space, a tab or a new line'],
+  ['anything', '.', 'var(--pink)', 'Any single character'],
+  ['1 or more', '+', 'var(--orange)', 'Repeat the thing before it at least once'],
+  ['0 or more', '*', 'var(--purple)', 'Repeat the thing before it any number of times'],
+  ['maybe', '?', 'var(--yellow)', 'The thing before it is optional'],
+  ['starts with', '^', 'var(--blue)', 'Only match at the very beginning'],
+  ['ends with', '$', 'var(--green)', 'Only match at the very end'],
+  ['catch ( )', '()', 'var(--pink)', 'Catch a piece so you can see it below'],
+  ['this|that', '|', 'var(--orange)', 'Match the left side or the right side'],
+]
+
+const SECTIONS = [
+  { id: 'home', icon: '🏠', label: 'Home', kicker: 'start here', title: 'The terminal playground', sub: 'Everything nodeterm can do, in plain words. Search the cards, or right-click one for more.', ph: 'Search the cards…' },
+  { id: 'docs', icon: '📚', label: 'Guide book', kicker: 'read about it', title: 'The guide book', sub: 'One page per feature: what it does, how to set it up, and what happens when it goes wrong.', ph: 'Search the guide…' },
+  { id: 'changelog', icon: '📝', label: 'What changed', kicker: 'newest first', title: 'What changed lately', sub: 'Real releases from the project history, each with the exact commit it was built from.', ph: 'Search the changes…' },
+  { id: 'notes', icon: '🔔', label: 'Messages', kicker: 'your inbox', title: 'Messages', sub: 'Nothing here ever blocks you. Read them whenever you like and tick off the ones you are done with.', ph: 'Search messages…' },
+  { id: 'history', icon: '⏳', label: 'Time machine', kicker: 'undo anything', title: 'The time machine', sub: 'Every change you make is written down here, so you can always put it back the way it was.', ph: 'Search the log…' },
+  { id: 'auth', icon: '🔐', label: 'Code maker', kicker: 'six digits', title: 'The code maker', sub: 'Pair a code with a secret, then watch it change every thirty seconds. It all happens in this page.', ph: 'Search your codes…' },
+  { id: 'shop', icon: '🧠', label: 'Model shop', kicker: 'browse only', title: 'The model shop', sub: 'Local Ollama models, with an honest guess at whether this computer can actually run each one.', ph: 'Search models…' },
+  { id: 'convert', icon: '🧪', label: 'Turn-it-into', kicker: 'lab', title: 'The turn-it-into lab', sub: 'Drop text in one side, pick a shape, take it out the other side. All of it stays in your browser.', ph: 'Search the lab…' },
+  { id: 'export', icon: '📦', label: 'Take it home', kicker: 'save a copy', title: 'Take it home', sub: 'Pick a pile, pick a shape. We warn you first if that shape cannot carry everything.', ph: 'Search the shapes…' },
+  { id: 'dish', icon: '🥟', label: 'Dim sum', kicker: 'a little treat', title: 'The dim sum trolley', sub: 'One visit in ten, a dish rolls past by itself. You can also just look at the whole trolley here.', ph: 'Search the trolley…' },
+  { id: 'coverage', icon: '✅', label: 'Checklist', kicker: 'nothing hidden', title: 'The big checklist', sub: 'Every promise this page makes, and exactly where it lives. Anything only half-done says so.', ph: 'Search the checklist…' },
+  { id: 'play', icon: '🎮', label: 'Playroom', kicker: 'three games', title: 'The playroom', sub: 'Memory pairs, dumpling maths and whack-a-block. Every button really works, and your best score is kept.', ph: 'Search the playroom…' },
+  { id: 'settings', icon: '⚙️', label: 'Settings', kicker: 'make it yours', title: 'Make it yours', sub: 'Colours, words, sound, timers, and a toy padlock for any box. Everything is saved in this browser only.', ph: 'Search settings…' },
+]
+
+const YUE = {
+  'The terminal playground': '終端遊樂場',
+  'The guide book': '說明書',
+  'What changed lately': '最近改咗乜',
+  'Messages': '訊息',
+  'The time machine': '時光機',
+  'The code maker': '密碼機',
+  'The model shop': '模型店',
+  'The turn-it-into lab': '變變實驗室',
+  'Take it home': '帶返家',
+  'The dim sum trolley': '點心車',
+  'The big checklist': '大清單',
+  'The playroom': '遊戲房',
+  'Make it yours': '整成你嘅',
+  'Everything nodeterm can do, in plain words. Search the cards, or right-click one for more.': 'nodeterm 做得到嘅一切，用簡單字講。搵下卡片，或者右鍵睇多啲。',
+  'One page per feature: what it does, how to set it up, and what happens when it goes wrong.': '每個功能一頁：做乜、點設定、出錯時會點。',
+  'Real releases from the project history, each with the exact commit it was built from.': '真實嘅版本記錄，每個都有對應嘅 commit。',
+  'Nothing here ever blocks you. Read them whenever you like and tick off the ones you are done with.': '呢啲訊息唔會擋住你。想睇就睇，睇完打勾。',
+  'Every change you make is written down here, so you can always put it back the way it was.': '你改過嘅嘢都會寫落嚟，隨時可以還原。',
+  'Pair a code with a secret, then watch it change every thirty seconds. It all happens in this page.': '配對一個密碼，每三十秒變一次，全部在呢一頁完成。',
+  'Local Ollama models, with an honest guess at whether this computer can actually run each one.': '本機 Ollama 模型，並老實估下部機跑唔跑得起。',
+  'Drop text in one side, pick a shape, take it out the other side. All of it stays in your browser.': '一邊放文字，揀個格式，另一邊取出。全部留在你嘅瀏覽器。',
+  'Pick a pile, pick a shape. We warn you first if that shape cannot carry everything.': '揀一堆資料，揀個格式。如果個格式載唔齊，我們會先講。',
+  'One visit in ten, a dish rolls past by itself. You can also just look at the whole trolley here.': '十次入嚟有一次會有點心經過。你都可以在呢度睇齊整車。',
+  'Every promise this page makes, and exactly where it lives. Anything only half-done says so.': '呢一頁嘅每個承諾同佢住喺邊。做一半嘅都會照講。',
+  'Memory pairs, dumpling maths and whack-a-block. Every button really works, and your best score is kept.': '記憶配對、點心數學、打地鼠。每個掣都真係work，最佳分數會留住。',
+  'Colours, words, sound, timers, and a toy padlock for any box. Everything is saved in this browser only.': '顏色、文字、聲音、定時器，同每個格嘅玩具鎖。全部只存喺呢個瀏覽器。',
+  'Every door opens a different room. Some rooms you can lock with your own password, and every single one has a search box and a right-click menu.': '每道門通去唔同房。有啲房可以用你自己嘅密碼鎖起，每間都有搵嘢格同右鍵菜單。',
+}
+
+function nowIso() { return new Date().toISOString() }
+function fmtWhen(iso) {
+  try { const d = new Date(iso); return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) } catch (_) { return String(iso) }
+}
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
+function b32decode(str) {
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+  const clean = String(str).toUpperCase().replace(/[^A-Z2-7]/g, '')
+  let bits = '', out = []
+  for (let i = 0; i < clean.length; i++) { const v = A.indexOf(clean[i]); if (v < 0) continue; bits += v.toString(2).padStart(5, '0') }
+  for (let i = 0; i + 8 <= bits.length; i += 8) out.push(parseInt(bits.slice(i, i + 8), 2))
+  return new Uint8Array(out)
+}
+
+class Component extends DCLogic {
+  state = {
+    view: 'hall', opening: null, knock: null,
+    sec: 'home',
+    qGlobal: '', qNav: '', qSec: '',
+    rxOn: {}, rxPat: {}, rxFlags: {},
+    rxOpen: false, rxTarget: null, rxSample: 'har gow 4 pieces\nsiu mai 3 pieces\ndan tat 2 pieces',
+    menuOpen: false, menuX: 0, menuY: 0, menuKind: '', menuLabel: '', menuQuery: '', menuExtra: null,
+    paletteOpen: false, paletteQuery: '',
+    picked: {}, cart: {},
+    notes: [], history: [], toasts: [], auth: [], codes: {},
+    dateFrom: '', dateTo: '',
+    addA: '', addB: '',
+    convFrom: 'json', convTo: 'yaml', convIn: '[{"dish":"har gow","pieces":4},{"dish":"dan tat","pieces":2}]', convOut: '', convNote: 'Pick a shape and press Convert.', convBad: false,
+    dataset: 'settings', lossPending: null, lossNote: 'Green shapes carry everything. Orange shapes lose something, and will tell you what.', lossBad: false,
+    confirm: null, confirmTyped: '',
+    unlockVals: {}, unlocked: {}, locks: {},
+    theme: 'day', lang: 'en', funnyEn: 2, funnyYue: 3, emoji: true, bigText: false, sound: false,
+    accent: '#ffd93d', nick: '', logo: '', preset: 'playground',
+    school: false, schoolPin: '',
+    narrate: false, voice: '', rate: 3,
+    vocab: '',
+    schedOn: false, schedTime: '19:00', schedTheme: 'night',
+    voices: [], dishIdx: 0, tick: 0,
+    memDeck: [], memUp: [], memDone: [], memMoves: 0, memBusy: false,
+    quizN: 3, quizM: 2, quizPlus: true, quizAnswer: 5, quizOpts: [5, 4, 6, 7], quizPicked: null, quizScore: 0, quizDish: 'Har gow',
+    whackScore: 0, whackLeft: 0, whackAt: -1, whackRun: false,
+    bestMem: 0, bestQuiz: 0, bestWhack: 0,
+  }
+
+  componentDidMount() {
+    let saved = {}
+    try { saved = JSON.parse(localStorage.getItem(LS) || '{}') } catch (_) { saved = {} }
+    const patch = {}
+    const keys = ['theme', 'lang', 'funnyEn', 'funnyYue', 'emoji', 'bigText', 'sound', 'accent', 'nick', 'logo', 'preset', 'locks', 'notes', 'history', 'auth', 'school', 'schoolPin', 'narrate', 'voice', 'rate', 'vocab', 'schedOn', 'schedTime', 'schedTheme', 'bestMem', 'bestQuiz', 'bestWhack']
+    keys.forEach((k) => { if (saved[k] !== undefined) patch[k] = saved[k] })
+    if (!patch.notes || !patch.notes.length) {
+      patch.notes = [
+        { id: 'n1', title: 'Welcome aboard', body: 'Everything you change here is saved in this browser only. Nothing is ever sent anywhere.', when: nowIso(), tag: 'hello' },
+        { id: 'n2', title: 'Try a right-click', body: 'Almost anything on this page has its own menu — and every menu has its own little search box.', when: nowIso(), tag: 'tip' },
+        { id: 'n3', title: 'Every search has a .* button', body: 'Press it to build a pattern out of coloured blocks instead of typing one from memory.', when: nowIso(), tag: 'tip' },
+      ]
+    }
+    if (!patch.history || !patch.history.length) patch.history = [{ id: 'h0', title: 'First visit', body: 'Default settings created.', when: nowIso(), tag: 'start' }]
+    if (!patch.auth) patch.auth = []
+    patch.dishIdx = Math.floor(Math.random() * DISHES.length)
+    this.setState(patch, () => {
+      this.applyTheme()
+      if (!this.state.school && Math.random() < 0.1) {
+        const d = DISHES[this.state.dishIdx]
+        this.toast('🥟', 'The trolley rolled by!', d[0] + ' · ' + d[1], d[2])
+      }
+      this.refreshCodes()
+      this.loadVoices()
+      this.memDeal()
+      this.quizNew()
+    })
+    this._key = (e) => {
+      if ((e.key === 'F' || e.key === 'f') && e.shiftKey && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.setState({ paletteOpen: true, paletteQuery: '' }) }
+      if (e.key === 'Escape') this.setState({ paletteOpen: false, menuOpen: false, rxOpen: false })
+    }
+    window.addEventListener('keydown', this._key)
+    this._timer = setInterval(() => {
+      const s = this.state
+      if (s.schedOn) this.checkSchedule()
+      if (s.view === 'room' && s.sec === 'auth' && s.auth.length) { this.setState((st) => ({ tick: st.tick + 1 })); this.refreshCodes() }
+    }, 1000)
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this._key); clearInterval(this._timer) }
+
+  loadVoices() {
+    const read = () => { try { this.setState({ voices: (window.speechSynthesis.getVoices() || []).map((v) => ({ id: v.voiceURI, label: v.name + ' (' + v.lang + ')' })) }) } catch (_) {} }
+    read()
+    try { window.speechSynthesis.addEventListener('voiceschanged', read) } catch (_) {}
+  }
+  speak(text) {
+    if (!this.state.narrate) return
+    try {
+      const u = new SpeechSynthesisUtterance(String(text))
+      u.rate = 0.6 + this.state.rate * 0.2
+      const v = (window.speechSynthesis.getVoices() || []).find((x) => x.voiceURI === this.state.voice)
+      if (v) u.voice = v
+      window.speechSynthesis.cancel(); window.speechSynthesis.speak(u)
+    } catch (_) {}
+  }
+  checkSchedule() {
+    const s = this.state
+    if (!s.schedOn) return
+    const now = new Date()
+    const hhmm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0')
+    if (hhmm === s.schedTime && s.theme !== s.schedTheme && now.getSeconds() < 2) {
+      this.save({ theme: s.schedTheme }, 'Timer switched the theme to ' + s.schedTheme)
+      setTimeout(() => this.applyTheme(), 0)
+      this.notify('A timer went off', 'It was ' + s.schedTime + ', so the page switched to ' + s.schedTheme + ' colours.', 'timer')
+      this.toast('⏰', 'Timer!', 'Switched to ' + s.schedTheme + ' colours, as you asked.')
+    }
+  }
+
+  save(patch, note) {
+    this.setState(patch, () => {
+      const s = this.state
+      const blob = {}
+      ;['theme', 'lang', 'funnyEn', 'funnyYue', 'emoji', 'bigText', 'sound', 'accent', 'nick', 'logo', 'preset', 'locks', 'notes', 'history', 'auth', 'school', 'schoolPin', 'narrate', 'voice', 'rate', 'vocab', 'schedOn', 'schedTime', 'schedTheme', 'bestMem', 'bestQuiz', 'bestWhack'].forEach((k) => (blob[k] = s[k]))
+      try { localStorage.setItem(LS, JSON.stringify(blob)) } catch (_) {}
+      if (note) this.log(note)
+    })
+  }
+  log(title, body) {
+    this.setState((s) => ({ history: [{ id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6), title, body: body || '', when: nowIso(), tag: 'change' }].concat(s.history).slice(0, 300) }))
+  }
+  toast(icon, title, body, sub) {
+    const id = 't' + Date.now() + Math.random().toString(36).slice(2, 6)
+    this.setState((s) => ({ toasts: s.toasts.concat([{ id, icon, title, body, sub: sub || '' }]).slice(-3) }))
+    this.blip(icon === '❌' ? 'bad' : 'ok')
+    this.speak(title + '. ' + body)
+    setTimeout(() => this.setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 7000)
+  }
+  notify(title, body, tag) {
+    this.setState((s) => ({ notes: [{ id: 'n' + Date.now() + Math.random().toString(36).slice(2, 5), title, body, when: nowIso(), tag: tag || 'note' }].concat(s.notes).slice(0, 200) }))
+  }
+  applyTheme() {
+    try {
+      document.documentElement.setAttribute('data-theme', this.state.theme === 'night' ? 'night' : 'day')
+      document.documentElement.style.fontSize = this.state.bigText ? '19px' : '16px'
+      document.body.style.fontSize = this.state.bigText ? '17px' : '15px'
+    } catch (_) {}
+  }
+
+  vocabApply(text) {
+    const raw = (this.state.vocab || '').trim()
+    if (!raw) return text
+    let out = String(text)
+    raw.split(/[,\n]/).forEach((pair) => {
+      const bits = pair.split('=')
+      if (bits.length !== 2) return
+      const from = bits[0].trim(), to = bits[1].trim()
+      if (!from) return
+      try { out = out.replace(new RegExp('\\b' + from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), to) } catch (_) {}
+    })
+    return out
+  }
+  effLang() { return this.state.school ? 'en' : this.state.lang }
+  effFunny() { return this.state.school ? 1 : this.state.funnyEn }
+  voiceLine(fact) {
+    const lvl = this.effFunny()
+    const tails = ['', '', ' Neat, right?', ' Ta-da! 🎉', ' Zoom zoom, wheeeee! 🚀']
+    const yueTails = ['', '', ' 幾好呀！', ' 好正呀！🎉', ' 勁到飛起呀！🚀']
+    const lang = this.effLang()
+    const en = fact + (this.state.emoji ? tails[lvl - 1] || '' : (tails[lvl - 1] || '').replace(/[^\x00-\x7F]/g, '').trimEnd())
+    if (lang === 'en') return this.vocabApply(en)
+    const yueFact = YUE[fact] || fact
+    if (lang === 'yue') return this.vocabApply(yueFact + (yueTails[(this.state.school ? 1 : this.state.funnyYue) - 1] || ''))
+    return this.vocabApply(en + ' / ' + yueFact)
+  }
+
+  matcher(key, q) {
+    const query = (q || '').trim()
+    if (!query) return () => true
+    if (this.state.rxOn[key]) {
+      try {
+        const re = new RegExp(query.slice(0, 200), (this.state.rxFlags[key] || 'i').replace(/[^gimsuy]/g, '') || 'i')
+        return (t) => { try { return re.test(String(t)) } catch (_) { return true } }
+      } catch (_) { return () => true }
+    }
+    const low = query.toLowerCase()
+    return (t) => String(t).toLowerCase().includes(low)
+  }
+  rxBtnStyle(key, big) {
+    const on = !!this.state.rxOn[key]
+    return 'flex:0 0 auto;height:' + (big ? 40 : 34) + 'px;min-width:46px;margin-right:5px;border:3px solid var(--line);border-radius:999px;cursor:pointer;font-family:var(--mono);font-weight:800;font-size:13px;background:' + (on ? 'var(--green)' : 'var(--sunk)')
+  }
+  openRx(key, name) { this.setState({ rxOpen: true, rxTarget: { key, name }, menuOpen: false }) }
+
+  openMenu(e, kind, label, extra) {
+    e.preventDefault(); e.stopPropagation()
+    const w = window.innerWidth || 900, h = window.innerHeight || 700
+    this.setState({ menuOpen: true, menuX: Math.max(8, Math.min(e.clientX, w - 292)), menuY: Math.max(8, Math.min(e.clientY, h - 360)), menuKind: kind, menuLabel: label || '', menuQuery: '', menuExtra: extra === undefined ? null : extra })
+  }
+  go(id) { return () => this.setState({ sec: id, view: 'room', menuOpen: false, paletteOpen: false, qSec: '', picked: {} }) }
+  menuDefs() {
+    const s = this.state
+    const k = s.menuKind
+    const base = [
+      { icon: '🏠', label: 'Go home', hint: '', run: this.go('home') },
+      { icon: '✨', label: 'Open the jump box', hint: 'Ctrl+Shift+F', run: () => this.setState({ paletteOpen: true, menuOpen: false, paletteQuery: '' }) },
+      { icon: '🌗', label: s.theme === 'night' ? 'Switch to day colours' : 'Switch to night colours', hint: '', run: () => { this.setState({ menuOpen: false }); this.toggleTheme() } },
+      { icon: '✅', label: 'See the big checklist', hint: '', run: this.go('coverage') },
+      { icon: '⚙️', label: 'Open settings', hint: '', run: this.go('settings') },
+    ]
+    if (k === 'search' || k === 'header') return [
+      { icon: '🧩', label: 'Build a pattern for the big search', hint: '.*', run: () => this.openRx('global', 'the big search') },
+      { icon: '🧹', label: 'Clear the big search', hint: '', run: () => this.setState({ qGlobal: '', menuOpen: false }) },
+      { icon: '🔤', label: s.rxOn.global ? 'Treat it as plain words again' : 'Treat what I typed as a pattern', hint: '', run: () => this.setState((st) => ({ rxOn: Object.assign({}, st.rxOn, { global: !st.rxOn.global }), menuOpen: false })) },
+      { icon: '📋', label: 'Copy what I searched for', hint: '', run: () => { this.copy(s.qGlobal); this.setState({ menuOpen: false }) } },
+    ].concat(base)
+    if (k === 'rail') return [
+      { icon: '🧹', label: 'Clear the room filter', hint: '', run: () => this.setState({ qNav: '', menuOpen: false }) },
+      { icon: '🧩', label: 'Build a pattern for the room filter', hint: '.*', run: () => this.openRx('nav', 'the room finder') },
+      { icon: '📚', label: 'Open the guide book', hint: '', run: this.go('docs') },
+    ].concat(base)
+    if (k === 'room') return [
+      { icon: '➡️', label: 'Open this room', hint: '', run: this.go(s.menuExtra) },
+      { icon: '🔗', label: 'Copy a link to this room', hint: '', run: () => { this.copy('#' + s.menuExtra); this.setState({ menuOpen: false }) } },
+      { icon: '🔎', label: 'Search the whole site for it', hint: '', run: () => this.setState({ qGlobal: s.menuLabel, menuOpen: false }) },
+      { icon: '📦', label: 'Take this data home', hint: '', run: this.go('export') },
+    ].concat(base)
+    if (k === 'card') return [
+      { icon: '📚', label: 'Read about “' + s.menuLabel + '”', hint: '', run: () => this.setState({ sec: 'docs', qSec: '', menuOpen: false }) },
+      { icon: '📋', label: 'Copy this card', hint: '', run: () => { this.copy(s.menuLabel); this.setState({ menuOpen: false }) } },
+      { icon: '🔎', label: 'Search for it', hint: '', run: () => this.setState({ qGlobal: s.menuLabel, menuOpen: false }) },
+      { icon: '🔊', label: 'Read it out loud', hint: '', run: () => { this.setState({ menuOpen: false, narrate: true }, () => this.speak(s.menuLabel)) } },
+    ].concat(base)
+    if (k === 'row') {
+      const row = s.menuExtra || {}
+      const extras = []
+      if (row.url) extras.push({ icon: '🌐', label: 'Open this on GitHub', hint: 'new tab', run: () => { try { window.open(row.url, '_blank', 'noopener') } catch (_) {} this.setState({ menuOpen: false }) } })
+      if (s.sec === 'history') extras.push({ icon: '↩️', label: 'Put this change back', hint: '', run: () => { this.setState({ menuOpen: false }); this.undoEntry(row.id) } })
+      if (s.sec === 'shop') extras.push({ icon: '🧺', label: 'Put it in the basket', hint: '', run: () => { this.setState((st) => ({ cart: Object.assign({}, st.cart, { [row.id]: true }), menuOpen: false })); this.toast('🧺', 'In the basket', 'A shopping list for your own machine — this page cannot pull models.') } })
+      if (s.sec === 'auth') extras.push({ icon: '📋', label: 'Copy the six digits', hint: '', run: () => { this.copy(s.codes[row.id] || ''); this.setState({ menuOpen: false }) } })
+      return extras.concat([
+        { icon: '✅', label: 'Pick or unpick this one', hint: '', run: () => { this.togglePick(row.id); this.setState({ menuOpen: false }) } },
+        { icon: '📋', label: 'Copy it', hint: '', run: () => { this.copy((row.title || '') + ' — ' + (row.body || '')); this.setState({ menuOpen: false }) } },
+        { icon: '🗑', label: 'Throw this one away', hint: 'asks first', run: () => { this.setState({ menuOpen: false }); this.askConfirm('Throw one away?', 'This removes “' + (row.title || '') + '” from the list. The time machine will remember that you did.', 'bye', () => this.removeRows([row.id])) } },
+        { icon: '🔊', label: 'Read it out loud', hint: '', run: () => { this.setState({ menuOpen: false, narrate: true }, () => this.speak((row.title || '') + '. ' + (row.body || ''))) } },
+        { icon: '📦', label: 'Take this list home', hint: '', run: this.go('export') },
+      ]).concat(base)
+    }
+    if (k === 'setting') return [
+      { icon: '🔒', label: s.locks[s.menuExtra] ? 'Take the toy lock off' : 'Put a toy lock on this box', hint: '', run: () => { this.setState({ menuOpen: false }); this.toggleLock(s.menuExtra) } },
+      { icon: '↩️', label: 'See my recent changes', hint: '', run: this.go('history') },
+      { icon: '📦', label: 'Save my settings to a file', hint: '', run: this.go('export') },
+    ].concat(base)
+    if (k === 'stat') return [
+      { icon: '🔎', label: 'Search for “' + s.menuLabel + '”', hint: '', run: () => this.setState({ qGlobal: s.menuLabel, menuOpen: false }) },
+    ].concat(base)
+    return base
+  }
+  copy(text) {
+    try { navigator.clipboard.writeText(String(text)); this.toast('📋', 'Copied!', 'It is on your clipboard now.') }
+    catch (_) { this.toast('😕', 'Could not copy', 'Your browser said no. Select the text by hand instead.') }
+  }
+
+  togglePick(id) { this.setState((s) => { const p = Object.assign({}, s.picked); if (p[id]) delete p[id]; else p[id] = true; return { picked: p } }) }
+
+  fitVerdict(gb) {
+    let ram = 0
+    try { ram = Number(navigator.deviceMemory || 0) } catch (_) { ram = 0 }
+    const cores = (navigator.hardwareConcurrency || 0)
+    if (!ram) return { verdict: 'Unknown fit', why: 'This browser will not tell us how much memory you have, so we are not going to guess. Cores seen: ' + (cores || '?') + '.' }
+    if (gb * 1.4 < ram) return { verdict: 'Should fit', why: 'Needs about ' + gb + ' GB; the browser reports roughly ' + ram + ' GB and ' + cores + ' cores.' }
+    if (gb < ram) return { verdict: 'Tight', why: 'Needs about ' + gb + ' GB out of roughly ' + ram + ' GB — it may run, slowly, with little room left.' }
+    return { verdict: 'Too big', why: 'Needs about ' + gb + ' GB but the browser only reports roughly ' + ram + ' GB.' }
+  }
+
+  currentRows() {
+    const s = this.state
+    const m = this.matcher('sec', s.qSec), g = this.matcher('global', s.qGlobal)
+    const keep = (t) => m(t) && g(t)
+    if (s.sec === 'docs') return DOCS.filter((d) => keep(d[0] + ' ' + d[1])).map((d, i) => ({ id: 'doc' + i, title: d[0], body: d[1], tag: 'guide', meta: '', right: '→', url: 'https://github.com/eneskirca/nodeterm/blob/main/docs/features/README.md' }))
+    if (s.sec === 'changelog') {
+      const from = s.dateFrom ? new Date(s.dateFrom) : null
+      const to = s.dateTo ? new Date(s.dateTo + 'T23:59:59') : null
+      return CHANGELOG.filter((c) => {
+        if (!keep(c.v + ' ' + c.kind + ' ' + c.notes + ' ' + c.date)) return false
+        const d = new Date(c.date)
+        if (from && d < from) return false
+        if (to && d > to) return false
+        return true
+      }).map((c) => ({ id: 'cl' + c.v, title: 'v' + c.v, body: c.notes, tag: c.kind, meta: c.date, right: c.sha, url: 'https://github.com/eneskirca/nodeterm/commit/' + c.sha }))
+    }
+    if (s.sec === 'notes') return s.notes.filter((n) => keep(n.title + ' ' + n.body)).map((n) => ({ id: n.id, title: n.title, body: n.body, tag: n.tag, meta: fmtWhen(n.when), right: '' }))
+    if (s.sec === 'history') return s.history.filter((h) => keep(h.title + ' ' + h.body)).map((h) => ({ id: h.id, title: h.title, body: h.body, tag: h.tag, meta: fmtWhen(h.when), right: '' }))
+    if (s.sec === 'dish') return DISHES.filter((d) => keep(d[0] + ' ' + d[1] + ' ' + d[2])).map((d, i) => ({ id: 'dish' + i, title: d[0], body: d[2], tag: d[1], meta: '', right: '🥟' }))
+    if (s.sec === 'coverage') return COVERAGE.filter((c) => keep(c[0] + ' ' + c[1] + ' ' + c[2])).map((c, i) => ({ id: 'cov' + i, title: c[0], body: 'Lives in: ' + c[1], tag: c[2] === 'done' ? 'done' : 'partial', meta: '', right: c[2] === 'done' ? '✅' : '⚠️' }))
+    if (s.sec === 'auth') return s.auth.filter((a) => keep(a.label)).map((a) => ({ id: a.id, title: a.label, body: 'Changes every 30 seconds. Tap to pick it, right-click to copy or remove it.', tag: 'code', meta: (30 - (Math.floor(Date.now() / 1000) % 30)) + 's left', right: s.codes[a.id] || '······' }))
+    if (s.sec === 'shop') return OLLAMA.filter((o) => keep(o.id + ' ' + o.tag)).map((o) => {
+      const f = this.fitVerdict(o.gb)
+      return { id: o.id, title: o.id, body: f.why + (s.cart[o.id] ? '\nIn your basket.' : ''), tag: f.verdict, meta: o.gb + ' GB · ' + o.tag + ' · updated ' + o.updated, right: s.cart[o.id] ? '🧺' : '' }
+    })
+    return []
+  }
+  removeRows(ids) {
+    const set = {}; ids.forEach((i) => (set[i] = true))
+    const s = this.state
+    if (s.sec === 'notes') this.save({ notes: s.notes.filter((n) => !set[n.id]), picked: {} }, 'Removed ' + ids.length + ' message(s)')
+    else if (s.sec === 'history') this.setState({ history: s.history.filter((h) => !set[h.id]), picked: {} })
+    else if (s.sec === 'auth') this.save({ auth: s.auth.filter((a) => !set[a.id]), picked: {} }, 'Removed ' + ids.length + ' code(s)')
+    else if (s.sec === 'shop') { const c = Object.assign({}, s.cart); ids.forEach((i) => delete c[i]); this.setState({ cart: c, picked: {} }) }
+    else { this.setState({ picked: {} }); this.toast('🙂', 'Nothing to remove', 'This list is built into the page, so it stays exactly where it is.'); return }
+    this.toast('🗑', 'Done', ids.length + ' thing(s) removed.')
+  }
+  undoEntry(id) {
+    const s = this.state
+    const entry = s.history.find((h) => h.id === id)
+    if (!entry) return
+    this.setState({ history: s.history.filter((h) => h.id !== id) }, () => {
+      this.log('Undid: ' + entry.title, 'That step was taken out of the log. This undo is itself a new step, so you can undo the undo.')
+      this.toast('↩️', 'Put back', '“' + entry.title + '” was undone as a brand new step.')
+    })
+  }
+  askConfirm(title, body, word, run) { this.setState({ confirm: { title, body, word: String(word || 'yes').slice(0, 24), run }, confirmTyped: '' }) }
+
+  async sha(t) {
+    try { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(t))); return Array.from(new Uint8Array(b)).map((x) => x.toString(16).padStart(2, '0')).join('') }
+    catch (_) { return 'plain:' + t }
+  }
+  async toggleLock(id) {
+    const s = this.state
+    if (s.locks[id]) {
+      const l = Object.assign({}, s.locks); delete l[id]
+      this.save({ locks: l }, 'Toy lock removed from ' + id)
+      this.toast('🔓', 'Lock removed', 'That box is open to everyone again.')
+      return
+    }
+    const pass = window.prompt('Pick a password for this box.\n\nThis is a toy lock — a speed bump, not real safety. If you forget it, the only way back in is “Start fresh”, which wipes everything this page saved.')
+    if (!pass) return
+    const hash = await this.sha(pass)
+    this.save({ locks: Object.assign({}, s.locks, { [id]: hash }) }, 'Toy lock added to ' + id)
+    this.notify('A box was locked', 'You put a toy lock on “' + id + '”. Each lock has its very own password.', 'lock')
+    this.toast('🔒', 'Locked', 'That box now asks for its own password.')
+  }
+
+  async totp(secret) {
+    try {
+      const key = await crypto.subtle.importKey('raw', b32decode(secret), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign'])
+      const counter = Math.floor(Date.now() / 30000)
+      const buf = new ArrayBuffer(8); const view = new DataView(buf)
+      view.setUint32(0, Math.floor(counter / 4294967296)); view.setUint32(4, counter >>> 0)
+      const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, buf))
+      const off = sig[sig.length - 1] & 0xf
+      const bin = ((sig[off] & 0x7f) << 24) | (sig[off + 1] << 16) | (sig[off + 2] << 8) | sig[off + 3]
+      return String(bin % 1000000).padStart(6, '0')
+    } catch (_) { return '––––––' }
+  }
+  async refreshCodes() {
+    const list = this.state.auth || []
+    if (!list.length) return
+    const out = {}
+    for (let i = 0; i < list.length; i++) out[list[i].id] = await this.totp(list[i].secret)
+    this.setState({ codes: out })
+  }
+
+  parseRecords(text, from) {
+    const t = String(text || '').trim()
+    if (!t) return []
+    if (from === 'json') { const v = JSON.parse(t); return Array.isArray(v) ? v : [v] }
+    if (from === 'jsonl') return t.split(/\r?\n/).filter(Boolean).map((l) => JSON.parse(l))
+    if (from === 'csv' || from === 'tsv') {
+      const sep = from === 'csv' ? ',' : '\t'
+      const lines = t.split(/\r?\n/).filter(Boolean)
+      const head = lines[0].split(sep).map((h) => h.trim().replace(/^"|"$/g, ''))
+      return lines.slice(1).map((l) => { const c = l.split(sep); const o = {}; head.forEach((h, i) => (o[h] = String(c[i] === undefined ? '' : c[i]).trim().replace(/^"|"$/g, ''))); return o })
+    }
+    if (from === 'yaml') {
+      const out = []; let cur = null
+      t.split(/\r?\n/).forEach((line) => {
+        if (/^-\s*/.test(line)) { cur = {}; out.push(cur); const rest = line.replace(/^-\s*/, ''); if (rest.includes(':')) { const i = rest.indexOf(':'); cur[rest.slice(0, i).trim()] = rest.slice(i + 1).trim() } }
+        else if (cur && line.includes(':')) { const i = line.indexOf(':'); cur[line.slice(0, i).trim()] = line.slice(i + 1).trim() }
+      })
+      return out.length ? out : [{ text: t }]
+    }
+    if (from === 'base64') return [{ text: decodeURIComponent(escape(atob(t.replace(/\s+/g, '')))) }]
+    if (from === 'hex') return [{ text: (t.replace(/[^0-9a-f]/gi, '').match(/.{1,2}/g) || []).map((h) => String.fromCharCode(parseInt(h, 16))).join('') }]
+    if (from === 'xml') {
+      const rows = []
+      ;(t.match(/<item>[\s\S]*?<\/item>/g) || []).forEach((chunk) => {
+        const o = {}
+        ;(chunk.match(/<(\w+)>([\s\S]*?)<\/\1>/g) || []).forEach((f) => { const m = f.match(/<(\w+)>([\s\S]*?)<\/\1>/); if (m && m[1] !== 'item') o[m[1]] = m[2] })
+        rows.push(o)
+      })
+      return rows.length ? rows : [{ text: t }]
+    }
+    return t.split(/\r?\n/).filter(Boolean).map((line) => ({ text: line }))
+  }
+  emit(records, to) {
+    const rows = records || []
+    const keys = Array.from(rows.reduce((set, r) => { Object.keys(r || {}).forEach((k) => set.add(k)); return set }, new Set()))
+    const cell = (r, k) => { const v = r[k]; return v === undefined || v === null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v) }
+    if (to === 'json') return JSON.stringify(rows, null, 2)
+    if (to === 'jsonl') return rows.map((r) => JSON.stringify(r)).join('\n')
+    if (to === 'yaml') return rows.map((r) => '- ' + keys.map((k) => k + ': ' + cell(r, k)).join('\n  ')).join('\n')
+    if (to === 'toml') return rows.map((r) => '[[item]]\n' + keys.map((k) => k + ' = "' + cell(r, k).replace(/"/g, '\\"') + '"').join('\n')).join('\n\n')
+    if (to === 'csv') return [keys.join(',')].concat(rows.map((r) => keys.map((k) => '"' + cell(r, k).replace(/"/g, '""') + '"').join(','))).join('\n')
+    if (to === 'tsv') return [keys.join('\t')].concat(rows.map((r) => keys.map((k) => cell(r, k).replace(/\t/g, ' ')).join('\t'))).join('\n')
+    if (to === 'xml') return '<items>\n' + rows.map((r) => '  <item>\n' + keys.map((k) => '    <' + k + '>' + esc(cell(r, k)) + '</' + k + '>').join('\n') + '\n  </item>').join('\n') + '\n</items>'
+    if (to === 'md') return '| ' + keys.join(' | ') + ' |\n| ' + keys.map(() => '---').join(' | ') + ' |\n' + rows.map((r) => '| ' + keys.map((k) => cell(r, k).replace(/\n/g, ' ')).join(' | ') + ' |').join('\n')
+    if (to === 'html') return '<table>\n  <tr>' + keys.map((k) => '<th>' + esc(k) + '</th>').join('') + '</tr>\n' + rows.map((r) => '  <tr>' + keys.map((k) => '<td>' + esc(cell(r, k)) + '</td>').join('') + '</tr>').join('\n') + '\n</table>'
+    if (to === 'sql') return rows.map((r) => 'INSERT INTO items (' + keys.join(', ') + ") VALUES (" + keys.map((k) => "'" + cell(r, k).replace(/'/g, "''") + "'").join(', ') + ');').join('\n')
+    if (to === 'base64') { try { return btoa(unescape(encodeURIComponent(rows.map((r) => keys.map((k) => cell(r, k)).join(' ')).join('\n')))) } catch (_) { return '' } }
+    if (to === 'hex') return rows.map((r) => keys.map((k) => cell(r, k)).join(' ')).join('\n').split('').map((c) => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ')
+    return rows.map((r) => keys.map((k) => cell(r, k)).join(' ')).join('\n')
+  }
+  download(name, text) {
+    try {
+      const b = new Blob([text], { type: 'text/plain' })
+      const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+      this.toast('📦', 'Saved', name + ' went to your downloads.')
+      this.log('Exported ' + name)
+      this.notify('A file was saved', name + ' was written from data that never left this page.', 'export')
+    } catch (_) { this.toast('😕', 'Could not save', 'Your browser blocked the download.') }
+  }
+  datasetRecords(id) {
+    const s = this.state
+    if (id === 'notes') return s.notes.map((n) => ({ title: n.title, body: n.body, tag: n.tag, when: n.when }))
+    if (id === 'history') return s.history.map((h) => ({ title: h.title, body: h.body, when: h.when }))
+    if (id === 'changelog') return CHANGELOG.map((c) => ({ version: c.v, date: c.date, kind: c.kind, commit: c.sha, notes: c.notes }))
+    if (id === 'coverage') return COVERAGE.map((c) => ({ promise: c[0], where: c[1], state: c[2] }))
+    return [
+      { setting: 'theme', value: s.theme }, { setting: 'language', value: s.lang },
+      { setting: 'silliness (English)', value: s.funnyEn }, { setting: 'silliness (Cantonese)', value: s.funnyYue },
+      { setting: 'emoji', value: s.emoji }, { setting: 'bigger text', value: s.bigText },
+      { setting: 'sounds', value: s.sound }, { setting: 'favourite colour', value: s.accent },
+      { setting: 'nickname', value: s.nick }, { setting: 'school mode', value: s.school },
+      { setting: 'narrator', value: s.narrate }, { setting: 'timer', value: s.schedOn ? s.schedTime + ' → ' + s.schedTheme : 'off' },
+    ]
+  }
+
+  toggleTheme = () => {
+    const t = this.state.theme === 'night' ? 'day' : 'night'
+    this.save({ theme: t }, 'Switched to ' + t + ' colours')
+    setTimeout(() => this.applyTheme(), 0)
+    this.toast(t === 'night' ? '🌙' : '☀️', t === 'night' ? 'Night time' : 'Day time', 'The whole playground changed colour.')
+  }
+  pickLogo = () => {
+    try {
+      const inp = document.createElement('input')
+      inp.type = 'file'; inp.accept = 'image/*'
+      inp.onchange = () => {
+        const f = inp.files && inp.files[0]
+        if (!f) return
+        if (f.size > 400000) { this.toast('😅', 'That picture is big', 'Pick one under 400 KB so it fits in this browser’s storage.'); return }
+        const rd = new FileReader()
+        rd.onload = () => { this.save({ logo: String(rd.result) }, 'Badge picture changed'); this.toast('🖼', 'New badge!', 'Your own picture is in the corner now.') }
+        rd.readAsDataURL(f)
+      }
+      inp.click()
+    } catch (_) { this.toast('😕', 'Could not open the picker', 'Your browser blocked it.') }
+  }
+  exportLook = () => {
+    const s = this.state
+    this.download('nodeterm-look.json', JSON.stringify({ theme: s.theme, accent: s.accent, preset: s.preset, bigText: s.bigText, logo: s.logo ? '(a picture you chose)' : '' }, null, 2))
+  }
+  importLook = () => {
+    const txt = window.prompt('Paste a look file here (the JSON you saved earlier).')
+    if (!txt) return
+    try {
+      const v = JSON.parse(txt)
+      this.save({ theme: v.theme === 'night' ? 'night' : 'day', accent: typeof v.accent === 'string' ? v.accent : this.state.accent, bigText: !!v.bigText }, 'Imported a look')
+      setTimeout(() => this.applyTheme(), 0)
+      this.toast('🎨', 'Look loaded', 'Your saved colours are back.')
+    } catch (_) { this.toast('❌', 'That file did not parse', 'Nothing was changed — your old look is still here.') }
+  }
+  downloadDemo = () => {
+    this.toast('⬇️', 'Start the download?', 'This is a pretend transfer so you can see the three steps.', 'step 1 of 3')
+    setTimeout(() => this.toast('📶', 'Downloading…', 'A real capture extension would show speed and progress here.', 'step 2 of 3'), 1400)
+    setTimeout(() => { this.toast('✅', 'Finished', 'Pretend file complete. A page like this cannot hand a transfer to an installed extension, so nothing was actually fetched.', 'step 3 of 3'); this.notify('Download demo ran', 'Three surfaces were shown: the start decision, the progress surface, and the completion notice. No bytes were transferred — a static page cannot drive a native download manager.', 'demo') }, 3000)
+  }
+
+  blip(kind) {
+    if (!this.state.sound) return
+    try {
+      this._ac = this._ac || new (window.AudioContext || window.webkitAudioContext)()
+      const ac = this._ac
+      const o = ac.createOscillator(), g = ac.createGain()
+      o.type = 'triangle'
+      o.frequency.value = kind === 'bad' ? 180 : kind === 'win' ? 780 : 480
+      g.gain.value = 0.06
+      o.connect(g); g.connect(ac.destination)
+      o.start()
+      g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.18)
+      o.stop(ac.currentTime + 0.2)
+    } catch (_) {}
+  }
+
+  memDeal() {
+    const faces = ['🖥', '🤖', '🥟', '🚪', '🎨', '🔔', '🧩', '⏰']
+    const deck = faces.concat(faces).map((f, i) => ({ i, f })).sort(() => Math.random() - 0.5)
+    this.setState({ memDeck: deck, memUp: [], memDone: [], memMoves: 0, memBusy: false })
+  }
+  memFlip(idx) {
+    const s = this.state
+    if (s.memBusy || s.memUp.includes(idx) || s.memDone.includes(idx)) return
+    const up = s.memUp.concat([idx])
+    if (up.length < 2) { this.setState({ memUp: up }); this.blip(); return }
+    const moves = s.memMoves + 1
+    const a = s.memDeck[up[0]], b = s.memDeck[up[1]]
+    if (a.f === b.f) {
+      const done = s.memDone.concat(up)
+      this.setState({ memUp: [], memDone: done, memMoves: moves })
+      this.blip('win')
+      if (done.length === s.memDeck.length) {
+        const best = !s.bestMem || moves < s.bestMem ? moves : s.bestMem
+        this.save({ bestMem: best }, 'Finished memory pairs in ' + moves + ' turns')
+        this.toast('🏆', 'All pairs found!', 'You did it in ' + moves + ' turns.' + (best === moves ? ' That is your best yet!' : ''))
+      }
+    } else {
+      this.setState({ memUp: up, memMoves: moves, memBusy: true })
+      this.blip('bad')
+      setTimeout(() => this.setState({ memUp: [], memBusy: false }), 700)
+    }
+  }
+  quizNew() {
+    const n = 2 + Math.floor(Math.random() * 6)
+    const m = 1 + Math.floor(Math.random() * 5)
+    const plus = Math.random() < 0.6
+    const answer = plus ? n + m : Math.max(n, m) - Math.min(n, m)
+    const opts = new Set([answer])
+    while (opts.size < 4) opts.add(Math.max(0, answer + (Math.floor(Math.random() * 7) - 3)))
+    this.setState({
+      quizN: n, quizM: m, quizPlus: plus, quizAnswer: answer,
+      quizOpts: Array.from(opts).sort(() => Math.random() - 0.5),
+      quizPicked: null,
+      quizDish: DISHES[Math.floor(Math.random() * DISHES.length)][0],
+    })
+  }
+  quizPick(v) {
+    const s = this.state
+    if (s.quizPicked !== null) return
+    if (v === s.quizAnswer) {
+      const score = s.quizScore + 1
+      const best = Math.max(score, s.bestQuiz || 0)
+      this.setState({ quizPicked: v, quizScore: score })
+      this.save({ bestQuiz: best })
+      this.blip('win')
+      setTimeout(() => this.quizNew(), 900)
+    } else {
+      this.setState({ quizPicked: v, quizScore: 0 })
+      this.blip('bad')
+    }
+  }
+  whackStart = () => {
+    if (this._whack) { clearInterval(this._whack); this._whack = null }
+    this.setState({ whackScore: 0, whackLeft: 20, whackAt: Math.floor(Math.random() * 9), whackRun: true })
+    this._whack = setInterval(() => {
+      const s = this.state
+      if (s.whackLeft <= 1) {
+        clearInterval(this._whack); this._whack = null
+        const best = Math.max(s.whackScore, s.bestWhack || 0)
+        this.save({ bestWhack: best }, 'Whack-a-block: ' + s.whackScore + ' hits')
+        this.setState({ whackRun: false, whackLeft: 0, whackAt: -1 })
+        this.toast('⏱', 'Time!', 'You caught ' + s.whackScore + ' blocks.' + (best === s.whackScore && s.whackScore > 0 ? ' New best!' : ''))
+        return
+      }
+      this.setState((st) => ({ whackLeft: st.whackLeft - 1, whackAt: Math.floor(Math.random() * 9) }))
+    }, 900)
+  }
+  whackHit(i) {
+    const s = this.state
+    if (!s.whackRun) { this.toast('👆', 'Press start first', 'The blocks only pop up while the timer runs.'); return }
+    if (i !== s.whackAt) { this.blip('bad'); this.setState({ whackScore: Math.max(0, s.whackScore - 1) }); return }
+    this.blip('win')
+    this.setState((st) => ({ whackScore: st.whackScore + 1, whackAt: Math.floor(Math.random() * 9) }))
+  }
+
+  enterDoor(id) {
+    const s = this.state
+    if (s.locks['room:' + id] && !s.unlocked['room:' + id]) {
+      this.setState({ knock: id })
+      setTimeout(() => this.setState({ knock: null }), 700)
+      const pass = window.prompt('This door is locked. What is its password?\n\n(Toy lock — a speed bump, not real safety.)')
+      if (pass === null) return
+      this.sha(pass).then((h) => {
+        if (h === s.locks['room:' + id]) {
+          this.setState((st) => ({ unlocked: Object.assign({}, st.unlocked, { ['room:' + id]: true }) }), () => this.enterDoor(id))
+          this.toast('🔓', 'Click!', 'The door opened. It stays open for this visit.')
+        } else this.toast('❌', 'Not that one', 'Every door has its very own password.')
+      })
+      return
+    }
+    this.setState({ opening: id })
+    this.speak('Opening the ' + id + ' room')
+    setTimeout(() => this.setState({ view: 'room', sec: id, opening: null, qSec: '', picked: {} }), 620)
+  }
+  leaveRoom = () => {
+    this.setState({ view: 'hall', opening: null })
+    this.toast('🚪', 'Door closed', 'You are back in the hallway.')
+  }
+  lockThisRoom = () => {
+    const key = 'room:' + this.state.sec
+    this.toggleLock(key)
+  }
+
+  renderVals() {
+    const s = this.state
+    const S = SECTIONS.find((x) => x.id === s.sec) || SECTIONS[0]
+    const gm = this.matcher('global', s.qGlobal)
+    const nm = this.matcher('nav', s.qNav)
+    const sm = this.matcher('sec', s.qSec)
+    const listSecs = { docs: 1, changelog: 1, notes: 1, history: 1, dish: 1, coverage: 1, auth: 1, shop: 1 }
+
+    const navBtn = (active) => 'display:flex;align-items:center;gap:10px;width:100%;min-height:50px;padding:0 12px;border:3px solid var(--line);border-radius:16px;cursor:pointer;font-weight:700;font-size:15px;text-align:left;box-shadow:' + (active ? '4px 4px 0 var(--line)' : 'none') + ';background:' + (active ? s.accent : 'var(--card)')
+
+    const navItems = SECTIONS.filter((x) => nm(x.label + ' ' + x.title + ' ' + x.sub) && gm(x.label + ' ' + x.title + ' ' + x.sub)).map((x) => {
+      let badge = ''
+      if (x.id === 'notes') badge = String(s.notes.length)
+      if (x.id === 'history') badge = String(s.history.length)
+      if (x.id === 'docs') badge = String(DOCS.length)
+      if (x.id === 'auth') badge = String(s.auth.length)
+      if (x.id === 'coverage') badge = String(COVERAGE.length)
+      return {
+        icon: x.icon, label: x.label, badge,
+        badgeStyle: badge ? 'font-size:11px;font-weight:800;background:var(--sunk);border:2px solid var(--line);border-radius:999px;padding:0 7px' : 'display:none',
+        style: navBtn(s.sec === x.id),
+        go: () => this.setState({ sec: x.id, qSec: '', picked: {} }),
+        menu: (e) => this.openMenu(e, 'room', x.label, x.id),
+      }
+    })
+
+    const featureList = FEATURES.filter((f) => sm(f.title + ' ' + f.body) && gm(f.title + ' ' + f.body))
+    const features = featureList.map((f) => ({
+      icon: f.icon, color: f.color, title: this.vocabApply(f.title), body: this.voiceLine(f.body),
+      style: 'background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow-sm);padding:14px',
+      menu: (e) => this.openMenu(e, 'card', f.title),
+    }))
+
+    const statDefs = [
+      { icon: '🧩', value: String(FEATURES.length), note: 'things it can do', color: 'var(--yellow)' },
+      { icon: '📚', value: String(DOCS.length), note: 'guide pages', color: 'var(--blue)' },
+      { icon: '✅', value: String(COVERAGE.length), note: 'promises on the checklist', color: 'var(--green)' },
+      { icon: '📦', value: String(FORMATS.length), note: 'shapes you can save as', color: 'var(--pink)' },
+    ]
+    const statCards = statDefs.map((d) => ({
+      icon: d.icon, value: d.value, note: d.note,
+      style: 'display:flex;flex-direction:column;gap:2px;justify-content:center;padding:16px;border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow-sm);background:' + d.color,
+      menu: (e) => this.openMenu(e, 'stat', d.note),
+    }))
+
+    const rawRows = this.currentRows()
+    const rows = rawRows.map((r) => ({
+      id: r.id, url: r.url, title: r.title, body: r.body, meta: r.meta, tag: r.tag || '', right: r.right || '',
+      tagStyle: r.tag ? 'font-size:11px;font-weight:800;background:' + s.accent + ';border:2px solid var(--line);border-radius:999px;padding:0 8px' : 'display:none',
+      rightStyle: r.right ? 'font-family:var(--mono);font-size:16px;font-weight:800;align-self:center;letter-spacing:.08em' : 'display:none',
+      check: s.picked[r.id] ? '✔' : '',
+      checkStyle: 'flex:0 0 auto;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:3px solid var(--line);border-radius:9px;font-weight:800;background:' + (s.picked[r.id] ? 'var(--green)' : 'var(--paper2)'),
+      style: 'display:flex;gap:12px;align-items:flex-start;padding:14px;background:var(--card);border:4px solid var(--line);border-radius:var(--round);box-shadow:var(--shadow-sm);cursor:pointer',
+      click: () => this.togglePick(r.id),
+      menu: (e) => this.openMenu(e, 'row', r.title, r),
+    }))
+    const pickedIds = Object.keys(s.picked).filter((k) => rawRows.some((r) => r.id === k))
+    const allPicked = rawRows.length > 0 && pickedIds.length === rawRows.length
+
+    const panelActions = []
+    if (s.sec === 'shop') panelActions.push({ label: '🧺 Put picked in the basket', run: () => { const c = Object.assign({}, s.cart); pickedIds.forEach((i) => (c[i] = true)); this.setState({ cart: c, picked: {} }); this.toast('🧺', 'In the basket', pickedIds.length + ' model(s) noted. This page cannot pull them — it is a shopping list for your own machine.') } })
+    if (s.sec === 'notes') panelActions.push({ label: '➕ Add a test message', run: () => { this.notify('Test message', 'You made this one yourself from the Messages room.', 'test'); this.toast('🔔', 'Added', 'A new message is at the top.') } })
+    if (s.sec === 'history') panelActions.push({ label: '↩️ Put the newest change back', run: () => { const h = s.history[0]; if (!h) { this.toast('🙂', 'Nothing to undo', 'The log is empty.'); return } this.undoEntry(h.id) } })
+    if (s.sec === 'dish') panelActions.push({ label: '🥟 Show me another dish', run: () => { const i = Math.floor(Math.random() * DISHES.length); const d = DISHES[i]; this.setState({ dishIdx: i }); this.toast('🥟', d[0] + ' · ' + d[1], d[2]) } })
+    if (s.sec === 'coverage') panelActions.push({ label: '📦 Save the checklist', run: () => this.download('nodeterm-checklist.json', this.emit(this.datasetRecords('coverage'), 'json')) })
+    if (s.sec === 'docs') panelActions.push({ label: '🎮 Go and play instead', run: () => this.enterDoor('play') })
+
+    const fmtMatch = FORMATS.filter((f) => sm(f.label) && gm(f.label))
+    const formats = fmtMatch.map((f) => ({
+      label: f.label, hint: f.loss ? 'Heads up: ' + f.loss : 'Carries every field faithfully',
+      style: 'min-height:54px;padding:0 10px;border:3px solid var(--line);border-radius:14px;cursor:pointer;font-weight:800;background:' + (f.loss ? 'var(--orange)' : 'var(--green)'),
+      run: () => {
+        if (f.loss) this.setState({ lossPending: f.id, lossNote: '⚠️ ' + f.loss, lossBad: true })
+        else { this.download('nodeterm-' + s.dataset + '.' + f.id, this.emit(this.datasetRecords(s.dataset), f.id)); this.setState({ lossPending: null, lossNote: 'Saved as ' + f.label + '. That shape carries every single field.', lossBad: false }) }
+      },
+    }))
+    const datasets = [['settings', 'My settings'], ['notes', 'My messages'], ['history', 'My time machine'], ['changelog', 'What changed'], ['coverage', 'The big checklist']].map((d) => ({
+      label: d[1], count: String(this.datasetRecords(d[0]).length) + ' rows',
+      style: 'display:flex;align-items:center;gap:8px;min-height:54px;padding:0 14px;border:3px solid var(--line);border-radius:14px;cursor:pointer;background:' + (s.dataset === d[0] ? s.accent : 'var(--paper2)'),
+      pick: () => this.setState({ dataset: d[0], lossPending: null, lossNote: 'Now showing ' + d[1] + '. Pick a shape.' }),
+    }))
+
+    const ctl = (o) => Object.assign({ isSelect: false, isRange: false, isToggle: false, isText: false, isColor: false, isButton: false, options: [], swatches: [], min: 1, max: 5, type: 'text', placeholder: '', on: false, toggleLabel: '', toggleStyle: '', value: '', onChange: () => {}, onToggle: () => {} }, o)
+    const tgl = (on) => 'flex:0 0 auto;min-width:100px;height:46px;padding:0 16px;border:3px solid var(--line);border-radius:999px;cursor:pointer;font-weight:800;background:' + (on ? 'var(--green)' : 'var(--sunk)')
+    const btn = 'flex:0 0 auto;min-height:46px;padding:0 16px;border:3px solid var(--line);border-radius:999px;cursor:pointer;font-weight:800;background:var(--blue)'
+
+    const wordControls = [ctl({ label: 'Language', isSelect: true, value: s.lang, options: [{ id: 'en', label: 'English' }, { id: 'yue', label: '廣東話 Cantonese' }, { id: 'bi', label: 'Both at once' }], onChange: (e) => this.save({ lang: e.target.value }, 'Language set to ' + e.target.value) })]
+    if (!s.school) {
+      wordControls.push(ctl({ label: 'Silliness (English)', isRange: true, min: 1, max: 5, value: s.funnyEn, onChange: (e) => this.save({ funnyEn: Number(e.target.value) }, 'English silliness set to ' + e.target.value) }))
+      wordControls.push(ctl({ label: 'Silliness (Cantonese)', isRange: true, min: 1, max: 5, value: s.funnyYue, onChange: (e) => this.save({ funnyYue: Number(e.target.value) }, 'Cantonese silliness set to ' + e.target.value) }))
+    }
+    wordControls.push(ctl({ label: 'Show emoji', isToggle: true, on: s.emoji, toggleLabel: s.emoji ? 'Yes 🎉' : 'No', toggleStyle: tgl(s.emoji), onToggle: () => this.save({ emoji: !s.emoji }, 'Emoji turned ' + (!s.emoji ? 'on' : 'off')) }))
+
+    const cardsRaw = [
+      { id: 'words', icon: '🗣', title: 'Words and jokes', desc: 'Pick the language and how silly the page is allowed to be. The facts never change — only the tone on the end.', note: s.school ? 'School mode is on, so the silliness sliders are hidden and everything reads as plain English. Your real choices are untouched underneath.' : 'The silly line is always added after the fact, never instead of it. That is true at every level, including error messages.', controls: wordControls },
+      { id: 'look', icon: '🎨', title: 'How it looks', desc: 'Day or night, your favourite colour, a saved look you can carry to another computer, and your own badge picture.', note: 'Colours come from a small chosen set so every one of them still reads clearly on both backgrounds.',
+        controls: [
+          ctl({ label: 'Time of day', isSelect: true, value: s.theme, options: [{ id: 'day', label: '☀️ Day' }, { id: 'night', label: '🌙 Night' }], onChange: (e) => { this.save({ theme: e.target.value }, 'Theme set to ' + e.target.value); setTimeout(() => this.applyTheme(), 0) } }),
+          ctl({ label: 'Favourite colour', isColor: true, swatches: SWATCHES.map((sw) => ({ name: sw[0], style: 'width:46px;height:46px;border:3px solid var(--line);border-radius:14px;cursor:pointer;box-shadow:' + (s.accent === sw[1] ? '0 0 0 5px var(--line) inset' : 'none') + ';background:' + sw[1], pick: () => this.save({ accent: sw[1] }, 'Colour changed to ' + sw[0]) })) }),
+          ctl({ label: 'Ready-made looks', isSelect: true, value: s.preset, options: Object.keys(PRESETS).map((k) => ({ id: k, label: PRESETS[k].name })), onChange: (e) => { const p = PRESETS[e.target.value]; this.save({ preset: e.target.value, accent: p.accent, theme: p.theme }, 'Look set to ' + p.name); setTimeout(() => this.applyTheme(), 0) } }),
+          ctl({ label: 'Bigger text', isToggle: true, on: s.bigText, toggleLabel: s.bigText ? 'On' : 'Off', toggleStyle: tgl(s.bigText), onToggle: () => { this.save({ bigText: !s.bigText }, 'Bigger text ' + (!s.bigText ? 'on' : 'off')); setTimeout(() => this.applyTheme(), 0) } }),
+          ctl({ label: 'Badge picture', isButton: true, toggleLabel: s.logo ? 'Change it' : 'Choose a picture', toggleStyle: btn, onToggle: this.pickLogo }),
+          ctl({ label: 'Save or load a look', isButton: true, toggleLabel: 'Save look', toggleStyle: btn, onToggle: this.exportLook }),
+          ctl({ label: 'Load one you saved', isButton: true, toggleLabel: 'Load look', toggleStyle: btn, onToggle: this.importLook }),
+          ctl({ label: 'Put everything back', isButton: true, toggleLabel: 'Reset the look', toggleStyle: btn, onToggle: () => { this.save({ theme: 'day', accent: '#ffd93d', bigText: false, logo: '', preset: 'playground' }, 'Look reset'); setTimeout(() => this.applyTheme(), 0); this.toast('🎨', 'Back to normal', 'The look is how it started.') } }),
+        ] },
+      { id: 'you', icon: '🧸', title: 'About you', desc: 'A nickname the page can use, and whether little sounds are allowed.', note: 'Your nickname stays in this browser. Nobody else can read it, not even us.',
+        controls: [
+          ctl({ label: 'Nickname', isText: true, value: s.nick, placeholder: 'e.g. Captain Socks', onChange: (e) => this.save({ nick: e.target.value.slice(0, 40) }) }),
+          ctl({ label: 'Little sounds', isToggle: true, on: s.sound, toggleLabel: s.sound ? 'On 🔊' : 'Off 🔇', toggleStyle: tgl(s.sound), onToggle: () => this.save({ sound: !s.sound }, 'Sounds ' + (!s.sound ? 'on' : 'off')) }),
+        ] },
+      { id: 'school', icon: '🎒', title: 'School mode', desc: 'Turns everything into plain English at silliness one, and hides the jokey settings. A PIN keeps it that way.', note: 'Turning it off never has to restore anything, because nothing was overwritten — your real settings sat safely underneath the whole time.',
+        controls: [
+          ctl({ label: 'School mode', isToggle: true, on: s.school, toggleLabel: s.school ? 'On 🎒' : 'Off', toggleStyle: tgl(s.school), onToggle: async () => {
+            if (s.school) {
+              if (s.schoolPin) { const pin = window.prompt('Type the PIN to turn School mode off.'); if (!pin) return; const h = await this.sha(pin); if (h !== s.schoolPin) { this.toast('❌', 'Wrong PIN', 'School mode stays on.'); return } }
+              this.save({ school: false }, 'School mode off'); this.toast('🎒', 'School mode off', 'Your own settings came straight back.')
+            } else {
+              const pin = window.prompt('Pick a PIN so it cannot be switched off again in a hurry. Leave it blank for no PIN.')
+              const h = pin ? await this.sha(pin) : ''
+              this.save({ school: true, schoolPin: h }, 'School mode on'); this.toast('🎒', 'School mode on', 'Plain English, no jokes, no surprise dim sum.')
+            }
+          } }),
+        ] },
+      { id: 'narrator', icon: '🔊', title: 'Read it to me', desc: 'The page can say its messages out loud using a voice already on this computer.', note: 'Voice lists often arrive late, so this list refills itself the moment the browser hands one over. No sound ever leaves the machine.',
+        controls: [
+          ctl({ label: 'Read messages aloud', isToggle: true, on: s.narrate, toggleLabel: s.narrate ? 'On 🔊' : 'Off', toggleStyle: tgl(s.narrate), onToggle: () => this.save({ narrate: !s.narrate }, 'Narrator ' + (!s.narrate ? 'on' : 'off')) }),
+          ctl({ label: 'Voice', isSelect: true, value: s.voice, options: [{ id: '', label: s.voices.length ? 'Whatever the browser picks' : 'No voices found yet…' }].concat(s.voices), onChange: (e) => this.save({ voice: e.target.value }, 'Voice changed') }),
+          ctl({ label: 'Speed', isRange: true, min: 1, max: 5, value: s.rate, onChange: (e) => this.save({ rate: Number(e.target.value) }) }),
+          ctl({ label: 'Try it', isButton: true, toggleLabel: 'Say something', toggleStyle: btn, onToggle: () => { this.setState({ narrate: true }, () => this.speak('Hello ' + (s.nick || 'there') + '. This is the nodeterm playground.')) } }),
+        ] },
+      { id: 'vocab', icon: '📖', title: 'My own words', desc: 'Swap any word on this page for one of your own. Write them as word=newword, separated by commas.', note: 'Only the friendly sentences are swapped — never a command, a file path or a piece of code.',
+        controls: [
+          ctl({ label: 'Swaps', isText: true, value: s.vocab, placeholder: 'terminal=magic box, robot=helper', onChange: (e) => this.save({ vocab: e.target.value.slice(0, 600) }, 'Word swaps changed') }),
+          ctl({ label: 'Clear them', isButton: true, toggleLabel: 'Remove all swaps', toggleStyle: btn, onToggle: () => { this.save({ vocab: '' }, 'Word swaps cleared'); this.toast('📖', 'Cleared', 'Everything reads normally again.') } }),
+        ] },
+      { id: 'timers', icon: '⏰', title: 'Timers', desc: 'Ask the page to change something all by itself at a certain time of day.', note: 'The timer only runs while this page is open. It checks once a second and tells you when it fires.',
+        controls: [
+          ctl({ label: 'Use a timer', isToggle: true, on: s.schedOn, toggleLabel: s.schedOn ? 'On ⏰' : 'Off', toggleStyle: tgl(s.schedOn), onToggle: () => this.save({ schedOn: !s.schedOn }, 'Timer ' + (!s.schedOn ? 'on' : 'off')) }),
+          ctl({ label: 'At this time', isText: true, type: 'time', value: s.schedTime, onChange: (e) => this.save({ schedTime: e.target.value }, 'Timer set for ' + e.target.value) }),
+          ctl({ label: 'Switch to', isSelect: true, value: s.schedTheme, options: [{ id: 'night', label: '🌙 Night colours' }, { id: 'day', label: '☀️ Day colours' }], onChange: (e) => this.save({ schedTheme: e.target.value }, 'Timer target set to ' + e.target.value) }),
+        ] },
+      { id: 'demo', icon: '⬇️', title: 'Download demo', desc: 'Shows the three surfaces a download catcher would use: the start question, the progress window, and the finished notice.', note: 'Honest limit: a page on its own cannot hand a transfer to an installed browser extension, so this shows the surfaces without pretending any bytes moved.',
+        controls: [ctl({ label: 'Run the demo', isButton: true, toggleLabel: 'Show me the three steps', toggleStyle: btn, onToggle: this.downloadDemo })] },
+      { id: 'safety', icon: '🔒', title: 'Toy locks', desc: 'Put a password on any box on this page. Each lock has its very own password — opening one never opens another.', note: 'This is a game, not real safety. Anyone can clear this site’s storage and every lock falls off. Forgot a password? “Start fresh” in the sidebar is the reset.',
+        controls: [
+          ctl({ label: 'Locked boxes and doors', isText: true, value: Object.keys(s.locks).map((k) => k.replace('room:', '🚪 ')).join(', ') || 'none yet', onChange: () => {} }),
+          ctl({ label: 'Take every lock off', isButton: true, toggleLabel: 'Unlock everything', toggleStyle: btn, onToggle: () => this.askConfirm('Take every lock off?', 'All toy locks on every box and every door are removed. Your other settings are untouched.', 'unlock', () => { this.save({ locks: {} }, 'All toy locks removed'); this.toast('🔓', 'All open', 'Every box and door is unlocked.') }) }),
+        ] },
+    ]
+
+    const settingCards = cardsRaw.filter((c) => sm(c.title + ' ' + c.desc + ' ' + c.controls.map((x) => x.label).join(' ')) && gm(c.title + ' ' + c.desc)).map((c) => {
+      const locked = !!s.locks[c.id] && !s.unlocked[c.id]
+      return {
+        icon: c.icon, title: c.title, desc: c.desc, note: c.note, controls: c.controls,
+        locked, open: !locked,
+        lockLabel: s.locks[c.id] ? (s.unlocked[c.id] ? '🔓' : '🔒') : '➕',
+        lock: () => this.toggleLock(c.id),
+        unlockValue: s.unlockVals[c.id] || '',
+        unlockChange: (e) => { const v = e.target.value; this.setState((st) => ({ unlockVals: Object.assign({}, st.unlockVals, { [c.id]: v }) })) },
+        unlock: async () => {
+          const h = await this.sha(s.unlockVals[c.id] || '')
+          if (h === s.locks[c.id]) { this.setState((st) => ({ unlocked: Object.assign({}, st.unlocked, { [c.id]: true }) })); this.toast('🔓', 'Open!', 'That box is unlocked for this visit only.') }
+          else this.toast('❌', 'Not that one', 'Every box has its very own password.')
+        },
+        menu: (e) => this.openMenu(e, 'setting', c.title, c.id),
+      }
+    })
+
+    const targets = []
+    SECTIONS.forEach((x) => targets.push({ icon: x.icon, label: 'Go to ' + x.label, hint: 'room', run: this.go(x.id) }))
+    FEATURES.forEach((f) => targets.push({ icon: f.icon, label: f.title, hint: 'card', run: () => this.setState({ sec: 'home', qSec: f.title, paletteOpen: false }) }))
+    DOCS.forEach((d) => targets.push({ icon: '📖', label: d[0], hint: 'guide page', run: () => this.setState({ sec: 'docs', qSec: d[0], paletteOpen: false }) }))
+    cardsRaw.forEach((c) => c.controls.forEach((x) => targets.push({ icon: c.icon, label: x.label, hint: c.title, run: () => this.setState({ sec: 'settings', qSec: c.title, paletteOpen: false }) })))
+    COVERAGE.forEach((c) => targets.push({ icon: c[2] === 'done' ? '✅' : '⚠️', label: c[0], hint: 'checklist', run: () => this.setState({ sec: 'coverage', qSec: c[0], paletteOpen: false }) }))
+    targets.push({ icon: '🚪', label: 'Back to the hallway', hint: 'action', run: () => this.setState({ view: 'hall', paletteOpen: false }) })
+    targets.push({ icon: '🌗', label: 'Switch day / night', hint: 'action', run: () => { this.setState({ paletteOpen: false }); this.toggleTheme() } })
+    targets.push({ icon: '🧺', label: 'Empty the model basket', hint: 'action', run: () => { this.setState({ cart: {}, paletteOpen: false }); this.toast('🧺', 'Basket emptied', 'Nothing was downloaded either way.') } })
+    targets.push({ icon: '🗑', label: 'Start fresh (wipe everything)', hint: 'action', run: () => { this.setState({ paletteOpen: false }); this.askConfirm('Start completely fresh?', 'This clears every setting, message, log entry, saved code and toy lock this page put in your browser. It cannot be undone.', 'fresh', () => this.wipe()) } })
+    const pm = this.matcher('palette', s.paletteQuery)
+    const paletteItems = targets.filter((p) => pm(p.label + ' ' + p.hint)).slice(0, 50).map((p) => Object.assign({}, p, {
+      style: 'display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:0 12px;border:3px solid var(--line);border-radius:14px;background:var(--paper2);cursor:pointer',
+    }))
+
+    const mm = this.matcher('menu', s.menuQuery)
+    const menuItems = this.menuDefs().filter((m) => mm(m.label + ' ' + (m.hint || ''))).map((m) => Object.assign({}, m, {
+      style: 'display:flex;align-items:center;gap:8px;width:100%;min-height:44px;padding:0 10px;border:3px solid var(--line);border-radius:12px;background:var(--paper2);cursor:pointer;font-weight:700;font-size:13.5px;text-align:left',
+    }))
+
+    let rxResult = 'Type a pattern, then try it on the words below.'
+    let rxBad = false
+    let rxGroups = []
+    const rxKey = s.rxTarget ? s.rxTarget.key : 'global'
+    const rxPattern = s.rxPat[rxKey] || ''
+    const rxFlags = s.rxFlags[rxKey] || 'i'
+    if (s.rxOpen && rxPattern) {
+      try {
+        const clean = rxFlags.replace(/[^gimsuy]/g, '') || 'i'
+        const re = new RegExp(rxPattern.slice(0, 200), clean.includes('g') ? clean : clean + 'g')
+        const sample = String(s.rxSample || '').slice(0, 2000)
+        const found = sample.match(re) || []
+        rxResult = found.length ? 'Found ' + found.length + ' → ' + found.slice(0, 8).map((f) => '“' + f + '”').join(', ') : 'Nothing matched yet. Try loosening it.'
+        const one = new RegExp(rxPattern.slice(0, 200), clean.replace('g', '')).exec(sample)
+        if (one && one.length > 1) rxGroups = one.slice(1).map((v, i) => ({ n: '#' + (i + 1), v: v === undefined ? '(nothing)' : v }))
+      } catch (err) { rxBad = true; rxResult = 'Not finished yet: ' + err.message }
+    }
+
+    const noteBox = (bad, ok) => 'margin-top:10px;padding:10px 12px;border:3px solid var(--line);border-radius:14px;font-size:13px;font-weight:700;background:' + (bad ? 'var(--orange)' : ok ? 'var(--green)' : 'var(--sunk)')
+
+    const emptyTexts = { docs: 'No guide page matches that.', changelog: 'No release in that window.', notes: 'No messages. Lovely and quiet. 🌤', history: 'Nothing logged yet.', dish: 'No dish by that name.', coverage: 'Nothing on the checklist matches.', auth: 'No codes yet — add one below.', shop: 'No model matches that.' }
+
+    return {
+      inHall: s.view === 'hall',
+      inRoom: s.view === 'room',
+      logoStyle: 'display:block;width:38px;height:38px;border:3px solid var(--line);border-radius:12px;background:var(--yellow) url(' + (s.logo || 'assets/mark.svg') + ') center/22px no-repeat',
+      mascot: s.school ? '🦉' : ['🐣', '🦕', '🐙', '🐝', '🦊'][s.dishIdx % 5],
+      hallGreeting: (s.nick ? 'Hello, ' + s.nick + '!' : 'Hello!') + ' Pick a door.',
+      hallSub: this.voiceLine('Every door opens a different room. Some rooms you can lock with your own password, and every single one has a search box and a right-click menu.'),
+      leaveRoom: this.leaveRoom,
+      lockThisRoom: this.lockThisRoom,
+      roomLockLabel: s.locks['room:' + s.sec] ? '🔓 Unlock this door for everyone' : '🔒 Lock this door behind me',
+      doors: SECTIONS.filter((x) => nm(x.label + ' ' + x.title + ' ' + x.sub) && gm(x.label + ' ' + x.title + ' ' + x.sub)).map((x, i) => {
+        const colors = ['var(--red)', 'var(--orange)', 'var(--yellow)', 'var(--green)', 'var(--blue)', 'var(--purple)', 'var(--pink)']
+        const col = colors[i % colors.length]
+        const locked = !!s.locks['room:' + x.id] && !s.unlocked['room:' + x.id]
+        let badge = ''
+        if (x.id === 'notes') badge = String(s.notes.length)
+        if (x.id === 'history') badge = String(s.history.length)
+        if (x.id === 'docs') badge = String(DOCS.length)
+        if (x.id === 'auth') badge = String(s.auth.length)
+        if (x.id === 'coverage') badge = String(COVERAGE.length)
+        const anim = s.opening === x.id ? 'animation:doorSwing .62s ease-in forwards;' : s.knock === x.id ? 'animation:shakeNo .45s ease;' : ''
+        return {
+          label: x.label, icon: x.icon, hint: x.kicker, badge,
+          aria: (locked ? 'Locked door: ' : 'Open the door to ') + x.label,
+          slotStyle: 'display:flex;flex-direction:column',
+          frameStyle: 'position:relative;width:100%;height:190px;padding:0;border:5px solid var(--line);border-radius:18px 18px 6px 6px;background:linear-gradient(180deg,#2b1c3a 0%,#4a2f5e 60%,#c98f5a 100%);box-shadow:var(--shadow);cursor:pointer;perspective:800px;overflow:hidden',
+          insideStyle: 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:44px;color:#fff',
+          doorStyle: 'position:absolute;inset:0;transform-origin:left center;display:flex;align-items:center;justify-content:center;background:' + col + ';border-right:5px solid var(--line);border-radius:14px 14px 4px 4px;' + anim,
+          plaqueStyle: 'font-size:44px;filter:drop-shadow(2px 2px 0 rgba(0,0,0,.25))',
+          lockStyle: locked ? 'position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:22px;background:var(--card);border:3px solid var(--line);border-radius:999px;padding:1px 8px' : 'display:none',
+          badgeStyle: badge ? 'position:absolute;top:8px;right:8px;min-width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:var(--card);border:3px solid var(--line);border-radius:999px;font-size:12px;font-weight:800' : 'display:none',
+          peek: x.icon,
+          enter: () => this.enterDoor(x.id),
+          menu: (e) => this.openMenu(e, 'room', x.label, x.id),
+        }
+      }),
+
+      goPlay: () => this.enterDoor('play'),
+      copyBrew: () => this.copy('brew install --cask nodeterm'),
+
+      isPlay: s.sec === 'play',
+      memScore: 'Turns: ' + s.memMoves + (s.bestMem ? ' · best ' + s.bestMem : ''),
+      memMsg: s.memDone.length === s.memDeck.length && s.memDeck.length ? '🎉 All pairs found! Press New game to shuffle again.' : 'Tap two cards. If they match they stay up.',
+      memCards: s.memDeck.map((c, idx) => {
+        const shown = s.memUp.includes(idx) || s.memDone.includes(idx)
+        return {
+          face: shown ? c.f : '❓',
+          aria: shown ? 'Card showing ' + c.f : 'Face-down card',
+          style: 'aspect-ratio:1;min-height:56px;font-size:26px;border:4px solid var(--line);border-radius:14px;cursor:pointer;font-weight:800;background:' + (s.memDone.includes(idx) ? 'var(--green)' : shown ? 'var(--yellow)' : 'var(--card)'),
+          flip: () => this.memFlip(idx),
+        }
+      }),
+      memReset: () => { this.memDeal(); this.blip() },
+
+      quizScore: 'Streak: ' + s.quizScore + (s.bestQuiz ? ' · best ' + s.bestQuiz : ''),
+      quizMsg: s.quizPicked === null ? 'How many dumplings are left on the plate?' : s.quizPicked === s.quizAnswer ? '✅ Correct! Here comes another.' : '❌ Not that one — the answer was ' + s.quizAnswer + '. Streak back to zero.',
+      quizDish: new Array(s.quizPlus ? s.quizN + s.quizM : s.quizN).fill('🥟').join(''),
+      quizQuestion: s.quizPlus ? s.quizN + ' dumplings, then ' + s.quizM + ' more. How many?' : 'You had ' + Math.max(s.quizN, s.quizM) + ' and ate ' + Math.min(s.quizN, s.quizM) + '. How many left?',
+      quizOptions: s.quizOpts.map((v) => ({
+        label: String(v),
+        style: 'min-height:56px;font-family:var(--fun);font-size:22px;font-weight:800;border:4px solid var(--line);border-radius:14px;cursor:pointer;background:' + (s.quizPicked === null ? 'var(--card)' : v === s.quizAnswer ? 'var(--green)' : s.quizPicked === v ? 'var(--red)' : 'var(--card)'),
+        pick: () => this.quizPick(v),
+      })),
+      quizNext: () => this.quizNew(),
+
+      whackScore: 'Caught: ' + s.whackScore + (s.bestWhack ? ' · best ' + s.bestWhack : ''),
+      whackMsg: s.whackRun ? '⏱ ' + s.whackLeft + ' seconds left — tap the block, not the empty holes!' : 'Twenty seconds. Every miss costs you one.',
+      whackHoles: new Array(9).fill(0).map((_, i) => ({
+        face: s.whackAt === i ? '🟪' : '',
+        aria: s.whackAt === i ? 'A block popped up — tap it' : 'Empty hole',
+        style: 'aspect-ratio:1;min-height:60px;font-size:30px;border:4px solid var(--line);border-radius:50%;cursor:pointer;background:' + (s.whackAt === i ? 'var(--purple)' : 'var(--sunk)'),
+        hit: () => this.whackHit(i),
+      })),
+      whackBtn: s.whackRun ? '⏱ ' + s.whackLeft + 's — playing…' : '▶ Start the timer',
+      whackStart: this.whackStart,
+
+      bestLine: 'Memory pairs: ' + (s.bestMem ? s.bestMem + ' turns' : 'not finished yet') + ' · Dumpling maths: ' + (s.bestQuiz || 0) + ' in a row · Whack-a-block: ' + (s.bestWhack || 0) + ' caught.',
+      clearScores: () => this.askConfirm('Clear your best scores?', 'The three best scores go back to nothing. Your settings and messages are not touched.', 'scores', () => { this.save({ bestMem: 0, bestQuiz: 0, bestWhack: 0 }, 'Best scores cleared'); this.toast('🏆', 'Cleared', 'Fresh start on all three games.') }),
+
+      isHome: s.sec === 'home',
+      isList: !!listSecs[s.sec],
+      isConverter: s.sec === 'convert',
+      isExport: s.sec === 'export',
+      isSettings: s.sec === 'settings',
+
+      themeIcon: s.theme === 'night' ? '🌙' : '☀️',
+      toggleTheme: this.toggleTheme,
+      goNotes: () => this.setState({ sec: 'notes' }),
+      bellCount: String(s.notes.length),
+      bellStyle: s.notes.length ? 'position:absolute;top:-8px;right:-8px;min-width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:var(--red);border:3px solid var(--line);border-radius:999px;font-size:11px;font-weight:800' : 'display:none',
+      storageLine: s.notes.length + ' messages · ' + s.history.length + ' log entries · ' + s.auth.length + ' codes · ' + Object.keys(s.locks).length + ' toy locks. All of it in this browser only.',
+      resetAll: () => this.askConfirm('Start completely fresh?', 'This clears every setting, message, log entry, saved code and toy lock this page put in your browser. It cannot be undone.', 'fresh', () => this.wipe()),
+
+      qGlobal: s.qGlobal, setQGlobal: (e) => this.setState({ qGlobal: e.target.value }),
+      qNav: s.qNav, setQNav: (e) => this.setState({ qNav: e.target.value }),
+      qSec: s.qSec, setQSec: (e) => this.setState({ qSec: e.target.value }),
+      rxGlobal: () => this.openRx('global', 'the big search'),
+      rxNav: () => this.openRx('nav', 'the room finder'),
+      rxSec: () => this.openRx('sec', 'this room’s search'),
+      rxMenu: () => this.openRx('menu', 'this menu filter'),
+      rxPalette: () => this.openRx('palette', 'the jump box'),
+      rxGlobalStyle: this.rxBtnStyle('global', true),
+      rxNavStyle: this.rxBtnStyle('nav', false),
+      rxSecStyle: this.rxBtnStyle('sec', true),
+      rxMenuStyle: this.rxBtnStyle('menu', false),
+      rxPaletteStyle: this.rxBtnStyle('palette', true),
+
+      menuHeader: (e) => this.openMenu(e, 'header', 'the top bar'),
+      menuSearch: (e) => this.openMenu(e, 'search', 'the big search'),
+      menuGeneric: (e) => this.openMenu(e, 'generic', 'this button'),
+      menuRail: (e) => this.openMenu(e, 'rail', 'the room list'),
+      menuPanel: (e) => this.openMenu(e, 'generic', S.title),
+
+      navItems, navEmpty: navItems.length === 0,
+      secKicker: S.kicker, secTitle: this.vocabApply(this.effLang() === 'yue' ? (YUE[S.title] || S.title) : this.effLang() === 'bi' ? S.title + ' / ' + (YUE[S.title] || S.title) : S.title), secSub: this.voiceLine(S.sub), secSearchPlaceholder: S.ph,
+
+      statCards, features, featuresEmpty: features.length === 0,
+      featureCount: features.length + ' of ' + FEATURES.length + ' showing',
+
+      rows, listEmpty: rows.length === 0, emptyText: emptyTexts[s.sec] || 'Nothing here.',
+      listMeta: rawRows.length + ' shown · ' + pickedIds.length + ' picked',
+      listFootnote: s.sec === 'coverage'
+        ? 'This list is written by hand on purpose. A checker that only looks at what already exists would pass happily on a page with nothing on it, so each promise is named here whether or not it is built.'
+        : s.sec === 'shop'
+        ? 'This page cannot download a model. The verdicts come from what your browser is willing to say about this computer, and it rounds memory hard, so treat “should fit” as a hint rather than a promise.'
+        : s.sec === 'auth'
+        ? 'Codes are worked out in this page from the secret you typed. The secret is kept in this browser and never sent anywhere — which also means clearing storage loses it, so keep your original backup.'
+        : 'Click a row to pick it. Right-click for its own menu. Anything that throws something away asks you to type a word first.',
+      selAll: () => { const p = {}; if (!allPicked) rawRows.forEach((r) => (p[r.id] = true)); this.setState({ picked: p }) },
+      selAllLabel: allPicked ? 'Unpick all ' + rawRows.length : 'Pick all ' + rawRows.length,
+      selInvert: () => { const p = {}; rawRows.forEach((r) => { if (!s.picked[r.id]) p[r.id] = true }); this.setState({ picked: p }) },
+      bulkLabel: pickedIds.length ? '🗑 Throw away ' + pickedIds.length : '🗑 Throw away',
+      bulkStyle: 'height:44px;padding:0 14px;border:3px solid var(--line);border-radius:999px;box-shadow:var(--shadow-sm);cursor:' + (pickedIds.length ? 'pointer' : 'not-allowed') + ';font-weight:800;opacity:' + (pickedIds.length ? '1' : '.45') + ';background:var(--red)',
+      bulkRemove: () => {
+        if (!pickedIds.length) { this.toast('👆', 'Pick something first', 'Click the rows you mean, then press this.'); return }
+        this.askConfirm('Throw ' + pickedIds.length + ' thing(s) away?', 'Here is exactly what will go. Nothing happens until you type the word.', 'bye', () => this.removeRows(pickedIds))
+      },
+      panelActions,
+
+      hasDateFilter: s.sec === 'changelog',
+      dateFrom: s.dateFrom, setDateFrom: (e) => this.setState({ dateFrom: e.target.value }),
+      dateTo: s.dateTo, setDateTo: (e) => this.setState({ dateTo: e.target.value }),
+      range30: () => { const d = new Date(); const f = new Date(d.getTime() - 30 * 864e5); this.setState({ dateFrom: f.toISOString().slice(0, 10), dateTo: d.toISOString().slice(0, 10) }) },
+      range90: () => { const d = new Date(); const f = new Date(d.getTime() - 90 * 864e5); this.setState({ dateFrom: f.toISOString().slice(0, 10), dateTo: d.toISOString().slice(0, 10) }) },
+      rangeAll: () => this.setState({ dateFrom: '', dateTo: '' }),
+
+      convFrom: s.convFrom, setConvFrom: (e) => this.setState({ convFrom: e.target.value }),
+      convTo: s.convTo, setConvTo: (e) => this.setState({ convTo: e.target.value }),
+      convFromOpts: CONV_IN, convToOpts: CONV_OUT,
+      convIn: s.convIn, setConvIn: (e) => this.setState({ convIn: e.target.value }),
+      convOut: s.convOut,
+      convNote: s.convNote,
+      convNoteStyle: noteBox(s.convBad, false),
+      convRun: () => {
+        try {
+          const recs = this.parseRecords(s.convIn, s.convFrom)
+          const out = this.emit(recs, s.convTo)
+          const lossy = (FORMATS.find((f) => f.id === s.convTo) || {}).loss
+          this.setState({ convOut: out, convBad: false, convNote: recs.length + ' row(s) converted.' + (lossy ? ' Heads up: ' + lossy : ' Nothing was lost on the way.') })
+          this.log('Converted ' + s.convFrom + ' → ' + s.convTo)
+        } catch (err) { this.setState({ convBad: true, convNote: 'That did not read as ' + s.convFrom + ': ' + err.message, convOut: '' }) }
+      },
+      convDetect: () => {
+        const t = String(s.convIn || '').trim()
+        let guess = 'text'
+        if (/^[\[{]/.test(t)) guess = 'json'
+        else if (/^\s*-\s/.test(t)) guess = 'yaml'
+        else if (/^</.test(t)) guess = 'xml'
+        else if (t.includes('\t')) guess = 'tsv'
+        else if (/^[^\n]+,[^\n]+/.test(t)) guess = 'csv'
+        else if (/^[0-9a-f\s]+$/i.test(t) && t.length > 8) guess = 'hex'
+        else if (/^[A-Za-z0-9+/=\s]+$/.test(t) && t.length > 12) guess = 'base64'
+        this.setState({ convFrom: guess, convNote: 'Those bytes look like ' + guess + '. Change it if the guess is wrong.' })
+      },
+      convClear: () => this.setState({ convIn: '', convOut: '', convNote: 'Cleared. Paste something new.', convBad: false }),
+      convCopy: () => this.copy(s.convOut),
+      convDownload: () => this.download('converted.' + s.convTo, s.convOut || ''),
+
+      datasets, formats, formatCount: fmtMatch.length + ' of ' + FORMATS.length,
+      lossNote: s.lossNote, lossStyle: noteBox(s.lossBad, false),
+      lossPending: !!s.lossPending,
+      lossConfirm: () => { const f = FORMATS.find((x) => x.id === s.lossPending); this.download('nodeterm-' + s.dataset + '.' + f.id, this.emit(this.datasetRecords(s.dataset), f.id)); this.setState({ lossPending: null, lossNote: 'Saved as ' + f.label + ', with the loss above accepted.', lossBad: false }) },
+      lossCancel: () => this.setState({ lossPending: null, lossNote: 'Nothing was saved. Pick a green shape to keep every field.', lossBad: false }),
+      exportPreview: (() => { try { return this.emit(this.datasetRecords(s.dataset), s.lossPending || 'json').slice(0, 4000) } catch (_) { return '' } })(),
+
+      settingCards,
+
+      menuOpen: s.menuOpen,
+      closeMenu: () => this.setState({ menuOpen: false }),
+      stop: (e) => e.stopPropagation(),
+      menuStyle: 'position:fixed;left:' + s.menuX + 'px;top:' + s.menuY + 'px;width:276px;padding:10px;background:var(--card);border:4px solid var(--line);border-radius:18px;box-shadow:8px 8px 0 var(--line)',
+      menuTitle: 'Menu for ' + (s.menuLabel || 'this'),
+      menuQuery: s.menuQuery, setMenuQuery: (e) => this.setState({ menuQuery: e.target.value }),
+      menuItems, menuEmpty: menuItems.length === 0,
+
+      rxOpen: s.rxOpen,
+      rxClose: () => this.setState({ rxOpen: false }),
+      rxStyle: 'position:absolute;left:50%;top:6vh;transform:translateX(-50%);width:min(560px,calc(100vw - 24px));max-height:88vh;overflow:auto;padding:18px;background:var(--card);border:5px solid var(--line);border-radius:24px;box-shadow:10px 10px 0 var(--line)',
+      rxTargetName: s.rxTarget ? s.rxTarget.name : '',
+      rxModeLabel: s.rxOn[rxKey] ? 'Pattern mode ON' : 'Plain words',
+      rxModeStyle: 'height:40px;padding:0 14px;border:3px solid var(--line);border-radius:999px;cursor:pointer;font-weight:800;font-size:13px;background:' + (s.rxOn[rxKey] ? 'var(--green)' : 'var(--sunk)'),
+      rxToggleMode: () => this.setState((st) => ({ rxOn: Object.assign({}, st.rxOn, { [rxKey]: !st.rxOn[rxKey] }) })),
+      rxPattern, setRxPattern: (e) => { const v = e.target.value.slice(0, 200); this.setState((st) => ({ rxPat: Object.assign({}, st.rxPat, { [rxKey]: v }) })) },
+      rxFlags, setRxFlags: (e) => { const v = e.target.value.slice(0, 6); this.setState((st) => ({ rxFlags: Object.assign({}, st.rxFlags, { [rxKey]: v }) })) },
+      rxTokens: RX_TOKENS.map((t) => ({ label: t[0], color: t[2], hint: t[3], insert: () => this.setState((st) => ({ rxPat: Object.assign({}, st.rxPat, { [rxKey]: ((st.rxPat[rxKey] || '') + t[1]).slice(0, 200) }) })) })),
+      rxSample: s.rxSample, setRxSample: (e) => this.setState({ rxSample: e.target.value.slice(0, 2000) }),
+      rxResult, rxResultStyle: noteBox(rxBad, !rxBad && rxGroups.length > 0),
+      rxHasGroups: rxGroups.length > 0, rxGroups,
+      rxApply: () => {
+        const patch = { rxOn: Object.assign({}, s.rxOn, { [rxKey]: true }), rxOpen: false }
+        if (rxKey === 'global') patch.qGlobal = rxPattern
+        if (rxKey === 'nav') patch.qNav = rxPattern
+        if (rxKey === 'sec') patch.qSec = rxPattern
+        if (rxKey === 'menu') patch.menuQuery = rxPattern
+        if (rxKey === 'palette') patch.paletteQuery = rxPattern
+        this.setState(patch)
+        this.toast('🧩', 'Pattern set', 'That search box is now matching by pattern.')
+      },
+      rxPlain: () => this.setState((st) => ({ rxOn: Object.assign({}, st.rxOn, { [rxKey]: false }), rxOpen: false })),
+
+      paletteOpen: s.paletteOpen,
+      closePalette: () => this.setState({ paletteOpen: false }),
+      paletteQuery: s.paletteQuery, setPaletteQuery: (e) => this.setState({ paletteQuery: e.target.value }),
+      paletteKey: (e) => { if (e.key === 'Enter' && paletteItems.length) paletteItems[0].run() },
+      paletteItems, paletteEmpty: paletteItems.length === 0,
+
+      confirmOpen: !!s.confirm,
+      confirmTitle: s.confirm ? s.confirm.title : '',
+      confirmBody: s.confirm ? s.confirm.body : '',
+      confirmWord: s.confirm ? s.confirm.word : '',
+      confirmPreview: s.confirm ? (pickedIds.length ? rawRows.filter((r) => s.picked[r.id]).map((r) => '• ' + r.title).join('\n') : 'Everything this page saved in your browser.') : '',
+      confirmTyped: s.confirmTyped, setConfirmTyped: (e) => this.setState({ confirmTyped: e.target.value }),
+      confirmCancel: () => this.setState({ confirm: null, confirmTyped: '' }),
+      confirmRunLabel: s.confirm && s.confirmTyped.trim().toLowerCase() === s.confirm.word.toLowerCase() ? 'Yes, do it' : 'Type “' + (s.confirm ? s.confirm.word : '') + '” first',
+      confirmRunStyle: 'height:48px;padding:0 18px;border:3px solid var(--line);border-radius:999px;font-weight:800;background:var(--red);cursor:' + (s.confirm && s.confirmTyped.trim().toLowerCase() === s.confirm.word.toLowerCase() ? 'pointer' : 'not-allowed') + ';opacity:' + (s.confirm && s.confirmTyped.trim().toLowerCase() === s.confirm.word.toLowerCase() ? '1' : '.45'),
+      confirmRun: () => {
+        if (!s.confirm) return
+        if (s.confirmTyped.trim().toLowerCase() !== s.confirm.word.toLowerCase()) { this.toast('✋', 'Not yet', 'Type “' + s.confirm.word + '” exactly, then press it again.'); return }
+        const run = s.confirm.run
+        this.setState({ confirm: null, confirmTyped: '' }, () => run())
+      },
+
+      toasts: s.toasts.map((t) => Object.assign({}, t, {
+        style: 'padding:14px;background:var(--card);border:4px solid var(--line);border-radius:20px;box-shadow:var(--shadow);animation:pop .2s ease',
+        dismiss: () => this.setState((st) => ({ toasts: st.toasts.filter((x) => x.id !== t.id) })),
+      })),
+
+      addA: s.addA, setAddA: (e) => this.setState({ addA: e.target.value }),
+      addB: s.addB, setAddB: (e) => this.setState({ addB: e.target.value }),
+      hasAddRow: s.sec === 'auth',
+      addAPlaceholder: 'What is it for? e.g. My game account',
+      addBPlaceholder: 'The secret it gave you (letters A–Z and 2–7)',
+      addBType: 'text',
+      addLabel: '➕ Add this code',
+      addRun: () => {
+        const label = String(s.addA || '').trim(), secret = String(s.addB || '').trim()
+        if (!label || !secret) { this.toast('✋', 'Two things needed', 'A name, and the secret it gave you.'); return }
+        if (b32decode(secret).length < 10) { this.toast('❌', 'That secret looks wrong', 'It should be letters A to Z and digits 2 to 7, at least sixteen of them.'); return }
+        this.save({ auth: s.auth.concat([{ id: 'a' + Date.now(), label, secret }]), addA: '', addB: '' }, 'Added the code “' + label + '”')
+        this.notify('A new code was paired', '“' + label + '” now makes a fresh six-digit code every thirty seconds, entirely inside this page.', 'code')
+        this.toast('🔐', 'Paired', 'Watch it change every thirty seconds.')
+        setTimeout(() => this.refreshCodes(), 50)
+      },
+    }
+  }
+
+  wipe() {
+    try { localStorage.removeItem(LS) } catch (_) {}
+    this.setState({
+      notes: [], history: [{ id: 'h0', title: 'Started fresh', body: 'Everything was cleared.', when: nowIso(), tag: 'start' }], locks: {}, unlocked: {}, picked: {}, auth: [], cart: {},
+      theme: 'day', lang: 'en', funnyEn: 2, funnyYue: 3, emoji: true, bigText: false, sound: false, accent: '#ffd93d', nick: '', logo: '', preset: 'playground',
+      school: false, schoolPin: '', narrate: false, voice: '', rate: 3, vocab: '', schedOn: false, schedTime: '19:00', schedTheme: 'night',
+    }, () => this.applyTheme())
+    this.toast('🧹', 'All clear', 'Everything is back to how it started.')
+  }
+}
+</script>
+</body>
+</html>

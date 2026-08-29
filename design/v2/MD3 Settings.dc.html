@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0" rel="stylesheet">
+<link rel="stylesheet" href="md3/tokens.css">
+<style>
+  body { margin:0; background:#0A090D; }
+  a { color:var(--md-primary); text-decoration:none; }
+  a:hover { color:var(--md-on-primary-container); }
+  .msr { font-family:'Material Symbols Rounded'; font-weight:400; font-style:normal; line-height:1;
+         letter-spacing:normal; display:inline-block; white-space:nowrap; direction:ltr;
+         font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
+  .msrf { font-variation-settings:'FILL' 1,'wght' 500,'GRAD' 0,'opsz' 24; }
+</style>
+</helmet>
+
+<div style="font-family:var(--md-font-ui);padding:36px;display:flex;flex-direction:column;gap:14px;color:#E6E0E9">
+  <div style="display:flex;align-items:flex-end;gap:16px">
+    <div>
+      <div style="font-size:21px;font-weight:600">Settings · Material 3 rewrite</div>
+      <div style="font-size:13px;color:#938F99;margin-top:2px"><a href="MD3 Canvas.dc.html">Canvas</a> · <a href="MD3 Board.dc.html">Board</a> · <a href="MD3 Files.dc.html">Files</a> · <a href="MD3 Overlays.dc.html">Overlays</a></div>
+    </div>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 20px;border-radius:999px;border:1px solid #49454F;background:transparent;color:#E6E0E9;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer"><span class="msr" style="font-size:18px">contrast</span>{{ themeLabel }}</button>
+  </div>
+
+<div style="width:1440px;height:900px;border-radius:28px;overflow:hidden;position:relative;background:var(--md-surface);color:var(--md-on-surface);display:flex;flex-direction:column;outline:1px solid var(--md-outline-variant)">
+
+  <div style="height:64px;flex:0 0 64px;display:flex;align-items:center;gap:14px;padding:0 20px 0 16px;background:var(--md-surface-container)">
+    <div style="display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:38px;height:38px;border-radius:14px;background:var(--md-primary-container);color:var(--md-on-primary-container);display:flex;align-items:center;justify-content:center"><span class="msr msrf" style="font-size:22px">hub</span></div>
+      <div style="font-size:17px;font-weight:600">nodeterm</div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:12px;width:300px;height:44px;padding:0 8px 0 18px;border-radius:999px;background:var(--md-surface-container-high);color:var(--md-on-surface-variant)">
+      <span class="msr" style="font-size:20px">search</span>
+      <input value="{{ q }}" onChange="{{ setQ }}" placeholder="Search settings…" style="flex:1;min-width:0;border:none;background:transparent;color:var(--md-on-surface);font-family:inherit;font-size:14px;outline:none">
+      <span style="font-family:var(--md-font-mono);font-size:11px;padding:4px 8px;border-radius:8px;background:var(--md-surface-container-highest);cursor:pointer">.*</span>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <div style="width:88px;flex:0 0 88px;background:var(--md-surface-container);display:flex;flex-direction:column;align-items:center;padding:10px 0 14px;gap:6px">
+      <button style="width:56px;height:56px;border-radius:16px;border:none;background:var(--md-primary-container);color:var(--md-on-primary-container);cursor:pointer;display:flex;align-items:center;justify-content:center;margin-bottom:14px"><span class="msr" style="font-size:26px">add</span></button>
+      <sc-for list="{{ rail }}" as="r" hint-placeholder-count="5">
+        <a href="{{ r.href }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;width:80px;padding:6px 0;color:inherit">
+          <span style="width:56px;height:32px;border-radius:999px;background:{{ r.pill }};color:{{ r.fg }};display:flex;align-items:center;justify-content:center"><span class="msr {{ r.fill }}" style="font-size:22px">{{ r.icon }}</span></span>
+          <span style="font-size:12px;font-weight:{{ r.weight }};color:{{ r.labelFg }}">{{ r.label }}</span>
+        </a>
+      </sc-for>
+    </div>
+
+    <div data-screen-label="Settings" style="flex:1;min-width:0;display:flex;min-height:0">
+
+      <!-- settings nav -->
+      <div style="width:300px;flex:0 0 300px;overflow-y:auto;padding:20px 8px 20px 16px;display:flex;flex-direction:column;gap:14px">
+        <sc-for list="{{ groups }}" as="g" hint-placeholder-count="4">
+          <div>
+            <div style="font-size:11.5px;font-weight:700;letter-spacing:.8px;color:var(--md-on-surface-variant);padding:0 16px 8px;text-transform:uppercase">{{ g.title }}</div>
+            <div style="display:flex;flex-direction:column;gap:1px">
+              <sc-for list="{{ g.sections }}" as="it" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:12px;height:40px;padding:0 16px;border-radius:999px;background:{{ it.bg }};color:{{ it.fg }};font-size:13.5px;font-weight:{{ it.weight }};cursor:pointer" style-hover="background:var(--md-surface-container-high)">
+                  <span class="msr {{ it.fill }}" style="font-size:19px">{{ it.icon }}</span>{{ it.label }}
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- settings body: Appearance -->
+      <div style="flex:1;min-width:0;overflow:hidden;padding:24px 32px;display:flex;flex-direction:column;gap:18px">
+        <div>
+          <div style="font-size:26px;font-weight:600">Appearance</div>
+          <div style="font-size:13.5px;color:var(--md-on-surface-variant);margin-top:4px">Theme, accent, type and the scheduled overrides.</div>
+        </div>
+
+        <div style="border-radius:28px;background:var(--md-surface-container-low);padding:8px;display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ rows }}" as="row" hint-placeholder-count="6">
+            <div style="display:flex;align-items:center;gap:16px;min-height:64px;padding:10px 18px;border-radius:20px" style-hover="background:var(--md-surface-container)">
+              <span class="msr" style="font-size:22px;color:var(--md-on-surface-variant)">{{ row.icon }}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:14.5px;font-weight:600">{{ row.label }}</div>
+                <div style="font-size:12.5px;color:var(--md-on-surface-variant);margin-top:2px;text-wrap:pretty">{{ row.hint }}</div>
+              </div>
+              <sc-if value="{{ row.isSelect }}" hint-placeholder-val="{{ false }}">
+                <span style="display:flex;align-items:center;gap:8px;height:40px;padding:0 10px 0 16px;border-radius:12px;border:1px solid var(--md-outline);font-size:13.5px;font-weight:500;cursor:pointer">{{ row.value }}<span class="msr" style="font-size:19px">arrow_drop_down</span></span>
+              </sc-if>
+              <sc-if value="{{ row.isLocked }}" hint-placeholder-val="{{ false }}">
+                <span style="display:flex;align-items:center;gap:7px;height:32px;padding:0 14px;border-radius:999px;background:var(--md-tertiary-container);color:var(--md-on-tertiary-container);font-size:12px;font-weight:700;flex:0 0 auto"><span class="msr msrf" style="font-size:15px">restaurant</span>Always on — by design</span>
+              </sc-if>
+              <sc-if value="{{ row.isSwitch }}" hint-placeholder-val="{{ false }}">
+                <span onClick="{{ row.flip }}" style="width:52px;height:32px;border-radius:999px;background:{{ row.bg }};border:2px solid {{ row.trackBd }};position:relative;cursor:pointer;flex:0 0 auto;transition:background var(--md-motion-effect)">
+                  <span style="position:absolute;top:{{ row.knobTop }};left:{{ row.knobLeft }};width:{{ row.knobSize }};height:{{ row.knobSize }};border-radius:50%;background:{{ row.knobBg }};transition:left var(--md-motion-spatial)"></span>
+                </span>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+
+        <!-- accent picker card -->
+        <div style="border-radius:28px;background:var(--md-surface-container-low);padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+          <div>
+            <div style="font-size:14.5px;font-weight:600">Accent</div>
+            <div style="font-size:12.5px;color:var(--md-on-surface-variant);margin-top:2px">The seed the whole tonal scheme derives from.</div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:center">
+            <sc-for list="{{ accents }}" as="a" hint-placeholder-count="6">
+              <span style="width:44px;height:44px;border-radius:50%;background:{{ a.c }};cursor:pointer;display:flex;align-items:center;justify-content:center;outline:{{ a.ring }};outline-offset:3px">
+                <sc-if value="{{ a.on }}" hint-placeholder-val="{{ false }}"><span class="msr" style="font-size:20px;color:#fff">check</span></sc-if>
+              </span>
+            </sc-for>
+            <span style="width:44px;height:44px;border-radius:50%;border:1px dashed var(--md-outline);color:var(--md-on-surface-variant);cursor:pointer;display:flex;align-items:center;justify-content:center"><span class="msr" style="font-size:20px">colorize</span></span>
+          </div>
+        </div>
+
+        <!-- terminal preview card -->
+        <div style="border-radius:28px;background:var(--md-surface-container-low);padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center">
+            <div>
+              <div style="font-size:14.5px;font-weight:600">Terminal</div>
+              <div style="font-size:12.5px;color:var(--md-on-surface-variant);margin-top:2px">Terminal bodies stay dark in both themes.</div>
+            </div>
+            <div style="flex:1"></div>
+            <span style="display:flex;align-items:center;gap:8px;height:40px;padding:0 10px 0 16px;border-radius:12px;border:1px solid var(--md-outline);font-size:13.5px;font-weight:500;cursor:pointer">JetBrains Mono · 13<span class="msr" style="font-size:19px">arrow_drop_down</span></span>
+          </div>
+          <div style="border-radius:16px;background:var(--term-bg);padding:14px 18px;font-family:var(--md-font-mono);font-size:12px;line-height:1.8;color:#CAC4D0">
+            <div style="color:#938F99">$ echo "the quick brown fox"</div>
+            <div>the quick brown fox <span style="color:#89D88C">✓</span> <span style="color:#D0BCFF">0.02s</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1520,&quot;height&quot;:1040},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark' | 'light'&quot;,&quot;section&quot;:&quot;Appearance&quot;}}">
+class Component extends DCLogic {
+  state = { theme: 'dark', q: '', sw: { narrator: false, school: false, dimsum: true, schedule: true } };
+  componentDidMount() { this.applyTheme(); }
+  componentDidUpdate() { this.applyTheme(); }
+  applyTheme() { document.documentElement.dataset.theme = this.props.theme ?? this.state.theme; }
+  sw(key, on) {
+    return {
+      isSwitch: true, isSelect: false,
+      bg: on ? 'var(--md-primary)' : 'var(--md-surface-container-highest)',
+      trackBd: on ? 'transparent' : 'var(--md-outline)',
+      knobBg: on ? 'var(--md-on-primary)' : 'var(--md-outline)',
+      knobTop: on ? '4px' : '8px', knobLeft: on ? '24px' : '8px', knobSize: on ? '24px' : '16px',
+      flip: () => this.setState((p) => ({ sw: { ...p.sw, [key]: !p.sw[key] } }))
+    };
+  }
+  filterGroups(groups) {
+    const q = this.state.q.toLowerCase();
+    if (!q) return groups;
+    return groups
+      .map(([title, sections]) => [title, sections.filter(([label]) => label.toLowerCase().includes(q) || title.toLowerCase().includes(q))])
+      .filter(([, sections]) => sections.length);
+  }
+  filterRows(rows) {
+    const q = this.state.q.toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => (r.label + ' ' + r.hint).toLowerCase().includes(q));
+  }
+  renderVals() {
+    const s = this.state;
+    return {
+      themeLabel: (this.props.theme ?? s.theme) === 'dark' ? 'Dark' : 'Light',
+      toggleTheme: () => this.setState((p) => ({ theme: p.theme === 'dark' ? 'light' : 'dark' })),
+      rail: [
+        ['workspaces', 'Canvas', 'MD3 Canvas.dc.html', false],
+        ['view_kanban', 'Board', 'MD3 Board.dc.html', false],
+        ['folder', 'Files', 'MD3 Files.dc.html', false],
+        ['construction', 'Tools', 'MD3 Tools.dc.html', false],
+        ['history', 'History', 'MD3 History.dc.html', false],
+        ['notifications', 'Alerts', 'MD3 Overlays.dc.html', false],
+        ['settings', 'Settings', 'MD3 Settings.dc.html', true]
+      ].map(([icon, label, href, on]) => ({
+        icon, label, href, fill: on ? 'msrf' : '',
+        pill: on ? 'var(--md-secondary-container)' : 'transparent',
+        fg: on ? 'var(--md-on-secondary-container)' : 'var(--md-on-surface-variant)',
+        labelFg: on ? 'var(--md-on-surface)' : 'var(--md-on-surface-variant)',
+        weight: on ? 600 : 500
+      })),
+      q: s.q,
+      setQ: (e) => this.setState({ q: e.target.value }),
+      groups: this.filterGroups([
+        ['AI capabilities', [['Agents', 'smart_toy'], ['Accounts', 'account_circle'], ['Custom agents', 'build'], ['Usage', 'data_usage'], ['Commit messages', 'commit']]],
+        ['Workspace', [['Terminal', 'terminal'], ['Shell', 'code'], ['tmux', 'grid_view'], ['GitHub Issues', 'bug_report'], ['Behavior', 'tune']]],
+        ['Interface', [['Appearance', 'palette'], ['Appearance editor', 'format_paint'], ['App name & logo', 'image'], ['Notch', 'crop_16_9'], ['Notifications', 'notifications'], ['Language', 'language'], ['Narrator', 'record_voice_over'], ['Dictation', 'mic'], ['Schedule', 'schedule']]],
+        ['Remote & team', [['Your name', 'badge'], ['Phone', 'smartphone'], ['Remote access', 'cloud'], ['Team seats', 'group'], ['Remote (SSH)', 'vpn_key']]],
+        ['Application', [['License', 'gavel'], ['Updates', 'system_update'], ['Privacy', 'shield'], ['School mode', 'school'], ['Personal vocabulary', 'spellcheck'], ['History', 'history']]],
+        ['Just for fun', [['Toy locks', 'toys'], ['Authenticator', 'password'], ['Dim-sum surprise', 'restaurant'], ['Kids mode', 'child_care']]]
+      ]).map(([title, sections]) => ({
+        title,
+        sections: sections.map(([label, icon]) => {
+          const on = label === 'Appearance';
+          return { label, icon, fill: on ? 'msrf' : '',
+            bg: on ? 'var(--md-secondary-container)' : 'transparent',
+            fg: on ? 'var(--md-on-secondary-container)' : 'var(--md-on-surface-variant)',
+            weight: on ? 600 : 500 };
+        })
+      })),
+      rows: this.filterRows([
+        { icon: 'contrast', label: 'Theme', hint: 'Follows the system by default.', isSwitch: false, isSelect: true, value: (this.props.theme ?? s.theme) === 'dark' ? 'Dark' : 'Light' },
+        { icon: 'language', label: 'Language', hint: 'English, playful Cantonese, or bilingual. Tone changes, never facts.', isSwitch: false, isSelect: true, value: 'Bilingual' },
+        { icon: 'record_voice_over', label: 'Narrator', hint: 'Speaks status changes with a queue and a cooldown.', ...this.sw('narrator', s.sw.narrator) },
+        { icon: 'school', label: 'School mode', hint: 'Shared switch that renames the app and hides the fun surfaces.', ...this.sw('school', s.sw.school) },
+        { icon: 'restaurant', label: 'Startup dim-sum', hint: 'The startup surprise. There is no off switch, by design.', isSwitch: false, isSelect: false, isLocked: true },
+        { icon: 'schedule', label: 'Scheduled appearance', hint: 'Override appearance by time of day, date range, or a Home Assistant entity.', ...this.sw('schedule', s.sw.schedule) }
+      ]),
+      accents: [
+        { c: '#6750A4', on: true, ring: '2px solid var(--md-primary)' },
+        { c: '#005AC1', on: false, ring: 'none' },
+        { c: '#00696D', on: false, ring: 'none' },
+        { c: '#8B5000', on: false, ring: 'none' },
+        { c: '#3E6837', on: false, ring: 'none' },
+        { c: '#9C4146', on: false, ring: 'none' }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>

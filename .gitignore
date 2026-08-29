@@ -1,0 +1,47 @@
+node_modules
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+.vite/
+*.tsbuildinfo
+
+# host.sh / host.bat write the first-boot server password here. It is runtime state and must
+# never become a tempting untracked credential that can be added to a commit by accident.
+/.env
+/.env.bak
+/.nodeterm-server-totp
+/.nodeterm-env-*
+
+build/icon.png
+
+# bundled tmux — a ~2MB universal binary, built by scripts/build-tmux.mjs (the source of truth)
+# and copied into the app by electron-builder's mac extraResources. Never committed.
+/resources/bin/
+
+.playwright-mcp/
+
+# concurrent-session worktrees / local agent state
+.claude/
+
+# backend lives in its own repo
+/nodebaseserver/
+
+# local session handoff transcripts / app state
+.nodeterm/
+
+# internal dev docs (SDD plans/specs, release runbook) — kept local, never tracked
+/docs/superpowers/
+/docs/RELEASING.md
+
+# local publish helper — never exported to the public repo
+/publish.sh
+/kanban-launch.mp4
+/agents-tour.mp4
+/unplug-tour.mp4
+/remote-tour.mp4
+/kanban-launch-4k.mp4
+/dictation-tour.mp4
+/canvas-tour.mp4
+/hero-tour.mp4

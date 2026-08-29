@@ -1,0 +1,9 @@
+# Windows batch files require CRLF line endings -- a .bat file saved with LF-only endings can
+# silently break `goto`/label resolution deep in the file (see docs/building.md). Pin these to
+# CRLF regardless of any given clone's core.autocrlf setting.
+*.bat text eol=crlf
+
+# POSIX shell scripts require LF line endings -- a CRLF shebang line ("#!/bin/sh\r") fails to
+# resolve the interpreter on Linux/macOS. Pin these to LF regardless of any given clone's
+# core.autocrlf setting.
+*.sh text eol=lf

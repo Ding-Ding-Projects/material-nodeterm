@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+  body { margin:0; background:#0b0b0c; }
+  a { color:#0a84ff; text-decoration:none; }
+  a:hover { color:#3a9bff; }
+  @keyframes ntWorking { 0%,100%{opacity:.25} 50%{opacity:1} }
+  @keyframes ntUnread { 0%,100%{opacity:0} 50%{opacity:1} }
+</style>
+</helmet>
+
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;padding:40px;display:flex;flex-direction:column;gap:14px">
+
+<div style="display:flex;align-items:baseline;gap:14px;color:rgba(255,255,255,.85)">
+  <div style="font-size:20px;font-weight:700">nodeterm — current UI</div>
+  <div style="font-size:13px;color:rgba(255,255,255,.45)">Recreated from src/renderer (styles.css, Canvas.tsx, TabBar.tsx, Dock.tsx, settings/nav.ts)</div>
+</div>
+
+<div style="display:flex;gap:8px">
+  <button onClick="{{ showCanvas }}" style="padding:7px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:#282828;color:rgba(255,255,255,.85);font-size:13px;cursor:pointer">Canvas</button>
+  <button onClick="{{ showKanban }}" style="padding:7px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:#282828;color:rgba(255,255,255,.85);font-size:13px;cursor:pointer">Kanban</button>
+  <button onClick="{{ showSettings }}" style="padding:7px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:#282828;color:rgba(255,255,255,.85);font-size:13px;cursor:pointer">Settings</button>
+</div>
+
+<!-- ================= APP WINDOW ================= -->
+<div style="width:1440px;height:900px;background:#1e1e1e;border-radius:10px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 30px 80px rgba(0,0,0,.6);color:rgba(255,255,255,.85)">
+
+  <!-- tabbar: 44px, padding 0 12px 0 86px, gap 14 -->
+  <div style="position:relative;display:flex;align-items:center;gap:14px;height:44px;padding:0 12px 0 86px;background:#282828;border-bottom:1px solid rgba(255,255,255,.1);z-index:30;flex-shrink:0">
+    <div style="position:absolute;left:14px;top:16px;display:flex;gap:8px">
+      <div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div>
+      <div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div>
+      <div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:9px;white-space:nowrap">
+      <div style="width:20px;height:20px;border-radius:6px;background:linear-gradient(140deg,#0a84ff,#6cb0ff)"></div>
+      <div style="font-size:14px;font-weight:700;letter-spacing:.2px">nodeterm</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:2px;height:34px;padding:3px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:17px">
+      <div style="position:relative;display:flex;align-items:center;gap:7px;padding:0 12px;height:100%;border-radius:14px;background:rgba(255,255,255,.09);font-weight:600;font-size:13px;color:rgba(255,255,255,.85)">
+        <span style="width:9px;height:9px;border-radius:50%;background:#0a84ff"></span>
+        <span>nodeterm</span>
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 5px;border-radius:9px;background:#0a84ff;color:#fff;font-size:10.5px;font-weight:700">2</span>
+        <span style="opacity:.55;font-size:12px">▾</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;padding:0 12px;height:100%;border-radius:14px;color:rgba(255,255,255,.55);font-size:13px">
+        <span style="width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.3)"></span>
+        <span>knowledge-base</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;padding:0 12px;height:100%;border-radius:14px;color:rgba(255,255,255,.55);font-size:13px">
+        <span style="font-size:9px;font-weight:600;letter-spacing:.06em;padding:2px 4px;border:1px solid rgba(255,255,255,.1);border-radius:4px">SSH</span>
+        <span>ha-box</span>
+      </div>
+      <div style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:14px;color:rgba(255,255,255,.55);font-size:17px">+</div>
+    </div>
+  </div>
+
+  <!-- controls cluster: top 54 right 14 -->
+  <div style="position:absolute;top:54px;right:14px;z-index:26;display:flex;align-items:center;gap:6px">
+    <div style="display:flex;align-items:center;gap:6px;height:34px;padding:0 10px;border-radius:8px;background:rgba(40,40,42,.92);border:1px solid rgba(255,255,255,.1);font-size:12px;color:rgba(255,255,255,.55)">
+      <span style="font-size:14px">⌕</span>
+      <span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08)">⌘K</span>
+    </div>
+    <sc-for list="{{ clusterIcons }}" as="ic" hint-placeholder-count="6">
+      <div style="width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;background:rgba(40,40,42,.92);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.7);font-size:14px">{{ ic.glyph }}</div>
+    </sc-for>
+  </div>
+
+  <!-- ============ CANVAS VIEW ============ -->
+  <sc-if value="{{ isCanvas }}" hint-placeholder-val="{{ true }}">
+  <div style="flex:1;position:relative;background:#000;background-image:radial-gradient(#4a4a4a 1.25px, transparent 1.25px);background-size:24px 24px;overflow:hidden">
+
+    <!-- terminal node -->
+    <div style="position:absolute;left:60px;top:60px;width:470px;height:300px;display:flex;flex-direction:column;background:#282828;border:1px solid rgba(255,255,255,.1);border-top:3px solid #6cb0ff;border-radius:10px;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.4)">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#323232">
+        <span style="width:12px;height:12px;border-radius:50%;background:#6cb0ff;flex-shrink:0"></span>
+        <span style="font-size:13px;font-weight:600;padding:2px 5px;border-radius:4px">dev server</span>
+        <span style="flex:1"></span>
+        <span style="font-size:11px;color:rgba(255,255,255,.55);padding:1px 8px;background:rgba(255,255,255,.06);border-radius:6px">nt-dev-1</span>
+        <span style="color:rgba(255,255,255,.55);font-size:12px">⌕</span>
+        <span style="color:rgba(255,255,255,.55);font-size:12px">✕</span>
+      </div>
+      <div style="flex:1;background:#000;padding:8px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.55;color:#d4d4d4;overflow:hidden">
+        <div><span style="color:#32d74b">➜</span> <span style="color:#6cb0ff">nodeterm</span> npm run dev</div>
+        <div style="color:rgba(255,255,255,.55)">&gt; nodeterm@0.9.4 dev</div>
+        <div style="color:rgba(255,255,255,.55)">&gt; electron-vite dev</div>
+        <div>&nbsp;</div>
+        <div><span style="color:#ffd60a">vite</span> v5.4.11 <span style="color:#32d74b">ready in 412 ms</span></div>
+        <div>➜  Local:   http://localhost:5173/</div>
+        <div>➜  main    build succeeded</div>
+        <div>➜  preload build succeeded</div>
+        <div style="color:#d97757">[hmr] renderer/canvas/Canvas.tsx updated</div>
+        <div><span style="color:#32d74b">➜</span> <span style="color:#6cb0ff">nodeterm</span> <span style="background:#d4d4d4;color:#000">&nbsp;</span></div>
+      </div>
+    </div>
+
+    <!-- agent node: working -->
+    <div style="position:absolute;left:570px;top:60px;width:470px;height:300px;display:flex;flex-direction:column;background:#282828;border:1px solid rgba(255,255,255,.1);border-top:3px solid #d97757;border-radius:10px;overflow:hidden;box-shadow:0 0 0 1px rgba(217,119,87,.35),0 0 14px 1px rgba(217,119,87,.22),0 8px 28px rgba(0,0,0,.4)">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#323232">
+        <span style="width:12px;height:12px;border-radius:50%;background:#d97757;flex-shrink:0"></span>
+        <span style="font-size:13px;font-weight:600;padding:2px 5px;border-radius:4px">Claude · refactor transport</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;letter-spacing:.06em;color:#d97757">
+          <span style="width:7px;height:7px;border-radius:50%;background:#d97757;animation:ntWorking 2.6s ease-in-out infinite"></span>RUNNING
+        </span>
+        <span style="flex:1"></span>
+        <span style="font-size:11px;color:rgba(255,255,255,.55);padding:1px 8px;background:rgba(10,132,255,.14);border-radius:6px">work@ha</span>
+        <span style="color:rgba(255,255,255,.55);font-size:12px">✕</span>
+      </div>
+      <div style="flex:1;background:#000;padding:8px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.55;color:#d4d4d4;overflow:hidden">
+        <div style="color:#d97757">✻ Refactoring… (esc to interrupt)</div>
+        <div>&nbsp;</div>
+        <div style="color:rgba(255,255,255,.55)">⏺ Read src/renderer/terminal/transport.ts (240 lines)</div>
+        <div style="color:rgba(255,255,255,.55)">⏺ Edit src/renderer/terminal/transport.ts</div>
+        <div style="color:#32d74b">  + export interface TerminalTransport {</div>
+        <div style="color:#ff453a">  -   attach(id: string): void</div>
+        <div>&nbsp;</div>
+        <div style="color:rgba(255,255,255,.55)">⏺ Bash(npm run typecheck)</div>
+      </div>
+      <div style="padding:5px 8px;background:#323232;border-top:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;color:rgba(255,255,255,.55)">context</span>
+        <span style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1);position:relative;overflow:hidden"><span style="position:absolute;inset:0 38% 0 0;background:#0a84ff;border-radius:2px"></span></span>
+        <span style="font-size:10px;color:rgba(255,255,255,.55)">62%</span>
+      </div>
+    </div>
+
+    <!-- agent node: needs you -->
+    <div style="position:absolute;left:570px;top:400px;width:470px;height:230px;display:flex;flex-direction:column;background:#282828;border:1px solid rgba(255,255,255,.1);border-top:3px solid #ff453a;border-radius:10px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,69,58,.4),0 0 14px 1px rgba(255,69,58,.25),0 8px 28px rgba(0,0,0,.4)">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#323232">
+        <span style="width:12px;height:12px;border-radius:50%;background:#ff453a;flex-shrink:0"></span>
+        <span style="font-size:13px;font-weight:600;padding:2px 5px;border-radius:4px">Codex · migrate ios protocol</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;letter-spacing:.06em;color:#ff453a">
+          <span style="width:7px;height:7px;border-radius:50%;background:#ff453a"></span>NEEDS YOU
+        </span>
+        <span style="flex:1"></span>
+        <span style="color:rgba(255,255,255,.55);font-size:12px">✕</span>
+      </div>
+      <div style="flex:1;background:#000;padding:8px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.55;color:#d4d4d4">
+        <div style="color:rgba(255,255,255,.55)">Codex wants to run:</div>
+        <div style="color:#ffd60a">  rm -rf out/ && npm run build</div>
+      </div>
+      <div style="display:flex;gap:8px;padding:8px;background:#323232">
+        <div style="flex:1;text-align:center;padding:7px;border-radius:6px;background:rgba(50,215,75,.16);color:#32d74b;font-size:12px;font-weight:600">Allow</div>
+        <div style="flex:1;text-align:center;padding:7px;border-radius:6px;background:rgba(255,69,58,.16);color:#ff453a;font-size:12px;font-weight:600">Deny</div>
+      </div>
+    </div>
+
+    <!-- sticky -->
+    <div style="position:absolute;left:60px;top:400px;width:230px;height:170px;background:#f7d774;color:#2b241c;border-radius:10px;padding:12px;box-shadow:0 8px 28px rgba(0,0,0,.4);font-size:13px;line-height:1.5">
+      <div style="font-weight:700;margin-bottom:6px">Context for Claude</div>
+      Transport seam must not import electron. Server Edition rides the same core.
+    </div>
+
+    <!-- group -->
+    <div style="position:absolute;left:320px;top:400px;width:210px;height:170px;border:1px dashed rgba(255,255,255,.25);border-radius:12px;background:rgba(255,255,255,.03)">
+      <div style="padding:8px 10px;font-size:12px;font-weight:600;color:rgba(255,255,255,.55)">⌥ worktree · feat/md3</div>
+    </div>
+
+    <!-- empty canvas hint area intentionally not shown (nodes exist) -->
+
+    <!-- react-flow controls bottom-left -->
+    <div style="position:absolute;left:14px;bottom:120px;display:flex;flex-direction:column;background:#282828;border:1px solid rgba(255,255,255,.1);border-radius:6px;overflow:hidden">
+      <sc-for list="{{ flowControls }}" as="c" hint-placeholder-count="4">
+        <div style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:12px;color:rgba(255,255,255,.7);border-bottom:1px solid rgba(255,255,255,.08)">{{ c.glyph }}</div>
+      </sc-for>
+    </div>
+
+    <!-- canvas pills bottom-left -->
+    <div style="position:absolute;left:14px;bottom:22px;display:flex;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 12px;border-radius:15px;background:rgba(40,40,42,.92);border:1px solid rgba(255,255,255,.1);font-size:11px;color:rgba(255,255,255,.7)">
+        <span style="width:7px;height:7px;border-radius:50%;background:#32d74b"></span>CPU 34% · RAM 9.2 GB · 6 ptys
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 12px;border-radius:15px;background:rgba(40,40,42,.92);border:1px solid rgba(255,255,255,.1);font-size:11px;color:rgba(255,255,255,.7)">
+        Session 41% · resets 2h
+      </div>
+    </div>
+
+    <!-- minimap bottom-right -->
+    <div style="position:absolute;right:14px;bottom:22px;width:190px;height:120px;border-radius:8px;background:rgba(10,12,18,.6);border:1px solid rgba(255,255,255,.1);overflow:hidden">
+      <div style="position:absolute;left:14px;top:16px;width:56px;height:32px;background:#6cb0ff;border-radius:2px"></div>
+      <div style="position:absolute;left:80px;top:16px;width:56px;height:32px;background:#d97757;border-radius:2px"></div>
+      <div style="position:absolute;left:80px;top:62px;width:56px;height:26px;background:#ff453a;border-radius:2px"></div>
+      <div style="position:absolute;left:14px;top:62px;width:28px;height:20px;background:#f7d774;border-radius:2px"></div>
+    </div>
+
+    <!-- dock -->
+    <div style="position:absolute;bottom:22px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:4px;padding:7px 10px;background:rgba(40,40,42,.92);border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:0 10px 32px rgba(0,0,0,.5)">
+      <div style="width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;background:#0a84ff;color:#fff;font-size:20px">+</div>
+      <sc-for list="{{ dockLeft }}" as="d" hint-placeholder-count="4">
+        <div style="width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;color:rgba(255,255,255,.85);font-size:14px">{{ d.glyph }}</div>
+      </sc-for>
+      <div style="width:1px;height:22px;background:rgba(255,255,255,.1);margin:0 4px"></div>
+      <div style="width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;color:rgba(255,255,255,.85);font-size:14px">−</div>
+      <div style="min-width:46px;text-align:center;font-size:12px;color:rgba(255,255,255,.55)">100%</div>
+      <div style="width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;color:rgba(255,255,255,.85);font-size:14px">+</div>
+      <div style="width:1px;height:22px;background:rgba(255,255,255,.1);margin:0 4px"></div>
+      <sc-for list="{{ dockRight }}" as="d" hint-placeholder-count="3">
+        <div style="width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;color:rgba(255,255,255,.85);font-size:14px">{{ d.glyph }}</div>
+      </sc-for>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ KANBAN VIEW ============ -->
+  <sc-if value="{{ isKanban }}" hint-placeholder-val="{{ false }}">
+  <div style="flex:1;background:#000;display:flex;flex-direction:column;overflow:hidden">
+    <div style="flex:0 0 auto;display:flex;align-items:center;gap:10px;height:46px;padding:0 18px;padding-right:300px;border-bottom:1px solid rgba(255,255,255,.08)">
+      <span style="width:10px;height:10px;border-radius:50%;background:#0a84ff"></span>
+      <span style="font-size:16px;font-weight:700;color:rgba(255,255,255,.9)">nodeterm</span>
+      <div style="display:inline-flex;align-items:center;gap:2px;margin-left:8px;padding:2px;border:1px solid rgba(255,255,255,.1);border-radius:7px;background:rgba(255,255,255,.04)">
+        <span style="border-radius:5px;background:rgba(255,255,255,.1);color:#fff;padding:3px 8px;font-size:11px">All</span>
+        <span style="border-radius:5px;color:rgba(255,255,255,.55);padding:3px 8px;font-size:11px">GitHub</span>
+        <span style="border-radius:5px;color:rgba(255,255,255,.55);padding:3px 8px;font-size:11px">Sessions</span>
+      </div>
+      <span style="font-size:11px;color:rgba(255,255,255,.5)">synced 2 min ago</span>
+    </div>
+    <div style="flex:1;overflow:hidden;padding:16px 16px 56px">
+      <div style="display:flex;align-items:stretch;gap:12px;height:100%">
+        <sc-for list="{{ columns }}" as="col" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;flex:0 0 288px;width:288px;max-height:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:12px">
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 12px">
+              <span style="width:10px;height:10px;border-radius:50%;background:{{ col.color }}"></span>
+              <span style="flex:1;font-size:13.5px;font-weight:700;color:rgba(255,255,255,.85)">{{ col.title }}</span>
+              <span style="font-size:12px;color:rgba(255,255,255,.4)">{{ col.count }}</span>
+              <span style="font-size:11px;color:rgba(255,255,255,.35)">✕</span>
+            </div>
+            <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;gap:8px;padding:2px 10px">
+              <sc-for list="{{ col.cards }}" as="card" hint-placeholder-count="2">
+                <div style="position:relative;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px 10px">
+                  <div style="display:flex;align-items:flex-start;gap:8px">
+                    <span style="width:9px;height:9px;border-radius:50%;margin-top:5px;flex:0 0 auto;background:{{ card.dot }}"></span>
+                    <span style="flex:1;font-size:12.5px;line-height:1.4;color:rgba(255,255,255,.85)">{{ card.title }}</span>
+                    <sc-if value="{{ card.badge }}" hint-placeholder-val="{{ false }}">
+                      <span style="flex:0 0 auto;font-size:9px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:{{ card.badgeBg }};color:{{ card.badgeFg }}">{{ card.badge }}</span>
+                    </sc-if>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,.06);min-height:20px">
+                    <span style="flex:1;font-size:10px;color:rgba(255,255,255,.45)">{{ card.session }}</span>
+                    <span style="background:rgba(255,255,255,.08);border-radius:5px;color:rgba(255,255,255,.7);font-size:12px;padding:2px 8px">Open</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="padding:8px 10px 10px">
+              <div style="font-size:12px;color:rgba(255,255,255,.45)">+ New</div>
+            </div>
+          </div>
+        </sc-for>
+        <div style="flex:0 0 288px;display:flex;align-items:flex-start">
+          <div style="width:100%;padding:12px;border:1px dashed rgba(255,255,255,.15);border-radius:12px;color:rgba(255,255,255,.4);font-size:13px">+ Add column</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ SETTINGS VIEW ============ -->
+  <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+  <div style="flex:1;background:#1e1e1e;display:flex;overflow:hidden">
+    <div style="width:236px;flex:0 0 236px;background:#1a1a1a;border-right:1px solid rgba(255,255,255,.1);overflow:auto;padding:12px 0">
+      <div style="padding:6px 16px 10px"><div style="height:28px;border-radius:6px;background:rgba(255,255,255,.06);display:flex;align-items:center;padding:0 8px;font-size:12px;color:rgba(255,255,255,.4)">⌕ Search settings</div></div>
+      <sc-for list="{{ settingsGroups }}" as="g" hint-placeholder-count="6">
+        <div style="padding:10px 16px 4px;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.35)">{{ g.title }}</div>
+        <sc-for list="{{ g.sections }}" as="s" hint-placeholder-count="5">
+          <div style="padding:6px 16px;font-size:13px;color:rgba(255,255,255,.7)">{{ s }}</div>
+        </sc-for>
+      </sc-for>
+    </div>
+    <div style="flex:1;overflow:auto;padding:26px 34px">
+      <div style="font-size:19px;font-weight:700;margin-bottom:18px">Agents</div>
+      <sc-for list="{{ settingRows }}" as="r" hint-placeholder-count="6">
+        <div style="display:flex;align-items:center;gap:16px;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.08)">
+          <div style="flex:1">
+            <div style="font-size:13.5px;color:rgba(255,255,255,.85)">{{ r.label }}</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:3px">{{ r.hint }}</div>
+          </div>
+          <div style="flex:0 0 auto">{{ r.control }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  </sc-if>
+
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { view: 'canvas' };
+  renderVals() {
+    const v = this.state.view;
+    const el = (bg, fg, txt) => React.createElement('span', { style: { fontSize: 12, color: fg, background: bg, padding: '4px 10px', borderRadius: 6 } }, txt);
+    return {
+      isCanvas: v === 'canvas', isKanban: v === 'kanban', isSettings: v === 'settings',
+      showCanvas: () => this.setState({ view: 'canvas' }),
+      showKanban: () => this.setState({ view: 'kanban' }),
+      showSettings: () => this.setState({ view: 'settings' }),
+      clusterIcons: ['🗂','⑂','⇄','◍','🔔','▢','⚙','?'].map((glyph, i) => ({ glyph, i })),
+      flowControls: ['+','−','⛶','🔓'].map((glyph, i) => ({ glyph, i })),
+      dockLeft: ['▣','◫','↺','↻'].map((glyph, i) => ({ glyph, i })),
+      dockRight: ['⛶','⇩','🎙'].map((glyph, i) => ({ glyph, i })),
+      columns: [
+        { title: 'Backlog', color: '#8e8e93', count: 3, cards: [
+          { title: 'Windows session host: reattach after host crash', dot: '#8e8e93', session: 'no session', badge: '', badgeBg: '', badgeFg: '' },
+          { title: 'Export: SQL dialect disclosure copy', dot: '#8e8e93', session: 'no session', badge: '', badgeBg: '', badgeFg: '' },
+          { title: '#412 Regex builder: capture-group naming', dot: '#a371f7', session: 'github', badge: '', badgeBg: '', badgeFg: '' }
+        ]},
+        { title: 'In progress', color: '#0a84ff', count: 2, cards: [
+          { title: 'Refactor TerminalTransport seam', dot: '#d97757', session: 'nt-claude-3', badge: 'RUNNING', badgeBg: 'rgba(217,119,87,.2)', badgeFg: '#d97757' },
+          { title: 'Migrate iOS protocol to v3', dot: '#ff453a', session: 'nt-codex-1', badge: 'NEEDS YOU', badgeBg: 'rgba(255,69,58,.2)', badgeFg: '#ff453a' }
+        ]},
+        { title: 'Review', color: '#ffd60a', count: 1, cards: [
+          { title: 'Kanban: GitHub two-way close/reopen', dot: '#6cb0ff', session: 'nt-term-7', badge: '', badgeBg: '', badgeFg: '' }
+        ]},
+        { title: 'Done', color: '#32d74b', count: 2, cards: [
+          { title: 'Ollama manager hardware-fit verdicts', dot: '#32d74b', session: 'nt-claude-1', badge: '', badgeBg: '', badgeFg: '' },
+          { title: 'Local history: restore as new revision', dot: '#32d74b', session: 'nt-claude-2', badge: '', badgeBg: '', badgeFg: '' }
+        ]}
+      ],
+      settingsGroups: [
+        { title: 'AI capabilities', sections: ['Agents','Accounts','Custom agents','Usage','Commit messages'] },
+        { title: 'Workspace', sections: ['Terminal','Shell','tmux','GitHub Issues','Behavior'] },
+        { title: 'Interface', sections: ['Appearance','Appearance editor','App name & logo','Notch','Notifications','Language','Narrator','Speech','Schedule'] },
+        { title: 'Remote & team', sections: ['Your name','Phone','Remote access','Team seats','Remote (SSH)'] },
+        { title: 'Application', sections: ['License','Updates','Privacy','School mode','Personal vocabulary','History'] },
+        { title: 'Just for fun', sections: ['Toy locks','Authenticator','Support Tickets'] }
+      ],
+      settingRows: [
+        { label: 'Default agent', hint: 'What ⌘⇧C spawns on the canvas.', control: el('#323232', 'rgba(255,255,255,.85)', 'Claude Code  ▾') },
+        { label: 'Permission mode', hint: 'Global default; each project can override it.', control: el('#323232', 'rgba(255,255,255,.85)', 'Ask every time  ▾') },
+        { label: 'Auto-name terminals', hint: 'Run a local agent CLI read-only on captured output.', control: el('#0a84ff', '#fff', 'On') },
+        { label: 'Context meter', hint: 'Show the per-node context bar under agent nodes.', control: el('#0a84ff', '#fff', 'On') },
+        { label: 'Branch a conversation', hint: 'Claude only. Fork a session into a new node.', control: el('#323232', 'rgba(255,255,255,.55)', 'Off') },
+        { label: 'Subagent cards', hint: 'Show live transcripts for spawned subagents.', control: el('#0a84ff', '#fff', 'On') }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

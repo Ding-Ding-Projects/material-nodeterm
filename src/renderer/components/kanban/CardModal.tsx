@@ -1,0 +1,306 @@
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { isTopDialog, nextDialogId, popDialog, pushDialog } from '../dialog-stack'
+import { IconChat, IconMic, IconSearch } from '../icons'
+import { ContextMeter } from '../ContextMeter'
+import { AdhdElapsedChip } from '../AdhdNodeSurfaces'
+import { useAgentStatus } from '../../state/agentStatus'
+import { useCardPanel } from '../../state/cardPanel'
+import { useSession } from '../../session/session'
+import type { ProjectKanban } from '@shared/types'
+import { browserPartitionFor } from '@shared/browser-profiles'
+import type { KanbanSession } from './KanbanView'
+import { BoardLogPanel } from './BoardLogPanel'
+import { CardMetaBar } from './CardMetaBar'
+import { ModalTerminal } from './ModalTerminal'
+import { BrowserSurface } from '../../nodes/BrowserSurface'
+import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
+import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
+import { TextArea } from '@renderer/ui/md3'
+
+interface CardModalProps {
+  session: KanbanSession
+  /** The active project id — resolves the browser node's `browserProfileId` (kind 'browser' only)
+   *  into the same Electron session partition the canvas node's own webview uses. See
+   *  `shared/browser-profiles.ts`. */
+  projectId: string
+  /** Column title shown as a chip; null = Ungrouped. */
+  columnTitle: string | null
+  /** The live board + its pruned commit — the Members/Due strip edits through them. */
+  board: ProjectKanban
+  onChangeBoard: (next: ProjectKanban) => void
+  onClose: () => void
+  /** Secondary action: close the modal, switch to canvas, focus the node. */
+  onOpenCanvas: () => void
+  /** Rename funnel (same as the sidebar's). */
+  onRename: (title: string) => void
+  /** Sticky text write-through (only called for kind 'sticky'). */
+  onEditSticky: (text: string) => void
+  /** Browser navigation write-through (only called for kind 'browser'). */
+  onBrowserNav: (patch: { url?: string; title?: string }) => void
+  /** Trusted profile display data for a local Windows terminal/agent card. */
+  terminalProfile?: KanbanTerminalProfilePresentation
+}
+
+/** Compact profile identity in the modal header; unavailable and unknown are never conflated. */
+export function CardModalTerminalProfile({
+  profile
+}: {
+  profile?: KanbanTerminalProfilePresentation
+}): JSX.Element | null {
+  const profileText = useLocalizedVocabularyText()
+  if (!profile) return null
+  const status =
+    profile.availability === 'available'
+      ? profileText('terminalProfiles.header.statusAvailable', 'available')
+      : profile.availability === 'unavailable'
+        ? profileText('terminalProfiles.header.statusUnavailable', 'unavailable')
+        : profileText('terminalProfiles.header.statusUnknown', 'availability unknown')
+  const ariaLabel = profile.hint
+    ? profileText(
+        'terminalProfiles.header.ariaLabelWithHint',
+        'Terminal profile: {profile}, {status}: {hint}',
+        { profile: profile.label, status, hint: profile.hint }
+      )
+    : profileText('terminalProfiles.header.ariaLabel', 'Terminal profile: {profile}, {status}', {
+        profile: profile.label,
+        status
+      })
+  return (
+    <span
+      className={`kanban-modal__profile kanban-modal__profile--${profile.availability}`}
+      title={
+        profile.hint ??
+        profileText('terminalProfiles.header.title', 'Terminal profile: {profile}', {
+          profile: profile.label
+        })
+      }
+      aria-label={ariaLabel}
+    >
+      <span>{profile.label}</span>
+      {profile.availability !== 'available' && (
+        <span className="kanban-modal__profile-status">{status}</span>
+      )}
+    </span>
+  )
+}
+
+/** Trello-style card popup over the board. Scrim click / Esc close it; the board (and the
+ *  canvas under it) stay mounted. Terminal cards carry the node header's actions too:
+ *  search / dictate / AI-name / markdown view (the node itself is hidden under the board). */
+export function CardModal({
+  session,
+  projectId,
+  columnTitle,
+  board,
+  onChangeBoard,
+  onClose,
+  onOpenCanvas,
+  onRename,
+  onEditSticky,
+  onBrowserNav,
+  terminalProfile
+}: CardModalProps) {
+  const { api } = useSession()
+  const idRef = useRef<string>()
+  if (!idRef.current) idRef.current = nextDialogId()
+  const id = idRef.current
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [title, setTitle] = useState(session.title)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const agentSessionId = useAgentStatus((st) => st.byId[session.id]?.sessionId)
+  const [naming, setNaming] = useState(false)
+  // Comments & activity panel: OPEN by default in the modal; the header 💬 collapses it. The
+  // choice is remembered (localStorage) — once collapsed, later cards open collapsed too.
+  const panelOpen = useCardPanel((s) => s.open)
+  const togglePanel = useCardPanel((s) => s.toggle)
+  const isTerminal = session.kind === 'terminal'
+  const isBrowser = session.kind === 'browser'
+
+  const nameWithAi = async () => {
+    setNaming(true)
+    const r = await api.pty.generateName(session.id, session.spawn.cwd ?? '')
+    setNaming(false)
+    if (r.ok) onRename(r.message)
+  }
+  // Ref mirror: the capture-phase listener below closes over stale state otherwise.
+  const editingTitleRef = useRef(false)
+  useEffect(() => {
+    editingTitleRef.current = editingTitle
+  }, [editingTitle])
+
+  useEffect(() => {
+    pushDialog(id)
+    return () => popDialog(id)
+  }, [id])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !isTopDialog(id)) return
+      // A rename in progress owns Esc first (cancel the edit, not the modal).
+      if (editingTitleRef.current) {
+        e.preventDefault()
+        e.stopPropagation()
+        setEditingTitle(false)
+        return
+      }
+      // Terminal focused → Esc belongs to the SESSION (agent "esc to interrupt"), not the modal.
+      // Don't consume it: leave it to xterm's own handler. Close the modal via ×, the scrim, or
+      // Esc while focus is elsewhere (the board-log composer, the header, etc.).
+      const ae = document.activeElement
+      if (ae && ae.closest('.kanban-modal__term')) return
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
+    }
+    // Capture phase: beat the canvas/global keydown listeners to the Escape.
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [id, onClose])
+
+  const commitTitle = () => {
+    const t = title.trim()
+    if (t && t !== session.title) onRename(t)
+    setEditingTitle(false)
+  }
+
+  return createPortal(
+    <div className="kanban-modal-scrim" onMouseDown={onClose}>
+      {/* stopPropagation: clicks inside the sheet must not reach the scrim-close */}
+      <div className="kanban-modal" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="kanban-modal__header">
+          <span className="kanban-card__nodedot" style={{ background: session.color }} />
+          {editingTitle ? (
+            <input
+              className="kanban-modal__rename"
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={commitTitle}
+              onKeyDown={(e) => {
+                // Esc is owned by the capture-phase handler (cancels the edit).
+                if (e.key === 'Enter') commitTitle()
+              }}
+            />
+          ) : (
+            <span
+              className="kanban-modal__title"
+              onClick={() => {
+                if (session.kind === 'sticky') return // a note's label IS its first line
+                setTitle(session.title)
+                setEditingTitle(true)
+              }}
+            >
+              {session.title}
+            </span>
+          )}
+          {isTerminal && <CardModalTerminalProfile profile={terminalProfile} />}
+          <span className="kanban-modal__column">{columnTitle ?? 'Ungrouped'}</span>
+          {isTerminal && (
+            <>
+              {/* Same context-window pill + popover as the node header (null until usage data). */}
+              <ContextMeter sessionId={agentSessionId ?? null} />
+              {/* ADHD time awareness. The card modal is a second live view of the SAME session, and
+                it is a place work actually happens — so the readout belongs here for the same
+                reason it belongs on the node: a clock the user has to go and look for does nothing
+                for time blindness. The MOMENTUM note deliberately does not follow it here; see
+                docs/adhd-modes.md. */}
+              <AdhdElapsedChip nodeId={session.id} />
+              <button
+                className="kanban-modal__action"
+                title="Search this terminal"
+                aria-pressed={searchOpen}
+                onClick={() => setSearchOpen((v) => !v)}
+              >
+                <IconSearch />
+              </button>
+              <button
+                className="kanban-modal__action"
+                title="Dictate into this terminal"
+                onClick={() =>
+                  window.dispatchEvent(
+                    new CustomEvent('nodeterm:dictate', {
+                      detail: { nodeId: session.id }
+                    })
+                  )
+                }
+              >
+                <IconMic />
+              </button>
+              <button
+                className="kanban-modal__action"
+                title="Name with AI (from terminal output)"
+                disabled={naming}
+                onClick={nameWithAi}
+              >
+                {naming ? '…' : '✦'}
+              </button>
+            </>
+          )}
+          <button
+            className="kanban-modal__action"
+            title={panelOpen ? 'Hide comments & activity' : 'Show comments & activity'}
+            aria-pressed={panelOpen}
+            onClick={togglePanel}
+          >
+            <IconChat />
+          </button>
+          <button className="kanban-modal__action" title="Open on canvas" onClick={onOpenCanvas}>
+            ↗
+          </button>
+          <button className="kanban-modal__action" title="Close" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <CardMetaBar nodeId={session.id} board={board} onChange={onChangeBoard} />
+        <div className="kanban-modal__body">
+          {/* Body is a flex row: the card's own pane (2/3) + the board-log panel (1/3, all kinds). */}
+          <div className="kanban-modal__main">
+            {session.kind === 'sticky' ? (
+              <TextArea
+                className="kanban-modal__sticky"
+                value={session.text ?? ''}
+                placeholder="Write a note…"
+                onChange={(e) => onEditSticky(e.target.value)}
+              />
+            ) : (
+              <div className="kanban-modal__pane" data-kind={session.kind}>
+                {session.kind === 'terminal' ? (
+                  // A live SECOND client on the node's session — keyed by node id so switching cards
+                  // remounts a fresh viewer.
+                  <ModalTerminal
+                    key={session.id}
+                    nodeId={session.id}
+                    spawn={session.spawn}
+                    searchOpen={searchOpen}
+                    onCloseSearch={() => setSearchOpen(false)}
+                    onOpenCanvas={onOpenCanvas}
+                  />
+                ) : isBrowser ? (
+                  // A live browser webview seeded with the node's URL; navigation persists back to
+                  // the node (the canvas node picks it up on its next mount).
+                  <BrowserSurface
+                    // Same partition the canvas node's own webview uses — see
+                    // shared/browser-profiles.ts. Keyed on it too, for the same reason BrowserNode
+                    // is: a profile switch made on the canvas must remount this view onto the new
+                    // session rather than reading stale cookies from the old one.
+                    key={`${session.id}:${browserPartitionFor(projectId, session.browserProfileId) ?? 'default'}`}
+                    nodeId={session.id}
+                    url={session.url ?? ''}
+                    onUrlChange={(u) => onBrowserNav({ url: u })}
+                    onTitleChange={(t) => onBrowserNav({ title: t })}
+                    partition={browserPartitionFor(projectId, session.browserProfileId)}
+                  />
+                ) : (
+                  <div className="kanban-modal__placeholder">Open on the canvas.</div>
+                )}
+              </div>
+            )}
+          </div>
+          {panelOpen && <BoardLogPanel card={session} />}
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}

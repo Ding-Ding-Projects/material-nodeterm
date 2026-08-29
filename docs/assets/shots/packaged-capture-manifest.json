@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "method": "cheap Lowlevel MCP headless packaged Windows profile/session-host acceptance",
+  "promotedAt": "2026-08-21T03:05:21.314Z",
+  "promotedFrom": {
+    "runId": "acc230315",
+    "gitHead": "a8a0d3bbfedd62a5ca2eae5468243fda3aca7028",
+    "workingTreeDigest": "9088f6093a8fb9451099344e8c900b8c570c9fa3015de2f086e585601140e107",
+    "fileCount": 1748
+  },
+  "candidate": {
+    "role": "packaged-executable",
+    "file": "dist/win-unpacked/nodeterm.exe",
+    "bytes": 221933568,
+    "modifiedAt": "2026-08-21T03:02:15.109Z",
+    "sha256": "ed2ab528110d27b53559a4b55e542aca6ee72fd36eb1cd6f2d7a9e2428cbd492"
+  },
+  "captured": [
+    {
+      "id": "windows-terminal-profile-picker",
+      "title": "windows-terminal-profile-picker",
+      "bytes": 97596,
+      "sha256": "fd5d01ba9a5f05286d91b4f540fa4fa4275f92894d1968317315f4e227f7a8f9",
+      "file": "windows-terminal-profile-picker.png"
+    },
+    {
+      "id": "windows-terminal-profile-terminal",
+      "title": "windows-terminal-profile-terminal",
+      "bytes": 122243,
+      "sha256": "7586ae6e4d560e73b3bef147df37bdf4efda771c4f0e288ab617caa8971a671b",
+      "file": "windows-terminal-profile-terminal.png"
+    },
+    {
+      "id": "windows-terminal-profile-unavailable",
+      "title": "windows-terminal-profile-unavailable",
+      "bytes": 97381,
+      "sha256": "b2edf6f0f50be6ca3d5edfc69e9d1986803c655b114fb4d4016c5aa12a3d2fb3",
+      "file": "windows-terminal-profile-unavailable.png"
+    },
+    {
+      "id": "windows-terminal-profile-restart-warning",
+      "title": "windows-terminal-profile-restart-warning",
+      "bytes": 655232,
+      "sha256": "a5a2e73803d8a56ff9e2cf13c0ffa90dbd6a8e1b600f43e04e228491f289a75a",
+      "file": "windows-terminal-profile-restart-warning.png"
+    },
+    {
+      "id": "windows-terminal-profile-reattached",
+      "title": "windows-terminal-profile-reattached",
+      "bytes": 630832,
+      "sha256": "08b9c9e6a842d10341cf6969123b6aa56537ae526eb95056c9de1f5d2afe784e",
+      "file": "windows-terminal-profile-reattached.png"
+    }
+  ],
+  "acceptanceComplete": false,
+  "blockers": [
+    "copy-paste-lossless-clipboard-restore",
+    "installed-squirrel-artifact-proof"
+  ]
+}

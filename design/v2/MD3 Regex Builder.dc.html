@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0" rel="stylesheet">
+<link rel="stylesheet" href="md3/tokens.css">
+<style>
+  body { margin:0; background:#0A090D; }
+  a { color:var(--md-primary); text-decoration:none; }
+  a:hover { color:var(--md-on-primary-container); }
+  .msr { font-family:'Material Symbols Rounded'; font-weight:400; font-style:normal; line-height:1;
+         letter-spacing:normal; display:inline-block; white-space:nowrap; direction:ltr;
+         font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
+  .msrf { font-variation-settings:'FILL' 1,'wght' 500,'GRAD' 0,'opsz' 24; }
+</style>
+</helmet>
+
+<div style="font-family:var(--md-font-ui);padding:36px;display:flex;flex-direction:column;gap:14px;color:#E6E0E9">
+  <div style="display:flex;align-items:flex-end;gap:16px">
+    <div>
+      <div style="font-size:21px;font-weight:600">Anchored regex builder · Material 3 rewrite</div>
+      <div style="font-size:13px;color:#938F99;margin-top:2px">Every search field carries the <span style="font-family:'Roboto Mono',monospace">.*</span> anchor — pressing it opens THIS builder attached to the field. Fully live: type in it. — <a href="MD3 Canvas.dc.html">Canvas</a> · <a href="MD3 Tools.dc.html">Tools</a> · <a href="MD3 Overlays.dc.html">Overlays</a></div>
+    </div>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 20px;border-radius:999px;border:1px solid #49454F;background:transparent;color:#E6E0E9;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer"><span class="msr" style="font-size:18px">contrast</span>{{ themeLabel }}</button>
+  </div>
+
+<div style="width:1560px;min-height:980px;border-radius:28px;overflow:hidden;position:relative;background:var(--md-surface);color:var(--md-on-surface);display:flex;flex-direction:column;outline:1px solid var(--md-outline-variant)">
+
+  <!-- host surface: a search field with the .* anchor, as every search bar in the app has -->
+  <div style="height:64px;flex:0 0 64px;display:flex;align-items:center;gap:14px;padding:0 20px 0 16px;background:var(--md-surface-container)">
+    <div style="display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:38px;height:38px;border-radius:14px;background:var(--md-primary-container);color:var(--md-on-primary-container);display:flex;align-items:center;justify-content:center"><span class="msr msrf" style="font-size:20px">regular_expression</span></div>
+      <div style="font-size:17px;font-weight:600">Regex — everywhere search is</div>
+    </div>
+    <div style="flex:1"></div>
+    <span style="display:flex;align-items:center;gap:8px;height:32px;padding:0 14px;border-radius:999px;background:var(--md-surface-container-high);color:var(--md-on-surface-variant);font-size:12px;font-weight:600"><span class="msr" style="font-size:15px">memory</span>JavaScript RegExp · evaluated locally · never transmitted</span>
+    <span style="display:flex;align-items:center;gap:8px;height:32px;padding:0 14px;border-radius:999px;background:var(--md-success-container);color:var(--md-on-success-container);font-size:12px;font-weight:700"><span class="msr" style="font-size:15px">bolt</span>Worker · 800 ms budget</span>
+  </div>
+
+  <div data-screen-label="Anchored regex builder" style="flex:1;padding:20px 24px;display:flex;flex-direction:column;gap:14px;position:relative;background-image:radial-gradient(var(--md-canvas-dot) 1.2px, transparent 1.2px);background-size:26px 26px">
+
+    <!-- the anchor field -->
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="display:flex;align-items:center;gap:12px;width:520px;height:48px;padding:0 8px 0 18px;border-radius:999px;background:var(--md-surface-container-high);border:2px solid {{ fieldBorder }}">
+        <span class="msr" style="font-size:20px;color:var(--md-on-surface-variant)">search</span>
+        <div style="flex:1;font-family:var(--md-font-mono);font-size:14px;color:var(--md-on-surface);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ pattern }}</div>
+        <button onClick="{{ toggleOpen }}" title="Regex mode — opens the anchored builder" style="display:flex;align-items:center;gap:6px;height:34px;padding:0 13px;border-radius:999px;border:none;background:{{ anchorBg }};color:{{ anchorFg }};font-family:var(--md-font-mono);font-size:12.5px;font-weight:700;cursor:pointer">.*</button>
+      </div>
+      <span style="font-size:12.5px;color:var(--md-on-surface-variant)">Search — Explorer · terminal find bar · command palette · settings · every menu filter. Plain text by default; regex is this explicit opt-in.</span>
+    </div>
+
+    <!-- THE ANCHORED BUILDER POPOVER — attached under the field, never a full page -->
+    <sc-if value="{{ open }}" hint-placeholder-val="{{ true }}">
+    <div style="position:absolute;left:24px;top:76px;width:1120px;max-height:820px;z-index:40;border-radius:28px;background:var(--md-surface-container-high);outline:1px solid var(--md-outline-variant);display:flex;overflow:hidden">
+
+      <!-- token palette -->
+      <div style="width:290px;flex:0 0 290px;max-height:820px;overflow-y:auto;padding:14px 10px 14px 14px;display:flex;flex-direction:column;gap:12px;border-right:1px solid var(--md-outline-variant)">
+        <div style="display:flex;align-items:center;gap:10px;height:40px;padding:0 14px;border-radius:999px;background:var(--md-surface-container-highest)">
+          <span class="msr" style="font-size:17px;color:var(--md-on-surface-variant)">search</span>
+          <input value="{{ tokQuery }}" onChange="{{ setTokQuery }}" placeholder="Filter tokens…" style="flex:1;min-width:0;border:none;background:transparent;color:var(--md-on-surface);font-family:inherit;font-size:12.5px;outline:none">
+        </div>
+        <sc-for list="{{ tokenSections }}" as="sec" hint-placeholder-count="8">
+          <div>
+            <div style="font-size:10.5px;font-weight:700;letter-spacing:.8px;color:var(--md-on-surface-variant);padding:0 4px 6px;text-transform:uppercase">{{ sec.title }}</div>
+            <div style="display:flex;flex-direction:column;gap:1px">
+              <sc-for list="{{ sec.items }}" as="t" hint-placeholder-count="4">
+                <div onClick="{{ t.insert }}" style="display:flex;align-items:center;gap:10px;min-height:34px;padding:3px 8px;border-radius:10px;cursor:pointer" style-hover="background:var(--md-surface-container-highest)">
+                  <span style="min-width:72px;padding:3px 7px;border-radius:7px;background:var(--md-surface-container-highest);color:var(--md-primary);font-family:var(--md-font-mono);font-size:11.5px;font-weight:700;text-align:center">{{ t.tok }}</span>
+                  <span style="flex:1;font-size:11.5px;color:var(--md-on-surface-variant);line-height:1.3">{{ t.desc }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+        <div>
+          <div style="font-size:10.5px;font-weight:700;letter-spacing:.8px;color:var(--md-on-surface-variant);padding:0 4px 6px">PRESET LIBRARY</div>
+          <div style="display:flex;flex-direction:column;gap:1px">
+            <sc-for list="{{ presets }}" as="p" hint-placeholder-count="10">
+              <div onClick="{{ p.use }}" style="display:flex;align-items:center;gap:10px;min-height:32px;padding:3px 8px;border-radius:10px;cursor:pointer" style-hover="background:var(--md-surface-container-highest)">
+                <span class="msr" style="font-size:16px;color:var(--md-tertiary)">{{ p.icon }}</span>
+                <span style="flex:1;font-size:12px;font-weight:600">{{ p.name }}</span>
+                <span class="msr" style="font-size:15px;color:var(--md-outline)">north_west</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <!-- pattern / sample / matches -->
+      <div style="flex:1;min-width:0;max-height:820px;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:11px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--md-on-surface-variant)">PATTERN</div>
+          <div style="flex:1"></div>
+          <span style="font-size:11px;color:var(--md-on-surface-variant);font-family:var(--md-font-mono)">{{ patternLen }} / 500</span>
+          <button onClick="{{ copyLiteral }}" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:999px;border:1px solid var(--md-outline);background:transparent;color:var(--md-on-surface);font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer"><span class="msr" style="font-size:14px">content_copy</span>{{ copyLabel }}</button>
+          <button onClick="{{ escapeSel }}" title="Escape the pattern as a literal" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:999px;border:1px solid var(--md-outline);background:transparent;color:var(--md-on-surface);font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer"><span class="msr" style="font-size:14px">format_quote</span>Escape literal</button>
+          <button onClick="{{ clearPattern }}" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:999px;border:1px solid var(--md-outline);background:transparent;color:var(--md-on-surface-variant);font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer"><span class="msr" style="font-size:14px">backspace</span>Clear</button>
+        </div>
+        <div style="display:flex;align-items:center;height:52px;border-radius:14px;background:var(--md-surface-container-lowest);border:1px solid {{ patternBorder }};padding:0 14px">
+          <span style="font-family:var(--md-font-mono);font-size:17px;color:var(--md-outline)">/</span>
+          <input value="{{ pattern }}" onChange="{{ setPattern }}" spellcheck="false" style="flex:1;min-width:0;border:none;background:transparent;color:var(--md-on-surface);font-family:var(--md-font-mono);font-size:15px;outline:none;padding:0 8px">
+          <span style="font-family:var(--md-font-mono);font-size:17px;color:var(--md-outline)">/</span>
+          <span style="font-family:var(--md-font-mono);font-size:14px;color:var(--md-primary);font-weight:700;margin-left:2px">{{ flagString }}</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <sc-for list="{{ flags }}" as="f" hint-placeholder-count="6">
+            <span onClick="{{ f.flip }}" title="{{ f.hint }}" style="display:flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:8px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};font-size:12px;font-weight:600;cursor:pointer">
+              <sc-if value="{{ f.on }}" hint-placeholder-val="{{ false }}"><span class="msr" style="font-size:14px">check</span></sc-if>
+              <span style="font-family:var(--md-font-mono);font-weight:700">{{ f.flag }}</span>{{ f.label }}
+            </span>
+          </sc-for>
+        </div>
+        <sc-if value="{{ hasError }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:10px;border-radius:12px;background:var(--md-error-container);color:var(--md-on-error-container);padding:9px 13px;font-size:12px;font-weight:600"><span class="msr msrf" style="font-size:17px">error</span>{{ errorMsg }}</div>
+        </sc-if>
+        <sc-if value="{{ hasWarning }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:10px;border-radius:12px;background:var(--md-warning-container);color:var(--md-on-warning-container);padding:9px 13px;font-size:12px;font-weight:600"><span class="msr msrf" style="font-size:17px">warning</span>{{ warningMsg }}</div>
+        </sc-if>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <div style="font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--md-on-surface-variant)">SAMPLE TEXT</div>
+          <div style="flex:1"></div>
+          <span style="font-size:11px;color:var(--md-on-surface-variant);font-family:var(--md-font-mono)">{{ sampleLen }} / 20 000</span>
+        </div>
+        <textarea value="{{ sample }}" onChange="{{ setSample }}" spellcheck="false" rows="4" style="border-radius:14px;background:var(--md-surface-container-lowest);border:1px solid var(--md-outline-variant);color:var(--md-on-surface);font-family:var(--md-font-mono);font-size:12.5px;line-height:1.7;padding:11px 14px;outline:none;resize:vertical"></textarea>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <div style="font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--md-on-surface-variant)">LIVE HIGHLIGHT</div>
+          <span style="height:22px;padding:0 10px;border-radius:999px;background:{{ matchCountBg }};color:{{ matchCountFg }};font-size:11px;font-weight:700;display:flex;align-items:center">{{ matchCount }}</span>
+          <span style="font-size:11px;color:var(--md-on-surface-variant)">capped at 500 · zero-width safe</span>
+        </div>
+        <div style="border-radius:14px;background:var(--md-surface-container-lowest);padding:11px 14px;font-family:var(--md-font-mono);font-size:12.5px;line-height:1.9;white-space:pre-wrap;word-break:break-all;min-height:48px">
+          <sc-for list="{{ segments }}" as="sg" hint-placeholder-count="3">
+            <span style="background:{{ sg.bg }};color:{{ sg.fg }};border-radius:4px">{{ sg.t }}</span>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <div style="font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--md-on-surface-variant)">SUBSTITUTION</div>
+          <span style="font-size:11px;color:var(--md-on-surface-variant);font-family:var(--md-font-mono)">$1 · $&lt;name&gt; · $&amp; · $` · $'</span>
+        </div>
+        <div style="display:flex;align-items:center;height:42px;border-radius:12px;background:var(--md-surface-container-lowest);border:1px solid var(--md-outline-variant);padding:0 14px">
+          <input value="{{ replacement }}" onChange="{{ setReplacement }}" spellcheck="false" placeholder="Replacement…" style="flex:1;min-width:0;border:none;background:transparent;color:var(--md-on-surface);font-family:var(--md-font-mono);font-size:12.5px;outline:none">
+        </div>
+        <div style="border-radius:14px;background:var(--md-surface-container-lowest);padding:11px 14px;font-family:var(--md-font-mono);font-size:12.5px;line-height:1.8;white-space:pre-wrap;word-break:break-all;color:var(--md-on-surface-variant);min-height:24px">{{ substituted }}</div>
+      </div>
+
+      <!-- groups + explanation + cheat facts -->
+      <div style="width:330px;flex:0 0 330px;max-height:820px;overflow-y:auto;padding:14px 14px 14px 12px;display:flex;flex-direction:column;gap:11px;border-left:1px solid var(--md-outline-variant)">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--md-on-surface-variant)">MATCHES &amp; CAPTURE GROUPS</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <sc-for list="{{ matches }}" as="m" hint-placeholder-count="3">
+            <div style="border-radius:14px;background:var(--md-surface-container);padding:10px 12px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="height:20px;padding:0 8px;border-radius:6px;background:var(--md-primary-container);color:var(--md-on-primary-container);font-size:10px;font-weight:700;display:flex;align-items:center">#{{ m.n }}</span>
+                <span style="font-family:var(--md-font-mono);font-size:12px;font-weight:700;word-break:break-all">{{ m.text }}</span>
+                <div style="flex:1"></div>
+                <span style="font-size:10.5px;color:var(--md-on-surface-variant);font-family:var(--md-font-mono)">@{{ m.index }}</span>
+              </div>
+              <sc-for list="{{ m.groups }}" as="g" hint-placeholder-count="0">
+                <div style="display:flex;align-items:center;gap:8px;margin-top:6px;padding-left:6px">
+                  <span style="height:18px;padding:0 7px;border-radius:5px;background:var(--md-tertiary-container);color:var(--md-on-tertiary-container);font-size:10px;font-weight:700;font-family:var(--md-font-mono);display:flex;align-items:center">{{ g.name }}</span>
+                  <span style="font-family:var(--md-font-mono);font-size:11.5px;color:var(--md-on-surface-variant);word-break:break-all">{{ g.val }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+          <sc-if value="{{ noMatches }}" hint-placeholder-val="{{ false }}">
+            <div style="border-radius:14px;border:1px dashed var(--md-outline-variant);padding:14px;font-size:12px;color:var(--md-on-surface-variant);text-align:center">No matches in the sample.</div>
+          </sc-if>
+        </div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--md-on-surface-variant);margin-top:4px">EXPLANATION</div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <sc-for list="{{ explain }}" as="e" hint-placeholder-count="5">
+            <div style="display:flex;align-items:baseline;gap:10px;padding:4px 2px 4px {{ e.pad }}">
+              <span style="min-width:64px;padding:2px 7px;border-radius:6px;background:var(--md-surface-container-highest);color:var(--md-primary);font-family:var(--md-font-mono);font-size:11.5px;font-weight:700;text-align:center;flex:0 0 auto">{{ e.tok }}</span>
+              <span style="font-size:11.5px;color:var(--md-on-surface-variant);line-height:1.45">{{ e.desc }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="border-radius:14px;background:var(--md-surface-container);padding:12px 14px;display:flex;flex-direction:column;gap:6px;margin-top:4px">
+          <div style="font-size:10.5px;font-weight:700;letter-spacing:.8px;color:var(--md-on-surface-variant)">WHERE THIS FIELD LIVES</div>
+          <div style="font-size:11.5px;color:var(--md-on-surface-variant);line-height:1.6">Terminal find bar (drives xterm highlight) · command palette · Explorer tree filter (directories never hide) · settings search · every flat menu past 6 items. Inline surfaces refuse catastrophic shapes and fail open; this preview runs in a Worker.</div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- the surface the popover floats over (Explorer rows, dimmed) — proves it is anchored, not a page -->
+    <div style="display:flex;flex-direction:column;gap:2px;width:520px;opacity:.45;margin-top:6px">
+      <div style="display:flex;align-items:center;gap:9px;height:34px;padding:0 14px;border-radius:999px;color:var(--md-on-surface);font-size:13px;font-weight:500"><span class="msr msrf" style="font-size:17px;color:var(--md-primary)">folder_open</span>src</div>
+      <div style="display:flex;align-items:center;gap:9px;height:34px;padding:0 14px 0 30px;border-radius:999px;color:var(--md-on-surface);font-size:13px;font-weight:500"><span class="msr msrf" style="font-size:17px;color:var(--md-primary)">folder</span>renderer</div>
+      <div style="display:flex;align-items:center;gap:9px;height:34px;padding:0 14px 0 30px;border-radius:999px;color:var(--md-on-surface);font-size:13px;font-weight:500"><span class="msr" style="font-size:17px;color:var(--md-on-surface-variant)">description</span>App.tsx</div>
+      <div style="display:flex;align-items:center;gap:9px;height:34px;padding:0 14px 0 30px;border-radius:999px;color:var(--md-on-surface);font-size:13px;font-weight:500"><span class="msr" style="font-size:17px;color:var(--md-on-surface-variant)">css</span>styles.css</div>
+    </div>
+  </div>
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1640,&quot;height&quot;:1100},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark' | 'light'&quot;,&quot;section&quot;:&quot;Appearance&quot;}}">
+class Component extends DCLogic {
+  state = {
+    theme: 'dark', open: true, tokQuery: '', copied: false,
+    pattern: '(?<host>[\\w.-]+):(?<port>\\d+)',
+    flags: { g: true, i: false, m: false, s: false, u: false, y: false },
+    sample: 'ha-box.local:8443 · 127.0.0.1:5173 · relay.nodeterm.dev:443\nssh enes@ha-box.local:22 — session nt-claude-3',
+    replacement: '$<host> → port $<port>'
+  };
+  componentDidMount() { this.applyTheme(); }
+  componentDidUpdate() { this.applyTheme(); }
+  applyTheme() { document.documentElement.dataset.theme = this.props.theme ?? this.state.theme; }
+  compile() {
+    const s = this.state;
+    const flagStr = Object.keys(s.flags).filter((k) => s.flags[k]).join('');
+    try { return { re: new RegExp(s.pattern, flagStr), flagStr, error: null }; }
+    catch (e) { return { re: null, flagStr, error: String(e.message || e) }; }
+  }
+  runMatches(re) {
+    const text = this.state.sample; const out = [];
+    if (!re || !text) return out;
+    const rx = re.global ? re : new RegExp(re.source, re.flags + 'g');
+    let m; let guard = 0;
+    while ((m = rx.exec(text)) && guard < 500) {
+      guard++;
+      out.push({ text: m[0], index: m.index, raw: m });
+      if (m[0] === '') rx.lastIndex++;
+      if (!re.global && guard >= 1) break;
+    }
+    return out;
+  }
+  explainPattern(p) {
+    const rows = []; let i = 0; let depth = 0;
+    const push = (tok, desc) => rows.push({ tok, desc, pad: (depth * 12) + 'px' });
+    while (i < p.length && rows.length < 40) {
+      const c = p[i];
+      if (c === '\\') {
+        const two = p.slice(i, i + 2);
+        const map = { '\\d': 'Any digit 0–9', '\\D': 'Any non-digit', '\\w': 'Word character [A-Za-z0-9_]', '\\W': 'Non-word character', '\\s': 'Whitespace', '\\S': 'Non-whitespace', '\\b': 'Word boundary', '\\B': 'Non-boundary', '\\n': 'Newline', '\\t': 'Tab', '\\.': 'Literal dot', '\\/': 'Literal slash' };
+        push(two, map[two] || ('Escaped literal "' + p[i + 1] + '"')); i += 2; continue;
+      }
+      if (c === '(') {
+        let end = i + 1; let tok = '('; let desc = 'Capturing group';
+        if (p.slice(i, i + 3) === '(?:') { tok = '(?:'; desc = 'Non-capturing group'; end = i + 3; }
+        else if (p.slice(i, i + 3) === '(?=') { tok = '(?='; desc = 'Positive lookahead'; end = i + 3; }
+        else if (p.slice(i, i + 3) === '(?!') { tok = '(?!'; desc = 'Negative lookahead'; end = i + 3; }
+        else if (p.slice(i, i + 4) === '(?<=') { tok = '(?<='; desc = 'Positive lookbehind'; end = i + 4; }
+        else if (p.slice(i, i + 4) === '(?<!') { tok = '(?<!'; desc = 'Negative lookbehind'; end = i + 4; }
+        else if (p.slice(i, i + 3) === '(?<') { const close = p.indexOf('>', i); const name = p.slice(i + 3, close); tok = '(?<' + name + '>'; desc = 'Named capturing group "' + name + '"'; end = close + 1; }
+        push(tok, desc); depth++; i = end; continue;
+      }
+      if (c === ')') { depth = Math.max(0, depth - 1); push(')', 'End of group'); i++; continue; }
+      if (c === '[') {
+        const close = p.indexOf(']', i + 1); const body = close > 0 ? p.slice(i, close + 1) : c;
+        push(body, body[1] === '^' ? 'Negated character class' : 'Character class — any listed character');
+        i = close > 0 ? close + 1 : i + 1; continue;
+      }
+      if (c === '{') { const close = p.indexOf('}', i); const body = close > 0 ? p.slice(i, close + 1) : c; push(body, 'Repeat exactly ' + body.slice(1, -1) + ' times'); i = close > 0 ? close + 1 : i + 1; continue; }
+      if (c === '+') { const lazy = p[i + 1] === '?'; push(lazy ? '+?' : '+', lazy ? 'One or more — lazy' : 'One or more — greedy'); i += lazy ? 2 : 1; continue; }
+      if (c === '*') { const lazy = p[i + 1] === '?'; push(lazy ? '*?' : '*', lazy ? 'Zero or more — lazy' : 'Zero or more — greedy'); i += lazy ? 2 : 1; continue; }
+      if (c === '?') { push('?', 'Optional (zero or one)'); i++; continue; }
+      if (c === '^') { push('^', 'Start of line/string'); i++; continue; }
+      if (c === '$') { push('$', 'End of line/string'); i++; continue; }
+      if (c === '.') { push('.', 'Any character (except newline unless s flag)'); i++; continue; }
+      if (c === '|') { push('|', 'Alternation — or'); i++; continue; }
+      let j = i; while (j < p.length && !'\\()[{+*?^$.|'.includes(p[j]) && p[j] !== '}') j++;
+      push(p.slice(i, j), 'Literal "' + p.slice(i, j) + '"'); i = j;
+    }
+    return rows;
+  }
+  ins(tok) { this.setState((prev) => ({ pattern: (prev.pattern + tok).slice(0, 500) })); }
+  renderVals() {
+    const s = this.state;
+    const { re, flagStr, error } = this.compile();
+    const warning = !error && /(\((?:[^()]*)[+*]\)[+*])|(\.\*\.\*)|(\([^()|]*\|[^()|]*\)\+)/.test(s.pattern)
+      ? 'Pattern shape can backtrack catastrophically — inline filters would refuse it and fail open; this preview is Worker-guarded.' : null;
+    const found = error ? [] : this.runMatches(re);
+    const segments = [];
+    if (found.length && !error) {
+      let last = 0;
+      const palette = [
+        ['var(--md-primary-container)', 'var(--md-on-primary-container)'],
+        ['var(--md-tertiary-container)', 'var(--md-on-tertiary-container)'],
+        ['var(--md-success-container)', 'var(--md-on-success-container)']
+      ];
+      found.forEach((m, i) => {
+        if (m.index > last) segments.push({ t: s.sample.slice(last, m.index), bg: 'transparent', fg: 'var(--md-on-surface-variant)' });
+        const [bg, fg] = palette[i % 3];
+        segments.push({ t: m.text === '' ? '∅' : m.text, bg, fg });
+        last = m.index + m.text.length;
+      });
+      if (last < s.sample.length) segments.push({ t: s.sample.slice(last), bg: 'transparent', fg: 'var(--md-on-surface-variant)' });
+    } else {
+      segments.push({ t: s.sample, bg: 'transparent', fg: 'var(--md-on-surface-variant)' });
+    }
+    let substituted = '';
+    if (!error && re) { try { substituted = s.sample.replace(re, s.replacement); } catch (e) { substituted = String(e.message || e); } }
+    const q = s.tokQuery.toLowerCase();
+    const sect = (title, items) => ({
+      title,
+      items: items.filter(([tok, desc]) => !q || tok.toLowerCase().includes(q) || desc.toLowerCase().includes(q))
+        .map(([tok, desc]) => ({ tok, desc, insert: () => this.ins(tok) }))
+    });
+    const tokenSections = [
+      sect('Character classes', [['\\d', 'Any digit 0–9'], ['\\D', 'Any non-digit'], ['\\w', 'Word character'], ['\\W', 'Non-word character'], ['\\s', 'Whitespace'], ['\\S', 'Non-whitespace'], ['.', 'Any character'], ['[abc]', 'Any of a, b, c'], ['[^abc]', 'Not a, b or c'], ['[a-z]', 'Range a through z'], ['\\p{L}', 'Unicode letter (needs u flag)']]),
+      sect('Anchors & boundaries', [['^', 'Start of line/string'], ['$', 'End of line/string'], ['\\b', 'Word boundary'], ['\\B', 'Non-boundary']]),
+      sect('Quantifiers', [['+', 'One or more (greedy)'], ['*', 'Zero or more (greedy)'], ['?', 'Optional'], ['{3}', 'Exactly 3'], ['{2,5}', 'Between 2 and 5'], ['{2,}', '2 or more'], ['+?', 'One or more (lazy)'], ['*?', 'Zero or more (lazy)']]),
+      sect('Groups & references', [['( )', 'Capturing group'], ['(?: )', 'Non-capturing group'], ['(?<name> )', 'Named group'], ['\\1', 'Backreference to group 1'], ['\\k<name>', 'Backreference by name'], ['|', 'Alternation — or']]),
+      sect('Lookaround', [['(?= )', 'Positive lookahead'], ['(?! )', 'Negative lookahead'], ['(?<= )', 'Positive lookbehind'], ['(?<! )', 'Negative lookbehind']]),
+      sect('Escapes', [['\\.', 'Literal dot'], ['\\/', 'Literal slash'], ['\\\\', 'Literal backslash'], ['\\n', 'Newline'], ['\\t', 'Tab'], ['\\uFFFF', 'Unicode code point']])
+    ].filter((x) => x.items.length);
+    const preset = (name, icon, pattern, sample) => ({ name, icon, use: () => this.setState({ pattern, ...(sample ? { sample } : {}) }) });
+    return {
+      themeLabel: (this.props.theme ?? s.theme) === 'dark' ? 'Dark' : 'Light',
+      toggleTheme: () => this.setState((p) => ({ theme: p.theme === 'dark' ? 'light' : 'dark' })),
+      open: s.open,
+      toggleOpen: () => this.setState((p) => ({ open: !p.open })),
+      anchorBg: s.open ? 'var(--md-primary)' : 'var(--md-surface-container-highest)',
+      anchorFg: s.open ? 'var(--md-on-primary)' : 'var(--md-on-surface-variant)',
+      fieldBorder: s.open ? 'var(--md-primary)' : 'transparent',
+      pattern: s.pattern,
+      setPattern: (e) => this.setState({ pattern: e.target.value.slice(0, 500) }),
+      patternLen: s.pattern.length,
+      patternBorder: error ? 'var(--md-error)' : 'var(--md-outline-variant)',
+      clearPattern: () => this.setState({ pattern: '' }),
+      escapeSel: () => this.setState((p) => ({ pattern: p.pattern.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&').slice(0, 500) })),
+      copyLiteral: () => {
+        navigator.clipboard && navigator.clipboard.writeText('/' + s.pattern + '/' + flagStr);
+        this.setState({ copied: true });
+        setTimeout(() => this.setState({ copied: false }), 1400);
+      },
+      copyLabel: s.copied ? 'Copied' : 'Copy /literal/',
+      flagString: flagStr,
+      flags: [
+        ['g', 'global', 'Find every match, not just the first'],
+        ['i', 'ignore case', 'Case-insensitive matching'],
+        ['m', 'multiline', '^ and $ match per line'],
+        ['s', 'dot-all', '. also matches newlines'],
+        ['u', 'unicode', 'Full unicode; enables \\p{…}'],
+        ['y', 'sticky', 'Match only at lastIndex']
+      ].map(([flag, label, hint]) => {
+        const on = s.flags[flag];
+        return { flag, label, hint, on,
+          flip: () => this.setState((p) => ({ flags: { ...p.flags, [flag]: !p.flags[flag] } })),
+          bg: on ? 'var(--md-secondary-container)' : 'transparent',
+          fg: on ? 'var(--md-on-secondary-container)' : 'var(--md-on-surface)',
+          bd: on ? 'transparent' : 'var(--md-outline)' };
+      }),
+      hasError: !!error, errorMsg: error || '',
+      hasWarning: !!warning, warningMsg: warning || '',
+      sample: s.sample,
+      setSample: (e) => this.setState({ sample: e.target.value.slice(0, 20000) }),
+      sampleLen: s.sample.length,
+      segments,
+      matchCount: error ? '—' : (found.length + (found.length === 1 ? ' match' : ' matches')),
+      matchCountBg: found.length ? 'var(--md-success-container)' : 'var(--md-surface-container-highest)',
+      matchCountFg: found.length ? 'var(--md-on-success-container)' : 'var(--md-on-surface-variant)',
+      replacement: s.replacement,
+      setReplacement: (e) => this.setState({ replacement: e.target.value }),
+      substituted,
+      matches: found.slice(0, 12).map((m, i) => {
+        const groups = [];
+        for (let gi = 1; gi < m.raw.length; gi++) if (m.raw[gi] !== undefined) groups.push({ name: '$' + gi, val: m.raw[gi] });
+        if (m.raw.groups) Object.entries(m.raw.groups).forEach(([k, v]) => { if (v !== undefined) groups.push({ name: k, val: v }); });
+        return { n: i + 1, text: m.text === '' ? '∅ (empty)' : m.text, index: m.index, groups };
+      }),
+      noMatches: !error && found.length === 0,
+      explain: this.explainPattern(s.pattern),
+      tokQuery: s.tokQuery,
+      setTokQuery: (e) => this.setState({ tokQuery: e.target.value }),
+      tokenSections,
+      presets: [
+        preset('Host : port', 'lan', '(?<host>[\\w.-]+):(?<port>\\d+)'),
+        preset('Email address', 'alternate_email', '(?<user>[\\w.+-]+)@(?<domain>[\\w-]+\\.[\\w.]+)', 'enes@nodeterm.dev · ops+ci@ding-ding.dev · not-an-email'),
+        preset('URL', 'link', 'https?:\\/\\/(?<host>[\\w.-]+)(?<path>\\/[\\w\\/.%-]*)?', 'see https://nodeterm.dev/docs and http://127.0.0.1:5173/app'),
+        preset('IPv4 address', 'router', '\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b', 'hosts: 127.0.0.1, 192.168.1.44, 10.0.0.255 — not 999.999'),
+        preset('ISO date', 'event', '(?<y>\\d{4})-(?<m>\\d{2})-(?<d>\\d{2})', 'released 2026-08-16, next 2026-09-01'),
+        preset('Semver', 'tag', '\\bv?(?<maj>\\d+)\\.(?<min>\\d+)\\.(?<patch>\\d+)\\b', 'v0.9.5 → v0.10.0 (was 0.9.4)'),
+        preset('Git SHA (short)', 'commit', '\\b[0-9a-f]{7,10}\\b', 'a41c9e2 7f0b135 c92aa07 — not zzz1234'),
+        preset('Hex color', 'palette', '#(?:[0-9a-fA-F]{3}){1,2}\\b', 'seed #6750A4 on #141218, light #FEF7FF'),
+        preset('ANSI escape', 'terminal', '\\x1b\\[[0-9;]*m', 'plain \u001b[31mred\u001b[0m text'),
+        preset('tmux session name', 'grid_view', 'nt-(?<agent>claude|codex|term)-(?<n>\\d+)', 'nt-claude-3 nt-codex-1 nt-term-7'),
+        preset('Trailing whitespace', 'space_bar', '[ \\t]+$'),
+        preset('Duplicate words', 'content_copy', '\\b(?<word>\\w+)\\s+\\k<word>\\b', 'the the quick brown fox fox')
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>

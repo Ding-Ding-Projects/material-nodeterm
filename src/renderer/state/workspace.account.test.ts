@@ -1,0 +1,125 @@
+import { describe, it, expect } from 'vitest'
+import {
+  accountChipLabel,
+  accountsForProject,
+  createAccountLoginNode,
+  flowToNodeStates,
+  isAccountLoginNode,
+  nodeStatesToFlow,
+  sshAccountsHint,
+  systemAccountDisplay
+} from './workspace'
+import type { ClaudeAccount } from '@shared/types'
+
+const acct = (over: Partial<ClaudeAccount>): ClaudeAccount => ({
+  id: 'a1',
+  label: 'work@example.com',
+  email: 'work@example.com',
+  createdAt: 0,
+  ...over
+})
+
+describe('accountChipLabel', () => {
+  it('returns null when there is no accountId (no chip)', () => {
+    expect(accountChipLabel(undefined, [acct({})])).toBeNull()
+    expect(accountChipLabel('', [acct({})])).toBeNull()
+  })
+
+  it('takes the part before @ and tooltips as "label (email)"', () => {
+    const r = accountChipLabel('a1', [acct({ label: 'work@example.com', email: 'work@example.com' })])
+    expect(r).toEqual({ short: 'work', tooltip: 'work@example.com (work@example.com)' })
+  })
+
+  it('caps the short label at 10 chars with an ellipsis', () => {
+    const r = accountChipLabel('a1', [acct({ label: 'verylongaccountname@example.com' })])
+    expect(r?.short).toBe('verylongac…')
+    expect(r?.short.length).toBe(11) // 10 chars + ellipsis
+  })
+
+  it('does not truncate a base of exactly 10 chars', () => {
+    const r = accountChipLabel('a1', [acct({ label: 'tenletters@x.com' })])
+    expect(r?.short).toBe('tenletters')
+  })
+
+  it('omits the "(email)" suffix when the account has no email', () => {
+    const r = accountChipLabel('a1', [acct({ label: 'personal', email: undefined })])
+    expect(r).toEqual({ short: 'personal', tooltip: 'personal' })
+  })
+
+  it('falls back to "Unknown account" when the id no longer resolves', () => {
+    expect(accountChipLabel('gone', [acct({ id: 'a1' })])).toEqual({
+      short: 'Unknown account',
+      tooltip: 'Unknown account'
+    })
+    expect(accountChipLabel('gone', [])).toEqual({
+      short: 'Unknown account',
+      tooltip: 'Unknown account'
+    })
+  })
+})
+
+describe('systemAccountDisplay', () => {
+  it('prefers the custom label', () => {
+    expect(systemAccountDisplay('Kişisel', 'me@example.com')).toBe('Kişisel')
+  })
+
+  it('falls back to the detected email when the label is empty/whitespace', () => {
+    expect(systemAccountDisplay('', 'me@example.com')).toBe('me@example.com')
+    expect(systemAccountDisplay('   ', 'me@example.com')).toBe('me@example.com')
+    expect(systemAccountDisplay(undefined, 'me@example.com')).toBe('me@example.com')
+  })
+
+  it('falls back to the generic name when nothing is known', () => {
+    expect(systemAccountDisplay('', null)).toBe('Default account')
+    expect(systemAccountDisplay(undefined, undefined)).toBe('Default account')
+  })
+})
+
+describe('isAccountLoginNode', () => {
+  it('keeps the login purpose after rename and a serialize/restore cycle', () => {
+    const login = createAccountLoginNode('a1', 0)
+    login.data.title = 'Family sign-in'
+    const restored = nodeStatesToFlow(flowToNodeStates([login]))[0]
+
+    expect(restored.data.accountLogin).toBe(true)
+    expect(isAccountLoginNode(restored.data)).toBe(true)
+  })
+
+  it('does not destroy a known ordinary terminal merely because it has the old login title', () => {
+    expect(isAccountLoginNode({ accountLogin: false, title: 'Claude login' })).toBe(false)
+  })
+
+  it('migrates legacy title/command signatures while rejecting ordinary legacy nodes', () => {
+    expect(isAccountLoginNode({ title: 'Claude login' })).toBe(true)
+    expect(isAccountLoginNode({ title: 'renamed', initialCommand: 'claude /login' })).toBe(true)
+    expect(isAccountLoginNode({ title: 'My session', initialCommand: 'claude' })).toBe(false)
+    expect(isAccountLoginNode({ title: 'Terminal' })).toBe(false)
+    expect(isAccountLoginNode({})).toBe(false)
+  })
+})
+
+// An SSH project's account pickers list ONLY accounts created on that host — local accounts are
+// (correctly) invisible there, which read as "multi-account is broken on SSH" without a hint row
+// explaining where accounts for this host come from.
+describe('sshAccountsHint', () => {
+  const sshProject = { ssh: { server: { host: 'box', user: 'me' } } }
+
+  it('hints on an SSH project whose host has no eligible accounts', () => {
+    const localOnly = [acct({ id: 'a1' })] // no `host` → local → filtered out for SSH
+    const eligible = accountsForProject(localOnly, sshProject)
+    expect(eligible).toEqual([])
+    expect(sshAccountsHint(sshProject, eligible)).toMatch(/Settings → Accounts/)
+  })
+
+  it('is null once the host has a matching account', () => {
+    const hosted = [acct({ id: 'a2', host: 'me@box' })]
+    const eligible = accountsForProject(hosted, sshProject)
+    expect(eligible).toHaveLength(1)
+    expect(sshAccountsHint(sshProject, eligible)).toBeNull()
+  })
+
+  it('is null for local projects (empty list there just means no managed accounts)', () => {
+    expect(sshAccountsHint(undefined, [])).toBeNull()
+    expect(sshAccountsHint({}, [])).toBeNull()
+  })
+})

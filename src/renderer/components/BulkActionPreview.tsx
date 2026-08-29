@@ -1,0 +1,83 @@
+// The reviewable preview every bulk action shows before it runs — "say what will happen before it
+// happens", and "distinguish '42 selected' from '39 will change' when some are skipped". Built on
+// the app's existing ConfirmDialog so it gets the same keyboard/focus/dialog-stack behavior as
+// every other confirmation in the app, rather than a bespoke modal.
+
+import { ConfirmDialog } from './ConfirmDialog'
+
+export interface BulkActionPreviewProps<T> {
+  title: string
+  items: T[]
+  describe: (item: T) => string
+  excluded: { item: T; reason: string }[]
+  destructive: boolean
+  busy: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+const MAX_LISTED = 12
+
+export function BulkActionPreview<T>({
+  title,
+  items,
+  describe,
+  excluded,
+  destructive,
+  busy,
+  onConfirm,
+  onCancel
+}: BulkActionPreviewProps<T>): JSX.Element {
+  const willChange = items.length
+  const totalSelected = willChange + excluded.length
+  const listed = items.slice(0, MAX_LISTED)
+  const hiddenCount = items.length - listed.length
+
+  const message =
+    totalSelected === willChange
+      ? `${title}: ${willChange} item${willChange === 1 ? '' : 's'}.`
+      : `${title}: ${willChange} of ${totalSelected} selected will change.`
+
+  return (
+    <ConfirmDialog
+      message={message}
+      confirmLabel={busy ? 'Working…' : title}
+      // The label alone never stopped a second submit — pass it through so the button disables.
+      busy={busy}
+      cancelLabel="Cancel"
+      danger={destructive}
+      // A pure-informational action (export) has nothing irreversible to gate behind Enter, so it
+      // may still confirm on Enter; a destructive one requires the explicit click, same rule the
+      // rest of the app's confirm dialogs follow.
+      enterConfirms={!destructive}
+      body={
+        <div className="bulk-preview">
+          {listed.length > 0 && (
+            <ul className="bulk-preview__list">
+              {listed.map((item, i) => (
+                <li key={i}>{describe(item)}</li>
+              ))}
+              {hiddenCount > 0 && <li className="bulk-preview__more">+{hiddenCount} more</li>}
+            </ul>
+          )}
+          {excluded.length > 0 && (
+            <div className="bulk-preview__excluded">
+              <div className="bulk-preview__excluded-title">
+                {excluded.length} excluded — will NOT change:
+              </div>
+              <ul className="bulk-preview__list bulk-preview__list--excluded">
+                {excluded.slice(0, MAX_LISTED).map(({ item, reason }, i) => (
+                  <li key={i}>
+                    {describe(item)} — <span className="bulk-preview__reason">{reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      }
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
+  )
+}

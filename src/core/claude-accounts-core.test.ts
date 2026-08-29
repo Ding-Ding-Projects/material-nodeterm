@@ -1,0 +1,249 @@
+import { describe, expect, it, vi } from 'vitest'
+
+// The LOCAL path builders under test (accountConfigDir, transcriptRootFor,
+// isSafeLocalTranscriptPath) build with the platform's native `path.join`/`path.sep`, which use
+// `\` on win32 — every fixture and expected value below is written in POSIX form (macOS-shaped
+// `/Users/x/...`) because what's under test is the join order / jail logic, not which separator
+// the host happens to use. Pin `path` to POSIX for this file only; production keeps the real,
+// platform-native module so a real Windows install still gets backslash paths. The REMOTE
+// functions (isSafeRemoteTranscriptPath, remoteAccountConfigDir*) already force POSIX explicitly
+// in the source (a remote host is always POSIX-shaped regardless of the local OS), so this mock
+// changes nothing for them.
+vi.mock('path', async () => {
+  const actual = await vi.importActual<typeof import('path')>('path')
+  return { ...actual.posix, default: actual.posix }
+})
+
+import {
+  accountConfigDir,
+  remoteAccountConfigDir,
+  isSafeRemoteTranscriptPath,
+  remoteAccountConfigDirAbs,
+  usageCredsPaths,
+  AUTH_ENV_STRIP,
+  accountTmuxEnvArgs,
+  parseLoginCapture,
+  isSupportedClaudeVersion,
+  transcriptRootFor,
+  isSafeLocalTranscriptPath
+} from './claude-accounts-core'
+
+describe('accountConfigDir', () => {
+  it('maps an account id under userData/claude-accounts', () => {
+    expect(accountConfigDir('/Users/x/Library/Application Support/nodeterm', 'a1')).toBe(
+      '/Users/x/Library/Application Support/nodeterm/claude-accounts/a1'
+    )
+  })
+  it('rejects ids that could traverse out of the root', () => {
+    expect(() => accountConfigDir('/ud', '../evil')).toThrow()
+    expect(() => accountConfigDir('/ud', 'a/b')).toThrow()
+    expect(() => accountConfigDir('/ud', '')).toThrow()
+  })
+})
+
+describe('remoteAccountConfigDir', () => {
+  it('is a ~-relative path under .nodeterm/claude-accounts (leading ~ for ssh expansion)', () => {
+    expect(remoteAccountConfigDir('a1')).toBe('~/.nodeterm/claude-accounts/a1')
+  })
+  it('rejects ids that could traverse out of the remote root', () => {
+    expect(() => remoteAccountConfigDir('../evil')).toThrow()
+    expect(() => remoteAccountConfigDir('a/b')).toThrow()
+    expect(() => remoteAccountConfigDir('')).toThrow()
+  })
+})
+
+describe('remoteAccountConfigDirAbs', () => {
+  it('joins the resolved remote $HOME with the account dir (absolute for tmux -e)', () => {
+    expect(remoteAccountConfigDirAbs('/home/bob', 'a1')).toBe(
+      '/home/bob/.nodeterm/claude-accounts/a1'
+    )
+  })
+  it('tolerates a trailing slash on the remote home', () => {
+    expect(remoteAccountConfigDirAbs('/home/bob/', 'a1')).toBe(
+      '/home/bob/.nodeterm/claude-accounts/a1'
+    )
+  })
+  it('rejects traversing ids', () => {
+    expect(() => remoteAccountConfigDirAbs('/home/bob', '../evil')).toThrow()
+  })
+})
+
+describe('usageCredsPaths', () => {
+  it('without a config dir reads the legacy ~/.claude layout', () => {
+    expect(usageCredsPaths('/Users/x')).toEqual({
+      credsFile: '/Users/x/.claude/.credentials.json',
+      identityFile: '/Users/x/.claude.json'
+    })
+  })
+  it('with a config dir reads that dir (the managed account stays isolated)', () => {
+    const p = usageCredsPaths('/Users/x', '/ud/claude-accounts/a1')
+    expect(p.credsFile).toBe('/ud/claude-accounts/a1/.credentials.json')
+    expect(p.identityFile).toBe('/ud/claude-accounts/a1/.claude.json')
+  })
+})
+
+describe('AUTH_ENV_STRIP', () => {
+  it('covers the env vars that would shadow the account OAuth login', () => {
+    expect(AUTH_ENV_STRIP).toEqual(
+      expect.arrayContaining(['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'])
+    )
+  })
+})
+
+describe('accountTmuxEnvArgs', () => {
+  it('emits one -e pair for CLAUDE_CONFIG_DIR', () => {
+    expect(accountTmuxEnvArgs('/ud/claude-accounts/a1')).toEqual([
+      '-e',
+      'CLAUDE_CONFIG_DIR=/ud/claude-accounts/a1'
+    ])
+  })
+})
+
+describe('parseLoginCapture', () => {
+  it('extracts the email from oauthAccount', () => {
+    const raw = JSON.stringify({ oauthAccount: { emailAddress: 'work@example.com' } })
+    expect(parseLoginCapture(raw)).toEqual({ email: 'work@example.com' })
+  })
+  it('accepts the alternate `email` key', () => {
+    const raw = JSON.stringify({ oauthAccount: { email: 'e@x.com' } })
+    expect(parseLoginCapture(raw)).toEqual({ email: 'e@x.com' })
+  })
+  it('returns null while login has not completed', () => {
+    expect(parseLoginCapture('{}')).toBeNull()
+    expect(parseLoginCapture('not json')).toBeNull()
+    expect(parseLoginCapture(JSON.stringify({ oauthAccount: {} }))).toBeNull()
+  })
+})
+
+describe('transcriptRootFor', () => {
+  it('defaults to the system ~/.claude/projects when no account', () => {
+    expect(transcriptRootFor('/Users/x', null)).toBe('/Users/x/.claude/projects')
+    expect(transcriptRootFor('/Users/x', '/ud', undefined)).toBe('/Users/x/.claude/projects')
+  })
+  it('uses the account config dir + projects when an account id is given', () => {
+    expect(transcriptRootFor('/Users/x', '/ud', 'a1')).toBe('/ud/claude-accounts/a1/projects')
+  })
+  it('rejects account ids that could traverse out of the root', () => {
+    expect(() => transcriptRootFor('/Users/x', '/ud', '../evil')).toThrow()
+  })
+})
+
+describe('isSupportedClaudeVersion', () => {
+  it('accepts 2.1+ and rejects older', () => {
+    expect(isSupportedClaudeVersion('2.1.0 (Claude Code)')).toBe(true)
+    expect(isSupportedClaudeVersion('2.10.3 (Claude Code)')).toBe(true)
+    expect(isSupportedClaudeVersion('3.0.0')).toBe(true)
+    expect(isSupportedClaudeVersion('2.0.14 (Claude Code)')).toBe(false)
+    expect(isSupportedClaudeVersion('1.0.44')).toBe(false)
+    expect(isSupportedClaudeVersion('garbage')).toBe(false) // unparseable → unsupported (warn)
+  })
+})
+
+describe('isSafeLocalTranscriptPath', () => {
+  const home = '/Users/x'
+  const ud = '/Users/x/Library/Application Support/nodeterm'
+  const legacy = '/Users/x/.claude/projects'
+  const acctRoot = `${ud}/claude-accounts`
+
+  it('accepts the legacy system root and paths under it', () => {
+    expect(isSafeLocalTranscriptPath(legacy, home, ud)).toBe(true)
+    expect(isSafeLocalTranscriptPath(`${legacy}/-repo/abc.jsonl`, home, ud)).toBe(true)
+  })
+  it('accepts a valid account transcript root and paths under it', () => {
+    expect(isSafeLocalTranscriptPath(`${acctRoot}/a1/projects`, home, ud)).toBe(true)
+    expect(isSafeLocalTranscriptPath(`${acctRoot}/a1/projects/-repo/s.jsonl`, home, ud)).toBe(true)
+    expect(isSafeLocalTranscriptPath(`${acctRoot}/A1_b-2/projects/x.jsonl`, home, ud)).toBe(true)
+  })
+  it("accepts gemini's chats root and paths under it", () => {
+    expect(isSafeLocalTranscriptPath(`${home}/.gemini/tmp`, home, ud)).toBe(true)
+    expect(
+      isSafeLocalTranscriptPath(`${home}/.gemini/tmp/nodeterm/chats/session-2026-08-09T10-48-fd01438b.jsonl`, home, ud)
+    ).toBe(true)
+  })
+  it("accepts codex's sessions root and paths under it", () => {
+    expect(isSafeLocalTranscriptPath(`${home}/.codex/sessions`, home, ud)).toBe(true)
+    expect(
+      isSafeLocalTranscriptPath(`${home}/.codex/sessions/2026/07/26/rollout-2026-07-26T00-48-38-019f9b40.jsonl`, home, ud)
+    ).toBe(true)
+  })
+  it("honors a relocated codex home ($CODEX_HOME), and only that one", () => {
+    // The shells pass `codexHome()` (core/usage/codex-usage.ts), which honors $CODEX_HOME. Without
+    // this the jail fails CLOSED on a relocated codex — its meter would silently never fill, which
+    // is the quiet failure mode, not a leak.
+    const moved = '/opt/codex-home'
+    expect(isSafeLocalTranscriptPath(`${moved}/sessions/2026/07/26/rollout-x.jsonl`, home, ud, moved)).toBe(true)
+    expect(isSafeLocalTranscriptPath(`${moved}/sessions`, home, ud, moved)).toBe(true)
+    // The relocated home REPLACES the default; it does not add to it.
+    expect(isSafeLocalTranscriptPath(`${home}/.codex/sessions/x.jsonl`, home, ud, moved)).toBe(false)
+    // …and the rest of the relocated home is still out of reach.
+    expect(isSafeLocalTranscriptPath(`${moved}/auth.json`, home, ud, moved)).toBe(false)
+    // Omitted / empty ⇒ the `<home>/.codex` default, exactly as before this parameter existed.
+    expect(isSafeLocalTranscriptPath(`${home}/.codex/sessions/x.jsonl`, home, ud)).toBe(true)
+    expect(isSafeLocalTranscriptPath(`${home}/.codex/sessions/x.jsonl`, home, ud, '')).toBe(true)
+  })
+  it('still refuses the rest of those agents\' config trees, and everything outside all roots', () => {
+    // The widening is per-ROOT, not per-agent-home: the credential and settings files that sit
+    // beside the transcripts stay out of reach.
+    expect(isSafeLocalTranscriptPath(`${home}/.gemini/settings.json`, home, ud)).toBe(false)
+    expect(isSafeLocalTranscriptPath(`${home}/.gemini`, home, ud)).toBe(false)
+    expect(isSafeLocalTranscriptPath(`${home}/.codex/auth.json`, home, ud)).toBe(false)
+    expect(isSafeLocalTranscriptPath(`${home}/.codex`, home, ud)).toBe(false)
+    // …and $HOME itself was never opened up.
+    expect(isSafeLocalTranscriptPath(home, home, ud)).toBe(false)
+    expect(isSafeLocalTranscriptPath(`${home}/.ssh/id_rsa`, home, ud)).toBe(false)
+    expect(isSafeLocalTranscriptPath('/etc/passwd', home, ud)).toBe(false)
+  })
+  it('rejects a `..` escape out of the accounts root', () => {
+    // Callers pass an already-resolved path; a resolved traversal lands elsewhere entirely.
+    expect(isSafeLocalTranscriptPath('/Users/x/.ssh/id_rsa', home, ud)).toBe(false)
+    expect(isSafeLocalTranscriptPath(`${ud}/hook-endpoint.env`, home, ud)).toBe(false)
+  })
+  it('rejects an invalid account-id segment', () => {
+    expect(isSafeLocalTranscriptPath(`${acctRoot}/../evil/projects/x`, home, ud)).toBe(false)
+    expect(isSafeLocalTranscriptPath(`${acctRoot}/a.b/projects/x`, home, ud)).toBe(false)
+  })
+  it('rejects a non-projects subpath under a valid account', () => {
+    expect(isSafeLocalTranscriptPath(`${acctRoot}/a1/.credentials.json`, home, ud)).toBe(false)
+    expect(isSafeLocalTranscriptPath(`${acctRoot}/a1`, home, ud)).toBe(false)
+    expect(isSafeLocalTranscriptPath(acctRoot, home, ud)).toBe(false)
+  })
+  it('rejects a sibling-prefix root (…/projects-evil)', () => {
+    expect(isSafeLocalTranscriptPath(`${legacy}-evil/x.jsonl`, home, ud)).toBe(false)
+    expect(isSafeLocalTranscriptPath(`${acctRoot}/a1/projects-evil/x`, home, ud)).toBe(false)
+  })
+})
+
+// The remote analogue of isSafeLocalTranscriptPath. A remote node's managed account writes its
+// transcripts under `~/.nodeterm/claude-accounts/<id>/projects` (remoteAccountConfigDir), NOT
+// under `~/.claude/projects` — jailing to the latter alone silently dropped every hook payload
+// for a remote account, which killed the session-name sync, the context meter and subagent cards.
+describe('isSafeRemoteTranscriptPath', () => {
+  const home = '/home/enes'
+  const ok = (p: string) => isSafeRemoteTranscriptPath(p, home)
+
+  it('accepts the system-default remote root', () => {
+    expect(ok('/home/enes/.claude/projects/-srv-proj/abc.jsonl')).toBe(true)
+  })
+
+  it('accepts a managed REMOTE account root', () => {
+    expect(ok('/home/enes/.nodeterm/claude-accounts/a1/projects/-srv-proj/abc.jsonl')).toBe(true)
+  })
+
+  it('rejects an arbitrary remote file (forged POST over the reverse tunnel)', () => {
+    expect(ok('/home/enes/.ssh/id_rsa')).toBe(false)
+    expect(ok('/etc/passwd')).toBe(false)
+  })
+
+  it('rejects a sibling-prefix root', () => {
+    expect(ok('/home/enes/.claude/projects-evil/x.jsonl')).toBe(false)
+  })
+
+  it('rejects a non-projects dir inside the accounts root, and a traversing account id', () => {
+    expect(ok('/home/enes/.nodeterm/claude-accounts/a1/.ssh/id_rsa')).toBe(false)
+    expect(ok('/home/enes/.nodeterm/claude-accounts/../../.ssh/id_rsa')).toBe(false)
+  })
+
+  it('is false when the remote home is unknown', () => {
+    expect(isSafeRemoteTranscriptPath('/home/enes/.claude/projects/x.jsonl', undefined)).toBe(false)
+  })
+})

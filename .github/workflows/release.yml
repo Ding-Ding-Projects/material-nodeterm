@@ -1,0 +1,439 @@
+name: Release
+
+# Governing policy — see docs/ci-and-releases.md for the full write-up:
+#
+#   This workflow runs NO tests, type-check or lint. Nothing in it gates the release: it
+#   BUILDS, PACKAGES and PUBLISHES a GitHub Release, and that is the whole job. A run fails
+#   only when the build, packaging, or publication itself fails.
+#
+# Windows is the active delivery target: the installer is built on windows-latest and is
+# permanently UNSIGNED (code signing is out of scope for this project — see the "Package"
+# step below). Its release stays a DRAFT while assets upload and becomes public only after the
+# complete Squirrel asset set has been verified.
+#
+# EVERY PUSH TO MAIN RELEASES. There is no manual bump step: the version is computed from the
+# tags and releases that already exist (`plan-version`, see the "Plan the release version" step)
+# and applied to the WORKING TREE ONLY.
+#
+# That last word is load-bearing and is enforced by scripts/check-release-workflow.mjs: this
+# workflow must contain no `git commit` and no `git push`. If it committed the bump back to main,
+# that commit would be a push to main, which would start this workflow again, which would bump
+# again — an unbounded chain of releases that stops only when the Actions minutes run out. The
+# cost of not committing it is that package.json on main lags what shipped; the git TAG is the
+# source of truth for the released version, and the packaged artifact carries the bumped value
+# because the build reads the working tree.
+#
+# Creating a tag does NOT retrigger this workflow: the push trigger is filtered to branches.
+#
+# Attempts for the same ref share one workflow/ref group and are never cancelled: cancellation
+# between draft creation and publication would leave a partially-staged release for a retry to
+# recover. Different refs cannot bypass the pre-checkout main-branch guard.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write # create the GitHub Release and upload its assets
+  actions: read # read this run's own run_started_at for the release-notes timing section
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      # Manual dispatch lets a caller select any ref. Refuse every tag and feature branch
+      # before checkout so a non-main build cannot become the stable latest release.
+      - name: Refuse non-main release ref
+        id: guard
+        if: github.ref != 'refs/heads/main' || github.ref_type != 'branch'
+        shell: bash
+        run: |
+          echo "::error::Stable releases must be dispatched from the main branch (got ref_type=${GITHUB_REF_TYPE}, ref=${GITHUB_REF})."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Full history: the line-count report attributes surviving lines with `git
+          # blame` across the whole tree, and the release-notes commit link wants the
+          # real SHA regardless of shallow-clone default behavior.
+          fetch-depth: 0
+          # Do not leave the contents-write token in git config for npm/build subprocesses.
+          persist-credentials: false
+
+
+      - name: Record workflow start time
+        id: timing
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Prefer GitHub's own `run_started_at` (the workflow run's first-job startedAt) so
+        # the reported duration reflects real queue+run time, not just this step's wall
+        # clock. Timing is release evidence, so a missing or invalid API value fails closed.
+        run: |
+          started_at=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .run_started_at)
+          if [ -z "$started_at" ] || [ "$started_at" = "null" ]; then
+            echo "::error::could not read run_started_at from the GitHub API"
+            exit 1
+          fi
+          node -e 'const value=process.argv[1]; const d=new Date(value); if (!Number.isFinite(d.getTime())) process.exit(1)' "$started_at"
+          echo "started_at=$started_at" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.23.2'
+          cache: 'npm'
+
+      # Bootstraps everything `npm ci` needs: locked npm dependencies, plus the postinstall
+      # hook's own bootstrap (scripts/patch-node-pty.mjs + `electron-rebuild -f -w
+      # node-pty,smart-whisper` against this runner's Electron ABI). windows-latest already
+      # ships the Visual Studio Build Tools + Python that native module compilation needs
+      # (part of the standard GitHub-hosted Windows runner image), so nothing extra is
+      # installed here. If a future dependency needs a tool the image doesn't carry, this
+      # step is where to add the missing bootstrap — check for it, install only if absent.
+      #
+      # Moved AHEAD of the version steps when releasing became automatic: the planner below is a
+      # `node scripts/…` call, and check-release-workflow.mjs refuses to let one run before its
+      # dependencies exist.
+      - name: Install dependencies
+        run: npm ci
+
+      # Works out what to release so nobody has to remember to bump package.json. The rule lives
+      # in `planReleaseVersion` (scripts/release-assets.mjs) and is unit-tested in
+      # src/main/release-version-plan.test.ts — this YAML cannot be run locally, so that suite is
+      # the part that is actually proven:
+      #
+      #   keep  — package.json already leads every tag AND release. A human chose a minor/major on
+      #           purpose; a patch bump would silently throw that intent away.
+      #   retry — package.json equals the highest version and every reference to it already points
+      #           at this commit. A re-run of a failed publish, not a new release.
+      #   bump  — everything else. Patch only: a machine cannot tell a breaking change from a typo
+      #           fix, and guessing from commit subjects would put a false promise in front of users.
+      #
+      # `bump` is the state this repository was stuck in — tags v0.4.0–v0.4.3 with no releases
+      # behind them, package.json still at 0.4.3, main 30 commits past the v0.4.3 tag — so every
+      # attempt died on "tag already targets a different commit".
+      #
+      # `npm version --no-git-tag-version` writes package.json and package-lock.json and makes NO
+      # commit and NO tag. That is required, not incidental: see the no-commit/no-push rule in the
+      # header. The build below reads the working tree, so the artifact carries the released
+      # version even though main's package.json still lags it.
+      - name: Plan the release version
+        id: version_plan
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/tags?per_page=100" > "$RUNNER_TEMP/tags-for-plan.json"
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/releases-for-plan.json"
+          head_sha="$(git rev-parse HEAD)"
+          node scripts/release-assets.mjs plan-version "$(node -p "require('./package.json').version")" "$RUNNER_TEMP/tags-for-plan.json" "$RUNNER_TEMP/releases-for-plan.json" "$head_sha" "$RUNNER_TEMP/version-plan.json"
+          # Read the path from the ENVIRONMENT, never by interpolating it into the JS source.
+          # RUNNER_TEMP on the Windows runner is `D:\a\_temp`, so `require('$RUNNER_TEMP/…')`
+          # hands JavaScript a string literal containing \a and \_ — escape sequences, not
+          # separators — and the first attempt at this died on `Cannot find module
+          # 'D:a_temp/version-plan.json'`. Every other RUNNER_TEMP use here is a shell ARGUMENT,
+          # which never had this problem; only a path pasted INTO a quoted language does.
+          planned="$(VERSION_PLAN_FILE="$RUNNER_TEMP/version-plan.json" node -p "require(process.env.VERSION_PLAN_FILE).version")"
+          npm version "$planned" --no-git-tag-version --allow-same-version
+
+      - name: Compute stable release tag
+        id: tag
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Stable release package.version must be an exact major.minor.patch SemVer (got ${version})."
+            exit 1
+          fi
+          tag="v${version}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Verify stable version advancement
+        id: version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/tags?per_page=100" > "$RUNNER_TEMP/tags-before-build.json"
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/releases-before-build.json"
+          node scripts/release-assets.mjs assert-version "$RELEASE_VERSION" "$RUNNER_TEMP/tags-before-build.json" "$RUNNER_TEMP/releases-before-build.json" "$GITHUB_SHA"
+
+      # The repository's own guards, run FIRST and under their own name.
+      #
+      # `npm run dist:win` already runs every one of these, so this step gates nothing new. What it
+      # buys is a truthful failure name: both times this release has ever gone red it was a stale
+      # generated docs bundle, and both times the refusal surfaced inside a step called "Package
+      # Windows installer", which reads as a packaging or toolchain problem. Nothing shipped until
+      # somebody opened the log and scrolled. Thirty seconds here turns that into a step that says
+      # what actually failed.
+      - name: Verify repository guards (changelog, docs bundle, inventory)
+        id: guards
+        shell: bash
+        run: |
+          node scripts/check-changelog.mjs
+          node scripts/check-docs-bundle.mjs
+          node scripts/check-uh-inventory.mjs
+
+      # Unsigned, permanently. No CSC_LINK/CSC_KEY_PASSWORD is ever set in this workflow, so
+      # electron-builder has no certificate to sign with in the first place;
+      # CSC_IDENTITY_AUTO_DISCOVERY=false additionally stops it from opportunistically
+      # picking one up from the runner's own certificate store. package.json's root
+      # `build.forceCodeSigning: false`, `build.win.forceCodeSigning: false`, and
+      # `build.win.signExecutable: false` prevent signing,
+      # while `build.win.signAndEditExecutable` stays at its default `true` so PE icon and
+      # version resources are still written. The next step independently verifies the produced
+      # installer's real Authenticode signature and fails if it is somehow signed.
+      - name: Package Windows installer (Squirrel, unsigned)
+        id: package
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run dist:win
+
+      - name: Validate complete Squirrel asset set
+        id: assets
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.tag.outputs.version }}
+          RELEASE_PACKAGE_ID: node-terminal
+          RELEASE_PRODUCT_NAME: nodeterm
+        # This checks all three required kinds independently and proves RELEASES' SHA-1/name/size
+        # records actually describe the .nupkg files being uploaded. "Some files exist" is not a
+        # complete Squirrel release.
+        run: node scripts/release-assets.mjs collect "$RELEASE_VERSION" "$RELEASE_PACKAGE_ID" "$RELEASE_PRODUCT_NAME" dist/squirrel-windows
+
+      - name: Verify packaged icon and metadata contract
+        id: icon_contract
+        run: node scripts/windows-installer.mjs assert-package dist/squirrel-windows dist/windows-icon-contract.json
+
+      - name: Verify installer is genuinely unsigned
+        id: unsigned
+        shell: pwsh
+        env:
+          SETUP_PATH: ${{ steps.assets.outputs.setup }}
+        run: |
+          $sig = Get-AuthenticodeSignature -FilePath $env:SETUP_PATH
+          Write-Host "Signature status for ${env:SETUP_PATH}: $($sig.Status)"
+          node scripts/release-assets.mjs assert-unsigned "$($sig.Status)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Stage exactly one draft release
+        id: draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          RELEASE_ASSET_MANIFEST: ${{ steps.assets.outputs.manifest }}
+        run: |
+          # A successful rerun must not clobber public assets. If this run already published a
+          # complete release, validate it and finish idempotently. An interrupted attempt leaves a
+          # draft, which is safe to edit and replace because nobody can download it as a release.
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --silent 2>"$RUNNER_TEMP/release-probe-error.txt"; then
+            state=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease --jq .isDraft)
+            if [ "$state" = "false" ]; then
+              gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/existing-release.json"
+              node scripts/release-assets.mjs verify "$RUNNER_TEMP/existing-release.json" published exact
+              gh release view --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/existing-latest-release.json"
+              node scripts/release-assets.mjs verify "$RUNNER_TEMP/existing-latest-release.json" published exact
+              echo "already_published=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --draft \
+              --prerelease=false \
+              --title "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --notes "Assets are being staged by GitHub Actions. This draft is not a published release."
+          elif grep -Eq '\(HTTP 404\)$' "$RUNNER_TEMP/release-probe-error.txt"; then
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --draft \
+              --prerelease=false \
+              --title "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --notes "Assets are being staged by GitHub Actions. This draft is not a published release."
+          else
+            cat "$RUNNER_TEMP/release-probe-error.txt" >&2
+            exit 1
+          fi
+          echo "already_published=false" >> "$GITHUB_OUTPUT"
+
+      - name: Upload assets to draft
+        id: upload
+        if: steps.draft.outputs.already_published != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          ASSET_PATHS: ${{ steps.assets.outputs.paths }}
+          RELEASE_ASSET_MANIFEST: ${{ steps.assets.outputs.manifest }}
+        run: |
+          # One direct gh invocation: failure stops this step and the release remains a draft.
+          # Prune leftovers from an older failed attempt first, so exact verification can converge;
+          # --clobber is safe here because it can only replace invisible draft assets.
+          declare -A expected=()
+          while IFS= read -r name; do
+            name="${name%$'\r'}"
+            [ -n "$name" ] && expected["$name"]=1
+          done < <(node -e 'const m=JSON.parse(process.env.RELEASE_ASSET_MANIFEST); for (const a of m.assets) console.log(a.name)')
+          while IFS= read -r name; do
+            name="${name%$'\r'}"
+            if [ -n "$name" ] && [ -z "${expected[$name]+present}" ]; then
+              gh release delete-asset "$RELEASE_TAG" "$name" --yes --repo "$GITHUB_REPOSITORY"
+            fi
+          done < <(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets,isPrerelease --jq '.assets[].name')
+
+          mapfile -t assets < <(printf '%s\n' "$ASSET_PATHS" | sed 's/\r$//' | sed '/^$/d')
+          if [ "${#assets[@]}" -lt 3 ]; then
+            echo "::error::the validated release asset list unexpectedly became incomplete"
+            exit 1
+          fi
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Generate final release notes
+        id: notes
+        if: steps.draft.outputs.already_published != 'true'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          WORKFLOW_STARTED_AT: ${{ steps.timing.outputs.started_at }}
+          RELEASE_ASSET_PATHS: ${{ steps.assets.outputs.paths }}
+          RELEASE_ASSET_MANIFEST: ${{ steps.assets.outputs.manifest }}
+        run: |
+          # RELEASE_NOTES_GENERATED_AT is left unset on purpose: release-notes.mjs stamps its
+          # own "now" after the potentially slow upload. It labels that boundary honestly;
+          # verification and publication still happen afterward.
+          node scripts/release-notes.mjs > "$RUNNER_TEMP/notes.md"
+          echo "notes_path=$RUNNER_TEMP/notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Verify draft and publish once
+        id: publish
+        if: steps.draft.outputs.already_published != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.tag.outputs.version }}
+          RELEASE_ASSET_MANIFEST: ${{ steps.assets.outputs.manifest }}
+        run: |
+          # Keep the notes edit explicitly draft. Only the command after an exact remote
+          # name+size comparison may cross the public boundary.
+          gh release edit "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --prerelease=false \
+            --notes-file "${{ steps.notes.outputs.notes_path }}"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/draft-release.json"
+          node scripts/release-assets.mjs verify "$RUNNER_TEMP/draft-release.json" draft exact
+
+          # The tag-targets-this-exact-commit gates were removed when releasing became automatic:
+          # every push releases, so the tag is minted by this run at this run's commit and there is
+          # no second author to disagree with. The version proof below is what still guarantees the
+          # number was never used for anything else.
+          if tag_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq .object.sha 2>"$RUNNER_TEMP/tag-ref-error.txt"); then
+            # Deliberately nothing to assert here any more, but the branch must still EXIST: an
+            # empty `then` body is a bash syntax error, and dropping the branch entirely would
+            # collapse the three-way answer (tag exists / confirmed 404 / unreadable) into two,
+            # which is how "the API was unreachable" starts being read as "no tag".
+            echo "Tag ${RELEASE_TAG} already exists at ${tag_sha}."
+          elif grep -Eq '\(HTTP 404\)$' "$RUNNER_TEMP/tag-ref-error.txt"; then
+            echo "Tag does not exist yet; GitHub will create it from the verified draft target."
+          else
+            cat "$RUNNER_TEMP/tag-ref-error.txt" >&2
+            exit 1
+          fi
+
+          # Re-read the complete release inventory immediately before publication. This catches a
+          # newer stable release created outside this serialized workflow while the build ran.
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/tags?per_page=100" > "$RUNNER_TEMP/tags-before-publish.json"
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/releases-before-publish.json"
+          node scripts/release-assets.mjs assert-version "$RELEASE_VERSION" "$RUNNER_TEMP/tags-before-publish.json" "$RUNNER_TEMP/releases-before-publish.json" "$GITHUB_SHA"
+
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
+
+          # The pre-publication check is the safety boundary. This post-check proves the state
+          # transition did not change the inventory; if the API read fails, the run is red while
+          # the already-verified complete release remains safe and retryable.
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/published-release.json"
+          node scripts/release-assets.mjs verify "$RUNNER_TEMP/published-release.json" published exact
+          gh release view --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/latest-release.json"
+          node scripts/release-assets.mjs verify "$RUNNER_TEMP/latest-release.json" published exact
+
+      - name: Record completion and finalize published release notes
+        id: finalize
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.ORG_TOKEN || github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          WORKFLOW_STARTED_AT: ${{ steps.timing.outputs.started_at }}
+          RELEASE_ASSET_PATHS: ${{ steps.assets.outputs.paths }}
+          RELEASE_ASSET_MANIFEST: ${{ steps.assets.outputs.manifest }}
+          ALREADY_PUBLISHED: ${{ steps.draft.outputs.already_published }}
+        run: |
+          if [ "$ALREADY_PUBLISHED" = "true" ]; then
+            gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body,isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/final-release.json"
+            node scripts/release-assets.mjs verify "$RUNNER_TEMP/final-release.json" published exact
+            FINAL_RELEASE_JSON="$RUNNER_TEMP/final-release.json" node -e 'const fs=require("fs"); const body=JSON.parse(fs.readFileSync(process.env.FINAL_RELEASE_JSON,"utf8")).body||""; for (const label of ["Workflow started","Workflow completed","Workflow duration"]) if (!body.includes(`**${label}:**`)) throw new Error(`published retry is missing ${label}`)'
+            echo "Existing published release already carries verified workflow timing; no public asset or note was changed."
+            exit 0
+          fi
+
+          completed_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          WORKFLOW_COMPLETED_AT="$completed_at" node scripts/release-notes.mjs > "$RUNNER_TEMP/final-notes.md"
+          # Notes only. The public transition happened once, above; repeating --draft=false
+          # --prerelease=false --latest here changed nothing on an already-public release but read
+          # as a SECOND public transition, which is exactly what the contract forbids — and it
+          # made the workflow fail its own check.
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/final-notes.md"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body,isDraft,isPrerelease,assets,tagName,targetCommitish > "$RUNNER_TEMP/final-release.json"
+          node scripts/release-assets.mjs verify "$RUNNER_TEMP/final-release.json" published exact
+          FINAL_RELEASE_JSON="$RUNNER_TEMP/final-release.json" FINAL_NOTES="$RUNNER_TEMP/final-notes.md" node -e 'const fs=require("fs"); const release=JSON.parse(fs.readFileSync(process.env.FINAL_RELEASE_JSON,"utf8")); const expected=fs.readFileSync(process.env.FINAL_NOTES,"utf8").trim(); if ((release.body||"").trim()!==expected) throw new Error("published release notes do not match the completed timing document")'
+
+      # Runs even when an earlier step failed, so a broken build still leaves something to
+      # inspect. Never uploads credentials, node_modules, caches, or the source tree — only
+      # the packaged output and the generated release notes. `continue-on-error` on both
+      # the collection and the upload keeps artifact handling from masking (or reversing)
+      # the real pass/fail verdict of the steps above it.
+      - name: Collect build artifacts
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/artifact-out"
+          {
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_number=$GITHUB_RUN_NUMBER"
+            echo "commit=$GITHUB_SHA"
+            echo "ref=$GITHUB_REF"
+            echo "job_status=$JOB_STATUS"
+            echo "runner_os=$RUNNER_OS"
+          } > "$RUNNER_TEMP/artifact-out/run-context.txt"
+          if [ -d dist/squirrel-windows ]; then
+            cp -r dist/squirrel-windows "$RUNNER_TEMP/artifact-out/squirrel-windows" || true
+          fi
+          if [ -f "$RUNNER_TEMP/notes.md" ]; then
+            cp "$RUNNER_TEMP/notes.md" "$RUNNER_TEMP/artifact-out/release-notes.md" || true
+          fi
+          if [ -f "$RUNNER_TEMP/final-notes.md" ]; then
+            cp "$RUNNER_TEMP/final-notes.md" "$RUNNER_TEMP/artifact-out/final-release-notes.md" || true
+          fi
+        env:
+          JOB_STATUS: ${{ job.status }}
+
+      - name: Upload build artifacts
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-build-${{ github.run_number }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/artifact-out
+          if-no-files-found: warn
+          retention-days: 14

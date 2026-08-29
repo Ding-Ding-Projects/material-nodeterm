@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Windows support — nodeterm docs</title>
+    <meta name="description" content="nodeterm ships as a native Windows desktop app with detected shell profiles and a standalone session host that keeps terminals alive across app restarts." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem('nodeterm-playground.v1') || '{}')
+          if (saved && saved.theme === 'night') document.documentElement.setAttribute('data-theme', 'night')
+          if (saved && saved.bigText) {
+            document.documentElement.style.fontSize = '19px'
+          }
+        } catch (_err) {
+          /* localStorage unavailable (private mode, etc.) -- falls back to the day palette */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Platforms</p>
+      <h1>Windows support</h1>
+      <p>nodeterm ships as a native Windows desktop app with detected native and WSL shell profiles, real ConPTY terminals, and a standalone session host that keeps them alive across app restarts.</p>
+
+      <h2>Behaviour</h2>
+      <p>The Windows build uses a frameless window with its own Material-Design title bar rather than the OS default chrome, matching the macOS and Linux builds. Local shells are hosted directly through ConPTY; nodeterm does not embed Microsoft Windows Terminal.</p>
+      <p>On stock Windows, where there is no native tmux, nodeterm's standalone session host owns each live PTY and a headless terminal buffer. Closing or crashing the desktop app detaches its clients while the host and shell keep running. Relaunching the app reattaches to the same named session and reconstructs its screen. A tmux installed only inside WSL is not treated as a native Windows tmux.</p>
+
+      <h2>Configuration</h2>
+      <p>Settings → Shell lists stable profiles for Automatic, PowerShell 7, Windows PowerShell, Command Prompt, Git Bash, each installed WSL distribution, and an advanced custom executable. Automatic tries PowerShell 7, then Windows PowerShell, then <code>%COMSPEC%</code>/<code>cmd.exe</code>. Detection can be refreshed after installing or removing a shell or WSL distribution.</p>
+      <p>One-click creation uses the saved default. Profile-aware menus can snapshot a different profile on a new node, so later default changes affect only newly created nodes. If an explicit profile disappears, it is shown as unavailable with its reason; it never silently opens another shell or WSL distribution.</p>
+      <p>For WSL profiles, the selected distribution translates the Windows project directory with its own <code>wslpath</code>. A trusted distro-side guard independently enters that translated directory before starting the configured default shell, so a directory removed during launch fails closed instead of silently opening in <code>/</code>.</p>
+
+      <h2>Switching and trust boundary</h2>
+      <p><strong>Restart with profile…</strong> is available for local terminal and agent nodes. Its destructive confirmation states that the live process and persistent session will end; cancellation changes nothing.</p>
+      <p>The renderer and canvas carry only a stable profile id. Executable paths and arguments remain private to the trusted core and are resolved again immediately before spawn. Profile choices, custom shell values, and advanced SSH execution fields stay machine-local and are stripped from shared project files and peer mutations.</p>
+
+      <h2>Failure modes</h2>
+      <p>A machine reboot ends the session-host process and every live shell it owned. On the next launch, nodeterm can replay its capped scrollback snapshot and resume a supported agent conversation, but it does not claim the original OS process survived. A provisional or rejected session-host attach fails closed instead of being indexed as persistent or replaced by a different shell.</p>
+      <p>Windows path handling — drive letters, backslashes, reparse points — remains a common source of platform-specific bugs in file and git operations; path-sensitive code must be exercised on Windows rather than assumed to work by analogy with POSIX behaviour.</p>
+
+      <h2>Security considerations</h2>
+      <p>No code-signing is applied to Windows builds under the project's current release policy; installers are unsigned and may trigger the OS's unknown-publisher warning. This is disclosed, not hidden, in the release notes for each build.</p>
+
+      <h2>Verification</h2>
+      <p>Resolver, spawn-boundary, settings, persistence, fail-closed attach behaviour, and profile-specific app localization have focused automated coverage. Packaged Windows interaction and capture evidence for the profile picker, each available profile, destructive switching, and post-relaunch reattachment is still pending; this page does not claim those gates have completed.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./packaging-updates.html">Packaging &amp; auto-update</a></li>
+        <li><a href="./terminal-sessions.html">Terminal sessions &amp; continuity</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

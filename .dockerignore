@@ -1,0 +1,28 @@
+# Keep the build context to what the image build actually reads: application sources/config,
+# package manifests, and the runtime entrypoint under deploy/.
+node_modules
+out
+dist
+.git
+.claude
+.nodeterm
+/.env
+/.env.bak
+/.nodeterm-env-*
+build
+site
+docs
+# ...except the one docs file the RENDERER genuinely bundles. StatusSurface.tsx does a Vite
+# `?raw` import of it, reached from Canvas.tsx, so without this exception `electron-vite build`
+# fails to resolve the import inside the container. This break was invisible for as long as it
+# existed because `npm run build` died earlier still, on a missing scripts/ gate.
+!docs/assets/shots/capture-manifest.json
+test
+scripts
+Dockerfile
+.dockerignore
+*.md
+*.png
+*.tsbuildinfo
+*.log
+LICENSE

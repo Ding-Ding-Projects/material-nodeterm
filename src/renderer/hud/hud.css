@@ -1,0 +1,494 @@
+/* Notch HUD (docs/notch-hud.md) — transparent overlay; only the indicator + panel paint. */
+
+:root {
+  /* agent-notch's panel is monospaced throughout (NSFont.monospacedSystemFont). Match it. */
+  --hud-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, 'Cascadia Mono', 'Roboto Mono',
+    monospace;
+
+  /* --- DynamicNotch capsule geometry — TUNE ON A MAC ---------------------------------------
+     A single black rounded-bottom surface that EXTENDS the physical notch (fused, seamless): its
+     top edge sits at y=0 sharing the notch's black, its bottom corners are rounded, and the
+     walking mascots live inside the few px that hang BELOW the menu-bar line. Clicking it grows the
+     SAME surface downward into the session panel. `--bar`, `--notch-width` and `--notch-center-x`
+     are pushed from main (notch-hud.ts geometry); the rest are visual tunables. */
+  --bar: 32px; /* menu-bar / notch strip height (from main) — the fused top zone */
+  --notch-width: 200px; /* physical notch width (from main) = the capsule's collapsed width */
+  --notch-center-x: 50%; /* notch horizontal center in px (from main) — the capsule anchor */
+  /* Unused while collapsed (the capsule never exceeds --bar); kept for the expand math only. */
+  --capsule-drop: 0px;
+  --capsule-radius: 16px; /* bottom-corner radius of the fused capsule */
+  --panel-width: 400px; /* expanded panel width */
+  --panel-max-h: 420px; /* expanded panel max content height (rows scroll past it) */
+  /* theme-exempt: fuses with the physical notch, which is black hardware regardless of the
+     system appearance — an M3 surface token here would put a visible seam at the notch edge. */
+  --capsule-bg: #000;
+
+  /* --- M3 dark-token subset (design/v2/md3/tokens.css), inlined -----------------------------
+     This document has no <html data-theme> to key off (it renders standalone, before any app
+     chrome exists), and there is nothing here that WOULD go light: the capsule above is fused
+     to the physical notch and is always black, so every row painted on it needs the DARK
+     on-* roles for contrast, in both system appearances. --md-tertiary departs from the v2
+     baseline's stock seed-pink on purpose: it carries --agent-working's exact coral
+     (src/renderer/styles.css) so the HUD's generic "working" dot reads as the identical hue
+     a user sees glowing on the canvas node for that same live agent, not an unrelated pink. */
+  --md-primary: #D0BCFF;
+  --md-on-primary: #381E72;
+  --md-primary-container: #4F378B;
+  --md-on-primary-container: #EADDFF;
+  --md-tertiary: #d97757;
+  --md-error: #F2B8B5;
+  --md-on-error: #601410;
+  --md-success: #89D88C;
+  --md-surface-container: #211F26;
+  --md-surface-container-low: #1D1B20;
+  --md-on-surface: #E6E0E9;
+  --md-on-surface-variant: #CAC4D0;
+  /* Alpha-composited stops (dither separator) need an RGB triple, not a hex string. */
+  --md-outline-variant-rgb: 73, 69, 79; /* #49454F */
+  --md-scrim: rgba(0, 0, 0, 0.6);
+  --capsule-ease: cubic-bezier(0.22, 1, 0.36, 1); /* spring-ish grow */
+  --capsule-dur: 0.22s;
+  /* Notchless fallback (no physical notch): a standalone floating pill. */
+  --pill-top-gap: 6px; /* gap above the floating pill */
+  --pill-radius: 18px; /* all-corner radius of the floating pill */
+  --pill-height: 30px; /* collapsed floating-pill height */
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+#hud {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* The DynamicNotch capsule: one black surface at y=0 that shares the notch's black. COLLAPSED it
+   sits to the LEFT of the notch, exactly `--bar` tall and only as wide as its mascots — the notch
+   appears WIDER, never taller (owner's call: no extra height). Its right edge butts against the
+   notch (square), only the bottom-left corner rounds. EXPANDED the same surface re-centres under
+   the notch and grows DOWNWARD into the session panel. `max-height` (not `height`) drives the
+   vertical grow so the reveal animates with content of unknown height. */
+.hud-capsule {
+  position: absolute;
+  top: 0;
+  /* CENTRED on the notch and widened SIDEWAYS, never taller (owner: "notch'a ekstra height
+     vermek istemiyorum"). The mascots occupy only the strip LEFT of the notch; main.ts pads the
+     right by `notch + content` so the black sticks out by the SAME amount on both sides. */
+  left: var(--notch-center-x, 50%);
+  transform: translateX(-50%);
+  /* Shrink-to-fit so however many mascots are running, none clip. */
+  width: auto;
+  height: auto;
+  max-height: var(--bar);
+  overflow: hidden;
+  background: var(--capsule-bg);
+  /* Both bottom corners round — the notch simply reads as a wider notch. */
+  border-radius: 0 0 var(--capsule-radius) var(--capsule-radius);
+  /* Elevation is a drop-shadow, not a box-shadow — this app's M3 pass keeps box-shadow for
+     React Flow's handle ring alone; every other surface (this one included) reads its lift
+     off a filter so the shape can stay a plain flat fill underneath. */
+  filter: drop-shadow(0 8px 20px var(--md-scrim));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  will-change: width, max-height;
+  transition:
+    max-height var(--capsule-dur) var(--capsule-ease),
+    border-radius var(--capsule-dur) var(--capsule-ease);
+}
+.hud-capsule--hidden {
+  display: none; /* idle: no empty black pill */
+}
+/* EXPANDED: re-centre under the notch and grow DOWNWARD into the panel. The height only appears
+   on click — collapsed, the strip is never taller than the real notch. */
+.hud-capsule.expanded {
+  left: var(--notch-center-x, 50%);
+  transform: translateX(-50%);
+  width: var(--panel-width);
+  max-height: calc(var(--bar) + var(--panel-max-h) + 20px);
+  border-radius: 0 0 var(--capsule-radius) var(--capsule-radius);
+}
+
+/* Notchless display: a standalone floating pill (no notch to fuse with) — a small top gap and
+   all-corner radius so it reads as its own Dynamic-Island-like element, not a black bar at y=0. */
+.notchless .hud-capsule {
+  /* No notch to butt against — centre the pill instead of hanging it off the notch's left edge. */
+  left: var(--notch-center-x, 50%);
+  transform: translateX(-50%);
+  top: var(--pill-top-gap);
+  max-height: var(--pill-height);
+  border-radius: var(--pill-radius);
+}
+.notchless .hud-capsule.expanded {
+  max-height: calc(var(--panel-max-h) + 16px);
+  border-radius: var(--pill-radius);
+}
+
+/* --- Collapsed indicator: the mascots, LEFT and vertically CENTRED in the notch strip ---
+   The capsule is exactly bar-tall, so the mascots sit centred on the bar's midline, left-packed,
+   inside black that extends the notch — the notch reads as wider, never taller.
+   Hidden when expanded (the rows carry their own icons). */
+.hud-indicator {
+  display: flex;
+  /* Vertically CENTRED in the notch strip, horizontally left-packed (owner's placement). */
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: auto;
+  height: var(--bar);
+  padding: 0 8px 0 10px;
+}
+.hud-capsule.expanded .hud-indicator {
+  display: none;
+}
+.notchless .hud-indicator {
+  height: var(--pill-height);
+  padding-top: 0; /* no notch to clear — center in the pill */
+}
+
+/* --- Walking mascots (copied from styles.css .term-node__mascot*) --- */
+.mascot {
+  display: inline-block;
+  flex-shrink: 0;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  will-change: background-position, transform;
+}
+.mascot--claude {
+  width: var(--mascot-w);
+  height: var(--mascot-h);
+  background-size: calc(var(--mascot-w) * 2) var(--mascot-h);
+  animation: mascot-walk-claude 0.8s steps(1) infinite;
+}
+/* Grok, gemini and opencode are their brand mark breathing, not a sprite — same treatment as the
+   canvas badge. The bloom is a drop-shadow of `currentColor`, so it needs no ink of its own; on this
+   strip that resolves against --capsule-bg (#000), which is why it reads as a glow here. */
+.mascot--pulse {
+  animation: mascot-pulse-brand 1.6s ease-in-out infinite;
+}
+/* An asset-based mark (gemini/opencode) is painted as a background image, since those four brand
+   SVGs are multi-colour documents and cannot be inlined the way grok's monochrome path is.
+   `image-rendering: auto` undoes .mascot's `pixelated`, which is there for the pixel-art critters
+   and would harden a vector mark's curves at 13px. */
+.mascot--pulse-asset {
+  background-size: contain;
+  background-position: center;
+  image-rendering: auto;
+}
+@keyframes mascot-pulse-brand {
+  0%,
+  100% {
+    opacity: 0.55;
+    filter: none;
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 1px currentColor) drop-shadow(0 0 4px currentColor);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot--pulse {
+    animation: none;
+    opacity: 1;
+    filter: drop-shadow(0 0 1px currentColor);
+  }
+}
+@keyframes mascot-walk-claude {
+  0% {
+    background-position-x: 0;
+    transform: translateY(0);
+  }
+  50% {
+    background-position-x: calc(var(--mascot-w) * -1);
+    transform: translateY(-1.5px);
+  }
+  100% {
+    background-position-x: calc(var(--mascot-w) * -2);
+    transform: translateY(0);
+  }
+}
+.mascot--codex {
+  width: var(--cmascot-w);
+  height: var(--cmascot-h);
+  background-position: 0 0;
+  background-size: var(--cmascot-sheet-w) var(--cmascot-sheet-h);
+  animation: mascot-walk-codex 0.96s steps(8) infinite;
+}
+@keyframes mascot-walk-codex {
+  to {
+    background-position-x: calc(var(--cmascot-w) * -8);
+  }
+}
+
+/* A generic (gemini/custom) working slot: a pulsing coral dot. */
+.mascot--dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--md-tertiary);
+  animation: hud-pulse 1.1s ease-in-out infinite;
+}
+@keyframes hud-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+/* Green "done, unseen" blob — a 7×7 crisp green pixel circle (agent-notch look), built as a sprite
+   in lib/mascot.ts and shown as a pixelated background; CSS drives the shimmer. */
+.done-blob {
+  /* Scaled with the mascots (they shrank ~0.72×) so the slot reads evenly. */
+  width: 9px;
+  height: 9px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+  animation: hud-shimmer 1.4s ease-in-out infinite;
+}
+/* Fallback when the pixel sprite couldn't be built (no DOM canvas): a plain round green blob. */
+.done-blob--fallback {
+  border-radius: 50%;
+  background: var(--md-success);
+  filter: drop-shadow(0 0 4px var(--md-success));
+}
+@keyframes hud-shimmer {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* --- Expanded panel: the session rows, INSIDE the same black capsule ---
+   No own background / border / radius — it IS the capsule's black surface. Rows start below the
+   fused top zone (padding-top clears the notch/menu-bar line). Fades in as the capsule grows. */
+.hud-panel {
+  width: 100%;
+  max-height: var(--panel-max-h);
+  overflow-y: auto;
+  padding: 4px 10px 10px;
+  padding-top: calc(var(--bar) + 4px);
+  font-family: var(--hud-mono);
+  color: var(--md-on-surface);
+  display: none;
+  opacity: 0;
+  transition: opacity 0.16s ease 0.06s;
+}
+.notchless .hud-panel {
+  padding-top: 8px; /* no notch to clear */
+}
+.hud-capsule.expanded .hud-panel {
+  display: block;
+  opacity: 1;
+}
+
+.hud-row {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 9px;
+  cursor: pointer;
+  position: relative;
+  transition: padding-right 0.12s ease;
+}
+.hud-row:hover {
+  background: var(--md-surface-container-low);
+  /* Make room for the dismiss × instead of letting it sit on top of the tag. */
+  padding-right: 26px;
+}
+
+/* Dismiss (×): hover-only, so an idle HUD stays clean. Right-click on the row does the same. */
+.hud-row__close {
+  position: absolute;
+  top: 6px;
+  right: 5px;
+  width: 17px;
+  height: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.hud-row:hover .hud-row__close {
+  opacity: 1;
+}
+.hud-row__close:hover {
+  color: var(--md-on-error);
+  background: var(--md-error);
+}
+.hud-row__icon {
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+}
+.hud-row__title {
+  font-family: var(--hud-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hud-row__tag {
+  grid-column: 3;
+  grid-row: 1;
+  font-family: var(--hud-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+.hud-row__tag--working {
+  color: var(--md-primary);
+}
+.hud-row__tag--needsYou {
+  color: var(--md-error);
+}
+.hud-row__tag--done {
+  color: var(--md-success);
+}
+.hud-row__tag--idle {
+  color: var(--md-on-surface-variant);
+}
+.hud-row__sub {
+  /* Column 2 ONLY: spanning into column 3 ran the `You: …` line UNDER the Go button. */
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  font-family: var(--hud-mono);
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hud-row__sub b {
+  color: var(--md-on-surface);
+  font-weight: 600;
+}
+
+/* Dithered pixel separator between rows (agent-notch's DitherSeparator: a sparse row of gray
+   pixels). Two offset dashed gradients read as scattered 2px cells rather than a solid rule. */
+.hud-sep {
+  height: 3px;
+  margin: 3px 4px;
+  opacity: 0.6;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(var(--md-outline-variant-rgb), 0.14) 0 2px, transparent 2px 6px),
+    repeating-linear-gradient(90deg, transparent 0 4px, rgba(var(--md-outline-variant-rgb), 0.08) 4px 6px);
+  background-position:
+    0 0,
+    3px 0;
+}
+
+/* Subagent disclosure */
+.hud-subs {
+  grid-column: 2 / span 2;
+  grid-row: 3;
+  margin-top: 4px;
+}
+.hud-subs__toggle {
+  font-family: var(--hud-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--md-primary);
+  padding-left: 20px;
+  cursor: pointer;
+}
+.hud-subs__list {
+  margin: 3px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.hud-subs__list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--hud-mono);
+  font-size: 10.5px;
+  color: var(--md-on-surface-variant);
+  padding: 1px 0 1px 20px;
+}
+.hud-subs__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.hud-subs__dot--working {
+  background: var(--md-primary);
+}
+.hud-subs__dot--done {
+  background: var(--md-success);
+}
+
+.hud-row__go {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: end;
+  font-family: var(--hud-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--md-on-primary-container);
+  background: var(--md-primary-container);
+  border-radius: 6px;
+  padding: 2px 8px;
+  border: none;
+  cursor: pointer;
+}
+.hud-row__go:hover {
+  color: var(--md-on-primary);
+  background: var(--md-primary);
+}
+
+.check {
+  color: var(--md-success);
+  font-size: 15px;
+  line-height: 1;
+}
+.needs-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--md-error);
+  animation: hud-pulse 1.1s ease-in-out infinite;
+}

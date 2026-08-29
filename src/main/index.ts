@@ -1,0 +1,3345 @@
+import { join, resolve, posix, dirname as dirnameOf } from 'path'
+import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
+import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
+import { readFile, writeFile, rm as rmFile, mkdir as mkdirFs } from 'fs/promises'
+import { statSync } from 'fs'
+import { renameAtomic, tempNameFor } from '../core/fs-atomic'
+import { homedir, hostname } from 'os'
+import { randomUUID } from 'crypto'
+import {
+  readCodexThreadAt,
+  rememberCodexSessionName,
+  startCodexThreadAt
+} from '../core/codex-session-name'
+import {
+  codexThreadIdentityHasLiveConflict,
+  resolveCodexThreadNodeIdentity
+} from '../core/codex-identity-proxy'
+import {
+  codexHomeForAccount,
+  codexUsageAccounts,
+  commitCodexRolloutExposure,
+  planCodexRolloutExposure
+} from '../core/codex-accounts-core'
+import { spawn } from 'child_process'
+import {
+  app,
+  BrowserWindow,
+  type BrowserWindowConstructorOptions,
+  clipboard,
+  dialog,
+  ipcMain,
+  Notification,
+  powerMonitor,
+  safeStorage,
+  shell,
+  systemPreferences,
+  webContents
+} from 'electron'
+import { IPC } from '../shared/ipc'
+import { writeFilesToClipboard } from './clipboard-files'
+import { NodeTermBrowserUseBackend } from './browser-use-backend'
+import { matchesShortcut } from '../shared/shortcut'
+import { registerFsHandlers } from '../core/fs-handlers'
+import { registerConverterIpc } from '../core/converter/register-ipc'
+import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
+import { registerOllamaIpc } from '../core/ollama/register-ipc'
+import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
+import { registerVsCodeHandlers } from '../core/vscode-handlers'
+import { LocalHistoryStore } from '../core/local-history'
+import { ProjectArchiveService } from '../core/project-archive'
+import { ServerDeploymentService, resolveServerDeploymentRoot } from './server-deployment'
+import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
+import { describeSettingsChange } from '../shared/settings-diff'
+import type { RemoteLoginHelp, Settings } from '../shared/types'
+import {
+  registerBrowserGuestRequest,
+  type BrowserGuest
+} from './browser-guest-registry'
+import {
+  addExtension,
+  listLoadedExtensions,
+  reloadPersistedBrowserExtensions,
+  removeExtensionByPath
+} from './browser-extensions'
+import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
+import {
+  registerPasswordManagerHandlers,
+  type PasswordManagerRoute
+} from '../core/password-manager/password-manager-handlers'
+import { vaultRootFor } from '../core/password-manager/vault-location'
+import { vaultPathFor } from '../core/password-manager/vault-store'
+import type { RemoteLogExec } from '../core/board-log'
+import { boardLogRemotePath } from '../core/board-log'
+import { PtyManager } from '../core/pty-manager'
+import { WindowsTerminalProfileService } from '../core/windows-terminal-profiles'
+import { WorkspaceStore } from '../core/workspace-store'
+import { WorkspaceWatcher } from '../core/workspace-watcher'
+import { SettingsStore } from '../core/settings-store'
+import { SchoolModeStore } from '../core/school-mode'
+import { KidsModeStore } from '../core/kids-mode'
+import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
+import { presenceHub } from '../core/presence/hub'
+import { SshStore } from './ssh-store'
+import { GitService } from '../core/git-service'
+import { registerGitHubIntegration } from '../core/github/integration'
+import { runGitHubCliCommand } from '../core/github/credentials'
+import { ElectronGitHubSecretStore, registerElectronGitHubControl } from './github-control'
+import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
+import { initUpdater } from './updater'
+import { decryptArchive, encryptArchive, looksLikeEncryptedArchive } from '../core/project-archive-encryption'
+import { ArchiveUnlockGuard } from '../core/archive-unlock-guard'
+import { desktopBuildPaths } from './desktop-build-paths'
+import { applyWindowsSquirrelAppUserModelId } from './windows-squirrel-identity'
+import { fetchCheck } from '../core/check'
+import { hookServer } from '../core/agents/hook-server'
+import { askpassServer, ensureAskpassScript } from './remote-ssh/ssh-askpass'
+import { appSshAgent } from './remote-ssh/ssh-agent'
+import {
+  writePendingAnswerLocal,
+  startPendingSweep,
+  isValidPendingId,
+  syntheticAnsweredEvent
+} from '../core/agents/pending-approvals'
+import { setMainWindow, getMainWindow, sendToMain, shouldHideOnClose, createCrashReloadPolicy } from './main-window'
+import {
+  initNotchHud,
+  applyNotchHudSettings,
+  type NotchHudTunables,
+  destroyNotchHud,
+  notchHudOnAgentEvent,
+  notchHudOnContextUpdate,
+  assertRegularDockPresence
+} from './notch-hud'
+import { registerCanvasWidgetIpc, closeAllCanvasWidgets } from './canvas-widget-window'
+import {
+  initAgentStatusMirror,
+  onMirrorFlush,
+  flush as flushAgentStatusMirror,
+  recordAgentEvent,
+  ackDone,
+  recordRawToolEvent,
+  recordContextUsage,
+  setMirrorSettingsProvider,
+  setMirrorUsageProvider,
+  buildMirrorUsage,
+  onInboxActionable,
+  onNodeStateChange,
+  onNodeNowChange,
+  isEventUnresolved,
+  type MirrorSettings,
+  setNodeSessionName,
+  sessionNameSweepEntries,
+  nodeState,
+  nodeSessionName,
+  workingNodes
+} from '../core/agent-status-mirror'
+import { createPushNotify, createLiveUpdatePush } from '../core/push-notify'
+import { createGrantsAccessor, type PushGrant } from '../core/push-grants'
+import { createRemoteGrantsCache } from '../core/remote-push-grants'
+import { createAckSweeper } from '../core/ack-sweep'
+import { createSessionReaper } from '../core/session-budget'
+import { startSessionMemoryService, sshScopePredicate } from '../core/session-memory-service'
+import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
+import { startToyLockService } from '../core/toylocks/toylock-service'
+import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
+import { createMemoryPressureMonitor } from '../core/memory-pressure'
+import { createPtyPressureMonitor } from '../core/pty-pressure'
+import { registerPtmxLimitHandler } from './ptmx-limit'
+import { initKeepAwake } from './keep-awake'
+import type { KeepAwakeTracker } from '../core/keep-awake'
+import { getDeviceId } from '../core/device-id'
+import { initRemoteStatusPush } from './remote-ssh/remote-status-push'
+import { runGitRemoteOp } from '../core/git-remote-proxy'
+import { initCanvasSync } from '../core/canvas-sync'
+import { retainUntilDismissed } from './notifications'
+import { installManagedAgentHooks } from '../core/agents/hooks'
+import { createSubagentTail } from '../core/subagent-tail'
+import { createContextTail, type TaskNotification } from '../core/context-tail'
+import { geminiContextParse } from '../core/gemini-session'
+import { codexContextParse } from '../core/codex-session'
+import { codexHome } from '../core/usage/codex-usage'
+import { grokRawFields, isAsyncSubagentLaunch, type NormalizedAgentEvent } from '../shared/agents/normalize'
+import { grokSessionDir, grokSessionsDir } from '../core/agents/grok-paths'
+import { forgetGrokSession, rememberGrokSessionDir } from '../core/grok-session'
+import {
+  setRemoteTranscriptReader,
+  TITLE_TAIL_BYTES,
+  SESSION_ID_RE
+} from '../core/transcript-reader'
+import {
+  locateRemoteTranscriptCommand,
+  parseLocatedTranscript,
+  remoteTranscriptRoots
+} from '../core/remote-transcript-locate'
+import { registerTranscriptIpc, resolveTranscript } from '../core/transcript-ipc'
+import { createRemoteContextTail } from './remote-context-tail'
+import { createRemoteSubagentTail } from './remote-subagent-tail'
+import { RemoteFile, type RemoteFileRef } from './remote-ssh/remote-file'
+import {
+  childArgs,
+  parseRemoteSessionNames,
+  remoteListSessionsArgs,
+  remotePaneCommandArgs
+} from '../core/remote-ssh/control-master'
+import { sessionName } from '../core/tmux-naming'
+import { posixQuote, sshHostKey } from '../shared/ssh'
+import { buildHandoff, type HandoffRemote } from './handoff'
+import { initContextLink, setNodeTranscript } from '../core/context-link'
+import { transcriptPathOf } from '../core/context-link-core'
+import { initCanvasControl, installCanvasSkillInto } from './canvas-control'
+import { initTranscriptIndex } from '../core/transcript-index'
+import { initTelemetry } from './telemetry'
+import { initClaudeUsage } from './claude-usage'
+import { remoteUsageTargets } from '../core/usage/remote-claude-usage'
+import { initLicense, isPremium, getStoredEntitlement } from '../core/license'
+import { WhisperModelStore } from '../core/speech/whisper-models'
+import { SpeechService } from '../core/speech/speech-service'
+import { registerSpeechIpc } from '../core/speech/register-ipc'
+import { initClaudeAccounts } from './claude-accounts'
+import {
+  ensureCodexAccountDaemon,
+  initCodexAccounts,
+  localCodexAccountHome,
+  localCodexSocket
+} from './codex-accounts'
+import { resolveForeignThreadAt } from './codex-relay-daemon'
+import { claudeCliCaps, registerClaudeCliIpc, type ClaudeCliCaps } from '../core/claude-cli'
+import { refreshCodexIdentityCaps, registerCodexIdentityIpc } from '../core/codex-identity-caps'
+import {
+  bindCodexThreadIdentity,
+  setCodexThreadIdentityAuthSecret,
+  writeCodexThreadIdentity
+} from '../core/codex-identity-proxy'
+import { loadOrCreateNodeAuthSecret } from '../core/agents/node-auth-secret'
+import { initNodeTokens, refreshNodeTokens } from '../core/agents/node-token-service'
+import { claudeConfigDirFor } from '../core/claude-config-dir'
+import {
+  isSafeLocalTranscriptPath,
+  isSafeRemoteTranscriptPath,
+  remoteAccountConfigDirAbs
+} from '../core/claude-accounts-core'
+import { installClaudeHooksInto, ensureClaudeFullscreenTuiInto } from '../core/agents/hooks/claude'
+import { createPairingService } from './pairing-service'
+import {
+  initRemoteHost,
+  loadOrCreateKeyPair,
+  relayAllowed,
+  API_BASE as RELAY_API_BASE,
+  RELAY_URL
+} from './remote/host-service'
+import { initStandingHost } from './remote/standing-host'
+import { killRelayHostsByPeerKey } from './remote/relay-host'
+import { initRelayHost } from './remote/relay-host-service'
+import { createRevoker } from './remote/revocation'
+import { loadApprovedDevices, mutateApprovedDevices } from './remote/approved-devices'
+import { publicKeyToB64 } from './remote/e2ee'
+import { connectRelayClient, type RelayClientSession } from './remote/relay-client'
+import { serializeProjectsListWorkspace } from './remote/projects-list-output'
+import { decodeOffer } from './remote/pairing'
+import { loadOrCreatePeerKeyPair } from './remote/peer-identity'
+import { initSshProject } from './remote-ssh/ssh-project'
+import { resyncProjectAgents, RESYNC_TRANSCRIPT_TAIL_BYTES } from './remote-ssh/agent-resync'
+import { setGitRemoteResolver, type GitRemoteRef } from '../core/remote-ssh/remote-git'
+import { SshFs, sshAppendArgs, sshTailArgs, sshSizeArgs, sshWriteArgs } from './ssh-fs'
+import { makeRemoteWorkspaceIO } from './remote-workspace-io'
+import {
+  registerMediaScheme,
+  initMediaProtocol,
+  allowMediaPath,
+  writeAgentHtml
+} from './media-protocol'
+import { initPlatform, platform } from '../core/platform'
+import { electronPlatform } from './platform-electron'
+import {
+  authorizeRelayPtyCreate,
+  type RelayPtyCreateAuthority
+} from './relay-pty-create'
+import { wirePeerRegistry } from './peer-registry'
+import { WEBGL_CONTEXT_CAP_DESKTOP } from '../shared/webgl'
+import { APP_BAR_HEIGHT } from '../shared/layout'
+import { registerConfirmedRecycleIpc } from './confirmed-recycle-ipc'
+import { registerWindowsTerminalProfileIpc } from './windows-terminal-profiles'
+import { assertSupportedNodeRuntime } from '../core/node-runtime'
+
+// Fail before Electron initializes any persistent service. mirror-publication loads node:sqlite
+// lazily so an incompatible embedded runtime reaches this clear diagnostic instead of an import
+// error during module evaluation.
+assertSupportedNodeRuntime()
+
+// Dev-only: NT_MULTI lets a SECOND instance run (host + client testing on one machine) with an
+// isolated userData via NT_USER_DATA — its own device-id/session/license/workspace. Never active
+// in packaged builds. Must run before the stores below resolve userData paths.
+const NT_MULTI = !app.isPackaged && !!process.env.NT_MULTI
+if (NT_MULTI && process.env.NT_USER_DATA) app.setPath('userData', process.env.NT_USER_DATA)
+
+// Raise Chromium's per-page WebGL context cap (default ~16) — a busy canvas wants more
+// GPU-rendered terminals than that. The renderer raises its own budget to match at boot
+// (main.tsx → setWebglBudget); see src/shared/webgl.ts for the invariant. Must be appended
+// before app 'ready' or the switch is silently ignored.
+app.commandLine.appendSwitch('max-active-webgl-contexts', String(WEBGL_CONTEXT_CAP_DESKTOP))
+
+// A throwaway NT_MULTI sandbox must not touch the real Keychain. The "node-terminal Safe Storage"
+// entry is keyed by the app NAME, which a dev instance shares with the installed app, so every
+// launch prompted for the login password and logged a scary os_crypt error when dismissed. The
+// mock keychain keeps safeStorage available in-process (no prompt, no error) while storing
+// nothing in the OS; the only consumer is the relay identity keypair, which already has a
+// documented plaintext fallback. Never set this for a real build: it would silently downgrade
+// at-rest encryption of that key.
+if (NT_MULTI && process.platform === 'darwin') app.commandLine.appendSwitch('use-mock-keychain')
+
+// Windows identifies apps by this id, not by exe path or window title — it decides whether a
+// desktop `Notification` actually shows (an unset AppUserModelID renders under a generic
+// "Electron" identity, or silently not at all on some builds) and whether the taskbar groups this
+// app's windows together instead of treating each launch as unrelated. Squirrel prefixes the
+// configured package id and executable name, so derive the runtime value from the same build
+// metadata instead of maintaining a second literal that can drift from installed shortcuts.
+applyWindowsSquirrelAppUserModelId(process.platform, app)
+
+// Platform-abstracted primary modifier target for shortcut matching in the main process
+// (⌘ on mac, Ctrl elsewhere) — mirrors the renderer's `isMac` reader.
+const isMacMain = process.platform === 'darwin'
+
+// First thing in bootstrap: install the Electron CorePlatform so anything in src/core
+// (wired in later tasks) can resolve platform() at boot. Placed after the NT_MULTI
+// userData override so userDataDir reads the final path; nothing consumes it yet.
+// Held: a relay peer's inbound RPC is answered from THIS instance's handler table (corePlatform
+// .dispatch / .cast — see platform-electron.ts). `platform()` only exposes the CorePlatform half.
+let relayPtyCreateAuthority: RelayPtyCreateAuthority | undefined
+const corePlatform = electronPlatform({
+  authorizeRelayPtyCreate: (raw, source) =>
+    relayPtyCreateAuthority
+      ? authorizeRelayPtyCreate(relayPtyCreateAuthority, raw, source)
+      : { ok: false, message: 'host terminal authority is not ready' }
+})
+initPlatform(corePlatform)
+// Set once registerMinecraftIpc runs inside app.whenReady() below; read by before-quit to ask any
+// live managed server to shut down gracefully. See requestGracefulStopAll's own doc comment for
+// why that call is synchronous and unawaited rather than joining the flush Promise.allSettled below.
+let minecraftServers: ReturnType<typeof registerMinecraftIpc>['manager'] | undefined
+
+// Only hand the OS a URL with a vetted scheme. Blocks file://, smb://, and custom
+// protocol-handler schemes that could be smuggled in via remote announcement feeds or
+// rendered markdown links. Used by both the window-open handler and the IPC handler.
+function isSafeExternalUrl(url: unknown): url is string {
+  if (typeof url !== 'string') return false
+  try {
+    const { protocol } = new URL(url)
+    return protocol === 'http:' || protocol === 'https:' || protocol === 'mailto:'
+  } catch {
+    return false
+  }
+}
+
+const settingsStore = new SettingsStore()
+const schoolModeStore = new SchoolModeStore()
+const kidsModeStore = new KidsModeStore()
+const scheduledSettingsRuntime = new ScheduledSettingsRuntime()
+const sshStore = new SshStore()
+// One trusted catalog/resolver instance owns both public detection and private launch resolution.
+// The getter is evaluated at use time so a Settings save updates Custom availability immediately;
+// the executable itself never crosses the profile IPC boundary.
+const windowsTerminalProfiles = new WindowsTerminalProfileService({
+  getCustomExecutable: () => settingsStore.get().defaultShell
+})
+const ptyManager = new PtyManager({ terminalProfiles: windowsTerminalProfiles })
+// One tiny detached relay is shared by every Codex node/account. Keeping it outside Electron
+// preserves live TUI connections across app restarts while the authenticated app-server remains
+// shared per account.
+const codexRelayScript = app.isPackaged
+  ? join(process.resourcesPath, 'codex-relay.js')
+  : join(__dirname, 'codex-relay.js')
+hookServer.setCodexRelayRuntime(process.execPath, codexRelayScript)
+// Start/ensure the one persistent relay before the renderer can create a Codex node. The daemon's
+// exclusive lock makes concurrent app starts harmless; detached + unref keeps it alive on Cmd+Q.
+const codexRelayProcess = spawn(process.execPath, [codexRelayScript, 'serve'], {
+  detached: true,
+  stdio: 'ignore',
+  env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+})
+codexRelayProcess.unref()
+// Dictation: local whisper.cpp models live under userData, one dir per install (same convention
+// as the tmux config / scrollback-store). onProgress pushes { id, pct } to the renderer the same
+// way agent-status events do (sendToMain — resolves the live window at send time).
+const whisperModels = new WhisperModelStore({
+  dir: join(app.getPath('userData'), 'speech-models'),
+  onProgress: (id, pct) => sendToMain(IPC.speechProgress, { id, pct })
+})
+const speechService = new SpeechService({ models: whisperModels })
+
+// Relay PEER sinks (docs/remote-sessions.md 4b) — the desktop mirror of src/server/index.ts's
+// setFlowController / setResyncProvider / onClientGone. Wired at boot, BEFORE any peer can register
+// (4c), because a peer that leaves must hand its pty subscriptions back: `unregisterPeerSink` calls
+// `onPeerGone` → `dropClient`, and nothing else tells the pty layer that subscriber is gone (a
+// vanished peer sends no `pty:kill`) — the pause it owed would freeze the shared terminal for every
+// viewer. Inert with zero peers: the registry holds no sink, so none of this ever runs.
+// Wired once here — do not double-wire (4b Task 4). A second wirePeerRegistry() call would silently
+// overwrite these deps (last write wins), so keep this the sole call site in src/main.
+let dropGitHubRelayClient: ((id: number) => void) | undefined
+wirePeerRegistry({
+  setFlow: (id, sid, resume, owner) => ptyManager.setFlow(id, sid, resume, owner),
+  captureForResync: (sid) => ptyManager.captureForResync(sid),
+  onPeerGone: (id) => {
+    ptyManager.dropClient(id)
+    dropGitHubRelayClient?.(id)
+  }
+})
+
+// Set once the app window is ready; used by the quit hooks to tear down SSH-project masters and
+// (via the closures below) to resolve a live SSH project's ControlMaster for remote workspace IO.
+let sshProjectManager: ReturnType<typeof initSshProject> | undefined
+// Remote SSH IO for the workspace store: mirrors each SSH project's <remoteCwd>/.nodeterm/project.json
+// over that project's live master. Resolves the ref lazily — the manager is created after the window
+// is ready — and fails open (no-op) while the project is disconnected.
+const workspaceSshFs = new SshFs((args, stdin) =>
+  sshProjectManager ? sshProjectManager.sshRun(args, stdin) : Promise.resolve({ code: 1, stdout: '' })
+)
+const remoteWorkspaceIO = makeRemoteWorkspaceIO(
+  (projectId) => sshProjectManager?.refForProject(projectId) ?? null,
+  workspaceSshFs,
+  // A throttled trailing write that fails after its optimistic ack re-owes the mirror, so the
+  // next save retries instead of believing the server file landed.
+  (projectId) => workspaceStore.markUnmirrored(projectId)
+)
+const workspaceStore = new WorkspaceStore(remoteWorkspaceIO)
+// Relay pty:create is an execution boundary, not a mirror operation. Resolve every existing node
+// from WorkspaceStore's machine-local overlay and every SSH project through the live host-owned
+// ControlMaster. A peer-supplied executable, argv, cwd, profile, launch intent, or sshRemote never
+// reaches PtyManager; a stale/mismatched master fails closed.
+relayPtyCreateAuthority = {
+  node: (persistKey) => workspaceStore.trustedNodeLaunchContext(persistKey),
+  project: (projectId) => workspaceStore.trustedProjectLaunchContext(projectId),
+  defaultTerminalProfileId: () => settingsStore.get().defaultTerminalProfileId,
+  sshRemote: (projectId, ssh, remoteCwd) => {
+    const ref = sshProjectManager?.refForProject(projectId)
+    if (!ref) return null
+    const expected = ssh.server
+    const live = ref.conn
+    if (
+      live.host !== expected.host ||
+      live.user !== expected.user ||
+      (live.port ?? 22) !== (expected.port ?? 22) ||
+      (live.identityFile ?? '') !== (expected.identityFile ?? '')
+    ) {
+      return null
+    }
+    const remoteHome = sshProjectManager?.remoteHomeFor(projectId)
+    return {
+      controlPath: ref.controlPath,
+      conn: live,
+      remoteCwd,
+      ...(remoteHome ? { remoteHome } : {})
+    }
+  }
+}
+// Watch each local ref's project.json for outside edits (git pull, a teammate's commit).
+// Self-writes match the store's last-written cache and are ignored. Re-synced after every
+// store load/save via onPersist; disposed on quit next to ptyManager.killAll().
+const workspaceWatcher = new WorkspaceWatcher({
+  paths: () => workspaceStore.localRefPaths(),
+  isSelfWrite: (p, c) => workspaceStore.isSelfWrite(p, c),
+  onExternalChange: (filePath) => {
+    void workspaceStore.readLocalRefByPath(filePath).then((changed) => {
+      if (changed) sendToMain(IPC.workspaceExternalChange, changed)
+    })
+  }
+})
+workspaceStore.onPersist = () => {
+  workspaceWatcher.sync()
+  refreshNodeTokens()
+}
+const gitService = new GitService()
+
+// Markers delimiting the `projects.list` relay blob. The iOS client splits on these exact
+// strings to recover [workspace.json | newline-joined tmux session names | agent-status.json],
+// matching the SSH browse pipeline it already uses — keep them in sync with NodetermProjects.swift.
+const NT_PROJECTS_MARK = '--NT-PROJECTS-SPLIT--'
+const NT_STATUS_MARK = '--NT-STATUS-SPLIT--'
+
+/**
+ * Build the marker-delimited projects blob served over the relay's `projects.list` RPC. Reads the
+ * same files the SSH browse path reads locally on the host (no SSH): `workspace.json` +
+ * `agent-status.json` under userData, plus the live nodeterm tmux session names. Every read is
+ * best-effort (missing files degrade to an empty section) so this never throws.
+ */
+async function listProjectsOutput(): Promise<string> {
+  const dir = app.getPath('userData')
+  // Serve the ASSEMBLED v2-shaped workspace, never the raw workspace.json. Post-migration the file
+  // is a v3 index ({version:3, entries:[…]}) whose local-ref entries hold no node data at all — the
+  // paired iOS client decodes `{ projects: [Project] }`, so a raw v3 file lists zero projects.
+  // load() re-reads each ref's .nodeterm/project.json and returns {version:2, projects:[…]}; it is
+  // idempotent (and re-syncs the watcher via onPersist), so calling it here is safe.
+  const workspace = await workspaceStore
+    // Read-only: a phone listing projects mid git-merge must NOT sideline a conflict-marked
+    // project.json to `.corrupt-<ts>` (the probe/watcher-path fix); sideline is boot/renderer-only.
+    .load({ sideline: false })
+    .then(serializeProjectsListWorkspace)
+    .catch(() => '')
+  const status = await readFile(join(dir, 'agent-status.json'), 'utf8').catch(() => '')
+  const sessions = (await ptyManager.listNodetermSessions().catch(() => [])).join('\n')
+  return `${workspace}\n${NT_PROJECTS_MARK}\n${sessions}\n${NT_STATUS_MARK}\n${status}`
+}
+
+// Remote git routing is scoped to the ACTIVE project only (set via `git:set-active-remote`).
+// A global cwd-keyed match would misroute when two SSH projects share a remote path, or when a
+// LOCAL project's cwd equals a connected SSH project's remoteCwd. The renderer drives this on every
+// project switch: the active SSH project's ref, or null for a local project (→ all git runs local).
+let activeRemote: { cwd: string; ref: GitRemoteRef } | null = null
+
+// The single app window is tracked in ./main-window (setMainWindow/getMainWindow) and
+// resolved AT SEND TIME everywhere — a closure-captured window goes stale after the
+// macOS close→dock-reopen cycle and silently swallows every send.
+// True from the first before-quit on: lets window close-events through (see hide-on-close).
+let quitting = false
+
+// Confirm-before-quit gate. Only fires when something would actually be lost: a plain-shell
+// terminal (no tmux/session-host underneath it) that would be killed for real, per
+// ptyManager.hasSessionsAtRiskOnQuit() / quit-risk.ts. A canvas where every terminal is
+// tmux-backed — the common case — quits silently, because nothing there dies from quitting.
+// `quitConfirmed` remembers a "Quit" answer so the re-issued app.quit() below (and the second
+// before-quit pass) is never re-prompted; `skipQuitConfirmation` is set for app-initiated quits
+// (auto-update restart) that are not a decision the user needs to re-make; `quitConfirmationPending`
+// dedupes concurrent triggers (native close + menu Quit + Cmd/Ctrl+Q landing in the same tick)
+// into a single dialog.
+let quitConfirmed = false
+let skipQuitConfirmation = false
+let quitConfirmationPending = false
+
+/** Whether the confirm dialog is owed at all: not already answered, not an app-initiated quit
+ *  (auto-update restart) that skips it by design, and — the actual gate — ptyManager reports live
+ *  work with no persistent backend behind it. Checked at every call site BEFORE preventDefault, so
+ *  a risk-free quit never touches the dialog machinery and never re-enters before-quit in a loop. */
+function shouldConfirmQuit(): boolean {
+  return !quitConfirmed && !skipQuitConfirmation && ptyManager.hasSessionsAtRiskOnQuit()
+}
+
+/** Shows the native confirm dialog (all platforms) and resolves once the user answers. Only ever
+ *  called after `shouldConfirmQuit()` is true. A "Quit" answer is remembered (`quitConfirmed`) so
+ *  the re-issued app.quit() below is not re-prompted. */
+function confirmQuit(parentWin: BrowserWindow | null): Promise<boolean> {
+  if (quitConfirmationPending) return Promise.resolve(false)
+  quitConfirmationPending = true
+  const opts = {
+    type: 'question' as const,
+    buttons: ['Cancel', 'Quit'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Quit nodeterm?',
+    message: 'Quit nodeterm?',
+    detail:
+      "One or more terminals here aren't using a persistent session, so quitting will end whatever is running in them right now. Terminals using tmux or the session host will still be here next time you open nodeterm."
+  }
+  const p =
+    parentWin && !parentWin.isDestroyed() ? dialog.showMessageBox(parentWin, opts) : dialog.showMessageBox(opts)
+  return p.then(({ response }) => {
+    quitConfirmationPending = false
+    const confirmed = response === 1
+    if (confirmed) quitConfirmed = true
+    return confirmed
+  })
+}
+
+// Keep-awake tracker (created in whenReady next to the notch HUD, disposed in before-quit).
+let keepAwake: KeepAwakeTracker | undefined
+
+// Browser <webview> guest webContents id → the browser node (and which of its two surfaces) it
+// belongs to. Used today for new-window capture; every entry is proven to BE a <webview> before it
+// lands here — see `registerBrowserGuestRequest`.
+const browserGuests = new Map<number, BrowserGuest>()
+
+// Node → live tail bookkeeping, so closing a node (× → pty:destroy) releases its file tailers.
+// Without this, a node closed mid-run never emits SessionEnd/PostToolUse, so context-tail (1s
+// poll) and subagent-tail (400ms poll) would keep stat/read-ing forever. Keyed by node id.
+// nodeId → the agent session id of whichever hook-capable CLI runs in that node (claude's, and
+// since the grok branch in the raw listener, grok's).
+const nodeContextSession = new Map<string, string>()
+const nodeSubagents = new Map<string, Set<string>>() // nodeId → active subagent tool_use_ids
+const browserUseBackend = new NodeTermBrowserUseBackend((sessionId) => {
+  for (const [nodeId, mappedSessionId] of nodeContextSession) {
+    if (mappedSessionId === sessionId) return nodeId
+  }
+  return resolveCodexThreadNodeIdentity(sessionId)
+})
+
+// Enforce a single instance. A second instance would re-attach every node's tmux session
+// (`new-session -A -D`), whose `-D` detaches the first instance's clients — leaving
+// "[detached (from session ...)]" dead terminals. Bail out and focus the existing window
+// instead. (This guards against a stray real GUI launch.)
+const gotSingleInstanceLock = NT_MULTI || app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    const win = getMainWindow()
+    if (!win) return
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+  })
+}
+
+// Declare the nt-media:// scheme privileged BEFORE the app is ready (required by Electron).
+// The actual request handler is installed post-ready via initMediaProtocol().
+registerMediaScheme()
+
+// Raise the soft file-descriptor limit (macOS/Linux; no-op elsewhere). macOS launches GUI apps
+// with a soft limit of 256, which a canvas full of terminals genuinely needs to exceed: every
+// attached PTY holds a master fd here, plus hook-server sockets and transcript tails. 256 was
+// hit in the field (posix_spawnp failures with ~34 terminals in one project).
+if (process.platform !== 'win32' && typeof process.setFdLimit === 'function') {
+  try {
+    process.setFdLimit(8192)
+  } catch (e) {
+    console.warn('[main] could not raise fd limit', e)
+  }
+}
+
+function createWindow(): BrowserWindow {
+  const buildPaths = desktopBuildPaths(__dirname)
+  // On Linux the window/taskbar icon is not supplied by an app bundle (unlike macOS),
+  // so set it explicitly from the bundled png (extraResources). mac is untouched — an icon
+  // there would do nothing useful and could clobber the bundled .icns. A packaged Windows exe
+  // already carries `win.icon` (build/icon.ico) as a resource via electron-builder, so this is
+  // only needed there in an unpackaged dev run, where there is no such exe to carry one.
+  const platformIcon =
+    process.platform === 'linux'
+      ? app.isPackaged
+        ? join(process.resourcesPath, 'icon.png')
+        : buildPaths.devIcon
+      : process.platform === 'win32' && !app.isPackaged
+        ? buildPaths.devIcon // BrowserWindow.icon accepts PNG fine; the
+          // .ico is only required for the exe/installer resource electron-builder embeds.
+        : undefined
+  // macOS gets the traffic lights integrated into our own top bar (`hiddenInset` + a custom
+  // `trafficLightPosition`), which is a look only macOS supports. Windows/Linux get the
+  // equivalent for THIS app's Material title bar: `hidden` removes the native title bar text and
+  // icon while keeping the native minimize/maximize/close buttons, and `titleBarOverlay` draws
+  // those buttons as an overlay on top of our page instead of a separate native strip above it —
+  // so our `.md3-app-bar` really is the only chrome, on every platform, not just macOS. Electron
+  // only honours `titleBarOverlay` on Windows/Linux; `hiddenInset` is macOS-only and is ignored
+  // elsewhere, which is why this was already safe to leave unconditional before this branch.
+  const titleBarOptions: Pick<
+    BrowserWindowConstructorOptions,
+    'titleBarStyle' | 'trafficLightPosition' | 'titleBarOverlay'
+  > =
+    process.platform === 'win32'
+      ? {
+          titleBarStyle: 'hidden',
+          // Colors match the MD3 app bar's own dark surface-container / on-surface tokens
+          // (design/v2/md3/tokens.css: --md-surface-container / --md-on-surface, dark) so the
+          // native caption buttons don't look like a different app's chrome pasted on top.
+          // Height matches `.md3-app-bar` (styles.css `--app-bar-h`); APP_BAR_HEIGHT is
+          // main's copy of that same value so the overlay buttons line up with our own row
+          // instead of floating over the canvas below it.
+          titleBarOverlay: { color: '#211F26', symbolColor: '#E6E0E9', height: APP_BAR_HEIGHT }
+        }
+      : { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 26 } }
+  const win = new BrowserWindow({
+    width: 1400,
+    height: 900,
+    show: false,
+    backgroundColor: '#1e1e1e',
+    // NT_MULTI instances are throwaway dev sandboxes: label the window so a second instance is
+    // never mistaken for the real one (the dock already shows the Electron icon in dev).
+    title: NT_MULTI ? 'node-terminal (test instance)' : 'node-terminal',
+    icon: platformIcon,
+    ...titleBarOptions,
+    webPreferences: {
+      preload: buildPaths.mainPreload,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      // Enables the <webview> tag used by WebNode (embedded content stays locked down —
+      // no nodeintegration is set on the webview element itself).
+      webviewTag: true,
+      // Chromium's built-in PDF viewer is gated behind `plugins`, and without it an EditorNode
+      // showing a .pdf renders nothing at all. This is not the old NPAPI/Flash surface (that is
+      // long gone from Chromium) — in a current Electron the only thing it turns on is the PDF
+      // viewer. The browser (Server Edition) needs no equivalent: it has the viewer already.
+      plugins: true
+    }
+  })
+
+  // Register as the live main window (send-time resolution via getMainWindow/sendToMain).
+  setMainWindow(win)
+
+  // Team presence: this window is one peer. With nobody else connected the renderer draws nothing
+  // (≤1 peer = zero cost); it matters when a phone joins over the relay, or when this desktop
+  // hosts. Its ClientId is the webContents id — the same id space sendTo/handleWithSender use.
+  // `closed` (not `close` — which only hides the window on macOS) is the real departure.
+  // (The id is captured up front: reading `win.webContents` after 'closed' throws — the window and
+  // its webContents are destroyed by then.)
+  const presenceId = win.webContents.id
+  presenceHub.join(presenceId, 'desktop')
+  win.on('closed', () => {
+    presenceHub.leave(presenceId)
+    // This webContents is a pty SUBSCRIBER (co-attach: one pty, N subscribers, keyed by the
+    // webContents id). A destroyed window sends no `pty:kill`, so without this it would stay
+    // subscribed forever: the pty client is never released, the detach-time scrollback snapshot
+    // is skipped, and a session it had paused via flow control could never be resumed — the next
+    // client to co-attach to that node would inherit a frozen terminal. The tmux sessions
+    // themselves keep running, exactly as they do on quit (killAll).
+    ptyManager.dropClient(presenceId)
+  })
+  // A crashed/killed renderer is the same story, minus the window: drop its subscriptions so the
+  // reloaded renderer reattaches to live sessions instead of inheriting the dead one's state.
+  // And actually reload — a dead renderer otherwise leaves the window a permanent blank page
+  // (both projects, every terminal). Bounded by the policy so a boot-path crash can't loop;
+  // past the budget the user decides. The tmux sessions all live in this process, so a reload
+  // costs nothing but the canvas re-hydrating from the workspace store.
+  const crashReload = createCrashReloadPolicy()
+  win.webContents.on('render-process-gone', (_event, details) => {
+    ptyManager.dropClient(presenceId)
+    if (quitting || win.isDestroyed()) return
+    const action = crashReload(details.reason, Date.now())
+    if (action === 'reload') {
+      win.webContents.reload()
+    } else if (action === 'give-up') {
+      void dialog
+        .showMessageBox(win, {
+          type: 'error',
+          message: 'The window keeps crashing',
+          detail: `The interface process died repeatedly (${details.reason}). Your terminal sessions are still running.`,
+          buttons: ['Reload', 'Not Now'],
+          defaultId: 0,
+          cancelId: 1
+        })
+        .then(({ response }) => {
+          if (response === 0 && !win.isDestroyed()) win.webContents.reload()
+        })
+    }
+  })
+
+  win.on('ready-to-show', () => win.show())
+  // The main window is a regular app window; establishing its Dock presence explicitly means the
+  // later focusable:false Notch HUD panel can never leave the app looking like an accessory.
+  win.on('show', () => assertRegularDockPresence())
+
+  // macOS: closing the window hides it instead of destroying it. The app deliberately
+  // outlives its window (tmux sessions, hook server, updater); destroying the window
+  // would leave every window-bound subsystem (agent-status forwarding, tails, updater,
+  // license events) pointing at a dead webContents after a dock-reopen.
+  win.on('close', (e) => {
+    if (shouldHideOnClose(process.platform, quitting)) {
+      e.preventDefault()
+      win.hide()
+      return
+    }
+    // The real close: on win32/linux the native title-bar × reaches this directly with no
+    // app.quit() first (see window-all-closed below), so the confirm gate has to sit here too —
+    // not only in before-quit, where the window (the only place left to show a dialog) would
+    // already be destroyed by the time we asked.
+    if (shouldConfirmQuit()) {
+      e.preventDefault()
+      void confirmQuit(win).then((ok) => {
+        if (ok) app.quit()
+      })
+    }
+  })
+
+  // Steal ⌘M / ⌘W / ⌘0 back from Electron's default application menu (minimize / close /
+  // resetZoom) and forward each to the renderer instead.
+  //
+  // ⌘M (markdown-view toggle) and ⌘W (close selected node) are read from settings.shortcuts
+  // (Settings → Shortcuts) via `matchesShortcut`, so a rebind is honoured here too — this is the
+  // inline handler `feat(settings): configurable keyboard shortcuts` introduced, kept here rather
+  // than folded into `keydown-intercept.ts`'s pure `keydownIntercept` (which predates the
+  // Shortcuts section and pins a deliberately BROADER match — any Cmd/Ctrl+M regardless of
+  // Shift/Alt — as a fixed, non-configurable menu-accelerator steal; narrowing that match to the
+  // exact configured combo is the whole point of making it reconfigurable, so the two cannot
+  // share one decision function without re-litigating that pin). ⌘0 (zoom-actual-size) is NOT
+  // part of the shortcuts registry — it is matched on the physical `code` like the renderer's
+  // `zoomShortcutChord`, unrelated to this feature — so it keeps the same fixed check
+  // `keydown-intercept.ts` uses.
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return
+    const shortcuts = settingsStore.get().shortcuts
+    const evt = {
+      metaKey: input.meta,
+      ctrlKey: input.control,
+      shiftKey: input.shift,
+      altKey: input.alt,
+      key: input.key
+    }
+    if (matchesShortcut(evt, shortcuts.toggleMarkdown, isMacMain)) {
+      event.preventDefault()
+      win.webContents.send(IPC.appToggleMarkdown)
+    } else if (matchesShortcut(evt, shortcuts.closeNode, isMacMain)) {
+      // Repurpose Cmd/Ctrl+W: the renderer closes the selected node(s); if none are
+      // selected it asks us to close the window (the standard behavior).
+      event.preventDefault()
+      win.webContents.send(IPC.appCloseNode)
+    } else if ((input.meta || input.control) && input.code === 'Digit0' && !input.shift && !input.alt) {
+      // Matched on the physical `code`, like `keydown-intercept.ts`'s `keydownIntercept`: on a
+      // non-US layout the zero key's `key` is not necessarily "0". Auto-repeat is still
+      // swallowed (so a held chord doesn't restart the renderer's 200ms zoom tween) but not
+      // forwarded again.
+      event.preventDefault()
+      if (!input.isAutoRepeat) win.webContents.send(IPC.appZoomActualSize)
+    }
+  })
+
+  // Open external links in the system browser — only safe schemes (no file://, no custom
+  // protocol handlers). Reachable from remotely-fetched announcement URLs and rendered
+  // markdown links, so the allowlist mirrors the shellOpenExternal IPC handler.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (isSafeExternalUrl(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  // Block any in-page top-level navigation away from the app origin (defense in depth).
+  win.webContents.on('will-navigate', (e, url) => {
+    if (!url.startsWith('file://') && !url.startsWith(process.env['ELECTRON_RENDERER_URL'] ?? '\0')) {
+      e.preventDefault()
+      if (isSafeExternalUrl(url)) void shell.openExternal(url)
+    }
+  })
+
+  // Load the electron-vite dev server if present, otherwise the built file.
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  } else {
+    win.loadFile(buildPaths.mainRenderer)
+  }
+
+  return win
+}
+
+app.whenReady().then(async () => {
+  // A fresh shared-Codex thread is created before its remote TUI attaches. Codex may emit its own
+  // SessionStart hook before NodeTerm has the returned thread id available to write the mapping,
+  // so publish one identity-only session event ourselves after the mapping is durable. During the
+  // narrow boot window before the renderer/mirror fan-out is wired, retain those events in order.
+  const pendingCodexIdentityEvents: NormalizedAgentEvent[] = []
+  let emitAgentStatus: ((event: NormalizedAgentEvent) => void) | undefined
+  if (!gotSingleInstanceLock) return // losing second instance — quitting; don't touch tmux
+
+  // One restart-stable secret authenticates generic per-node hook routing, Codex broker control,
+  // and signed thread mappings. The core loader adopts the legacy Codex key before minting a new
+  // one, so upgrading never invalidates an existing mapping.
+  hookServer.setIdentityStrictOverride(() => settingsStore.get().hookIdentityStrict)
+  try {
+    const nodeAuthSecret = await loadOrCreateNodeAuthSecret()
+    hookServer.setNodeAuthSecret(nodeAuthSecret)
+    hookServer.setCodexNodeAuthSecret(nodeAuthSecret)
+    setCodexThreadIdentityAuthSecret(nodeAuthSecret)
+    // Materialise capabilities before the browser backend and hook broker begin accepting work.
+    initNodeTokens({ canvases: () => workspaceStore.persistedCanvases() })
+  } catch (error) {
+    console.warn('[node-identity] no secret — hook identity unavailable, running legacy', error)
+  }
+
+  await browserUseBackend.start().catch((error) => {
+    console.error('[browser-use] backend start failed', error)
+  })
+
+  // Electron forgets loaded extensions across restarts (its own docs: "loadExtension must be
+  // called on every boot… if you want the changes to be applied"), so replay whatever was
+  // persisted the last time the user added one. Non-blocking on the rest of boot: a slow/failed
+  // reload for one profile must not delay the window opening.
+  void reloadPersistedBrowserExtensions()
+
+  // Harden every <webview> guest (WebNode runs its page in its own webContents, so the main
+  // window's setWindowOpenHandler / will-navigate above don't cover it). Registered once at
+  // startup for all current and future guests.
+  app.on('web-contents-created', (_e, contents) => {
+    if (contents.getType() !== 'webview') return
+    // Web nodes may only show http(s) pages or local content we serve via the jailed
+    // nt-media:// scheme.
+    contents.on('will-navigate', (e, url) => {
+      if (!/^https?:\/\//i.test(url) && !/^nt-media:\/\//i.test(url)) e.preventDefault()
+    })
+    // A browser node's guest requested a new window → open it as another browser node
+    // (never a real popup). Only http(s); other schemes are dropped. The map is consulted
+    // live at call time, so a guest registered later (on dom-ready) is seen when a popup fires.
+    contents.setWindowOpenHandler(({ url }) => {
+      const sourceNodeId = browserGuests.get(contents.id)?.nodeId
+      if (sourceNodeId && /^https?:\/\//i.test(url)) {
+        sendToMain(IPC.browserNewWindow, { url, sourceNodeId })
+      }
+      return { action: 'deny' }
+    })
+  })
+
+  settingsStore.init()
+  settingsStore.registerIpc()
+  // "Escape to widget" — see main/canvas-widget-window.ts's module doc. Uses the same
+  // `desktopBuildPaths(__dirname)` call every window creation path uses; cheap and pure, so
+  // recomputing it here rather than threading the `createWindow()`-local `buildPaths` through
+  // costs nothing and keeps this registration call self-contained.
+  registerCanvasWidgetIpc(settingsStore, desktopBuildPaths(__dirname), ptyManager)
+  // Native Electron IPC on purpose: profile detection is machine-local desktop state and must not
+  // enter CorePlatform's relay-dispatch table. The same service resolves the chosen id at spawn.
+  // The preload namespace is Windows-only, so keep its handlers absent on every other desktop too.
+  if (process.platform === 'win32') {
+    const disposeTerminalProfileIpc = registerWindowsTerminalProfileIpc(
+      ipcMain,
+      windowsTerminalProfiles
+    )
+    app.once('will-quit', disposeTerminalProfileIpc)
+  }
+  await schoolModeStore.init()
+  schoolModeStore.registerIpc()
+  await kidsModeStore.init()
+  kidsModeStore.registerIpc()
+  // This one runtime is shared with the Server Edition. A corrupt/unreadable schedule file boots
+  // into a disabled recovery state rather than aborting this app-ready sequence.
+  scheduledSettingsRuntime.start()
+  // Local, git-backed settings history (docs/local-history.md). One append-only revision per
+  // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
+  // shell that saves settings, rather than re-derived per process.
+  const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
+  const projectArchives = new ProjectArchiveService(localHistoryStore)
+  // The packaged extraResources directory in a production install, the repo root in dev (see
+  // resolveServerDeploymentRoot's own doc comment; `build.extraResources` in package.json ships
+  // the matching `server-deployment/` directory). Writable state (the generated .env password,
+  // the TOTP secret) lives under userData instead, since a packaged install's project directory
+  // sits in a Squirrel version folder that is replaced wholesale on every update.
+  const serverDeploymentRoot = resolveServerDeploymentRoot({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    repoRoot: app.getAppPath()
+  })
+  const serverDeployment = new ServerDeploymentService(
+    serverDeploymentRoot,
+    join(app.getPath('userData'), 'server-deployment')
+  )
+  ipcMain.handle(IPC.serverDeploymentStart, () => serverDeployment.start())
+  ipcMain.handle(IPC.serverDeploymentTotp, () => serverDeployment.currentTotp())
+  ipcMain.handle(IPC.serverDeploymentStatus, () => serverDeployment.status())
+  // Forwarded to every window (not just the one that started it) so the always-visible canvas
+  // indicator in a second window reflects a deployment kicked off from the first one.
+  serverDeployment.onProgress((stage) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send(IPC.serverDeploymentProgress, stage)
+    }
+  })
+  workspaceStore.setProjectHistoryRecorder((project, content, change) =>
+    localHistoryStore.record({
+      domain: `project_${project.id}`,
+      filename: 'project.json',
+      content,
+      // What actually happened on the canvas, not that a save happened — see shared/project-diff.ts.
+      label: change.label,
+      action: change.action
+    })
+  )
+  // ONE export/import at a time, enforced HERE and not only by disabled renderer controls — a
+  // keyboard-driven second submit (or a second window) walks straight past a disabled button, and
+  // two concurrent archive operations could interleave dialogs and history-domain writes.
+  let projectArchiveBusy = false
+  /** The working-copy vault document of a folder-less project, or undefined when it has none.
+   *  A read failure counts as "no vault" only for a MISSING file; anything else propagates, because
+   *  silently saving a project without the vault it has would be data loss wearing a success
+   *  message. */
+  const readFolderlessVault = async (projectId: string): Promise<Buffer | undefined> => {
+    const root = vaultRootFor({
+      projectId,
+      userDataDir: app.getPath('userData'),
+      known: workspaceStore.hasProject(projectId)
+    })
+    if (!root) return undefined
+    try {
+      return await readFile(vaultPathFor(root))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return undefined
+      throw error
+    }
+  }
+
+  /** Put an imported archive's carried vault into the freshly minted project's working copy.
+   *  `wx` so it can never overwrite: a brand-new project id cannot already have a vault, so a file
+   *  already there is something we do not understand, and leaving it alone is the safe move. */
+  const restoreFolderlessVault = async (projectId: string, vault: Buffer): Promise<void> => {
+    const root = vaultRootFor({ projectId, userDataDir: app.getPath('userData'), known: true })
+    if (!root) return
+    const file = vaultPathFor(root)
+    await mkdirFs(dirnameOf(file), { recursive: true })
+    await writeFile(file, vault, { flag: 'wx' }).catch((error: NodeJS.ErrnoException) => {
+      if (error?.code !== 'EEXIST') throw error
+    })
+  }
+
+  // Wrong-password rate limiting for protected project files, keyed by resolved path. Lives HERE
+  // rather than in the renderer for the reason the ladder's own header gives: a count kept by the
+  // guesser is not a count.
+  const archiveUnlock = new ArchiveUnlockGuard({ schoolMode: () => schoolModeStore.get().enabled })
+  ipcMain.handle(
+    IPC.projectArchiveExport,
+    async (_event, project: import('../shared/types').Project, password?: string) => {
+    if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
+    projectArchiveBusy = true
+    try {
+      const result = await dialog.showSaveDialog({
+        title: password ? 'Save protected project as one file' : 'Save project as one file',
+        defaultPath: `${project.name.replace(/[<>:"/\\|?*]+/g, '_') || 'project'}.nodeterm-project`,
+        filters: [{ name: 'nodeterm project file', extensions: ['nodeterm-project'] }]
+      })
+      if (result.canceled || !result.filePath) return { ok: false, canceled: true }
+      // The OS save dialog's own "replace?" prompt is the overwrite confirmation; the write itself
+      // is temp + atomic rename (binary — the V2 archive is a ZIP container, never utf-8 text), so
+      // an interrupted save can never tear an existing save file.
+      // A FOLDER-LESS project's vault is a working copy under this machine's app data, so nothing
+      // else in the archive would carry it - read it explicitly. A folder project's vault is one of
+      // its own files and is captured with the rest; passing it here too would put two copies in
+      // one save file. See core/password-manager/vault-location.ts.
+      const vault = project.cwd ? undefined : await readFolderlessVault(project.id)
+      const exported = await projectArchives.export(project, vault ? { vault } : {})
+      // Encrypt the FINISHED container, never its entries: a ZIP's entry names alone would say
+      // which repository travelled and what the project is called. See project-archive-encryption.ts.
+      const bytes = password ? encryptArchive(exported.bytes, password) : exported.bytes
+      const tmp = tempNameFor(result.filePath)
+      try {
+        await writeFile(tmp, bytes)
+        await renameAtomic(tmp, result.filePath)
+      } catch (error) {
+        await rmFile(tmp, { force: true }).catch(() => {})
+        throw error
+      }
+      return { ok: true, path: result.filePath, contents: exported.contents, encrypted: Boolean(password) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      projectArchiveBusy = false
+    }
+    }
+  )
+  ipcMain.handle(IPC.projectArchiveImport, async (_event, opts?: { path?: string; password?: string }) => {
+    if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
+    projectArchiveBusy = true
+    try {
+      // A password retry re-opens the file the FIRST call already found protected, by path: making
+      // the user pick the same file again for every wrong password would be its own small cruelty.
+      let chosen = opts?.path
+      if (!chosen) {
+        const result = await dialog.showOpenDialog({
+          title: 'Open a project file',
+          properties: ['openFile'],
+          filters: [{ name: 'nodeterm project file', extensions: ['nodeterm-project'] }]
+        })
+        if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true }
+        chosen = result.filePaths[0]
+      }
+      let raw = await readFile(chosen)
+      if (looksLikeEncryptedArchive(raw)) {
+        const key = resolve(chosen)
+        const gate = archiveUnlock.state(key)
+        // Refuse BEFORE deriving a key: the whole point of the wait is that the next guess costs
+        // wall-clock rather than only 128 MiB of scrypt.
+        if (gate.waitMs > 0) {
+          return { ok: false, lockedMs: gate.waitMs, ladderAvailable: gate.ladderAvailable, path: chosen }
+        }
+        // Protected: not an error, a prompt. The path travels back so the retry needs no picker.
+        if (!opts?.password) return { ok: false, needsPassword: true, path: chosen }
+        // A malformed envelope THROWS out of here and is reported as the damage it is — showing it
+        // as a wrong password would have the user retype a correct one forever.
+        const opened = decryptArchive(raw, opts.password)
+        if (!opened.ok) {
+          const after = archiveUnlock.recordFailure(key)
+          return {
+            ok: false,
+            wrongPassword: true,
+            path: chosen,
+            ...(after.waitMs > 0
+              ? { lockedMs: after.waitMs, ladderAvailable: after.ladderAvailable }
+              : {})
+          }
+        }
+        archiveUnlock.recordSuccess(key)
+        raw = opened.archive
+      }
+      const inspection = projectArchives.inspect(raw)
+      let destination: string | undefined
+      if (inspection.needsDestination) {
+        // The file carries the repository and working files — they need a place on disk. Only an
+        // EMPTY folder is accepted (the service enforces it), so import can never overwrite.
+        const dest = await dialog.showOpenDialog({
+          title: `Choose an EMPTY folder for ${inspection.projectName ?? 'the imported project'}`,
+          buttonLabel: 'Import here',
+          properties: ['openDirectory', 'createDirectory']
+        })
+        if (dest.canceled || !dest.filePaths[0]) return { ok: false, canceled: true }
+        destination = dest.filePaths[0]
+      }
+      const outcome = await projectArchives.import(raw, { destination })
+      // The project id is minted by the import, so a carried vault can only be placed once it
+      // exists. A folder-restoring import already got its vault back with the working files.
+      if (outcome.vault) await restoreFolderlessVault(outcome.project.id, outcome.vault)
+      return {
+        ok: true,
+        project: outcome.project,
+        archiveVersion: outcome.archiveVersion,
+        contents: outcome.contents,
+        ...(outcome.restoredTo ? { restoredTo: outcome.restoredTo } : {})
+      }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      projectArchiveBusy = false
+    }
+  })
+  settingsStore.setHistoryRecorder(async (before, after, override) => {
+    if (override) {
+      await localHistoryStore.record({
+        domain: 'settings',
+        filename: 'settings.json',
+        content: JSON.stringify(after, null, 2),
+        label: override.label,
+        action: override.action
+      })
+      return
+    }
+    const change = describeSettingsChange(before, after)
+    if (!change) return
+    await localHistoryStore.record({
+      domain: 'settings',
+      filename: 'settings.json',
+      content: JSON.stringify(after, null, 2),
+      label: change.label,
+      action: change.action
+    })
+  })
+  registerLocalHistoryHandlers(corePlatform, {
+    historyStore: localHistoryStore,
+    domainFilenames: { settings: 'settings.json' },
+    restoreHandlers: {
+      settings: async (content: string, sha: string) => {
+        const parsed = JSON.parse(content) as Settings
+        await settingsStore.applyRestoredSettings(parsed, `Restored settings to ${sha.slice(0, 7)}`)
+      }
+    }
+  })
+  registerVsCodeHandlers(corePlatform)
+  ipcMain.handle(
+    IPC.exportSaveText,
+    async (_e, suggestedFilename: string, content: string): Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }> => {
+      // `getMainWindow()` returns the narrow structural `MainWindowLike` (a testability seam),
+      // not a real BrowserWindow — and `showSaveDialog` needs the real thing to parent a sheet.
+      // Ask Electron directly, exactly as the app-close handler below does, and fall back to the
+      // parentless overload rather than casting the seam away.
+      const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null
+      const result = win
+        ? await dialog.showSaveDialog(win, { defaultPath: suggestedFilename })
+        : await dialog.showSaveDialog({ defaultPath: suggestedFilename })
+      if (result.canceled || !result.filePath) return { ok: false, canceled: true }
+      try {
+        await writeFile(result.filePath, content, 'utf-8')
+        return { ok: true, path: result.filePath }
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
+  sshStore.registerIpc()
+  ptyManager.init(() => settingsStore.get())
+  ptyManager.registerIpc()
+  workspaceStore.registerIpc()
+  gitService.registerIpc()
+  presenceHub.registerIpc()
+  registerSpeechIpc({
+    handle: (channel, fn) => corePlatform.handle(channel, fn),
+    service: speechService,
+    models: whisperModels,
+    settings: () => settingsStore.get(),
+    licenseToken: () => getStoredEntitlement(),
+    apiBase: RELAY_API_BASE
+  })
+  // Electron-only mic consent: not core-bound (systemPreferences is main-process-only), so it's
+  // a raw ipcMain handler like the other Electron-only surfaces (dialogs, shell, media) rather
+  // than going through registerSpeechIpc/corePlatform.
+  ipcMain.handle(IPC.speechMicConsent, async () =>
+    process.platform === 'darwin' ? systemPreferences.askForMediaAccess('microphone') : true
+  )
+  registerClaudeCliIpc()
+  registerCodexIdentityIpc()
+  // Warm the `claude --version` probe now (it spawns a login shell + node, ~sub-second) so the
+  // renderer's first `claude.cliCaps()` — awaited on the launch path of a cold-restored agent
+  // node — resolves from cache instead of racing the probe into a conservative "no auto".
+  void claudeCliCaps()
+
+  // REACHABILITY (4c): a handler registered through `corePlatform` serves BOTH the local window
+  // (it is still `ipcMain.handle`, bit-for-bit) AND a relay peer (answered from the platform's
+  // handler table — a peer has no webContents, so a raw `ipcMain.handle` is invisible to it).
+  // Everything core-bound — it acts on THIS machine's state, which is exactly what a remote tab
+  // is looking at — goes on the platform. The raw `ipcMain` registrations that remain further down
+  // are deliberate: each one must act on the USER's machine (dialogs, shell, notifications,
+  // updater) or is part of the host's own trust/relay control plane (pairing, remote:*, accounts).
+  corePlatform.handle(IPC.commitGenerate, (cwd: string) =>
+    generateCommitMessage(cwd, settingsStore.get())
+  )
+
+  ipcMain.handle(IPC.mediaAllow, (_e, absPath: string) => allowMediaPath(absPath))
+  ipcMain.handle(IPC.mediaWriteHtml, (_e, html: string) => writeAgentHtml(html))
+
+  ipcMain.on(
+    IPC.browserRegister,
+    (_e, webContentsId: unknown, nodeId: unknown, ownerNodeId?: unknown) => {
+      const accepted = registerBrowserGuestRequest(
+        browserGuests,
+        webContentsId,
+        nodeId,
+        undefined,
+        (id) => webContents.fromId(id) ?? null,
+        // Loud, because the symptom otherwise is "popups from this node stopped opening" with
+        // nothing anywhere to explain it.
+        (details) => console.warn('[browser] refused guest registration', details)
+      )
+      if (accepted && typeof webContentsId === 'number' && typeof nodeId === 'string') {
+        browserUseBackend.register(
+          webContentsId,
+          nodeId,
+          typeof ownerNodeId === 'string' ? ownerNodeId : undefined
+        )
+      }
+    }
+  )
+  ipcMain.on(IPC.browserUnregister, (_e, webContentsId: number) => {
+    browserGuests.delete(webContentsId)
+    browserUseBackend.unregister(webContentsId)
+  })
+
+  // Unpacked Chrome-extension loading, per browser profile — see `BrowserExtensionsApi`'s doc
+  // comment in shared/types.ts for the real limits this establishes from the pinned Electron's
+  // own typings (unpacked-only, no persistence across restarts without the boot-time replay
+  // below, a subset of chrome.* is implemented).
+  ipcMain.handle(IPC.browserExtensionsList, (_e, partition: string | undefined) =>
+    listLoadedExtensions(partition)
+  )
+  ipcMain.handle(IPC.browserExtensionsPickDir, async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
+  })
+  ipcMain.handle(IPC.browserExtensionsAdd, (_e, partition: string | undefined, dirPath: string) =>
+    addExtension(partition, dirPath)
+  )
+  ipcMain.handle(IPC.browserExtensionsRemove, (_e, partition: string | undefined, dirPath: string) =>
+    removeExtensionByPath(partition, dirPath)
+  )
+
+  // The naming agent runs LOCALLY on captured output, so it needs a cwd that exists on THIS
+  // machine. An SSH-project node's `data.cwd` is a path on the REMOTE host — spawning there fails
+  // (ENOENT) and the ✦ button silently did nothing. The cwd carries no meaning for naming (the
+  // terminal output is in the prompt), so a remote node falls back to '' → runAgent's os.homedir().
+  const localNamingCwd = (keys: string[], cwd: string): string =>
+    keys.some((k) => ptyManager.sshRemoteForNode(k)) ? '' : cwd
+
+  corePlatform.handle(IPC.ptyGenerateName, async (persistKey: string, cwd: string) =>
+    generateTerminalName(
+      await ptyManager.captureSession(persistKey),
+      localNamingCwd([persistKey], cwd),
+      settingsStore.get()
+    )
+  )
+
+  corePlatform.handle(IPC.ptyGenerateGroupName, async (memberKeys: string[], cwd: string) => {
+    const contents = await Promise.all(memberKeys.map((k) => ptyManager.captureSession(k)))
+    return generateGroupName(contents, localNamingCwd(memberKeys, cwd), settingsStore.get())
+  })
+
+  corePlatform.handle(IPC.ptyCapture, (persistKey: string, full?: boolean) =>
+    ptyManager.captureSession(persistKey, full)
+  )
+
+  // Gemini's title read needs the transcript path its own context tail already tracks (nothing
+  // scans for it). That tail is created ~600 lines below with the rest of the hook plumbing, while
+  // this deps object is consumed by the ptyReadSessionName handler just under here and by the
+  // session-name sweep further down — so the association is held in a `let` that the tail's
+  // creation assigns, NOT closed over as a `const` declared later. The difference matters: closing
+  // over the later `const` makes an early call a TDZ **ReferenceError**, and `TerminalNode`'s poll
+  // does not catch its `readSessionName` rejection — one throw kills that node's poll chain for the
+  // whole mount. A poll CAN fire early: `sessionId` is persisted in localStorage, so a cold
+  // relaunch has one before any hook arrives. Undefined-until-assigned degrades instead: no path,
+  // no name, next tick tries again. `pathFor` likewise answers undefined for a session no hook has
+  // been seen for and for a remote (SSH) gemini node, which the tails deliberately never track —
+  // all of which mean "no name", never a throw.
+  let geminiTranscriptPathFor: ((sessionId: string) => string | undefined) | undefined
+  const agentSessionNameDeps: AgentSessionNameDeps = {
+    geminiPathFor: (sessionId) => geminiTranscriptPathFor?.(sessionId)
+  }
+
+  // The reader is selected by the NODE's agent (core/agent-session-name.ts — the one copy of that
+  // rule, shared with the sweep below and with the Server Edition), so no reader ever searches
+  // another's tree. `agentId` is a TRAILING optional argument, so every pre-grok caller resolves
+  // through the claude reader unchanged.
+  corePlatform.handle(
+    IPC.ptyReadSessionName,
+    (sessionId: string, accountId?: string, agentId?: string) =>
+      readAgentSessionName(sessionId ?? '', accountId, agentId, agentSessionNameDeps)
+  )
+
+  ipcMain.on(IPC.appCloseWindow, () => BrowserWindow.getFocusedWindow()?.close())
+
+  // Bring the window forward after a file is dropped into a terminal. On macOS a drag-drop from
+  // another app does NOT activate the destination app, so without this the drag-source keeps OS
+  // keyboard focus and the user types into the wrong application. `getMainWindow()` (not the
+  // focused window — there may be none) restores + shows + focuses.
+  ipcMain.on(IPC.appFocusWindow, () => {
+    const w = getMainWindow()
+    if (!w) return
+    if (w.isMinimized()) w.restore()
+    w.show()
+    // On macOS `win.focus()` alone won't pull us in front of the still-active drag-source app —
+    // app-level focus with `steal` is what actually activates us across apps.
+    if (process.platform === 'darwin') app.focus({ steal: true })
+    w.focus()
+  })
+
+  // System-clipboard write from the MAIN process. Renderer/preload `clipboard` access is deprecated
+  // in Electron (logs a warning per call). Return a truthful acknowledgement so UI feedback never
+  // claims success when the OS clipboard rejects the write.
+  ipcMain.handle(IPC.clipboardWrite, (_e, text: unknown) => {
+    if (typeof text !== 'string') return false
+    try {
+      clipboard.writeText(text)
+      return true
+    } catch {
+      return false
+    }
+  })
+  ipcMain.handle(IPC.clipboardWriteFiles, (_e, paths: unknown) =>
+    writeFilesToClipboard(paths, {
+      platform: process.platform,
+      isFile: (path) => statSync(path).isFile(),
+      writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer)
+    })
+  )
+
+  // Dock badge: number of Claude nodes with unread output (macOS only). '' clears it.
+  ipcMain.on(IPC.appSetBadge, (_e, count: number) => {
+    if (process.platform !== 'darwin' || !app.dock) return
+    app.dock.setBadge(count > 0 ? String(count) : '')
+  })
+
+  // Show an OS notification — but only when the window is in the background. Clicking it
+  // brings the app forward and asks the renderer to focus the originating node.
+  // Resolves 'shown' | 'failed' | 'skipped' so the renderer can SEE a macOS permission
+  // denial (UNErrorCodeNotificationsNotAllowed) instead of it dying silently — that broke
+  // once already after an Electron upgrade invalidated the ncprefs signature record.
+  ipcMain.handle(
+    IPC.appNotify,
+    async (_e, payload: { title: string; body: string; nodeId: string; force?: boolean }) => {
+      const win = getMainWindow()
+      if (!win || !Notification.isSupported()) return 'skipped'
+      // `force` (permission request / confirmation) shows even when focused; normal
+      // completion notifications only show when the window is in the background.
+      if (!payload.force && win.isFocused()) return 'skipped'
+      const n = new Notification({ title: payload.title, body: payload.body })
+      n.on('click', () => {
+        // Re-resolve at click time — the window may have been hidden/recreated since.
+        const w = getMainWindow()
+        if (!w) return
+        if (w.isMinimized()) w.restore()
+        w.show()
+        w.focus()
+        if (payload.nodeId) w.webContents.send(IPC.appFocusNode, payload.nodeId)
+      })
+      // Without a retained reference the wrapper gets GC'd and the click handler dies —
+      // clicking would then only activate the app, never focus the originating node.
+      retainUntilDismissed(n)
+      return await new Promise<'shown' | 'failed'>((resolve) => {
+        // macOS reports delivery async; if neither event lands quickly, assume shown
+        // (Windows/Linux never emit 'failed').
+        const timer = setTimeout(() => resolve('shown'), 1500)
+        n.on('show', () => {
+          clearTimeout(timer)
+          resolve('shown')
+        })
+        n.on('failed', (_ev, error) => {
+          clearTimeout(timer)
+          console.warn('[notify] OS rejected the notification:', error)
+          resolve('failed')
+        })
+        n.show()
+      })
+    }
+  )
+
+  // Deep-link to the OS notification settings so the user can re-grant a denied
+  // permission (macOS never re-prompts once the app's record exists). The URL is a
+  // main-side constant — deliberately NOT routed through shellOpenExternal's
+  // http(s)-only allowlist, which must stay closed to renderer-supplied strings.
+  ipcMain.handle(IPC.appOpenNotificationSettings, () => {
+    if (process.platform !== 'darwin') return
+    void shell.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings.extension')
+  })
+
+  ipcMain.handle(IPC.announcementsFetch, async () => (await fetchCheck()).messages)
+  ipcMain.handle(IPC.appUpdatePolicy, async () => (await fetchCheck()).update)
+
+  // Writable base dir for app-managed files (e.g. default git worktree location). On the platform:
+  // a remote tab derives the default worktree path from it, and the worktree lives on THIS host.
+  corePlatform.handle(IPC.appUserDataDir, () => app.getPath('userData'))
+
+  // Phone pairing (nodeterm iOS "scan a QR" flow): a one-shot LAN listener that installs the
+  // phone's Ed25519 key into ~/.ssh/authorized_keys. The completion result is forwarded to the
+  // window over `pairing:done` so the settings section can show the paired/timeout state.
+  const pairingService = createPairingService({
+    getSettings: () => settingsStore.get(),
+    getEntitlement: getStoredEntitlement,
+    loadHostKeyPair: loadOrCreateKeyPair,
+    relayEndpoint: RELAY_URL,
+    apiBase: RELAY_API_BASE,
+    relayAllowed
+  })
+  ipcMain.handle(IPC.pairingStart, (_event, attemptId: string) =>
+    pairingService.start((result) => {
+      const w = getMainWindow()
+      if (w && !w.isDestroyed()) w.webContents.send(IPC.pairingDone, result)
+    }, attemptId)
+  )
+  ipcMain.handle(IPC.pairingStop, (_event, attemptId: string) => pairingService.stop(attemptId))
+  ipcMain.handle(IPC.pairingProbeSsh, () => pairingService.probeSsh())
+  // Same pattern as appOpenNotificationSettings: a main-side constant deep link, NOT routed
+    // Returns what it actually DID, because the renderer has to tell the truth about it. This used
+    // to be `if (process.platform !== 'darwin') return` — a silent no-op on Windows and Linux,
+    // reached from a button the renderer only rendered on macOS anyway. So a Windows user was told
+    // "Remote Login is off, turn it on", handed no control, and the one control that did exist
+    // would have done nothing for them: a dead end at the exact moment they knew what they wanted.
+    ipcMain.handle(IPC.pairingOpenRemoteLoginSettings, async (): Promise<RemoteLoginHelp> => {
+      if (process.platform === 'darwin') {
+        // Must open from MAIN: shellOpenExternal's http(s)-only allowlist silently drops x-apple.*
+        // URLs, which is why this button once did nothing when the renderer sent it.
+        await shell.openExternal(
+          'x-apple.systempreferences:com.apple.preferences.sharing?Services_RemoteLogin'
+        )
+        return { opened: 'settings' }
+      }
+      if (process.platform === 'win32') {
+        // "Remote Login" on Windows is the OpenSSH Server optional feature plus its sshd service.
+        // Optional features is the right first stop: with the feature absent there is no service to
+        // start, so the Services console would send them somewhere with nothing in it.
+        await shell.openExternal('ms-settings:optionalfeatures')
+        return { opened: 'settings', note: 'openssh-server' }
+      }
+      // Linux has no settings URL that is right across desktops, and guessing one yields a button
+      // that opens the wrong thing or nothing. Hand back the command and let the renderer show it
+      // as copyable text — an honest instruction beats a control that misfires.
+      return { opened: 'none', command: 'sudo systemctl enable --now ssh' }
+    })
+  ipcMain.handle(IPC.pairingListDevices, () => pairingService.listDevices())
+  ipcMain.handle(IPC.pairingRevokeDevice, (_e, id: string) => pairingService.revokeDevice(id))
+
+  // Revoking a bridged PEER must CUT THE LIVE SESSION, not just unpin it (revocation.ts): unpinning
+  // refuses only the NEXT handshake, while the open relay socket keeps full shell access — "the
+  // person I just removed is still sitting in my terminal, typing". `killByPeerKey` closes every
+  // live session with that key, and each close runs the peer teardown (presence leave →
+  // PtyManager.dropClient → sink prune). Host-security control plane, so it stays on raw ipcMain:
+  // a remote peer must never be able to revoke anyone.
+  const peerRevoker = createRevoker({
+    mutate: mutateApprovedDevices,
+    onRevoke: (peerKeyB64) => killRelayHostsByPeerKey(peerKeyB64)
+  })
+  ipcMain.handle(IPC.remoteRevokePeer, (_e, peerKeyB64: string) =>
+    peerRevoker.revoke(String(peerKeyB64))
+  )
+  // Read-only companion to the revoker: who is currently pinned. Same host-security control plane
+  // as the revoke handler above, so it stays on raw ipcMain — a remote peer must never learn the
+  // full trust list either.
+  ipcMain.handle(IPC.remoteListApprovedPeers, async () => {
+    const store = await loadApprovedDevices()
+    return store.pubkeys
+  })
+
+  ipcMain.on(IPC.shellReveal, (_e, p: string) => {
+    if (p) shell.showItemInFolder(p)
+  })
+
+  ipcMain.on(IPC.shellOpenPath, (_e, p: string) => {
+    if (p) void shell.openPath(p)
+  })
+
+  ipcMain.on(IPC.shellOpenExternal, (_e, url: string) => {
+    if (isSafeExternalUrl(url)) void shell.openExternal(url)
+  })
+
+  // The Explorer/Editor fs surface: ONE registrar (core/fs-handlers.ts) shared by this shell and
+  // the Server Edition, over the same pure core/fs-ops — so local, browser and peer filesystem
+  // behaviour cannot drift. Registered on the platform, so a remote tab's Explorer/editor works.
+  // `localProjectCwd` is how a canvas image finds the project's own `.nodeterm/images/`. It
+  // answers undefined for an SSH project (its cwd is on the host, and the image node reads
+  // locally) and for a relay tab (not in this index at all) — both take the app-local fallback.
+  registerFsHandlers(corePlatform, {
+    localProjectCwd: (projectId: string) => workspaceStore.localCwdForProject(projectId)
+  })
+
+  // Universal file converter (docs/file-converter.md) + local Ollama suite manager
+  // (docs/ollama-manager.md) + local Minecraft server create-and-manage
+  // (docs/minecraft-server-manager.md) — all three register on the shared CorePlatform, so the
+  // Server Edition gets the identical engine via src/server/handlers/index.ts's own call to these
+  // same functions.
+  registerConverterIpc(corePlatform)
+  registerNodeDependencyIpc(corePlatform)
+  registerOllamaIpc(corePlatform)
+  minecraftServers = registerMinecraftIpc(corePlatform).manager
+
+  const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
+  const github = registerGitHubIntegration({
+    platform: corePlatform,
+    userDataDir: app.getPath('userData'),
+    project: (projectId) => workspaceStore.githubProject(projectId),
+    detectRepository: (project) =>
+      gitService.originUrl(project.ssh?.remoteCwd ?? project.cwd ?? ''),
+    secret: githubSecret,
+    run: runGitHubCliCommand
+  })
+  dropGitHubRelayClient = (id) => github.service.dropClient(id)
+  registerElectronGitHubControl(
+    ipcMain,
+    () => getMainWindow()?.webContents.id,
+    github.controller
+  )
+
+  // SSH-project Explorer/Editor fs: the remote analog of the fs:* handlers above, scoped to a
+  // project's ControlMaster. One SshFs bound to the SSH-project manager's own ssh runner (the SAME
+  // runner RemoteFile reuses — just forwarding stdin so writes work), resolved lazily because
+  // sshProjectManager is created below. The ref is looked up per call; a call before the manager
+  // exists, or for an unconnected project, finds no ref and fails open ([]/''/false).
+  const sshFs = new SshFs((args, stdin) =>
+    sshProjectManager ? sshProjectManager.sshRun(args, stdin) : Promise.resolve({ code: 1, stdout: '' })
+  )
+  const sshFsRefFor = (projectId: string) => sshProjectManager?.refForProject(projectId)
+  ipcMain.handle(IPC.sshFsList, (_e, projectId: string, p: string) => {
+    const ref = sshFsRefFor(projectId)
+    return ref ? sshFs.listDir(ref, p) : Promise.resolve([])
+  })
+  ipcMain.handle(IPC.sshFsRead, (_e, projectId: string, p: string) => {
+    const ref = sshFsRefFor(projectId)
+    return ref ? sshFs.readText(ref, p) : Promise.resolve('')
+  })
+  ipcMain.handle(IPC.sshFsReadBinary, (_e, projectId: string, p: string) => {
+    const ref = sshFsRefFor(projectId)
+    return ref ? sshFs.readBinary(ref, p) : Promise.resolve('')
+  })
+  ipcMain.handle(IPC.sshFsWrite, (_e, projectId: string, p: string, content: string) => {
+    const ref = sshFsRefFor(projectId)
+    return ref ? sshFs.writeText(ref, p, content) : Promise.resolve(false)
+  })
+  ipcMain.handle(IPC.sshFsMkdir, (_e, projectId: string, p: string) => {
+    const ref = sshFsRefFor(projectId)
+    return ref ? sshFs.mkdir(ref, p) : Promise.resolve(false)
+  })
+  ipcMain.handle(IPC.sshFsExists, (_e, projectId: string, p: string) => {
+    const ref = sshFsRefFor(projectId)
+    return ref ? sshFs.exists(ref, p) : Promise.resolve(false)
+  })
+  ipcMain.handle(IPC.sshFsQuickOpen, (_e, projectId: string, cwd: string) => {
+    const ref = sshFsRefFor(projectId)
+    return ref ? sshFs.listQuickOpenFiles(ref, cwd) : Promise.resolve([])
+  })
+
+  // Board-log: same CorePlatform registrar as the Server Edition (core/board-log-handlers.ts), with
+  // a desktop router that adds SSH routing on top of the local-cwd/unsupported the server also does.
+  // A connected SSH project (refForProject → a ref with a remoteCwd) reads/writes/fingerprints over
+  // its ControlMaster; anything else falls to the local folder cwd, then unsupported.
+  registerBoardLogHandlers(corePlatform, {
+    route: (projectId: string): BoardLogRoute => {
+      const ref = sshProjectManager?.refForProject(projectId)
+      if (ref?.remoteCwd) {
+        const run = (args: string[], stdin?: string) =>
+          sshProjectManager!.sshRun(args, stdin)
+        const exec: RemoteLogExec = {
+          append: async (p, line) => {
+            const { code } = await run(sshAppendArgs(ref.conn, ref.controlPath, p, line))
+            if (code !== 0) throw new Error('board-log ssh append failed')
+          },
+          tail: async (p, lines) => {
+            const { code, stdout } = await run(sshTailArgs(ref.conn, ref.controlPath, p, lines))
+            return code === 0 ? stdout : ''
+          }
+        }
+        const remotePath = boardLogRemotePath(ref.remoteCwd)
+        const fingerprint = async (): Promise<string> => {
+          const { code, stdout } = await run(sshSizeArgs(ref.conn, ref.controlPath, remotePath))
+          if (code !== 0) throw new Error('board-log ssh fingerprint failed')
+          return stdout.trim()
+        }
+        return { kind: 'remote', remoteCwd: ref.remoteCwd, exec, fingerprint }
+      }
+      const cwd = workspaceStore.localCwdForProject(projectId)
+      if (cwd) return { kind: 'local', cwd }
+      return { kind: 'unsupported' }
+    }
+  })
+
+  // Password managers (core/password-manager/): v1 is local-only, same starting scope board-log
+  // above shipped with — an SSH-ref or cwd-less inline project answers `unsupported` rather than
+  // guessing at a remote vault path.
+  // A folder project keeps its vault beside project.json (git-shareable, unchanged). A
+  // folder-less one - an SSH project, a cwd-less canvas, a project opened from a one-file save -
+  // keeps a working copy under this machine's app data, which is what stopped the panel from
+  // refusing every project without a folder. See core/password-manager/vault-location.ts.
+  registerPasswordManagerHandlers(corePlatform, {
+    route: (projectId: string): PasswordManagerRoute => {
+      const root = vaultRootFor({
+        projectId,
+        cwd: workspaceStore.localCwdForProject(projectId),
+        userDataDir: app.getPath('userData'),
+        known: workspaceStore.hasProject(projectId)
+      })
+      return root ? { kind: 'local', cwd: root } : { kind: 'unsupported' }
+    }
+  })
+
+  // The ladder for a protected project file's prompt. Both routes are pure pass-through to the
+  // guard — every rule, and every grading decision, lives in core (see archive-unlock-guard.ts).
+  ipcMain.handle(IPC.projectArchiveLadderIssue, async (_event, filePath: string) =>
+    archiveUnlock.issue(resolve(filePath))
+  )
+  ipcMain.handle(
+    IPC.projectArchiveLadderVerify,
+    async (_event, input: { path: string; answer: import('../shared/unlock-ladder-types').LadderAnswer }) =>
+      archiveUnlock.verify(resolve(input.path), input.answer)
+  )
+
+  ipcMain.handle(IPC.dialogSelectFolder, async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle(IPC.dialogSelectFile, async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openFile'] })
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
+  })
+
+  // Multi-file picker for the converter's "Add files…" — dialog:select-file above only ever
+  // returns one path. Electron-only: the Server Edition has no native file dialog and uses a plain
+  // <input type="file" multiple> instead (see FileConverterPanel.tsx).
+  ipcMain.handle(IPC.dialogSelectFiles, async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] })
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths
+  })
+
+  // The hook server starts BEFORE the window exists: an SSH project the renderer auto-reconnects
+  // on load calls remoteHooks.setup with getHook()'s LIVE port/token, and a start racing behind
+  // that connect hands it port 0 — setup then bails fail-open and, on a reused live-orphan
+  // ControlMaster, the master keeps serving a PREVIOUS app run's `-R` hook forward: every remote
+  // hook POST dies against a dead port with zero symptoms beyond "statuses stay idle". The
+  // listeners (setListener/setRawListener/setControlHandler) attach later, which the server
+  // tolerates — early hook POSTs are simply dropped, never mis-routed.
+  // Network-git relay for the mobile companion: over SSH the macOS Keychain refuses a
+  // non-interactive session (-25308), so the phone's whitelisted push/pull/fetch operation runs
+  // here in the GUI session instead. Desktop-only: the Server Edition process has the same
+  // credential environment as an SSH exec channel, so a proxy there would change nothing.
+  hookServer.setGitRemoteHandler((req) => runGitRemoteOp(req))
+  hookServer.setCodexThreadStartHandler(async ({ nodeId, cwd, hookEndpoint, accountId }) => {
+    if (ptyManager.sshRemoteForNode(nodeId)) {
+      throw new Error('Remote Codex starts must use the host relay')
+    }
+    await ensureCodexAccountDaemon(accountId)
+    const threadId = await startCodexThreadAt(localCodexSocket(accountId), cwd)
+    writeCodexThreadIdentity(threadId, nodeId, hookEndpoint, accountId)
+    const identityEvent: NormalizedAgentEvent = {
+      nodeId,
+      agentId: 'codex',
+      sessionId: threadId,
+      kind: 'session',
+      sessionPhase: 'start'
+    }
+    if (emitAgentStatus) emitAgentStatus(identityEvent)
+    else pendingCodexIdentityEvents.push(identityEvent)
+    return threadId
+  })
+  hookServer.setCodexThreadBindHandler(async ({ nodeId, threadId, hookEndpoint, accountId }) => {
+    const remote = ptyManager.sshRemoteForNode(nodeId)
+    const belongs =
+      remote && sshProjectManager
+        ? await sshProjectManager.remoteCodexThreadExists(remote.controlPath, accountId, threadId)
+        : (await ensureCodexAccountDaemon(accountId),
+          !!(await readCodexThreadAt(localCodexSocket(accountId), threadId)))
+    if (!belongs) {
+      throw new Error('Codex thread does not belong to the selected account')
+    }
+    bindCodexThreadIdentity(
+      threadId,
+      nodeId,
+      hookEndpoint,
+      (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined,
+      accountId
+    )
+    const identityEvent: NormalizedAgentEvent = {
+      nodeId,
+      agentId: 'codex',
+      sessionId: threadId,
+      kind: 'session',
+      sessionPhase: 'start'
+    }
+    if (emitAgentStatus) emitAgentStatus(identityEvent)
+    else pendingCodexIdentityEvents.push(identityEvent)
+  })
+  hookServer.setCodexThreadObservedHandler(
+    async ({ nodeId, threadId, hookEndpoint, accountId, name }) => {
+      const remote = ptyManager.sshRemoteForNode(nodeId)
+      const belongs =
+        remote && sshProjectManager
+          ? await sshProjectManager.remoteCodexThreadExists(remote.controlPath, accountId, threadId)
+          : (await ensureCodexAccountDaemon(accountId),
+            !!(await readCodexThreadAt(localCodexSocket(accountId), threadId)))
+      if (!belongs) {
+        throw new Error('Observed Codex thread does not belong to the selected account')
+      }
+      bindCodexThreadIdentity(
+        threadId,
+        nodeId,
+        hookEndpoint,
+        (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined,
+        accountId
+      )
+      if (name) {
+        if (!remote) rememberCodexSessionName(threadId, name, localCodexSocket(accountId))
+        setNodeSessionName(nodeId, name)
+      }
+      const identityEvent: NormalizedAgentEvent = {
+        nodeId,
+        agentId: 'codex',
+        sessionId: threadId,
+        kind: 'session',
+        sessionPhase: 'start'
+      }
+      if (emitAgentStatus) emitAgentStatus(identityEvent)
+      else pendingCodexIdentityEvents.push(identityEvent)
+    }
+  )
+  hookServer.setCodexThreadAuthorizeHandler(async ({ nodeId, threadId, accountId }) => {
+    if (!ptyManager.sshRemoteForNode(nodeId)) await ensureCodexAccountDaemon(accountId)
+    // The relay freshly verifies a foreign rollout against a configured source socket before
+    // path-resume. The target app-server cannot read that id until after the resume succeeds.
+    // Authorization therefore owns concurrency only; bind/observed revalidate the target server.
+    if (
+      codexThreadIdentityHasLiveConflict(
+        threadId,
+        nodeId,
+        (ownerNodeId) => workspaceStore.getNode(ownerNodeId) !== undefined
+      )
+    )
+      throw new Error('Codex thread is already bound to another live node')
+  })
+  hookServer.setCodexThreadExposeHandler(async ({ nodeId, threadId, accountId }) => {
+    const remote = ptyManager.sshRemoteForNode(nodeId)
+    if (remote) {
+      if (!sshProjectManager) throw new Error('SSH Codex host is unavailable')
+      const host = sshHostKey(remote.conn)
+      const configuredAccountIds = (settingsStore.get().codexAccounts ?? [])
+        .filter((account) => account.host === host && !account.pending)
+        .map((account) => account.id)
+      if (accountId && !configuredAccountIds.includes(accountId)) {
+        throw new Error('Selected SSH Codex account is unavailable')
+      }
+      await sshProjectManager.remoteCodexExposeThread(
+        remote.controlPath,
+        accountId,
+        threadId,
+        configuredAccountIds
+      )
+      return
+    }
+    const configuredAccountIds = (settingsStore.get().codexAccounts ?? [])
+      .filter((account) => !account.host && !account.pending)
+      .map((account) => account.id)
+    if (accountId && !configuredAccountIds.includes(accountId)) {
+      throw new Error('Selected Codex account is unavailable')
+    }
+    const accountIds: Array<string | undefined> = [undefined, ...configuredAccountIds]
+    for (const candidateAccountId of accountIds) {
+      await ensureCodexAccountDaemon(candidateAccountId)
+    }
+    const socketEntries = accountIds.map((candidateAccountId) => ({
+      accountId: candidateAccountId,
+      socketPath: localCodexSocket(candidateAccountId)
+    }))
+    const targetSocket = localCodexSocket(accountId)
+    const resolved = await resolveForeignThreadAt(
+      targetSocket,
+      socketEntries.map((entry) => entry.socketPath),
+      threadId
+    )
+    if (resolved.kind === 'native') return
+    if (resolved.kind !== 'foreign') {
+      throw new Error('Codex session id is unavailable or ambiguous')
+    }
+    const source = socketEntries.find((entry) => entry.socketPath === resolved.thread.socketPath)
+    if (!source) throw new Error('Codex session source account is unavailable')
+    const exposure = planCodexRolloutExposure(
+      codexHomeForAccount(platform().userDataDir, source.accountId),
+      codexHomeForAccount(platform().userDataDir, accountId),
+      resolved.thread.path,
+      threadId
+    )
+    commitCodexRolloutExposure(exposure)
+  })
+  hookServer.setCodexThreadCatalogHandler(async ({ nodeId }) => {
+    const remote = ptyManager.sshRemoteForNode(nodeId)
+    if (remote) {
+      if (!sshProjectManager) throw new Error('SSH Codex host is unavailable')
+      const host = sshHostKey(remote.conn)
+      const accountIds = (settingsStore.get().codexAccounts ?? [])
+        .filter((account) => account.host === host && !account.pending)
+        .map((account) => account.id)
+      return sshProjectManager.remoteCodexCatalog(remote.controlPath, accountIds)
+    }
+    const accountIds: Array<string | undefined> = [
+      undefined,
+      ...(settingsStore.get().codexAccounts ?? [])
+        .filter((account) => !account.host && !account.pending)
+        .map((account) => account.id)
+    ]
+    const accounts: Array<{ accountId?: string; socketPath: string }> = []
+    for (const accountId of accountIds) {
+      // Catalog completeness is a correctness boundary: omitting an unavailable account could
+      // make a duplicate thread id look unique and route a resume to the wrong credential store.
+      await ensureCodexAccountDaemon(accountId)
+      accounts.push({ accountId, socketPath: localCodexSocket(accountId) })
+    }
+    return accounts
+  })
+  await hookServer.start()
+  // Probes the CLI for `--remote`, installs the launcher, and publishes the construction-time
+  // answer. MUST stay after the secret above and before the window: it is what unblocks
+  // `codexIdentityCaps()`, which the renderer's first Codex launch line waits on. NOT awaited —
+  // the probe is a login-shell lookup plus up to two `--help` spawns, and nothing in the boot
+  // chain should queue behind it; callers of `codexIdentityCaps()` wait for it instead of being
+  // told "no". Reordering it later only delays that answer; leaving it out would stall those
+  // callers until their own timeout, so it is not optional.
+  void refreshCodexIdentityCaps()
+  hookServer.setCodexIdentityListener((ev) => sendToMain(IPC.codexIdentity, ev))
+  // SSH_ASKPASS relay (ssh-project.ts): lets the ControlMaster, which has no tty, route a
+  // passphrase-protected identity file's prompt back through the app instead of failing auth.
+  // MUST NOT be fatal: binding a unix socket under ~/.nodeterm can fail for filesystem reasons
+  // (bad ownership, a $HOME that cannot bind AF_UNIX), and this await sits in the boot chain
+  // before createWindow with no catch above it. A failed relay costs passphrase prompts (envFor
+  // then hands out no askpass env, the pre-feature behavior); it must never cost the window.
+  await askpassServer.start().catch((e) => console.error('[ssh-askpass] relay disabled:', e))
+  const askpassScriptPath = await ensureAskpassScript(app.getPath('userData')).catch((e) => {
+    console.error('[ssh-askpass] script generation failed, relay disabled:', e)
+    return undefined
+  })
+  const win = createWindow()
+  // NT_MULTI instances are throwaway dev sandboxes. The dock badge is the one marker that is
+  // always visible on macOS (the window title is hidden by titleBarStyle: 'hiddenInset', and the
+  // dev dock icon/name are Electron's own), so a test instance can never be mistaken for the
+  // real app.
+  if (NT_MULTI && process.platform === 'darwin') app.dock?.setBadge('TEST')
+  // Flip `quitting` before quitAndInstall so the window's close-event actually closes (not hides);
+  // quitAndInstall closes all windows then calls app.quit(), which our hide-on-close would block.
+  // Also skip the confirm dialog: this is a restart-to-update the user already asked for via the
+  // "Restart to update" card, not a fresh decision to re-confirm, and a modal here would only
+  // block the install.
+  initUpdater(() => {
+    quitting = true
+    skipQuitConfirmation = true
+  })
+  // Mirror live agent status to <userData>/agent-status.json for the external mobile host agent.
+  initAgentStatusMirror()
+
+  /** The one display-title rule for everything the HOST sends out (push alerts, Live Activity
+   *  updates, the notch capsule): the live session name unless the node was hand-renamed. */
+  const displayTitleFor = (nodeId: string): string | undefined =>
+    displayNodeTitle(nodeId, {
+      sessionName: nodeSessionName,
+      node: (id) => {
+        const n = workspaceStore.getNode(id)
+        return n ? { title: n.title, titleAuto: n.titleAuto } : undefined
+      }
+    })
+
+  // Keep every agent node's session name fresh in the mirror — including nodes no canvas has
+  // mounted (the phone lists them all; see core/session-name-sweep.ts).
+  startSessionNameSweep({
+    entries: sessionNameSweepEntries,
+    node: (nodeId) => {
+      const n = workspaceStore.getNode(nodeId)
+      return n
+        ? {
+            accountId: n.agentId === 'codex' ? n.codexAccountId : n.accountId,
+            titleAuto: n.titleAuto
+          }
+        : undefined
+    },
+    // Same router the IPC handler above uses — the sweep sees every TITLE_READ_CAPABLE agent, so
+    // resolving a grok or gemini node through claude's reader would scan ~/.claude/projects once a
+    // minute for an id that can never be there.
+    resolve: (sessionId, accountId, agentId) =>
+      readAgentSessionName(sessionId, accountId, agentId, agentSessionNameDeps),
+    publish: setNodeSessionName
+    // `supports` is deliberately NOT passed: the rule (TITLE_READ_CAPABLE, since the sweep only
+    // READS a name) is core's default, `supportsTitleRead`. A copy here would be a second place to
+    // get it wrong, and getting it wrong is invisible — the wrong list silently skips an agent's
+    // nodes with every test still green.
+  })
+  // macOS Notch HUD (docs/notch-hud.md): walking agent mascots by the notch. darwin + setting only;
+  // reads the same agent-status seams the mirror does. Live-toggled via settings below.
+  //
+  // Create the HUD only AFTER the main window is visible. The HUD is a focusable:false (non-
+  // activating) panel; if it is shown while the main window is still loading (created with
+  // show:false, shown on 'ready-to-show'), it can be the only orderFront-ed window on screen and
+  // demote the app to accessory — the Dock icon then disappears. Gating on the main window's first
+  // 'show' guarantees a regular window has established the app's Dock presence first.
+  const notchTunables = (): NotchHudTunables => {
+    const s = settingsStore.get()
+    return { enabled: s.notchHud, notchWidth: s.notchWidth, hoverExpand: s.notchHoverExpand }
+  }
+  const startNotchHud = (): void =>
+    initNotchHud({ getNodeTitle: displayTitleFor }, notchTunables())
+  if (win.isVisible()) startNotchHud()
+  else win.once('show', startNotchHud)
+  settingsStore.onChange(() => applyNotchHudSettings(notchTunables()))
+  // Keep awake while agents work (docs/superpowers/specs/2026-08-18-keep-awake-design.md): hold an
+  // idle-sleep power assertion while a LOCAL agent node is working, released the moment the last
+  // one stops. Folds the same mirror edges the notch does; the stale sweep's synthetic end
+  // (WORKING_STALE_MS) is the leak backstop for exits that never send their own edge.
+  keepAwake = initKeepAwake({
+    enabled: () => settingsStore.get().keepAwakeWhileAgentsWork,
+    // SSH-homed nodes work on the remote host — they must not pin THIS machine awake.
+    isRemoteNode: (nodeId) => workspaceStore.sshProjectIdForNode(nodeId) !== undefined
+  })
+  onNodeStateChange((c) => keepAwake?.onChange(c))
+  settingsStore.onChange(() => keepAwake?.refresh())
+  // Advertise launch settings to the mobile companion through the mirror. The provider is
+  // consulted at every flush (heartbeat ≤60s), so a settings change propagates without extra
+  // plumbing. Caps arrive async: re-flush once the memoized probe answers.
+  let localClaudeCaps: ClaudeCliCaps | undefined
+  void claudeCliCaps()
+    .then((c) => {
+      localClaudeCaps = c
+      void flushAgentStatusMirror()
+    })
+    .catch(() => {})
+  setMirrorSettingsProvider((): MirrorSettings => {
+    const s = settingsStore.get()
+    return {
+      claudePermissionMode: s.claudePermissionMode,
+      autoSupported: localClaudeCaps?.autoPermissionMode === true,
+      claudeAccounts: (s.claudeAccounts ?? [])
+        .filter((a) => !a.host && !a.pending)
+        .map((a) => ({ id: a.id, dir: claudeConfigDirFor(a.id) }))
+    }
+  })
+  // Desktop → paired-phone APNs push (spec: apns-push). Feeds off the SAME actionable-event seam
+  // the mobile Inbox uses (`onInboxActionable`), so it fires exactly on approval/question (post-
+  // dedup) + done (turn edge). The host public key (identity every paired phone pinned) + paired
+  // flag load async and refresh on a cheap interval, so a mid-run pairing / keyring-unlock is
+  // picked up without re-wiring; the getter is sync.
+  //
+  // GRANTED-MODE FALLBACK (spec: 2026-07-21-push-grants; owner-approved "B"). The desktop ALSO
+  // wires the SSH-possession push grants the Server Edition uses (src/server/index.ts) — a phone
+  // that reached this Mac by plain SSH drops a signed, device-scoped grant at
+  // `~/.nodeterm/push-grants/<deviceId>.grant` on the Mac's own fs. `resolveTarget` keeps a SINGLE
+  // sender: host-mode only when a relay identity is present AND a phone is paired; else (unpaired,
+  // or no identity) it falls through to the grants. So a plain-SSH phone gets pushes for
+  // Mac-tracked sessions with NO QR pairing, and QR-pairing later flips `hasPairedPhone` true →
+  // host-mode automatically (grants suppressed — no double-push to the same phone).
+  const pushGrants = createGrantsAccessor()
+  // ...and the REMOTE half of the same idea. A Mac-driven SSH project's phone can only reach the
+  // HOST, so its grant is dropped there, not here — without this sweep an SSH-only user got no
+  // push at all (no paired phone, no local grant ⇒ `resolveTarget` silently returns null). Filled
+  // by a timer below; `get()` is sync so it can sit behind `getGrants`. See
+  // core/remote-push-grants.ts.
+  const remoteGrants = createRemoteGrantsCache()
+  /** Local grants first (this machine's own phone), then the hosts' — deduped per device inside. */
+  const allPushGrants = (): PushGrant[] => [...pushGrants.get(), ...remoteGrants.get()]
+  /** A 401/403 could be on either side's token; neither accessor knows the other's. */
+  const markPushGrantDead = (grant: string): void => {
+    pushGrants.markDead(grant)
+    remoteGrants.markDead(grant)
+  }
+  let pushHostKeyB64: string | null = null
+  let pushHasPairedPhone = false
+  const refreshPushIdentity = async (): Promise<void> => {
+    try {
+      pushHasPairedPhone = (await loadApprovedDevices()).pubkeys.length > 0
+    } catch {
+      // A failed trust-store read says nothing about whether a phone is paired. Preserve the
+      // last-known state; replacing it with false would misroute a transient read failure into the
+      // fallback push-grant path and could make two channels speak for one destination.
+    }
+    // No paired destination means no host-mode push can be sent. Avoid touching macOS
+    // Safe Storage at boot in that state: locally signed development builds otherwise trigger
+    // a Keychain ACL prompt even though there is nobody to notify.
+    if (!pushHasPairedPhone) {
+      pushHostKeyB64 = null
+      return
+    }
+    try {
+      pushHostKeyB64 = publicKeyToB64((await loadOrCreateKeyPair()).publicKey)
+    } catch {
+      // Keyring locked / transient read error: keep the last-known key (never clobber identity).
+    }
+  }
+  void refreshPushIdentity()
+  const pushIdentityTimer = setInterval(() => void refreshPushIdentity(), 60_000)
+  pushIdentityTimer.unref?.()
+  // Presence-aware alert deferral (spec: presence-aware-push; owner UX call). Hold phone ALERTS
+  // while the user is actively at THIS Mac (noise); release them the moment they go idle or lock
+  // the screen (exactly the right time). Presence = powerMonitor: idle < 180s AND not screen-locked.
+  // A 15s poll detects the present→away idle edge; the lock event fires the flush immediately. Only
+  // createPushNotify (alerts) is deferred — the live-update stream stays ambient. When the setting
+  // is off, isUserPresent() is always false ⇒ nothing is ever held ⇒ exact legacy behavior.
+  const PRESENCE_IDLE_AWAY_SECS = 180
+  let screenLocked = false
+  const presenceAwayListeners = new Set<() => void>()
+  const isUserPresent = (): boolean => {
+    if (settingsStore.get().mobilePushPresenceAware === false) return false
+    if (screenLocked) return false
+    try {
+      return powerMonitor.getSystemIdleTime() < PRESENCE_IDLE_AWAY_SECS
+    } catch {
+      return false // powerMonitor unavailable (e.g. no session) ⇒ treat as away, send immediately
+    }
+  }
+  const firePresenceAway = (): void => {
+    for (const cb of presenceAwayListeners) {
+      try {
+        cb()
+      } catch {
+        // A held-flush subscriber must never break its siblings.
+      }
+    }
+  }
+  let wasPresent = isUserPresent()
+  powerMonitor.on('lock-screen', () => {
+    screenLocked = true
+    wasPresent = false
+    firePresenceAway()
+  })
+  powerMonitor.on('unlock-screen', () => {
+    screenLocked = false
+    wasPresent = isUserPresent()
+  })
+  const presenceTimer = setInterval(() => {
+    const present = isUserPresent()
+    if (wasPresent && !present) firePresenceAway() // present → away: flush held alerts
+    wasPresent = present
+  }, 15_000)
+  presenceTimer.unref?.()
+  createPushNotify({
+    subscribe: onInboxActionable,
+    getHostIdentity: () =>
+      pushHostKeyB64
+        ? {
+            hostDeviceId: getDeviceId(),
+            hostPublicKeyB64: pushHostKeyB64,
+            hostLabel: hostname(),
+            hasPairedPhone: pushHasPairedPhone
+          }
+        : null,
+    // Granted-mode fallback (unpaired / no relay identity → push to SSH-dropped grants; see the
+    // block comment above). resolveTarget keeps a single sender: host wins when paired.
+    getGrants: allPushGrants,
+    markGrantDead: markPushGrantDead,
+    hostLabel: () => hostname(),
+    mobilePushEnabled: () => settingsStore.get().mobilePushEnabled !== false,
+    mobilePushNeedsYou: () => settingsStore.get().mobilePushNeedsYou !== false,
+    mobilePushDone: () => settingsStore.get().mobilePushDone !== false,
+    isPackaged: () => app.isPackaged,
+    // The node's canvas/sidebar display title, so the phone can title the alert
+    // "<Needs you|Completed> — <nodeTitle>" (see workspace-store.getNodeTitle for the freshness note).
+    getNodeTitle: displayTitleFor,
+    // Presence-aware deferral wiring (alerts only).
+    isUserPresent,
+    subscribePresence: (cb) => {
+      presenceAwayListeners.add(cb)
+      return () => presenceAwayListeners.delete(cb)
+    },
+    isEventUnresolved: (nodeId, eventId) => isEventUnresolved(nodeId, eventId)
+  })
+  // Desktop → paired-phone Live Activity updates (spec: interactive-push-live-activities). Feeds off
+  // the mirror's state-edge + activity/context seams, throttles activity ticks (≥20s/node), and
+  // POSTs to /v1/push/live-update. Same host identity + granted-mode fallback as notify (a
+  // plain-SSH phone's grants also drive Live Activities), plus its own `mobileLiveActivities`
+  // sub-gate under the `mobilePushEnabled` master. Presence deferral does NOT apply here — the
+  // live-update stream is ambient (activity/context ticks), so it is never held.
+  createLiveUpdatePush({
+    subscribeStateChange: onNodeStateChange,
+    subscribeNowChange: onNodeNowChange,
+    getHostIdentity: () =>
+      pushHostKeyB64
+        ? {
+            hostDeviceId: getDeviceId(),
+            hostPublicKeyB64: pushHostKeyB64,
+            hostLabel: hostname(),
+            hasPairedPhone: pushHasPairedPhone
+          }
+        : null,
+    getGrants: allPushGrants,
+    markGrantDead: markPushGrantDead,
+    hostLabel: () => hostname(),
+    mobilePushEnabled: () => settingsStore.get().mobilePushEnabled !== false,
+    mobileLiveActivities: () => settingsStore.get().mobileLiveActivities !== false,
+    isPackaged: () => app.isPackaged,
+    getNodeTitle: displayTitleFor
+  })
+  // And push each connected SSH project's slice of it onto its host
+  // (`~/.nodeterm/agent-status-<projectId>.json`): hook events tunnel from the host to THIS
+  // process, so that file is the only agent-status source a phone browsing the host directly
+  // can read. sshProjectManager is created below — the closures look it up per call.
+  initRemoteStatusPush({
+    onFlush: onMirrorFlush,
+    flush: flushAgentStatusMirror,
+    sshProjectIds: () => workspaceStore.sshProjectIds(),
+    nodeIdsFor: (projectId) => workspaceStore.sshProjectNodeIds(projectId),
+    push: (projectId, json) =>
+      sshProjectManager ? sshProjectManager.pushAgentStatus(projectId, json) : Promise.resolve(),
+    settingsFor: (projectId) => {
+      const s = settingsStore.get()
+      const home = sshProjectManager?.remoteHomeFor(projectId)
+      const hostKey = sshProjectManager?.hostKeyFor(projectId)
+      return {
+        claudePermissionMode: s.claudePermissionMode,
+        // The phone launches claude on the REMOTE host — its CLI is the gate, never the local one.
+        autoSupported: sshProjectManager?.remoteAutoPermFor(projectId) === true,
+        ...(home && hostKey
+          ? {
+              claudeAccounts: (s.claudeAccounts ?? [])
+                .filter((a) => a.host === hostKey && !a.pending)
+                .map((a) => ({ id: a.id, dir: remoteAccountConfigDirAbs(home, a.id) }))
+            }
+          : {}) // unresolved home ⇒ no accounts advertised (fail-open), autoSupported still ships
+      }
+    }
+  })
+  // Canvas sync: the same reflector the Server Edition boots. With a single window clientIds()
+  // returns one id, so on the desktop today it is a no-op — wired for parity (and for the
+  // relay-host / multi-window futures), not because Electron needs it right now.
+  initCanvasSync()
+
+  // Agent hooks: install the managed hook script into each agent's config, then start the
+  // local HTTP server that receives hook posts and forwards normalized events to the renderer.
+  // A raw listener drives the transcript-tailing features (context meter + subagent transcript),
+  // which need the raw transcript_path the NormalizedAgentEvent intentionally drops.
+  const subagentTail = createSubagentTail(({ toolUseId, chunk }) => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.agentSubagentActivity, { toolUseId, chunk })
+  })
+  // Async subagents (Claude's default) end via a <task-notification> queued into the PARENT
+  // transcript — their PostToolUse is only a launch ack (see the raw listener below). The
+  // context tails already read that transcript, so they surface the notification here and we
+  // emit the synthetic subagent-end the hooks never send, then release the transcript tail.
+  /**
+   * A tool RESULT landed in a tracked transcript. Only interesting while the node is still in
+   * needs-you: an `AskUserQuestion` the user declined with Esc fires no PostToolUse and no Stop, so
+   * nothing ever moved the node off NEEDS YOU — badge, notch capsule and phone card all stuck until
+   * the next prompt. The result proves the ask settled; `working` is the honest next state (Claude
+   * carries on with "User declined to answer questions"), and any real event corrects it anyway.
+   */
+  const onToolResult = (sessionId: string): void => {
+    let nodeId: string | undefined
+    for (const [nid, sid] of nodeContextSession) if (sid === sessionId) nodeId = nid
+    if (!nodeId) return
+    const st = nodeState(nodeId)
+    if (st !== 'blocked' && st !== 'waiting') return
+    const ev = {
+      nodeId,
+      agentId: 'claude',
+      sessionId,
+      kind: 'state',
+      state: 'working'
+    } satisfies NormalizedAgentEvent
+    sendToMain(IPC.agentStatus, ev)
+    recordAgentEvent(ev)
+  }
+  const onTaskNotification = (sessionId: string, n: TaskNotification): void => {
+    let nodeId: string | undefined
+    for (const [nid, sid] of nodeContextSession) if (sid === sessionId) nodeId = nid
+    if (!nodeId) return
+    const taskDoneEvent = {
+      nodeId,
+      agentId: 'claude',
+      sessionId,
+      kind: 'subagent-end',
+      toolUseId: n.toolUseId,
+      result: n.result
+    } satisfies NormalizedAgentEvent
+    sendToMain(IPC.agentStatus, taskDoneEvent)
+    recordAgentEvent(taskDoneEvent)
+    subagentTail.finish(n.toolUseId)
+    remoteSubagentTail.untrack(n.toolUseId)
+    nodeSubagents.get(nodeId)?.delete(n.toolUseId)
+  }
+  // Every context tail pushes through here, so an agent's meter reaches the renderer, the Notch HUD
+  // and the phone's context ring identically whichever CLI produced the numbers.
+  const pushContextUpdate = (payload: unknown): void => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.contextUpdate, payload)
+    // Feed the macOS Notch HUD the model name (keyed by sessionId; no-op off/non-darwin).
+    notchHudOnContextUpdate(payload as { sessionId?: string; model?: string; usedPercent?: number })
+    // Feed the mirror's per-node context ring (mobile-usage-inbox). The context tail keys by
+    // sessionId; map it back to the node via the raw-listener's nodeId↔sessionId association.
+    const cw = payload as { sessionId?: string; usedPercent?: number }
+    for (const [nid, sid] of nodeContextSession) {
+      if (sid === cw.sessionId && typeof cw.usedPercent === 'number') {
+        recordContextUsage(nid, cw.usedPercent)
+        break
+      }
+    }
+  }
+  const contextTail = createContextTail(pushContextUpdate, { onTaskNotification, onToolResult })
+  // ONE TAIL PER AGENT, each with its own parser — not one tail switching on an agent id, which
+  // would mean changing `ContextTail.track(sessionId, path)` and the four call sites that depend on
+  // it. The poller (offset reads, torn-line carry, change-gated push) is written once in
+  // createContextTail; only the token keys differ, so only `parse` differs. Neither gets
+  // onTaskNotification/onToolResult: both are claude transcript features (subagent cards, the
+  // declined-ask rescue), and neither agent is in SUBAGENT_CAPABLE.
+  const geminiContextTail = createContextTail(pushContextUpdate, { parse: geminiContextParse })
+  // Hand the gemini session-name reader its path authority (declared above the handlers that use
+  // it, assigned here where the tail exists).
+  geminiTranscriptPathFor = (sessionId) => geminiContextTail.pathFor(sessionId)
+  const codexContextTail = createContextTail(pushContextUpdate, { parse: codexContextParse })
+  // Remote (SSH-project) counterparts: a node whose pty runs on a remote host has its Claude
+  // transcript on that host, so its meter / subagent transcript / search must read over the
+  // project's ControlMaster. One RemoteFile bound to the SSH-project manager's own ssh runner
+  // (so reads reuse the live master); resolved lazily — sshProjectManager is created below but
+  // these are only invoked once a remote hook POST arrives, long after init. Fail-open: a read
+  // before the manager exists returns a non-zero code (RemoteFile maps that to empty).
+  const remoteFile = new RemoteFile((args) =>
+    sshProjectManager ? sshProjectManager.sshRun(args) : Promise.resolve({ code: 1, stdout: '' })
+  )
+  const remoteContextTail = createRemoteContextTail(win, remoteFile, { onTaskNotification, onToolResult })
+  const remoteSubagentTail = createRemoteSubagentTail(win, remoteFile)
+  // Remote transcript ref learned from the hook raw-listener, keyed by sessionId — lets the
+  // search/chat read handlers (which receive only sessionId + cwd) read remotely without a
+  // nodeId. Only remote sessions are ever inserted, so local reads stay on the local reader.
+  const remoteTranscriptBySession = new Map<string, RemoteFileRef>()
+  // Subset of the above that WE located by asking the host (no hook event ever fed it). Tracked
+  // separately so a stale entry can be dropped on a failed read without touching the hook-fed
+  // ones — see `readRemoteTranscript`.
+  const locatedTranscriptSessions = new Set<string>()
+  // Route the session-name read (the node-title poll) through the same remote ref. An SSH
+  // project's agent runs on the remote host, so its transcript is NOT under the local
+  // `~/.claude/projects` — without this, `/rename` never reached the node title on remote nodes
+  // (and the poll re-scanned the local root every 4s for nothing). Returning null for an unknown
+  // sessionId keeps every local node on the local reader.
+  setRemoteTranscriptReader(async (sessionId) => {
+    const ref = remoteTranscriptBySession.get(sessionId)
+    if (!ref) return null
+    return { text: await remoteFile.readTail(ref, TITLE_TAIL_BYTES) }
+  })
+  // toolUseIds whose remote subagent file resolution was cancelled (PostToolUse / node close
+  // arrived before the file appeared) — checked by the async resolver to avoid a late track.
+  // Bounded by `remoteSubagentResolving`: a cancel flag is only added (and only matters) while a
+  // resolver is in flight, and the resolver clears BOTH sets in its `finally` once it settles, so
+  // neither set can accumulate dead ids over the app lifetime.
+  const remoteSubagentCancel = new Set<string>()
+  // toolUseIds with an in-flight `resolveRemoteSubagentFile` poll. PostToolUse / node-close only
+  // raise a cancel flag while resolution is still running (otherwise the add would leak).
+  const remoteSubagentResolving = new Set<string>()
+
+  // Resolve a remote subagent's transcript FILE (`agent-<id>.jsonl`) by matching the spawning
+  // toolUseId inside its sibling `.meta.json` — the remote analogue of the local subagent tail's
+  // dir scan (the remote tail takes a resolved file path, so we resolve it here). The file
+  // appears shortly after PreToolUse, so we poll briefly over the master. Fail-open throughout.
+  const resolveRemoteSubagentFile = async (
+    rt: { conn: import('../shared/ssh').SshConnection; controlPath: string },
+    parentTranscript: string,
+    toolUseId: string
+  ): Promise<string | undefined> => {
+    if (!sshProjectManager) return undefined
+    const dir = parentTranscript.replace(/\.jsonl$/, '') + '/subagents'
+    // grep -lF prints the matching meta path; `… /*.meta.json` glob is left unquoted to expand.
+    const cmd = `grep -lF ${posixQuote(toolUseId)} ${posixQuote(dir)}/*.meta.json 2>/dev/null | head -1`
+    for (let i = 0; i < 12; i++) {
+      if (remoteSubagentCancel.has(toolUseId)) return undefined
+      const { stdout } = await sshProjectManager.sshRun(childArgs(rt.conn, rt.controlPath, cmd))
+      const meta = stdout.trim()
+      if (meta) return meta.replace(/\.meta\.json$/, '.jsonl')
+      await new Promise((r) => setTimeout(r, 600))
+    }
+    return undefined
+  }
+  // Read at most the last 5 MB of a transcript (mirrors transcript-reader's READ_CAP_BYTES) —
+  // the remote read fetches the tail over ssh, then reuses the SAME pure parsers as local, so
+  // the returned shape is byte-identical to the local reader.
+  const REMOTE_TRANSCRIPT_CAP = 5 * 1024 * 1024
+
+  /**
+   * The remote ref for a session, resolving it on the HOST when no hook event has registered one.
+   *
+   * `remoteTranscriptBySession` is fed only by hook POSTs, and a tmux session outlives the app —
+   * so after an app restart an IDLE remote agent node has no ref, and the local resolvers below
+   * would search this machine's disk for a session that exists only on the host (finding nothing,
+   * or another local session that happens to share the cwd). Asking the host directly is what the
+   * node id buys us; a hit is cached under the sessionId so the title poll and the next read get
+   * it for free. Fail-open at every step: no node id / not an SSH session / no resolved home /
+   * a failed ssh call all mean "not remote", which is the pre-existing local path.
+   *
+   * `remote` overrides the live-pty lookup for callers that already know which host the node runs
+   * on. `PtyManager.kill()` forgets a session on detach, so a backgrounded project's nodes are
+   * absent from that map — and the reconnect resync runs on exactly those nodes. Absent ⇒ the
+   * lookup, i.e. the pre-existing behavior byte for byte.
+   */
+  const remoteTranscriptRefFor = async (
+    sessionId: string | undefined,
+    cwd: string | undefined,
+    accountId: string | undefined,
+    nodeId: string | undefined,
+    remote?: {
+      conn: import('../shared/ssh').SshConnection
+      controlPath: string
+    }
+  ): Promise<RemoteFileRef | undefined> => {
+    if (!sessionId) return undefined
+    const cached = remoteTranscriptBySession.get(sessionId)
+    if (cached) return cached
+    if (!nodeId) return undefined
+    const rt = remote ?? ptyManager.sshRemoteForNode(nodeId)
+    if (!rt || !sshProjectManager) return undefined
+    const remoteHome = sshProjectManager.remoteHomeForControlPath(rt.controlPath)
+    if (!remoteHome) return undefined
+    let accountDir: string | undefined
+    if (accountId) {
+      // A hand-edited project.json can carry any string; the helper validates and throws.
+      try {
+        accountDir = remoteAccountConfigDirAbs(remoteHome, accountId)
+      } catch {
+        accountDir = undefined
+      }
+    }
+    const cmd = locateRemoteTranscriptCommand(
+      remoteTranscriptRoots(remoteHome, accountDir),
+      cwd,
+      sessionId
+    )
+    if (!cmd) return undefined
+    let located: string | undefined
+    try {
+      const { code, stdout } = await sshProjectManager.sshRun(
+        childArgs(rt.conn, rt.controlPath, cmd)
+      )
+      located = code === 0 ? parseLocatedTranscript(stdout) : undefined
+    } catch {
+      return undefined
+    }
+    // Jailed exactly like a hook-supplied path: the command only ever emits paths under our own
+    // roots, but the answer still crosses a machine boundary before we read it.
+    if (!located || !isSafeRemoteTranscriptPath(located, remoteHome)) return undefined
+    const ref: RemoteFileRef = { conn: rt.conn, controlPath: rt.controlPath, path: located }
+    remoteTranscriptBySession.set(sessionId, ref)
+    locatedTranscriptSessions.add(sessionId)
+    return ref
+  }
+
+  /**
+   * Read a remote transcript through a ref, forgetting refs WE located once they stop reading.
+   * `cap` is the tail window in bytes; it defaults to the full reader's cap, so every caller that
+   * wants a transcript to READ is unchanged. A caller that only wants to know how the last few
+   * records look (the reconnect resync) passes a much smaller one — see
+   * RESYNC_TRANSCRIPT_TAIL_BYTES.
+   *
+   * Without this the panel's Retry replays a dead path forever (the transcript was deleted, or the
+   * session moved) because the cache lookup comes first. A hook-fed ref is deliberately left in
+   * place on an empty read — that is usually a transient master hiccup, and dropping it would send
+   * the next read down the LOCAL resolver, i.e. to the wrong machine.
+   */
+  const readRemoteTranscript = async (
+    sessionId: string,
+    ref: RemoteFileRef,
+    cap: number = REMOTE_TRANSCRIPT_CAP
+  ): Promise<string> => {
+    const text = await remoteFile.readTail(ref, cap)
+    if (!text && locatedTranscriptSessions.delete(sessionId)) {
+      remoteTranscriptBySession.delete(sessionId)
+    }
+    return text
+  }
+
+  // Both read channels now live in core (the Server Edition serves the very same handlers); the
+  // ONE thing this shell adds is the remote leg, which needs a ControlMaster. `null` means "not a
+  // remote session", which is the signal for core to take its local path.
+  registerTranscriptIpc({
+    pathFor: (sessionId) => contextTail.pathFor(sessionId),
+    readRemote: async ({ sessionId, cwd, accountId, nodeId }) => {
+      const ref = await remoteTranscriptRefFor(sessionId, cwd, accountId, nodeId)
+      return ref ? await readRemoteTranscript(sessionId!, ref) : null
+    }
+  })
+
+  initTranscriptIndex(() => settingsStore.get().claudeAccounts ?? [])
+  // Populate the context meter without a live hook event: the renderer calls this on mount
+  // (the continuing session may be idle after a restart). Track under the sessionId (the key
+  // the meter looks up); cwd is only a path fallback. contextTail.track reads immediately and
+  // the 1s interval keeps it fresh while tracked.
+  // Shares core's `resolveTranscript` with the read channels — including its `accountId`-scoped
+  // cwd fallback. This copy dropped the account, so a managed-account node could track (and then
+  // meter, and then SERVE as the chat's first-choice path) an unrelated session's transcript.
+  corePlatform.on(IPC.contextEnsure, async (sessionId?: string, cwd?: string, accountId?: string) => {
+    if (!sessionId || !SESSION_ID_RE.test(sessionId)) return
+    const p = await resolveTranscript({ sessionId, cwd, accountId }, (s) => contextTail.pathFor(s))
+    if (p) contextTail.track(sessionId, p)
+  })
+  // The remote half of a handoff. Same three-line shape as the context-link deps above and for
+  // the same reason: reading (and here also WRITING) on an SSH project's host is the one thing
+  // the handoff builder cannot answer for itself. Absent deps ⇒ local-only, as before.
+  const handoffRemote: HandoffRemote = {
+    isRemoteNode: (nodeId) => !!ptyManager.sshRemoteForNode(nodeId),
+    hookedTranscriptPath: (nodeId) => transcriptPathOf(nodeId),
+    readRemoteFile: async (nodeId, filePath, maxBytes) => {
+      const rt = ptyManager.sshRemoteForNode(nodeId)
+      if (!rt) return null
+      const text = await remoteFile.readTail(
+        { conn: rt.conn, controlPath: rt.controlPath, path: filePath },
+        maxBytes
+      )
+      return text || null
+    },
+    writeRemoteFile: async (nodeId, filePath, content) => {
+      const rt = ptyManager.sshRemoteForNode(nodeId)
+      if (!rt || !sshProjectManager) return false
+      try {
+        const { code } = await sshProjectManager.sshRun(
+          sshWriteArgs(rt.conn, rt.controlPath, filePath),
+          content
+        )
+        return code === 0
+      } catch {
+        return false
+      }
+    }
+  }
+  corePlatform.handle(
+    IPC.handoffBuild,
+    (
+      sessionId: string,
+      agentId: string,
+      sourceNodeId: string,
+      cwd: string | undefined,
+      accountId: string | undefined
+    ) => buildHandoff({ sessionId, agentId, sourceNodeId, cwd, accountId, remote: handoffRemote })
+  )
+
+  installManagedAgentHooks()
+  // Managed accounts each carry their own settings.json AND skills/ (Claude Code resolves both
+  // relative to CLAUDE_CONFIG_DIR) — re-install the hook + canvas skill there too (idempotent),
+  // so an app update's new versions reach every account dir. Best-effort: one failing account
+  // must never block launch (match installManagedAgentHooks' fail-open).
+  for (const acct of settingsStore.get().claudeAccounts ?? []) {
+    if (acct.host) continue // remote accounts live on another host; nothing to install locally
+    try {
+      installClaudeHooksInto(claudeConfigDirFor(acct.id))
+      installCanvasSkillInto(claudeConfigDirFor(acct.id))
+      // Ensure fullscreen TUI in this account dir (write-if-absent, version-gated). Off the
+      // critical path: it awaits the memoized CLI probe, then writes fail-open. (The system
+      // ~/.claude is handled by installManagedAgentHooks above, which covers Server Edition too.)
+      void ensureClaudeFullscreenTuiInto(claudeConfigDirFor(acct.id))
+    } catch (e) {
+      console.warn(`[agent-hooks] account ${acct.id} hook install failed`, e)
+    }
+  }
+  // Fan a normalized agent event to BOTH consumers: the renderer's agentStatus store (canvas badge)
+  // and the mobile-facing mirror. Named so the deterministic-approval answer handler below can reuse
+  // it for the optimistic flip.
+  emitAgentStatus = (e: NormalizedAgentEvent): void => {
+    // Record FIRST: recordAgentEvent computes the stash-priority classification and returns the
+    // event ENRICHED for a needs-you edge (a question strips its pendingId), so the canvas keys off
+    // the same single source of truth as the mirror/phone. Then broadcast the enriched event.
+    const enriched = recordAgentEvent(e) ?? e
+    sendToMain(IPC.agentStatus, enriched)
+    // Feed the macOS Notch HUD its prompt (ev.task on newTurn) + subagent grouping (no-op off/non-darwin).
+    notchHudOnAgentEvent(enriched)
+  }
+  hookServer.setListener(emitAgentStatus)
+  for (const event of pendingCodexIdentityEvents.splice(0)) emitAgentStatus(event)
+  // Deterministic hook-reply approvals (docs/hook-reply-approvals.md): the canvas Approve/Deny
+  // buttons (and any relay client) answer a held Claude permission hook here. Route by the node's
+  // project: an SSH project's hook runs on the REMOTE host (write over its ControlMaster), a local
+  // project's on THIS machine (write under os.homedir() — the hook uses $HOME, which may differ from
+  // the project cwd). pendingId is validated before it is interpolated into any path/command.
+  corePlatform.handle(
+    IPC.agentAnswerPermission,
+    async (payload: { nodeId: string; pendingId: string; decision: 'allow' | 'deny' }) => {
+      const { nodeId, pendingId, decision } = payload ?? ({} as typeof payload)
+      if (!isValidPendingId(pendingId)) return false
+      if (decision !== 'allow' && decision !== 'deny') return false
+      const sshProjectId = workspaceStore.sshProjectIdForNode(nodeId)
+      const ok =
+        sshProjectId && sshProjectManager
+          ? await sshProjectManager.writePendingAnswer(sshProjectId, pendingId, decision)
+          : await writePendingAnswerLocal(pendingId, decision, homedir())
+      // Optimistic flip: on a successful write, emit the same synthetic "answered" transition the
+      // held hook's second POST will produce, so the NEEDS YOU badge clears instantly instead of
+      // waiting for that POST to round-trip. The later hook POST is an idempotent duplicate (a
+      // same-state working re-assert is a no-op). See docs/hook-reply-approvals.md.
+      if (ok) {
+        const ev = syntheticAnsweredEvent(nodeId, pendingId, decision)
+        if (ev) emitAgentStatus(ev)
+      }
+      return ok
+    }
+  )
+  // Read-a-finished-session ack (this feature): the renderer's unread-clear funnel calls it when the
+  // just-read node's latest state is `done`. The mirror resolves the node's done inbox event(s)
+  // (phone Inbox archives the card) and re-sends an 'end' live-update so the paired phone dismisses
+  // its lingering DONE Live Activity. Fire-and-forget; the mirror no-ops with no unresolved done.
+  corePlatform.handle(IPC.agentAckDone, (nodeId: string) => {
+    ackDone(nodeId)
+  })
+  // Phone→host read-acks (this feature, the other direction): the phone drops
+  // `~/.nodeterm/acks/<nodeId>.seen` on the SESSION host when it READS a finished session. For each
+  // ack: `ackDone` (mirror resolves the done event → phone Inbox archives it + the paired phone's
+  // DONE Live Activity dismisses) AND `agent:unread-clear` so the desktop renderer drops the node's
+  // unread flag WITHOUT re-acking (external clear — the ack already happened phone-side; a re-ack
+  // would loop). ONE 15s cadence drives BOTH: the LOCAL fs sweep (cheap dir-mtime gate) for
+  // local-project nodes, and a REMOTE sweep of each connected SSH project's host over its
+  // ControlMaster (a Mac→SSH node's acks land on the REMOTE fs, invisible to the local sweep).
+  // sshProjectManager is created below; the tick resolves it lazily.
+  // Session budget: reap long-idle DETACHED nt- tmux sessions on THIS machine under memory
+  // pressure or past a count cap (core/session-budget.ts — the tmux counterpart of the WebGL
+  // budget). Attached sessions are never touched; a reaped node cold-restores on next open.
+  // Local sockets only — a remote SSH host's sessions are reaped by that host's own
+  // nodeterm-server, never across the wire. Timer is unref'd; no explicit stop needed.
+  // `shadowed` subtracts our own control-mode shadows from tmux's attached flag: a shadow is a real
+  // tmux client but NOT a watcher, so a shadowed session must stay exactly as cullable as an idle
+  // detached one (see PtyManager.shadowedTmuxSessions).
+  // `readMem: hostMemReader()` — the SAME platform-aware reader the memory-pressure monitor uses,
+  // and for the same reason. On darwin it returns null, so `planReap` sees no pressure signal and
+  // only the detached-count cap can trigger a cull.
+  //
+  // Available BYTES is not macOS's pressure signal. Measured on a 24 GB Mac (2026-08-12): 82% used,
+  // 8.38 GB compressed, 1.77 GB swap in use — and macOS's own Memory Pressure graph GREEN. A
+  // 10%-available watermark fires in states the OS itself calls healthy, so a byte trigger there
+  // culls sessions on a machine macOS says is fine. Fixing readMemInfo made the bytes HONEST; it
+  // did not make them the right instrument.
+  //
+  // This is not a regression of the reaper's purpose on macOS: the count cap still bounds
+  // accumulation, the pty-pressure monitor covers the resource that actually ran out, and the
+  // session-memory panel gives the user the visibility to cull deliberately.
+  const sessionReaper = createSessionReaper({
+    tmuxBin: () => ptyManager.getTmuxBin(),
+    shadowed: (socket) => ptyManager.shadowedTmuxSessions(socket)
+  })
+  sessionReaper.start()
+  // Memory pressure (core/memory-pressure.ts): the reaper's own 10-minute timer is the steady
+  // state; this is the fast path. On a watermark crossing the renderer runs its reclaim levers
+  // (hidden WebGL contexts, parked terminals) and a CRITICAL reading also sweeps the reaper NOW
+  // rather than waiting out its timer. Both levers are idempotent and the monitor re-fires at most
+  // once a minute. The send goes through `sendToMain`, which resolves the window AT SEND TIME and
+  // no-ops while it is closed (macOS keeps the app alive without one) — the monitor's own
+  // try/catch is the backstop, not the primary.
+  createMemoryPressureMonitor({
+    onPressure: (severity) => {
+      sendToMain(IPC.appMemoryPressure, severity)
+      if (severity === 'critical') void sessionReaper.sweep()
+    }
+  }).start()
+  // Pty-device pressure (core/pty-pressure.ts): the OTHER way this machine runs out, and the one
+  // that actually happened. The memory monitor above could not see it — during the 2026-08-11
+  // incident RAM was plentiful while `/dev/ttys*` was full, so the reaper never woke and the user
+  // got no warning at all, just terminals that stopped opening. Same shape as the memory leg: tell
+  // the renderer (which raises a banner) on every band change, and sweep the reaper NOW on
+  // critical — a reaped detached session returns its pty device, which is exactly the resource in
+  // short supply. Transitions only, re-announced at most every five minutes.
+  //
+  // The sweep is passed `pressure: 'pty'` because a bare `sweep()` here would plan NOTHING: the
+  // budget's own triggers are memory and a detached-count cap, and the incident profile clears
+  // both (healthy RAM, under the cap). The reason grants the same batch allowance low memory
+  // would and widens no exemption — attached and in-grace sessions stay untouchable.
+  const ptyPressure = createPtyPressureMonitor({
+    onLevel: (reading) => {
+      sendToMain(IPC.ptyPressure, reading)
+      if (reading.level === 'critical') void sessionReaper.sweep({ pressure: 'pty' })
+    }
+  })
+  ptyPressure.start()
+  // The banner's "Fix automatically…" button. Registered, never called on our own initiative: it
+  // raises `kern.tty.ptmx_max` behind macOS's own admin-password dialog. Its success re-announces
+  // through the monitor's funnel, so the banner clears without waiting out the next tick.
+  registerPtmxLimitHandler(corePlatform, { announce: (reading) => ptyPressure.announce(reading) })
+  // Session memory (docs/superpowers/specs/2026-08-10-session-memory-panel-design.md): the pill's
+  // cheap RAM read plus the on-demand per-session breakdown. An SSH project's sessions live on ITS
+  // host, so they are read THERE over the project's ControlMaster — the same injection Context Link
+  // and remote usage use (core owns the command + the parsing, main owns the master).
+  // `sshProjectManager` is assigned far below, so both closures resolve it lazily; they only ever
+  // run after a project has connected.
+  startSessionMemoryService({
+    tmuxBin: () => ptyManager.getTmuxBin(),
+    remote: {
+      // Identity, not liveness: a DISCONNECTED SSH project is still someone else's machine, and
+      // `connectedHosts()` alone would answer "local" for it — exactly the window the service's
+      // refusal exists for. The workspace index is the connection-independent source; the live
+      // masters are OR-ed in for a project the index has not (yet) listed. See sshScopePredicate.
+      isRemoteProject: sshScopePredicate({
+        sshProjectIds: () => workspaceStore.sshProjectIds(),
+        connectedProjectIds: () =>
+          (sshProjectManager?.connectedHosts() ?? []).map((h) => h.projectId)
+      }),
+      run: async (projectId, command) => {
+        const mgr = sshProjectManager
+        const ref = mgr?.refForProject(projectId)
+        if (!mgr || !ref) return null
+        try {
+          const { code, stdout } = await mgr.sshRun(childArgs(ref.conn, ref.controlPath, command))
+          // Gated on the exit code, unlike the usage runner: every command in the generated script
+          // ends `|| true`, so a completed read exits 0 unconditionally. A non-zero code therefore
+          // means ssh itself could not run it — a dead ControlMaster reports exactly that, with an
+          // EMPTY stdout ("Control socket connect(…): No such file or directory" goes to stderr).
+          // Passing that empty string on would leave "the host answered nothing" to be inferred
+          // from a missing marker; `null` says "we could not look" outright.
+          if (code !== 0) return null
+          return stdout
+        } catch {
+          return null
+        }
+      }
+    }
+  })
+
+  // WSL distribution management (docs pending) — src/core/wsl/service.ts. Windows-only in
+  // practice (wsl.exe simply is not found elsewhere); every handler degrades to a real, honest
+  // rejection rather than a silent empty list. The ownership ledger is a small machine-local
+  // JSON file, exactly the shape session-memory/toylock stores use, under this app's own
+  // userData directory — never inside a project's shared `.nodeterm/`.
+  startWslService({
+    runtime: defaultWslRuntime(),
+    ownership: fileWslOwnershipStore(join(app.getPath('userData'), 'wsl-owned-distributions.json'))
+  })
+
+  // Toy locks + the built-in authenticator (docs/toy-locks.md, docs/authenticator.md). Pure
+  // core-bound services — no shell-specific wiring beyond what CorePlatform already offers
+  // (userDataDir + Electron's safeStorage seal/unseal). Registered on the Server Edition too, in
+  // src/server/index.ts, so a browser tab reaches the exact same service over the WS bridge.
+  const toyLockService = startToyLockService({
+    // Live read, never a boot-time sample: School mode is a shared switch a running app must pick
+    // up without a restart, and it removes the ladder's dim-sum rung entirely.
+    schoolMode: () => schoolModeStore.get().enabled
+  })
+  // Close the name-addressed write bypass: sendText must ask the lock service before typing into
+  // a node (see pty-manager.sendText). Wired here because the service starts after the manager.
+  ptyManager.setTextWriteGate((persistKey) => toyLockService.mayWriteToNode(persistKey))
+  startAuthenticatorService()
+
+  const ackSweeper = createAckSweeper({
+    handlers: { ackDone, onUnreadClear: (id) => sendToMain(IPC.agentUnreadClear, id) }
+  })
+  let remoteAckSweepBusy = false
+  const ackSweepTimer = setInterval(() => {
+    ackSweeper.sweep()
+    if (remoteAckSweepBusy || !sshProjectManager) return
+    remoteAckSweepBusy = true
+    void sshProjectManager
+      .sweepRemoteAcks()
+      .then((ids) => {
+        for (const id of ids) {
+          ackDone(id)
+          sendToMain(IPC.agentUnreadClear, id)
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        remoteAckSweepBusy = false
+      })
+  }, 15_000)
+  ackSweepTimer.unref?.()
+  // Push grants on the connected SSH hosts (core/remote-push-grants.ts). Its own, slower cadence:
+  // unlike an ack — which the phone waits on — a grant only has to be fresh by the time something
+  // is actually pushed, and the phone re-drops it long before it expires. One ssh exec per
+  // connected host per minute, and none at all with no SSH project open.
+  let remoteGrantSweepBusy = false
+  const grantSweepTimer = setInterval(() => {
+    if (remoteGrantSweepBusy || !sshProjectManager) return
+    remoteGrantSweepBusy = true
+    void sshProjectManager
+      .readRemoteGrants()
+      .then((grants) => remoteGrants.set(grants))
+      .catch(() => {})
+      .finally(() => {
+        remoteGrantSweepBusy = false
+      })
+  }, 60_000)
+  grantSweepTimer.unref?.()
+  // Sweep stale request/answer files (~/.nodeterm/pending) on boot + hourly — orphans from killed
+  // sessions that never got an answer. Local only; a remote host runs its own sweep if it hosts
+  // nodeterm, else the files age out harmlessly.
+  startPendingSweep(homedir())
+  // Security: hook POSTs now arrive over the remote reverse tunnel too (SSH Phase 2a), so a
+  // forged/remote POST could set transcript_path to an arbitrary LOCAL path (e.g. ~/.ssh/id_rsa)
+  // and have the app read it. The tails read the LOCAL filesystem; legitimate LOCAL transcripts
+  // live under the system default `~/.claude/projects` OR a managed account's
+  // `{userData}/claude-accounts/<id>/projects` (id-validated so a forged POST can't traverse out
+  // — see isSafeLocalTranscriptPath). Phase 2a does NOT tail remote transcripts (that's 2b), so we
+  // jail transcript_path to those roots and skip the read otherwise. Returns the path only when it
+  // resolves under an allowed root.
+  const safeTranscriptPath = (tp: string | undefined): string | undefined => {
+    if (!tp) return undefined
+    const abs = resolve(tp)
+    // codexHome() honors $CODEX_HOME — a relocated codex (the snap-codex case this project has hit
+    // before) would otherwise fail the jail and its meter would silently never fill.
+    return isSafeLocalTranscriptPath(abs, homedir(), app.getPath('userData'), codexHome())
+      ? abs
+      : undefined
+  }
+  // Remote analogue of safeTranscriptPath: a remote node's transcript_path is a remote absolute
+  // path arriving over the reverse tunnel — a forged POST must not read an arbitrary remote file.
+  // The jail (both allowed roots, incl. a managed remote account's) is pure + unit-tested in
+  // claude-accounts-core.
+  const safeRemoteTranscriptPath = (
+    tp: string | undefined,
+    remoteHome: string | undefined
+  ): string | undefined => {
+    if (!tp) return undefined
+    const abs = posix.resolve(tp)
+    return isSafeRemoteTranscriptPath(abs, remoteHome) ? abs : undefined
+  }
+  const SUBAGENT_TOOLS = new Set(['Agent', 'Task'])
+  // `meta` carries the per-node `verified` flag and is deliberately UNUSED here: A13 moved
+  // enforcement into the hook server, which refuses before a listener is ever called. This shell
+  // used to keep a `nodeVerified` map written on every event and read by nothing. The parameter
+  // stays because the flag is part of the listener contract and both shells must take it
+  // (invariant 4, pinned by hook-verified-parity.test.ts); a second copy of the answer is not.
+  hookServer.setRawListener((agentId, nodeId, payload, _meta) => {
+    if (agentId === 'grok') {
+      // This branch records two associations, neither of which grok's envelope states outright.
+      // Everything the claude path does below hangs off `transcript_path`, and grok has none.
+      // Read through `grokRawFields` so grok's two field dialects (camelCase and the SDK's
+      // snake_case) are decoded in exactly one place.
+      const g = grokRawFields(payload)
+      // 1. node → session: read by the phone's context ring and the ⌘K session lookup.
+      if (nodeId && g.sessionId) nodeContextSession.set(nodeId, g.sessionId)
+      // 2. session → its session DIRECTORY, derived from (cwd, sessionId) — the two fields every
+      // grok hook does carry — and remembered here, the one place they arrive together. That is
+      // what lets the session-name read (core/grok-session.ts) be a direct open rather than a scan
+      // of grok's sessions tree, which is how one node would end up adopting another's name.
+      // `grokSessionDir` returns null for a cwd grok stored under its slug+hash scheme instead, in
+      // which case we learn nothing about this session rather than build half a path.
+      if (g.sessionId && g.cwd) {
+        const dir = grokSessionDir({
+          sessionsDir: grokSessionsDir(),
+          cwd: g.cwd,
+          sessionId: g.sessionId
+        })
+        if (dir) rememberGrokSessionDir(g.sessionId, dir)
+      }
+      // The session is over, so nothing will read its directory again — and forgetting costs
+      // nothing even though grok IS resumable and `grok --resume <id>` reuses BOTH the id and the
+      // directory: a resumed session fires its own hooks, whose (cwd, sessionId) re-derive and
+      // re-remember the very same path. The map is bounded, so dropping now beats waiting for
+      // eviction to reach an entry nobody is asking about.
+      if (g.event === 'sessionend') forgetGrokSession(g.sessionId)
+      return
+    }
+    // gemini and codex both carry `transcript_path` in their hook envelope (gemini: the base input
+    // schema of its bundled `docs/hooks/reference.md:48-58`; codex: the same claude-shaped envelope,
+    // whose own hook wire structs name session_id/transcript_path/cwd/hook_event_name), so the
+    // meter needs no path DERIVATION the way grok's does — only its own token reader. The path is
+    // jailed by the same `safeTranscriptPath` claude uses (widened to those two agents' transcript
+    // roots), because a forged POST could otherwise aim a file read at an arbitrary local path.
+    if (agentId === 'gemini' || agentId === 'codex') {
+      const p = payload as {
+        session_id?: string
+        transcript_path?: string
+        hook_event_name?: string
+      }
+      // A REMOTE (SSH) node's transcript lives on the HOST, and these tails read the LOCAL disk —
+      // a host path like `~/.gemini/tmp/…` clears the local jail, so without this we would meter
+      // whatever same-named file happens to exist on THIS machine. Remote meters for these agents
+      // are out of scope (remote-context-tail.ts is that path), so skip rather than report the
+      // wrong machine's numbers. The Server Edition needs no counterpart: it has no SSH projects,
+      // which is why its copy of this branch is otherwise identical but lacks these two lines.
+      if (nodeId && ptyManager.sshRemoteForNode(nodeId)) return
+      const transcriptPath = safeTranscriptPath(p.transcript_path)
+      const tail = agentId === 'gemini' ? geminiContextTail : codexContextTail
+      if (p.session_id && transcriptPath) tail.track(p.session_id, transcriptPath)
+      if (nodeId && p.session_id) nodeContextSession.set(nodeId, p.session_id)
+      // gemini subscribes SessionEnd (GEMINI_HOOK_EVENTS); codex does NOT today (CODEX_EVENTS stops
+      // at Stop), so for codex the tail is released by `releaseNodeTails` on pty:destroy/recycle
+      // instead. Handling it here regardless costs nothing and is correct the day codex's event
+      // list grows.
+      if (p.hook_event_name === 'SessionEnd' && p.session_id) tail.untrack(p.session_id)
+      return
+    }
+    if (agentId !== 'claude') return
+    // Mirror the per-node "what it's doing now" activity line for the phone (mobile-usage-inbox).
+    // Runs BEFORE the local/remote split so it covers remote (SSH) nodes too — it needs only
+    // tool_name/tool_input, never the transcript path the split routes on.
+    recordRawToolEvent(nodeId, payload)
+    const p = payload as {
+      hook_event_name?: string
+      session_id?: string
+      transcript_path?: string
+      tool_name?: string
+      tool_use_id?: string
+      tool_response?: { status?: string; isAsync?: boolean }
+    }
+    // An async subagent's PostToolUse is only the launch ack — keep tailing its transcript;
+    // the real end (task-notification via the context tails) releases it.
+    const asyncLaunch = p.hook_event_name === 'PostToolUse' && isAsyncSubagentLaunch(p.tool_response)
+    // REMOTE node: route to the remote tails/search, jailing the path under the project's remote
+    // ~/.claude/projects. Diverges from the local path ONLY when the node has a live ssh remote.
+    const rt = nodeId ? ptyManager.sshRemoteForNode(nodeId) : undefined
+    if (rt) {
+      const remoteHome = sshProjectManager?.remoteHomeForControlPath(rt.controlPath)
+      const transcriptPath = safeRemoteTranscriptPath(p.transcript_path, remoteHome)
+      if (p.session_id && transcriptPath) {
+        const ref: RemoteFileRef = { conn: rt.conn, controlPath: rt.controlPath, path: transcriptPath }
+        remoteContextTail.track(p.session_id, ref)
+        remoteTranscriptBySession.set(p.session_id, ref)
+      }
+      if (nodeId && p.session_id) nodeContextSession.set(nodeId, p.session_id)
+      // Context Link: remember the node's transcript path for remote nodes too. This branch used
+      // to `return` without it, which is why a remote node was never readable through a link —
+      // the local locators are no substitute (they search the wrong machine's disk, so
+      // resolveLinkTranscript deliberately refuses them for remote nodes). The path stored is the
+      // JAILED one, so a forged POST cannot aim a link read at an arbitrary remote file.
+      if (nodeId && p.session_id && transcriptPath) setNodeTranscript(nodeId, p.session_id, transcriptPath)
+      if (p.hook_event_name === 'SessionEnd' && p.session_id) {
+        remoteContextTail.untrack(p.session_id)
+        remoteTranscriptBySession.delete(p.session_id)
+        locatedTranscriptSessions.delete(p.session_id)
+      }
+      if (p.tool_use_id && p.tool_name && SUBAGENT_TOOLS.has(p.tool_name) && transcriptPath) {
+        const toolUseId = p.tool_use_id
+        if (p.hook_event_name === 'PreToolUse') {
+          remoteSubagentCancel.delete(toolUseId)
+          remoteSubagentResolving.add(toolUseId)
+          // Resolve the remote subagent file asynchronously (it appears shortly after), then track.
+          // The `finally` always clears both bookkeeping sets so they can't accumulate dead ids.
+          void resolveRemoteSubagentFile(rt, transcriptPath, toolUseId)
+            .then((file) => {
+              if (file && !remoteSubagentCancel.has(toolUseId)) {
+                remoteSubagentTail.track(toolUseId, { conn: rt.conn, controlPath: rt.controlPath, path: file })
+              }
+            })
+            .finally(() => {
+              remoteSubagentResolving.delete(toolUseId)
+              remoteSubagentCancel.delete(toolUseId)
+            })
+          if (nodeId) {
+            const set = nodeSubagents.get(nodeId) ?? new Set<string>()
+            set.add(toolUseId)
+            nodeSubagents.set(nodeId, set)
+          }
+        } else if (p.hook_event_name === 'PostToolUse' && !asyncLaunch) {
+          // Only cancel an in-flight resolve; if it already settled, adding here would leak.
+          if (remoteSubagentResolving.has(toolUseId)) remoteSubagentCancel.add(toolUseId)
+          remoteSubagentTail.untrack(toolUseId)
+          if (nodeId) nodeSubagents.get(nodeId)?.delete(toolUseId)
+        }
+      }
+      // Session over → release any still-tracked async subagent tails for this node.
+      if (p.hook_event_name === 'SessionEnd' && nodeId) {
+        for (const toolUseId of nodeSubagents.get(nodeId) ?? []) {
+          if (remoteSubagentResolving.has(toolUseId)) remoteSubagentCancel.add(toolUseId)
+          remoteSubagentTail.untrack(toolUseId)
+        }
+        nodeSubagents.delete(nodeId)
+      }
+      return
+    }
+    const transcriptPath = safeTranscriptPath(p.transcript_path)
+    // Context-window meter: tail the session transcript (any event carrying both fields).
+    if (p.session_id && transcriptPath) contextTail.track(p.session_id, transcriptPath)
+    if (nodeId && p.session_id) nodeContextSession.set(nodeId, p.session_id)
+    if (nodeId && p.session_id && transcriptPath) setNodeTranscript(nodeId, p.session_id, transcriptPath)
+    if (p.hook_event_name === 'SessionEnd' && p.session_id) contextTail.untrack(p.session_id)
+    // Subagent live transcript: track on PreToolUse / finish on PostToolUse for subagent tools.
+    if (p.tool_use_id && p.tool_name && SUBAGENT_TOOLS.has(p.tool_name)) {
+      if (p.hook_event_name === 'PreToolUse') {
+        subagentTail.track(p.tool_use_id, transcriptPath)
+        if (nodeId) {
+          const set = nodeSubagents.get(nodeId) ?? new Set<string>()
+          set.add(p.tool_use_id)
+          nodeSubagents.set(nodeId, set)
+        }
+      } else if (p.hook_event_name === 'PostToolUse' && !asyncLaunch) {
+        subagentTail.finish(p.tool_use_id)
+        if (nodeId) nodeSubagents.get(nodeId)?.delete(p.tool_use_id)
+      }
+    }
+    // Session over → release any still-tracked async subagent tails for this node (their
+    // task-notifications will never arrive once the session is gone).
+    if (p.hook_event_name === 'SessionEnd' && nodeId) {
+      for (const toolUseId of nodeSubagents.get(nodeId) ?? []) subagentTail.finish(toolUseId)
+      nodeSubagents.delete(nodeId)
+    }
+  })
+
+  // Releasing tails when a node's session ENDS — whichever way it ends. This runs from
+  // PtyManager's end hook, after session-host kill acknowledgement when that backend owns it; an attempted destroy
+  // whose session-host connection drops must keep its tails because its outcome is unknown.
+  //  - pty:destroy — the user clicked × (the node is gone);
+  //  - pty:recycle — "move into worktree" (the node stays, but its session is replaced, so the
+  //    tails of the OLD session's transcript are just as dead; the respawned agent re-registers
+  //    them under its new session id via the hook events).
+  const releaseNodeTails = (nodeId: string): void => {
+    const sessionId = nodeContextSession.get(nodeId)
+    if (sessionId) {
+      // Untrack both tails — untracking a non-tracked session is a no-op, so this is safe
+      // regardless of whether the closed node was local or remote (avoids an ordering race
+      // with pty-manager's own ptyDestroy handler clearing the ssh-remote registration).
+      // Every agent's tail is untracked, not just claude's: `nodeContextSession` now holds gemini
+      // and codex sessions too, and a tail nobody releases keeps polling a dead session's file
+      // once a second forever. Only one of these can be tracking any given sessionId.
+      contextTail.untrack(sessionId)
+      geminiContextTail.untrack(sessionId)
+      codexContextTail.untrack(sessionId)
+      remoteContextTail.untrack(sessionId)
+      remoteTranscriptBySession.delete(sessionId)
+      locatedTranscriptSessions.delete(sessionId)
+      nodeContextSession.delete(nodeId)
+    }
+    const subs = nodeSubagents.get(nodeId)
+    if (subs) {
+      for (const toolUseId of subs) {
+        subagentTail.finish(toolUseId)
+        // Only cancel an in-flight resolve; if it already settled, adding here would leak.
+        if (remoteSubagentResolving.has(toolUseId)) remoteSubagentCancel.add(toolUseId)
+        remoteSubagentTail.untrack(toolUseId)
+      }
+      nodeSubagents.delete(nodeId)
+    }
+  }
+  // Registered on the manager rather than a second IPC listener: pty:destroy is request/response,
+  // so cleanup cannot race ahead of its acknowledgement on either the local window or a peer.
+  ptyManager.onSessionEnded((nodeId) => releaseNodeTails(nodeId))
+  // Profile switching needs an awaited destroy-before-respawn barrier. Keep this native to the
+  // desktop: a relay peer must not be able to invoke a machine-local Windows profile action.
+  // The callback is intentionally idempotent with the manager hook above and preserves the
+  // confirmed-recycle contract for a teardown completed through this native handler.
+  const disposeConfirmedRecycleIpc = registerConfirmedRecycleIpc(
+    ipcMain,
+    ptyManager,
+    releaseNodeTails
+  )
+  app.once('will-quit', disposeConfirmedRecycleIpc)
+  // Agent canvas control: the spawned agent's `nodeterm` CLI POSTs a verb to the hook server,
+  // which we forward to the renderer and await a reply. A pending-request map (keyed by a random
+  // requestId) bridges the two async hops; both the reply and the 120s timeout clear the entry.
+  const pendingControl = new Map<
+    string,
+    {
+      resolve: (r: { ok: boolean; message?: string; result?: unknown; error?: string }) => void
+      timer: NodeJS.Timeout
+    }
+  >()
+  ipcMain.on(
+    IPC.agentControlResult,
+    (
+      _e,
+      payload: {
+        requestId: string
+        ok: boolean
+        message?: string
+        result?: unknown
+        error?: string
+      }
+    ) => {
+      const pending = pendingControl.get(payload.requestId)
+      if (!pending) return
+      clearTimeout(pending.timer)
+      pendingControl.delete(payload.requestId)
+      pending.resolve(payload)
+    }
+  )
+  hookServer.setControlHandler(async ({ verb, nodeId, args }) => {
+    const target = getMainWindow()
+    if (!target) return { ok: false, error: 'window unavailable' }
+    const requestId = randomUUID()
+    return await new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        pendingControl.delete(requestId)
+        resolve({ ok: false, error: 'timed out (no response / not confirmed)' })
+      }, 120_000)
+      pendingControl.set(requestId, { resolve, timer })
+      target.webContents.send(IPC.agentControl, { requestId, sourceNodeId: nodeId, verb, args })
+    })
+  })
+  initMediaProtocol()
+
+  // Context Link reads happen HERE, on the desktop, which is what lets a remote (SSH-project)
+  // node's transcript be read at all: it lives on the host, behind the project's ControlMaster.
+  // These three deps are the whole of what `src/core` cannot answer for itself. Fail-open
+  // throughout — a failed remote read renders as "no transcript yet", never as an error.
+  initContextLink(ptyManager, {
+    isRemoteNode: (nodeId) => !!ptyManager.sshRemoteForNode(nodeId),
+    readRemoteFile: async (nodeId, filePath, maxBytes) => {
+      const rt = ptyManager.sshRemoteForNode(nodeId)
+      if (!rt) return null
+      const text = await remoteFile.readTail(
+        { conn: rt.conn, controlPath: rt.controlPath, path: filePath },
+        maxBytes
+      )
+      return text || null
+    },
+    runRemoteCommand: async (nodeId, command) => {
+      const rt = ptyManager.sshRemoteForNode(nodeId)
+      if (!rt || !sshProjectManager) return null
+      try {
+        const { code, stdout } = await sshProjectManager.sshRun(childArgs(rt.conn, rt.controlPath, command))
+        return code === 0 ? stdout : null
+      } catch {
+        return null
+      }
+    }
+  })
+  initCanvasControl()
+  // Usage service + the mobile `usage` mirror block (mobile-usage-inbox): poll all local managed
+  // accounts alongside the system account, and re-flush the mirror on every cache update. The
+  // provider pairs the service's cache with the settings account labels at flush time; SSH slices
+  // drop it (filterMirrorForNodes) — a host answers only for its own local credentials.
+  const localClaudeAccountIds = (): string[] =>
+    (settingsStore.get().claudeAccounts ?? []).filter((a) => !a.host && !a.pending).map((a) => a.id)
+  const usageService = initClaudeUsage(win, {
+    localAccounts: localClaudeAccountIds,
+    codexAccounts: () =>
+      codexUsageAccounts(
+        (settingsStore.get().codexAccounts ?? []).filter((account) => !account.host),
+        localCodexAccountHome
+      ),
+    onCacheUpdate: () => {
+      void flushAgentStatusMirror()
+    },
+    // Remote (SSH host) Claude usage. Same shape as the Context Link remote deps: core owns the
+    // command and the parsing, main owns the ControlMaster. `sshProjectManager` is assigned just
+    // below, so both closures read it lazily — they only ever run after a project has connected.
+    remote: {
+      targets: () =>
+        remoteUsageTargets(
+          sshProjectManager?.connectedHosts() ?? [],
+          settingsStore.get().claudeAccounts ?? []
+        ),
+      run: async (target, command) => {
+        const mgr = sshProjectManager
+        const ref = mgr?.refForProject(target.projectId)
+        if (!mgr || !ref) return null
+        try {
+          const { stdout } = await mgr.sshRun(childArgs(ref.conn, ref.controlPath, command))
+          // Deliberately not gated on the exit code: the remote script exits 0 on its own
+          // short-circuits but curl's exit status rides through on a network failure, and the
+          // marker block is what says whether the read completed.
+          return stdout
+        } catch {
+          return null
+        }
+      }
+    }
+  })
+  setMirrorUsageProvider(() =>
+    buildMirrorUsage(usageService.snapshot(), settingsStore.get().claudeAccounts ?? [], Date.now())
+  )
+  initTelemetry(() => settingsStore.get())
+  initLicense(() => {})
+  // Lazy getter: sshProjectManager is created just below, so a remote account op (which only runs
+  // after the user has connected an SSH project) always sees the live manager.
+  initClaudeAccounts(() => sshProjectManager)
+  initCodexAccounts(() => sshProjectManager)
+  // The jailed core bridge both phone hosts serve: typed git verbs against the real GitService
+  // (cwd-jailed to the shared canvas roots inside the handlers) and phone node registration
+  // through the workspace store (written as an outside edit, so the watcher broadcasts it and
+  // the canvas adopts the node live).
+  const hostBridge = {
+    git: gitService,
+    registerNode: (projectId: string, node: { id: string; title?: string; agentId?: string }) =>
+      workspaceStore.appendRemoteNode(
+        projectId,
+        node,
+        undefined,
+        process.platform === 'win32' ? settingsStore.get().defaultTerminalProfileId : undefined
+      ),
+    // Jail roots beyond the active canvas: the phone browses EVERY project (projects.list), so
+    // its fs/git access spans every local project root — not just the tab the desktop happens
+    // to have focused (that gap read as "cwd is outside the shared project roots" on the phone).
+    workspaceRoots: () => workspaceStore.localProjectCwds()
+  }
+  initRemoteHost(win, ptyManager, listProjectsOutput, hostBridge)
+  // NEW interactive relay host (Stage 4): a connecting peer desktop becomes a first-class
+  // CorePlatform client of this desktop after mutual SAS approval. Runs BESIDE initRemoteHost (the
+  // phone still uses the legacy flow). Inert until `relay:host:start` — a solo user pays nothing.
+  // Revocation reaches its sessions via `killRelayHostsByPeerKey` (peerRevoker, above).
+  initRelayHost(win, corePlatform, {
+    dockerSettingsFor: (projectId) => {
+      const cwd = workspaceStore.localCwdForProject(projectId)
+      if (!cwd) return null
+      const global = settingsStore.get().dockerHost
+      const project = workspaceStore.settingsOverridesForProject(projectId)?.dockerHost
+      return { settings: { ...global, ...project }, cwd }
+    }
+  })
+  // Standing (phone) relay host: keep a host connection registered so a paired phone can reach
+  // this Mac from anywhere. Honors settings.phoneAccessEnabled internally.
+  const standingHost = initStandingHost(win, ptyManager, () => settingsStore.get(), listProjectsOutput, hostBridge)
+  ipcMain.on(IPC.remoteStandingHostSet, (_e, enabled: boolean) => standingHost.setEnabled(!!enabled))
+  // Reconcile from persisted settings on launch (starts hosting if enabled).
+  standingHost.syncFromSettings()
+  // Interactive relay CLIENT (Stage 4): connect OUT to another desktop's host. `connectRelayClient`
+  // runs the client half of mutual SAS approval and, once BOTH humans confirm, exposes the raw rpc.ts
+  // frame pipe (`relay:client:send`/`relay:client:frame`) that Task 4's RpcClient drives. This is the
+  // ONLY desktop client path now — the legacy `initRemoteClient` dialect was deleted in Task 10.
+  // Inert until `relay:client:connect` — a solo user pays nothing.
+  {
+    const relayClients = new Map<string, RelayClientSession>()
+    const sendTo = (channel: string, ...args: unknown[]): void => {
+      if (!win.isDestroyed()) win.webContents.send(channel, ...args)
+    }
+    ipcMain.handle(IPC.relayClientConnect, async (_e, offerCode: string): Promise<string> => {
+      // No Pro gate on the client: the paywall is the HOST minting the pairing token, so a valid offer
+      // is the credential (the paywall is host-side). The dev/relay gate still applies.
+      if (!relayAllowed()) {
+        throw new Error('Remote access is unavailable in development builds (set NODETERM_RELAY_URL).')
+      }
+      const offer = decodeOffer(String(offerCode ?? ''))
+      if (!offer) {
+        throw new Error('That pairing code is invalid or incomplete.')
+      }
+      // Our persistent peer identity (4d: pinned on both ends). A locked keyring rejects here as
+      // PeerKeyLockedError (E_PEER_KEY_LOCKED) — the identity on disk is intact and must NOT be rotated;
+      // the renderer tells the human to unlock and reconnect.
+      const keys = await loadOrCreatePeerKeyPair()
+      const connectionId = randomUUID()
+      const session = connectRelayClient({
+        url: offer.relayEndpoint,
+        token: offer.pairingToken,
+        hostKeyB64: offer.hostPublicKeyB64,
+        ourKeys: keys,
+        // The SAS is known — push it so this human can compare it before the host approves.
+        onSas: (s) => sendTo(IPC.relayClientSas(connectionId), s.sas()),
+        // Mutually approved — the frame pipe is live.
+        onApproved: () => sendTo(IPC.relayClientApproved(connectionId)),
+        // An inbound rpc frame from the host (res/ev) → the renderer's RpcClient.
+        onFrame: (json) => sendTo(IPC.relayClientFrame(connectionId), json),
+        // pty output arrives on the SAME per-session channel a local pty uses (ws-bridge binary path).
+        onPtyData: (sessionId, data) => sendTo(IPC.ptyData(sessionId), data),
+        onClose: () => {
+          relayClients.delete(connectionId)
+          sendTo(IPC.relayClientClosed(connectionId))
+        }
+      })
+      relayClients.set(connectionId, session)
+      return connectionId
+    })
+    // This human compared the SAS and pressed Confirm → advance the trust gate (confirm rides the
+    // ENCRYPTED tunnel). An unknown id (stale event) is a no-op.
+    // Preload sends `{ id }` (matching the host side's relayHostConfirm), so read the object — a
+    // positional `connectionId` here would stringify to "[object Object]" and match no session,
+    // silently breaking the client's half of the mutual approval (never covered by vitest — this
+    // send↔on boundary only runs under real Electron).
+    ipcMain.on(IPC.relayClientConfirm, (_e, msg: { id?: string } = {}) => {
+      if (msg?.id) relayClients.get(String(msg.id))?.confirm()
+    })
+    // The renderer casts an outbound rpc frame at the host (refused inside the session before approval).
+    ipcMain.on(IPC.relayClientSend, (_e, connectionId: string, json: string) => {
+      relayClients.get(String(connectionId))?.send(String(json))
+    })
+    // `on`, not `handle`: the preload calls this via `ipcRenderer.send` (fire-and-forget), which an
+    // `ipcMain.handle` would never receive — the socket would never close and the host-side presence
+    // leave would never fire (the peer lingers in the host facepile).
+    ipcMain.on(IPC.relayClientDisconnect, (_e, connectionId: string) => {
+      const id = String(connectionId)
+      relayClients.get(id)?.close()
+      relayClients.delete(id)
+    })
+  }
+  sshProjectManager = initSshProject(
+    (projectId) => {
+      // An attached host shares an existing local canvas; it has no independent remote workspace
+      // document to reconcile.
+      if (projectId.startsWith('attached-')) return
+      // On (re)connect, reconcile the server's .nodeterm/project.json with our offline cache by rev.
+      // A non-null result means the remote won → adopt it in the renderer (Task 7's listener does the
+      // silent replace / conflict bar). null means our cache was pushed up instead, so nothing to send.
+      // The .catch is load-bearing: this fires on every successful SSH connect, sendToMain THROWS
+      // when the render frame is disposed (reload, crash, quit, see ssh-project.ts), and an
+      // unhandled rejection is a hard main-process crash, not a log line. Right after the user
+      // answers a passphrase prompt is exactly when the renderer can be mid-churn.
+      void workspaceStore
+        .refreshSshProject(projectId)
+        .then((adopted) => {
+          if (adopted) sendToMain(IPC.workspaceExternalChange, adopted)
+        })
+        .catch(() => {})
+    },
+    askpassScriptPath,
+    // The project's reverse hook tunnel is verified again on a freshly established master: every
+    // hook event fired while it was down is gone (the POSTs are fire-and-forget and nothing queues
+    // them on the host), so ask the host what is actually true for the nodes we still believe are
+    // working. Fire-and-forget — this must never delay or fail the connect that has already
+    // reported `connected`.
+    (_projectId, controlPath, conn) => {
+      void resyncProjectAgents({
+        workingNodes,
+        hostSessionNames: async () => {
+          if (!sshProjectManager) return new Set<string>()
+          const { code, stdout } = await sshProjectManager.sshRun(
+            remoteListSessionsArgs(conn, controlPath)
+          )
+          // `list-sessions` exits non-zero when no tmux server is running — that is "no sessions",
+          // not a failed read, and either way an empty set repairs nothing.
+          return new Set(code === 0 ? parseRemoteSessionNames(stdout) : [])
+        },
+        paneCommand: async (nodeId) => {
+          // The node's REMOTE pane, over this project's master. `PtyManager.paneCommand` would
+          // read our live session map, which a backgrounded project has already been dropped from.
+          if (!sshProjectManager) return null
+          const { code, stdout } = await sshProjectManager.sshRun(
+            remotePaneCommandArgs(conn, controlPath, sessionName(nodeId))
+          )
+          return code === 0 ? stdout.trim() || null : null
+        },
+        readTranscriptTail: async (nodeId, sessionId) => {
+          // cwd/accountId are unknown here: with no accountId there is exactly ONE transcript root
+          // (the system one), so a managed-account node without a hook-fed ref simply stays
+          // undecided. A hook-fed ref (the common case) is already cached by session id. The
+          // explicit `remote` is what keeps this working for a node with no live pty session.
+          const ref = await remoteTranscriptRefFor(sessionId, undefined, undefined, nodeId, {
+            conn,
+            controlPath
+          })
+          // A small tail, NOT the read path's 5 MB cap: the verdict is about the last few records,
+          // and a wider window only lets an ancient unmatched tool_use pin the node at `working`.
+          return ref
+            ? await readRemoteTranscript(sessionId, ref, RESYNC_TRANSCRIPT_TAIL_BYTES)
+            : null
+        },
+        emit: emitAgentStatus
+      }).catch(() => {
+        // best-effort: a failed resync leaves the stale sweep as the backstop, exactly as today
+      })
+    },
+    () => readFile(codexRelayScript, 'utf8'),
+    // The remote tmux conf reads these, so an SSH project honours the same scrollback and
+    // word-separator settings a local one does.
+    () => ({
+      tmuxScrollback: settingsStore.get().tmuxScrollback,
+      terminalWordSeparators: settingsStore.get().terminalWordSeparators
+    })
+  )
+  // Wake-from-sleep: re-validate every SSH master NOW instead of letting ServerAlive discover the
+  // dead TCP ~60s later — until it does, every remote terminal looks alive and is dead (no echo,
+  // no scroll). The small delay lets the network interface come back up first; connect() is
+  // idempotent so a master that survived the nap is a cheap `-O check` no-op.
+  powerMonitor.on('resume', () => {
+    setTimeout(() => void sshProjectManager?.revalidateAll(), 2000)
+  })
+  // While connected, poll each SSH project's server file: the mobile companion appends the
+  // sessions it starts to <remoteCwd>/.nodeterm/project.json, and this is how those nodes reach
+  // the live canvas without a reconnect. Read-only unless a mirror write is owed
+  // (pushIfStanding:false), one `cat` per project per tick over the ControlMaster. The in-flight
+  // set keeps a hung read from stacking a second poll on the same project.
+  {
+    const REMOTE_WORKSPACE_POLL_MS = 15_000
+    const inFlight = new Set<string>()
+    setInterval(() => {
+      for (const projectId of workspaceStore.sshProjectIds()) {
+        if (inFlight.has(projectId) || !sshProjectManager?.refForProject(projectId)) continue
+        inFlight.add(projectId)
+        void workspaceStore
+          .refreshSshProject(projectId, { pushIfStanding: false })
+          .then((adopted) => {
+            if (adopted) sendToMain(IPC.workspaceExternalChange, adopted)
+          })
+          .catch(() => { /* fail-open: the next tick retries */ })
+          .finally(() => inFlight.delete(projectId))
+      }
+    }, REMOTE_WORKSPACE_POLL_MS)
+  }
+  // Route git-service + commit-message git ops over the active SSH project's master only — and only
+  // for that project's exact remoteCwd. Any other cwd (a local project, or a different connected
+  // project) resolves to undefined, so the local path stays byte-identical.
+  setGitRemoteResolver((cwd) =>
+    activeRemote && activeRemote.cwd === cwd ? activeRemote.ref : undefined
+  )
+  // The renderer's active-project effect calls this on every switch: a non-null projectId of a
+  // connected SSH project (whose ref carries a remoteCwd) arms remote routing; null/local disarms it.
+  ipcMain.handle(IPC.gitSetActiveRemote, (_e, projectId: string | null) => {
+    const ref = projectId ? sshProjectManager?.refForProject(projectId) : undefined
+    activeRemote =
+      ref && ref.remoteCwd
+        ? { cwd: ref.remoteCwd, ref: { conn: ref.conn, controlPath: ref.controlPath } }
+        : null
+  })
+
+  app.on('activate', () => {
+    // With hide-on-close the window usually still exists — just re-show it. Only a truly
+    // gone window (e.g. renderer crash) is recreated; createWindow re-registers it as the
+    // main window, so send-time resolution keeps agent-status forwarding alive.
+    const existing = getMainWindow()
+    if (existing) {
+      existing.show()
+      existing.focus()
+    } else if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow()
+    }
+  })
+})
+
+app.on('window-all-closed', () => {
+  // On macOS the app stays alive, so the async final snapshots inside killAll can complete
+  // in the background; on other platforms quitting goes through before-quit below.
+  if (process.platform !== 'darwin') {
+    app.quit()
+  } else {
+    void ptyManager.killAll()
+    // Land any pending throttled .nodeterm mirror write BEFORE the masters die — killing a
+    // master mid-write used to leave a truncated project.json on the server.
+    void remoteWorkspaceIO.flush().finally(() => {
+      sshProjectManager?.disconnectAll()
+      // Every master is gone, so nothing can use the unlocked key; scheduled (not stop()) so a
+      // quick window-reopen + reconnect inside the grace re-uses the agent instead of re-prompting.
+      // Without this, a destroyed window left the key alive for the agent's full 12h backstop.
+      appSshAgent.scheduleStop()
+    })
+  }
+})
+
+// The final scrollback snapshots are async (capture subprocess + fs.promises write) — hold
+// the quit just long enough for them to land, capped so a hung tmux can never block quit.
+let quitFlushed = false
+app.on('before-quit', (e) => {
+  // Menu Quit / Cmd+Q / Ctrl+Q reach here directly (no window-close event first), so the confirm
+  // gate is repeated here for that path. `quitConfirmed` short-circuits this on the re-issued
+  // app.quit() below once the user has answered, or on the win.close() gate's own re-issue.
+  if (shouldConfirmQuit()) {
+    e.preventDefault()
+    void confirmQuit(getMainWindow() as unknown as BrowserWindow | null).then((ok) => {
+      if (ok) app.quit()
+    })
+    return
+  }
+  quitting = true // from here on, window close-events must NOT be turned into hide
+  // Destroy every open widget window (never the sessions they were co-attached to — see
+  // canvas-widget-window.ts's module doc; PtyManager.killAll() below detaches every client the
+  // normal way, including the ones these windows opened).
+  closeAllCanvasWidgets()
+  // Fire-and-forget on purpose (see the method's own doc comment): a managed Minecraft server is
+  // an ordinary child process that outlives its parent quitting, so there is nothing to await here
+  // — writing "stop" now is enough for it to shut down gracefully on its own schedule. Called on
+  // BOTH passes; the method itself no-ops for an instance already asked.
+  minecraftServers?.requestGracefulStopAll()
+  destroyNotchHud()
+  const scheduledSettingsStop = scheduledSettingsRuntime.stop()
+  // Electron releases power assertions at exit anyway; disposing keeps the hold/release log honest.
+  keepAwake?.dispose()
+  workspaceWatcher.dispose()
+  if (quitFlushed) {
+    // Second pass (the deferred app.quit() below): the flush had its chance — drop the masters.
+    sshProjectManager?.disconnectAll()
+    // Then the app-private ssh-agent, which is the whole point of it existing: quitting nodeterm
+    // forgets the unlocked key. AFTER disconnectAll so a throw here can never skip the master
+    // teardown, and in this pass rather than the first, where the flush is still writing over
+    // those masters. `.finally(app.quit())` above guarantees this pass runs.
+    appSshAgent.stop()
+    // And the askpass relay's socket file: close() is what unlinks a unix socket (process exit
+    // does not), and a lingering file is one more thing the next start() has to clear.
+    askpassServer.stop()
+    void browserUseBackend.stop()
+    // A SIGTERM quit (dev runners, `kill`, logout) arrives through Chromium's shutdown
+    // detector, and this pass's re-issued app.quit() cannot resume the OS-initiated
+    // termination the first pass preventDefault'ed: both passes run, but will-quit never
+    // fires and the process lingers as a windowless shell. Everything that must land has
+    // landed by this point, so give Electron a moment to finish on its own, then force the
+    // exit. A normal Cmd+Q exits well inside the fuse and never reaches it.
+    setTimeout(() => app.exit(0), 1500)
+    return
+  }
+  quitFlushed = true
+  e.preventDefault()
+  // Pending throttled .nodeterm mirror writes must land BEFORE the ControlMasters die — killing
+  // a master mid-write used to leave a truncated project.json on the server. The masters are
+  // therefore kept up through the raced flush and dropped on the second before-quit pass.
+  const flush = Promise.allSettled([
+    remoteWorkspaceIO.flush(),
+    ptyManager.killAll(),
+    scheduledSettingsStop
+  ])
+  void Promise.race([flush, new Promise((r) => setTimeout(r, 1500))])
+    // Then let whisper go. A dictation still transcribing when Electron tears down the main
+    // process's node env aborts the WHOLE app from inside the native addon (SIGABRT in
+    // Napi::ThreadSafeFunction::CallJS) — see SpeechService.shutdown. It needs its own budget
+    // because the 1500ms cap above is shorter than a transcription, and it costs nothing at
+    // all when dictation is idle, which is nearly always.
+    .then(() => speechService.shutdown())
+    .finally(() => app.quit())
+})

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>nodeterm — design compare</title>
+    <style>
+      /* The chrome deliberately uses the DESIGN's own tokens, so the tool itself is a running
+         sample of the palette being adopted. If the toolbar looks wrong, the tokens are wrong. */
+      :root {
+        --surface: #111318;
+        --sc: #1d2024;
+        --sc-high: #282a2f;
+        --on-surface: #e2e2e9;
+        --on-surface-var: #c3c6cf;
+        --outline-var: #43474e;
+        --primary: #aac7ff;
+        --on-primary: #0a305f;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex; flex-direction: column;
+        background: var(--surface); color: var(--on-surface);
+        font: 13px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+      }
+      header {
+        display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+        padding: 8px 12px; background: var(--sc);
+        border-bottom: 1px solid var(--outline-var);
+      }
+      .group { display: flex; align-items: center; gap: 6px; }
+      .group > label { color: var(--on-surface-var); }
+      button {
+        background: var(--sc-high); color: var(--on-surface);
+        border: 1px solid var(--outline-var); border-radius: 999px;
+        padding: 5px 12px; cursor: pointer; font: inherit;
+      }
+      button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+      input[type="range"] { width: 130px; }
+      input[type="url"] {
+        background: var(--surface); color: var(--on-surface);
+        border: 1px solid var(--outline-var); border-radius: 8px; padding: 5px 9px; width: 250px; font: inherit;
+      }
+      #stage { position: relative; flex: 1; display: flex; min-height: 0; }
+      /* Each pane is its own <webview>: the two sides are unrelated origins and the design
+         prototype is a full interactive app, not a static mock — an <iframe> would let its
+         scripts reach this window. */
+      webview { flex: 1; min-width: 0; height: 100%; border: 0; background: #fff; }
+      #split { width: 1px; background: var(--outline-var); flex: none; }
+      /* Overlay mode stacks the panes so a slider can cross-fade them. Side-by-side catches
+         layout drift; overlay catches the few-pixel spacing and colour drift that side-by-side
+         hides, which is the whole reason a design-compare tool beats two windows. */
+      body[data-mode="overlay"] #split { display: none; }
+      body[data-mode="overlay"] webview { position: absolute; inset: 0; width: 100%; }
+      body[data-mode="overlay"] #right { opacity: var(--mix, 0.5); }
+      footer { padding: 5px 12px; background: var(--sc); border-top: 1px solid var(--outline-var); color: var(--on-surface-var); }
+    </style>
+  </head>
+  <body data-mode="split">
+    <header>
+      <div class="group">
+        <button id="mode-split" aria-pressed="true">Side by side</button>
+        <button id="mode-overlay" aria-pressed="false">Overlay</button>
+      </div>
+      <div class="group">
+        <label for="mix">Blend</label>
+        <input id="mix" type="range" min="0" max="100" value="50" />
+        <span id="mix-out">50%</span>
+      </div>
+      <div class="group">
+        <label for="app-url">App</label>
+        <input id="app-url" type="url" value="http://localhost:5173" />
+        <button id="reload">Reload</button>
+      </div>
+      <div class="group"><button id="swap">Swap sides</button></div>
+    </header>
+
+    <div id="stage">
+      <webview id="left" src="../Nodeterm MD3.dc.html"></webview>
+      <div id="split"></div>
+      <webview id="right" src="http://localhost:5173"></webview>
+    </div>
+
+    <footer id="status">Left: design prototype · Right: running app — start it with <code>npm run dev</code></footer>
+
+    <script>
+      const body = document.body
+      const left = document.getElementById('left')
+      const right = document.getElementById('right')
+      const status = document.getElementById('status')
+      const DESIGN = '../Nodeterm MD3.dc.html'
+
+      const setMode = (mode) => {
+        body.dataset.mode = mode
+        document.getElementById('mode-split').setAttribute('aria-pressed', String(mode === 'split'))
+        document.getElementById('mode-overlay').setAttribute('aria-pressed', String(mode === 'overlay'))
+      }
+      document.getElementById('mode-split').onclick = () => setMode('split')
+      document.getElementById('mode-overlay').onclick = () => setMode('overlay')
+
+      const mix = document.getElementById('mix')
+      mix.oninput = () => {
+        body.style.setProperty('--mix', String(mix.value / 100))
+        document.getElementById('mix-out').textContent = mix.value + '%'
+      }
+
+      document.getElementById('reload').onclick = () => {
+        const url = document.getElementById('app-url').value
+        // Reassigning src rather than calling reload(): the user may have typed a different port,
+        // and reload() would faithfully re-fetch the OLD address and look like the box was ignored.
+        for (const v of [left, right]) if (v.src.startsWith('http')) v.src = url
+      }
+
+      document.getElementById('swap').onclick = () => {
+        const a = left.src, b = right.src
+        left.src = b
+        right.src = a
+      }
+
+      // A dev server that is not running fails silently in a <webview> — the pane just stays blank
+      // and reads as "the app renders nothing", which is a much worse lie than an error line.
+      right.addEventListener('did-fail-load', (e) => {
+        if (e.isMainFrame === false) return
+        status.textContent =
+          'App pane failed to load ' + right.src + ' (' + e.errorDescription + '). Start it with `npm run dev`, then press Reload.'
+      })
+      right.addEventListener('did-finish-load', () => {
+        status.textContent = 'Left: design prototype (' + DESIGN + ') · Right: ' + right.src
+      })
+    </script>
+  </body>
+</html>

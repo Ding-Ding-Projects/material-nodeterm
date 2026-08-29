@@ -1,0 +1,107 @@
+// Renders the nodeterm app icon into build/icon.png (1024x1024) and the committed,
+// deterministic multi-resolution build/icon.ico used by Windows packaging. The PNG doubles as
+// the Linux icon and the runtime `resources/icon.png` extraResource. (The macOS .icns this PNG
+// once fed was dropped with the macOS desktop target.) Run: npm run make-icon
+//
+// Design: a black terminal-window tile (dark rounded square + window dots),
+// with the nodeterm node-graph mark in our purple inside it.
+import { mkdirSync, writeFileSync } from 'fs'
+import sharp from 'sharp'
+
+// The mark was drawn on Apple's icon grid: a rounded-square tile at ~824px inside the 1024
+// canvas (≈100px transparent margin) with a ~185px corner radius. The geometry stays even though
+// macOS is no longer a target — every committed .ico frame derives from it, and the Windows
+// packaging wrapper pins those exact bytes, so changing it silently invalidates the tracked ICO.
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a2a30"/>
+      <stop offset="1" stop-color="#0b0b0e"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a38dff"/>
+      <stop offset="1" stop-color="#7a4bd0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- black terminal window -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/>
+  <rect x="101" y="101" width="822" height="822" rx="184" fill="none"
+        stroke="#ffffff" stroke-opacity="0.07" stroke-width="2"/>
+
+  <!-- window dots (top-left) -->
+  <g fill="#50505a">
+    <circle cx="186" cy="190" r="15"/>
+    <circle cx="232" cy="190" r="15"/>
+    <circle cx="278" cy="190" r="15"/>
+  </g>
+
+  <!-- nodeterm mark, in our purple -->
+  <g transform="translate(512 528) scale(12) translate(-26.5 -24)"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13 12 L31 24 L13 36" fill="none" stroke="url(#mark)" stroke-width="5"/>
+    <circle cx="13" cy="12" r="3.6" fill="#a38dff"/>
+    <circle cx="13" cy="36" r="3.6" fill="#a38dff"/>
+    <circle cx="31" cy="24" r="3.6" fill="#ffffff"/>
+    <rect x="33.5" y="32.5" width="10.5" height="5" rx="2.5" fill="#a38dff"/>
+  </g>
+</svg>`
+
+mkdirSync('build', { recursive: true })
+const png = await sharp(Buffer.from(svg)).png().toBuffer()
+writeFileSync('build/icon.png', png)
+console.log('wrote build/icon.png (1024x1024)')
+
+// --- Windows .ico (multi-resolution) ---
+//
+// electron-builder's `win.icon` (and Squirrel.Windows, which reads the same option) expects a
+// real ICO container, not a PNG wearing a `.ico` extension — Explorer, the taskbar and
+// "Programs and Features" each pick a different frame by SIZE, and a single-frame file just
+// gets stretched/blurred everywhere but the one size it happens to match.
+//
+// Windows Vista+ accepts PNG-COMPRESSED frames packed directly inside an ICO container (no
+// BMP/DIB re-encoding required), so this renders the same SVG mark at each standard size and
+// writes a small hand-rolled ICO container around the PNGs — no extra npm dependency for
+// something this documented (MS-ICO: a 6-byte ICONDIR header, then one 16-byte ICONDIRENTRY per
+// frame, then the frame bytes back to back).
+//
+// build/icon.ico is intentionally tracked. Squirrel embeds a source-SHA URL for this exact file
+// in its nuspec, so changing the renderer must regenerate and commit the derivative in the same
+// change; the Windows packaging wrapper proves the checked-out bytes match the committed blob.
+const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
+
+/** Pack PNG buffers (one per size, same order as `sizes`) into a Windows ICO file buffer. */
+function packIco(sizes, pngBuffers) {
+  const HEADER_BYTES = 6
+  const ENTRY_BYTES = 16
+  const dir = Buffer.alloc(HEADER_BYTES)
+  dir.writeUInt16LE(0, 0) // reserved, must be 0
+  dir.writeUInt16LE(1, 2) // image type: 1 = icon
+  dir.writeUInt16LE(sizes.length, 4) // frame count
+
+  const entries = []
+  let offset = HEADER_BYTES + ENTRY_BYTES * sizes.length
+  for (let i = 0; i < sizes.length; i++) {
+    const size = sizes[i]
+    const data = pngBuffers[i]
+    const entry = Buffer.alloc(ENTRY_BYTES)
+    // Width/height are single bytes; the ICO format's documented escape is 0 == 256px.
+    entry.writeUInt8(size >= 256 ? 0 : size, 0)
+    entry.writeUInt8(size >= 256 ? 0 : size, 1)
+    entry.writeUInt8(0, 2) // color count: 0 = no palette (true color)
+    entry.writeUInt8(0, 3) // reserved, must be 0
+    entry.writeUInt16LE(1, 4) // color planes
+    entry.writeUInt16LE(32, 6) // bits per pixel (32 = RGBA)
+    entry.writeUInt32LE(data.length, 8) // size of this frame's data
+    entry.writeUInt32LE(offset, 12) // offset of this frame's data from file start
+    entries.push(entry)
+    offset += data.length
+  }
+  return Buffer.concat([dir, ...entries, ...pngBuffers])
+}
+
+const icoFrames = await Promise.all(
+  ICO_SIZES.map((size) => sharp(Buffer.from(svg)).resize(size, size).png().toBuffer())
+)
+writeFileSync('build/icon.ico', packIco(ICO_SIZES, icoFrames))
+console.log(`wrote build/icon.ico (${ICO_SIZES.join('/')}px frames)`)

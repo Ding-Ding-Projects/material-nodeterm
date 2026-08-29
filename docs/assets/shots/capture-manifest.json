@@ -1,0 +1,20 @@
+{
+  "commit": "4031672e926fe249b5c0f2a0895af1714d8848e0",
+  "capturedAt": "2026-08-26T04:34:26.596Z",
+  "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, 1600x1000",
+  "viewport": {
+    "width": 1600,
+    "height": 1000,
+    "deviceScaleFactor": 1
+  },
+  "captured": [
+    {
+      "id": "app-settings-docker-host",
+      "title": "Settings — Docker host",
+      "bytes": 81436,
+      "hadOpener": true
+    }
+  ],
+  "skipped": [],
+  "failures": []
+}

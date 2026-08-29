@@ -1,0 +1,378 @@
+import { describe, expect, it } from 'vitest'
+import {
+  planReap,
+  parseSessionList,
+  sessionBudgetConfig,
+  createSessionReaper,
+  type SessionInfo,
+  type SessionBudgetConfig
+} from './session-budget'
+
+const NOW = 1_753_000_000 // fixed epoch seconds for every test
+
+const cfg = (over: Partial<SessionBudgetConfig> = {}): SessionBudgetConfig => ({
+  disabled: false,
+  minAvailableMb: 2048,
+  maxIdle: 48,
+  graceSec: 6 * 3600,
+  batchMax: 8,
+  ...over
+})
+
+/** An nt- session whose last activity was `idleH` hours ago, with tmux's client count retained. */
+const idle = (name: string, idleH: number, clients = 0): SessionInfo => ({
+  name,
+  clients,
+  activitySec: NOW - idleH * 3600
+})
+
+const lowMem = { availableMb: 500, totalMb: 64_000 }
+const okMem = { availableMb: 30_000, totalMb: 64_000 }
+
+describe('planReap (pure policy)', () => {
+  it('under memory pressure, reaps the least-recently-active sessions first', () => {
+    const plan = planReap([idle('nt-old', 240), idle('nt-mid', 48), idle('nt-new', 7)], lowMem, NOW, cfg({ batchMax: 2 }))
+    expect(plan).toEqual(['nt-old', 'nt-mid'])
+  })
+
+  // Attachment used to veto eviction, which made the reaper a no-op wherever every session is
+  // shown on a canvas: a multi-tenant host measured 54 of 54 sessions attached and planned []
+  // on every sweep. Idleness decides now; attachment is not consulted at all.
+  it('reaps an idle session even while attached (attachment is not a signal)', () => {
+    const plan = planReap([idle('nt-shown', 500, 1), idle('nt-hidden', 400)], lowMem, NOW, cfg())
+    expect(plan).toEqual(['nt-shown', 'nt-hidden'])
+  })
+
+  it('a canvas where every session is attached is still reapable', () => {
+    const sessions = Array.from({ length: 4 }, (_, i) => idle(`nt-s${i}`, 100 + i, 1))
+    expect(planReap(sessions, lowMem, NOW, cfg({ batchMax: 2 }))).toEqual(['nt-s3', 'nt-s2'])
+  })
+
+  it('never reaps within the grace window, even under pressure', () => {
+    const plan = planReap([idle('nt-recent', 1), idle('nt-old', 100)], lowMem, NOW, cfg())
+    expect(plan).toEqual(['nt-old'])
+  })
+
+  it('ignores sessions not named nt-* (a user session on the same socket is untouchable)', () => {
+    const plan = planReap([idle('main', 500), idle('nt-x', 500)], lowMem, NOW, cfg())
+    expect(plan).toEqual(['nt-x'])
+  })
+
+  it('healthy memory + under cap → reaps nothing', () => {
+    const plan = planReap([idle('nt-a', 500), idle('nt-b', 500)], okMem, NOW, cfg())
+    expect(plan).toEqual([])
+  })
+
+  it('a FAILED memory read is not pressure (mem=null never triggers the watermark)', () => {
+    const plan = planReap([idle('nt-a', 500)], null, NOW, cfg())
+    expect(plan).toEqual([])
+  })
+
+  it('count cap is a backstop: excess idle sessions are reaped even with healthy memory', () => {
+    const sessions = Array.from({ length: 10 }, (_, i) => idle(`nt-s${i}`, 100 + i))
+    const plan = planReap(sessions, okMem, NOW, cfg({ maxIdle: 7 }))
+    // 10 idle, cap 7 → 3 oldest go (highest idle hours = oldest activity)
+    expect(plan).toEqual(['nt-s9', 'nt-s8', 'nt-s7'])
+  })
+
+  // The cap bounds the idle pile, not the session count: a host where people are actively working
+  // in fifty sessions is not accumulating anything, and firing there would take work away.
+  it('sessions inside the grace window do not count toward the cap', () => {
+    const sessions = [idle('nt-busy', 1), ...Array.from({ length: 5 }, (_, i) => idle(`nt-d${i}`, 100 + i))]
+    const plan = planReap(sessions, okMem, NOW, cfg({ maxIdle: 4 }))
+    expect(plan).toEqual(['nt-d4'])
+  })
+
+  it('combined triggers stay bounded by batchMax per sweep (gradual convergence)', () => {
+    const sessions = Array.from({ length: 30 }, (_, i) => idle(`nt-s${i}`, 100 + i))
+    const plan = planReap(sessions, lowMem, NOW, cfg({ maxIdle: 5, batchMax: 4 }))
+    expect(plan).toHaveLength(4)
+  })
+
+  it('disabled kill switch plans nothing', () => {
+    const plan = planReap([idle('nt-a', 500)], lowMem, NOW, cfg({ disabled: true }))
+    expect(plan).toEqual([])
+  })
+
+  it('pressure alone reaps at most batchMax even with many eligible', () => {
+    const sessions = Array.from({ length: 20 }, (_, i) => idle(`nt-s${i}`, 100 + i))
+    const plan = planReap(sessions, lowMem, NOW, cfg({ batchMax: 3 }))
+    expect(plan).toHaveLength(3)
+  })
+
+  // The 2026-08-11 profile: plenty of RAM, well under the idle cap, and the machine still
+  // could not open a terminal because it was out of pty DEVICES. Without an allowance of its own
+  // that reading plans nothing at all — the sweep the shell fires on critical pty pressure would
+  // be a no-op, which is exactly the bug this argument exists to close.
+  it('an external pressure reason earns the same allowance low memory does', () => {
+    const sessions = Array.from({ length: 20 }, (_, i) => idle(`nt-s${i}`, 100 + i))
+    expect(planReap(sessions, okMem, NOW, cfg({ batchMax: 3 }))).toHaveLength(0)
+    expect(planReap(sessions, okMem, NOW, cfg({ batchMax: 3 }), true)).toHaveLength(3)
+  })
+
+  it('external pressure widens no eligibility gate: only old nt- sessions may go', () => {
+    const sessions = [idle('nt-idle', 500, 1), idle('nt-fresh', 1), idle('user-shell', 500)]
+    expect(planReap(sessions, okMem, NOW, cfg(), true)).toEqual(['nt-idle'])
+  })
+
+  it('the kill switch still wins over an external pressure reason', () => {
+    const plan = planReap([idle('nt-a', 500)], okMem, NOW, cfg({ disabled: true }), true)
+    expect(plan).toEqual([])
+  })
+})
+
+describe('parseSessionList', () => {
+  it('parses names, CLIENT COUNTS and activity, skipping malformed lines', () => {
+    const out = parseSessionList('nt-a|0|1753000000\nnt-b|2|1753000100\n\njunk\nx|y|z\n')
+    expect(out).toEqual([
+      { name: 'nt-a', clients: 0, activitySec: 1_753_000_000 },
+      { name: 'nt-b', clients: 2, activitySec: 1_753_000_100 }
+    ])
+  })
+})
+
+describe('sessionBudgetConfig', () => {
+  it('defaults: 10% of RAM watermark (floor 1GB), cap 48, grace 24h, batch 8', () => {
+    const c = sessionBudgetConfig({}, 64_000)
+    expect(c).toEqual({ disabled: false, minAvailableMb: 6400, maxIdle: 48, graceSec: 86_400, batchMax: 8 })
+    expect(sessionBudgetConfig({}, 4000).minAvailableMb).toBe(1024)
+  })
+
+  it('env overrides win; junk values fall back', () => {
+    const c = sessionBudgetConfig(
+      {
+        NODETERM_SESSION_MIN_AVAILABLE_MB: '3000',
+        NODETERM_SESSION_MAX_IDLE: 'garbage',
+        NODETERM_SESSION_GRACE_HOURS: '12',
+        NODETERM_SESSION_REAP_DISABLED: '1'
+      },
+      64_000
+    )
+    expect(c.minAvailableMb).toBe(3000)
+    expect(c.maxIdle).toBe(48)
+    expect(c.graceSec).toBe(43_200)
+    expect(c.disabled).toBe(true)
+  })
+
+  // The cap was renamed when attachment stopped gating eligibility. An operator who tuned the old
+  // variable meant "do not let more than N of these pile up", and that intent outlives the rename —
+  // silently reverting such a host to the default would be the rename quietly changing behaviour.
+  it('the legacy MAX_DETACHED variable still sets the cap', () => {
+    expect(sessionBudgetConfig({ NODETERM_SESSION_MAX_DETACHED: '12' }, 64_000).maxIdle).toBe(12)
+  })
+
+  it('the new MAX_IDLE variable wins when both are set', () => {
+    const env = { NODETERM_SESSION_MAX_IDLE: '5', NODETERM_SESSION_MAX_DETACHED: '99' }
+    expect(sessionBudgetConfig(env, 64_000).maxIdle).toBe(5)
+  })
+})
+
+// ---- service over fake exec ------------------------------------------------------------------
+
+type Call = { args: string[] }
+
+function fakeWorld(listings: Record<string, string[]>): {
+  calls: Call[]
+  exec: (bin: string, args: string[]) => Promise<string>
+} {
+  const calls: Call[] = []
+  return {
+    calls,
+    exec: async (_bin, args) => {
+      calls.push({ args })
+      const socket = args[1]
+      if (args[2] === 'list-sessions') {
+        const lines = listings[socket]
+        if (!lines) throw new Error('no server running')
+        return lines.join('\n')
+      }
+      return '' // kill-session
+    }
+  }
+}
+
+const OLD = String(NOW - 100 * 3600)
+
+describe('createSessionReaper (service)', () => {
+  const base = {
+    readMem: () => ({ availableMb: 100, totalMb: 64_000 }),
+    env: {} as NodeJS.ProcessEnv,
+    nowSec: () => NOW,
+    log: () => {}
+  }
+
+  it('sweeps every socket, kills planned sessions on the right socket with exact-match targets', async () => {
+    const w = fakeWorld({
+      'node-terminal': [`nt-local|0|${OLD}`],
+      'nodeterm-rmt': [`nt-remote|0|${OLD}`]
+    })
+    const reaper = createSessionReaper({ ...base, tmuxBin: () => 'tmux', exec: w.exec })
+    expect(await reaper.sweep()).toBe(2)
+    const kills = w.calls.filter((c) => c.args[2] === 'kill-session')
+    expect(kills).toEqual([
+      { args: ['-L', 'node-terminal', 'kill-session', '-t', '=nt-local'] },
+      { args: ['-L', 'nodeterm-rmt', 'kill-session', '-t', '=nt-remote'] }
+    ])
+  })
+
+  // A sweep spans several tmux calls across sockets, so the world can move between planning and
+  // killing. The re-verify checks the same rule that made the session eligible — it used to check
+  // attachment, which no longer means anything; waking up shows as activity, so that is what is
+  // re-read.
+  it('re-verifies at kill time: a session that became active between plan and kill is spared', async () => {
+    let first = true
+    const w = fakeWorld({})
+    const exec = async (bin: string, args: string[]): Promise<string> => {
+      if (args[2] === 'list-sessions' && args[1] === 'node-terminal') {
+        if (first) {
+          first = false
+          return `nt-x|0|${OLD}`
+        }
+        return `nt-x|0|${NOW}` // typed into just now — no longer idle
+      }
+      return w.exec(bin, args)
+    }
+    const reaper = createSessionReaper({ ...base, tmuxBin: () => 'tmux', sockets: ['node-terminal'], exec })
+    expect(await reaper.sweep()).toBe(0)
+    expect(w.calls.filter((c) => c.args[2] === 'kill-session')).toHaveLength(0)
+  })
+
+  it('still attached but still idle at kill time → reaped', async () => {
+    const w = fakeWorld({ 'node-terminal': [`nt-x|1|${OLD}`] })
+    const reaper = createSessionReaper({ ...base, tmuxBin: () => 'tmux', sockets: ['node-terminal'], exec: w.exec })
+    expect(await reaper.sweep()).toBe(1)
+    expect(w.calls.filter((c) => c.args[2] === 'kill-session')).toHaveLength(1)
+  })
+
+  it('a socket whose listing fails contributes no candidates; the other socket still sweeps', async () => {
+    const w = fakeWorld({ 'nodeterm-rmt': [`nt-r|0|${OLD}`] }) // node-terminal listing throws
+    const reaper = createSessionReaper({ ...base, tmuxBin: () => 'tmux', exec: w.exec })
+    expect(await reaper.sweep()).toBe(1)
+    const kills = w.calls.filter((c) => c.args[2] === 'kill-session')
+    expect(kills).toEqual([{ args: ['-L', 'nodeterm-rmt', 'kill-session', '-t', '=nt-r'] }])
+  })
+
+  it('kill switch: disabled env runs no tmux commands at all', async () => {
+    const w = fakeWorld({ 'node-terminal': [`nt-x|0|${OLD}`] })
+    const reaper = createSessionReaper({
+      ...base,
+      env: { NODETERM_SESSION_REAP_DISABLED: '1' },
+      tmuxBin: () => 'tmux',
+      exec: w.exec
+    })
+    expect(await reaper.sweep()).toBe(0)
+    expect(w.calls).toHaveLength(0)
+  })
+
+  it('tmux unavailable (bin=null) → quiet no-op', async () => {
+    const w = fakeWorld({ 'node-terminal': [`nt-x|0|${OLD}`] })
+    const reaper = createSessionReaper({ ...base, tmuxBin: () => null, exec: w.exec })
+    expect(await reaper.sweep()).toBe(0)
+    expect(w.calls).toHaveLength(0)
+  })
+
+  it('a failing kill is tolerated and does not abort the rest of the batch', async () => {
+    const w = fakeWorld({ 'node-terminal': [`nt-a|0|${OLD}`, `nt-b|0|${String(NOW - 99 * 3600)}`] })
+    const exec = async (bin: string, args: string[]): Promise<string> => {
+      if (args[2] === 'kill-session' && args[4] === '=nt-a') throw new Error('gone already')
+      return w.exec(bin, args)
+    }
+    const reaper = createSessionReaper({ ...base, tmuxBin: () => 'tmux', sockets: ['node-terminal'], exec })
+    expect(await reaper.sweep()).toBe(1) // nt-b still dies
+  })
+
+  it('healthy memory + under cap → lists but never kills', async () => {
+    const w = fakeWorld({ 'node-terminal': [`nt-x|0|${OLD}`] })
+    const reaper = createSessionReaper({
+      ...base,
+      readMem: () => ({ availableMb: 30_000, totalMb: 64_000 }),
+      tmuxBin: () => 'tmux',
+      exec: w.exec
+    })
+    expect(await reaper.sweep()).toBe(0)
+    expect(w.calls.filter((c) => c.args[2] === 'kill-session')).toHaveLength(0)
+  })
+
+  it('…but the same host sweeps under an explicit external pressure reason', async () => {
+    const w = fakeWorld({ 'node-terminal': [`nt-x|0|${OLD}`] })
+    const reaper = createSessionReaper({
+      ...base,
+      readMem: () => ({ availableMb: 30_000, totalMb: 64_000 }),
+      tmuxBin: () => 'tmux',
+      sockets: ['node-terminal'],
+      exec: w.exec
+    })
+    expect(await reaper.sweep({ pressure: 'pty' })).toBe(1)
+  })
+
+  it('an external reason never overrides the grace or nt-name gates', async () => {
+    const w = fakeWorld({
+      'node-terminal': [`nt-idle|1|${OLD}`, `nt-fresh|0|${NOW - 60}`, `user-shell|0|${OLD}`]
+    })
+    const reaper = createSessionReaper({
+      ...base,
+      readMem: () => ({ availableMb: 30_000, totalMb: 64_000 }),
+      tmuxBin: () => 'tmux',
+      sockets: ['node-terminal'],
+      exec: w.exec
+    })
+    expect(await reaper.sweep({ pressure: 'pty' })).toBe(1)
+    expect(w.calls.filter((c) => c.args[2] === 'kill-session')).toEqual([
+      { args: ['-L', 'node-terminal', 'kill-session', '-t', '=nt-idle'] }
+    ])
+  })
+})
+
+describe('planReap with no memory signal', () => {
+  const idle = (name: string, hoursAgo: number): SessionInfo => ({
+    name,
+    clients: 0,
+    activitySec: 1_000_000 - hoursAgo * 3600
+  })
+
+  it('culls NOTHING on memory grounds when the reader reports null', () => {
+    // A reader that could not measure (unreadable /proc, a throwing os call) returns null, and
+    // null must mean "no pressure signal", never "no memory". Absence of evidence may not cull a
+    // session — the CLAUDE.md rule "a failed read is never evidence of absence", applied to RAM.
+    const sessions = Array.from({ length: 20 }, (_, i) => idle(`nt-old-${i}`, 48))
+    const cfg = sessionBudgetConfig({}, 24576)
+    expect(planReap(sessions, null, 1_000_000, cfg)).toEqual([])
+  })
+
+  it('still culls past the idle-count cap without any memory signal', () => {
+    // The cap is not memory-based, so it survives a host whose memory cannot be measured.
+    const sessions = Array.from({ length: 60 }, (_, i) => idle(`nt-old-${i}`, 48))
+    const cfg = sessionBudgetConfig({}, 24576)
+    expect(planReap(sessions, null, 1_000_000, cfg).length).toBeGreaterThan(0)
+  })
+})
+
+describe('sessionBudgetConfig with fractional env values', () => {
+  const cfg = (env: Record<string, string>) => sessionBudgetConfig(env, 24576)
+
+  it('a fractional MAX_DETACHED fallback must never become an idle cap of ZERO', () => {
+    // Math.floor(0.5) === 0, and a cap of zero is not a smaller cap: every idle session counts
+    // as over-cap, so a full batch dies every sweep. The unsafe direction.
+    expect(cfg({ NODETERM_SESSION_MAX_DETACHED: '0.5' }).maxIdle).toBe(48)
+    expect(cfg({ NODETERM_SESSION_MAX_DETACHED: '0.9' }).maxIdle).toBe(48)
+    // A real value still works, and 1.5 still floors to 1 rather than falling back.
+    expect(cfg({ NODETERM_SESSION_MAX_DETACHED: '10' }).maxIdle).toBe(10)
+    expect(cfg({ NODETERM_SESSION_MAX_DETACHED: '1.5' }).maxIdle).toBe(1)
+  })
+
+  it('a fractional GRACE_HOURS means what it says — half an hour, not NO grace', () => {
+    // The plausible-input trap: `abc`/``/`0` all fell back safely, but `0.5` floored to zero grace,
+    // making a session reapable the moment it became idle.
+    expect(cfg({ NODETERM_SESSION_GRACE_HOURS: '0.5' }).graceSec).toBe(1800)
+    expect(cfg({ NODETERM_SESSION_GRACE_HOURS: '0.25' }).graceSec).toBe(900)
+    expect(cfg({ NODETERM_SESSION_GRACE_HOURS: '2' }).graceSec).toBe(7200)
+  })
+
+  it('junk and zero still fall back to the safe defaults on every key', () => {
+    for (const v of ['abc', '', '0', '-3']) {
+      expect(cfg({ NODETERM_SESSION_GRACE_HOURS: v }).graceSec).toBe(24 * 3600)
+      expect(cfg({ NODETERM_SESSION_MAX_DETACHED: v }).maxIdle).toBe(48)
+      expect(cfg({ NODETERM_SESSION_REAP_BATCH: v }).batchMax).toBe(8)
+    }
+  })
+})

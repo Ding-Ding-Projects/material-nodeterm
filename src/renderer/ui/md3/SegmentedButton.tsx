@@ -1,0 +1,52 @@
+import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import type { VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
+
+export interface SegmentedButtonProps<T extends string> {
+  value: T
+  options: { value: T; label: string; disabled?: boolean }[]
+  onChange: (v: T) => void
+  ariaLabel?: string
+  className?: string
+  vocabularyMode?: VocabularyTextMode
+}
+
+/**
+ * MD3 segmented button — one 40px pill container, 1px `--md-outline` border, the selected segment
+ * filled `secondary-container`. Measured off the Canvas/Board/Files prototypes' own nav toggle
+ * (`design/v2/MD3 Board.dc.html` — Canvas | Board), which is exactly this shape at exactly this
+ * size, so it doubles as the header nav-switcher recipe.
+ *
+ * Prop shape matches `ui/SegmentedPill.tsx` exactly (`{ value, options, onChange, ariaLabel }`),
+ * which now re-exports this component rather than keeping its own, differently-themed
+ * implementation — see that file.
+ */
+export function SegmentedButton<T extends string>({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+  className,
+  vocabularyMode = 'authored'
+}: SegmentedButtonProps<T>): React.JSX.Element {
+  const vocab = useVocabularyMapper()
+  return (
+    <div className={cn('mdx-seg', className)} role="radiogroup" aria-label={vocabularyMode === 'authored' ? vocab(ariaLabel) : ariaLabel}>
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          role="radio"
+          aria-checked={opt.value === value}
+          disabled={opt.disabled}
+          className={cn('mdx-seg__opt', opt.value === value && 'mdx-seg__opt--active')}
+          onClick={() => {
+            if (opt.value !== value) onChange(opt.value)
+          }}
+        >
+          {vocabularyMode === 'authored' ? vocab(opt.label) : opt.label}
+        </button>
+      ))}
+    </div>
+  )
+}

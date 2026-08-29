@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent support — nodeterm docs</title>
+    <meta name="description" content="nodeterm is a pluggable multi-agent system — Claude Code, Codex, Gemini, opencode, and Grok all get first-class status badges, session-name syncing, and canvas control, driven entirely by each agent CLI's own hooks rather than by parsing terminal output." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem('nodeterm-playground.v1') || '{}')
+          if (saved && saved.theme === 'night') document.documentElement.setAttribute('data-theme', 'night')
+          if (saved && saved.bigText) {
+            document.documentElement.style.fontSize = '19px'
+          }
+        } catch (_err) {
+          /* localStorage unavailable (private mode, etc.) -- falls back to the day palette */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Agents</p>
+      <h1>Agent support</h1>
+      <p>nodeterm is a pluggable multi-agent system — Claude Code, Codex, Gemini, opencode, and Grok all get first-class status badges, session-name syncing, and canvas control, driven entirely by each agent CLI's own hooks rather than by parsing terminal output.</p>
+
+      <h2>Behaviour</h2>
+      <p>An agent node's live state (working, waiting for you, blocked, or done) comes from a normalized event stream fed by each agent's own hook mechanism, posted to a small local loopback server the app runs. A busy-to-idle transition while the window is unfocused marks the node unread and can fire a desktop notification. Capable agents also expose subagent visualization, context-window metering, session-name syncing between the CLI and the node's title, and — for Claude specifically — branching a conversation into a new resumed session.</p>
+        <p>Custom, user-defined agents (anything not built in) still get a launch command and a terminal-title-derived status, just without the hook-driven extras.</p>
+
+      <h2>Configuration</h2>
+      <p>Per-agent permission mode (how readily the agent may act without asking) is configurable globally and per-project, on whichever agents support the concept. Managed Claude accounts let you run several signed-in identities side by side, each in its own config directory.</p>
+
+      <h2>Failure modes</h2>
+      <p>An agent capability is a membership list, not a hardcoded check — a feature meant for one agent should never silently light up for another that merely resembles it. A guess an agent's status can't confidently make (an unreadable hook payload, an unsupported CLI version) degrades to "unknown," never to a fabricated status.</p>
+
+      <h2>Security considerations</h2>
+      <p>Each terminal node's hook identity is a capability derived from a restart-stable secret local to the machine, never sent anywhere off it; hook payloads are validated before being trusted for anything sensitive like canvas control.</p>
+
+      <h2>Verification</h2>
+      <p>Each agent's hook dialect (event names, field shapes, quirks) is measured against the real CLI rather than assumed from another agent's behaviour, and recorded in a dedicated per-agent document alongside its own device checklist.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+        <li><a href="./terminal-sessions.html">Terminal sessions &amp; continuity</a></li>
+        <li><a href="./node-kinds.html">Node kinds</a></li>
+        <li><a href="./source-control-worktrees.html">Source control &amp; worktrees</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

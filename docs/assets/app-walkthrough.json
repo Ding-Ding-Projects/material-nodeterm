@@ -1,0 +1,21 @@
+{
+  "commit": "21ae18ae745823cb97432e47fabd8b1892701e30",
+  "recordedAt": "2026-08-22T05:53:19.808Z",
+  "frames": 113,
+  "storedFrames": 53,
+  "durationMs": 24066,
+  "targetFps": 5,
+  "size": {
+    "width": 800,
+    "height": 500
+  },
+  "bytes": 811180,
+  "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, on a disposable home and userData. The renderer only: no screen, window or desktop capture is involved.",
+  "shows": [
+    "first run and the welcome screen",
+    "creating a project",
+    "a real terminal on the canvas, running a real command",
+    "the command palette",
+    "the settings surface"
+  ]
+}

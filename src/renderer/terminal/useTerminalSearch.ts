@@ -1,0 +1,178 @@
+import { useEffect, useMemo, useState } from 'react'
+import type { TranscriptLine } from '@shared/types'
+import { useSession } from '../session/session'
+import { useRegexSearchField, type SearchMode } from '../lib/regex/useRegexSearchField'
+import { compileForInlineFilter } from '../lib/regex/safety'
+
+export interface SearchSnippet {
+  source: 'terminal' | 'claude'
+  role?: 'user' | 'assistant' | 'tool'
+  text: string
+}
+
+interface Args {
+  nodeId: string
+  sessionId: string | undefined
+  /** The node's working directory — durable fallback for resolving the transcript. */
+  cwd: string | undefined
+  /** Managed Claude account whose transcript root the search resolves against (default system). */
+  accountId: string | undefined
+  /**
+   * Whether this node has a readable CLAUDE transcript. Callers gate this on
+   * `readsClaudeTranscript` (lib/transcriptGates.ts) — NOT on the context meter's `hasUsage`, which
+   * spans codex and gemini, whose transcripts this reader cannot parse and whose resolver fallback
+   * would hand it an unrelated claude session.
+   */
+  searchTranscript: boolean
+  open: boolean
+  /** Fallback content source (live xterm buffer text) when tmux capture is unavailable. */
+  readBuffer: () => string
+}
+
+export interface TerminalSearch {
+  /** The active search term shown in the field — the plain query in text mode, the pattern
+   *  source in regex mode. Also what's handed to xterm's own SearchAddon for the on-screen
+   *  highlight (see TerminalNode's `findOpts`/`handleNext`/`handlePrev`). */
+  query: string
+  setQuery: (q: string) => void
+  matchCount: number
+  matchIndex: number // 1-based for display; 0 when no matches
+  current: SearchSnippet | null
+  next: () => void
+  prev: () => void
+  /** Plain text (default) vs regex — an explicit opt-in, per field. */
+  mode: SearchMode
+  setMode: (m: SearchMode) => void
+  pattern: string
+  flags: string
+  setFlags: (f: string) => void
+  /** Compile/safety error for the current regex pattern, or null. */
+  error: string | null
+}
+
+export function useTerminalSearch({
+  nodeId,
+  sessionId,
+  cwd,
+  accountId,
+  searchTranscript,
+  open,
+  readBuffer
+}: Args): TerminalSearch {
+  // The node's core api — the tmux capture must run on the core that owns the session.
+  // (Hook, so this runs in the calling component's context; the value is session-stable.)
+  const { api } = useSession()
+  const field = useRegexSearchField()
+  const [cursor, setCursor] = useState(0) // 0-based index into `matches`
+  const [source, setSource] = useState<SearchSnippet[]>([])
+
+  // Build the snapshot index when the bar opens; clear it (and the query) when it closes.
+  useEffect(() => {
+    if (!open) {
+      setSource([])
+      field.reset()
+      setCursor(0)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const lines: SearchSnippet[] = []
+      let captured = ''
+      try {
+        captured = await api.pty.capture(nodeId, true)
+      } catch {
+        captured = ''
+      }
+      if (!captured) captured = readBuffer()
+      for (const t of captured.split('\n')) lines.push({ source: 'terminal', text: t })
+      // Search the full Claude transcript for agent nodes. Resolved by sessionId when known,
+      // else by cwd (durable) — so it works even when no live hook event set the sessionId.
+      if (searchTranscript) {
+        try {
+          // `nodeId` is what lets an SSH-project node's transcript be located on its HOST when no
+          // hook event has registered it in this app run — otherwise the search silently indexes
+          // the terminal buffer alone there, which reads as "the transcript isn't searchable".
+          const tr: TranscriptLine[] = await window.nodeTerminal.claude.readTranscript(
+            sessionId,
+            cwd,
+            accountId,
+            nodeId
+          )
+          for (const l of tr) {
+            for (const t of l.text.split('\n')) lines.push({ source: 'claude', role: l.role, text: t })
+          }
+        } catch {
+          // transcript unavailable — fall back to terminal buffer only
+        }
+      }
+      if (!cancelled) setSource(lines)
+    })()
+    return () => {
+      cancelled = true
+    }
+    // readBuffer must be stable (useCallback in the caller) to avoid rebuilds.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, open, nodeId, sessionId, cwd, accountId, searchTranscript, readBuffer])
+
+  // Lowercase once per snapshot, not per keystroke — the snapshot can be tens of thousands of
+  // lines (full scrollback + transcript), and re-lowercasing all of it on every typed character
+  // made find-as-you-type O(lines × keystrokes) in plain-text mode.
+  const lowerSource = useMemo(() => source.map((s) => s.text.toLowerCase()), [source])
+
+  // Regex mode compiles ONCE per pattern/flags change, not once per line — same rationale as the
+  // lowercased index above. A pattern the safety heuristic refuses (or that fails to compile)
+  // falls open here too: no filtering rather than a silent hang or a scary "0 matches" for a
+  // pattern the user hasn't finished typing yet.
+  const compiled = useMemo(
+    () => (field.mode === 'regex' ? compileForInlineFilter(field.pattern, field.flags) : null),
+    [field.mode, field.pattern, field.flags]
+  )
+
+  const matches = useMemo(() => {
+    if (field.mode === 'text') {
+      const q = field.query.trim().toLowerCase()
+      if (!q) return [] as number[]
+      const out: number[] = []
+      for (let i = 0; i < lowerSource.length; i++) {
+        if (lowerSource[i].includes(q)) out.push(i)
+      }
+      return out
+    }
+    if (!field.pattern.trim() || !compiled) return [] as number[]
+    const out: number[] = []
+    for (let i = 0; i < source.length; i++) {
+      // Fresh RegExp per line: a `g`-flagged instance carries lastIndex across `.test()` calls,
+      // which would silently skip alternating matches when reused across lines.
+      const re = new RegExp(compiled.source, compiled.flags)
+      if (re.test(source[i].text)) out.push(i)
+    }
+    return out
+  }, [field.mode, field.query, field.pattern, lowerSource, source, compiled])
+
+  // Reset the cursor to the first match whenever the result set changes.
+  // `matches` is a fresh array on every query/source change (useMemo), so this
+  // intentionally jumps back to the first match on each new search — not a bug.
+  useEffect(() => {
+    setCursor(0)
+  }, [matches])
+
+  const matchCount = matches.length
+  const safeCursor = matchCount ? Math.min(cursor, matchCount - 1) : 0
+  const current = matchCount ? source[matches[safeCursor]] : null
+
+  return {
+    query: field.value,
+    setQuery: field.setValue,
+    matchCount,
+    matchIndex: matchCount ? safeCursor + 1 : 0,
+    current,
+    next: () => setCursor((c) => (matchCount ? (c + 1) % matchCount : 0)),
+    prev: () => setCursor((c) => (matchCount ? (c - 1 + matchCount) % matchCount : 0)),
+    mode: field.mode,
+    setMode: field.setMode,
+    pattern: field.pattern,
+    flags: field.flags,
+    setFlags: field.setFlags,
+    error: field.error
+  }
+}

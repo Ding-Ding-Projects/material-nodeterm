@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0" rel="stylesheet">
+<link rel="stylesheet" href="md3/tokens.css">
+<style>
+  body { margin:0; background:#0A090D; }
+  a { color:var(--md-primary); text-decoration:none; }
+  a:hover { color:var(--md-on-primary-container); }
+  .msr { font-family:'Material Symbols Rounded'; font-weight:400; font-style:normal; line-height:1;
+         letter-spacing:normal; display:inline-block; white-space:nowrap; direction:ltr;
+         font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
+  .msrf { font-variation-settings:'FILL' 1,'wght' 500,'GRAD' 0,'opsz' 24; }
+  @keyframes mdPulse { 0%,100%{opacity:.4;transform:scale(1)} 50%{opacity:1;transform:scale(1.3)} }
+</style>
+</helmet>
+
+<div style="font-family:var(--md-font-ui);padding:36px;display:flex;flex-direction:column;gap:14px;color:#E6E0E9">
+  <div style="display:flex;align-items:flex-end;gap:16px">
+    <div>
+      <div style="font-size:21px;font-weight:600">Kanban board · Material 3 rewrite</div>
+      <div style="font-size:13px;color:#938F99;margin-top:2px">Cards are live sessions — <a href="MD3 Canvas.dc.html">Canvas</a> · <a href="MD3 Files.dc.html">Files</a> · <a href="MD3 Settings.dc.html">Settings</a> · <a href="MD3 Overlays.dc.html">Overlays</a></div>
+    </div>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 20px;border-radius:999px;border:1px solid #49454F;background:transparent;color:#E6E0E9;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer"><span class="msr" style="font-size:18px">contrast</span>{{ themeLabel }}</button>
+    <button onClick="{{ toggleModal }}" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 20px;border-radius:999px;border:none;background:var(--md-primary);color:var(--md-on-primary);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer"><span class="msr" style="font-size:18px">crop_square</span>{{ modalLabel }}</button>
+  </div>
+
+<div style="width:1440px;height:900px;border-radius:28px;overflow:hidden;position:relative;background:var(--md-surface);color:var(--md-on-surface);display:flex;flex-direction:column;outline:1px solid var(--md-outline-variant)">
+
+  <div style="height:64px;flex:0 0 64px;display:flex;align-items:center;gap:14px;padding:0 20px 0 16px;background:var(--md-surface-container)">
+    <div style="display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:38px;height:38px;border-radius:14px;background:var(--md-primary-container);color:var(--md-on-primary-container);display:flex;align-items:center;justify-content:center"><span class="msr msrf" style="font-size:22px">hub</span></div>
+      <div style="font-size:17px;font-weight:600">nodeterm</div>
+    </div>
+    <button style="display:flex;align-items:center;gap:10px;height:44px;padding:0 12px 0 16px;border-radius:999px;border:none;background:var(--md-secondary-container);color:var(--md-on-secondary-container);font-family:inherit;font-size:14.5px;font-weight:600;cursor:pointer">
+      <span style="width:10px;height:10px;border-radius:50%;background:var(--md-primary)"></span>material-nodeterm<span class="msr" style="font-size:20px">arrow_drop_down</span>
+    </button>
+    <div style="flex:1"></div>
+    <!-- view switcher: canvas | board segmented -->
+    <div style="display:flex;height:40px;border:1px solid var(--md-outline);border-radius:999px;overflow:hidden">
+      <a href="MD3 Canvas.dc.html" style="display:flex;align-items:center;gap:8px;padding:0 18px;font-size:13.5px;font-weight:500;color:var(--md-on-surface)"><span class="msr" style="font-size:17px">workspaces</span>Canvas</a>
+      <div style="width:1px;background:var(--md-outline)"></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:0 18px;font-size:13.5px;font-weight:600;background:var(--md-secondary-container);color:var(--md-on-secondary-container)"><span class="msr" style="font-size:17px">check</span>Board</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;width:300px;height:44px;padding:0 8px 0 18px;border-radius:999px;background:var(--md-surface-container-high);color:var(--md-on-surface-variant)">
+      <span class="msr" style="font-size:20px">search</span>
+      <input value="{{ q }}" onChange="{{ setQ }}" placeholder="Filter cards…" style="flex:1;min-width:0;border:none;background:transparent;color:var(--md-on-surface);font-family:inherit;font-size:14px;outline:none">
+      <span style="font-family:var(--md-font-mono);font-size:11px;padding:4px 8px;border-radius:8px;background:var(--md-surface-container-highest);cursor:pointer">.*</span>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <div style="width:88px;flex:0 0 88px;background:var(--md-surface-container);display:flex;flex-direction:column;align-items:center;padding:10px 0 14px;gap:6px">
+      <button style="width:56px;height:56px;border-radius:16px;border:none;background:var(--md-primary-container);color:var(--md-on-primary-container);cursor:pointer;display:flex;align-items:center;justify-content:center;margin-bottom:14px"><span class="msr" style="font-size:26px">add</span></button>
+      <sc-for list="{{ rail }}" as="r" hint-placeholder-count="5">
+        <a href="{{ r.href }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;width:80px;padding:6px 0;color:inherit">
+          <span style="width:56px;height:32px;border-radius:999px;background:{{ r.pill }};color:{{ r.fg }};display:flex;align-items:center;justify-content:center"><span class="msr {{ r.fill }}" style="font-size:22px">{{ r.icon }}</span></span>
+          <span style="font-size:12px;font-weight:{{ r.weight }};color:{{ r.labelFg }}">{{ r.label }}</span>
+        </a>
+      </sc-for>
+    </div>
+
+    <div data-screen-label="Kanban board" style="flex:1;min-width:0;display:flex;flex-direction:column;padding:22px 26px;gap:18px;overflow:hidden;position:relative">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:22px;font-weight:600">Board</div>
+        <div style="font-size:13px;color:var(--md-on-surface-variant)">8 cards · 2 live agents</div>
+        <div style="flex:1"></div>
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="3">
+          <span style="display:flex;align-items:center;gap:7px;height:32px;padding:0 14px;border-radius:8px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};font-size:13px;font-weight:600;cursor:pointer">
+            <sc-if value="{{ f.check }}" hint-placeholder-val="{{ false }}"><span class="msr" style="font-size:16px">check</span></sc-if>{{ f.label }}
+          </span>
+        </sc-for>
+        <button style="display:flex;align-items:center;gap:8px;height:32px;padding:0 14px;border-radius:8px;border:1px solid var(--md-outline);background:transparent;color:var(--md-on-surface);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer"><span class="msr" style="font-size:16px">sync</span>GitHub</button>
+      </div>
+
+      <div style="flex:1;display:grid;grid-template-columns:repeat(4, 1fr);gap:16px;min-height:0">
+        <sc-for list="{{ columns }}" as="col" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;gap:12px;border-radius:24px;background:var(--md-surface-container-low);padding:14px;min-height:0">
+            <div style="display:flex;align-items:center;gap:10px;padding:0 6px">
+              <span style="width:10px;height:10px;border-radius:50%;background:{{ col.color }}"></span>
+              <div style="font-size:14.5px;font-weight:700">{{ col.title }}</div>
+              <span style="min-width:24px;height:24px;padding:0 8px;border-radius:12px;background:var(--md-surface-container-high);color:var(--md-on-surface-variant);font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">{{ col.count }}</span>
+              <div style="flex:1"></div>
+              <span class="msr" style="font-size:18px;color:var(--md-on-surface-variant);cursor:pointer">add</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;overflow:hidden">
+              <sc-for list="{{ col.cards }}" as="c" hint-placeholder-count="2">
+                <div style="border-radius:16px;background:var(--md-surface-container-high);padding:14px 14px 12px;cursor:pointer;transition:background var(--md-motion-effect)" style-hover="background:var(--md-surface-container-highest)">
+                  <div style="font-size:13.5px;font-weight:600;line-height:1.4;text-wrap:pretty">{{ c.title }}</div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+                    <span style="display:flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:8px;background:var(--md-surface-container);color:var(--md-on-surface-variant);font-size:11px;font-weight:600;font-family:var(--md-font-mono)"><span style="width:7px;height:7px;border-radius:50%;background:{{ c.dot }}"></span>{{ c.session }}</span>
+                    <sc-if value="{{ c.badge }}" hint-placeholder-val="{{ false }}">
+                      <span style="display:flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;background:{{ c.badgeBg }};color:{{ c.badgeFg }};font-size:10.5px;font-weight:700;letter-spacing:.4px"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:mdPulse 1.4s infinite"></span>{{ c.badge }}</span>
+                    </sc-if>
+                    <div style="flex:1"></div>
+                    <sc-for list="{{ c.faces }}" as="f" hint-placeholder-count="1">
+                      <span style="width:26px;height:26px;border-radius:50%;background:{{ f.bg }};color:{{ f.fg }};font-size:10.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">{{ f.txt }}</span>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- CARD MODAL: live session opened from a card -->
+      <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ toggleModal }}" style="position:absolute;inset:0;background:var(--md-scrim);z-index:50;display:flex;align-items:center;justify-content:center">
+        <div style="width:860px;border-radius:28px;background:var(--md-surface-container-high);overflow:hidden;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:12px;padding:20px 24px 14px">
+            <div style="width:38px;height:38px;border-radius:12px;background:var(--md-surface-container-highest);display:flex;align-items:center;justify-content:center"><img src="md3/assets/claude.svg" alt="Claude" style="width:22px;height:22px"></div>
+            <div>
+              <div style="font-size:17px;font-weight:600">Refactor TerminalTransport seam</div>
+              <div style="font-size:12.5px;color:var(--md-on-surface-variant)">nt-claude-3 · In progress · created 2 h ago</div>
+            </div>
+            <div style="flex:1"></div>
+            <span style="display:flex;align-items:center;gap:7px;height:28px;padding:0 12px;border-radius:999px;background:var(--md-tertiary-container);color:var(--md-on-tertiary-container);font-size:11.5px;font-weight:700"><span style="width:7px;height:7px;border-radius:50%;background:var(--md-tertiary);animation:mdPulse 1.4s infinite"></span>RUNNING</span>
+            <button style="width:36px;height:36px;border-radius:999px;border:none;background:transparent;color:var(--md-on-surface-variant);cursor:pointer;display:flex;align-items:center;justify-content:center"><span class="msr" style="font-size:20px">close</span></button>
+          </div>
+          <div style="display:flex;gap:8px;padding:0 24px 14px;flex-wrap:wrap">
+            <span style="height:28px;padding:0 12px;border-radius:8px;background:var(--md-primary-container);color:var(--md-on-primary-container);font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px"><span class="msr" style="font-size:15px">label</span>refactor</span>
+            <span style="height:28px;padding:0 12px;border-radius:8px;background:var(--md-surface-container-highest);color:var(--md-on-surface-variant);font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px"><span class="msr" style="font-size:15px">event</span>Due Fri</span>
+            <span style="height:28px;padding:0 12px;border-radius:8px;background:var(--md-error-container);color:var(--md-on-error-container);font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px"><span class="msr" style="font-size:15px">flag</span>High</span>
+            <span style="height:28px;padding:0 10px;border-radius:999px;background:var(--md-tertiary-container);color:var(--md-on-tertiary-container);font-size:11px;font-weight:700;display:flex;align-items:center">EK</span>
+          </div>
+          <div style="height:260px;margin:0 24px;border-radius:16px;background:var(--term-bg);padding:14px 18px;font-family:var(--md-font-mono);font-size:12px;line-height:1.8;color:#CAC4D0">
+            <div><span style="color:#D0BCFF">●</span> Refactoring TerminalTransport…</div>
+            <div style="color:#938F99">  src/core/transport.ts · extracted interface</div>
+            <div style="color:#938F99">  src/renderer/bridge/ws-bridge.ts · adapted to seam</div>
+            <div><span style="color:#89D88C">✓</span> 14 tests passing</div>
+            <div style="color:#EFB8C8">▌ writing frame-transport.test.ts…</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:16px 24px 20px">
+            <div style="flex:1;display:flex;align-items:center;height:48px;padding:0 18px;border-radius:999px;background:var(--md-surface-container-highest);color:var(--md-on-surface-variant);font-size:13.5px">Add a comment…</div>
+            <button style="height:40px;padding:0 20px;border-radius:999px;border:none;background:var(--md-primary);color:var(--md-on-primary);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Open on canvas</button>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1520,&quot;height&quot;:1040},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark' | 'light'&quot;,&quot;section&quot;:&quot;Appearance&quot;}}">
+class Component extends DCLogic {
+  state = { theme: 'dark', modal: false, q: '' };
+  componentDidMount() { this.applyTheme(); }
+  componentDidUpdate() { this.applyTheme(); }
+  applyTheme() { document.documentElement.dataset.theme = this.props.theme ?? this.state.theme; }
+  renderVals() {
+    const s = this.state;
+    return {
+      themeLabel: (this.props.theme ?? s.theme) === 'dark' ? 'Dark' : 'Light',
+      toggleTheme: () => this.setState((p) => ({ theme: p.theme === 'dark' ? 'light' : 'dark' })),
+      modalOpen: s.modal,
+      toggleModal: () => this.setState((p) => ({ modal: !p.modal })),
+      modalLabel: s.modal ? 'Close card modal' : 'Open card modal',
+      rail: [
+        ['workspaces', 'Canvas', 'MD3 Canvas.dc.html', false],
+        ['view_kanban', 'Board', 'MD3 Board.dc.html', true],
+        ['folder', 'Files', 'MD3 Files.dc.html', false],
+        ['construction', 'Tools', 'MD3 Tools.dc.html', false],
+        ['history', 'History', 'MD3 History.dc.html', false],
+        ['notifications', 'Alerts', 'MD3 Overlays.dc.html', false],
+        ['settings', 'Settings', 'MD3 Settings.dc.html', false]
+      ].map(([icon, label, href, on]) => ({
+        icon, label, href, fill: on ? 'msrf' : '',
+        pill: on ? 'var(--md-secondary-container)' : 'transparent',
+        fg: on ? 'var(--md-on-secondary-container)' : 'var(--md-on-surface-variant)',
+        labelFg: on ? 'var(--md-on-surface)' : 'var(--md-on-surface-variant)',
+        weight: on ? 600 : 500
+      })),
+      filters: [
+        { label: 'All', bg: 'var(--md-secondary-container)', fg: 'var(--md-on-secondary-container)', bd: 'transparent', check: true },
+        { label: 'GitHub', bg: 'transparent', fg: 'var(--md-on-surface)', bd: 'var(--md-outline)', check: false },
+        { label: 'Sessions', bg: 'transparent', fg: 'var(--md-on-surface)', bd: 'var(--md-outline)', check: false }
+      ],
+      q: s.q,
+      setQ: (e) => this.setState({ q: e.target.value }),
+      columns: this.filterCols([
+        { title: 'Backlog', color: 'var(--md-outline)', count: 3, cards: [
+          { title: 'Windows session host: reattach after host crash', dot: 'var(--md-outline)', session: 'no session', badge: '', badgeBg: '', badgeFg: '', faces: [] },
+          { title: '#412 Regex builder: capture-group naming', dot: 'var(--md-tertiary)', session: 'github · issue', badge: '', badgeBg: '', badgeFg: '', faces: [{ txt: 'EK', bg: 'var(--md-tertiary-container)', fg: 'var(--md-on-tertiary-container)' }] },
+          { title: 'Explorer: per-row download progress on SSH', dot: 'var(--md-outline)', session: 'no session', badge: '', badgeBg: '', badgeFg: '', faces: [] }
+        ]},
+        { title: 'In progress', color: 'var(--md-primary)', count: 2, cards: [
+          { title: 'Refactor TerminalTransport seam', dot: 'var(--md-tertiary)', session: 'nt-claude-3', badge: 'RUNNING', badgeBg: 'var(--md-tertiary-container)', badgeFg: 'var(--md-on-tertiary-container)', faces: [{ txt: 'EK', bg: 'var(--md-primary-container)', fg: 'var(--md-on-primary-container)' }] },
+          { title: 'Migrate iOS protocol to v3', dot: 'var(--md-error)', session: 'nt-codex-1', badge: 'NEEDS YOU', badgeBg: 'var(--md-error-container)', badgeFg: 'var(--md-on-error-container)', faces: [] }
+        ]},
+        { title: 'Review', color: 'var(--md-warning)', count: 1, cards: [
+          { title: 'Kanban: GitHub two-way close and reopen sync', dot: 'var(--md-primary)', session: 'nt-term-7', badge: '', badgeBg: '', badgeFg: '', faces: [{ txt: 'JL', bg: 'var(--md-secondary-container)', fg: 'var(--md-on-secondary-container)' }] }
+        ]},
+        { title: 'Done', color: 'var(--md-success)', count: 2, cards: [
+          { title: 'Ollama manager hardware-fit verdicts', dot: 'var(--md-success)', session: 'nt-claude-1', badge: '', badgeBg: '', badgeFg: '', faces: [] },
+          { title: 'Local history: restore as a new revision', dot: 'var(--md-success)', session: 'nt-claude-2', badge: '', badgeBg: '', badgeFg: '', faces: [] }
+        ]}
+      ])
+    };
+  }
+  filterCols(cols) {
+    const q = this.state.q.toLowerCase();
+    if (!q) return cols;
+    return cols.map((c) => {
+      const cards = c.cards.filter((k) => (k.title + ' ' + k.session).toLowerCase().includes(q));
+      return { ...c, cards, count: cards.length };
+    });
+  }
+}
+
+</script>
+</body>
+</html>
