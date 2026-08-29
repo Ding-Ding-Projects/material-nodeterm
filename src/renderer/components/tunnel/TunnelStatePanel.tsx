@@ -81,7 +81,7 @@ export function TunnelStatePanel({ intent, live, onRetry, onCancel }: TunnelStat
     <section className="tunnel-state-panel nodrag" aria-label={vocab('Tunnel state')}>
       <header className="tunnel-state-panel__header">
         <div>
-          <h3 className="tunnel-state-panel__title">{vocab(intent.displayName || 'Cloudflare Tunnel')}</h3>
+          <h3 className="tunnel-state-panel__title">{intent.displayName || vocab('Cloudflare Tunnel')}</h3>
           <p className="tunnel-state-panel__hostname">
             {intent.hostname || vocab('No hostname selected')}
           </p>

@@ -6,6 +6,8 @@ import { SettingsSearchContext } from './context'
 import { SearchableRow } from './SearchableRow'
 import { SettingsSection, sectionVisible } from './SettingsSection'
 import type { SettingsSearchEntry } from './search'
+import { usePersonalVocabulary } from '../../state/personalVocabulary'
+import { useSchoolMode } from '../../state/schoolMode'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -69,6 +71,8 @@ describe('SettingsSection', () => {
   afterEach(() => {
     act(() => root.unmount())
     host.remove()
+    usePersonalVocabulary.setState({ status: 'no-file', entries: {}, entryCount: 0, loadedAt: null, lastError: null })
+    useSchoolMode.setState({ enabled: false, hydrated: false })
   })
 
   it('filters rows to the matching one on an ordinary query', async () => {
@@ -88,5 +92,58 @@ describe('SettingsSection', () => {
   it('renders nothing when neither active, matched, nor forced', async () => {
     await mount(section(false), 'zzz')
     expect(host.textContent).toBe('')
+  })
+
+  it('renders the mapped section title and description, including their accessible text', async () => {
+    usePersonalVocabulary.setState({
+      status: 'loaded',
+      entries: { 'Original title': 'Mapped title', 'Original description': 'Mapped description' },
+      entryCount: 2,
+      loadedAt: Date.now(),
+      lastError: null
+    })
+    useSchoolMode.setState({ enabled: false, hydrated: true })
+
+    await mount(
+      <SettingsSection
+        id="mapped"
+        title="Original title"
+        description="Original description"
+        isActive
+      >
+        <span>content</span>
+      </SettingsSection>,
+      ''
+    )
+
+    expect(host.querySelector('h2')?.textContent).toBe('Mapped title')
+    expect(host.querySelector('p')?.textContent).toBe('Mapped description')
+  })
+
+  it('does not map section text a second time when the caller already resolved it', async () => {
+    usePersonalVocabulary.setState({
+      status: 'loaded',
+      entries: { 'Mapped title': 'Double mapped title', 'Mapped description': 'Double mapped description' },
+      entryCount: 2,
+      loadedAt: Date.now(),
+      lastError: null
+    })
+    useSchoolMode.setState({ enabled: false, hydrated: true })
+
+    await mount(
+      <SettingsSection
+        id="already-mapped"
+        title="Mapped title"
+        description="Mapped description"
+        isActive
+        resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'section' }}
+      >
+        <span>content</span>
+      </SettingsSection>,
+      ''
+    )
+
+    expect(host.querySelector('h2')?.textContent).toBe('Mapped title')
+    expect(host.querySelector('p')?.textContent).toBe('Mapped description')
   })
 })
