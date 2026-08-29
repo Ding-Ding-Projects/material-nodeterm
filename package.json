@@ -72,6 +72,7 @@
   "build": {
     "appId": "com.nodeterm.app",
     "productName": "nodeterm",
+    "npmRebuild": false,
     "afterSign": "./scripts/windows-pe-identity.mjs",
     "beforePack": "./scripts/before-pack.cjs",
     "afterPack": "./scripts/after-pack.cjs",

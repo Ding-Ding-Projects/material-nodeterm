@@ -365,7 +365,23 @@ outside that branding gate because the pinned builder has no supported resource-
    attempts, separated by one-second then two-second backoff, only for those exact runtime
    signatures. It pins sequential modules and disables MSBuild node reuse through both node-gyp's
    command line and the process environment. Exhausting the budget and every ordinary compiler or
-   linker failure remain fatal. The wrapper never broadens the module list during recovery.
+   linker failure remain fatal. Later measured signatures are accepted only at exact boundaries:
+   `MSB4018` for the `CL` task with a `MissingMethodException` naming
+   `System.IO.StreamWriter..ctor(System.String, Boolean, System.Text.Encoding)`, or `MSB4093` naming
+   either the `TLogReadFiles` parameter of `CL` or the `ContentFiles` parameter of
+   `GenerateDesktopDeployRecipe` with no `"set"` accessor. The wrapper never broadens the module
+   list during recovery.
+6. **The application-build host process has exited with `0xC0000409`.** This exact Windows status
+   was observed after icon verification and before Squirrel packaging. The installer wrapper removes
+   only partial `out/`, waits one second, and starts one fresh application-build process. A repeated
+   status or any different nonzero exit remains fatal. The retry retains the same verified icon
+   metadata and cannot switch local icon mode into published proof, weaken published reachability,
+   enable signing, or skip the later Squirrel contract checks.
+7. **electron-builder starts a second native dependency scan.** The default includes unrelated
+   optional packages such as `bufferutil`, `utf-8-validate`, and `utp-native`, even though
+   postinstall has already patched, rebuilt, and ABI-proved the two required packages. Root
+   `build.npmRebuild` is therefore `false`; Squirrel consumes the proven tree rather than compiling
+   a broader one. The focused installer contract test keeps that setting exact.
 
 ## Testing generated POSIX shell
 

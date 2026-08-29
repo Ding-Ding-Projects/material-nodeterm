@@ -11,7 +11,13 @@
   with one-second then two-second backoff for proven MSBuild 17.14 runtime/JIT failures, including
   the measured regex-JIT access-violation form. Ordinary compiler diagnostics fail immediately,
   and both required packages must load under Electron before success. The compiler gets two
-  rematches, not a season ticket.
+  rematches, not a season ticket. The measured MSBuild `StreamWriter` missing-method,
+  `TLogReadFiles`, and `GenerateDesktopDeployRecipe.ContentFiles` no-set-accessor forms use the same
+  bounded recovery. Installer application builds
+  retry once only for exact Windows process status `0xC0000409`, after removing partial `out/` and
+  without changing the already-proven local or published icon metadata. Squirrel packaging disables
+  electron-builder's separate broad native scan and consumes the exact patched, ABI-proven outputs
+  from postinstall.
 
   Electron native rebuild 而家只會處理 application 真正用嗰兩個 ABI package：`node-pty` 同
   `smart-whisper`。舊有 `--which-module` 其實只係將兩個名加入自動偵測清單，其他 optional native
@@ -20,7 +26,12 @@
   sequential 處理 module，亦會喺 launcher 同 environment 關閉 MSBuild node reuse。只有已確認嘅
   MSBuild 17.14 runtime/JIT 問題先可以最多試三次，等待時間係一秒再兩秒，包括實測 regex-JIT
   access violation。普通 compiler diagnostic 即刻失敗，成功後再用 Electron 真正載入兩個必要
-  package。編譯器有兩次補考，唔係無限留班。
+  package。實測 MSBuild `StreamWriter` missing-method、`TLogReadFiles` 同
+  `GenerateDesktopDeployRecipe.ContentFiles` 冇 set accessor 亦用同一個有界復原。Installer
+  application build 只會對準確 Windows process status `0xC0000409` 重試一次，
+  先清走半製成 `out/`，已經證明過嘅 local 或 published icon metadata 完全唔會郁。編譯器有兩次
+  補考，唔係無限留班。Squirrel packaging 會關閉 electron-builder 另一輪廣泛 native scan，直接用
+  postinstall 已經 patch 同通過 ABI proof 嘅準確輸出。
 
 - Prepare the deliberate `1.0.0` major source candidate. `package.json` and `package-lock.json`
   now agree on the candidate version, while publication, installer generation, and production

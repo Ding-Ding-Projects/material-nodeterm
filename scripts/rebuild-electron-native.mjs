@@ -98,14 +98,24 @@ function appendDiagnosticTail(current, chunk) {
 }
 
 export function isTransientMsbuildRuntimeFailure(output) {
-  if (!/(?:MSBuild|Microsoft\.Build)/i.test(output)) return false
+  if (!/(?:MSBuild|Microsoft\.Build|\bMSB(?:4018|4093)\b)/i.test(output)) return false
   return (
     /System\.InvalidProgramException/i.test(output) ||
     (/System\.AccessViolationException/i.test(output) &&
       /(?:Compiled)?RegexRunner\.(?:Go|Scan)/i.test(output)) ||
     /Microsoft\.Build\.CPPTasks\.[A-Za-z0-9_]+[\s\S]{0,500}does not have an implementation/i.test(
       output
-    )
+    ) ||
+    (/\bMSB4018\b/i.test(output) &&
+      /["']CL["'] task failed unexpectedly/i.test(output) &&
+      /System\.MissingMethodException/i.test(output) &&
+      /System\.IO\.StreamWriter\.\.ctor\(System\.String,\s*Boolean,\s*System\.Text\.Encoding\)/i.test(output)) ||
+    (/\bMSB4093\b/i.test(output) &&
+      /["']TLogReadFiles["'] parameter of the ["']CL["'] task cannot be written/i.test(output) &&
+      /does not have a ["']set["'] accessor/i.test(output)) ||
+    (/\bMSB4093\b/i.test(output) &&
+      /["']ContentFiles["'] parameter of the ["']GenerateDesktopDeployRecipe["'] task cannot be written/i.test(output) &&
+      /does not have a ["']set["'] accessor/i.test(output))
   )
 }
 

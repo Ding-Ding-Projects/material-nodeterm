@@ -171,6 +171,16 @@ need it too, and wire it in the same change.
   three total attempts with bounded backoff only for measured MSBuild 17.14 runtime/JIT signatures.
   It then loads both required packages under Electron. Ordinary compiler failures are never retried
   or converted into success.
+  The measured signatures include `MSB4018` with the exact
+  `System.IO.StreamWriter..ctor(System.String, Boolean, System.Text.Encoding)` missing-method form,
+  and `MSB4093` naming either the `TLogReadFiles` parameter of `CL` or the `ContentFiles` parameter of
+  `GenerateDesktopDeployRecipe` with no `"set"` accessor. Installer application builds separately
+  retry once only for process status `0xC0000409`, after removing partial `out/`. That retry never
+  reruns or changes local-versus-published icon verification, never enables signing, and never admits
+  an ordinary build error.
+  Keep root `build.npmRebuild` set to `false`: postinstall already patches, rebuilds exactly
+  `node-pty` and `smart-whisper`, and proves both under Electron. The electron-builder default is a
+  separate discovery-based native scan that also touches unrelated optional packages.
   The preflight names the PID holding a file and independently verifies the component, reporting
   both problems at once. Neither check can fail on macOS or Linux.
 
