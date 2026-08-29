@@ -3798,6 +3798,8 @@ export interface NodeTerminalApi {
   ollama: import('./ollama').OllamaApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** Typed local and SSH Docker host manager — docs/features/remote/docker-host.md. */
+  dockerHost: import('./docker-host').DockerHostApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

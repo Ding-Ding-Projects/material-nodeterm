@@ -44,6 +44,7 @@ import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
+import { registerDockerHostIpc } from '../core/docker-host/register-ipc'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
@@ -1469,6 +1470,13 @@ app.whenReady().then(async () => {
   registerConverterIpc(corePlatform)
   registerOllamaIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
+  registerDockerHostIpc(corePlatform, {
+    credentialVault: {
+      // SSH identity and host metadata remain in the machine-local SSH store. The portable
+      // project projection carries only a server id, never this connection or its key path.
+      resolveSshServer: (serverId) => sshStore.list().find((server) => server.id === serverId) ?? null
+    }
+  })
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({

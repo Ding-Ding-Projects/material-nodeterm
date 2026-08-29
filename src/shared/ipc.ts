@@ -466,6 +466,34 @@ export const IPC = {
   // main → renderer when a bridged peer becomes a live client / drops (payload `{ id }`).
   relayHostStart: 'relay:host:start',
   relayHostDockerContexts: 'relay:host:docker-contexts',
+  // Typed Docker host manager. Requests carry structured values only; command text and Compose
+  // source never cross IPC. See shared/docker-host.ts and core/docker-host/manager.ts.
+  dockerHostList: 'docker-host:list',
+  dockerHostSave: 'docker-host:save',
+  dockerHostRemove: 'docker-host:remove',
+  dockerHostVerify: 'docker-host:verify',
+  dockerHostContexts: 'docker-host:contexts',
+  dockerHostInventory: 'docker-host:inventory',
+  dockerHostContainers: 'docker-host:containers',
+  dockerHostImages: 'docker-host:images',
+  dockerHostVolumes: 'docker-host:volumes',
+  dockerHostNetworks: 'docker-host:networks',
+  dockerHostComposeList: 'docker-host:compose-list',
+  dockerHostContainerStart: 'docker-host:container-start',
+  dockerHostContainerStop: 'docker-host:container-stop',
+  dockerHostContainerRestart: 'docker-host:container-restart',
+  dockerHostContainerPause: 'docker-host:container-pause',
+  dockerHostContainerUnpause: 'docker-host:container-unpause',
+  dockerHostStats: 'docker-host:stats',
+  dockerHostLogs: 'docker-host:logs',
+  dockerHostExec: 'docker-host:exec',
+  dockerHostPreviewDestructive: 'docker-host:preview-destructive',
+  dockerHostRemoveContainers: 'docker-host:remove-containers',
+  dockerHostRemoveImages: 'docker-host:remove-images',
+  dockerHostRemoveVolumes: 'docker-host:remove-volumes',
+  dockerHostRemoveNetworks: 'docker-host:remove-networks',
+  dockerHostComposeUp: 'docker-host:compose-up',
+  dockerHostComposeDown: 'docker-host:compose-down',
   // Team Access (multi-seat): `relayHostInvite` ADDS a seat (invoke, `{ projectId?, email? }` →
   // `{ offer }`, cap-checked → rejects `E_SEATS_FULL`); `relayHostRevoke` (send, `{ id }`) cuts one
   // bridged peer's live session. `relayHostPeerPending`/`relayHostOpen` now also carry the seat

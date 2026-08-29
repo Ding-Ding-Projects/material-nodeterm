@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-08-26, typed Docker host manager lane
+
+Added `src/shared/docker-host.ts`, `src/core/docker-host/manager.ts`, and
+`src/core/docker-host/register-ipc.ts`. The manager persists only machine-local host labels and
+transport ids, resolves SSH connection details through the machine-local credential/profile vault,
+and executes validated Docker argv through local or SSH transports. It provides daemon verification,
+container/image/volume/network inventory, typed Compose profiles, container lifecycle, bounded stats
+and logs, typed executable controls, destructive previews, and confirmation-required removal.
+
+The renderer now exposes `dockerHost` through preload and Server Edition bridges and renders a
+searchable Settings manager with local/SSH host selection, verification, inventory tabs, lifecycle
+controls, and an adjacent regex builder. The feature article, offline article entry, README, and
+roadmap now describe the lane and its portability boundary.
+
+This ultra-speed lane deliberately did not run tests, type checking, lint, security or accessibility
+checks, builds, packaging, installer execution, runtime interaction, or captures. No commit or dew
+was made by this lane. The next owner should run the normal verification and resolve any bridge or
+platform typing issues before integration.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

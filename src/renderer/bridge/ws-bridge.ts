@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { DockerHostApi } from '../../shared/docker-host'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,40 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+/** Typed Docker host manager. The Server Edition executes the same argv-only manager on the
+ * machine serving this browser, so a browser client never receives a Docker socket or shell. */
+export function buildDockerHostApi(client: RpcClient): Pick<NodeTerminalApi, 'dockerHost'> {
+  const dockerHost: DockerHostApi = {
+    listHosts: () => client.request(IPC.dockerHostList) as ReturnType<DockerHostApi['listHosts']>,
+    saveHost: (input) => client.request(IPC.dockerHostSave, input) as ReturnType<DockerHostApi['saveHost']>,
+    removeHost: (id, confirmed) => client.request(IPC.dockerHostRemove, id, confirmed) as Promise<void>,
+    verify: (id) => client.request(IPC.dockerHostVerify, id) as ReturnType<DockerHostApi['verify']>,
+    listContexts: (id) => client.request(IPC.dockerHostContexts, id) as ReturnType<DockerHostApi['listContexts']>,
+    inventory: (id) => client.request(IPC.dockerHostInventory, id) as ReturnType<DockerHostApi['inventory']>,
+    listContainers: (id) => client.request(IPC.dockerHostContainers, id) as ReturnType<DockerHostApi['listContainers']>,
+    listImages: (id) => client.request(IPC.dockerHostImages, id) as ReturnType<DockerHostApi['listImages']>,
+    listVolumes: (id) => client.request(IPC.dockerHostVolumes, id) as ReturnType<DockerHostApi['listVolumes']>,
+    listNetworks: (id) => client.request(IPC.dockerHostNetworks, id) as ReturnType<DockerHostApi['listNetworks']>,
+    listCompose: (id, profile) => client.request(IPC.dockerHostComposeList, id, profile) as ReturnType<DockerHostApi['listCompose']>,
+    startContainer: (id, containerId) => client.request(IPC.dockerHostContainerStart, id, containerId) as Promise<void>,
+    stopContainer: (id, containerId, timeout) => client.request(IPC.dockerHostContainerStop, id, containerId, timeout) as Promise<void>,
+    restartContainer: (id, containerId, timeout) => client.request(IPC.dockerHostContainerRestart, id, containerId, timeout) as Promise<void>,
+    pauseContainer: (id, containerId) => client.request(IPC.dockerHostContainerPause, id, containerId) as Promise<void>,
+    unpauseContainer: (id, containerId) => client.request(IPC.dockerHostContainerUnpause, id, containerId) as Promise<void>,
+    stats: (id, ids) => client.request(IPC.dockerHostStats, id, ids) as ReturnType<DockerHostApi['stats']>,
+    logs: (id, options) => client.request(IPC.dockerHostLogs, id, options) as ReturnType<DockerHostApi['logs']>,
+    exec: (id, request) => client.request(IPC.dockerHostExec, id, request) as ReturnType<DockerHostApi['exec']>,
+    previewDestructive: (input) => client.request(IPC.dockerHostPreviewDestructive, input) as ReturnType<DockerHostApi['previewDestructive']>,
+    removeContainers: (id, ids, confirmed) => client.request(IPC.dockerHostRemoveContainers, id, ids, confirmed) as Promise<void>,
+    removeImages: (id, ids, confirmed) => client.request(IPC.dockerHostRemoveImages, id, ids, confirmed) as Promise<void>,
+    removeVolumes: (id, ids, confirmed) => client.request(IPC.dockerHostRemoveVolumes, id, ids, confirmed) as Promise<void>,
+    removeNetworks: (id, ids, confirmed) => client.request(IPC.dockerHostRemoveNetworks, id, ids, confirmed) as Promise<void>,
+    composeUp: (id, profile, services) => client.request(IPC.dockerHostComposeUp, id, profile, services) as Promise<void>,
+    composeDown: (id, profile, confirmed) => client.request(IPC.dockerHostComposeDown, id, profile, confirmed) as Promise<void>
+  }
+  return { dockerHost }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1410,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildDockerHostApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

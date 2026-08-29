@@ -9,6 +9,7 @@ import { CopyButton } from '@renderer/ui/CopyButton'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
 import { useSettings } from '../../../state/settings'
+import { DockerHostManagerPanel } from './DockerHostManagerPanel'
 
 const ROWS = {
   allow: { title: 'Allow remote access', keywords: ['remote', 'host', 'share', 'pairing', 'ssh'] },
@@ -222,6 +223,7 @@ export function RemoteSection({
           ) : null}
         </div>
       </SearchableRow>
+      <DockerHostManagerPanel />
     </SettingsSection>
   )
 }

@@ -147,7 +147,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Ship the unified Node Catalog and one creation coordinator.
 - [ ] Add one non-deletable Shop node to every Multiverse and AWS Universe child canvas.
 - [ ] Add shared account, credential-vault, OAuth callback, and provider-binding services.
-- [ ] Add guided Docker host management for local and SSH contexts.
+- [ ] Add guided Docker host management for local and SSH contexts, including typed container,
+      image, volume, network, Compose, lifecycle, stats, logs, exec, verification, and destructive
+      preview controls. Implementation landed in `src/core/docker-host/` and the Settings manager;
+      verification remains intentionally unrun in the ultra-speed lane.
 
 ### Media, torrents, virtual machines, and planning
 

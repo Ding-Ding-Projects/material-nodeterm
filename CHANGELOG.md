@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the typed Docker host manager for local and saved SSH contexts. It verifies the selected
+  daemon, inventories containers, images, volumes, networks, and Compose services, exposes bounded
+  lifecycle/stats/logs and typed exec controls, and requires a destructive preview before removal.
+  Host credentials and paths remain machine-local. Ultra-speed verification and captures remain
+  intentionally unrun.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.
