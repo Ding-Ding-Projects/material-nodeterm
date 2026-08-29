@@ -178,6 +178,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
 - [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.
+- [ ] Add the generation-aware tunnel state model for API creation, token sealing, process and
+      connector health, DNS, Access, origin reachability, and external reachability. The local
+      model and settings surface are implemented on `feat/program-51`; tests, packaging, and
+      provider connector integration remain pending.
 
 ### Clean-room features and upstream parity
 

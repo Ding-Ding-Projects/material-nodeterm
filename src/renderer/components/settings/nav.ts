@@ -24,6 +24,7 @@ export type SettingsSectionId =
   | 'license'
   | 'presence'
   | 'remote'
+  | 'tunnel-state'
   | 'team-access'
   | 'ssh'
   | 'updates'
@@ -101,6 +102,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'presence', title: 'Your name' },
       { id: 'phone', title: 'Phone' },
       { id: 'remote', title: 'Docker host' },
+      { id: 'tunnel-state', title: 'Tunnel state' },
       { id: 'team-access', title: 'Team seats' },
       { id: 'ssh', title: 'Remote (SSH)' }
     ]

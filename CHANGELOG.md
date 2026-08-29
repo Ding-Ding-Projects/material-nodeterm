@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a provider-neutral hosted tunnel state model and Settings surface. It distinguishes API
+  creation, token sealing, process and connector health, DNS routing, Access protection, origin
+  reachability, and external reachability with generation-aware stale and partial states, bounded
+  history, non-blocking notifications, and credential-free JSON export. Provider connector
+  integration and verification remain pending in this ultra-speed lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

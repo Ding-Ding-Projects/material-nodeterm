@@ -1,5 +1,29 @@
 # Handoff
 
+## 2026-08-26, tunnel state model, issue #62
+
+Implemented the provider-neutral hosted tunnel state lane on `feat/program-51` without adding a
+provider connector. `src/shared/tunnel-state.ts` defines eight independent observations (API
+creation, token sealing, process running, connector health, DNS routing, Access protection, origin
+reachability, and external reachability), typed actions, monotonic reconciliation generations,
+stale-response refusal, partial/error lifecycle derivation, bounded redacted history, safe export
+rows, and connector interfaces for later provider lanes. Credentials, provider sessions, process
+identifiers, machine paths, and runtime caches are excluded by the model boundary.
+
+`src/renderer/components/settings/sections/TunnelStateSection.tsx` adds the Settings → Tunnel state
+surface with safe identity fields, per-phase state controls, generation actions, reset, history,
+non-blocking notifications, and UTF-8 JSON export with an explicit omission list. The section is
+registered in the settings navigation and has its own icon. The feature article is
+`docs/features/remote/tunnel-state.md`, indexed from the Remote & SSH category and bundled in
+`src/shared/docs-data.ts`; `ROADMAP.md` and `CHANGELOG.md` record the unverified state.
+
+This lane intentionally did not run tests, type checking, lint, security checks, accessibility
+checks, builds, packaging, installer execution, runtime interaction checks, or captures. The docs
+bundle generator was attempted but could not run because `esbuild` is absent from `C:\w\p51`; the
+bundle entry was updated manually. No commit or dew was made. Next owner should run the relevant
+checks, implement a provider adapter through `TunnelConnectorAdapter`, and verify the real host,
+DNS, Access, origin, and external probes before ticking the roadmap item.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

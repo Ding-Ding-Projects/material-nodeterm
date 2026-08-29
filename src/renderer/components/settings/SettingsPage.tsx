@@ -29,6 +29,7 @@ import { WorkspaceStorageSection } from './sections/WorkspaceStorageSection'
 import { LicenseSection } from './sections/LicenseSection'
 import { PresenceIdentitySection } from './sections/PresenceIdentitySection'
 import { RemoteSection } from './sections/RemoteSection'
+import { TunnelStateSection } from './sections/TunnelStateSection'
 import { TeamAccessSection } from './sections/TeamAccessSection'
 import { SshSection } from './sections/SshSection'
 import { UpdatesSection } from './sections/UpdatesSection'
@@ -200,6 +201,7 @@ export function SettingsPage({
             <LicenseSection isActive={active === 'license'} />
             <PresenceIdentitySection isActive={active === 'presence'} />
             <RemoteSection isActive={active === 'remote'} onClose={onClose} />
+            <TunnelStateSection isActive={active === 'tunnel-state'} />
             <TeamAccessSection isActive={active === 'team-access'} onClose={onClose} />
             <SshSection isActive={active === 'ssh'} onNavigate={setActive} />
             <UpdatesSection isActive={active === 'updates'} />
