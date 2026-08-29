@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Stage the detached Windows session host in a versioned runtime under local application data,
+  outside Squirrel's replaceable `app-*` directories. Existing host state and named-pipe ownership
+  are still checked first, so a live host is attached rather than replaced. New hosts copy the
+  current executable plus the complete `session-host` and `node-pty` bundle through an atomic
+  staging directory, validate a completion marker, and launch only from the stable runtime. An
+  already-running host created by an older release cannot transfer live ConPTY ownership and is
+  never terminated for an upgrade; that one-time upgrade waits until its sessions end naturally.
+
+  Windows detached session host 而家會先放入 local application data 入面有版本嘅穩定 runtime，
+  唔再鎖住 Squirrel 會更換嘅 `app-*` 目錄。程式仍然先檢查現有 host state 同 named pipe，所以 live
+  host 只會重新接駁，唔會亂換。新 host 會經 atomic staging 複製目前 executable、完整
+  `session-host` 同 `node-pty` bundle，驗證完成 marker 先啟動。舊版本已經跑緊嘅 host 無法轉移 live
+  ConPTY ownership，upgrade 絕對唔會終止佢；嗰次過渡要等現有 sessions 自然完結。
+
 - Limit Electron native rebuilds to the two packages the application actually loads through that
   ABI: `node-pty` and `smart-whisper`. The previous `--which-module` option added those names to
   the detected package walk, so unrelated optional native packages still compiled and could stop a

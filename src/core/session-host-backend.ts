@@ -20,6 +20,7 @@ function getClient(): SessionHostClient {
     client = new SessionHostClient({
       userDataDir: platform().userDataDir,
       resourcesPath: platform().resourcesPath,
+      runtimeDir: platform().sessionHostRuntimeDir,
       // Dev-mode fallback, mirroring `findTmux`'s own `process.cwd()` use: under `electron-vite
       // dev` the cwd is the repo root, which is where `npm run host:build` writes its bundle.
       repoRoot: process.cwd()

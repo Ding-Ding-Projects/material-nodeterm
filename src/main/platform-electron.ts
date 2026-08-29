@@ -1,4 +1,5 @@
 import { app, ipcMain, safeStorage, shell, webContents } from 'electron'
+import path from 'node:path'
 import type { CorePlatform } from '../core/platform'
 import { mainWindowClientIds, sendToMain } from './main-window'
 import { peerRegistry } from './peer-registry'
@@ -137,6 +138,14 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
     // why bundledTmuxPath falls back to the repo's own resources/bin).
     get resourcesPath() {
       return process.resourcesPath
+    },
+    get sessionHostRuntimeDir() {
+      if (!app.isPackaged) return undefined
+      const localAppData = process.env.LOCALAPPDATA
+      const version = app.getVersion()
+      if (!localAppData || !path.isAbsolute(localAppData)) return undefined
+      if (!/^[A-Za-z0-9._-]{1,64}$/.test(version)) return undefined
+      return path.join(localAppData, 'node-terminal-session-host-runtime', `app-${version}`)
     },
     // The ipcMain half of each registration is UNCHANGED — the local window's call is bit-identical
     // to what it was before the table existed (same event-stripping, same sender id).

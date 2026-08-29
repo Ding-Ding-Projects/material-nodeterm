@@ -13,6 +13,9 @@ export interface CorePlatform {
    *  OPTIONAL because it is an Electron notion: the Server Edition has no such directory and
    *  simply omits it, which is also how src/core stays Electron-free (no-electron.test.ts). */
   readonly resourcesPath?: string
+  /** Stable, versioned runtime directory for the detached Windows session host. The desktop
+   *  keeps this outside Squirrel's replaceable app-* directories; other shells omit it. */
+  readonly sessionHostRuntimeDir?: string
   /** Seal / unseal a secret at rest, byte-in byte-out. Present together on a shell that can
    *  encrypt (Desktop: Electron safeStorage). Their ABSENCE is a supported configuration, not a
    *  degradation: the Server Edition runs headless with no OS keychain and deliberately stores

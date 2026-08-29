@@ -405,6 +405,15 @@ describes for tmux. See `docs/windows-session-host.md` for the full design; the 
 branches alongside the existing tmux CLI calls — everything below in this section still describes
 the tmux path exactly as before.
 
+**A packaged session host never runs from Squirrel's replaceable `app-*` directory.** Before a new
+host launch, the client atomically stages the current Electron-as-Node executable plus the complete
+`resources/session-host` bundle under
+`%LOCALAPPDATA%/node-terminal-session-host-runtime/app-<version>`, validates its completion marker,
+and spawns that stable pair. Connection to existing state/pipe always happens first, so staging never
+replaces a live host. Versioned stable directories are never overwritten while mapped. A host
+started by an older release from `app-*` cannot transfer ownership of live ConPTY processes; keep it
+attachable and postpone a full Setup upgrade until those sessions end naturally.
+
 **Windows profile trust boundary:** local Windows creation carries only `profileId` through
 `PtyCreateOptions`. The trusted core validates and resolves that stable id immediately before
 spawn; executable paths and argv never enter the public catalog, renderer state from a peer, or

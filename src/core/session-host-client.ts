@@ -26,7 +26,11 @@ import {
   type ExecuteLaunchResult,
   type ListSessionsResult
 } from '../session-host/protocol'
-import { resolveSessionHostScript, spawnSessionHost } from './session-host-launcher'
+import {
+  prepareSessionHostRuntime,
+  resolveSessionHostScript,
+  spawnSessionHost,
+} from './session-host-launcher'
 import type { PreparedAgentLaunch } from './agent-launch'
 
 export interface SessionSubscriber {
@@ -240,6 +244,7 @@ export class SessionHostClient {
       userDataDir: string
       resourcesPath?: string | null
       repoRoot?: string | null
+      runtimeDir?: string | null
     }
   ) {}
 
@@ -354,7 +359,12 @@ export class SessionHostClient {
           'or `npm run build` which now runs it too)'
       )
     }
-    spawnSessionHost(script, this.deps.userDataDir)
+    const runtime = await prepareSessionHostRuntime({
+      scriptPath: script,
+      userDataDir: this.deps.userDataDir,
+      runtimeDir: this.deps.runtimeDir,
+    })
+    spawnSessionHost(runtime.executablePath, runtime.scriptPath, this.deps.userDataDir)
     let lastPublicationError: Error | null = null
     for (let attempt = 0; attempt < 30; attempt++) {
       await sleep(150)
