@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { watch, type FSWatcher } from 'fs'
 import { BOARD_LOG_TEXT_MAX, type BoardLogEntry } from '@shared/types'
 import { BOARD_LOG_ATTACHMENT_LIMITS, validateBoardLogAttachmentUpload, validBoardLogAttachment, type BoardLogAttachment, type BoardLogAttachmentSession, type BoardLogAttachmentUpload } from '@shared/board-log-attachments'
+import { renameAtomicSync } from './fs-atomic'
 
 // Re-exported so callers of this module (and its tests) can reach the cap alongside buildLine.
 export { BOARD_LOG_TEXT_MAX }
@@ -218,7 +219,7 @@ export class BoardLogStore {
   private rotateIfLarge(file: string, incoming: number): void {
     try {
       if (fs.statSync(file).size + incoming <= MAX_BOARD_LOG_BYTES) return
-      fs.renameSync(file, `${file}.1`)
+      renameAtomicSync(file, `${file}.1`)
     } catch {
       // Missing or temporarily unavailable logs remain appendable, and the append reports its
       // actual result rather than turning a best-effort rotation into a false success.
