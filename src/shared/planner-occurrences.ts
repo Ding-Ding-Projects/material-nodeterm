@@ -66,6 +66,16 @@ export const PLANNER_LIMITS = {
 const LOCAL_RE = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)$/
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/
 const ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/
+const PLANNER_FILE_KEYS = new Set(['version', 'schedules', 'occurrences', 'lastTickMs'])
+const PLANNER_SCHEDULE_KEYS = new Set(['id', 'title', 'enabled', 'timeZone', 'startLocal', 'endTime', 'recurrence', 'notification'])
+const PLANNER_RECURRENCE_KEYS = new Set(['kind', 'days', 'everyMinutes'])
+const PLANNER_NOTIFICATION_KEYS = new Set(['title', 'body'])
+const PLANNER_OCCURRENCE_KEYS = new Set(['id', 'scheduleId', 'scheduledAtMs', 'observedAtMs', 'status', 'title', 'body'])
+const wallFormatters = new Map<string, Intl.DateTimeFormat>()
+
+function hasUnknownKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>): boolean {
+  return Object.keys(value).some((key) => !allowed.has(key))
+}
 
 export function isPlannerLocalDateTime(value: unknown): value is string {
   if (typeof value !== 'string') return false
@@ -102,6 +112,7 @@ export function defaultPlannerFile(): PlannerFile {
 export function validatePlannerFile(raw: unknown): string | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return 'Planner data is malformed.'
   const file = raw as Record<string, unknown>
+  if (hasUnknownKeys(file, PLANNER_FILE_KEYS)) return 'Planner data contains an unknown field.'
   if (file.version !== PLANNER_SCHEMA_VERSION) return 'Unsupported planner data version.'
   if (!Array.isArray(file.schedules) || file.schedules.length > PLANNER_LIMITS.maxSchedules) {
     return `Planner supports at most ${PLANNER_LIMITS.maxSchedules} schedules.`
@@ -124,6 +135,7 @@ export function validatePlannerFile(raw: unknown): string | null {
   for (const rawOccurrence of file.occurrences) {
     if (!rawOccurrence || typeof rawOccurrence !== 'object' || Array.isArray(rawOccurrence)) return 'Planner occurrence history is malformed.'
     const occurrence = rawOccurrence as Partial<PlannerOccurrence>
+    if (hasUnknownKeys(occurrence as Record<string, unknown>, PLANNER_OCCURRENCE_KEYS)) return 'Planner occurrence contains an unknown field.'
     if (typeof occurrence.id !== 'string' || occurrence.id.length > 220 || occurrenceIds.has(occurrence.id)) return 'Planner occurrence ids must be unique.'
     if (typeof occurrence.scheduleId !== 'string' || !Number.isSafeInteger(occurrence.scheduledAtMs) || !Number.isSafeInteger(occurrence.observedAtMs)) return 'Planner occurrence timestamps are invalid.'
     if (occurrence.status !== 'fired' && occurrence.status !== 'missed') return 'Planner occurrence status is invalid.'
@@ -137,6 +149,7 @@ export function validatePlannerFile(raw: unknown): string | null {
 function validatePlannerSchedule(raw: unknown): string | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return 'Planner schedule is malformed.'
   const schedule = raw as Partial<PlannerSchedule>
+  if (hasUnknownKeys(schedule as Record<string, unknown>, PLANNER_SCHEDULE_KEYS)) return 'Planner schedule contains an unknown field.'
   if (typeof schedule.id !== 'string' || !ID_RE.test(schedule.id)) return 'Planner schedule id is invalid.'
   if (typeof schedule.title !== 'string' || schedule.title.trim().length === 0 || schedule.title.length > PLANNER_LIMITS.maxTitleLength) return 'Planner schedule title is invalid.'
   if (typeof schedule.enabled !== 'boolean') return 'Planner schedule enabled value is invalid.'
@@ -145,12 +158,14 @@ function validatePlannerSchedule(raw: unknown): string | null {
   if (schedule.endTime !== undefined && !isPlannerTime(schedule.endTime)) return 'Planner schedule end time is invalid.'
   if (!schedule.recurrence || typeof schedule.recurrence !== 'object') return 'Planner recurrence is missing.'
   const recurrence = schedule.recurrence as PlannerRecurrence
+  if (hasUnknownKeys(recurrence as Record<string, unknown>, PLANNER_RECURRENCE_KEYS)) return 'Planner recurrence contains an unknown field.'
   if (!['once', 'daily', 'weekdays', 'weekly', 'interval'].includes(recurrence.kind)) return 'Planner recurrence kind is invalid.'
   if (recurrence.kind === 'weekly') {
     if (!Array.isArray(recurrence.days) || recurrence.days.some((day) => !Number.isInteger(day) || day < 0 || day > 6)) return 'Planner weekly days are invalid.'
   }
   if (recurrence.kind === 'interval' && (!Number.isSafeInteger(recurrence.everyMinutes) || recurrence.everyMinutes < 1 || recurrence.everyMinutes > 1_000_000)) return 'Planner interval is invalid.'
-  if (!schedule.notification || typeof schedule.notification !== 'object') return 'Planner notification is missing.'
+  if (!schedule.notification || typeof schedule.notification !== 'object' || Array.isArray(schedule.notification)) return 'Planner notification is missing.'
+  if (hasUnknownKeys(schedule.notification as Record<string, unknown>, PLANNER_NOTIFICATION_KEYS)) return 'Planner notification contains an unknown field.'
   if (typeof schedule.notification.title !== 'string' || schedule.notification.title.length > PLANNER_LIMITS.maxTitleLength) return 'Planner notification title is invalid.'
   if (typeof schedule.notification.body !== 'string' || schedule.notification.body.length > PLANNER_LIMITS.maxBodyLength) return 'Planner notification body is invalid.'
   return null
@@ -176,13 +191,23 @@ function shiftDate(value: string, days: number): string {
   return date.toISOString().slice(0, 10)
 }
 
+function weekday(date: string): PlannerWeekday {
+  const [year, month, day] = date.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay() as PlannerWeekday
+}
+
 function formatLocal(date: string, hour: number, minute: number): string {
   return `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
 
-function weekday(date: string): PlannerWeekday {
-  const [year, month, day] = date.split('-').map(Number)
-  return new Date(Date.UTC(year, month - 1, day)).getUTCDay() as PlannerWeekday
+function wallParts(epochMs: number, timeZone: string): { date: string; time: string } {
+  let formatter = wallFormatters.get(timeZone)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('sv-SE', { timeZone, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    wallFormatters.set(timeZone, formatter)
+  }
+  const formatted = formatter.format(new Date(epochMs)).replace(' ', 'T')
+  return { date: formatted.slice(0, 10), time: formatted.slice(11, 16) }
 }
 
 /**
@@ -192,37 +217,25 @@ function weekday(date: string): PlannerWeekday {
 export function resolvePlannerLocalTime(local: string, timeZone: string): number | null {
   const parts = dateParts(local)
   const nominal = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute)
+  const sample = wallParts(nominal, timeZone)
+  const sampleUtc = Date.UTC(Number(sample.date.slice(0, 4)), Number(sample.date.slice(5, 7)) - 1, Number(sample.date.slice(8, 10)), Number(sample.time.slice(0, 2)), Number(sample.time.slice(3, 5)))
+  const first = nominal - (sampleUtc - nominal)
   const matches: number[] = []
-  const wanted = local
-  for (let offset = -36 * 60; offset <= 36 * 60; offset += 1) {
-    const candidate = nominal + offset * 60_000
-    const formatted = new Intl.DateTimeFormat('sv-SE', { timeZone, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(candidate)).replace(' ', 'T')
-    if (formatted === wanted) matches.push(candidate)
+  for (let offset = -6 * 60; offset <= 6 * 60; offset += 1) {
+    const candidate = first + offset * 60_000
+    const actual = wallParts(candidate, timeZone)
+    if (actual.date === local.slice(0, 10) && actual.time === local.slice(11, 16)) matches.push(candidate)
   }
   if (matches.length > 0) return Math.min(...matches)
-  for (let delta = 1; delta <= 180; delta += 1) {
-    const shiftedMinute = parts.hour * 60 + parts.minute + delta
-    const dayOffset = Math.floor(shiftedMinute / 1440)
-    const minuteOfDay = shiftedMinute % 1440
-    const shiftedDate = shiftDate(local.slice(0, 10), dayOffset)
-    const shifted = formatLocal(shiftedDate, Math.floor(minuteOfDay / 60), minuteOfDay % 60)
-    const result = resolvePlannerLocalTimeExact(shifted, timeZone)
-    if (result !== null) return result
+  let firstValid: number | null = null
+  for (let offset = -6 * 60; offset <= 6 * 60; offset += 1) {
+    const candidate = first + offset * 60_000
+    const actual = wallParts(candidate, timeZone)
+    if (actual.date > local.slice(0, 10) || (actual.date === local.slice(0, 10) && actual.time > local.slice(11, 16))) {
+      firstValid = firstValid === null ? candidate : Math.min(firstValid, candidate)
+    }
   }
-  return null
-}
-
-function resolvePlannerLocalTimeExact(local: string, timeZone: string): number | null {
-  const parts = dateParts(local)
-  const nominal = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute)
-  const wanted = local
-  let earliest: number | null = null
-  for (let offset = -36 * 60; offset <= 36 * 60; offset += 1) {
-    const candidate = nominal + offset * 60_000
-    const formatted = new Intl.DateTimeFormat('sv-SE', { timeZone, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(candidate)).replace(' ', 'T')
-    if (formatted === wanted && (earliest === null || candidate < earliest)) earliest = candidate
-  }
-  return earliest
+  return firstValid
 }
 
 function recurrenceMatches(schedule: PlannerSchedule, date: string): boolean {
