@@ -570,6 +570,18 @@ export function buildStubApi(): Omit<
       chatStop: U('ollama.chatStop'),
       onChatStream: noopUnsub
     },
+    aws: {
+      status: U('aws.status'),
+      context: U('aws.context'),
+      discoverResources: U('aws.discoverResources'),
+      listResourceTypes: U('aws.listResourceTypes'),
+      listResources: U('aws.listResources'),
+      readResource: U('aws.readResource'),
+      preview: U('aws.preview'),
+      createResource: U('aws.createResource'),
+      updateResource: U('aws.updateResource'),
+      deleteResource: U('aws.deleteResource')
+    },
     minecraft: {
       versions: U('minecraft.versions'),
       status: U('minecraft.status'),

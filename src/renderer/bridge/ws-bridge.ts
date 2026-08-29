@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { AwsApi } from '../../shared/aws'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -922,6 +923,24 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+/** AWS Resource Explorer and Cloud Control managers use the same authenticated RPC connection as
+ * every other Server Edition service. No AWS credential or signed request crosses this bridge. */
+export function buildAwsApi(client: RpcClient): Pick<NodeTerminalApi, 'aws'> {
+  const aws: AwsApi = {
+    status: () => client.request(IPC.awsStatus) as ReturnType<AwsApi['status']>,
+    context: (input) => client.request(IPC.awsContext, input) as ReturnType<AwsApi['context']>,
+    discoverResources: (input) => client.request(IPC.awsDiscoverResources, input) as ReturnType<AwsApi['discoverResources']>,
+    listResourceTypes: (input) => client.request(IPC.awsListResourceTypes, input) as ReturnType<AwsApi['listResourceTypes']>,
+    listResources: (input) => client.request(IPC.awsListResources, input) as ReturnType<AwsApi['listResources']>,
+    readResource: (input) => client.request(IPC.awsReadResource, input) as ReturnType<AwsApi['readResource']>,
+    preview: (input) => client.request(IPC.awsPreview, input) as ReturnType<AwsApi['preview']>,
+    createResource: (input) => client.request(IPC.awsCreateResource, input) as ReturnType<AwsApi['createResource']>,
+    updateResource: (input) => client.request(IPC.awsUpdateResource, input) as ReturnType<AwsApi['updateResource']>,
+    deleteResource: (input) => client.request(IPC.awsDeleteResource, input) as ReturnType<AwsApi['deleteResource']>
+  }
+  return { aws }
+}
+
 /** Local Minecraft server create-and-manage (docs/minecraft-server-manager.md) — same core engine
  *  as desktop; the server process is the one downloading, spawning and owning `java`, exactly as
  *  main does. */
@@ -1374,6 +1393,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSpeechApi(client),
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
+    ...buildAwsApi(client),
     ...buildMinecraftApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),

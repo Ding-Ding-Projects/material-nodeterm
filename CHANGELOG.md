@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add AWS Resource Explorer and Cloud Control managers with signed HTTPS requests, generated
+  request context, bounded pagination, a labeled Resource Groups Tagging API fallback, typed CRUDL
+  previews, and explicit permission and partial-result states. Verification remains pending.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

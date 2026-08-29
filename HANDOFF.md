@@ -1,5 +1,21 @@
 # Handoff
 
+## 2026-08-26, AWS Resource Explorer and Cloud Control manager implementation
+
+Added `src/shared/aws.ts`, `src/core/aws/client.ts`, `src/core/aws/aws-manager.ts`, and
+`src/core/aws/register-ipc.ts`. The core now uses signed HTTPS JSON requests without a shell path,
+generates redacted request contexts, paginates Resource Explorer and Cloud Control results with
+bounded limits, labels the Resource Groups Tagging API fallback, and returns explicit permission and
+partial-result states. Cloud Control resource type listing, resource listing, reads, and typed
+create, update, and delete previews are exposed through both the desktop preload and Server Edition
+WebSocket bridge. `AwsManagerPanel` adds Resource Explorer discovery and Cloud Control CRUDL controls
+to the Tools destination, with visible source, pagination, error, and preview details.
+
+Added the categorized article `docs/features/integrations/aws-resource-managers.md` and linked it
+from the integrations index. The roadmap and Unreleased changelog now record this lane. This lane
+did not run tests, type checking, linting, security checks, builds, packaging, runtime interaction,
+or captures. No commit or dew was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

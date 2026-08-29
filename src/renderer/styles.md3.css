@@ -11230,3 +11230,43 @@ button.term-node__title-text:focus-visible {
 .icon-menu__reset-btn {
   align-self: flex-start;
 }
+/* AWS Resource Explorer and Cloud Control drawer. The controls are real, typed actions; this
+   surface deliberately keeps provider errors and partial pagination visible. */
+.aws-manager.drawer {
+  width: min(760px, 94vw);
+  max-width: 760px;
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+  border-left: 1px solid var(--md-outline-variant);
+  box-shadow: var(--shadow-lg);
+  overflow: auto;
+}
+.aws-manager__header, .aws-manager__toolbar, .aws-manager__actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.aws-manager__header { justify-content: space-between; padding: 20px; border-bottom: 1px solid var(--md-outline-variant); }
+.aws-manager__header h2 { margin: 0; }
+.aws-manager__header p { margin: 4px 0 0; color: var(--md-on-surface-variant); }
+.aws-manager__header > button, .aws-manager__actions button, .aws-manager__toolbar button { min-height: 40px; border-radius: 20px; padding: 0 14px; }
+.aws-manager__tabs { display: flex; gap: 4px; padding: 12px 20px 0; border-bottom: 1px solid var(--md-outline-variant); }
+.aws-manager__tabs button { min-height: 44px; border: 0; background: transparent; color: var(--md-on-surface-variant); border-bottom: 3px solid transparent; }
+.aws-manager__tabs button[aria-selected='true'] { color: var(--md-primary); border-bottom-color: var(--md-primary); }
+.aws-manager__section { padding: 20px; }
+.aws-manager__toolbar label, .aws-manager__crud-form label { font-weight: 600; }
+.aws-manager__toolbar input, .aws-manager__crud-form input, .aws-manager__crud-form textarea { min-height: 40px; border: 1px solid var(--md-outline); border-radius: 8px; padding: 8px 10px; background: var(--md-surface); color: inherit; }
+.aws-manager__toolbar input { flex: 1 1 220px; }
+.aws-manager__crud-form { display: grid; grid-template-columns: minmax(130px, 180px) 1fr; gap: 12px; margin: 18px 0; align-items: start; }
+.aws-manager__crud-form textarea { width: 100%; resize: vertical; font: 13px var(--md-sys-typescale-body-medium-font-family, monospace); }
+.aws-manager__crud-form .aws-manager__actions { grid-column: 1 / -1; }
+.aws-manager__meta { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0; color: var(--md-on-surface-variant); font-size: 13px; }
+.aws-manager__meta span { display: inline-flex; align-items: center; gap: 4px; }
+.aws-manager__resource-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.aws-manager__resource-row { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--md-outline-variant); border-radius: 12px; background: var(--md-surface-container-low); }
+.aws-manager__resource-row code { overflow-wrap: anywhere; }
+.aws-manager__resource-row span, .aws-manager__resource-row small, .aws-manager__privacy { color: var(--md-on-surface-variant); }
+.aws-manager__resource-row pre, .aws-manager__context pre { overflow: auto; max-height: 240px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.aws-manager__error { margin: 12px 0; padding: 12px; border-radius: 10px; color: var(--md-on-error-container); background: var(--md-error-container); }
+.aws-manager__empty { color: var(--md-on-surface-variant); }
+@media (max-width: 560px) {
+  .aws-manager__crud-form { display: flex; flex-direction: column; align-items: stretch; }
+  .aws-manager__crud-form .aws-manager__actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .aws-manager__crud-form .aws-manager__actions button { min-width: 0; }
+}

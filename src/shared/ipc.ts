@@ -570,6 +570,18 @@ export const IPC = {
   /** main/server → renderer: a streamed chat token/finish/error for the session named in the
    *  payload. One shared channel (not per-session) — the renderer filters by sessionId. */
   ollamaChatStream: 'ollama:chat-stream',
+  // AWS Resource Explorer 2 and Cloud Control managers. Requests are signed and issued only by
+  // the privileged core service; the renderer receives redacted contexts and typed results.
+  awsStatus: 'aws:status',
+  awsContext: 'aws:context',
+  awsDiscoverResources: 'aws:discover-resources',
+  awsListResourceTypes: 'aws:list-resource-types',
+  awsListResources: 'aws:list-resources',
+  awsReadResource: 'aws:read-resource',
+  awsPreview: 'aws:preview',
+  awsCreateResource: 'aws:create-resource',
+  awsUpdateResource: 'aws:update-resource',
+  awsDeleteResource: 'aws:delete-resource',
   // Local Minecraft server create-and-manage (docs/minecraft-server-manager.md). Registered on
   // BOTH shells over the same `platform.handle`/`platform.broadcast` seam as Ollama above, so it
   // manages whichever machine is actually running the shell. NOT carried over the relay (a peer

@@ -924,6 +924,18 @@ const api: NodeTerminalApi = {
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
   },
+  aws: {
+    status: () => ipcRenderer.invoke(IPC.awsStatus),
+    context: (input) => ipcRenderer.invoke(IPC.awsContext, input),
+    discoverResources: (input) => ipcRenderer.invoke(IPC.awsDiscoverResources, input),
+    listResourceTypes: (input) => ipcRenderer.invoke(IPC.awsListResourceTypes, input),
+    listResources: (input) => ipcRenderer.invoke(IPC.awsListResources, input),
+    readResource: (input) => ipcRenderer.invoke(IPC.awsReadResource, input),
+    preview: (input) => ipcRenderer.invoke(IPC.awsPreview, input),
+    createResource: (input) => ipcRenderer.invoke(IPC.awsCreateResource, input),
+    updateResource: (input) => ipcRenderer.invoke(IPC.awsUpdateResource, input),
+    deleteResource: (input) => ipcRenderer.invoke(IPC.awsDeleteResource, input)
+  },
   minecraft: {
     versions: () => ipcRenderer.invoke(IPC.minecraftVersions),
     status: (id) => ipcRenderer.invoke(IPC.minecraftStatus, id),

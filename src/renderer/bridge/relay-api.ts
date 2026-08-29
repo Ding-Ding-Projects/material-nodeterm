@@ -205,6 +205,9 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // host the same way `fs`/`git` are routed above.
     converter: stub.converter,
     ollama: stub.ollama,
+    // AWS credentials and signed requests belong to the owning shell. The relay has no
+    // provider-routed AWS surface, so it refuses rather than querying this viewer machine.
+    aws: stub.aws,
     // Same reasoning as converter/ollama immediately above: creating and running a Minecraft
     // server is ONE machine's filesystem/java/process table, and there is no remote-routed core
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG

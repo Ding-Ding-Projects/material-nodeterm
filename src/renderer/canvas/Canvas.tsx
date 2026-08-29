@@ -191,6 +191,7 @@ import {
   KanbanView,
   FileConverterPanel,
   OllamaManagerPanel,
+  AwsManagerPanel,
   PasswordManagerPanel
 } from '../components/lazyPanels'
 import { WelcomeScreen, canDismissWelcomeScreen } from '../components/WelcomeScreen'
@@ -1262,6 +1263,7 @@ export function Canvas() {
   // toggle-a-flag pattern as every other drawer/panel on this canvas.
   const [converterOpen, setConverterOpen] = useState(false)
   const [ollamaOpen, setOllamaOpen] = useState(false)
+  const [awsOpen, setAwsOpen] = useState(false)
   // Password manager (shared/password-manager.ts) — same drawer pattern, but per-project rather
   // than per-machine, and it can jump straight to "add a credential" when opened from the canvas
   // pane menu's "New credential…" row (see onPaneContextMenu below).
@@ -1277,6 +1279,7 @@ export function Canvas() {
     setScOpen(false)
     setConverterOpen(false)
     setOllamaOpen(false)
+    setAwsOpen(false)
     setPwmOpen(false)
     setSettingsOpen(false)
     setNotifCenterOpen(false)
@@ -13046,6 +13049,7 @@ export function Canvas() {
       { id: 'open-web', label: 'Open web view…', icon: <IconRemote />, run: () => addWebView() },
       { id: 'open-converter', label: 'File converter', icon: <IconConvert />, run: () => setConverterOpen(true) },
       { id: 'open-ollama', label: 'Ollama manager', icon: <IconOllama />, run: () => setOllamaOpen(true) },
+      { id: 'open-aws', label: 'AWS Resource Explorer and Cloud Control', icon: <IconRemote />, run: () => setAwsOpen(true) },
       { id: 'open-browser', label: 'New browser', icon: <IconRemote />, run: () => addBrowser() },
       ...useSshServers.getState().servers.map(
         (srv): Command => ({
@@ -13791,6 +13795,7 @@ export function Canvas() {
           scOpen ||
           converterOpen ||
           ollamaOpen ||
+          awsOpen ||
           pwmOpen ||
           settingsOpen ||
           notifCenterOpen ||
@@ -13849,7 +13854,7 @@ export function Canvas() {
             id: 'tools',
             icon: <IconConvert />,
             label: 'Tools',
-            active: converterOpen || ollamaOpen || pwmOpen,
+            active: converterOpen || ollamaOpen || awsOpen || pwmOpen,
             onClick: (anchor: HTMLElement) => {
               closeAllDrawers()
               leaveBoard()
@@ -13860,6 +13865,7 @@ export function Canvas() {
                 items: [
                   { label: 'File converter', onClick: () => setConverterOpen(true) },
                   { label: 'Ollama manager', onClick: () => setOllamaOpen(true) },
+                  { label: 'AWS Resource Explorer and Cloud Control', onClick: () => setAwsOpen(true) },
                   {
                     label: 'Password manager',
                     icon: <IconLock />,
@@ -14517,6 +14523,7 @@ export function Canvas() {
 
       {converterOpen && <FileConverterPanel onClose={() => setConverterOpen(false)} />}
       {ollamaOpen && <OllamaManagerPanel onClose={() => setOllamaOpen(false)} />}
+      {awsOpen && <AwsManagerPanel onClose={() => setAwsOpen(false)} />}
       {pwmOpen && (
         <PasswordManagerPanel
           onClose={() => setPwmOpen(false)}

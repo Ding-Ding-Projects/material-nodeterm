@@ -223,6 +223,10 @@ Identical on desktop and in the browser.
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See
   [`docs/ollama-manager.md`](./docs/ollama-manager.md).
+- **AWS Resource Explorer and Cloud Control managers**: signed HTTPS discovery with bounded
+  pagination, a labeled Resource Groups Tagging API fallback, and typed CRUDL previews with
+  explicit permission and partial-result states. See
+  [`docs/features/integrations/aws-resource-managers.md`](./docs/features/integrations/aws-resource-managers.md).
 - **Scheduled settings** — rules that automatically overlay appearance/customization settings
   for a date+time window ("dark theme after 22:00"), with an optional Home Assistant boolean
   source. See [`docs/scheduled-settings.md`](./docs/scheduled-settings.md).
