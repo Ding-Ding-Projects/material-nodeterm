@@ -6,6 +6,8 @@ built in; any other CLI can be added as a custom agent.
 - [Agent support](./agent-support.md) — the shared status model, hook-driven detection,
   permission modes, managed accounts, and the capability system that decides which agent gets
   which feature.
+- [Usage popover account defaults](./usage-popover-account-default.md) — choose the Claude
+  identity used by new sessions, with local and SSH scopes, persistence, fallback, and search.
 
 See also [Canvas → Node kinds](../canvas/README.md) for the agent node itself,
 [Kanban](../kanban/README.md) for how agent status renders on a board card, and

@@ -1,5 +1,20 @@
 # Handoff
 
+## 2026-08-26, usage popover account defaults
+
+Implemented the usage-popover account picker in `src/renderer/components/UsageIndicator.tsx`.
+Local and connected SSH Claude identities are selectable when multiple identities are available;
+the active project default is written through `setProjectDefaultAccount` and the existing
+workspace-dirty persistence path. Existing node account ids and running sessions are untouched.
+The picker includes local account search with an anchored regex builder, keyboard navigation,
+pressed radio state, and a System fallback when a saved identity is absent from the current scope.
+Provider rows remain read-only. Added the feature article and updated the agent index, roadmap, and
+unreleased changelog.
+
+This lane intentionally did not run tests, type checking, builds, packaging, reviews, UI
+interaction, or captures. The implementation is therefore not release-verified. Desktop and
+Server Edition share the renderer path; Mobile remains outside this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

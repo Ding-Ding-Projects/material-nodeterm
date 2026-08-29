@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a searchable usage-popover account picker for choosing the active project's default Claude
+  identity for new sessions. Local and SSH identities persist through the existing project
+  workspace path, while existing sessions remain unchanged. Invalid or removed defaults fall back
+  to System until the user makes a new choice. Release verification is pending.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

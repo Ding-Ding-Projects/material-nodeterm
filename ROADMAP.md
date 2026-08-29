@@ -23,6 +23,9 @@ later commit, since this file will not be kept in lockstep with every merge).
       Context Link, and Branch conversation (Claude-only).
 - [x] Managed Claude accounts (local + remote/SSH), permission-mode gating with a version-gated
       `auto` flag, and per-account usage indicators including remote-host usage over SSH.
+- [ ] Usage popover account defaults — implementation is present for local and SSH scopes with
+      persisted project selection, account search, anchored regex filtering, and removed-account
+      fallback. Release verification and built-artifact interaction evidence remain pending.
 - [x] Projects/tabs with `.nodeterm/project.json` as the git-shareable source of truth, SSH
       project mirroring with atomic writes and conflict reconciliation.
 - [x] Kanban board view (session cards, card modal with live co-attached terminal, board log,

@@ -24,6 +24,9 @@ import {
   providerLabel
 } from '@shared/usage-limits'
 import { systemAccountDisplay } from '../state/workspace'
+import { markWorkspaceDirty } from '../state/workspaceDirty'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 
 /** Grace period before a hover-opened popover closes, so the pointer can cross the pill's own
  *  gap (or clip a corner en route elsewhere) without the panel flickering shut. */
@@ -67,16 +70,39 @@ function AccountUsageBlock({
   label,
   email,
   u,
-  mode
+  mode,
+  accountId,
+  selected,
+  onSelect,
+  selectable
 }: {
   label: string
   email?: string
   u: ClaudeUsage | null
   mode: 'used' | 'remaining'
+  accountId: string | undefined
+  selected: boolean
+  onSelect: (accountId: string | undefined) => void
+  selectable: boolean
 }) {
   return (
     <div className="usage-account">
-      <div className="usage-account__label">{label}</div>
+      {selectable ? (
+        <button
+          type="button"
+          className="usage-account__select"
+          role="radio"
+          aria-checked={selected}
+          aria-label={`Use ${label} for new sessions`}
+          onClick={() => onSelect(accountId)}
+        >
+          Use for new sessions
+        </button>
+      ) : null}
+      <div className="usage-account__label">
+        <span>{label}</span>
+        {selected && <span className="usage-account__default" aria-hidden>✓</span>}
+      </div>
       {(email ?? u?.email) && <div className="usage-account__email">{email ?? u?.email}</div>}
       {u?.limits.map((l) => (
         <LimitRow key={limitKey(l)} limit={l} mode={mode} />
@@ -96,13 +122,40 @@ function AccountUsageBlock({
  * `claude` has nothing to report, and listing it would turn "connect an SSH project" into "grow
  * a permanent empty section".
  */
-function RemoteUsageBlock({ row, mode }: { row: RemoteAccountUsage; mode: 'used' | 'remaining' }) {
+function RemoteUsageBlock({
+  row,
+  mode,
+  accountId,
+  selected,
+  onSelect,
+  selectable
+}: {
+  row: RemoteAccountUsage
+  mode: 'used' | 'remaining'
+  accountId: string | undefined
+  selected: boolean
+  onSelect: (accountId: string | undefined) => void
+  selectable: boolean
+}) {
   if (row.usage.status === 'unavailable') return null
   const showHost = row.label !== row.hostKey
   return (
     <div className="usage-account">
+      {selectable ? (
+        <button
+          type="button"
+          className="usage-account__select"
+          role="radio"
+          aria-checked={selected}
+          aria-label={`Use ${row.label} for new sessions`}
+          onClick={() => onSelect(accountId)}
+        >
+          Use for new sessions
+        </button>
+      ) : null}
       <div className="usage-account__label">
-        {row.label}
+        <span>{row.label}</span>
+        {selected && <span className="usage-account__default" aria-hidden>✓</span>}
         <span className="usage-account__host" title={`Read on ${row.hostKey} over SSH`}>
           {showHost ? row.hostKey : 'SSH'}
         </span>
@@ -174,6 +227,8 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
   const [acctUsage, setAcctUsage] = useState<Record<string, ClaudeUsage | null>>({})
   const [providers, setProviders] = useState<ProviderUsage[]>([])
   const [remote, setRemote] = useState<RemoteAccountUsage[]>([])
+  const accountSearch = useRegexSearchField({ mode: 'text' })
+  const accountSearchInputRef = useRef<HTMLInputElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
   const closeTimerRef = useRef<number | null>(null)
 
@@ -199,6 +254,9 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
     usageScopeKey(s.projects.find((p) => p.id === s.activeProjectId))
   )
   const scope = useMemo(() => scopeFromKey(scopeHostKey), [scopeHostKey])
+  const defaultAccountId = useProjects((s) =>
+    s.projects.find((p) => p.id === s.activeProjectId)?.defaultAccountId
+  )
 
   useEffect(() => {
     void window.nodeTerminal.usage.fetch().then(setUsage)
@@ -283,6 +341,29 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
     closeTimerRef.current = window.setTimeout(() => setOpen(false), USAGE_HOVER_CLOSE_MS)
   }
 
+  const selectDefaultAccount = (accountId: string | undefined): void => {
+    const projectId = useProjects.getState().activeProjectId
+    if (!projectId) return
+    const current = useProjects.getState().getProject(projectId)?.defaultAccountId
+    if (current === accountId) return
+    useProjects.getState().setProjectDefaultAccount(projectId, accountId)
+    markWorkspaceDirty()
+  }
+
+  const moveAccountFocus = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    const rows = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="radio"]')]
+    const current = rows.indexOf(event.target as HTMLButtonElement)
+    if (current < 0 || rows.length < 2) return
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? rows.length - 1 :
+      event.key === 'ArrowDown' || event.key === 'ArrowRight'
+        ? (current + 1) % rows.length
+        : (current - 1 + rows.length) % rows.length
+    event.preventDefault()
+    rows[next].focus()
+    rows[next].click()
+  }
+
   // Settings → Usage toggles are a display choice, applied before any other rule — a hidden
   // provider is invisible here even when signed in and mid-limit. Scoping runs after them: the
   // toggles say what you never want to see, the scope says what belongs to where you are.
@@ -299,6 +380,9 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
   const claudeUsage = scoped.claude
   const visibleProviders = scoped.providers
   const visibleRemote = scoped.remote
+  const defaultAccountIsAvailable = scope.kind === 'local'
+    ? defaultAccountId === undefined || scoped.accounts.some((a) => a.id === defaultAccountId)
+    : defaultAccountId === undefined || visibleRemote.some((r) => (r.accountId ?? undefined) === defaultAccountId)
 
   // Only providers the user has actually enabled reach the pill; render whenever ANY of them
   // (Claude included) has something to say. Both rules are pure and pinned by tests — gating on
@@ -422,7 +506,7 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
       onMouseLeave={closeSoon}
     >
       {open && (
-        <div className="usage-popover">
+        <div className="usage-popover" onKeyDown={moveAccountFocus}>
           <div className="usage-popover__head">
             <span className="usage-popover__title">✦ Usage</span>
             {/* Tracks whichever snapshot the panel is actually showing — the local poll's, or
@@ -437,16 +521,44 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
           {scope.kind === 'local' &&
             (scoped.accounts.length > 0 && claudeUsage ? (
               <>
-                <AccountUsageBlock
-                  mode={percentMode}
-                  label={systemAccountDisplay(systemLabelSetting, claudeUsage.email)}
-                  // Avoid printing the email twice when it's already the display label.
-                  email={systemLabelSetting.trim() ? (claudeUsage.email ?? undefined) : undefined}
-                  u={claudeUsage}
-                />
-                {scoped.accounts.map((a) => (
-                  <AccountUsageBlock key={a.id} mode={percentMode} label={a.label} email={a.email} u={acctUsage[a.id] ?? null} />
-                ))}
+                <div className="usage-account-picker" onKeyDown={moveAccountFocus}>
+                  <div className="usage-account-picker__search">
+                    <input
+                      ref={accountSearchInputRef}
+                      value={accountSearch.value}
+                      onChange={(e) => accountSearch.setValue(e.target.value)}
+                      placeholder="Filter Claude accounts…"
+                      aria-label="Filter Claude accounts"
+                    />
+                    <AnchoredRegexBuilder search={accountSearch} fieldRef={accountSearchInputRef} label="Regex — Claude account filter" />
+                  </div>
+                  {accountSearch.error && <div className="usage-popover__empty">{accountSearch.error}</div>}
+                  <div role="radiogroup" aria-label="Default account for new sessions">
+                    {accountSearch.test(systemAccountDisplay(systemLabelSetting, claudeUsage.email)) && (
+                      <AccountUsageBlock
+                        mode={percentMode}
+                        label={systemAccountDisplay(systemLabelSetting, claudeUsage.email)}
+                        email={systemLabelSetting.trim() ? (claudeUsage.email ?? undefined) : undefined}
+                        u={claudeUsage}
+                        accountId={undefined}
+                        selected={!defaultAccountIsAvailable || defaultAccountId === undefined}
+                        onSelect={selectDefaultAccount}
+                        selectable
+                      />
+                    )}
+                    {scoped.accounts.filter((a) => accountSearch.test(`${a.label} ${a.email ?? ''}`)).map((a) => (
+                      <AccountUsageBlock key={a.id} mode={percentMode} label={a.label} email={a.email} u={acctUsage[a.id] ?? null}
+                        accountId={a.id} selected={defaultAccountId === a.id} onSelect={selectDefaultAccount} selectable />
+                    ))}
+                    {accountSearch.active && !accountSearch.test(systemAccountDisplay(systemLabelSetting, claudeUsage.email)) &&
+                      !scoped.accounts.some((a) => accountSearch.test(`${a.label} ${a.email ?? ''}`)) && (
+                        <div className="usage-popover__empty">No Claude accounts match this filter.</div>
+                      )}
+                  </div>
+                  {defaultAccountId !== undefined && !scoped.accounts.some((a) => a.id === defaultAccountId) && (
+                    <div className="usage-popover__empty">The saved default account is unavailable. System will be used for new sessions until you choose another account.</div>
+                  )}
+                </div>
               </>
             ) : (
               <>
@@ -469,9 +581,24 @@ export function UsageIndicator({ overBoard = false }: { overBoard?: boolean }): 
             ))}
           {/* On an SSH project these are the whole panel; the host badge is what says the numbers
               were read somewhere other than this machine. */}
-          {visibleRemote.map((r) => (
-            <RemoteUsageBlock key={`${r.hostKey}#${r.accountId ?? ''}`} row={r} mode={percentMode} />
+          {scope.kind === 'ssh' && visibleRemote.length > 1 && (
+            <div className="usage-account-picker__search">
+              <input ref={accountSearchInputRef} value={accountSearch.value}
+                onChange={(e) => accountSearch.setValue(e.target.value)}
+                placeholder="Filter Claude accounts…" aria-label="Filter Claude accounts" />
+              <AnchoredRegexBuilder search={accountSearch} fieldRef={accountSearchInputRef} label="Regex — Claude account filter" />
+            </div>
+          )}
+          {scope.kind === 'ssh' && accountSearch.error && <div className="usage-popover__empty">{accountSearch.error}</div>}
+          {visibleRemote.filter((r) => accountSearch.test(`${r.label} ${r.usage.email ?? ''}`)).map((r) => (
+            <RemoteUsageBlock key={`${r.hostKey}#${r.accountId ?? ''}`} row={r} mode={percentMode}
+              accountId={r.accountId ?? undefined} selected={defaultAccountIsAvailable && (r.accountId ?? undefined) === defaultAccountId}
+              onSelect={selectDefaultAccount} selectable={visibleRemote.length > 1} />
           ))}
+          {scope.kind === 'ssh' && accountSearch.active && visibleRemote.length > 0 &&
+            !visibleRemote.some((r) => accountSearch.test(`${r.label} ${r.usage.email ?? ''}`)) && (
+              <div className="usage-popover__empty">No Claude accounts match this filter.</div>
+            )}
           {scope.kind === 'ssh' && visibleRemote.length === 0 && (
             <div className="usage-popover__empty">
               No usage from this host yet — it is read once the project connects.
