@@ -6,6 +6,8 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 interface AgentContinuationReviewProps {
   nodeId: string
   api?: AgentContinuationApi
+  /** Cold relaunch decides when this card is relevant. Undefined keeps standalone compatibility. */
+  enabled?: boolean
 }
 /**
  * An anchored, explicit review surface for a recovered Codex turn.
@@ -14,14 +16,14 @@ interface AgentContinuationReviewProps {
  * In particular, mounting it cannot inject a prompt. Only the user's Continue button invokes the
  * provider action, and the core clears the packet only after it sees the next-turn receipt.
  */
-export function AgentContinuationReview({ nodeId, api }: AgentContinuationReviewProps): JSX.Element | null {
+export function AgentContinuationReview({ nodeId, api, enabled = true }: AgentContinuationReviewProps): JSX.Element | null {
   const vocab = useVocabularyMapper()
   const [packet, setPacket] = useState<AgentContinuationPreview | null>(null)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<AgentContinuationResult | null>(null)
 
   useEffect(() => {
-    if (!api) return
+    if (!api || !enabled) return
     let live = true
     void api.preview(nodeId).then((value) => {
       if (live) setPacket(value)
@@ -34,9 +36,9 @@ export function AgentContinuationReview({ nodeId, api }: AgentContinuationReview
       live = false
       off()
     }
-  }, [api, nodeId])
+  }, [api, nodeId, enabled])
 
-  if (!api || !packet) return null
+  if (!api || !enabled || !packet) return null
 
   const runContinue = (): void => {
     if (busy) return

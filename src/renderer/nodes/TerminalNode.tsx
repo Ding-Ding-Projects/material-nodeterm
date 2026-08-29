@@ -2124,6 +2124,9 @@ export function TerminalNode({
   // Co-attach state published by the (park-surviving) transport listeners — see CoState.
   const [co, setCo_] = useState<CoState>(() => getCo(termKey))
   const [agentRelaunchRetrying, setAgentRelaunchRetrying] = useState(false)
+  // A continuation review belongs to a fresh cold relaunch only. A resumed provider session has
+  // its own conversation and must not also receive the recovered prompt card.
+  const [agentContinuationFresh, setAgentContinuationFresh] = useState(false)
   useEffect(() => {
     coSubs.set(termKey, setCo_)
     setCo_(getCo(termKey)) // catch up anything published while this instance was mounting
@@ -2211,7 +2214,11 @@ export function TerminalNode({
       }
     )
       .then((result) => {
-        if (!result.recovered) setCo(termKey, { agentRelaunchError: result.error })
+        if (!result.recovered) {
+          setCo(termKey, { agentRelaunchError: result.error })
+        } else {
+          setAgentContinuationFresh(result.continuationReview)
+        }
       })
       .finally(() => setAgentRelaunchRetrying(false))
   }
@@ -3808,6 +3815,29 @@ export function TerminalNode({
               // relaunched empty while their transcripts sat on disk, unreachable.
               const st = useAgentStatus.getState().byId[id]
               const priorId = st?.sessionId || data.agentSessionId
+              // Ask the typed continuation API whether this node has a retained packet, then
+              // combine that fact with the cold-relaunch decision. This is a review-only lookup;
+              // no prompt is sent and no packet is changed by the cold path.
+              const continuationApi = api.agentContinuation
+              if (continuationApi) {
+                void continuationApi.preview(id).then((packet) => {
+                  if (life.dead) return
+                  const customLaunchCmd = useSettings
+                    .getState()
+                    .settings.customAgents.find((custom) => custom.id === agentId)?.launchCmd
+                  const decision = agentColdRelaunchDecision({
+                    agentId,
+                    priorSessionId: priorId,
+                    customLaunchCmd,
+                    continuationPacket: Boolean(packet)
+                  })
+                  setAgentContinuationFresh(decision.reconstructable && decision.continuationReview)
+                }).catch(() => {
+                  if (!life.dead) setAgentContinuationFresh(false)
+                })
+              } else {
+                setAgentContinuationFresh(false)
+              }
           // Re-resolve the mode at relaunch: it's a property of how a session is launched, not
           // a persisted property of the node, so the current setting wins after a reboot. Awaited
           // (not the sync `activePermissionMode`) because this fires on mount: right after a machine
@@ -5526,7 +5556,11 @@ export function TerminalNode({
           <AdhdElapsedChip nodeId={id} />
           {/* Cold-relaunch recovery is an explicit anchored review card. It reads encrypted provider
             state only; mounting never sends text and the Continue action owns the only delivery. */}
-          <AgentContinuationReview nodeId={id} api={api.agentContinuation} />
+          <AgentContinuationReview
+            nodeId={id}
+            api={api.agentContinuation}
+            enabled={agentContinuationFresh}
+          />
           {/* Who else is in this node. Subscribes to presence itself — see PresenceChips. */}
           <PresenceChips nodeId={id} />
           {status?.state === 'working' && (

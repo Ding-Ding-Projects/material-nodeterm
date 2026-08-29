@@ -135,5 +135,147 @@ describe('agent continuation packets', () => {
     expect(JSON.stringify(events)).not.toContain('private result')
   })
 
-  afterEach(() => resetPlatformForTests())
+  it('retains the packet when delivery fails', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'nodeterm-continuation-'))
+    initPlatform(platformFor(dir))
+    const service = createAgentContinuationService()
+    Object.defineProperty(service, '_deps', {
+      value: {
+        providerReady: () => true,
+        deliver: async () => false
+      },
+      configurable: true
+    })
+    service.observe({
+      nodeId: 'node-1',
+      provider: 'codex',
+      sessionId: 'session-1',
+      phase: 'turn-stop',
+      summary: 'delivery failure'
+    })
+    await waitForPacket(service)
+
+    await expect(service.continue('node-1')).resolves.toEqual({ ok: false, reason: 'delivery-failed' })
+    expect(await service.preview('node-1')).not.toBeNull()
+  })
+
+  it('retains the packet when the next-turn receipt times out', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'nodeterm-continuation-'))
+    initPlatform(platformFor(dir))
+    const service = createAgentContinuationService()
+    let deliveryStarted = 0
+    Object.defineProperty(service, '_deps', {
+      value: {
+        providerReady: () => true,
+        deliver: async () => {
+          deliveryStarted += 1
+          return true
+        }
+      },
+      configurable: true
+    })
+    service.observe({
+      nodeId: 'node-1',
+      provider: 'codex',
+      sessionId: 'session-1',
+      phase: 'turn-stop',
+      summary: 'receipt timeout'
+    })
+    await vi.waitFor(async () => expect((await service.summary()).length).toBe(1))
+    vi.useFakeTimers()
+
+    const pending = service.continue('node-1')
+    await vi.waitFor(() => expect(deliveryStarted).toBe(1))
+    await vi.advanceTimersByTimeAsync(15_001)
+    await expect(pending).resolves.toEqual({ ok: false, reason: 'receipt-timeout' })
+    expect(await service.preview('node-1')).not.toBeNull()
+  })
+
+  it('does not let another node or session satisfy the receipt, then clears on the exact receipt', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'nodeterm-continuation-'))
+    initPlatform(platformFor(dir))
+    let deliveryCount = 0
+    const service = createAgentContinuationService()
+    Object.defineProperty(service, '_deps', {
+      value: {
+        providerReady: () => true,
+        deliver: async () => {
+          deliveryCount += 1
+          return true
+        }
+      },
+      configurable: true
+    })
+    service.observe({
+      nodeId: 'node-1',
+      provider: 'codex',
+      sessionId: 'session-1',
+      phase: 'turn-stop',
+      summary: 'exact receipt'
+    })
+    await vi.waitFor(async () => expect((await service.summary()).length).toBe(1))
+    vi.useFakeTimers()
+
+    const pending = service.continue('node-1')
+    await vi.waitFor(() => expect(deliveryCount).toBe(1))
+    service.observe({
+      nodeId: 'node-2',
+      provider: 'codex',
+      sessionId: 'session-1',
+      phase: 'turn-start',
+      summary: 'wrong node'
+    })
+    service.observe({
+      nodeId: 'node-1',
+      provider: 'codex',
+      sessionId: 'session-2',
+      phase: 'turn-start',
+      summary: 'wrong session'
+    })
+    await vi.advanceTimersByTimeAsync(15_001)
+    await expect(pending).resolves.toEqual({ ok: false, reason: 'receipt-timeout' })
+    expect(await service.preview('node-1')).not.toBeNull()
+
+    const retry = service.continue('node-1')
+    await vi.waitFor(() => expect(deliveryCount).toBe(2))
+    service.observe({
+      nodeId: 'node-1',
+      provider: 'codex',
+      sessionId: 'session-1',
+      phase: 'turn-start',
+      summary: 'right receipt'
+    })
+    await expect(retry).resolves.toMatchObject({ ok: true })
+    expect(deliveryCount).toBe(2)
+    expect(await service.preview('node-1')).toBeNull()
+  })
+
+  it('rejects a node-id tamper through the packet record authentication binding', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'nodeterm-continuation-'))
+    initPlatform(platformFor(dir))
+    const service = createAgentContinuationService()
+    service.observe({
+      nodeId: 'node-1',
+      provider: 'codex',
+      sessionId: 'session-1',
+      phase: 'progress',
+      summary: 'authenticated packet'
+    })
+    await waitForPacket(service)
+    const packetPath = join(dir, 'agent-continuation', 'agent-continuation-packets.json')
+    const parsed = JSON.parse(await fs.readFile(packetPath, 'utf8')) as {
+      version: number
+      records: Array<{ nodeId: string }>
+    }
+    parsed.records[0].nodeId = 'node-2'
+    await fs.writeFile(packetPath, `${JSON.stringify(parsed)}\n`)
+
+    expect(await service.preview('node-1')).toBeNull()
+    expect(await service.summary()).toEqual([])
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    resetPlatformForTests()
+  })
 })

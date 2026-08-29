@@ -15,7 +15,8 @@ describe('agentColdRelaunchDecision', () => {
     ).toEqual({
       reconstructable: true,
       command: 'claude --resume session-123',
-      continuity: 'resume'
+      continuity: 'resume',
+      continuationReview: false
     })
   })
 
@@ -23,7 +24,8 @@ describe('agentColdRelaunchDecision', () => {
     expect(agentColdRelaunchDecision({ agentId: 'gemini' })).toEqual({
       reconstructable: true,
       command: 'gemini',
-      continuity: 'fresh'
+      continuity: 'fresh',
+      continuationReview: false
     })
   })
 
@@ -36,7 +38,8 @@ describe('agentColdRelaunchDecision', () => {
     ).toEqual({
       reconstructable: true,
       command: 'opencode',
-      continuity: 'fresh'
+      continuity: 'fresh',
+      continuationReview: false
     })
   })
 
@@ -50,12 +53,14 @@ describe('agentColdRelaunchDecision', () => {
     ).toEqual({
       reconstructable: true,
       command: 'nodeterm-codex resume thread-1',
-      continuity: 'resume'
+      continuity: 'resume',
+      continuationReview: false
     })
     expect(agentColdRelaunchDecision({ agentId: 'codex', sharedIdentity: true })).toEqual({
       reconstructable: true,
       command: 'nodeterm-codex',
-      continuity: 'fresh'
+      continuity: 'fresh',
+      continuationReview: false
     })
   })
 
@@ -68,7 +73,8 @@ describe('agentColdRelaunchDecision', () => {
     ).toEqual({
       reconstructable: true,
       command: '"C:\\Program Files\\Reviewer\\reviewer.exe" --interactive',
-      continuity: 'fresh'
+      continuity: 'fresh',
+      continuationReview: false
     })
   })
 
@@ -86,6 +92,29 @@ describe('agentColdRelaunchDecision', () => {
       reconstructable: false,
       reason: 'custom-agent-not-configured'
     })
+  })
+
+  it('marks a retained packet for review only when the relaunch is fresh', () => {
+    expect(
+      agentColdRelaunchDecision({
+        agentId: 'codex',
+        priorSessionId: 'session-1',
+        continuationPacket: true
+      })
+    ).toMatchObject({ continuity: 'resume', continuationReview: false })
+    expect(
+      agentColdRelaunchDecision({
+        agentId: 'codex',
+        continuationPacket: true
+      })
+    ).toMatchObject({ continuity: 'fresh', continuationReview: true })
+    expect(
+      agentColdRelaunchDecision({
+        agentId: 'custom:reviewer',
+        customLaunchCmd: 'reviewer --interactive',
+        continuationPacket: true
+      })
+    ).toMatchObject({ continuity: 'fresh', continuationReview: true })
   })
 
   it('does not recycle or respawn while the custom agent remains unreconstructable', async () => {
@@ -141,8 +170,25 @@ describe('agentColdRelaunchDecision', () => {
     })
     expect(respawn).not.toHaveBeenCalled()
     finishRecycle()
-    await expect(pending).resolves.toEqual({ recovered: true })
+    await expect(pending).resolves.toEqual({ recovered: true, continuationReview: false })
     expect(events).toEqual(['preflight-and-recycle', 'respawn'])
+  })
+
+  it('carries the fresh-only continuation review bit through a confirmed retry', async () => {
+    const respawn = vi.fn()
+    await expect(
+      retryAgentColdRelaunch(
+        {
+          agentId: 'codex',
+          persistKey: 'node-1',
+          cwd: 'C:\\work',
+          continuationPacket: true
+        },
+        vi.fn().mockResolvedValue(undefined),
+        respawn
+      )
+    ).resolves.toEqual({ recovered: true, continuationReview: true })
+    expect(respawn).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the blank generation and respawn state untouched when recycle is uncertain', async () => {
@@ -206,7 +252,7 @@ describe('agentColdRelaunchDecision', () => {
         recycle,
         respawn
       )
-    ).resolves.toEqual({ recovered: true })
+    ).resolves.toEqual({ recovered: true, continuationReview: false })
 
     expect(recycle).toHaveBeenCalledWith('node-1')
     expect(recycle.mock.calls[0]).toHaveLength(1)
