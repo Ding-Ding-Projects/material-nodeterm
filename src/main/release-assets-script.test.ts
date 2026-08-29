@@ -124,7 +124,7 @@ function releasesLine(name: string, value: Buffer, size = value.length, hash = s
 }
 
 function validReleases(): string {
-  return `${releasesLine(FULL, FULL_BYTES)}\r\n${releasesLine(DELTA, DELTA_BYTES)}\r\n`
+  return `${releasesLine(FULL, FULL_BYTES)}\r\n`
 }
 
 function parseOutputs(raw: string): Record<string, string> {
@@ -158,7 +158,6 @@ describe('release-assets helper CLI', () => {
     output = `${root}-github-output.txt`
     writeFileSync(join(root, SETUP), SETUP_BYTES)
     writeFileSync(join(root, FULL), FULL_BYTES)
-    writeFileSync(join(root, DELTA), DELTA_BYTES)
     writeFileSync(join(root, 'RELEASES'), validReleases())
     writeFileSync(output, '')
   })
@@ -327,7 +326,6 @@ describe('release-assets helper CLI', () => {
     expect(collected.setup).toBe(resolve(root, SETUP))
     expect(collected.paths).toEqual([
       resolve(root, 'RELEASES'),
-      resolve(root, DELTA),
       resolve(root, FULL),
       resolve(root, SETUP),
     ])
@@ -341,7 +339,6 @@ describe('release-assets helper CLI', () => {
           size: Buffer.byteLength(validReleases()),
           sha256: sha256(Buffer.from(validReleases())),
         },
-        { name: DELTA, size: DELTA_BYTES.length, sha256: sha256(DELTA_BYTES) },
         { name: FULL, size: FULL_BYTES.length, sha256: sha256(FULL_BYTES) },
         { name: SETUP, size: SETUP_BYTES.length, sha256: sha256(SETUP_BYTES) },
       ],
@@ -397,7 +394,7 @@ describe('release-assets helper CLI', () => {
     writeFileSync(join(root, FULL), commentedLookalike)
     writeFileSync(
       join(root, 'RELEASES'),
-      `${releasesLine(FULL, commentedLookalike)}\n${releasesLine(DELTA, DELTA_BYTES)}\n`,
+      `${releasesLine(FULL, commentedLookalike)}\n`,
     )
     let result = collect()
     expect(result.status).not.toBe(0)
@@ -414,23 +411,23 @@ describe('release-assets helper CLI', () => {
     writeFileSync(join(root, FULL), traversal)
     writeFileSync(
       join(root, 'RELEASES'),
-      `${releasesLine(FULL, traversal)}\n${releasesLine(DELTA, DELTA_BYTES)}\n`,
+      `${releasesLine(FULL, traversal)}\n`,
     )
     result = collect()
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('unsafe archive path')
   })
 
-  it('validates every package identity, including the optional delta', () => {
+  it('rejects a delta package instead of silently publishing a fourth release asset', () => {
     const wrongDelta = fullPackage('0.3.0')
     writeFileSync(join(root, DELTA), wrongDelta)
     writeFileSync(
       join(root, 'RELEASES'),
-      `${releasesLine(FULL, FULL_BYTES)}\n${releasesLine(DELTA, wrongDelta)}\n`,
+      `${releasesLine(FULL, FULL_BYTES)}\n`,
     )
     const result = collect()
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('internal version mismatch')
+    expect(result.stderr).toContain('delta packages are not release assets')
   })
 
   it('accepts only exact one-line SHA-256 result text', () => {
@@ -476,9 +473,9 @@ describe('release-assets helper CLI', () => {
     [
       'missing full package',
       () => {
-        // A delta can supplement the complete set, but it never replaces the required full package.
+        // The release policy requires the full package and does not accept a delta companion.
         unlinkSync(join(root, FULL))
-        writeFileSync(join(root, 'RELEASES'), `${releasesLine(DELTA, DELTA_BYTES)}\n`)
+        writeFileSync(join(root, 'RELEASES'), '')
       },
       `exactly one full Squirrel package named ${FULL}`,
     ],
@@ -501,10 +498,11 @@ describe('release-assets helper CLI', () => {
   })
 
   it('rejects a package referenced by RELEASES but missing on disk', () => {
-    unlinkSync(join(root, DELTA))
+    unlinkSync(join(root, FULL))
+    writeFileSync(join(root, 'RELEASES'), `${releasesLine(FULL, FULL_BYTES)}\n`)
     const result = collect()
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain(`missing on disk: ${DELTA}`)
+    expect(result.stderr).toContain(`expected exactly one full Squirrel package named ${FULL}`)
   })
 
   it('rejects malformed and duplicate RELEASES entries', () => {
@@ -514,7 +512,6 @@ describe('release-assets helper CLI', () => {
     expect(result.stderr).toContain('40-hex SHA1')
 
     writeFileSync(join(root, 'RELEASES'), `${releasesLine(FULL, FULL_BYTES)}\n${releasesLine(FULL, FULL_BYTES)}\n`)
-    unlinkSync(join(root, DELTA))
     result = collect()
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain(`duplicate package entry: ${FULL}`)
@@ -524,7 +521,7 @@ describe('release-assets helper CLI', () => {
     const badHash = '0'.repeat(40)
     writeFileSync(
       join(root, 'RELEASES'),
-      `${releasesLine(FULL, FULL_BYTES, FULL_BYTES.length, badHash)}\n${releasesLine(DELTA, DELTA_BYTES)}\n`,
+      `${releasesLine(FULL, FULL_BYTES, FULL_BYTES.length, badHash)}\n`,
     )
     const result = collect()
     expect(result.status).not.toBe(0)
@@ -534,7 +531,7 @@ describe('release-assets helper CLI', () => {
   it('rejects a RELEASES byte-size mismatch', () => {
     writeFileSync(
       join(root, 'RELEASES'),
-      `${releasesLine(FULL, FULL_BYTES, FULL_BYTES.length + 1)}\n${releasesLine(DELTA, DELTA_BYTES)}\n`,
+      `${releasesLine(FULL, FULL_BYTES, FULL_BYTES.length + 1)}\n`,
     )
     const result = collect()
     expect(result.status).not.toBe(0)
@@ -545,20 +542,18 @@ describe('release-assets helper CLI', () => {
     writeFileSync(join(root, 'orphan-delta.nupkg'), Buffer.from('orphan'))
     const result = collect()
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('unexpected Squirrel package name')
+    expect(result.stderr).toContain('delta packages are not release assets')
   })
 
   it('rejects a self-consistent stale Squirrel set instead of publishing it under the candidate tag', () => {
     const staleFull = 'node-terminal-0.3.0-full.nupkg'
-    const staleDelta = 'node-terminal-0.3.0-delta.nupkg'
     const staleFullBytes = fullPackage('0.3.0')
     renameSync(join(root, SETUP), join(root, 'nodeterm-Setup-0.3.0.exe'))
     unlinkSync(join(root, FULL))
     writeFileSync(join(root, staleFull), staleFullBytes)
-    renameSync(join(root, DELTA), join(root, staleDelta))
     writeFileSync(
       join(root, 'RELEASES'),
-      `${releasesLine(staleFull, staleFullBytes)}\n${releasesLine(staleDelta, DELTA_BYTES)}\n`,
+      `${releasesLine(staleFull, staleFullBytes)}\n`,
     )
 
     const result = collect()
@@ -582,7 +577,7 @@ describe('release-assets helper CLI', () => {
     writeFileSync(join(root, FULL), value)
     writeFileSync(
       join(root, 'RELEASES'),
-      `${releasesLine(FULL, value)}\n${releasesLine(DELTA, DELTA_BYTES)}\n`,
+      `${releasesLine(FULL, value)}\n`,
     )
 
     const result = collect()
@@ -600,7 +595,7 @@ describe('release-assets helper CLI', () => {
 
     const result = collect()
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain(`unexpected Squirrel package name`)
+    expect(result.stderr).toContain(`expected exactly one full Squirrel package named ${FULL}`)
   })
 
   it('verifies an exact draft asset inventory', () => {

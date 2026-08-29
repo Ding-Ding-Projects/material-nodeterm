@@ -16,6 +16,7 @@ import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
 import { renameAtomicSync } from './lib/rename-atomic.mjs'
+import { validateInstallerReceipt } from './installer-receipt.mjs'
 
 const require = createRequire(import.meta.url)
 const {
@@ -60,6 +61,7 @@ const parsed = parseArgs({
     candidate: { type: 'string' },
     'session-host': { type: 'string' },
     setup: { type: 'string' },
+    'installer-receipt': { type: 'string' },
     releases: { type: 'string' },
     nupkg: { type: 'string' },
     'app-asar': { type: 'string' },
@@ -148,6 +150,7 @@ function buildOptions() {
       'setup',
       path.join(repoRoot, 'dist', 'squirrel-windows', `nodeterm-Setup-${JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8')).version}.exe`)
     ),
+    installerReceipt: parsed.values['installer-receipt'] === undefined ? undefined : absolute('installer-receipt'),
     releases: optionalAbsolute('releases', path.join(repoRoot, 'dist', 'squirrel-windows', 'RELEASES')),
     nupkg: parsed.values.nupkg === undefined ? undefined : absolute('nupkg'),
     appAsar: optionalAbsolute('app-asar', path.join(repoRoot, 'dist', 'win-unpacked', 'resources', 'app.asar')),
@@ -203,8 +206,10 @@ function publicPlan(plan, options) {
       reason: 'Clipboard is not inspected or mutated in plan mode; execution remains fail-closed.'
     },
     installer: {
-      status: 'blocked',
-      reason: 'This route validates win-unpacked only; installer proof waits for correct PE identity and early Squirrel lifecycle handling.'
+      status: options.installerReceipt ? 'planned' : 'blocked',
+      reason: options.installerReceipt
+        ? 'A separate installer receipt was supplied and will be validated against the exact source commit during execution.'
+        : 'No installer receipt was supplied; this route validates win-unpacked only.'
     }
   }
 }
@@ -596,6 +601,27 @@ async function execute(plan, options) {
       throw new Error('Source/build provenance changed during packaged interaction.')
     }
 
+    let installer = {
+      status: 'blocked',
+      reason: 'No installer receipt was supplied; this acceptance run proves only the unpacked candidate.'
+    }
+    if (options.installerReceipt) {
+      const receipt = parseJsonDocument(
+        fs.readFileSync(options.installerReceipt, 'utf8'),
+        'Installer acceptance receipt'
+      )
+      const verified = await validateInstallerReceipt(receipt, { commit: plan.provenance.commit })
+      installer = {
+        status: 'verified',
+        version: verified.version,
+        packageId: verified.packageId,
+        productName: verified.productName,
+        installer: verified.installer,
+        sha256: verified.sha256,
+        assets: verified.assets
+      }
+    }
+
     const manifest = {
       schemaVersion: 1,
       routeStatus: 'passed',
@@ -630,11 +656,11 @@ async function execute(plan, options) {
         status: 'blocked',
         reason: 'Clipboard formats were not mutated; lossless all-format snapshot/restore is not available through the cheap route.'
       },
-      installer: {
-        status: 'blocked',
-        reason: 'Installer proof is separate and remains blocked until a fresh artifact has correct PE identity and Squirrel lifecycle handling.'
-      },
-      blockers: ['copy-paste-lossless-clipboard-restore', 'installed-squirrel-artifact-proof']
+      installer,
+      blockers: [
+        'copy-paste-lossless-clipboard-restore',
+        ...(installer.status === 'verified' ? [] : ['installed-squirrel-artifact-proof'])
+      ]
     }
     return { manifest, profiles: manifest.profiles.length, evidence: captures.length }
   }, cleanup, (completed) => {

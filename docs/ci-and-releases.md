@@ -74,13 +74,15 @@ job:
    install step here, immediately before it is needed.
 9. **Build and package through `npm run dist:win`.** The Windows-only wrapper runs the native
    preflight, regenerates and proves the committed seven-frame ICO at an immutable source-SHA URL,
-   clears stale generated output, builds the app and session host, invokes only the x64 Squirrel
-   target with publishing disabled, then verifies the nuspec and Setup/app/stub PE resources.
-10. **Validate a real, complete Squirrel set** with `scripts/release-assets.mjs`: the exact
-   version/product Setup, legacy `node-terminal` full package, optional matching delta, exact
-   `RELEASES`, no other output entry, semantic ID/version/title in every nupkg, and bidirectional
-   RELEASES SHA-1/name/size agreement. It emits the exact name/size/SHA-256 manifest later checked
-   against GitHub's hosted digests. The workflow also reruns the packaged icon/nuspec proof.
+   clears stale generated output, builds the app and session host through `build:app` (the release
+   route does not run repository quality checks), invokes only the x64 Squirrel target with
+   publishing disabled, then verifies the nuspec and Setup/app/stub PE resources.
+10. **Validate a real, complete Squirrel set** with `scripts/release-assets.mjs`: exactly three
+   assets, the exact version/product Setup, one `node-terminal` full package, and one `RELEASES`
+   index. Delta packages and unrelated output are refused. The validator also proves semantic
+   ID/version/title metadata and bidirectional RELEASES SHA-1/name/size agreement. It emits the
+   exact name/size/SHA-256 manifest later checked against GitHub's hosted digests. The workflow
+   also reruns the packaged icon/nuspec proof.
 11. **Verify the setup is genuinely unsigned** — Authenticode must report exactly `NotSigned`.
    An invalid, untrusted, or otherwise anomalous signature is not accepted as a synonym for
    unsigned (see [Signing](#signing) below).
@@ -146,6 +148,22 @@ state. Its gates deliberately mutate the trigger allowlist, pre-checkout `main` 
 tag, concurrency, package target, signing
 status, draft creation, upload retry, remote verification, and hidden package-script validation;
 source-text presence alone is not accepted as evidence.
+
+### Installer acceptance receipts
+
+The packaged acceptance route may receive an installer receipt through
+`--installer-receipt <absolute-json-path>`. `scripts/installer-receipt.mjs` validates that receipt
+against the exact source commit and recomputes the Setup executable's SHA-256 before promoting it
+into the acceptance manifest. A receipt must identify the stable version, package id, product name,
+the source commit, and exactly these three Squirrel assets: the product Setup executable,
+`RELEASES`, and the matching `-full.nupkg`. The validator rejects `dist/win-unpacked` executables,
+delta packages, missing files, changed bytes, and mismatched source or package identity.
+
+The unpacked executable remains useful for the cheap headless interaction route, but it is not
+installer evidence. The two claims are kept separate so a successful UI drive cannot accidentally
+promote a development directory as a downloadable installer. Visual evidence stays in the
+documented capture and issue records; it is not attached to a published release after the
+publication step.
 
 ### Token resolution
 

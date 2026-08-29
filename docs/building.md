@@ -224,7 +224,7 @@ the same version as `package.json`:
    - it is at least 5 MiB (a plausible-size floor that only exists to catch an obviously
      truncated or empty file, not a target);
    - on Windows, the directory contains the exact versioned Setup and legacy `node-terminal`
-     full package (plus only the matching delta when emitted), exact `RELEASES`, and no other
+     full package, exact `RELEASES`, and no other
      entry. Every package has one semantic nuspec whose ID/version/title match `package.json`, and
      every RELEASES SHA-1, filename, and byte size is checked bidirectionally;
    - the generated seven-frame `build/icon.ico` is committed at the exact source SHA, downloadable

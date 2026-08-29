@@ -9,8 +9,8 @@ newer one.
 
 **Building.** The desktop app uses
 [electron-builder](https://www.electron.build/). The active Windows delivery target is one
-unsigned Squirrel.Windows set: `Setup.exe`, `RELEASES`, one full `.nupkg`, and any delta package
-Squirrel emits for the candidate. ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only Windows
+unsigned Squirrel.Windows set: exactly `Setup.exe`, `RELEASES`, and one full `.nupkg`.
+Delta packages are not published. ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only Windows
 outputs are not supported parallel release routes. Native dependencies are rebuilt against the
 Electron ABI during installation.
 
