@@ -830,10 +830,10 @@ describe('exposeForeignThread — PR 3 primitive + verify-then-recycle (§4.2a, 
 describe('relay self-spawn + token transport (probe U6, GC 6 argv-spy)', () => {
   // Bundle the TS daemon to CJS and drive its CLI dispatch under plain `node` — the runnable half of
   // U6 (`process.argv[2]` switch; self-spawned `serve`; a real `/register` round-trip). The node
-  // capability token travels ONLY in env `NODETERM_CODEX_NODE_TOKEN`, never on argv; the control
-  // token lives only in the 0600 state file and is sent as an `Authorization: Bearer` header — this
-  // test proves registration SUCCEEDS with the token in env and FAILS without it, though the argv is
-  // byte-identical either way (the argv-spy: capability is env-borne, not command-line-borne).
+  // capability token travels ONLY over stdin, never on argv or in the environment; the control
+  // token lives only in the 0600 state file and is sent as an `Authorization: Bearer` header. This
+  // test proves registration SUCCEEDS with the token on stdin and FAILS without it, while the argv
+  // is byte-identical either way.
   const bundle = (): string => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const esbuild = require('esbuild')
@@ -851,13 +851,13 @@ describe('relay self-spawn + token transport (probe U6, GC 6 argv-spy)', () => {
     return out
   }
 
-  it('sources the node token from env, never argv, and mints a header-only control token', () => {
+  it('sources the node token from stdin, never argv or env, and mints a header-only control token', () => {
     const out = bundle()
     const home = mkdtempSync(path.join(tmpdir(), 'nt-relay-home-'))
     // The relay assumes its `~/.nodeterm` root exists (the app creates it at startup); the control
     // lock lives directly under it. Create it so the first register can self-spawn the server.
     mkdirSync(path.join(home, '.nodeterm'), { recursive: true })
-    const token = 'A'.repeat(43) // matches SAFE_NODE_TOKEN /^[A-Za-z0-9_-]{43}$/
+    const token = `${'K'.repeat(8)}.${'A'.repeat(43)}` // matches SAFE_NODE_TOKEN kid.mac
     const argv = [
       out,
       'register',
@@ -867,19 +867,24 @@ describe('relay self-spawn + token transport (probe U6, GC 6 argv-spy)', () => {
       path.join(home, 'hook.env')
     ]
     try {
-      // No token on argv, none in env: registration is refused at the argv validation gate.
+      // No token on argv, stdin, or env: registration is refused at the validation gate.
       const missing = spawnSync(process.execPath, argv, {
-        env: { ...process.env, HOME: home, NODETERM_CODEX_NODE_TOKEN: '' },
+        // Node resolves os.homedir() from USERPROFILE on Windows, not HOME. Pin both so the
+        // detached serve child and this registration process share the isolated fixture root.
+        env: { ...process.env, HOME: home, USERPROFILE: home, NODETERM_CODEX_NODE_TOKEN: '' },
+        input: '',
         encoding: 'utf8',
         timeout: 15_000
       })
       expect(missing.status).not.toBe(0)
       expect(missing.stderr).toContain('invalid relay registration')
 
-      // Same argv, token now in env: registration succeeds. The token is NEVER a command-line arg.
+      // Same argv, token now on stdin: registration succeeds. The token is NEVER a command-line
+      // argument or environment value.
       expect(argv).not.toContain(token)
       const ok = spawnSync(process.execPath, argv, {
-        env: { ...process.env, HOME: home, NODETERM_CODEX_NODE_TOKEN: token },
+        env: { ...process.env, HOME: home, USERPROFILE: home, NODETERM_CODEX_NODE_TOKEN: '' },
+        input: `${token}\n`,
         encoding: 'utf8',
         timeout: 15_000
       })
@@ -902,7 +907,10 @@ describe('relay self-spawn + token transport (probe U6, GC 6 argv-spy)', () => {
         closeSync(stateFd)
       }
       const state = JSON.parse(raw) as { token: string; pid: number }
-      expect(mode.toString(8)).toBe('600')
+      // Windows runtime reports POSIX mode bits from its ACL-backed files as 0666 even when the
+      // mode:600 request was made. The source still requests owner-only permissions; strict mode
+      // bits are meaningful on POSIX and are asserted there.
+      if (process.platform !== 'win32') expect(mode.toString(8)).toBe('600')
       expect(state.token).not.toBe(token)
       expect(raw).not.toContain(token)
 

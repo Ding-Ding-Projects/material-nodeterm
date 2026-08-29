@@ -71,15 +71,14 @@ describe('Codex local→SSH transfer source leg (Task 5.3)', () => {
     const res = (await call(
       IPC.codexAccountsTransferThreadToSsh,
       THREAD,
-      '/work',
-      PROJECT,
+      SOURCE,
       TARGET,
-      SOURCE
-    )) as { threadId: string; imported: boolean }
+      { projectId: PROJECT }
+    )) as { threadId: string }
 
-    expect(res).toEqual({ threadId: THREAD, imported: true })
+    expect(res).toEqual({ threadId: THREAD })
     expect(remoteCodexImportThread).toHaveBeenCalledTimes(1)
-    const [projectId, targetAccountId, threadId, sessionsRelativePath, localPath] =
+    const [projectId, targetAccountId, threadId, localPath, sessionsRelativePath] =
       remoteCodexImportThread.mock.calls[0] as unknown[]
     expect(projectId).toBe(PROJECT)
     expect(targetAccountId).toBe(TARGET)
