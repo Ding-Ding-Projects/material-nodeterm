@@ -341,6 +341,7 @@ if (dropSectionIndex >= 0 && scriptArgs[dropSectionIndex + 1]) {
   if (index >= 0) SETTINGS_SECTION_BOUNDARY_MANIFEST.splice(index, 1)
 }
 const CANONICAL_CANVAS_NOTIFY_CALL_IDS = `terminal-profile-create-unavailable terminal-create-placement-failed file-open-node-placement-failed working-diff-node-placement-failed commit-diff-node-placement-failed commit-explanation-node-placement-failed service-node-placement-failed sticky-node-placement-failed authenticator-node-placement-failed native-loop-node-placement-failed nsis-node-placement-failed dino-node-placement-failed web-node-placement-failed browser-node-placement-failed files-node-placement-failed trigger-node-placement-failed catalog-node-unavailable aws-universe-create-unavailable catalog-node-placement-failed claude-account-login-node-placement-failed codex-account-login-node-placement-failed agent-node-placement-failed explorer-agent-folder-drop-stale-project explorer-agent-folder-drop-missing-source explorer-agent-folder-node-placement-failed explorer-terminal-folder-drop-stale-project explorer-terminal-folder-node-placement-failed ssh-terminal-node-placement-failed wsl-group-node-placement-failed worktree-group-node-placement-failed duplicate-node-placement-failed terminal-profile-restart-disabled terminal-profile-restart-failed conversation-branch-failed conversation-branch-node-placement-failed conversation-transfer-not-ready conversation-transfer-failed conversation-transfer-node-placement-failed reopen-last-closed-node-placement-failed board-terminal-profile-unavailable board-node-placement-failed transcript-resume-node-placement-failed canvas-control-node-placement-failed canvas-control-verify-node-placement-failed portable-media-inspection-failed project-save-busy project-save-progress project-save-success project-save-cancelled project-save-failed project-password-mismatch project-open-busy project-open-cancelled project-open-password-check project-open-success project-open-failed test-notification kiosk-pwa-node-placement-failed`.split(/\s+/)
+CANONICAL_CANVAS_NOTIFY_CALL_IDS.splice(43, 0, 'linked-agent-inbox-updated')
 // Keep the expected title evidence independent from the mutable callsite count. A replacement
 // notification with the same number of arguments must not make the inventory look complete.
 const CANONICAL_CANVAS_NOTIFY_TITLE_MARKERS = [
@@ -366,6 +367,7 @@ const CANONICAL_CANVAS_NOTIFY_TITLE_MARKERS = [
   ['Project open cancelled', 1],
   ['Unlocking project file…', 1],
   ['Project opened from file', 1],
+  ['Linked agent inbox updated', 1],
   ['Planner definitions configured', 1],
   ['Planner configuration failed', 1],
   ['Project open failed', 1],
@@ -454,6 +456,7 @@ const canvasNotifyCalls = callArguments(read('src/renderer/canvas/Canvas.tsx') |
   // `window.nodeTerminal.notify` calls while retaining multiline object literals.
   .filter((args) => /\bkind\s*:/.test(args) && /\btitle\s*:/.test(args))
 check('canonical Canvas notification inventory is independent and complete', canvasNotifyCalls.length === CANONICAL_CANVAS_NOTIFY_CALL_IDS.length)
+check('canonical Canvas notification IDs are unique', new Set(CANONICAL_CANVAS_NOTIFY_CALL_IDS).size === CANONICAL_CANVAS_NOTIFY_CALL_IDS.length)
 check('every Canvas notification has explicit title ownership', canvasNotifyCalls.length === CANONICAL_CANVAS_NOTIFY_CALL_IDS.length && canvasNotifyCalls.every((args) => /\btitleKind\s*:/.test(args)))
 check('every Canvas notification body has explicit ownership', canvasNotifyCalls.length === CANONICAL_CANVAS_NOTIFY_CALL_IDS.length && canvasNotifyCalls.filter((args) => /\bbody\s*:/.test(args)).every((args) => /\bbodyKind\s*:/.test(args)))
 for (const [marker, expected] of CANONICAL_CANVAS_NOTIFY_TITLE_MARKERS) {
@@ -640,6 +643,13 @@ if (!fixtureRun) {
     const quote = String.fromCharCode(96)
     const lines = readFileSync(path, 'utf8').split(/\r?\n/)
     writeFileSync(path, lines.filter((line) => !line.includes('| ' + quote + 'tooltip' + quote + ' |')).join('\n'), 'utf8')
+  })
+  runFreshFixtureMutation('full checker rejects a removed linked-agent inbox notification', (root) => {
+    const path = join(root, 'src/renderer/canvas/Canvas.tsx')
+    const source = readFileSync(path, 'utf8')
+    const marker = "title: 'Linked agent inbox updated'"
+    if (!source.includes(marker)) throw new Error('linked-agent inbox marker was not present in the fixture')
+    writeFileSync(path, source.replace(marker, ''), 'utf8')
   })
   for (const [id, file, marker] of PRODUCERS.filter(([producerId]) => [
     'veracrypt-node', 'repository-graph-node', 'unigetui-node', 'unigetui-panel',
