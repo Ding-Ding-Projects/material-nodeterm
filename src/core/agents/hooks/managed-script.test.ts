@@ -45,7 +45,7 @@ describe('buildManagedScript', () => {
       '$HOME/.nodeterm/codex-thread-nodes/$nt_codex_scope/$CODEX_THREAD_ID'
     )
     expect(codex.indexOf('nt_codex_map=')).toBeLessThan(
-      codex.indexOf('if [ -z "$NODETERM_NODE_ID" ]; then\n  exit 0')
+      codex.indexOf('if [ -z "$NODETERM_NODE_ID" ]; then')
     )
   })
   it('posts a mapped resumed Codex hook under its own node id', () => {

@@ -11,6 +11,7 @@ import {
   CONTEXT_UNREACHABLE_MSG
 } from './context-link-core'
 import { CODEX_SANDBOX_BLOCKED_LINE } from './agents/hook-sandbox-hint-sh'
+import { environmentForPosixShell, REAL_POSIX_SHELL, pathForPosixShell } from './testing/posix-shell'
 
 describe('buildLinkDoc', () => {
   it('enriches each link with tmux name, injected transcript path, and cwd', () => {
@@ -244,7 +245,11 @@ describe('the context-link shim', () => {
     const file = path.join(dir, 'context.sh')
     fs.writeFileSync(file, CONTEXT_SHIM_SCRIPT, { mode: 0o755 })
     try {
-      await expect(promisify(execFile)('/bin/sh', ['-n', file])).resolves.toBeTruthy()
+      await expect(
+        promisify(execFile)(REAL_POSIX_SHELL, ['-n', pathForPosixShell(file)], {
+          env: environmentForPosixShell()
+        })
+      ).resolves.toBeTruthy()
     } finally {
       fs.rmSync(dir, { recursive: true, force: true })
     }

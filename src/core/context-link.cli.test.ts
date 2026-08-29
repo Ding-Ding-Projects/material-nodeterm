@@ -518,14 +518,14 @@ describe('context-link shim keeps credentials off curl\'s command line', { timeo
 // failure tail — with its own generic sentence kept byte-for-byte for the non-sandbox case.
 describe('codex-sandbox self-diagnosis (issue #367)', () => {
   function deadRun(env: Record<string, string>): Promise<{ stderr: string; code?: number }> {
-    return run('/bin/sh', [shim, 'list'], {
-      env: {
+    return run(REAL_POSIX_SHELL, [pathForPosixShell(shim), 'list'], {
+      env: environmentForPosixShell(pathsForPosixShellEnv({
         PATH: process.env.PATH ?? '',
         NODETERM_NODE_ID: 'node-A',
         NODETERM_HOOK_SOCK: join(dir, 'nobody-listens.sock'),
         NODETERM_HOOK_TOKEN: 'x',
         ...env
-      }
+      }, ['NODETERM_HOOK_SOCK']))
     }).then(
       () => ({ stderr: '' }),
       (e) => e as { stderr: string; code?: number }
@@ -548,14 +548,14 @@ describe('codex-sandbox self-diagnosis (issue #367)', () => {
   })
 
   it('a healthy endpoint is untouched by the sandbox var (failure-path only)', async () => {
-    const out = await run('/bin/sh', [shim, 'list'], {
-      env: {
+    const out = await run(REAL_POSIX_SHELL, [pathForPosixShell(shim), 'list'], {
+      env: environmentForPosixShell({
         PATH: process.env.PATH ?? '',
         NODETERM_NODE_ID: 'node-A',
         NODETERM_HOOK_PORT: String(hookServer.getPort()),
         NODETERM_HOOK_TOKEN: hookServer.getToken(),
         CODEX_SANDBOX_NETWORK_DISABLED: '1'
-      }
+      })
     })
     expect(out.stdout).toContain('Builder')
   })
