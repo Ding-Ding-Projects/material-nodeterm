@@ -101,6 +101,7 @@ import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
+import AwsWizardNode from '../nodes/AwsWizardNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import WebNode from '../nodes/WebNode'
@@ -576,6 +577,7 @@ import {
   createSshTerminalNode,
   createAuthenticatorNode,
   createNsisNode,
+  createAwsWizardNode,
   createStickyNode,
   createTerminalNode,
   nodeSshFor,
@@ -1806,6 +1808,7 @@ export function Canvas() {
       // they behave as canvas objects, and React Flow hands each its own `type` so the component can
       // tell them apart without six registrations of six near-identical files.
       nsis: withNodeBoundary(NsisInstallerNode),
+      'aws-wizard': withNodeBoundary(AwsWizardNode),
       minecraft: withNodeBoundary(ServiceNode),
       dockerhost: withNodeBoundary(ServiceNode),
       proxmox: withNodeBoundary(ServiceNode),
@@ -4617,6 +4620,19 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createNsisNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  /** Adds the offline schema-driven AWS request wizard. It builds safe intent only and never
+   * executes a provider request; selected file paths remain machine-local renderer state. */
+  const addAwsWizard = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createAwsWizardNode(ns.length, center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -8928,6 +8944,11 @@ export function Canvas() {
               onClick: () => addNsis(at)
             },
             {
+              label: 'New AWS request wizard',
+              icon: <IconRemote />,
+              onClick: () => addAwsWizard(at)
+            },
+            {
               label: 'New dino game',
               icon: <IconDino />,
               onClick: () => addDino(at)
@@ -9046,6 +9067,7 @@ export function Canvas() {
       addSticky,
       addAuthenticator,
       addNsis,
+      addAwsWizard,
       addNativeLoop,
       addDino,
       addBrowser,
@@ -13028,6 +13050,12 @@ export function Canvas() {
             run: () => addNsis()
           },
           {
+            id: 'new-aws-wizard',
+            label: 'New AWS request wizard',
+            icon: <IconRemote />,
+            run: () => addAwsWizard()
+          },
+          {
             id: 'new-dino',
             label: 'New dino game',
             icon: <IconDino />,
@@ -13376,6 +13404,7 @@ export function Canvas() {
     addAgentNode,
     addSticky,
     addNsis,
+    addAwsWizard,
     addNativeLoop,
     addDino,
     addWebView,

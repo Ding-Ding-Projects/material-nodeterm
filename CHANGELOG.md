@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an offline schema-driven AWS request wizard canvas node with searchable typed controls for
+  enums, switches, bounded numbers, dates/times, local file selection, repeatable lists/maps,
+  nested values, and synchronized JSON/YAML review. The node never executes a provider request;
+  service integration and runtime verification remain separate work.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

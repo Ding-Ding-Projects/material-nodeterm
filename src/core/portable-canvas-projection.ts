@@ -8,6 +8,8 @@
  */
 
 import type { BridgeLink, CanvasNodeState, Project, Viewport } from '../shared/types'
+import type { AwsWizardField, AwsWizardSchema, AwsWizardSpec } from '../shared/aws-wizard'
+import { validateAwsWizardValues } from '../shared/aws-wizard'
 import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEMA_VERSION } from './portable-project-v3'
 import { sanitizeProjectIcon } from '../shared/project-icon'
 
@@ -38,6 +40,7 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  awsWizardSpec?: AwsWizardSpec
 }
 
 export interface PortableRelationshipV3 {
@@ -81,17 +84,21 @@ export const PORTABLE_CANVAS_LIMITS = {
 } as const
 
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
+const SAFE_KEY = /^[A-Za-z0-9_.:-]{1,128}$/
 const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'appearance'])
 const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'awsWizardSpec'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
 const ALLOWED_RELATIONSHIP = new Set(['id', 'kind', 'source', 'target', 'order'])
 const ALLOWED_APPEARANCE = new Set(['theme', 'density', 'seedColor', 'fontFamily', 'fontSize', 'fontWeight', 'motion'])
+const ALLOWED_WIZARD_SCHEMA = new Set(['schemaVersion', 'service', 'operation', 'label', 'description', 'input'])
+const ALLOWED_WIZARD_FIELD = new Set(['kind', 'label', 'description', 'required', 'requiredProperties', 'default', 'min', 'max', 'step', 'minLength', 'maxLength', 'pattern', 'accept', 'options', 'properties', 'items', 'minItems', 'maxItems', 'values', 'maxEntries'])
+const ALLOWED_WIZARD_OPTION = new Set(['value', 'label'])
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -111,6 +118,64 @@ function text(value: unknown, label: string): string {
 function content(value: unknown, label: string): string {
   if (typeof value !== 'string' || new TextEncoder().encode(value).byteLength > PORTABLE_CANVAS_LIMITS.maxStringBytes) throw new PortableProjectV3Error('manifest', `Portable ${label} exceeds its UTF-8 bound.`)
   return value
+}
+
+function wizardField(value: unknown, depth = 0): AwsWizardField {
+  if (!record(value) || depth > PORTABLE_CANVAS_LIMITS.maxDepth) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard schema exceeds its bounds.')
+  exactKeys(value, ALLOWED_WIZARD_FIELD, 'AWS wizard field')
+  if (typeof value.kind !== 'string' || !['string', 'number', 'integer', 'boolean', 'date', 'time', 'date-time', 'file', 'enum', 'object', 'array', 'map'].includes(value.kind)) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard field kind is invalid.')
+  if (typeof value.label !== 'string' || value.label.length === 0) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard field label is invalid.')
+  const common: Record<string, unknown> = { kind: value.kind, label: content(value.label, 'AWS wizard field label') }
+  if (value.description !== undefined) common.description = content(value.description, 'AWS wizard field description')
+  if (value.required !== undefined && typeof value.required !== 'boolean') throw new PortableProjectV3Error('manifest', 'Portable AWS wizard required flag is invalid.')
+  if (value.required !== undefined) common.required = value.required
+  if (value.requiredProperties !== undefined) {
+    if (!Array.isArray(value.requiredProperties)) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard required properties are invalid.')
+    common.requiredProperties = value.requiredProperties.map((key) => content(key, 'AWS wizard required property'))
+  }
+  if (value.default !== undefined) common.default = wizardData(value.default, depth + 1)
+  for (const key of ['min', 'max', 'step', 'minLength', 'maxLength', 'minItems', 'maxItems', 'maxEntries']) {
+    if (value[key] !== undefined) common[key] = finite(value[key], `AWS wizard ${key}`)
+  }
+  for (const key of ['pattern']) if (value[key] !== undefined) common[key] = content(value[key], `AWS wizard ${key}`)
+  if (value.accept !== undefined) { if (!Array.isArray(value.accept)) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard file types are invalid.'); common.accept = value.accept.map((item) => content(item, 'AWS wizard file type')) }
+  if (value.kind === 'enum') {
+    if (!Array.isArray(value.options) || value.options.length > 100) throw new PortableProjectV3Error('entry-limit', 'Portable AWS wizard options exceed their bound.')
+    common.options = value.options.map((option) => { if (!record(option)) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard option is invalid.'); exactKeys(option, ALLOWED_WIZARD_OPTION, 'AWS wizard option'); return { value: content(option.value, 'AWS wizard option value'), label: content(option.label, 'AWS wizard option label') } })
+  } else if (value.kind === 'object') {
+    if (!record(value.properties)) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard properties are invalid.')
+    for (const key of (value.requiredProperties ?? []) as unknown[]) if (typeof key !== 'string' || !Object.prototype.hasOwnProperty.call(value.properties, key)) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard required property is unknown.')
+    common.properties = Object.fromEntries(Object.keys(value.properties).sort().map((key) => { if (!SAFE_KEY.test(key) || UNSAFE_KEYS.has(key)) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard property key is invalid.'); return [key, wizardField(value.properties[key], depth + 1)] }))
+  } else if (value.kind === 'array') {
+    common.items = wizardField(value.items, depth + 1)
+  } else if (value.kind === 'map') {
+    common.values = wizardField(value.values, depth + 1)
+  }
+  return common as AwsWizardField
+}
+
+function wizardData(value: unknown, depth = 0, count = { value: 0 }): unknown {
+  if (++count.value > PORTABLE_CANVAS_LIMITS.maxNodes || depth > PORTABLE_CANVAS_LIMITS.maxDepth) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard values exceed their bounds.')
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return typeof value === 'string' ? content(value, 'AWS wizard value') : value
+  if (typeof value === 'number') return finite(value, 'AWS wizard value')
+  if (Array.isArray(value)) return value.map((item) => wizardData(item, depth + 1, count))
+  if (!record(value)) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard value is unsafe.')
+  const out: Record<string, unknown> = {}
+  for (const key of Object.keys(value).sort()) { if (!SAFE_KEY.test(key) || UNSAFE_KEYS.has(key)) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard value key is invalid.'); out[key] = wizardData(value[key], depth + 1, count) }
+  return out
+}
+
+function wizardSpec(value: unknown): AwsWizardSpec {
+  if (!record(value) || !record(value.schema) || !record(value.values)) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard specification is invalid.')
+  exactKeys(value, new Set(['schema', 'values']), 'AWS wizard specification')
+  exactKeys(value.schema, ALLOWED_WIZARD_SCHEMA, 'AWS wizard schema')
+  if (value.schema.schemaVersion !== 1) throw new PortableProjectV3Error('manifest', 'Portable AWS wizard schema version is unsupported.')
+  for (const key of ['service', 'operation', 'label', 'description']) if (typeof value.schema[key] !== 'string' || value.schema[key].length === 0) throw new PortableProjectV3Error('manifest', `Portable AWS wizard ${key} is invalid.`)
+  const schema = { schemaVersion: 1, service: content(value.schema.service, 'AWS wizard service'), operation: content(value.schema.operation, 'AWS wizard operation'), label: content(value.schema.label, 'AWS wizard label'), description: content(value.schema.description, 'AWS wizard description'), input: wizardField(value.schema.input) } as AwsWizardSchema
+  const values = wizardData(value.values) as Record<string, unknown>
+  const errors = validateAwsWizardValues(schema, values)
+  if (errors.length) throw new PortableProjectV3Error('manifest', `Portable AWS wizard values are invalid at ${errors[0]!.path}.`)
+  return { schema, values }
 }
 
 function finite(value: unknown, label: string): number {
@@ -159,6 +224,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.parentId !== undefined && typeof node.parentId !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node parent is invalid.')
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
+  if (strict && node.awsWizardSpec !== undefined) wizardSpec(node.awsWizardSpec)
   if (strict && node.browserTabs !== undefined && !Array.isArray(node.browserTabs)) throw new PortableProjectV3Error('manifest', 'Portable browser tabs must be an array.')
   if (node.collapsed !== undefined) out.collapsed = node.collapsed
   if (node.parentId !== undefined) out.parentId = text(node.parentId, 'parent id')
@@ -166,6 +232,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.awsWizardSpec !== undefined) out.awsWizardSpec = wizardSpec(node.awsWizardSpec)
   if (node.browserTabs !== undefined) {
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
     out.browserTabs = node.browserTabs.map((tab) => { if (!record(tab)) throw new PortableProjectV3Error('manifest', 'Portable browser tab is invalid.'); exactKeys(tab, ALLOWED_TAB, 'browser tab'); const url = safeUrl(tab.url, 'browser tab URL'); return { id: text(tab.id, 'browser tab id'), ...(url ? { url } : {}), title: content(tab.title, 'browser tab title') } })

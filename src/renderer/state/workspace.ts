@@ -3,6 +3,8 @@ import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, Cl
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
+import type { AwsWizardSpec } from '@shared/aws-wizard'
+import { defaultAwsWizardSpec } from '@shared/aws-wizard'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
 import {
   agentConfig,
@@ -177,6 +179,10 @@ export interface NodeData {
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
    *  from the shared document and from inbound peers; see shared/node-exec.ts. */
   nsisLocalPaths?: NsisLocalPaths
+  /** aws-wizard-only, GIT-SHARED: schema and safe request intent. File paths live only in memory. */
+  awsWizardSpec?: AwsWizardSpec
+  /** aws-wizard-only, MACHINE-LOCAL renderer overlay, never serialized to project.json. */
+  awsWizardFiles?: Record<string, string>
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
   /**
@@ -938,6 +944,7 @@ export function createDiffNode(
 /** Creates a new sticky note. */
 const AUTHENTICATOR_SIZE = { width: 340, height: 260 }
 const NSIS_SIZE = { width: 460, height: 520 }
+const AWS_WIZARD_SIZE = { width: 680, height: 760 }
 
 /**
  * A view of this machine's own TOTP generators, on the canvas.
@@ -1054,6 +1061,26 @@ export function createNsisNode(index: number, center?: { x: number; y: number })
       group: null,
       nsisSpec: defaultNsisSpec(),
       nsisLocalPaths: defaultNsisLocalPaths()
+    }
+  }
+}
+
+/** Creates a schema-driven AWS request wizard. It only builds a validated local request shape and
+ * never calls AWS or stores credentials. Paths selected by file controls remain machine-local. */
+export function createAwsWizardNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('aws-wizard'),
+    type: 'aws-wizard',
+    position: placeAt(center, index, AWS_WIZARD_SIZE.width, AWS_WIZARD_SIZE.height),
+    width: AWS_WIZARD_SIZE.width,
+    height: AWS_WIZARD_SIZE.height,
+    style: { width: AWS_WIZARD_SIZE.width, height: AWS_WIZARD_SIZE.height },
+    data: {
+      title: 'AWS request wizard',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      awsWizardSpec: defaultAwsWizardSpec(),
+      awsWizardFiles: {}
     }
   }
 }
@@ -1466,7 +1493,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
-  nsis: true
+  nsis: true,
+  'aws-wizard': true
 }
 
 /**
@@ -1505,7 +1533,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
-  nsis: NSIS_SIZE
+  nsis: NSIS_SIZE,
+  'aws-wizard': AWS_WIZARD_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1918,6 +1947,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         serviceConnection: n.serviceConnection,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
+        awsWizardSpec: n.awsWizardSpec,
         filePath: n.filePath,
         fileMissing: n.fileMissing,
         url: n.url,
@@ -1993,6 +2023,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         serviceConnection: n.data.serviceConnection,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
+        awsWizardSpec: n.data.awsWizardSpec,
         filePath: n.data.filePath,
         fileMissing: n.data.fileMissing,
         url: n.data.url,

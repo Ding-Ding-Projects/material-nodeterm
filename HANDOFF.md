@@ -1,5 +1,23 @@
 # Handoff
 
+## 2026-08-26, AWS wizard generator lane
+
+Implemented issue #43's schema-driven AWS request wizard in `src/shared/aws-wizard.ts` and
+`src/renderer/nodes/AwsWizardNode.tsx`, registered as the `aws-wizard` canvas kind with a creation
+entry in the canvas context menu and command palette. The starter schema exercises enums, switches,
+bounded integers, date/time fields, a local file picker, repeatable lists and maps, nested objects,
+and a bounded safe-key validator. The typed controls and advanced JSON/YAML views use the same
+values and schema, while selected file paths remain a renderer-only machine-local overlay.
+
+Added the categorized article `docs/features/aws-wizard-generator.md`, its offline bundle entry,
+Material token styling, a feature-index row, roadmap entry, and Unreleased changelog entry. No AWS
+credentials, network calls, service execution, arbitrary command textbox, or provider mutation is
+included.
+
+This lane deliberately did not run automated checks, type checks, lint, builds, packaging, runtime
+interaction, service execution, or screenshots. Integration must perform those checks and inspect
+the real bundled application before treating the feature as verified.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

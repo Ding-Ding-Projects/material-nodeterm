@@ -84,6 +84,10 @@ later commit, since this file will not be kept in lockstep with every merge).
       section; subagent visualization and Context Link remain claude-only/unbuilt for Grok
       specifically (`SUBAGENT_CAPABLE`/`CONTEXT_LINK_CAPABLE` exclude Grok — its
       `updates.jsonl` parser is unbuilt).
+- [ ] **AWS wizard generator (#43)** — schema-driven offline request planning node with typed
+      enum, switch, bounded number, date/time, local file, repeatable list/map, nested, and
+      synchronized JSON/YAML controls. Implementation is present in this lane; focused checks,
+      packaged interaction, and release evidence remain for integration.
 
 ## Known open defects (filed, unfixed)
 

@@ -11230,3 +11230,185 @@ button.term-node__title-text:focus-visible {
 .icon-menu__reset-btn {
   align-self: flex-start;
 }
+/* AWS request wizard (docs/features/aws-wizard-generator.md). The wizard is intentionally an
+   offline typed editor: it has no service button and no free-form command field. */
+.aws-wizard-node {
+  min-width: 520px;
+  min-height: 520px;
+}
+
+.aws-wizard__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  min-height: 0;
+  overflow: auto;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-low);
+}
+
+.aws-wizard__intro,
+.aws-wizard__field,
+.aws-wizard__object,
+.aws-wizard__collection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.aws-wizard__intro strong {
+  color: var(--md-on-surface);
+  font-size: 15px;
+}
+
+.aws-wizard__intro span,
+.aws-wizard__description,
+.aws-wizard__bounds,
+.aws-wizard__advanced-note {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.aws-wizard__offline-note {
+  color: var(--md-primary);
+  font-weight: 600;
+}
+
+.aws-wizard__search {
+  padding: 0;
+}
+
+.aws-wizard__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.aws-wizard__editor-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.aws-wizard__typed,
+.aws-wizard__advanced {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aws-wizard__object,
+.aws-wizard__collection {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 0;
+}
+
+.aws-wizard__object legend,
+.aws-wizard__collection legend {
+  padding: 0 6px;
+  color: var(--md-on-surface);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.aws-wizard__children {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aws-wizard__label {
+  color: var(--md-on-surface);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.aws-wizard__switch-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.aws-wizard__switch-field .aws-wizard__description,
+.aws-wizard__switch-field .aws-wizard__error {
+  grid-column: 1 / -1;
+}
+
+.aws-wizard__enum-search,
+.aws-wizard__file-row,
+.aws-wizard__map-row,
+.aws-wizard__collection-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.aws-wizard__enum-search .mdx-input,
+.aws-wizard__file-row .mdx-input,
+.aws-wizard__map-row .mdx-input {
+  min-width: 0;
+  flex: 1;
+}
+
+.aws-wizard__collection-row > .aws-wizard__field,
+.aws-wizard__map-row > .aws-wizard__field {
+  flex: 1;
+  min-width: 0;
+}
+
+.aws-wizard__advanced textarea {
+  width: 100%;
+  min-height: 330px;
+  resize: vertical;
+  box-sizing: border-box;
+  border: 1px solid var(--md-outline);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.aws-wizard__error {
+  color: var(--md-error);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.aws-wizard__empty {
+  margin: 0;
+  padding: 8px;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  border: 1px dashed var(--md-outline-variant);
+  border-radius: 8px;
+}
+
+.aws-wizard__status {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.aws-wizard__status.is-valid {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.aws-wizard__status.is-invalid {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+
+@media (max-width: 900px) {
+  .aws-wizard-node { min-width: 420px; }
+  .aws-wizard__editor-grid { grid-template-columns: 1fr; }
+}
