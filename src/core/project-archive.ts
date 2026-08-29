@@ -46,6 +46,8 @@ import { looksLikeContainer, openContainer, packContainer, type ContainerEntry }
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
 export * from './portable-canvas-projection'
+// Hosted-service providers share the same bounded archive, compatibility, and rollback seam.
+export * from './hosted-service-backup'
 
 /** V1 JSON-text archives keep their historical cap. */
 const MAX_ARCHIVE_BYTES_V1 = 180 * 1024 * 1024

@@ -1,5 +1,30 @@
 # Handoff
 
+# 2026-08-26, shared hosted-service backup and restore framework
+
+Implemented the provider-neutral backup and restore foundation in
+`src/shared/hosted-service-backup.ts` and `src/core/hosted-service-backup.ts`.
+
+The shared contract carries a versioned `nodeterm-hosted-service-backup` manifest with service
+identity, owner identity, edition, minimum reader version, per-resource kind/version/edition and
+SHA-256 metadata, raw and compressed byte totals, canonical payload hash, explicit encryption
+choice, and omission records. Credentials, machine-local bindings, external state, unsupported
+resources, and oversized resources remain represented as omissions rather than entering a portable
+archive. Relative archive paths and resource identifiers are validated and host paths are refused.
+
+The core engine builds bounded ZIP archives, supports plain and password-protected AES-256-GCM
+archives, verifies framing and every hash before restore, publishes files through the shared atomic
+rename helper, and preflights free storage. Restore has a read-only preview, service/version/
+edition/owner/resource compatibility checks, explicit ownership adoption, a two-key confirmation
+bound to the exact resource set, cancellable byte/resource progress, machine-local staging, and
+provider adapter rollback hooks around mutation. The framework never deploys a service or calls a
+provider itself.
+
+Documentation is in `docs/features/integrations/hosted-service-backups.md`, linked from the
+integrations index. The roadmap and Unreleased changelog now describe the implementation and its
+remaining provider, UI, and verification work. Tests, builds, captures, provider adapters, and
+commits were intentionally not run or created in this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

@@ -175,6 +175,11 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add GitLab Server CE and EE hosting profiles with backup and restore.
 - [ ] Add Nextcloud AIO and managed no-socket hosting profiles.
 - [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
+- [ ] Add the shared hosted-service backup and restore framework with ownership, version, edition,
+      and resource compatibility checks. Core archive framing, hashes, encryption choice, atomic
+      publication, progress, cancellation, storage preflight, restore preview, rollback hooks, and
+      machine-local path boundaries are implemented; provider adapters, UI wiring, and verification
+      remain pending.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
 - [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.

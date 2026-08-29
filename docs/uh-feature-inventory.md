@@ -100,6 +100,7 @@ and then never edited this file.
 
 | Feature | What is missing | Closes when | Notes |
 | --- | --- | --- | --- |
+| Shared hosted-service backup and restore | Core framework is present; provider adapters, renderer controls, focused tests, and built-artifact evidence remain. | `manual:provider adapters and user-facing restore surfaces are separate lanes; this lane intentionally does not run tests or builds` | `src/shared/hosted-service-backup.ts`, `src/core/hosted-service-backup.ts`, and `docs/features/integrations/hosted-service-backups.md` define the shared contract and implementation. |
 | Status Hub | The registration half only. | `manual:the shared Hub is an external service; nothing in this repository can observe whether registration happened` | **Narrowed 2026-08-20, and the app half is now in the Shipped table above as its own contract row.** The surface shipped in `3e96ad78` — `src/renderer/components/StatusSurface.tsx`, `src/shared/project-status.ts`, `docs/status-surface.md`, 31 tests in `src/shared/project-status.test.ts`, and a `status-surface` row in `scripts/check-app-contract.mjs`. What remains is reporting *into* the shared Hub, which is a service outside this tree — hence the `manual:` predicate rather than a machine-checkable one. |
 
 ---

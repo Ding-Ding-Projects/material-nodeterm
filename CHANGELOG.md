@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add the shared hosted-service backup and restore framework for future GitLab, Nextcloud, and Open
+  WebUI adapters. It validates ownership, service version, edition, and resource compatibility;
+  writes bounded ZIP archives with manifests, SHA-256 hashes, explicit omission records, optional
+  password encryption, storage preflight, progress and cancellation, atomic publication, restore
+  preview, two-key confirmation, machine-local staging, and adapter rollback hooks. Provider
+  adapters, renderer wiring, and verification remain pending.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.
