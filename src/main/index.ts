@@ -44,6 +44,7 @@ import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
+import { registerCloudflaredIpc } from './cloudflared-runtime'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
@@ -1469,6 +1470,14 @@ app.whenReady().then(async () => {
   registerConverterIpc(corePlatform)
   registerOllamaIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
+  // Cloudflared owns a machine-local connector lifecycle. Its token is written to a protected
+  // user-data file and the runtime receives only that file path, never token material in argv or
+  // environment. Docker launches are constrained by the manager's read-only/no-capabilities
+  // policy, while Windows service installation deliberately goes through UAC.
+  registerCloudflaredIpc(corePlatform, {
+    userDataDir: app.getPath('userData'),
+    resourcesPath: process.resourcesPath
+  })
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({

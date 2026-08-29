@@ -373,6 +373,7 @@ export type NodeKind =
   | 'gitlab'
   | 'homeassistant'
   | 'freepbx'
+  | 'cloudflared'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -385,7 +386,8 @@ export const SERVICE_NODE_KINDS = [
   'proxmox',
   'gitlab',
   'homeassistant',
-  'freepbx'
+  'freepbx',
+  'cloudflared'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -514,6 +516,8 @@ export interface CanvasNodeState {
    * reasons. It never carries a secret; see `ServiceConnection` in shared/node-exec.ts.
    */
   serviceConnection?: ServiceConnection
+  /** cloudflared-only machine-local runtime choice; the connector token remains in a protected file. */
+  cloudflaredSettings?: import('./cloudflared').CloudflaredRuntimeSettings
   /**
    * nsis-only, GIT-SHARED: the installer's description (app name, version, publisher, output
    * filename, install root, shortcut/uninstaller/compression choices). Nothing here names a
@@ -3798,6 +3802,8 @@ export interface NodeTerminalApi {
   ollama: import('./ollama').OllamaApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** Cloudflared connector runtimes — protected token file, process/service/Docker lifecycle. */
+  cloudflared: import('./cloudflared').CloudflaredRuntimeApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

@@ -7,12 +7,13 @@ import { safeServiceEndpoint } from '@shared/node-exec'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
+import { CloudflaredRuntimePanel } from '../components/cloudflared/CloudflaredRuntimePanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 
 /**
- * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
- * and FreePBX. They differ in what they will eventually manage, not in how they behave as canvas
- * objects, so six near-identical components would be six copies of one rule waiting to drift.
+ * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant,
+ * FreePBX, and the cloudflared connector. They differ in what they manage, not in how they behave
+ * as canvas objects, so near-identical components would be copies of one rule waiting to drift.
  *
  * WHAT THIS DELIBERATELY DOES NOT DO for five of the six kinds, and why the emptiness is the point:
  *
@@ -47,7 +48,8 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   proxmox: 'https://proxmox.local:8006',
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
-  freepbx: 'https://pbx.local'
+  freepbx: 'https://pbx.local',
+  cloudflared: 'http://127.0.0.1:3000'
 }
 
 /**
@@ -226,8 +228,15 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
         </div>
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
+        {!collapsed && kind === 'cloudflared' && (
+          <CloudflaredRuntimePanel
+            nodeId={id}
+            settings={data.cloudflaredSettings}
+            onSettings={(next) => updateNodeData(id, { cloudflaredSettings: next })}
+          />
+        )}
 
-        {!collapsed && kind !== 'minecraft' && (
+        {!collapsed && kind !== 'minecraft' && kind !== 'cloudflared' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">Address</span>

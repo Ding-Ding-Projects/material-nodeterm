@@ -108,7 +108,7 @@ need a live agent session and a reachable host, so the harness skips them loudly
 Right-click to open a **terminal** or an **agent** node. Alongside them live **sticky notes**
 (link one to a terminal to feed it context on demand), **Monaco editors**, **diff views**, web and
 browser views, annotations, and a family of **service managers** — Minecraft, Docker host,
-Proxmox, GitLab, Home Assistant and FreePBX — each an ordinary node you drag, colour, group and
+Proxmox, GitLab, Home Assistant, FreePBX, and a Cloudflared connector — each an ordinary node you drag, colour, group and
 persist like any other, because a managed service is something you arrange beside the terminals
 working on it, not a modal you visit.
 

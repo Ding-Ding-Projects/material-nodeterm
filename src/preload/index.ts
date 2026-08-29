@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { CloudflaredRuntimeStatus } from '../shared/cloudflared'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -75,6 +76,7 @@ const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateC
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
 const subscribeRelayHostOpen = subscribe<[{ id: string; email?: string }]>(IPC.relayHostOpen)
 const subscribeRelayHostClosed = subscribe<[{ id: string }]>(IPC.relayHostClosed)
+const subscribeCloudflaredStatus = subscribe<[{ nodeId: string; status: CloudflaredRuntimeStatus }]>(IPC.cloudflaredStatusEvent)
 
 // Scheduled settings (docs/scheduled-settings.md): the resolved-schedule push can have more than
 // one subscriber at once (the Settings → Schedule panel AND the always-mounted apply-controller in
@@ -721,6 +723,17 @@ const api: NodeTerminalApi = {
     confirm: (id: string) => ipcRenderer.send(IPC.relayHostConfirm, { id }),
     onOpen: subscribeRelayHostOpen,
     onClosed: subscribeRelayHostClosed
+  },
+  cloudflared: {
+    status: (nodeId: string, runtime) => ipcRenderer.invoke(IPC.cloudflaredStatus, nodeId, runtime),
+    setToken: (nodeId: string, token: string) => ipcRenderer.invoke(IPC.cloudflaredSetToken, nodeId, token),
+    clearToken: (nodeId: string) => ipcRenderer.invoke(IPC.cloudflaredClearToken, nodeId),
+    start: (nodeId, settings) => ipcRenderer.invoke(IPC.cloudflaredStart, nodeId, settings),
+    stop: (nodeId: string) => ipcRenderer.invoke(IPC.cloudflaredStop, nodeId),
+    uninstall: (nodeId: string) => ipcRenderer.invoke(IPC.cloudflaredUninstall, nodeId),
+    reconcile: (nodeId: string) => ipcRenderer.invoke(IPC.cloudflaredReconcile, nodeId),
+    installWindowsService: (nodeId, settings) => ipcRenderer.invoke(IPC.cloudflaredInstallService, nodeId, settings),
+    onStatus: subscribeCloudflaredStatus
   },
   relayClient: {
     connect: (offer) => ipcRenderer.invoke(IPC.relayClientConnect, offer),

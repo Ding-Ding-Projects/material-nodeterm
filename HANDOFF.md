@@ -1451,6 +1451,30 @@ b4061448 d475bdee` also succeeds — the commit that deleted `TabBar.tsx`/`Dock.
 - The stranded-draft pattern this document already flagged is recurring under new numbers
   (`v0.4.41`, targeting this exact commit) rather than resolved.
 
+### Cloudflared connector runtime lane (#61)
+
+The desktop now has a dedicated cloudflared runtime manager and a Cloudflared connector canvas node.
+The implementation is on the task branch and has not been committed or published by this lane.
+`src/main/cloudflared-runtime.ts` owns dependency resolution, protected token files, per-user process
+execution, explicit-UAC Windows service install/stop/delete, Docker image digest resolution, bounded
+container launch, redacted logs, and process/container reconciliation. Shared API and IPC contracts
+live in `src/shared/cloudflared.ts`, `src/shared/ipc.ts`, and `src/shared/types.ts`; the local runtime
+overlay is filtered by `src/shared/node-exec.ts`. The UI is
+`src/renderer/components/cloudflared/CloudflaredRuntimePanel.tsx`, wired through the ServiceNode
+family and the preload bridge.
+
+The token is written to the app's protected user-data directory and is never placed in a project
+file, command argument, environment variable, log, or export. Docker uses an official
+`cloudflare/cloudflared` digest, read-only root and token mount, dropped capabilities,
+`no-new-privileges`, bounded CPU/memory/PIDs, bridge networking only, no privileged mode, and no
+Docker socket. Windows service creation and lifecycle use an explicit UAC consent path.
+
+Documentation is in `docs/features/integrations/cloudflared-runtimes.md` and its category index;
+the roadmap and changelog have matching entries. The offline docs bundle was not regenerated because
+this ultra-speed lane explicitly forbids builds. Tests, type checks, lint, security and accessibility
+checks, installer execution, runtime interaction checks, and screenshots were not run. No release,
+default-branch integration, or remote verification is claimed.
+
 ### Next-owner note
 
 Before claiming the Material Design 3 rewrite is release-ready: launch the packaged build (or run

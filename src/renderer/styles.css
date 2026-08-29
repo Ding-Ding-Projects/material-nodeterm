@@ -13264,6 +13264,34 @@ body.focus-mode .dock:hover {
   color: var(--md-error, #ff453a);
 }
 
+.cloudflared-runtime__choices,
+.cloudflared-runtime__actions,
+.cloudflared-runtime__limits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+}
+
+.cloudflared-runtime__limits label {
+  display: grid;
+  gap: 4px;
+  min-width: 100px;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+}
+
+.cloudflared-runtime__log {
+  max-height: 160px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre-wrap;
+}
+
 /* Minecraft server create-and-manage (docs/minecraft-server-manager.md). Reuses every
  * .service-node__* token above (field/input/note/state) and adds only what that shared surface
  * doesn't already have: buttons, a progress bar, and the console. */

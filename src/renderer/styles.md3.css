@@ -2261,6 +2261,25 @@ button.term-node__title-text:focus-visible {
 .service-node__input {
   border-radius: var(--md-shape-sm);
 }
+
+.cloudflared-runtime__choices,
+.cloudflared-runtime__actions,
+.cloudflared-runtime__limits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+}
+
+.cloudflared-runtime__log {
+  max-height: 160px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  white-space: pre-wrap;
+}
 .ctx-colors__rainbow.is-active {
   outline-color: var(--md-primary);
 }

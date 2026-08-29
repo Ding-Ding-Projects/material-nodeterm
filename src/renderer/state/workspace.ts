@@ -1,6 +1,7 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
 import type { ServiceConnection } from '@shared/node-exec'
+import type { CloudflaredRuntimeSettings } from '@shared/cloudflared'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
@@ -65,7 +66,7 @@ const ANNOTATION_SIZE = { width: 240, height: 160 }
  * Service managers. Two shapes rather than six numbers, because the distinction that matters is how
  * much a surface has to SHOW, not which product it manages:
  *
- * - a console-and-list manager (Minecraft, Docker, Proxmox) needs room for output beside a list, so
+ * - a console-and-list manager (Minecraft, Docker, Proxmox, cloudflared) needs room for output beside a list, so
  *   it starts nearer a terminal's footprint;
  * - a summary manager (GitLab, Home Assistant, FreePBX) opens on counts and status rows and can
  *   start smaller without immediately needing a resize.
@@ -172,6 +173,8 @@ export interface NodeData {
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  /** cloudflared-only runtime selection, machine-local through the workspace overlay. */
+  cloudflaredSettings?: CloudflaredRuntimeSettings
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
   nsisSpec?: NsisSpec
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
@@ -989,11 +992,12 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   proxmox: 'Proxmox',
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
-  freepbx: 'FreePBX'
+  freepbx: 'FreePBX',
+  cloudflared: 'Cloudflared connector'
 }
 
 /**
- * Creates a service-manager node.
+ * Creates a service-manager node, including the cloudflared connector runtime.
  *
  * ONE factory with six callers rather than six near-identical factories, because the only thing that
  * varies is the kind, its starting size and its default title — and this codebase's most repeated
@@ -1466,6 +1470,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
+  cloudflared: true,
   nsis: true
 }
 
@@ -1505,6 +1510,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
+  cloudflared: SERVICE_CONSOLE_SIZE,
   nsis: NSIS_SIZE
 }
 
@@ -1916,6 +1922,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         text: n.text,
         serviceLabel: n.serviceLabel,
         serviceConnection: n.serviceConnection,
+        cloudflaredSettings: n.cloudflaredSettings,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
         filePath: n.filePath,
@@ -1991,6 +1998,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
         serviceConnection: n.data.serviceConnection,
+        cloudflaredSettings: n.data.cloudflaredSettings,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
         filePath: n.data.filePath,

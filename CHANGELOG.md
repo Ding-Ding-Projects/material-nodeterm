@@ -10,6 +10,10 @@
   entries, bounded raw and compressed budgets, deterministic SHA-256 metadata, safe path and
   collision refusal, omission reporting, and pure V1/V2 migration filtering. Verification is
   intentionally pending in this implementation lane.
+- Add guided cloudflared connector runtimes with protected local token files, per-user process
+  execution, explicit-UAC Windows service installation, verified official Docker image digests, and
+  a constrained container profile. Runtime, service, and packaging verification remains pending;
+  no token is passed through arguments or environment variables.
 - Publish the decision-complete plan for portable schema 3 project saves, universe Shop nodes,
   interactive AWS and Cloudflare managers, one-click hosted services, and the upstream parity
   program. This entry records planning only; no product implementation or release was made.

@@ -8,9 +8,9 @@ does more than it says.
 
 ## The six kinds, and why one is called a manager and not a host
 
-Six new node kinds join the canvas's `NodeKind` union
+Seven node kinds join the canvas's `NodeKind` union
 (`src/shared/types.ts` `SERVICE_NODE_KINDS`): `minecraft`, `dockerhost`, `proxmox`, `gitlab`,
-`homeassistant`, `freepbx`. Each is rendered by the **same** component,
+`homeassistant`, `freepbx`, and `cloudflared`. Each is rendered by the **same** component,
 `src/renderer/nodes/ServiceNode.tsx` — one component with six callers, because the only thing that
 varies between them is a label and a starting size, and this codebase's most repeated lesson is
 that a duplicated rule drifts from its copies.
@@ -200,6 +200,11 @@ platform and every OS the same way the plain `ssh` command does, to whoever is c
 — there is nothing to branch on per platform and nothing to go and ask the OS for.
 
 ## What does not work yet
+
+**Cloudflared is the connected exception.** Its dedicated connector panel runs the local
+`cloudflared` process, an explicitly consented Windows service, or a constrained Docker connector;
+see [Cloudflared connector runtimes](cloudflared-runtimes.md). The other manager kinds below remain
+address-only until their own integrations land.
 
 State this plainly, because CLAUDE.md's rule against decorative controls cuts both ways: it forbids
 a control that *looks* wired and is not, and it equally forbids a document that implies more than

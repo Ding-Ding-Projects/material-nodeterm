@@ -466,6 +466,17 @@ export const IPC = {
   // main → renderer when a bridged peer becomes a live client / drops (payload `{ id }`).
   relayHostStart: 'relay:host:start',
   relayHostDockerContexts: 'relay:host:docker-contexts',
+  // Cloudflared connector lifecycle. The token crosses only the local desktop IPC call that
+  // writes the protected file; no runtime launch channel accepts token material.
+  cloudflaredStatus: 'cloudflared:status',
+  cloudflaredSetToken: 'cloudflared:set-token',
+  cloudflaredClearToken: 'cloudflared:clear-token',
+  cloudflaredStart: 'cloudflared:start',
+  cloudflaredStop: 'cloudflared:stop',
+  cloudflaredUninstall: 'cloudflared:uninstall',
+  cloudflaredReconcile: 'cloudflared:reconcile',
+  cloudflaredInstallService: 'cloudflared:install-service',
+  cloudflaredStatusEvent: 'cloudflared:status-event',
   // Team Access (multi-seat): `relayHostInvite` ADDS a seat (invoke, `{ projectId?, email? }` →
   // `{ offer }`, cap-checked → rejects `E_SEATS_FULL`); `relayHostRevoke` (send, `{ id }`) cuts one
   // bridged peer's live session. `relayHostPeerPending`/`relayHostOpen` now also carry the seat

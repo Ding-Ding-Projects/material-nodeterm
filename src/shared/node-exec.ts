@@ -30,6 +30,7 @@ import { BUILTIN_AGENT_IDS, isPermissionMode } from './agents/config'
 import { sshExtraArgsEnableLocalExec } from './ssh'
 import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from './types'
 import type { NsisLocalPaths } from './nsis-form-types'
+import { safeCloudflaredRuntimeSettings, type CloudflaredRuntimeSettings } from './cloudflared'
 
 /** Per-node exec values the LOCAL machine typed. Persisted only in the machine-local index. */
 export interface LocalNodeExec {
@@ -66,6 +67,8 @@ export interface LocalNodeExec {
    * person's disk paths appearing (or worse, being read) in everybody else's checkout.
    */
   nsisLocalPaths?: NsisLocalPaths
+  /** Cloudflared runtime selection and bounded resources, machine-local; token remains a file. */
+  cloudflaredSettings?: CloudflaredRuntimeSettings
 }
 
 /**
@@ -316,6 +319,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
     n.pendingLaunch === undefined &&
     n.serviceConnection === undefined &&
     n.nsisLocalPaths === undefined &&
+    n.cloudflaredSettings === undefined &&
     n.ssh?.extraArgs === undefined &&
     n.ssh?.execTrusted === undefined
   )
@@ -326,6 +330,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   delete out.pendingLaunch
   delete out.serviceConnection
   delete out.nsisLocalPaths
+  delete out.cloudflaredSettings
   if (out.ssh) {
     // `execTrusted` goes with the value it vouches for. It is a MACHINE-LOCAL provenance marker:
     // if it could ride a document or a wire frame, a hostile one would simply set it to true.
@@ -412,12 +417,14 @@ export function carryLocalNodeExec(
   const extraArgs = prev.ssh?.extraArgs
   const pendingLaunch = next.kind === 'terminal' ? clonePendingLaunch(prev.pendingLaunch) : undefined
   const nsisPaths = safeNsisLocalPaths(prev.nsisLocalPaths)
+  const cloudflaredSettings = safeCloudflaredRuntimeSettings(prev.cloudflaredSettings)
   if (
     prev.shell === undefined &&
     prev.terminalProfileId === undefined &&
     extraArgs === undefined &&
     pendingLaunch === undefined &&
-    nsisPaths === undefined
+    nsisPaths === undefined &&
+    cloudflaredSettings === undefined
   )
     return next
   const out: CanvasNodeState = { ...next }
@@ -427,6 +434,7 @@ export function carryLocalNodeExec(
     out.ssh = { ...out.ssh, extraArgs, execTrusted: prev.ssh?.execTrusted }
   if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
   if (nsisPaths !== undefined) out.nsisLocalPaths = nsisPaths
+  if (cloudflaredSettings !== undefined) out.cloudflaredSettings = cloudflaredSettings
   return out
 }
 
@@ -473,13 +481,16 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     if (conn) entry.serviceConnection = conn
     const nsisPaths = safeNsisLocalPaths(n.nsisLocalPaths)
     if (nsisPaths) entry.nsisLocalPaths = nsisPaths
+    const cloudflaredSettings = safeCloudflaredRuntimeSettings(n.cloudflaredSettings)
+    if (cloudflaredSettings) entry.cloudflaredSettings = cloudflaredSettings
     if (
       entry.shell ||
       entry.terminalProfileId !== undefined ||
       entry.sshExtraArgs ||
       entry.pendingLaunch ||
       entry.serviceConnection ||
-      entry.nsisLocalPaths
+      entry.nsisLocalPaths ||
+      entry.cloudflaredSettings
     )
       map[n.id] = entry
   }
@@ -518,6 +529,8 @@ export function applyLocalNodeExec(
     if (conn) out.serviceConnection = conn
     const nsisPaths = safeNsisLocalPaths(mine?.nsisLocalPaths)
     if (nsisPaths) out.nsisLocalPaths = nsisPaths
+    const cloudflaredSettings = safeCloudflaredRuntimeSettings(mine?.cloudflaredSettings)
+    if (cloudflaredSettings) out.cloudflaredSettings = cloudflaredSettings
     return out
   })
 }
