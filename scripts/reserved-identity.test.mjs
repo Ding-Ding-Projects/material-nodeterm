@@ -79,7 +79,9 @@ describe('check-commit-identity CLI', () => {
   })
 
   it('refuses a range containing a placeholder identity, naming it', () => {
-    const { code, out } = run('HEAD~300..HEAD')
+    // Keep the range anchored to the exact published placeholder commit. The history grew well
+    // past the old HEAD~300 window, which silently stopped exercising the refusal path.
+    const { code, out } = run('7ad6a6c6c8704203c579b8b431b7da3424439a6f^..HEAD')
     expect(code).toBe(1)
     expect(out).toMatch(/smoke@example\.invalid/)
   })

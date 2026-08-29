@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const JSX_IN_TS_ALLOWLIST = new Set([
-  'src/renderer/components/ShellSessionVocabulary.boundaries.test.ts',
+  'src/renderer/components/ShellSessionVocabulary.boundaries.test.tsx',
 ]);
 
 function loadEsbuild(root) {
@@ -69,7 +69,11 @@ export function parseSource({ root, files, esbuild = loadEsbuild(root), requireA
 export function trackedSourceFiles(root) {
   const output = execFileSync('git', ['ls-files', '-z'], { cwd: root });
   const tracked = output.toString('utf8').split('\0').filter(Boolean);
-  return selectTrackedSourceFiles(tracked);
+  // A deliberate sparse Gerk Tong Hui still reports every tracked path through `git ls-files`,
+  // while files outside its cone are absent on disk. Parse only materialized source files so the
+  // checker does not turn an intentional no-submodules/sparse checkout into twenty-five false
+  // ENOENT poke guys. The explicit JSX allowlist remains fail-closed when its path is present.
+  return selectTrackedSourceFiles(tracked).filter((file) => existsSync(path.join(root, file)));
 }
 
 export function selectTrackedSourceFiles(files) {

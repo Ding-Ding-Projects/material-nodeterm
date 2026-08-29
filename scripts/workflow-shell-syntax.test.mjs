@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { readFileSync, readdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -8,6 +8,22 @@ import yaml from 'js-yaml'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const workflows = join(here, '..', '.github', 'workflows')
+
+function bashExecutable() {
+  if (process.platform !== 'win32') return 'bash'
+  const candidates = [
+    process.env.NODETERM_GIT_BASH,
+    'C:\\Program Files\\Git\\bin\\bash.exe',
+    'C:\\Program Files\\Git\\usr\\bin\\bash.exe',
+    'C:\\Program Files (x86)\\Git\\bin\\bash.exe',
+    'C:\\Program Files (x86)\\Git\\usr\\bin\\bash.exe'
+  ].filter(Boolean)
+  const executable = candidates.find(
+    (candidate) => existsSync(candidate) && /\\Git\\(?:bin|usr)\\bash\.exe$/i.test(candidate)
+  )
+  if (!executable) throw new Error('Git Bash is required for workflow shell syntax checks on Windows')
+  return executable
+}
 
 /**
  * Every `run:` block that bash will execute must at least PARSE — in EVERY workflow.
@@ -64,6 +80,7 @@ const stripExpressions = (script) => script.replace(/\$\{\{[\s\S]*?\}\}/g, 'GH_E
 
 describe('workflow shell steps parse', () => {
   const scripts = shellScripts()
+  const bash = bashExecutable()
 
   it('finds the bash steps at all', () => {
     // A checker that silently found nothing would pass forever while checking nothing — the
@@ -76,7 +93,7 @@ describe('workflow shell steps parse', () => {
     const path = join(dir, 'step.sh')
     try {
       writeFileSync(path, stripExpressions(script))
-      execFileSync('bash', ['-n', path], { encoding: 'utf8', stdio: 'pipe' })
+      execFileSync(bash, ['-n', path], { encoding: 'utf8', stdio: 'pipe' })
     } catch (err) {
       throw new Error(`shell syntax error:\n${err.stderr || err.message}`)
     } finally {

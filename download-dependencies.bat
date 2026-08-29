@@ -497,8 +497,13 @@ rem expands them. Emitting an unvalidated quote/ampersand through FOR /F would t
 rem batch source. Only canonical digits/dots, the exact official URL, and hex reach this file.
 set "NODE_MANIFEST_RESULT=%TEMP%\nodeterm-node-manifest-%RANDOM%-%RANDOM%.txt"
 if exist "%NODE_MANIFEST_RESULT%" del /f /q "%NODE_MANIFEST_RESULT%" >nul 2>nul
-call node "%NODETERM_ROOT%\scripts\check-node-version.cjs" --print-portable "%NODE_ARCH%" 1>"%NODE_MANIFEST_RESULT%" 2>"%TEMP%\nodeterm-node-version.log"
+set "NODETERM_MANIFEST_FILE=%MANIFEST%"
+set "NODETERM_NODE_ARCH=%NODE_ARCH%"
+set "NODETERM_MANIFEST_RESULT=%NODE_MANIFEST_RESULT%"
+powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop'; $d=Get-Content -Raw -LiteralPath $env:NODETERM_MANIFEST_FILE | ConvertFrom-Json; $v=[string]$d.node.version; $e=$d.node.portable.($env:NODETERM_NODE_ARCH); $u=[string]$e.url; $s=[string]$e.sha256; $expected='https://nodejs.org/dist/v'+$v+'/node-v'+$v+'-'+$env:NODETERM_NODE_ARCH+'.zip'; if($v -notmatch '^\d+\.\d+\.\d+$' -or $u -ne $expected -or $s -notmatch '^[a-fA-F0-9]{64}$'){ throw 'portable Node manifest entry failed validation' }; [IO.File]::WriteAllText($env:NODETERM_MANIFEST_RESULT, ('NODE_VERSION='+$v+'`nNODE_URL='+$u+'`nNODE_SHA256='+$s+'`n'), [Text.UTF8Encoding]::new($false))" 1>"%TEMP%\nodeterm-node-version.log" 2>&1
 set "NODE_MANIFEST_VALID=%ERRORLEVEL%"
+set "NODETERM_MANIFEST_FILE="
+set "NODETERM_NODE_ARCH="
 if not "%NODE_MANIFEST_VALID%"=="0" goto :node_manifest_invalid
 if not exist "%NODE_MANIFEST_RESULT%" goto :node_manifest_invalid
 for /f "usebackq tokens=1,* delims==" %%K in ("%NODE_MANIFEST_RESULT%") do set "%%K=%%L"
