@@ -66,6 +66,7 @@ and then never edited this file.
 | App rename (display name only) | `src/renderer/components/settings/sections/AppIdentitySection.tsx` | `docs/app-rename.md` | `src/renderer/components/settings/sections/AppIdentitySection.test.tsx` |
 | App-logo customization + safe conversion | `src/renderer/components/settings/sections/AppIdentitySection.tsx` | `docs/app-logo.md` | `src/renderer/components/settings/sections/AppIdentitySection.test.tsx` |
 | Universal file converter | `src/core/converter/service.ts` | `docs/file-converter.md` | `src/core/converter/service.atomic-write.test.ts` |
+| Advanced media, archive, PDF, and OCR pipelines | `src/core/advanced-media/service.ts`, `src/core/advanced-media/formats.ts`, `src/shared/advanced-media.ts` | `docs/features/files/advanced-media.md` | Focused tests are still pending; issue #67 intentionally ran no tests in the ultra-speed lane |
 | Local Ollama suite manager | `src/core/ollama/catalog-pure.ts` | `docs/ollama-manager.md` | `src/core/ollama/catalog-pure.test.ts` |
 | Tabbed navigation | `src/renderer/components/ProjectSwitcher.tsx` | `docs/features/projects/projects-and-tabs.md` | `src/renderer/state/projects.test.ts` |
 | Toy locks on every element | `src/core/secure-store.ts` | `docs/toy-locks.md` | `src/core/secure-store.test.ts` |

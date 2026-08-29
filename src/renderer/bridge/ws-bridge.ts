@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { AdvancedMediaApi } from '../../shared/advanced-media'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -885,6 +886,23 @@ export function buildConverterApi(client: RpcClient): Pick<NodeTerminalApi, 'con
   return { converter }
 }
 
+/** Advanced media pipeline over the same core RPC seam as the express converter. */
+export function buildAdvancedMediaApi(client: RpcClient): Pick<NodeTerminalApi, 'advancedMedia'> {
+  const advancedMedia: AdvancedMediaApi = {
+    catalog: () => client.request(IPC.advancedMediaCatalog) as ReturnType<AdvancedMediaApi['catalog']>,
+    inspect: (path) => client.request(IPC.advancedMediaInspect, path) as ReturnType<AdvancedMediaApi['inspect']>,
+    enqueue: (request) => client.request(IPC.advancedMediaEnqueue, request) as ReturnType<AdvancedMediaApi['enqueue']>,
+    state: (offset, limit) => client.request(IPC.advancedMediaState, offset, limit) as ReturnType<AdvancedMediaApi['state']>,
+    start: () => client.request(IPC.advancedMediaStart) as Promise<void>,
+    pause: () => client.request(IPC.advancedMediaPause) as Promise<void>,
+    cancel: (id) => client.request(IPC.advancedMediaCancel, id) as Promise<void>,
+    retry: (id) => client.request(IPC.advancedMediaRetry, id) as Promise<void>,
+    remove: (id) => client.request(IPC.advancedMediaRemove, id) as Promise<void>,
+    onProgress: (listener) => client.subscribe(IPC.advancedMediaProgress, listener as Listener)
+  }
+  return { advancedMedia }
+}
+
 /** Local Ollama suite manager (docs/ollama-manager.md) — the SAME core engine as desktop; the
  *  server process is the one making the loopback calls to Ollama, exactly as main does. */
 export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama'> {
@@ -1373,6 +1391,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildPresenceApi(client),
     ...buildSpeechApi(client),
     ...buildConverterApi(client),
+    ...buildAdvancedMediaApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
     ...buildUsageApi(client),

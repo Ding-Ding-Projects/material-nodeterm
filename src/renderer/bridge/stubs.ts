@@ -24,6 +24,7 @@ import {
   type UpdatePolicy
 } from '../../shared/types'
 import type { HistoryListResult } from '../../shared/local-history'
+import type { AdvancedMediaApi } from '../../shared/advanced-media'
 import { E_UNSUPPORTED } from '../../shared/rpc'
 
 /** Reject with a coded error the RPC layer + renderer recognize (renderer degrades silently). */
@@ -540,6 +541,18 @@ export function buildStubApi(): Omit<
       onItem: noopUnsub,
       onSummary: noopUnsub
     },
+    advancedMedia: {
+      catalog: U('advancedMedia.catalog'),
+      inspect: U('advancedMedia.inspect'),
+      enqueue: U('advancedMedia.enqueue'),
+      state: U('advancedMedia.state'),
+      start: U('advancedMedia.start'),
+      pause: U('advancedMedia.pause'),
+      cancel: U('advancedMedia.cancel'),
+      retry: U('advancedMedia.retry'),
+      remove: U('advancedMedia.remove'),
+      onProgress: noopUnsub
+    } satisfies AdvancedMediaApi,
     ollama: {
       status: U('ollama.status'),
       models: U('ollama.models'),

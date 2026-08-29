@@ -80,10 +80,12 @@ genuinely bundled adapters are the ones expressible in pure JS/Node with zero ne
   7-Zip container support is **listed, disabled** (`requires a ZIP container library…`, etc.) —
   none of those are bundled in this pass.
 
-**Documents/PDF, Images, Audio and Video have no bundled adapters at all** — every row in those
-categories is listed disabled with its exact missing dependency (e.g. `pdf-to-text` needs
-`pdf-parse`, `png-to-jpeg` needs an image codec such as `sharp`, `mp3-to-wav` needs `ffmpeg`).
-Adding real support for any of these is a good next-pass target — see "Known gaps" below.
+The express converter intentionally keeps Documents/PDF, image transcoding, audio transcoding,
+video transcoding, and container extraction out of its one-output adapter contract. The separate
+[`Advanced media pipelines`](features/files/advanced-media.md) surface now owns ZIP/TAR containers,
+PDF inspection and conservative text extraction, image metadata, media probing, and OCR. It uses a
+multi-output queue and a process boundary where the express queue cannot safely represent the
+operation.
 
 ## Detection
 
@@ -176,13 +178,14 @@ partially-successful batch is never presented as a uniform success or a uniform 
 
 ## Known gaps (deliberately out of scope this pass)
 
-- **No document/image/audio/video adapters are bundled.** Every row in those four categories is
-  listed disabled. Adding real ones (e.g. `pdf-parse` for PDF text extraction, `sharp` for images,
-  `ffmpeg`/`fluent-ffmpeg` for audio/video) is real, valuable follow-up work — but each is a new
-  native or sizeable dependency and was out of scope for this pass's "no new dependency" bundled
-  rule.
-- **No ZIP/TAR/7-Zip container support**, bundled or otherwise — listed disabled with their exact
-  missing library.
+- **Image, audio, and video transcoding remain outside the express queue.** Advanced media provides
+  image header inspection and media stream probing, but does not claim a codec conversion when a
+  package-owned codec is absent.
+- **7-Zip container support remains disabled** until a package-owned, digest-verified 7-Zip engine
+  is supplied. The advanced catalog keeps the capability gap visible instead of invoking PATH.
+- **OCR and media probing remain disabled by default** until the package's verified dependency
+  manifest supplies Tesseract, ffprobe, and the PDF rasterizer. The advanced service is wired for
+  those tools but never treats a developer installation as bundled.
 - **Per-category search is plain substring matching**, not the full anchored regex-builder popover
   described in the house UI contract. A future pass should give each category's search field (and
   every other search field in these two panels) a real regex-builder affordance.

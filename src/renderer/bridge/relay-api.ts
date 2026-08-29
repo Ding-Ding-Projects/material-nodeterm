@@ -204,6 +204,7 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // (E_UNSUPPORTED) rather than either wrong-machine option; a future pass can route these to the
     // host the same way `fs`/`git` are routed above.
     converter: stub.converter,
+    advancedMedia: stub.advancedMedia,
     ollama: stub.ollama,
     // Same reasoning as converter/ollama immediately above: creating and running a Minecraft
     // server is ONE machine's filesystem/java/process table, and there is no remote-routed core

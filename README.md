@@ -220,6 +220,10 @@ Identical on desktop and in the browser.
   audio, video, archives, structured data, code/text, binary encodings) reachable from the nav
   rail's Tools destination or the command palette. See
   [`docs/file-converter.md`](./docs/file-converter.md).
+- **Advanced media pipelines** — a separate bounded queue for ZIP/TAR archives, PDF inspection and
+  text extraction, image metadata, media probing, and OCR. Archive and PDF operations are built in;
+  media probing and OCR remain disabled until package-owned digest-verified tools are installed.
+  See [`docs/features/files/advanced-media.md`](./docs/features/files/advanced-media.md).
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See
   [`docs/ollama-manager.md`](./docs/ollama-manager.md).

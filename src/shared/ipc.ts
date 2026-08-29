@@ -533,6 +533,17 @@ export const IPC = {
   converterSetConcurrency: 'converter:set-concurrency',
   converterItem: 'converter:item',
   converterSummary: 'converter:summary',
+  /** Advanced media operations that need folders, verified processes, or multiple outputs. */
+  advancedMediaCatalog: 'advanced-media:catalog',
+  advancedMediaInspect: 'advanced-media:inspect',
+  advancedMediaEnqueue: 'advanced-media:enqueue',
+  advancedMediaState: 'advanced-media:state',
+  advancedMediaStart: 'advanced-media:start',
+  advancedMediaPause: 'advanced-media:pause',
+  advancedMediaCancel: 'advanced-media:cancel',
+  advancedMediaRetry: 'advanced-media:retry',
+  advancedMediaRemove: 'advanced-media:remove',
+  advancedMediaProgress: 'advanced-media:progress',
   /** Electron only: a multi-file picker (dialog:select-file only returns one path). Browser (Server
    *  Edition) uses a plain `<input type="file" multiple>` + files.saveUpload instead — see
    *  FileConverterPanel.tsx. */

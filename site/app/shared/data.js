@@ -104,6 +104,7 @@ export const COVERAGE = [
   ['Guided forms', 'the add rows in Code maker, and the 1·2·3 export steps', 'done'],
   ['Super-confirmation before anything destructive', 'type-the-word gate', 'done'],
   ['A real local file converter with honest unsupported cases', 'Turn-it-into lab', 'done'],
+  ['Advanced media: archives, PDF, image metadata, media probing and OCR', 'Documentation → Advanced media pipelines', 'partial'],
   ['Ollama browser with hardware-fit verdicts and a basket', 'Model shop room', 'done'],
   ['The dim sum surprise, one visit in ten', 'Dim sum room', 'done'],
   ['School mode that forces plain English and hides the rest', 'Settings → School mode', 'done'],

@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-08-26, advanced media pipeline implementation
+
+Issue #67 adds a separate advanced media seam so the express converter from issue #22 keeps its
+one-input/one-output contract. `src/shared/advanced-media.ts` defines the explicit capability
+catalog, bounds, queue state, progress events, dependency records, and renderer API. The core
+implementation in `src/core/advanced-media/` provides strict ZIP/TAR listing, extraction and
+creation, PDF inspection and conservative text extraction, image-header metadata inspection, and
+an operation queue with atomic output, destination collision refusal, progress, cancellation,
+pause, retry, bounded history, and restart recovery.
+
+External media probing and OCR are process-backed only after a package-owned manifest supplies an
+HTTPS source, version, executable name, and SHA-256. `dependencies.ts` refuses PATH discovery,
+arbitrary URLs, mismatched bytes, unsafe executable names, and non-HTTPS sources. `sandbox.ts`
+executes an absolute verified path with `shell: false`, a reduced environment, argument and output
+budgets, hidden windows, deadlines, and cancellation. `service.ts` exposes the same core registrar
+through Desktop and Server Edition IPC, while browser and relay stubs remain honest when the
+capability is unavailable.
+
+The categorized article is [`docs/features/files/advanced-media.md`](docs/features/files/advanced-media.md)
+and its index is [`docs/features/files/README.md`](docs/features/files/README.md). `ROADMAP.md` and
+`CHANGELOG.md` record the implementation as unverified because this lane intentionally did not run
+tests, type checks, lint, security checks, builds, packaging, installer execution, runtime
+interaction, or UI captures. The offline documentation bundle still needs regeneration by the
+owning release lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

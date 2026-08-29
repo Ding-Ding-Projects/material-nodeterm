@@ -894,6 +894,22 @@ const api: NodeTerminalApi = {
     onItem: (listener) => subscribeConverterItem(listener),
     onSummary: (listener) => subscribeConverterSummary(listener)
   },
+  advancedMedia: {
+    catalog: () => ipcRenderer.invoke(IPC.advancedMediaCatalog),
+    inspect: (path) => ipcRenderer.invoke(IPC.advancedMediaInspect, path),
+    enqueue: (request) => ipcRenderer.invoke(IPC.advancedMediaEnqueue, request),
+    state: (offset, limit) => ipcRenderer.invoke(IPC.advancedMediaState, offset, limit),
+    start: () => ipcRenderer.invoke(IPC.advancedMediaStart),
+    pause: () => ipcRenderer.invoke(IPC.advancedMediaPause),
+    cancel: (id) => ipcRenderer.invoke(IPC.advancedMediaCancel, id),
+    retry: (id) => ipcRenderer.invoke(IPC.advancedMediaRetry, id),
+    remove: (id) => ipcRenderer.invoke(IPC.advancedMediaRemove, id),
+    onProgress: (listener) => {
+      const handler = (_event: unknown, payload: Parameters<typeof listener>[0]) => listener(payload)
+      ipcRenderer.on(IPC.advancedMediaProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.advancedMediaProgress, handler)
+    }
+  },
   ollama: {
     status: () => ipcRenderer.invoke(IPC.ollamaStatus),
     models: () => ipcRenderer.invoke(IPC.ollamaModels),

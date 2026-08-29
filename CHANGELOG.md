@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add the advanced media pipeline for bounded ZIP/TAR archive listing, extraction and creation,
+  PDF inspection and conservative text extraction, image metadata inspection, and a queue with
+  atomic outputs, progress, cancellation, retries, and crash recovery. Media probing and OCR use
+  only package-owned digest-verified tools with shell-free argument vectors; those rows remain
+  unavailable until the packaged tool manifest supplies the required binaries. Tests, builds,
+  packaging, installer execution, runtime interaction, and UI captures were not run in this lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

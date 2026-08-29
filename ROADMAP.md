@@ -153,6 +153,11 @@ intentionally unchecked because this task publishes the plan only.
 
 - [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes.
 - [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
+      The express converter remains in `src/core/converter/`; issue #67 adds the separate
+      `src/core/advanced-media/` queue with ZIP/TAR, PDF, image inspection, media probing, and OCR
+      adapters. Built-in archive/PDF/image adapters are implemented; external media/OCR adapters
+      stay disabled until a package-owned, digest-verified tool manifest is supplied. Verification
+      and packaged interaction evidence remain outstanding.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
