@@ -3604,6 +3604,44 @@ body,
   width: 460px;
 }
 
+/* CloudFormation manager: the panel keeps the operation reviewable without accepting arbitrary
+   command text. Every row is a real control and change-set rows retain the action/replacement
+   facts returned by CloudFormation rather than styling a guessed status. */
+.drawer.cloudformation { width: min(760px, 96vw); }
+.cf-body { display: flex; flex-direction: column; gap: 14px; }
+.cf-context, .cf-actions, .cf-search { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; }
+.cf-context label, .cf-section > label, .cf-section > fieldset > label { display: flex; flex-direction: column; gap: 5px; flex: 1 1 180px; }
+.cf-context select, .cf-section select, .cf-section input:not([type='checkbox']):not([type='file']), .cf-search input { min-height: 40px; }
+.cf-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.cf-tabs button { min-height: 40px; padding: 8px 14px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); cursor: pointer; }
+.cf-tabs button.is-active { color: var(--text); border-bottom-color: var(--accent); }
+.cf-section { display: flex; flex-direction: column; gap: 10px; }
+.cf-section h3 { margin: 0; font-size: 15px; }
+.cf-help, .cf-empty, .cf-file { margin: 0; color: var(--muted); line-height: 1.45; }
+.cf-error, .cf-warning, .cf-valid { padding: 10px 12px; border-radius: 10px; line-height: 1.4; }
+.cf-error { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--panel)); }
+.cf-warning { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--panel)); }
+.cf-valid { color: var(--success); background: color-mix(in srgb, var(--success) 12%, var(--panel)); }
+.cf-section fieldset { border: 1px solid var(--border); border-radius: 10px; display: grid; gap: 8px; padding: 10px; }
+.cf-section fieldset label { display: block; }
+.cf-section fieldset small { color: var(--muted); }
+.cf-tags, .cf-events { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.cf-tags li, .cf-events li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.cf-tags button { margin-left: auto; }
+.cf-change-table { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: auto; }
+.cf-change-row { min-width: 680px; display: grid; grid-template-columns: 80px minmax(130px, 1.1fr) minmax(150px, 1.2fr) 100px minmax(180px, 1.5fr); gap: 10px; padding: 10px; background: var(--panel); align-items: start; }
+.cf-change-row--head { color: var(--muted); font-size: 12px; background: var(--panel-header); }
+.cf-change-row--add strong { color: var(--success); }
+.cf-change-row--modify strong { color: var(--warn); }
+.cf-change-row--remove strong { color: var(--danger); }
+.cf-events li { flex-direction: column; align-items: flex-start; }
+.cf-events li time { color: var(--muted); font-size: 12px; }
+.cf-events li p { margin: 0; }
+.cf-events .is-error strong { color: var(--danger); }
+.cf-events .is-running strong { color: var(--warn); }
+.cf-events .is-success strong { color: var(--success); }
+@media (max-width: 560px) { .drawer.cloudformation { width: 100vw; } .cf-change-row { min-width: 620px; } }
+
 .drawer__head {
   display: flex;
   align-items: center;

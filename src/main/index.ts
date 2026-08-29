@@ -43,6 +43,7 @@ import { matchesShortcut } from '../shared/shortcut'
 import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
+import { registerCloudFormationIpc } from '../core/cloudformation/service'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
@@ -1468,6 +1469,7 @@ app.whenReady().then(async () => {
   // same functions.
   registerConverterIpc(corePlatform)
   registerOllamaIpc(corePlatform)
+  registerCloudFormationIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)

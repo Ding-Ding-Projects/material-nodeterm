@@ -79,6 +79,7 @@ import { IPC } from '@shared/ipc'
 import { WhisperModelStore } from '../core/speech/whisper-models'
 import { SpeechService } from '../core/speech/speech-service'
 import { registerSpeechIpc } from '../core/speech/register-ipc'
+import { registerCloudFormationIpc } from '../core/cloudformation/service'
 import { isPremium, getStoredEntitlement } from '../core/license'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
 
@@ -195,6 +196,7 @@ export async function startServer(
   ptyManager.init(() => settingsStore.get())
   ptyManager.registerIpc()
   workspaceStore.registerIpc()
+  registerCloudFormationIpc(platform)
   // Dictation: same construction as src/main/index.ts, with the server's data dir. onProgress
   // broadcasts to every attached browser tab the same way wireAgentStatus pushes agent-status.
   const whisperModels = new WhisperModelStore({

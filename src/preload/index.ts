@@ -942,6 +942,18 @@ const api: NodeTerminalApi = {
     restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
+  },
+  cloudFormation: {
+    status: () => ipcRenderer.invoke(IPC.cloudFormationStatus),
+    profiles: () => ipcRenderer.invoke(IPC.cloudFormationProfiles),
+    regions: () => ipcRenderer.invoke(IPC.cloudFormationRegions),
+    stacks: (input) => ipcRenderer.invoke(IPC.cloudFormationStacks, input),
+    validate: (input) => ipcRenderer.invoke(IPC.cloudFormationValidate, input),
+    createChangeSet: (input) => ipcRenderer.invoke(IPC.cloudFormationCreateChangeSet, input),
+    describeChangeSet: (input) => ipcRenderer.invoke(IPC.cloudFormationDescribeChangeSet, input),
+    executeChangeSet: (input) => ipcRenderer.invoke(IPC.cloudFormationExecuteChangeSet, input),
+    events: (input) => ipcRenderer.invoke(IPC.cloudFormationEvents, input),
+    wait: (input) => ipcRenderer.invoke(IPC.cloudFormationWait, input)
   }
 }
 

@@ -1,5 +1,29 @@
 # Handoff
 
+## 2026-08-26, CloudFormation manager with change-set preview
+
+Implemented the guided CloudFormation manager in `src/renderer/components/cloudformation/` with
+structured shared types in `src/shared/cloudformation.ts` and a fixed-argv core service in
+`src/core/cloudformation/service.ts`. The surface provides bounded local JSON/YAML template
+selection and validation, AWS profile and region pickers, stack selection and filtering with the
+anchored regex builder, parameter controls including use-previous-value, capability and IAM
+warnings, key/value tags, named create/update change sets, exact Add/Modify/Remove/Import/Dynamic
+resource rows with replacement details, reviewed execution, stack events, bounded create/update
+waiters, and honest rollback or failure state reporting. Destructive previews route through the
+existing two-key confirmation flow before execute.
+
+The API is registered for Desktop and Server Edition through `src/shared/ipc.ts`,
+`src/preload/index.ts`, `src/renderer/bridge/ws-bridge.ts`, `src/main/index.ts`, and
+`src/server/index.ts`. The Tools rail and command palette expose the manager. Documentation is in
+`docs/features/integrations/cloudformation-manager.md`, indexed from the integrations category.
+The shared project projection deliberately carries no credentials, profile sessions, template
+bytes, local paths, cached responses, process state, or account-specific identifiers.
+
+This ultra-speed lane intentionally did not run tests, type checks, lint, security checks,
+accessibility checks, builds, packaging, installer execution, runtime interaction checks, or
+captures. The generated in-app documentation bundle still needs regeneration through
+`scripts/build-docs-bundle.mjs` by the integration owner. No commit or dew was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

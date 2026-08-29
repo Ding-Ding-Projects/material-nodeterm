@@ -570,6 +570,18 @@ export const IPC = {
   /** main/server → renderer: a streamed chat token/finish/error for the session named in the
    *  payload. One shared channel (not per-session) — the renderer filters by sessionId. */
   ollamaChatStream: 'ollama:chat-stream',
+  // CloudFormation manager. Requests carry structured input only; the core owns the allowlisted
+  // AWS CLI argv and never accepts a user-authored command or template execution string.
+  cloudFormationStatus: 'cloudformation:status',
+  cloudFormationProfiles: 'cloudformation:profiles',
+  cloudFormationRegions: 'cloudformation:regions',
+  cloudFormationStacks: 'cloudformation:stacks',
+  cloudFormationValidate: 'cloudformation:validate',
+  cloudFormationCreateChangeSet: 'cloudformation:create-change-set',
+  cloudFormationDescribeChangeSet: 'cloudformation:describe-change-set',
+  cloudFormationExecuteChangeSet: 'cloudformation:execute-change-set',
+  cloudFormationEvents: 'cloudformation:events',
+  cloudFormationWait: 'cloudformation:wait',
   // Local Minecraft server create-and-manage (docs/minecraft-server-manager.md). Registered on
   // BOTH shells over the same `platform.handle`/`platform.broadcast` seam as Ollama above, so it
   // manages whichever machine is actually running the shell. NOT carried over the relay (a peer

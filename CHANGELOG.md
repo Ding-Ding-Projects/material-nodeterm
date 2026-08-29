@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add the guided CloudFormation manager: bounded local JSON/YAML template selection and
+  validation, AWS profile and region pickers, parameter/capability/tag controls, exact change-set
+  resource previews, IAM warnings, reviewed execution, stack events, bounded waiters, and rollback
+  state reporting. Destructive changes use the existing two-key confirmation flow. This ultra-speed
+  lane intentionally did not run tests, type checks, lint, security checks, accessibility checks,
+  installer execution, runtime interaction checks, or captures.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

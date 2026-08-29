@@ -3798,6 +3798,8 @@ export interface NodeTerminalApi {
   ollama: import('./ollama').OllamaApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** Guided CloudFormation manager with reviewed change-set execution. */
+  cloudFormation?: import('./cloudformation').CloudFormationApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

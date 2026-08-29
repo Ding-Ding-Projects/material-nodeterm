@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { CloudFormationApi } from '../../shared/cloudformation'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,24 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+/** CloudFormation routes the same structured manager requests through the Server Edition RPC.
+ * No renderer code receives or constructs an AWS CLI command. */
+export function buildCloudFormationApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudFormation'> {
+  const cloudFormation: CloudFormationApi = {
+    status: () => client.request(IPC.cloudFormationStatus) as ReturnType<CloudFormationApi['status']>,
+    profiles: () => client.request(IPC.cloudFormationProfiles) as ReturnType<CloudFormationApi['profiles']>,
+    regions: () => client.request(IPC.cloudFormationRegions) as ReturnType<CloudFormationApi['regions']>,
+    stacks: (input) => client.request(IPC.cloudFormationStacks, input) as ReturnType<CloudFormationApi['stacks']>,
+    validate: (input) => client.request(IPC.cloudFormationValidate, input) as ReturnType<CloudFormationApi['validate']>,
+    createChangeSet: (input) => client.request(IPC.cloudFormationCreateChangeSet, input) as ReturnType<CloudFormationApi['createChangeSet']>,
+    describeChangeSet: (input) => client.request(IPC.cloudFormationDescribeChangeSet, input) as ReturnType<CloudFormationApi['describeChangeSet']>,
+    executeChangeSet: (input) => client.request(IPC.cloudFormationExecuteChangeSet, input) as ReturnType<CloudFormationApi['executeChangeSet']>,
+    events: (input) => client.request(IPC.cloudFormationEvents, input) as ReturnType<CloudFormationApi['events']>,
+    wait: (input) => client.request(IPC.cloudFormationWait, input) as ReturnType<CloudFormationApi['wait']>
+  }
+  return { cloudFormation }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1394,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildCloudFormationApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

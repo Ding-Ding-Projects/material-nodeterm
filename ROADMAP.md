@@ -168,6 +168,9 @@ intentionally unchecked because this task publishes the plan only.
       skeleton, input, and output described by the installed CLI models.
 - [ ] Add AWS identity, SSO, role, MFA, Resource Explorer, Cloud Control, S3, EC2, IAM, STS,
       Lambda, CloudWatch, Logs, CloudFormation, CDK, container, database, networking, and cost tools.
+- [ ] CloudFormation manager with guided template validation, exact change-set preview, IAM review,
+      reviewed execution, events, waiters, and rollback states — implemented on `feat/program-36`
+      but not yet tested, built, packaged, or captured in the ultra-speed lane.
 - [ ] Add the generic all-service AWS GUI without a command textbox fallback.
 
 ### Hosting and Cloudflare

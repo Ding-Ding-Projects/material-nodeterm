@@ -1121,6 +1121,26 @@ const FEATURES = [
     docs: ['docs/ollama-manager.md'],
   },
   {
+    id: 'cloudformation-manager',
+    label: 'Guided CloudFormation manager with change-set review',
+    files: [
+      'src/shared/cloudformation.ts',
+      'src/core/cloudformation/service.ts',
+      'src/renderer/components/cloudformation/CloudFormationManagerPanel.tsx',
+      'src/shared/ipc.ts',
+      'src/preload/index.ts',
+      'src/renderer/bridge/ws-bridge.ts',
+    ],
+    contentChecks: [
+      ['src/shared/cloudformation.ts', 'export interface CloudFormationApi'],
+      ['src/core/cloudformation/service.ts', 'export class CloudFormationService'],
+      ['src/renderer/components/cloudformation/CloudFormationManagerPanel.tsx', 'export function CloudFormationManagerPanel'],
+      ['src/renderer/components/cloudformation/CloudFormationManagerPanel.tsx', 'openDestructiveGate'],
+    ],
+    wired: { file: 'src/renderer/canvas/Canvas.tsx', symbol: 'CloudFormationManagerPanel' },
+    docs: ['docs/features/integrations/cloudformation-manager.md'],
+  },
+  {
     id: 'minecraft-server-manager',
     label: 'Local Minecraft server create-and-manage',
     files: [
