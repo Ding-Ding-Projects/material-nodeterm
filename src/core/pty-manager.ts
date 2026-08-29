@@ -892,14 +892,6 @@ export class PtyManager {
   private confPath = ''
   private getSettings: () => Settings = () => DEFAULT_SETTINGS
 
-  /**
-   * Is this account id one of the managed CODEX accounts? Asked instead of guessing from the id's
-   * shape: `codexAccounts` and `claudeAccounts` share an id alphabet, so only the list can tell
-   * them apart (issue #345). Reads LIVE settings, so an account added after init is seen.
-   */
-  private isCodexAccount(accountId: string): boolean {
-    return this.getSettings().codexAccounts.some((a) => a.id === accountId)
-  }
   /** Literal model-gateway key loaded by the shell's secret service during startup. */
   private getModelGatewaySecret: () => string | null = () => null
   /**
@@ -2135,10 +2127,7 @@ export class PtyManager {
     // chip. `resolveCodexSessionScope` returns `{ unavailable: 'codex-account' }` for exactly that
     // case; we map it straight through to a real refusal and spawn NOTHING. The system account (no
     // id) always resolves. Remote (ssh) Codex sessions carry their account env via tmux `-e`.
-    if (
-      needsCodexAccountScope(options.agentId, options.codexAccountId, (id) => this.isCodexAccount(id)) &&
-      !options.sshRemote
-    ) {
+    if (needsCodexAccountScope(options.agentId, options.codexAccountId) && !options.sshRemote) {
       const scope = resolveCodexSessionScope(platform().userDataDir, options.codexAccountId)
       if (isCodexScopeRefusal(scope)) {
         return { sessionId: '', fresh: false, unavailable: 'codex-account' }
@@ -2801,10 +2790,7 @@ export class PtyManager {
     // The missing-explicit-account case already refused in spawnNew (fail-closed,
     // property 4), so `codexSessionEnv` here never resolves an explicit id to the system home. Also
     // strip env vars that would shadow the account's OAuth login with API-key auth.
-    if (
-      needsCodexAccountScope(options.agentId, options.codexAccountId, (id) => this.isCodexAccount(id)) &&
-      !options.sshRemote
-    ) {
+    if (needsCodexAccountScope(options.agentId, options.codexAccountId) && !options.sshRemote) {
       const codexScope = codexSessionEnv(platform().userDataDir, options.codexAccountId)
       env.CODEX_HOME = codexScope.CODEX_HOME
       env.NODETERM_CODEX_ACCOUNT_ID = codexScope.NODETERM_CODEX_ACCOUNT_ID
@@ -2947,11 +2933,7 @@ export class PtyManager {
       // selection off that raw id with no `nt-` stripping. Passing the session name here would
       // emit events under `nt-<id>` that match no node → no badge/notification/session/loop.
       const remoteCodex = (options.agentId ?? 'claude') === 'codex'
-      const remoteCodexScope = needsCodexAccountScope(
-        options.agentId,
-        options.codexAccountId,
-        (id) => this.isCodexAccount(id)
-      )
+      const remoteCodexScope = needsCodexAccountScope(options.agentId, options.codexAccountId)
       if (
         remoteCodex &&
         (!options.sshRemote.remoteHome ||
@@ -3135,11 +3117,7 @@ export class PtyManager {
       // The account config dir must ride `-e` like the hook env: the tmux server is shared
       // and long-lived, so session env comes from creation args, not client inheritance.
       const accountEnvArgs = accountDir ? accountTmuxEnvArgs(accountDir) : []
-      const codexEnvArgs = needsCodexAccountScope(
-        options.agentId,
-        options.codexAccountId,
-        (id) => this.isCodexAccount(id)
-      )
+      const codexEnvArgs = needsCodexAccountScope(options.agentId, options.codexAccountId)
         ? codexTmuxEnvArgs(platform().userDataDir, options.codexAccountId)
         : []
       const attachFlags = tmuxAttachFlags(!!sinks)
