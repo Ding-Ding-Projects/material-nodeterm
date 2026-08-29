@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { DEFAULT_SETTINGS, type Settings } from '@shared/types'
 import {
   APPEARANCE_RESET_KEYS,
+  BEHAVIOR_RESET_KEYS,
   TERMINAL_RESET_KEYS,
   isPristine,
   resetPatch
@@ -10,14 +11,16 @@ import {
 describe('reset key lists', () => {
   it.each([
     ['terminal', TERMINAL_RESET_KEYS],
-    ['appearance', APPEARANCE_RESET_KEYS]
+    ['appearance', APPEARANCE_RESET_KEYS],
+    ['behavior', BEHAVIOR_RESET_KEYS]
   ])('%s keys all exist in DEFAULT_SETTINGS', (_name, keys) => {
     for (const k of keys) expect(DEFAULT_SETTINGS).toHaveProperty(k)
   })
 
   it.each([
     ['terminal', TERMINAL_RESET_KEYS],
-    ['appearance', APPEARANCE_RESET_KEYS]
+    ['appearance', APPEARANCE_RESET_KEYS],
+    ['behavior', BEHAVIOR_RESET_KEYS]
   ])('%s keys have no duplicates', (_name, keys) => {
     expect(new Set(keys).size).toBe(keys.length)
   })

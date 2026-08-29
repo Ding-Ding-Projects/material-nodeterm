@@ -510,6 +510,12 @@ import {
   writeExplorerPinned,
   type ExplorerShowAction
 } from '../lib/explorerPin'
+import {
+  EXPLORER_PIN_HINT_TEXT,
+  readSeenExplorerPinHint,
+  shouldShowExplorerPinHint,
+  writeSeenExplorerPinHint
+} from '../lib/explorerPinHint'
 import { useProjects } from '../state/projects'
 import { useGitHubIssues } from '../state/githubIssues'
 import { useAgentStatus } from '../state/agentStatus'
@@ -1513,8 +1519,26 @@ export function Canvas() {
     open: false
   }))
   const explorerOpen = explorerIsOpen(explorer)
+  const explorerStateRef = useRef(explorer)
+  explorerStateRef.current = explorer
+  const explorerOpenedFileRef = useRef(false)
   const showExplorer = useCallback((action: ExplorerShowAction) => {
-    setExplorer((s) => ({ ...s, ...nextExplorerShow(s, action) }))
+    const current = explorerStateRef.current
+    const next = { ...current, ...nextExplorerShow(current, action) }
+    const wasOpen = explorerIsOpen(current)
+    const isOpenAfter = explorerIsOpen(next)
+    if (!wasOpen && isOpenAfter) explorerOpenedFileRef.current = false
+    if (shouldShowExplorerPinHint({
+      wasOpen,
+      isOpenAfter,
+      pinned: current.pinned,
+      openedFile: explorerOpenedFileRef.current,
+      seen: readSeenExplorerPinHint()
+    })) {
+      writeSeenExplorerPinHint()
+      setNotice({ kind: 'info', text: EXPLORER_PIN_HINT_TEXT })
+    }
+    setExplorer(next)
   }, [])
   const toggleExplorerPin = useCallback(() => {
     setExplorer((s) => {
@@ -17305,6 +17329,22 @@ export function Canvas() {
         secondaryLabel: 'Open in Settings'
       },
       {
+        id: 'setting-open-markdown-preview',
+        label: 'Open Markdown files in preview',
+        hint: 'md markdown mdown mkd rendered editor default',
+        section: 'Settings',
+        icon: <IconEditor />,
+        control: {
+          type: 'toggle',
+          checked: s.openMarkdownPreview,
+          ariaLabel: 'Open Markdown files in preview',
+          onToggle: (v) => update({ openMarkdownPreview: v })
+        },
+        run: () => update({ openMarkdownPreview: !s.openMarkdownPreview }),
+        onSecondary: () => openSettingsTo('behavior', 'Open Markdown in preview'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
         id: 'setting-snap-to-grid',
         label: 'Snap nodes to the grid while dragging',
         section: 'Settings',
@@ -18878,7 +18918,10 @@ export function Canvas() {
       {explorerOpen && (
         <ExplorerPanel
           onClose={() => showExplorer('close')}
-          onOpenFile={(path, isSsh) => openFile(path, undefined, isSsh)}
+          onOpenFile={(path, isSsh) => {
+            explorerOpenedFileRef.current = true
+            openFile(path, undefined, isSsh)
+          }}
           onAgentNodeDrop={openAgentAtExplorerFolder}
           onOpenTerminalAtFolder={(folder) => openTerminalAtExplorerFolder(folder)}
           keyboardAgentNodeId={explorerAgentNodeId}

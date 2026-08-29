@@ -5,6 +5,7 @@ import { monaco } from '../editor/monaco-setup'
 import { monacoTheme } from '../lib/appTheme'
 import { useAppTheme } from '../state/useAppTheme'
 import { renderMarkdown } from '../lib/markdown'
+import { opensInPreview } from '../lib/markdownPreview'
 import { useSettings } from '../state/settings'
 import { sshFs } from '../terminal/ssh-fs'
 import { useProjects } from '../state/projects'
@@ -228,6 +229,12 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
       savedRef.current = content
       editor.onDidChangeModelContent(() => setDirty(editor!.getValue() !== savedRef.current))
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveRef.current())
+      // Decide only after the file content has loaded so the initial preview is the same render
+      // the user would get by clicking Preview immediately after opening the node.
+      if (opensInPreview(ext, s.openMarkdownPreview)) {
+        setPreviewHtml(renderMarkdown(content))
+        setPreview(true)
+      }
     })
 
     return () => {
@@ -353,9 +360,9 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
               <div className="term-md nodrag nowheel">
                 <div className="term-md__bar">
                   <span>{vocab('Preview')}</span>
-                  <span className="term-md__hint">{hintLabel(`⌘M ${vocab('to edit')}`)}</span>
-                  <span>Preview</span>
-                  <span className="term-md__hint">{mdChip ? `${mdChip} to edit` : 'Edit'}</span>
+                  <span className="term-md__hint">
+                    {mdChip ? `${mdChip} ${vocab('to edit')}` : vocab('Edit')}
+                  </span>
                 </div>
                 <div
                   className="term-md__content"

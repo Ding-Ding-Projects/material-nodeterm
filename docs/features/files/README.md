@@ -8,6 +8,8 @@ to a network service.
   partial results, and completed-output handoff to Visual Studio Code.
 - [Files node](./files-node.md): one persisted directory listing on the canvas, guided navigation,
   bounded local creation, regex-capable filtering, file routing, and remote-host safety.
+- [Markdown preview on open](./markdown-preview.md): default-on Markdown rendering, one-shot
+  migration, editor toggling, and Explorer pin discoverability.
 
 ## Suggested articles
 

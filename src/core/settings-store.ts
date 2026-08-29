@@ -70,6 +70,13 @@ function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
     }
   }
 
+  // An unstamped file may contain a materialized false from the old default. Flip once, then
+  // preserve the user's later opt-out permanently.
+  if (!saved?.openMarkdownPreviewMigrated) {
+    merged.openMarkdownPreview = true
+    merged.openMarkdownPreviewMigrated = true
+  }
+
   // The old boolean GPU setting maps into the current four-state setting.
   const gpu = (saved as { terminalGpuRendering?: unknown } | null | undefined)?.terminalGpuRendering
   if (gpu === false) merged.terminalGpuRendering = 'off'

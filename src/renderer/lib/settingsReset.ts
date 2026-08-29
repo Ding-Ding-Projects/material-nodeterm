@@ -43,6 +43,15 @@ export const APPEARANCE_RESET_KEYS = [
   'windowTitleActiveSession'
 ] as const satisfies readonly (keyof Settings)[]
 
+/** Behavior settings presented by BehaviorSection. */
+export const BEHAVIOR_RESET_KEYS = [
+  'defaultProjectView', 'gridSize', 'defaultNodeWidth', 'defaultNodeHeight', 'snapToGrid',
+  'autoAlignGrid', 'panHoverDelay', 'doubleClickFocus', 'openMarkdownPreview',
+  'sidebarAutoCollapse', 'sidebarGrouping', 'worktreePathTemplate', 'wheelZoom',
+  'wheelZoomSpeed', 'trackpadPan', 'canvasDragMode', 'browserMemorySaver',
+  'keepAwakeWhileAgentsWork', 'confirmBeforeQuit'
+] as const satisfies readonly (keyof Settings)[]
+
 /** The language/funny-level settings the Language section owns. */
 export const LANGUAGE_RESET_KEYS = [
   'languageMode',
