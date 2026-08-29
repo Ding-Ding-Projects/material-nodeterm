@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a model-driven generic all-service AWS manager with searchable typed service and operation
+  forms, nested input editors, pagination and waiter controls, skeleton and guided JMESPath output
+  choices, bounded retry and cancellation, and a reviewed risk preview of the generated argv. The
+  host integration and release verification remain pending.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

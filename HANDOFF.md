@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-08-26, generic all-service AWS manager lane
+
+Added the model-driven generic AWS surface for newly installed services and operations. The shared
+contract in `src/shared/aws-generic.ts` describes bounded typed shapes, enums, nested structures,
+repeatable lists, maps, global options, pagination, waiters, skeletons, output modes, guided
+JMESPath fields, risk levels, retry budgets, and cancellation-aware invocation requests. Its argv
+builder returns an argument vector and never a shell string. The renderer panel in
+`src/renderer/components/aws/AwsGenericServicePanel.tsx` provides independent searchable service
+and operation catalogs with anchored Regex Builder controls, typed input editors, model-backed
+pagination/waiter/skeleton choices, guided output filtering, exact risk and argv preview, explicit
+review acknowledgement, retry/cancel state, and local output rendering. Host callbacks remain
+responsible for model loading, file picking, credentials, destructive confirmation, and CLI
+execution.
+
+The feature article and integration index were added at
+`docs/features/integrations/aws-generic-service-gui.md` and
+`docs/features/integrations/README.md`; ROADMAP and CHANGELOG now describe this lane and its
+remaining host wiring. The offline `src/shared/docs-data.ts` bundle was not regenerated because
+the checkout has no installed `esbuild` package and this lane does not install dependencies or run
+builds. Tests, type checks, builds, packaging, installer execution, runtime interaction, security
+review, accessibility review, and captures were not run by this lane, per the ultra-speed boundary.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

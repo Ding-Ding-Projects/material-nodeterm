@@ -589,6 +589,20 @@ const FEATURES = [
     docs: ['docs/features/integrations/service-nodes.md'],
   },
   {
+    id: 'aws-generic-service-gui',
+    label: 'Generic all-service AWS manager',
+    files: [
+      'src/shared/aws-generic.ts',
+      'src/renderer/components/aws/AwsGenericServicePanel.tsx',
+      'src/renderer/components/aws/AwsGenericServicePanel.css',
+    ],
+    contentChecks: [
+      ['src/shared/aws-generic.ts', 'export function buildAwsArgv('],
+      ['src/renderer/components/aws/AwsGenericServicePanel.tsx', 'export function AwsGenericServicePanel('],
+    ],
+    docs: ['docs/features/integrations/aws-generic-service-gui.md'],
+  },
+  {
     id: 'agent-support',
     label: 'Agent support (Claude / Codex / Gemini / opencode / Grok / custom)',
     files: ['src/shared/agents/config.ts'],

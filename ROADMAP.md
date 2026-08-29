@@ -168,7 +168,10 @@ intentionally unchecked because this task publishes the plan only.
       skeleton, input, and output described by the installed CLI models.
 - [ ] Add AWS identity, SSO, role, MFA, Resource Explorer, Cloud Control, S3, EC2, IAM, STS,
       Lambda, CloudWatch, Logs, CloudFormation, CDK, container, database, networking, and cost tools.
-- [ ] Add the generic all-service AWS GUI without a command textbox fallback.
+- [ ] Add the generic all-service AWS GUI without a command textbox fallback. The model-driven
+      typed panel and argv builder are implemented in `src/shared/aws-generic.ts` and
+      `src/renderer/components/aws/AwsGenericServicePanel.tsx`; host integration and verification
+      remain pending.
 
 ### Hosting and Cloudflare
 
