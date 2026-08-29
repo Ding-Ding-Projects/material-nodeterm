@@ -8,6 +8,21 @@ deliberately does **not** do, and the honest cost of that trade-off.
 
 **GitHub Actions runs no tests, type-check or lint. Nothing in a workflow gates the release.**
 
+## v1.0.0 source candidate
+
+The source candidate currently sets `package.json` and `package-lock.json` to `1.0.0`. This is a
+deliberate human-selected major release, not an automatic patch decision. The workflow's normal
+planner remains responsible for ordinary patch releases, while a maintainer may intentionally
+select a minor or major version by committing it before publication. The candidate is not a
+published release until a workflow run creates and verifies the unique non-draft tag, installer,
+release assets, timing, line-count report, and dim-sum photo link.
+
+The candidate preparation records local Chut results separately from release publication. In
+particular, a passing release-version test or workflow checker proves the planner contract only;
+it does not prove a built installer, an installed runtime, or the production upgrade receipt.
+The remaining runtime receipt follows [`windows-support.md`](windows-support.md) and must use the
+isolated Windows route against the published `v0.4.152` baseline and the `1.0.0` Setup candidate.
+
 On every push to `main`, and on a manual `workflow_dispatch` from `main`, `release.yml` builds the
 app, packages a Windows installer, and publishes it as a GitHub Release — that is the whole job. A
 run fails only when its ref guard, build, packaging, validation, or publication fails. It does not

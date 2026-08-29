@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Prepare the deliberate `1.0.0` major source candidate. `package.json` and `package-lock.json`
+  now agree on the candidate version, while publication, installer generation, and production
+  runtime acceptance remain pending. Ordinary patch releases continue through the workflow planner;
+  this major is a human release decision. Local evidence passes typecheck, 84 of 84 release
+  version/workflow tests, the release workflow checker, the 16-assertion docs bundle check, the
+  130-assertion changelog check, and `git diff --check`. Inventory Chuts remain red for the app
+  contract, personal-vocabulary ownership, and WSL copy coverage; design parity has 10 pending
+  runtime receipts.
+
+  準備刻意揀定嘅 `1.0.0` major source candidate。`package.json` 同 `package-lock.json` 而家一致，
+  但 publication、installer 生成同 production runtime acceptance 仲未完成。普通 patch release
+  照樣交俾 workflow planner；今次 major 係人手作出嘅 release 決定。本地 evidence 入面，typecheck、
+  84/84 release version/workflow tests、release workflow checker、16 assertions docs bundle、
+  130 assertions changelog 同 `git diff --check` 都通過。App contract、personal-vocabulary
+  ownership 同 WSL copy coverage Chut 仲係 red；design parity 仲有 10 個 pending runtime receipt。
+
+- Reconcile issue #11's historical upstream pull request step with the downstream-only policy. The
+  plan now records that upstream pull requests and comments are not part of this fork's workflow.
+
+  將 issue #11 舊有 upstream pull request 步驟同 downstream-only policy 對齊。計劃而家寫清楚，
+  呢個 fork 唔會開 upstream pull request，亦唔會喺嗰邊留言。
+
 - Complete the Windows shutdown lifecycle by signaling and awaiting the exact detached Codex relay
   child that the current application instance spawned. The bounded stop uses the retained child
   handle rather than a pid scan or process-name match, so it cannot terminate an older relay or an

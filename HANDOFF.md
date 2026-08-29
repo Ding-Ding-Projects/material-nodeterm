@@ -1,5 +1,31 @@
 # Handoff
 
+## 2026-08-29, v1.0.0 source candidate preparation
+
+The release-finalization lane created `pig/release-finalization-gbdv5s` from
+`claude/bug-implementation-plan-gbdv5s` at `449c9b31738738f0a5a64677ee40b8bacd17f899`.
+`npm version 1.0.0 --no-git-tag-version` made `package.json` and `package-lock.json` agree on
+the deliberate human-selected major. No tag, release, installer publication, default-jer
+integration, issue mutation, or dew was performed by this lane.
+
+Local evidence at the candidate tree: `npm run typecheck` passed, with the expected
+`check-paste-frame-parity.mjs` skip because the sibling checkout is absent; the release version and
+workflow suites passed 84 of 84 tests; `node scripts/check-release-workflow.mjs` passed; the docs
+bundle passed 16 assertions; the changelog passed 130 assertions; and `git diff --check` reported
+no whitespace errors. The app-contract inventory remains red on one completeness assertion for six
+unlisted docs, personal-vocabulary coverage remains red on three Canvas-notification ownership
+assertions, and WSL copy coverage remains red because `operationErrorPrefix` has no production use.
+Design parity reports 10 exact references, 0 verified receipts, and 10 pending-runtime receipts.
+The full packaged application, production install or upgrade, and runtime acceptance receipt remain
+unverified.
+
+Public release records were updated in `ROADMAP.md`, `CHANGELOG.md`, `README.md`,
+`docs/ci-and-releases.md`, and `docs/windows-support.md`. The issue #11 plan now explicitly marks
+its historical upstream pull request step as superseded by this fork's downstream-only policy.
+`src/shared/docs-data.ts` and `src/shared/changelog-data.ts` were regenerated. The six app-contract
+docs, three personal-vocabulary assertions, WSL copy row, and 10 runtime receipts remain for the
+coordinating owner to repair or verify before publication.
+
 ## 2026-08-29, trigger scheduling lane
 
 The trigger lane adds a real host-owned scheduler for cron, interval, and one-shot definitions.
