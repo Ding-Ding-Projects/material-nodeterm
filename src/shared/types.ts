@@ -373,6 +373,8 @@ export type NodeKind =
   | 'gitlab'
   | 'homeassistant'
   | 'freepbx'
+  // A portal door. Doors are the only route into a special child canvas and the only route back.
+  | 'portal'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -387,6 +389,57 @@ export const SERVICE_NODE_KINDS = [
   'homeassistant',
   'freepbx'
 ] as const
+
+/** The portable canvas scopes that may be nested below a project root. */
+export type CanvasScope = 'root' | 'multiverse' | 'aws-universe'
+
+/** A door's direction is part of the persisted contract, not inferred from its label. */
+export type PortalDoorDirection = 'entry' | 'return'
+
+/**
+ * Safe, portable identity of one portal door. The pair id is deliberately shared by the two
+ * physical doors, while each door names the canvas it opens. No host, credential, process, or
+ * browser state belongs here.
+ */
+export interface PortalDoor {
+  doorPairId: string
+  direction: PortalDoorDirection
+  targetCanvasId: string
+}
+
+/** A child canvas carried by a project file and by schema 3 portable projection. */
+export interface ProjectCanvas {
+  id: string
+  scope: CanvasScope
+  parentCanvasId: string
+  title: string
+  order: number
+  viewport?: Viewport
+  entryDoorPairId?: string
+  returnDoorPairId?: string
+}
+
+/** The local navigation snapshot. It is safe to persist in a portable projection, but the live
+ * controller always returns to root on application relaunch rather than reopening a child behind a
+ * missing door interaction. */
+export interface PortalNavigationSnapshot {
+  currentCanvasId: string
+  parentCanvasId?: string
+  entryDoorNodeId?: string
+  returnDoorNodeId?: string
+  parentViewport?: Viewport
+  parentFocusNodeId?: string
+  /** Parent frames, oldest first, so nested special canvases unwind door-by-door. */
+  trail?: PortalNavigationFrame[]
+}
+
+export interface PortalNavigationFrame {
+  canvasId: string
+  entryDoorNodeId?: string
+  returnDoorNodeId?: string
+  viewport?: Viewport
+  focusNodeId?: string
+}
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
 
@@ -439,6 +492,8 @@ export interface CanvasNodeState {
   titleAuto?: boolean
   color: string
   group: string | null
+  /** Child-canvas membership. Absent means the root canvas. */
+  canvasId?: string
   /** Labels for organizing/filtering terminals. */
   tags?: string[]
   /** When true the node body is hidden (header-only). */
@@ -572,6 +627,8 @@ export interface CanvasNodeState {
    *  `annotationRectFromPoints` (src/renderer/lib/annotation.ts) from the draw gesture; unaffected
    *  by a later resize, which just stretches the same diagonal to the new box. */
   annotationDir?: 'tl-br' | 'tr-bl'
+  /** Portal nodes are inert until the owning canvas navigation controller authorizes the door. */
+  portal?: PortalDoor
 }
 
 /**
@@ -821,6 +878,10 @@ export interface Project {
   ssh?: { server: import('./ssh').SshConnection; remoteCwd: string }
   viewport: Viewport
   nodes: CanvasNodeState[]
+  /** Special child canvases. The root canvas is implicit in `viewport` and nodes without canvasId. */
+  canvases?: ProjectCanvas[]
+  /** Safe, portable navigation context. Relaunch intentionally normalizes this to root. */
+  portalNavigation?: PortalNavigationSnapshot
   /** Default managed Claude account for new Claude/chat nodes in this project. */
   defaultAccountId?: string
   /** Permission mode for new Claude TERMINAL (CLI) sessions in this project. SDK chat nodes are

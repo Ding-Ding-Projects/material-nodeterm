@@ -17,7 +17,7 @@ import {
 } from '@renderer/state/workspace'
 import { absolutePosition, type FocusableNode } from './nodeFocus'
 
-export type RestorableNodeKind = Exclude<NodeKind, 'group' | 'subagent' | 'loop'>
+export type RestorableNodeKind = Exclude<NodeKind, 'group' | 'subagent' | 'loop' | 'portal'>
 
 export interface ReopenNodeSnapshot {
   type: RestorableNodeKind
@@ -45,7 +45,7 @@ type SnapshotSource = {
   data: NodeData
 }
 
-const UNRESTORABLE: ReadonlySet<string> = new Set(['group', 'subagent', 'loop'])
+const UNRESTORABLE: ReadonlySet<string> = new Set(['group', 'subagent', 'loop', 'portal'])
 
 /** Captures a node right before deletion. `all` must be the FULL live tree (before any
  *  mutation), so the parent chain is still walkable. Returns null for kinds this feature

@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react'
-import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
+import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, PortalDoor, Project, ServiceNodeKind } from '@shared/types'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
@@ -218,6 +218,7 @@ export interface NodeData {
   annotationVariant?: 'line' | 'arrow'
   /** annotation-only: which corner-to-corner diagonal of the node's box the line/arrow follows. */
   annotationDir?: 'tl-br' | 'tr-bl'
+  portal?: PortalDoor
   [key: string]: unknown
 }
 
@@ -1029,6 +1030,25 @@ export function createServiceNode(
   }
 }
 
+/** Create a door without creating a hidden navigation route. The caller must register its matching
+ * return door and child canvas before making the node visible. */
+export function createPortalNode(
+  index: number,
+  door: PortalDoor,
+  position = staggeredPosition(index),
+  title = door.direction === 'entry' ? 'Portal door' : 'Return door'
+): CanvasNode {
+  return {
+    id: nextId('portal'),
+    type: 'portal',
+    position,
+    width: 260,
+    height: 180,
+    style: { width: 260, height: 180 },
+    data: { title, color: NODE_COLORS[index % NODE_COLORS.length], group: null, portal: door }
+  }
+}
+
 /**
  * Creates an NSIS installer-builder node — a GUI for authoring a Windows NSIS installer script for
  * ANOTHER project. Not this app's own installer, which stays Squirrel.Windows (see CLAUDE.md's
@@ -1466,7 +1486,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
-  nsis: true
+  nsis: true,
+  portal: true
 }
 
 /**
@@ -1505,7 +1526,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
-  nsis: NSIS_SIZE
+  nsis: NSIS_SIZE,
+  portal: { width: 260, height: 180 }
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1901,6 +1923,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         titleAuto: n.titleAuto ?? true,
         color: n.color,
         group: n.group,
+        canvasId: n.canvasId,
         tags: n.tags,
         collapsed,
         expandedHeight: n.size.height,
@@ -1939,7 +1962,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         sshFs: n.sshFs,
         worktree: n.worktree,
         annotationVariant: n.annotationVariant,
-        annotationDir: n.annotationDir
+        annotationDir: n.annotationDir,
+        portal: n.portal
       }
     }
   })
@@ -1976,6 +2000,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         titleAuto: n.data.titleAuto,
         color: n.data.color,
         group: n.data.group,
+        canvasId: n.data.canvasId as string | undefined,
         tags: n.data.tags,
         collapsed: n.data.collapsed,
         loopTask: n.data.loopTask,
@@ -2013,7 +2038,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         sshFs: n.data.sshFs,
         worktree: n.data.worktree,
         annotationVariant: n.data.annotationVariant,
-        annotationDir: n.data.annotationDir
+        annotationDir: n.data.annotationDir,
+        portal: n.data.portal
       }
     })
 }

@@ -1,5 +1,32 @@
 # Handoff
 
+## 2026-08-26, door-only portal navigation (issue #37)
+
+Implemented the door-only navigation lane in `src/shared/portal-navigation.ts` and
+`src/renderer/state/portalNavigation.ts`. A special child canvas can be entered only through an
+`entry` door and exited only through the reciprocal `return` door. Both doors must carry the same
+`doorPairId`, target the reciprocal canvases, and appear exactly once in each direction; malformed
+topology is refused before mounting. Direct canvas selection is an explicit refusal, so project
+tabs, browser back, and generic route commands cannot bypass the door.
+
+Added the persisted `portal` node kind and `PortalNode` Material Design 3 surface. Child membership
+(`CanvasNodeState.canvasId`) and child metadata (`Project.canvases`) travel through project-file and
+schema 3 projection boundaries. The renderer filters nodes and palette-visible content to the
+current canvas. Parent viewport and focus are captured on entry and restored on return. Navigation
+is reset to root on relaunch, so a child is never reopened behind a missing door interaction.
+
+Changed files: `src/shared/types.ts`, `src/shared/portal-navigation.ts`,
+`src/core/portable-canvas-projection.ts`, `src/core/workspace-files.ts`,
+`src/renderer/state/workspace.ts`, `src/renderer/state/portalNavigation.ts`,
+`src/renderer/nodes/PortalNode.tsx`, `src/renderer/canvas/Canvas.tsx`,
+`src/renderer/styles.md3.css`, `src/renderer/lib/reopenNode.ts`,
+`docs/features/projects/portal-navigation.md`,
+`docs/features/projects/README.md`, `ROADMAP.md`, and `CHANGELOG.md`.
+
+This lane intentionally did not run tests, type checking, linting, builds, packaging, runtime
+interaction, security checks, accessibility checks, or captures. Built-artifact verification and
+release evidence remain open for the parent integration lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

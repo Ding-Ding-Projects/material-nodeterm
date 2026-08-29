@@ -11230,3 +11230,36 @@ button.term-node__title-text:focus-visible {
 .icon-menu__reset-btn {
   align-self: flex-start;
 }
+/* Door-only child-canvas navigation. The door paints its own Lang gui surface and exposes one
+   explicit action; there is deliberately no link styling or generic route affordance. */
+.portal-node {
+  min-width: 220px;
+  min-height: 140px;
+  color: var(--md-on-surface);
+}
+.portal-node__frame {
+  display: grid;
+  gap: 10px;
+  min-height: 140px;
+  padding: 14px;
+  border: 2px solid;
+  border-radius: 20px;
+  background: var(--md-surface-container);
+  box-shadow: var(--md-sys-elevation-2, 0 3px 6px rgb(0 0 0 / 20%));
+}
+.portal-node__header { display: flex; align-items: center; gap: 8px; }
+.portal-node__icon { font-size: 24px; }
+.portal-node__copy { display: grid; gap: 3px; font-size: 12px; }
+.portal-node__copy span { color: var(--md-on-surface-variant); }
+.portal-node__activate {
+  min-height: 40px;
+  border: 0;
+  border-radius: 20px;
+  padding: 0 16px;
+  color: var(--md-on-primary);
+  background: var(--md-primary);
+  cursor: pointer;
+}
+.portal-node__activate:focus-visible { outline: 3px solid var(--md-secondary); outline-offset: 2px; }
+.portal-node__activate:disabled { opacity: .55; cursor: not-allowed; }
+.portal-node--invalid { padding: 16px; border-radius: 16px; background: var(--md-error-container); color: var(--md-on-error-container); }

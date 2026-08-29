@@ -160,7 +160,9 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Multiverse and AWS
 
-- [ ] Add door-only Multiverse canvases to depth 8.
+- [ ] Add door-only Multiverse canvases to depth 8. Issue #37 now contains the matched-door
+  navigation controller, reciprocal `doorPairId` validation, parent focus/camera restoration,
+  scope-bound rendering, and relaunch-at-root behavior; built-artifact verification remains open.
 - [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
 - [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
 - [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.

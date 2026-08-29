@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add door-only navigation for special child canvases. Entry and return doors must share a
+  reciprocal `doorPairId`; tabs, browser back, and generic canvas selection cannot bypass the door.
+  Parent camera and focus restore on return, searches remain scoped to the mounted canvas, and a
+  relaunch starts at the root. This lane intentionally has no test, build, packaging, or capture
+  verdict yet.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

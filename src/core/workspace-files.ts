@@ -11,6 +11,7 @@ import type {
   BridgeLink,
   BrowserProfile,
   CanvasNodeState,
+  ProjectCanvas,
   NavStop,
   Project,
   ProjectKanban,
@@ -72,6 +73,8 @@ export interface ProjectFileV1 {
    */
   viewport?: Viewport
   nodes: CanvasNodeState[]
+  /** Special child canvases. The root remains implicit in nodes without canvasId. */
+  canvases?: ProjectCanvas[]
   bridges?: BridgeLink[]
   ropes?: BridgeLink[]
   /**
@@ -217,6 +220,7 @@ export function projectToFile(
     color: p.color,
     viewport: framingViewport(nodes),
     nodes,
+    ...(p.canvases && p.canvases.length > 0 ? { canvases: p.canvases } : {}),
     ...(icon ? { icon } : {}),
     ...(p.bridges ? { bridges: p.bridges } : {}),
     ...(p.ropes ? { ropes: p.ropes } : {}),
@@ -258,6 +262,43 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
       typeof (p as BrowserProfile).color === 'string'
   )
   return cleaned.length > 0 ? cleaned : undefined
+}
+
+/**
+ * Validate child-canvas metadata at the shared-file boundary. A malformed portal record must
+ * degrade to no special canvas, never create a route that can skip its matching door.
+ */
+export function validProjectCanvases(v: unknown): ProjectCanvas[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const out: ProjectCanvas[] = []
+  const ids = new Set<string>()
+  for (const value of v) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue
+    const c = value as Partial<ProjectCanvas>
+    if (
+      typeof c.id !== 'string' || !c.id || ids.has(c.id) ||
+      (c.scope !== 'multiverse' && c.scope !== 'aws-universe') ||
+      typeof c.parentCanvasId !== 'string' || !c.parentCanvasId ||
+      typeof c.title !== 'string' || !c.title || typeof c.order !== 'number' || !Number.isFinite(c.order)
+    ) continue
+    if (c.viewport !== undefined) {
+      const vp = c.viewport
+      if (!vp || !Number.isFinite(vp.x) || !Number.isFinite(vp.y) || !Number.isFinite(vp.zoom) || vp.zoom <= 0) continue
+    }
+    if ((c.entryDoorPairId !== undefined && (typeof c.entryDoorPairId !== 'string' || !c.entryDoorPairId)) || (c.returnDoorPairId !== undefined && (typeof c.returnDoorPairId !== 'string' || !c.returnDoorPairId))) continue
+    ids.add(c.id)
+    out.push({
+      id: c.id,
+      scope: c.scope,
+      parentCanvasId: c.parentCanvasId,
+      title: c.title,
+      order: c.order,
+      ...(c.viewport ? { viewport: { x: c.viewport.x, y: c.viewport.y, zoom: c.viewport.zoom } } : {}),
+      ...(c.entryDoorPairId ? { entryDoorPairId: c.entryDoorPairId } : {}),
+      ...(c.returnDoorPairId ? { returnDoorPairId: c.returnDoorPairId } : {})
+    })
+  }
+  return out.length ? out : undefined
 }
 
 /**
@@ -304,6 +345,7 @@ export function fileToProject(
     // applyLocalNodeExec DROPS whatever the file carried in the exec fields (it is not ours) and
     // re-attaches only what this machine typed. See @shared/node-exec.
     nodes: applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec),
+    ...(Array.isArray(f.canvases) ? { canvases: validProjectCanvases(f.canvases) } : {}),
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),

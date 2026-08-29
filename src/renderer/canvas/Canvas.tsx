@@ -101,6 +101,8 @@ import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
+import { PortalNode, setPortalDoorActionHandler } from '../nodes/PortalNode'
+import { nodesForPortalCanvas, usePortalNavigation } from '../state/portalNavigation'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import WebNode from '../nodes/WebNode'
@@ -1656,6 +1658,10 @@ export function Canvas() {
   }, [getViewport, setViewport])
 
   const activeProjectId = useProjects((s) => s.activeProjectId)
+  const portalCanvasId = usePortalNavigation((s) => s.current(activeProjectId || '').currentCanvasId)
+  useEffect(() => {
+    if (activeProjectId) usePortalNavigation.getState().reset(activeProjectId)
+  }, [activeProjectId])
   const activeProjectSettingsOverrides = useProjects(
     (s) => s.projects.find((p) => p.id === s.activeProjectId)?.settingsOverrides
   )
@@ -1806,6 +1812,7 @@ export function Canvas() {
       // they behave as canvas objects, and React Flow hands each its own `type` so the component can
       // tell them apart without six registrations of six near-identical files.
       nsis: withNodeBoundary(NsisInstallerNode),
+      portal: withNodeBoundary(PortalNode),
       minecraft: withNodeBoundary(ServiceNode),
       dockerhost: withNodeBoundary(ServiceNode),
       proxmox: withNodeBoundary(ServiceNode),
@@ -2521,7 +2528,10 @@ export function Canvas() {
       )
     }
     loadingRef.current = true
-    const flow = nodeStatesToFlow(project.nodes)
+    // A special child canvas is mounted only after the navigation controller accepts its entry
+    // door. Direct tab, back, palette, or project selection never changes portalCanvasId.
+    const visibleProjectNodes = nodesForPortalCanvas(project, portalCanvasId)
+    const flow = nodeStatesToFlow(visibleProjectNodes)
     setNodes(flow)
     // React Flow now holds THIS project's canvas: the commit guard may pair it with the active id
     // again. Both refs are assigned HERE, synchronously, because `setNodes` only lands on the next
@@ -2563,18 +2573,23 @@ export function Canvas() {
       // the file's viewport is where another machine last saved, not where this user looks.
       preserveViewportRef.current = false
     } else {
-      viewportRef.current = project.viewport
-      setViewport(project.viewport)
-      setZoomPct(Math.round(project.viewport.zoom * 100))
-      setGroupLabelBoost(project.viewport.zoom)
+      const restore = usePortalNavigation.getState().current(project.id)
+      const childViewport = project.canvases?.find((canvas) => canvas.id === portalCanvasId)?.viewport
+      const nextViewport = portalCanvasId === 'root'
+        ? (restore.parentViewport ?? project.viewport)
+        : (childViewport ?? project.viewport)
+      viewportRef.current = nextViewport
+      setViewport(nextViewport)
+      setZoomPct(Math.round(nextViewport.zoom * 100))
+      setGroupLabelBoost(nextViewport.zoom)
       // A project can load already zoomed IN past the crisp threshold (saved viewport) — seed
       // the gate before the mount-time IntersectionObserver reports make every node request a
       // context it would only have to give back.
-      setWebglZoom(project.viewport.zoom)
+      setWebglZoom(nextViewport.zoom)
       // Seed the shared glyph camera from the same viewport: `onMove` only fires once the user
       // actually pans, so without this a project that loads scrolled away would draw its grids
       // against the previous project's camera until the first gesture.
-      setSharedGlyphCamera(project.viewport)
+      setSharedGlyphCamera(nextViewport)
     }
     // Let load-induced changes settle before we start tracking edits as dirty.
     const t = setTimeout(() => {
@@ -2626,7 +2641,7 @@ export function Canvas() {
     }, 0)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProjectId, reloadNonce, setNodes, setViewport])
+  }, [activeProjectId, portalCanvasId, reloadNonce, setNodes, setViewport])
 
   /**
    * Counts EDITS (not saves). `writeDisk` captures it before it builds the snapshot and clears
@@ -2789,18 +2804,28 @@ export function Canvas() {
     // ids still agree — but an autosave timer armed under the previous project now skips instead of
     // writing its nodes under the new project's id (field bug 2026-08-10). The tested commit seam
     // carries both edge refs too; a peer edge must reach the same whole-file snapshot as the nodes.
+    const visibleNodes = flowToNodeStates(nodesRef.current)
+    const activeProject = store.getProject(store.activeProjectId)
+    // Child canvases share one project record. Merge only the visible canvas slice so leaving a
+    // child never replaces the parent's nodes, and leaving the root never drops child content.
+    const nodes = activeProject
+      ? [
+          ...activeProject.nodes.filter((node) => (node.canvasId ?? 'root') !== portalCanvasId),
+          ...visibleNodes
+        ]
+      : visibleNodes
     commitActiveCanvas(
       {
         nodesProjectId: nodesProjectIdRef.current,
         activeProjectId: store.activeProjectId,
-        nodes: flowToNodeStates(nodesRef.current),
+        nodes,
         viewport: viewportRef.current,
         bridges: linkEdgesRef.current.map(toBridgeLink),
         ropes: controlEdgesRef.current.map(toBridgeLink)
       },
       store.commitCanvas
     )
-  }, [])
+  }, [portalCanvasId])
 
   const writeDisk = useCallback(async () => {
     // Captured BEFORE the snapshot is built (`toWorkspace()` runs synchronously on this line), so
@@ -7772,6 +7797,10 @@ export function Canvas() {
   const switchProject = useCallback(
     (id: string) => {
       if (id === useProjects.getState().activeProjectId) return
+      if (usePortalNavigation.getState().current(useProjects.getState().activeProjectId).currentCanvasId !== 'root') {
+        setNotice({ kind: 'error', text: 'Return through the matching portal door before switching projects.' })
+        return
+      }
       if (worktreeRemovalInFlightRef.current.size > 0) {
         setNotice({
           kind: 'error',
@@ -7783,8 +7812,41 @@ export function Canvas() {
       useProjects.getState().setActive(id)
       void writeDisk()
     },
-    [commitActiveToStore, writeDisk]
+    [commitActiveToStore, portalCanvasId, setNotice, writeDisk]
   )
+
+  const activatePortalDoor = useCallback(
+    (doorNodeId: string, door: import('@shared/types').PortalDoor) => {
+      const project = useProjects.getState().getProject(useProjects.getState().activeProjectId)
+      if (!project) return
+      const nav = usePortalNavigation.getState()
+      const result = door.direction === 'entry'
+        ? nav.enter(project, doorNodeId, viewportRef.current, focusedId ?? undefined)
+        : nav.exit(project, doorNodeId)
+      if (!result.ok) {
+        setNotice({ kind: 'error', text: `This door cannot open its matched canvas (${result.reason ?? 'invalid topology'}).` })
+        return
+      }
+      // Commit the visible slice before changing the route. The child canvas is not a tab and its
+      // navigation is not reachable through browser history or a generic route command.
+      commitActiveToStore()
+      void writeDisk()
+      if (door.direction === 'return') {
+        const restored = result.snapshot?.parentViewport
+        if (restored) {
+          viewportRef.current = restored
+          void setViewport(restored)
+        }
+        if (result.snapshot?.parentFocusNodeId) pendingFocusRef.current = result.snapshot.parentFocusNodeId
+      }
+    },
+    [commitActiveToStore, focusedId, setNotice, setViewport, writeDisk]
+  )
+
+  useEffect(() => {
+    setPortalDoorActionHandler(activatePortalDoor)
+    return () => setPortalDoorActionHandler(null)
+  }, [activatePortalDoor])
 
   /**
    * `app.reopenLastClosed` (Ctrl+Shift+T): pops the shared close-history stack and reopens a
@@ -12755,12 +12817,16 @@ export function Canvas() {
   // serialized nodes, whose TerminalNodes reattach to the surviving tmux sessions (or cold-restore).
   const reopenProject = useCallback(
     (id: string) => {
+      if (usePortalNavigation.getState().current(useProjects.getState().activeProjectId).currentCanvasId !== 'root') {
+        setNotice({ kind: 'error', text: 'Return through the matching portal door before reopening a project.' })
+        return
+      }
       commitActiveToStore()
       useProjects.getState().reopenProject(id)
       setWelcomeOpen(false)
       void writeDisk()
     },
-    [commitActiveToStore, writeDisk]
+    [commitActiveToStore, portalCanvasId, setNotice, writeDisk]
   )
 
   // ---- presence travel ("go to where my teammate is", from the facepile) ----
@@ -13247,20 +13313,22 @@ export function Canvas() {
     )
 
     const store = useProjects.getState()
-    store.projects
-      // Skip unavailable projects: activating one lets edits commit to the store but they're
-      // dropped on save (the ref emits header-only), so switching there silently loses work.
-      // The TabBar already guards its own click; this covers the palette (⌘K) path.
-      .filter((p) => p.id !== store.activeProjectId && !p.unavailable)
-      .forEach((p) =>
-        cmds.push({
-          id: `proj-${p.id}`,
-          label: `Switch to ${p.name}`,
-          hint: 'project',
-          icon: <IconSwitch />,
-          run: () => switchProject(p.id)
-        })
-      )
+    if (portalCanvasId === 'root') {
+      store.projects
+        // Skip unavailable projects: activating one lets edits commit to the store but they're
+        // dropped on save (the ref emits header-only), so switching there silently loses work.
+        // The TabBar already guards its own click; this covers the palette (⌘K) path.
+        .filter((p) => p.id !== store.activeProjectId && !p.unavailable)
+        .forEach((p) =>
+          cmds.push({
+            id: `proj-${p.id}`,
+            label: `Switch to ${p.name}`,
+            hint: 'project',
+            icon: <IconSwitch />,
+            run: () => switchProject(p.id)
+          })
+        )
+    }
     const cs = useAgentStatus.getState()
     // Labels replaced free-text tags — search matches label NAMES now (unified system).
     const searchKanban = useProjects.getState().getProject(useProjects.getState().activeProjectId)?.kanban
@@ -13401,6 +13469,7 @@ export function Canvas() {
     openSettingsTo,
     profileText,
     toggleFocusMode,
+    portalCanvasId,
     // Not read directly in this closure (the body reads `useSettings.getState().settings` fresh
     // on every call) — a dependency purely so a settings change while the palette is open
     // rebuilds the list and the inline toggle rows' `checked` stays live rather than frozen at
@@ -13425,10 +13494,22 @@ export function Canvas() {
           onSwitch={switchProject}
           onReconnect={reconnectRelay}
           onReorder={reorderProject}
-          onOpenWelcome={() => setWelcomeOpen(true)}
+          onOpenWelcome={() => {
+            if (usePortalNavigation.getState().current(useProjects.getState().activeProjectId).currentCanvasId !== 'root') {
+              setNotice({ kind: 'error', text: 'Return through the matching portal door before leaving this canvas.' })
+              return
+            }
+            setWelcomeOpen(true)
+          }}
           onRename={renameProject}
           onSetFolder={setProjectFolder}
-          onCloseProject={closeProject}
+          onCloseProject={(id) => {
+            if (usePortalNavigation.getState().current(useProjects.getState().activeProjectId).currentCanvasId !== 'root') {
+              setNotice({ kind: 'error', text: 'Return through the matching portal door before closing this project.' })
+              return
+            }
+            closeProject(id)
+          }}
           onRemoteAccess={() => setRemoteDialogOpen(true)}
           onSetDefaultAccount={setProjectDefaultAccount}
           onSetDefaultPermissionMode={setProjectDefaultPermissionMode}
