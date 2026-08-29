@@ -196,6 +196,20 @@ describe('WslCreateDialog', () => {
     expect(document.body.textContent).toContain('The WSL operation reported an error:')
     expect(document.body.textContent).toContain('wsl.exe could not create "my-project" from "Ubuntu 24.04 LTS".')
   })
+
+  it('uses the operation prefix when a factual create error has no authored framing', () => {
+    const diagnostic = 'wsl.exe could not create "my-project" from "Ubuntu 24.04 LTS".'
+    render({
+      error: {
+        ownership: 'external-factual',
+        text: diagnostic,
+        facts: ['wsl.exe', 'my-project', 'Ubuntu 24.04 LTS']
+      }
+    })
+    expect(document.body.textContent).toContain('The WSL operation reported an error:')
+    expect(document.body.textContent).toContain(diagnostic)
+  })
+
   it('renders a typed catalogue failure with mapped authored text around literal executable facts', () => {
     usePersonalVocabulary.setState({
       entries: { 'Could not load available distributions:': 'Catalogue unavailable:', 'could not be fetched': 'could not be read' },
