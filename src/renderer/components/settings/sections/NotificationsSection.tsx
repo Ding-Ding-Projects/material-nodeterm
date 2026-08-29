@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Switch } from '@renderer/ui/Switch'
 import { Button } from '@renderer/ui/Button'
-import { playSfx } from '@renderer/lib/sfx'
+import { playAlertSound, readAlertSoundFile } from '@renderer/lib/sfx'
 import { Slider } from '@renderer/ui/md3'
 
 const ROWS = {
@@ -28,6 +28,7 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
   const notifyOnClaudeDone = useSettings((s) => s.settings.notifyOnClaudeDone)
   const soundEffects = useSettings((s) => s.settings.soundEffects)
   const soundVolume = useSettings((s) => s.settings.soundVolume)
+  const alertSounds = useSettings((s) => s.settings.alertSounds)
   const mobilePushEnabled = useSettings((s) => s.settings.mobilePushEnabled)
   const mobilePushNeedsYou = useSettings((s) => s.settings.mobilePushNeedsYou)
   const mobilePushDone = useSettings((s) => s.settings.mobilePushDone)
@@ -37,6 +38,23 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
   // The OS refused our test notification (macOS permission denied). macOS never re-prompts
   // once the app's record exists, so the only way back is the System Settings pane.
   const [osBlocked, setOsBlocked] = useState(false)
+  const [soundError, setSoundError] = useState<string | null>(null)
+  const fileRefs = useRef<Record<'done' | 'needsYou', HTMLInputElement | null>>({ done: null, needsYou: null })
+  const chooseSound = async (kind: 'done' | 'needsYou', file: File | undefined): Promise<void> => {
+    if (!file) return
+    try {
+      const clip = await readAlertSoundFile(file)
+      update({ alertSounds: { ...alertSounds, clips: { ...alertSounds.clips, [kind]: clip }, mappings: { ...alertSounds.mappings, [kind]: 'custom' } } })
+      setSoundError(null)
+    } catch (e) {
+      setSoundError(e instanceof Error ? e.message : 'The audio file could not be used.')
+    }
+  }
+  const clearSound = (kind: 'done' | 'needsYou'): void => {
+    const clips = { ...alertSounds.clips }
+    delete clips[kind]
+    update({ alertSounds: { ...alertSounds, clips, mappings: { ...alertSounds.mappings, [kind]: 'builtin' } } })
+  }
   return (
     <SettingsSection
       id="notifications"
@@ -92,7 +110,7 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
                 update({ soundEffects: on })
                 // Enabling plays the finish chirp — it doubles as the volume preview AND as the
                 // user gesture a browser needs before it will let us make noise at all.
-                if (on) playSfx('done', soundVolume)
+                if (on) playAlertSound('done', soundVolume, alertSounds)
               }}
             />
           }
@@ -115,7 +133,7 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
                   value={Math.round(soundVolume * 100)}
                   aria-label="Sound effect volume"
                   onChange={(e) => update({ soundVolume: Number(e.target.value) / 100 })}
-                  onMouseUp={() => playSfx('done', soundVolume)}
+                  onMouseUp={() => playAlertSound('done', soundVolume, alertSounds)}
                   className="w-40 accent-[var(--accent)]"
                 />
                 <span className="w-9 text-right text-[12px] text-muted tabular-nums">
@@ -128,11 +146,51 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
             label="Preview"
             control={
               <div className="flex items-center gap-2">
-                <Button onClick={() => playSfx('done', soundVolume)}>Finished</Button>
-                <Button onClick={() => playSfx('needsYou', soundVolume)}>Needs you</Button>
+                <Button onClick={() => playAlertSound('done', soundVolume, alertSounds)}>Finished</Button>
+                <Button onClick={() => playAlertSound('needsYou', soundVolume, alertSounds)}>Needs you</Button>
               </div>
             }
           />
+          {(['done', 'needsYou'] as const).map((kind) => {
+            const label = kind === 'done' ? 'Finished turn' : 'Needs you'
+            const clip = alertSounds.clips[kind]
+            return (
+              <FieldRow
+                key={kind}
+                label={`${label} sound`}
+                description="Choose a local audio file. Files are validated and stored only in this app's settings; remote URLs are not accepted."
+                control={
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={(el) => { fileRefs.current[kind] = el }}
+                      type="file"
+                      accept="audio/wav,audio/ogg,audio/mpeg,audio/mp4,audio/webm"
+                      className="sr-only"
+                      aria-label={`Choose local ${label.toLowerCase()} sound`}
+                      onChange={(e) => { void chooseSound(kind, e.target.files?.[0]); e.currentTarget.value = '' }}
+                    />
+                    <Button onClick={() => fileRefs.current[kind]?.click()}>{clip ? 'Replace local sound' : 'Choose local sound'}</Button>
+                    {clip ? <Button onClick={() => clearSound(kind)}>Reset</Button> : null}
+                    <span className="text-xs text-muted">{clip ? `${clip.name} · custom` : 'Built-in retro sound'}</span>
+                  </div>
+                }
+              />
+            )
+          })}
+          <FieldRow
+            label="Sound behavior"
+            description="Quiet and reduced-sound modes pause alert clips without changing notifications or the spoken narrator."
+            control={
+              <div className="space-y-2">
+                <Switch checked={!alertSounds.quiet} ariaLabel="Alert sounds enabled outside quiet mode" onChange={(on) => update({ alertSounds: { ...alertSounds, quiet: !on } })} />
+                <label className="flex items-center gap-2 text-xs text-muted">
+                  <input type="checkbox" checked={alertSounds.reducedSound} onChange={(e) => update({ alertSounds: { ...alertSounds, reducedSound: e.target.checked } })} />
+                  Reduced sound mode
+                </label>
+              </div>
+            }
+          />
+          {soundError ? <div role="alert" className="text-sm text-[color:var(--warn)]">{soundError}</div> : null}
         </div>
       </SearchableRow>
       <SearchableRow {...ROWS.mobilePush}>

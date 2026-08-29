@@ -1,5 +1,20 @@
 # Handoff
 
+## 2026-08-26, custom alert sounds (#289, plan lane 67)
+
+Implemented the custom alert-sounds surface in `src/renderer/lib/sfx.ts`,
+`src/renderer/components/settings/sections/NotificationsSection.tsx`, and `src/shared/types.ts`.
+Users can choose bounded local WAV, OGG, MP3, M4A, or WebM clips independently for finished-turn
+and needs-you alerts, preview the exact mapped event, replace or reset each clip, and persist the
+mapping in settings. Remote URLs, empty files, unsupported media types, and files over 2 MB are
+rejected. Quiet and reduced-sound settings pause clips while preserving notifications and the
+independent spoken narrator. The built-in effects remain the fallback.
+
+Added `docs/alert-sounds.md` and updated `ROADMAP.md` and `CHANGELOG.md` for issues #289 and #78.
+This lane intentionally did not run tests, type checking, builds, packaging, UI interaction,
+captures, commits, or dews. Focused verification, docs-bundle generation, and GitHui issue updates
+remain with the parent integration lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

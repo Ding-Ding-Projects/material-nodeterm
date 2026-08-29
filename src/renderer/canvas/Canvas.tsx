@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { playSfx, primeSfx } from '@renderer/lib/sfx'
+import { playAlertSound, primeSfx } from '@renderer/lib/sfx'
 import { narrate, suppressNarratorTrack } from '@renderer/lib/narrator'
 import {
   bindCanvasNarrationToSchoolMode,
@@ -11939,7 +11939,7 @@ export function Canvas() {
           const t = Date.now()
           if (t - (sfxCooldownRef.current[e.nodeId] ?? 0) >= 5000) {
             sfxCooldownRef.current[e.nodeId] = t
-            playSfx(sound, snd.soundVolume)
+            playAlertSound(sound, snd.soundVolume, snd.alertSounds)
           }
         }
         // Narration: same "fires regardless of focus" reasoning as the chirp above — it's meant

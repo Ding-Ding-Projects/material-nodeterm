@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add per-event custom alert sounds for finished turns and sessions needing attention. Local audio
+  is bounded and validated, supports preview/reset and built-in fallback, and respects persisted
+  volume, quiet, and reduced-sound choices without muting the independent narrator. Verification
+  remains pending in the implementation lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

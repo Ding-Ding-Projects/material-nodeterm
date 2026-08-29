@@ -119,7 +119,9 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
       Server Edition).
 - [ ] **#291** — Node type icons alongside color coding.
 - [ ] **#290** — Source control for monorepos with multiple nested git repos.
-- [ ] **#289** — Custom sounds for agent alerts.
+- [x] **#289** — Custom sounds for agent alerts. Implemented in Notifications settings with bounded
+      local audio validation, per-event mappings, preview/reset, quiet/reduced-sound handling, and
+      narrator coexistence. Verification remains pending in this no-tests implementation lane.
 - [ ] **#286** — Named terminal profiles (start directory).
 - [ ] **#284** — Per-terminal independent "repo context".
 - [ ] **#145** — Basic annotation tools (colored frame, lines, arrows) — note: an `annotation`
@@ -127,8 +129,9 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
       this is unstarted.
 - [ ] **#119** — Opt-in lead-pane-width preference (Claude Code agent teams squeeze the lead
       pane to ~30%).
-- [ ] **#78** — Owner's own tracked roadmap of 4 bug fixes + 4 features (grouped meta-issue;
-      contents not itemized here — see the issue directly).
+- [x] **#78** — Owner's own tracked roadmap of 4 bug fixes + 4 features (grouped meta-issue;
+      contents not itemized here — see the issue directly). Plan lane 67 implemented custom alert
+      sounds and recorded its verification debt.
 
 ## Portable Node Universes and Hosting Program, planned 2026-08-26
 

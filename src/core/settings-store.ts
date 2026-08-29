@@ -33,6 +33,19 @@ function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
   // settings.json that predates a newly-added action still picks up its shipped default, exactly
   // like `speech`. A missing map on old files falls back to the full default map.
   merged.shortcuts = { ...DEFAULT_SETTINGS.shortcuts, ...saved?.shortcuts }
+  const rawAlertSounds = saved?.alertSounds as Partial<Settings['alertSounds']> | undefined
+  merged.alertSounds = {
+    ...DEFAULT_SETTINGS.alertSounds,
+    ...(rawAlertSounds && typeof rawAlertSounds === 'object' ? rawAlertSounds : {}),
+    clips: {
+      ...DEFAULT_SETTINGS.alertSounds.clips,
+      ...(rawAlertSounds?.clips && typeof rawAlertSounds.clips === 'object' ? rawAlertSounds.clips : {})
+    },
+    mappings: {
+      ...DEFAULT_SETTINGS.alertSounds.mappings,
+      ...(rawAlertSounds?.mappings && typeof rawAlertSounds.mappings === 'object' ? rawAlertSounds.mappings : {})
+    }
+  }
   // Legacy `terminalGpuRendering` was a boolean whose default (true) was merged into every saved
   // file — so a stored `true` is indistinguishable from "never touched" and maps to the new
   // 'auto' (platform-aware) default, while a stored `false` was always an explicit escape-hatch

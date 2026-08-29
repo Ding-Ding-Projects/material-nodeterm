@@ -1535,6 +1535,22 @@ export type TerminalCursorInactiveStyle = TerminalCursorStyle | 'outline' | 'non
 /** Which language(s) the spoken narrator speaks (docs/narrator.md). 'both' speaks English then
  *  Cantonese, strictly serialized — never overlapping. */
 export type NarratorLanguage = 'en' | 'yue' | 'both'
+
+/** A user-provided local alert sound. The bytes stay in settings so the picker is portable
+ * between the desktop and Server Edition, and the bounded validator in sfx.ts rejects remote,
+ * animated or unreasonably large inputs before they can be persisted. */
+export interface AlertSoundClip {
+  name: string
+  mime: 'audio/wav' | 'audio/ogg' | 'audio/mpeg' | 'audio/mp4' | 'audio/webm'
+  dataUrl: string
+}
+
+export interface AlertSoundSettings {
+  clips: Partial<Record<'done' | 'needsYou', AlertSoundClip>>
+  mappings: Partial<Record<'done' | 'needsYou', 'builtin' | 'custom'>>
+  quiet: boolean
+  reducedSound: boolean
+}
 /* -----------------------------------------------------------------------------------------------
  * Per-element appearance customization (docs/appearance.md).
  *
@@ -1938,6 +1954,8 @@ export interface Settings {
   soundEffects: boolean
   /** Sound-effect volume, 0..1. */
   soundVolume: number
+  /** Per-event local alert sounds. Data URLs are bounded, validated local media only. */
+  alertSounds: AlertSoundSettings
   /** User-defined agents (BYO CLI) appended to the Add menus. */
   customAgents: CustomAgent[]
   /** Per-builtin-agent launch command overrides (Settings → Agents → Launch commands). The value
@@ -2232,6 +2250,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notifyConsentAsked: false,
   soundEffects: true,
   soundVolume: 0.5,
+  alertSounds: { clips: {}, mappings: { done: 'builtin', needsYou: 'builtin' }, quiet: false, reducedSound: false },
   customAgents: [],
   agentLaunchCommands: {},
   claudeAccounts: [],
