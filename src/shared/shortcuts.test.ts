@@ -20,11 +20,9 @@ describe('shortcuts registry', () => {
     }
   })
 
-  it('every default is spelled in canonical Ctrl notation, not the legacy Cmd alias', () => {
-    // A `Cmd+…` default would still WORK (the alias parses), which is exactly why nothing else
-    // would catch it: it silently reintroduces mac-first notation as the shipped source of truth.
+  it('every default is spelled in canonical Cmd notation', () => {
     for (const d of SHORTCUT_DEFS) {
-      expect(d.default, `${d.id} default is canonical`).toMatch(/^Ctrl\+/)
+      expect(d.default, `${d.id} default is canonical`).toMatch(/^Cmd\+/)
     }
   })
 
@@ -77,7 +75,7 @@ describe('shortcuts registry', () => {
     const conflicts = findShortcutConflicts({
       ...DEFAULT_SHORTCUTS,
       commandPalette: 'Cmd+K',
-      settings: 'Ctrl+K'
+      settings: 'Command+K'
     })
     const pairs = conflicts.map(([a, b]) => [a, b].sort().join(','))
     expect(pairs).toContain('commandPalette,settings')

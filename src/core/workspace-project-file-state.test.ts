@@ -7,8 +7,9 @@
  * MUTATION: make the catch return 'absent' unconditionally (i.e. treat any error as absence) →
  * the ENOTDIR case below reddens, which is the case that stands in for a permissions/mount error.
  */
-import { describe, expect, it, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs'
+import { promises as fs } from 'node:fs'
 import os from 'os'
 import path from 'path'
 import { initPlatform, resetPlatformForTests } from './platform'
@@ -54,7 +55,7 @@ describe('projectFileState distinguishes absence from a failed read', () => {
     // the permissions / stalled-mount errors that must never be read as "the file is gone".
     const folder = path.join(dir, 'blocked')
     mkdirSync(folder)
-    writeFileSync(path.join(folder, '.nodeterm'), 'i am not a directory')
+    vi.spyOn(fs, 'stat').mockRejectedValueOnce(Object.assign(new Error('not a directory'), { code: 'ENOTDIR' }))
     expect(await store.projectFileState(folder)).toBe('unreadable')
   })
 })

@@ -78,6 +78,31 @@ const REQUIRED_TERMINAL_PROFILE_COPY = {
   'terminalProfiles.settings.chooseExecutableAria': 'Choose custom terminal executable',
   'terminalProfiles.settings.chooseExecutable': 'Choose executable…',
 
+  'terminalProfiles.named.heading': 'Named terminal profiles',
+  'terminalProfiles.named.description': 'Save a name, initial directory, and optional startup command for new terminal or agent nodes. These values stay on this computer and are not written to shared project files.',
+  'terminalProfiles.named.search': 'Search named profiles',
+  'terminalProfiles.named.listLabel': 'Saved named terminal profiles',
+  'terminalProfiles.named.empty': 'No named profiles match this search. Create one below.',
+  'terminalProfiles.named.noStartup': 'No startup command',
+  'terminalProfiles.named.default': 'Default',
+  'terminalProfiles.named.useDefault': 'Use for new nodes',
+  'terminalProfiles.named.defaultStatus': '{profile} is used for one-click new nodes.',
+  'terminalProfiles.named.edit': 'Edit',
+  'terminalProfiles.named.remove': 'Remove',
+  'terminalProfiles.named.confirmRemove': 'Confirm remove',
+  'terminalProfiles.named.editorTitle': 'Create named profile',
+  'terminalProfiles.named.nameLabel': 'Name',
+  'terminalProfiles.named.nameDescription': 'A short label shown in profile pickers.',
+  'terminalProfiles.named.cwdLabel': 'Initial directory',
+  'terminalProfiles.named.cwdDescription': 'The directory opened before the startup command runs.',
+  'terminalProfiles.named.browse': 'Browse…',
+  'terminalProfiles.named.commandLabel': 'Startup command',
+  'terminalProfiles.named.commandDescription': 'Optional text sent once after the shell is ready. It is user-authored and runs locally.',
+  'terminalProfiles.named.invalid': 'Enter a name and initial directory. Keep each value within its stated limit.',
+  'terminalProfiles.named.cancel': 'Cancel',
+  'terminalProfiles.named.saveChanges': 'Save changes',
+  'terminalProfiles.named.create': 'Create profile',
+
   'terminalProfiles.create.menuLabel': 'New terminal with profile…',
   'terminalProfiles.create.chooseProfileAria': 'Choose terminal profile',
   'terminalProfiles.create.backToNewNodes': 'Back to new nodes',
@@ -173,14 +198,19 @@ describe('Windows terminal-profile localization catalog', () => {
     >) {
       const entry = CATALOG[id]
       expect(entry, `${id} is missing`).toBeDefined()
-      expect(entry.en, `${id}.en must retain all five tone levels`).toEqual([
+      expect(entry.en, `${id}.en must retain all ten tone levels`).toEqual([
+        fallback,
+        fallback,
+        fallback,
+        fallback,
+        fallback,
         fallback,
         fallback,
         fallback,
         fallback,
         fallback
       ])
-      expect(entry.yue, `${id}.yue must retain all five tone levels`).toHaveLength(5)
+      expect(entry.yue, `${id}.yue must retain all ten tone levels`).toHaveLength(10)
       for (const [index, variant] of entry.yue.entries()) {
         expect(variant.trim(), `${id}.yue[${index}] must not be blank`).not.toBe('')
       }

@@ -116,7 +116,9 @@ async function detectDiskFormat(file: string | null): Promise<'qcow2' | 'raw' | 
 
 export function diskFormatFromHeader(header: Uint8Array): 'qcow2' | 'raw' | 'unknown' {
   if (header.byteLength < 4) return 'unknown'
-  return Buffer.from(header.subarray(0, 4)).toString('ascii') === 'QFI\xfb' ? 'qcow2' : 'raw'
+  return header[0] === 0x51 && header[1] === 0x46 && header[2] === 0x49 && header[3] === 0xfb
+    ? 'qcow2'
+    : 'raw'
 }
 
 export function isoSha256Matches(expected: string | undefined, actual: string): boolean {

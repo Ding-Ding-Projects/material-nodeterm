@@ -19,6 +19,7 @@ describe('Pages playground time machine', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     values = new Map()
+    values.set('nodeterm-playground.v2', JSON.stringify({ funnySchemaVersion: 2 }))
     storage = {
       getItem: vi.fn((key) => values.get(key) ?? null),
       setItem: vi.fn((key, value) => values.set(key, value)),
@@ -95,7 +96,7 @@ describe('Pages playground time machine', () => {
 
     expect(store.state.history[0].undo).toBeUndefined()
     expect(store.state.history[0].body).toContain('credential')
-    const persisted = JSON.parse(values.get('nodeterm-playground.v1'))
+    const persisted = JSON.parse(values.get('nodeterm-playground.v2'))
     expect(JSON.stringify(persisted.history)).not.toContain('FIRSTSECRET2345')
     expect(JSON.stringify(persisted.history)).not.toContain('SECONDSECRET2345')
     // Active records remain canonical and functional; only their hidden historical duplicates go.
@@ -106,6 +107,7 @@ describe('Pages playground time machine', () => {
   })
 
   it('migrates legacy secret-bearing undo rows immediately without touching active authenticators', () => {
+    values.delete('nodeterm-playground.v2')
     values.set('nodeterm-playground.v1', JSON.stringify({
       auth: [{ id: 'a1', label: 'Live', secret: 'LIVESECRET234567' }],
       history: [{
@@ -122,7 +124,7 @@ describe('Pages playground time machine', () => {
     const store = createStore()
     expect(store.state.auth[0].secret).toBe('LIVESECRET234567')
     expect(store.state.history[0].undo).toEqual({ theme: 'night' })
-    const rewritten = JSON.parse(values.get('nodeterm-playground.v1'))
+    const rewritten = JSON.parse(values.get('nodeterm-playground.v2'))
     expect(JSON.stringify(rewritten.history)).not.toContain('OLDSECRET234567')
     expect(JSON.stringify(rewritten.history)).not.toContain('schoolPin')
     expect(rewritten.auth[0].secret).toBe('LIVESECRET234567')
@@ -196,7 +198,7 @@ describe('Pages playground time machine', () => {
     expect(store.state.history[0].title).toContain('Removed 1 authenticator')
     expect(store.state.history[0].undo).toBeUndefined()
     expect(store.state.history[0].body).toContain('cannot be put back')
-    expect(JSON.stringify(JSON.parse(values.get('nodeterm-playground.v1')).history)).not.toContain(
+    expect(JSON.stringify(JSON.parse(values.get('nodeterm-playground.v2')).history)).not.toContain(
       'DELETESECRET2345',
     )
     expect(room.removeWarning).toContain('cannot be put back')
@@ -229,7 +231,7 @@ describe('Pages playground time machine', () => {
     removeHistoryEntries(store, ids)
 
     expect(store.state.history).toEqual([])
-    expect(JSON.parse(values.get('nodeterm-playground.v1')).history).toEqual([])
+    expect(JSON.parse(values.get('nodeterm-playground.v2')).history).toEqual([])
     expect(createStore().state.history).toEqual([])
   })
 })

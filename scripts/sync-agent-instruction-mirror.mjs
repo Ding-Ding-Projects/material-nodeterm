@@ -12,10 +12,12 @@
  *   node scripts/sync-agent-instruction-mirror.mjs --check
  *   <sanitized.md node scripts/sync-agent-instruction-mirror.mjs --write
  */
-import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { renameAtomicSync } from './lib/rename-atomic.mjs'
 
 export const MANAGED_BEGIN = '<!-- codingmachineedge/agent-global-memory-public:begin -->'
 export const MANAGED_END = '<!-- codingmachineedge/agent-global-memory-public:end -->'
@@ -166,21 +168,6 @@ export function replaceManagedBody(text, body) {
   return `${text.slice(0, begin)}${block}${text.slice(end + MANAGED_END.length)}`
 }
 
-function renameWithRetry(source, destination) {
-  let lastError
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    try {
-      renameSync(source, destination)
-      return
-    } catch (error) {
-      lastError = error
-      if (!['EPERM', 'EACCES', 'EBUSY'].includes(error.code)) throw error
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25 * (attempt + 1))
-    }
-  }
-  throw lastError
-}
-
 export function writeManagedInstructionMirror(repoRoot, body, options = {}) {
   const bodyProblems = validateManagedBody(body)
   if (bodyProblems.length > 0) throw new Error(bodyProblems.join('\n'))
@@ -205,11 +192,11 @@ export function writeManagedInstructionMirror(repoRoot, body, options = {}) {
   try {
     for (const [file, replacement] of replacements) {
       const absolute = path.join(repoRoot, file)
-      const temporary = `${absolute}.instruction-mirror-${process.pid}-${Date.now()}-${staged.length}.tmp`
+      const temporary = `${absolute}.instruction-mirror-${process.pid}-${Date.now()}-${randomUUID()}.tmp`
       writeFileSync(temporary, replacement, 'utf8')
       staged.push({ file, absolute, temporary })
     }
-    const publishRename = options.publishRename ?? renameWithRetry
+    const publishRename = options.publishRename ?? renameAtomicSync
     for (const entry of staged) publishRename(entry.temporary, entry.absolute)
   } catch (error) {
     for (const entry of staged) {
@@ -218,9 +205,9 @@ export function writeManagedInstructionMirror(repoRoot, body, options = {}) {
     for (const [file, original] of originals) {
       const absolute = path.join(repoRoot, file)
       if (readFileSync(absolute, 'utf8') === original) continue
-      const temporary = `${absolute}.instruction-mirror-rollback-${process.pid}-${Date.now()}.tmp`
+      const temporary = `${absolute}.instruction-mirror-rollback-${process.pid}-${Date.now()}-${randomUUID()}.tmp`
       writeFileSync(temporary, original, 'utf8')
-      renameWithRetry(temporary, absolute)
+      renameAtomicSync(temporary, absolute)
     }
     throw error
   }
