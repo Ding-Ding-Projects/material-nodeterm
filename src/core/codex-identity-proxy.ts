@@ -572,9 +572,9 @@ export function writeCodexThreadIdentity(
   if (!isSafeThreadId(threadId) || !SAFE_NODE_ID.test(nodeId) || !canonicalEndpoint) {
     throw new Error('Invalid NodeTerm Codex thread identity')
   }
-  const root = path.isAbsolute(rootOrAccountId) ? rootOrAccountId : defaultIdentityRoot()
   const effectiveAccountId = path.isAbsolute(rootOrAccountId) ? accountId : rootOrAccountId
   const scope = accountScope(effectiveAccountId) // throws on an id that could escape the mapping directory
+  const root = path.isAbsolute(rootOrAccountId) ? rootOrAccountId : defaultIdentityRoot()
   const signature = identitySignature(threadId, scope, nodeId, canonicalEndpoint)
   const file = identityFile(threadId, scope, root)
   const dir = path.dirname(file)
@@ -628,9 +628,9 @@ export function bindCodexThreadIdentity(
   if (!isSafeThreadId(threadId) || !SAFE_NODE_ID.test(nodeId) || !canonicalEndpoint) {
     throw new Error('Invalid NodeTerm Codex thread identity')
   }
-  const root = path.isAbsolute(rootOrAccountId) ? rootOrAccountId : defaultIdentityRoot()
   const effectiveAccountId = path.isAbsolute(rootOrAccountId) ? accountId : rootOrAccountId
   const scope = accountScope(effectiveAccountId) // reject an escaping account id before any read or write
+  const root = path.isAbsolute(rootOrAccountId) ? rootOrAccountId : defaultIdentityRoot()
   const existing = readCodexThreadIdentity(threadId, root, effectiveAccountId)
   for (const candidate of identityCandidates(threadId, root)) {
     if (candidate.scope !== scope) continue

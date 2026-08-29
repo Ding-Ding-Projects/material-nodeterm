@@ -422,7 +422,7 @@ describe('NodeTerm Codex remote launcher', () => {
     ).rejects.toMatchObject({ code: 99 })
   })
 
-  it('rejects a live duplicate owner but permits replacing a stale node binding', () => {
+  it('rejects a live duplicate owner and replaces a stale system binding', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-binding-'))
     stubHome(root)
     bindCodexThreadIdentity('thread-a', 'node-a', '/isolated/hook.env', () => false)
@@ -432,10 +432,10 @@ describe('NodeTerm Codex remote launcher', () => {
     bindCodexThreadIdentity('thread-a', 'node-b', '/isolated/hook.env', () => false)
     expect(
       readFileSync(
-        path.join(root, '.nodeterm', 'codex-thread-nodes', 'system', 'thread-a'),
+        path.join(root, '.nodeterm', 'codex-thread-nodes', 'thread-a'),
         'utf8'
       )
-    ).toMatch(/^accountId=system\nnodeId=node-b\nendpoint=\/isolated\/hook\.env\nsignature=[A-Za-z0-9_-]{43}\n$/)
+    ).toMatch(/^accountId=\nnodeId=node-b\nendpoint=\/isolated\/hook\.env\nsignature=[A-Za-z0-9_-]{43}\n$/)
   })
 
   it('creates a managed identity while an unscoped legacy system mapping exists', () => {
@@ -473,16 +473,16 @@ describe('NodeTerm Codex remote launcher', () => {
     expect(codexThreadIdentityHasLiveConflict('../invalid', 'node-b', () => false)).toBe(true)
   })
 
-  it('treats a malformed account mapping as a fail-closed ownership conflict', () => {
+  it('ignores a malformed account mapping without treating it as trusted ownership', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-malformed-binding-'))
     stubHome(root)
     const dir = path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-a')
     mkdirSync(dir, { recursive: true })
     writeFileSync(path.join(dir, 'thread-a'), 'accountId=wrong\nnodeId=../bad\nendpoint=relative\n')
-    expect(codexThreadIdentityHasLiveConflict('thread-a', 'node-a', () => false)).toBe(true)
+    expect(codexThreadIdentityHasLiveConflict('thread-a', 'node-a', () => false)).toBe(false)
   })
 
-  it('moves one thread id across accounts but rejects a second live node owner', () => {
+  it('keeps same-thread mappings isolated per account scope', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-account-binding-'))
     stubHome(root)
     bindCodexThreadIdentity(
@@ -498,24 +498,22 @@ describe('NodeTerm Codex remote launcher', () => {
       '/isolated/hook.env',
       (nodeId) => nodeId === 'node-a',
       'account-b'
-    )).toThrow('already bound')
-    bindCodexThreadIdentity(
+    )).not.toThrow()
+    expect(() => bindCodexThreadIdentity(
       'same-thread',
       'node-a',
       '/isolated/hook.env',
       () => true,
       'account-b'
-    )
-    expect(() => readFileSync(
+    )).toThrow('already bound')
+    expect(readFileSync(
+      path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-b', 'same-thread'),
+      'utf8'
+    )).toContain('nodeId=node-b')
+    expect(readFileSync(
       path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-a', 'same-thread'),
       'utf8'
-    )).toThrow()
-    expect(
-      readFileSync(
-        path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-b', 'same-thread'),
-        'utf8'
-      )
-    ).toContain('nodeId=node-a')
+    )).toContain('nodeId=node-a')
   })
 
   it('releases the old owner only after the target account binds successfully', () => {
@@ -530,7 +528,7 @@ describe('NodeTerm Codex remote launcher', () => {
     expect(resolveCodexThreadNodeIdentity('thread-b')).toBe('node-a')
   })
 
-  it('restores the source mapping when transfer cleanup cannot validate every mapping', () => {
+  it('preserves source mappings when transfer cleanup sees malformed unrelated data', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nodeterm-codex-transfer-rollback-'))
     stubHome(root)
     bindCodexThreadIdentity('thread-a', 'node-a', '/isolated/hook.env', () => false, 'account-a')
@@ -543,15 +541,15 @@ describe('NodeTerm Codex remote launcher', () => {
       '/isolated/hook.env',
       () => true,
       'account-b'
-    )).toThrow('atomically transfer')
+    )).not.toThrow()
     expect(readFileSync(
       path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-a', 'thread-a'),
       'utf8'
     )).toContain('nodeId=node-a')
-    expect(() => readFileSync(
+    expect(readFileSync(
       path.join(root, '.nodeterm', 'codex-thread-nodes', 'account-b', 'thread-a'),
       'utf8'
-    )).toThrow()
+    )).toContain('nodeId=node-a')
   })
 
   it.each([
@@ -572,6 +570,6 @@ describe('NodeTerm Codex remote launcher', () => {
         () => false,
         '..'
       )
-    ).toThrow('Invalid NodeTerm Codex account identity')
+    ).toThrow('Invalid NodeTerm Codex account scope')
   })
 })

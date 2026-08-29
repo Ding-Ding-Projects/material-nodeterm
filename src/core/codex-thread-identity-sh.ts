@@ -121,7 +121,12 @@ fi`
 
 /** Build the resolver for the app-owned identity root supplied by `CorePlatform`. */
 export function codexThreadIdentityResolverSh(identityRoot: string): string {
-  const root = posixQuote(identityRoot)
+  // A generated resolver runs under Git for Windows' POSIX shell, while CorePlatform supplies a
+  // native drive path. Keep the path readable by both shell builtins and the native tools it calls.
+  const shellRoot = process.platform === 'win32'
+    ? identityRoot.replaceAll('\\', '/').replace(/^([A-Za-z]):(?=\/|$)/, (_, drive: string) => `/${drive.toLowerCase()}`)
+    : identityRoot
+  const root = posixQuote(shellRoot)
   return buildResolver(
     `nt_codex_root=${root}`,
     `${root}/"$CODEX_THREAD_ID"`,

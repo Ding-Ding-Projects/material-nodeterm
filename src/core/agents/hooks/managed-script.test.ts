@@ -300,7 +300,7 @@ describe('buildManagedScript', () => {
       // Each backgrounded answered POST reads the payload from the temp file and self-deletes it
       // after curl returns (the file must never outlive its reader).
       const backgrounded = s.match(
-        /--data-urlencode "payload@\$\{nt_payload_file\}" >\/dev\/null 2>&1; rm -f "\$nt_payload_file" 2>\/dev\/null \|\| :; \} &/g
+        /--data-urlencode "\$\(nt_payload_arg\)" >\/dev\/null 2>&1; rm -f "\$nt_payload_file" 2>\/dev\/null \|\| :; \} &/g
       ) ?? []
       expect(backgrounded.length).toBe(2)
       expect(s).toContain('--max-time 1')
@@ -365,7 +365,7 @@ describe('buildManagedScript', () => {
     })
     it('every POST reads the payload from the temp file with payload@file', () => {
       // Four POSTs: request (unix-socket + TCP) and answered (unix-socket + TCP).
-      const atFile = s.match(/--data-urlencode "payload@\$\{nt_payload_file\}"/g) ?? []
+      const atFile = s.match(/--data-urlencode "\$\(nt_payload_arg\)"/g) ?? []
       expect(atFile.length).toBe(4)
     })
     it('deletes the temp file on every exit path (hot path, answered, no-transport, timeout)', () => {
@@ -719,16 +719,16 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeo
       )
       const script = join(dir, 'claude-local-first.sh')
       writeFileSync(script, buildManagedScript('claude'), { encoding: 'utf8', mode: 0o755 })
-      const res = spawnSync('sh', [script], {
+      const res = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {
         encoding: 'utf8',
         input: '{"hook_event_name":"PermissionRequest"}',
-        env: {
-          PATH: `${bin}:${process.env.PATH ?? ''}`,
+        env: environmentForPosixShell(pathsForPosixShellEnv({
+          PATH: process.env.PATH ?? '',
           HOME: home,
           NODETERM_NODE_ID: 'node-1',
           NODETERM_HOOK_ENDPOINT: primary,
           NODETERM_PERM_WAIT_SECS: '1'
-        }
+        }, SHELL_PATH_ENV_KEYS))
       })
       expect(res.status).toBe(0)
       const calls = curlCalls(log)
@@ -782,16 +782,16 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeo
     )
     const script = join(dir, 'claude-space.sh')
     writeFileSync(script, buildManagedScript('claude'), { encoding: 'utf8', mode: 0o755 })
-    const res = spawnSync('sh', [script], {
+    const res = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {
       encoding: 'utf8',
       input: '{"hook_event_name":"PermissionRequest"}',
-      env: {
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
+      env: environmentForPosixShell(pathsForPosixShellEnv({
+        PATH: process.env.PATH ?? '',
         HOME: home,
         NODETERM_NODE_ID: 'node-1',
         NODETERM_HOOK_ENDPOINT: primary,
         NODETERM_PERM_WAIT_SECS: '1'
-      }
+      }, SHELL_PATH_ENV_KEYS))
     })
     expect(res.status).toBe(0)
     const calls = curlCalls(log)
@@ -829,16 +829,16 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeo
     })
     const script = join(dir, 'claude-bound.sh')
     writeFileSync(script, buildManagedScript('claude'), { encoding: 'utf8', mode: 0o755 })
-    const res = spawnSync('sh', [script], {
+    const res = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {
       encoding: 'utf8',
       input: '{"hook_event_name":"PermissionRequest"}',
-      env: {
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
+      env: environmentForPosixShell(pathsForPosixShellEnv({
+        PATH: process.env.PATH ?? '',
         HOME: home,
         NODETERM_NODE_ID: 'node-1',
         NODETERM_HOOK_ENDPOINT: primary,
         NODETERM_PERM_WAIT_SECS: '1'
-      }
+      }, SHELL_PATH_ENV_KEYS))
     })
     expect(res.status).toBe(0)
     const calls = curlCalls(log)
@@ -869,16 +869,16 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeo
     writeFileSync(join(bin, 'curl'), fakeCurlScript(log, 'exit 7'), { encoding: 'utf8', mode: 0o755 })
     const script = join(dir, 'claude-single.sh')
     writeFileSync(script, buildManagedScript('claude'), { encoding: 'utf8', mode: 0o755 })
-    const res = spawnSync('sh', [script], {
+    const res = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {
       encoding: 'utf8',
       input: '{"hook_event_name":"PermissionRequest"}',
-      env: {
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
+      env: environmentForPosixShell(pathsForPosixShellEnv({
+        PATH: process.env.PATH ?? '',
         HOME: home,
         NODETERM_NODE_ID: 'node-1',
         NODETERM_HOOK_ENDPOINT: primary,
         NODETERM_PERM_WAIT_SECS: '1'
-      }
+      }, SHELL_PATH_ENV_KEYS))
     })
     expect(res.status).toBe(0)
     expect(curlCalls(log)).toHaveLength(1)
@@ -904,16 +904,16 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeo
     writeFileSync(join(bin, 'curl'), fakeCurlScript(log), { encoding: 'utf8', mode: 0o755 })
     const script = join(dir, 'claude-happy.sh')
     writeFileSync(script, buildManagedScript('claude'), { encoding: 'utf8', mode: 0o755 })
-    const res = spawnSync('sh', [script], {
+    const res = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script, [], bin), {
       encoding: 'utf8',
       input: '{"hook_event_name":"PermissionRequest"}',
-      env: {
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
+      env: environmentForPosixShell(pathsForPosixShellEnv({
+        PATH: process.env.PATH ?? '',
         HOME: home,
         NODETERM_NODE_ID: 'node-1',
         NODETERM_HOOK_ENDPOINT: primary,
         NODETERM_PERM_WAIT_SECS: '1'
-      }
+      }, SHELL_PATH_ENV_KEYS))
     })
     expect(res.status).toBe(0)
     expect(curlCalls(log)).toHaveLength(1)
@@ -1233,7 +1233,7 @@ describe('buildManagedScript generated shell is syntactically valid', { timeout:
  * the behavior: no EPIPE for a big writer, and not one byte of endpoint stdout reaching the agent.
  */
 describe('the managed script bail path (issues #186/#187), under /bin/sh', () => {
-  const sh = spawnSync('sh', ['-c', 'exit 0'])
+  const sh = spawnSync(REAL_POSIX_SHELL, ['-c', 'exit 0'], { env: environmentForPosixShell() })
   const shAvailable = sh.status === 0 && !sh.error
   const dir = shAvailable ? mkdtempSync(join(tmpdir(), 'nt-bail-path-')) : ''
   const script = dir ? join(dir, 'claude.sh') : ''
@@ -1256,8 +1256,8 @@ describe('the managed script bail path (issues #186/#187), under /bin/sh', () =>
       // The issue's repro: raw writes (subprocess.communicate-style helpers swallow EPIPE and hide
       // this). 2MB is ~32 pipe buffers, so an un-drained bail fails on the second write at latest.
       const payload = Buffer.alloc(2_000_000, 0x41)
-      const child = spawn('sh', [script], {
-        env: { ...baseEnv, HOME: home },
+      const child = spawn(REAL_POSIX_SHELL, posixShellScriptArgs(script), {
+        env: environmentForPosixShell(pathsForPosixShellEnv({ ...baseEnv, HOME: home }, ['HOME'])),
         stdio: ['pipe', 'pipe', 'pipe']
       })
       const writeError = new Promise<Error | null>((resolve) => {
@@ -1277,10 +1277,10 @@ describe('the managed script bail path (issues #186/#187), under /bin/sh', () =>
       // different failures, and the marker file catches the first even if output were swallowed.
       const canary = join(dir, 'canary.env')
       writeFileSync(canary, `echo "LEAKED"\n: > '${join(dir, 'executed.marker')}'\n`, 'utf8')
-      const res = spawnSync('sh', [script], {
+      const res = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script), {
         encoding: 'utf8',
         input: '{"hook_event_name":"UserPromptSubmit"}',
-        env: { ...baseEnv, HOME: home, NODETERM_HOOK_ENDPOINT: canary }
+        env: environmentForPosixShell(pathsForPosixShellEnv({ ...baseEnv, HOME: home, NODETERM_HOOK_ENDPOINT: canary }, ['HOME', 'NODETERM_HOOK_ENDPOINT']))
       })
       expect(res.status).toBe(0)
       expect(res.stdout).toBe('')
@@ -1296,10 +1296,10 @@ describe('the managed script bail path (issues #186/#187), under /bin/sh', () =>
       // finds no transport and no fallback candidates; the script still owes a silent exit 0.
       const canary = join(dir, 'canary-live.env')
       writeFileSync(canary, 'echo "LEAKED"\n', 'utf8')
-      const res = spawnSync('sh', [script], {
+      const res = spawnSync(REAL_POSIX_SHELL, posixShellScriptArgs(script), {
         encoding: 'utf8',
         input: '{"hook_event_name":"UserPromptSubmit"}',
-        env: { ...baseEnv, HOME: home, NODETERM_NODE_ID: 'node-1', NODETERM_HOOK_ENDPOINT: canary }
+        env: environmentForPosixShell(pathsForPosixShellEnv({ ...baseEnv, HOME: home, NODETERM_NODE_ID: 'node-1', NODETERM_HOOK_ENDPOINT: canary }, ['HOME', 'NODETERM_HOOK_ENDPOINT']))
       })
       expect(res.status).toBe(0)
       expect(res.stdout).toBe('')
