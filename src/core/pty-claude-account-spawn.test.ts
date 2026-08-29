@@ -26,6 +26,13 @@ import { accountConfigDir } from './claude-accounts-core'
 
 const spawned: Array<{ file: string; args: string[]; env: Record<string, string> }> = []
 
+// This suite mocks node-pty and asserts the direct shell account scope. Pin off the session-host
+// backend so an ignored `out/session-host/host.cjs` from a prior build cannot change the backend
+// under test on a warm tree. The dedicated session-host suites cover that backend separately.
+vi.mock('./session-host-backend', async () =>
+  (await import('./__fixtures__/no-session-host')).noSessionHost()
+)
+
 vi.mock('node-pty', () => ({
   spawn: (file: string, args: string[], options: { env: Record<string, string> }) => {
     spawned.push({ file, args, env: options?.env ?? {} })
