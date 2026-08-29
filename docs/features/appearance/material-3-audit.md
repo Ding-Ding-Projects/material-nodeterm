@@ -528,9 +528,10 @@ landing-page JSON/cache validators. The site renderer also has an independent pe
 manifest with file-backed removal mutations. Runtime facts such as paths, IDs, model names,
 provider errors, visible commands, brand names, license text, and shortcut text remain outside the
 authored-copy mapper. Canvas notifications classify every direct body as authored or fact, and the
-hand-written Canvas inventory now names 58 checker-retained production calls in source order,
-including the scheduled-trigger placement path and the two planner notifications nested inside
-the project-open success action. All remain explicitly classified in source. The landing-page file
+hand-written Canvas inventory now names 59 checker-retained production calls in source order,
+including the scheduled-trigger placement path, the linked-agent inbox update, and the two planner
+notifications nested inside the project-open success action. All remain explicitly classified in
+source. The landing-page file
 reader keeps rejected reads visible instead of
 treating them as successful input.
 The per-string checker parses the arguments of each copy call, while the delegated file-change

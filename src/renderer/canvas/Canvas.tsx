@@ -13290,8 +13290,10 @@ export function Canvas() {
             useAgentStatus.getState().markUnread(targetId)
             notify({
               kind: 'info',
+              titleKind: 'authored',
               title: 'Linked agent inbox updated',
               body: 'A linked agent was asked to check its configured coordination inbox.',
+              bodyKind: 'authored',
               target: { nodeId: targetId, ...(projectId ? { projectId } : {}) },
               dedupeKey: `linked-agent-inbox:${projectId}:${sourceNodeId}:${targetId}`
             })
