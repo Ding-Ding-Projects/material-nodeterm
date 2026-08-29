@@ -6,8 +6,10 @@ import { FieldRow } from '../FieldRow'
 import { Switch } from '@renderer/ui/Switch'
 import { Button } from '@renderer/ui/Button'
 import { SegmentedPill } from '@renderer/ui/SegmentedPill'
+import { NumberField } from '@renderer/ui/NumberField'
 import { USAGE_PROVIDER_IDS, providerLabel } from '@shared/usage-limits'
 import { AGENT_CONFIG } from '@shared/agents/config'
+import { normalizeClaudeAccountRotation } from '../../../lib/claudeAccountRotation'
 
 const ROWS = {
   percentMode: {
@@ -39,6 +41,21 @@ const ROWS = {
   cookies: {
     title: 'Web-console sign-in',
     keywords: ['minimax', 'opencode', 'cookie', 'session', 'sign in', 'credential', 'paste']
+  },
+  rotation: {
+    title: 'Automatic Claude account rotation',
+    keywords: [
+      'claude',
+      'account',
+      'rotate',
+      'rotation',
+      'threshold',
+      'usage',
+      'headroom',
+      'hysteresis',
+      'cooldown',
+      'new session'
+    ]
   }
 }
 const ENTRIES = Object.values(ROWS)
@@ -158,6 +175,10 @@ function CookieProviderRow({
 export function UsageSection({ isActive }: { isActive: boolean }): React.JSX.Element | null {
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
+  const rotation = normalizeClaudeAccountRotation(settings.claudeAccountRotation)
+  const updateRotation = (patch: Partial<typeof rotation>): void => {
+    update({ claudeAccountRotation: { ...rotation, ...patch } })
+  }
 
   const hidden = new Set(settings.hiddenUsageProviders)
   const setShown = (provider: string, shown: boolean): void => {
@@ -258,6 +279,70 @@ export function UsageSection({ isActive }: { isActive: boolean }): React.JSX.Ele
               }}
             />
           ))}
+        </div>
+      </SearchableRow>
+      <SearchableRow {...ROWS.rotation}>
+        <FieldRow
+          label="Automatic Claude account rotation"
+          description="When enabled, only new Claude sessions may move to another configured local account after the selected account reaches the usage threshold. Running sessions are never interrupted, and an explicit account choice stays pinned."
+          note="Usage evidence is read for every configured local account before a new session. A failed read is not treated as free headroom."
+          control={
+            <Switch
+              checked={rotation.enabled}
+              onChange={(enabled) => updateRotation({ enabled })}
+              ariaLabel="Automatic Claude account rotation"
+            />
+          }
+        />
+        <div className="space-y-2 border-t border-border/60 pt-4">
+          <FieldRow
+            label="Rotate at usage"
+            description="The default is 90%. The highest consumed limit wins; ties use the limit that resets soonest."
+            control={
+              <NumberField
+                value={rotation.thresholdPercent}
+                min={50}
+                max={100}
+                step={1}
+                ariaLabel="Claude rotation usage threshold"
+                onChange={(value) => {
+                  if (Number.isFinite(value)) updateRotation({ thresholdPercent: value })
+                }}
+              />
+            }
+          />
+          <FieldRow
+            label="Recovery margin"
+            description="Hysteresis margin in percentage points. After a rotation, the source account must fall below threshold minus this margin before it can rotate again."
+            control={
+              <NumberField
+                value={rotation.hysteresisPercent}
+                min={0}
+                max={25}
+                step={1}
+                ariaLabel="Claude rotation recovery margin"
+                onChange={(value) => {
+                  if (Number.isFinite(value)) updateRotation({ hysteresisPercent: value })
+                }}
+              />
+            }
+          />
+          <FieldRow
+            label="Rotation cooldown (minutes)"
+            description="Minimum time between rotations from the same source account. The default is 30 minutes."
+            control={
+              <NumberField
+                value={rotation.cooldownMinutes}
+                min={1}
+                max={240}
+                step={1}
+                ariaLabel="Claude rotation cooldown in minutes"
+                onChange={(value) => {
+                  if (Number.isFinite(value)) updateRotation({ cooldownMinutes: value })
+                }}
+              />
+            }
+          />
         </div>
       </SearchableRow>
     </SettingsSection>

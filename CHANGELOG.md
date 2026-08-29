@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add opt-in Claude account rotation for new sessions when the selected account reaches the
+  configurable usage threshold (90% by default). The launch policy reads every configured local
+  account, preserves explicit pins and live sessions, uses hysteresis and cooldown to avoid churn,
+  and reports both successful rotation and the no-lower-usage fallback honestly. Verification is
+  intentionally pending in this implementation lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

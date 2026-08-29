@@ -114,7 +114,10 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
       re-check the issue before treating this as unstarted.)*
 - [ ] **#347** — Cleanup/uninstall script or portable install.
 - [ ] **#299** — High-DPI UI text scaling setting.
-- [ ] **#295** — Auto-rotate Claude accounts when usage crosses a threshold (default 90%).
+- [ ] **#295**: Auto-rotate Claude accounts when usage crosses a threshold (default 90%). The
+  launch policy, guided Usage settings, multi-account evidence, hysteresis, cooldown, and honest
+  no-alternative notification are implemented on `feat/program-70`; tests, builds, packaged
+  interaction, and capture evidence remain intentionally unrun in this ultra-speed lane.
 - [ ] **#292** — Auto-handle OAuth localhost callbacks for remote sessions (MCP auth on SSH /
       Server Edition).
 - [ ] **#291** — Node type icons alongside color coding.

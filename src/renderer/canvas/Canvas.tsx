@@ -275,6 +275,10 @@ import {
 } from '../lib/zoomShortcut'
 import { UsageIndicator } from '../components/UsageIndicator'
 import { SystemResourcePill } from '../components/SystemResourcePill'
+import {
+  normalizeClaudeAccountRotation,
+  resolveClaudeAccountForLaunch
+} from '../lib/claudeAccountRotation'
 import { ServerDeploymentPill } from '../components/ServerDeploymentPill'
 import { MinecraftConnectBanner } from '../components/MinecraftConnectBanner'
 import { PresenceLayer } from '../components/PresenceLayer'
@@ -4461,14 +4465,47 @@ export function Canvas() {
   /** Open a Claude node seeded with a commit-explanation prompt, rooted in the panel's scope so
    *  the `git show` it is told to run inspects the checkout the commit was read from. */
   const explainCommit = useCallback(
-    (prompt: string, scopeCwd?: string) => {
+    async (prompt: string, scopeCwd?: string): Promise<void> => {
       const project = useProjects.getState().getProject(activeProjectId)
       const cwd = scmCwd(scopeCwd)
-      const account = resolveNewNodeAccount(
+      const selectedAccount = resolveNewNodeAccount(
         undefined,
         project,
         useSettings.getState().settings.claudeAccounts
       )
+      const settings = useSettings.getState().settings
+      const decision = await resolveClaudeAccountForLaunch({
+        selectedAccountId: selectedAccount,
+        projectDefaultAccountId: project?.defaultAccountId,
+        accounts: settings.claudeAccounts,
+        systemLabel: settings.systemAccountLabel,
+        projectId: project?.id,
+        projectIsRemote: !!project?.ssh,
+        settings: normalizeClaudeAccountRotation(settings.claudeAccountRotation),
+        fetchUsage: (id) => window.nodeTerminal.usage.fetch(id)
+      })
+      const account = decision.accountId
+      if (decision.reason === 'rotated') {
+        notify({
+          kind: 'info',
+          title: 'Claude account rotated for this new session',
+          body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`
+        })
+      } else if (decision.reason === 'no-alternative') {
+        notify({
+          kind: 'warning',
+          title: 'No lower-usage Claude account is available',
+          body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`
+        })
+      }
+      if (useProjects.getState().activeProjectId !== activeProjectId) {
+        notify({
+          kind: 'warning',
+          title: 'New Claude session cancelled',
+          body: 'The active project changed while account usage was being checked. No node was created.'
+        })
+        return
+      }
       setNodes((ns) => [
         ...ns,
         createAgentNode(
@@ -4793,14 +4830,15 @@ export function Canvas() {
       groupId?: string,
       accountId?: string,
       sshOverride?: Project['ssh']
-    ) => {
+    ): Promise<void> => {
       const project = useProjects.getState().getProject(activeProjectId)
       const localCwd = cwdForNewNodeIn(groupId) ?? project?.cwd
       // Funnel through resolveNewNodeAccount so the project default applies even without an
-      // explicit pick. The factory drops the account for non-claude agents.
+      // explicit pick. Claude's optional rotation policy runs before the node exists, so a live
+      // CLI is never interrupted or reconfigured mid-conversation.
       const settings = useSettings.getState().settings
       const eligibleCodexAccounts = codexAccountsForCanvas(settings.codexAccounts, project)
-      const account =
+      let account =
         agentId === 'claude'
           ? resolveNewNodeAccount(accountId, project, settings.claudeAccounts)
           : agentId === 'codex' &&
@@ -4808,6 +4846,43 @@ export function Canvas() {
               eligibleCodexAccounts.some((a) => a.id === accountId)
             ? accountId
             : undefined
+      if (agentId === 'claude') {
+        const decision = await resolveClaudeAccountForLaunch({
+          explicitAccountId: accountId,
+          selectedAccountId: account,
+          projectDefaultAccountId: project?.defaultAccountId,
+          accounts: settings.claudeAccounts,
+          systemLabel: settings.systemAccountLabel,
+          projectId: project?.id,
+          projectIsRemote: !!project?.ssh,
+          settings: normalizeClaudeAccountRotation(settings.claudeAccountRotation),
+          fetchUsage: (id) => window.nodeTerminal.usage.fetch(id)
+        })
+        account = decision.accountId
+        if (decision.reason === 'rotated') {
+          notify({
+            kind: 'info',
+            title: 'Claude account rotated for this new session',
+            body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`
+          })
+        } else if (decision.reason === 'no-alternative') {
+          notify({
+            kind: 'warning',
+            title: 'No lower-usage Claude account is available',
+            body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`
+          })
+        }
+      }
+      // Usage reads are bounded but asynchronous. Do not place a node resolved against an older
+      // project into whichever project the user switched to while the evidence was arriving.
+      if (useProjects.getState().activeProjectId !== activeProjectId) {
+        notify({
+          kind: 'warning',
+          title: 'New Claude session cancelled',
+          body: 'The active project changed while account usage was being checked. No node was created.'
+        })
+        return
+      }
       setNodes((ns) => {
         const accountSsh = agentId === 'codex' ? sshForCodexAccount(account) : undefined
         const ssh = sshOverride ?? accountSsh ?? project?.ssh
@@ -4831,7 +4906,7 @@ export function Canvas() {
   )
 
   const openAgentAtExplorerFolder = useCallback(
-    (drop: { nodeId: string; projectId: string; path: string }): void => {
+    async (drop: { nodeId: string; projectId: string; path: string }): Promise<void> => {
       const projects = useProjects.getState()
       if (projects.activeProjectId !== drop.projectId) {
         notify({
@@ -4855,10 +4930,44 @@ export function Canvas() {
 
       const launchPlan = activeAgentLaunchPlan('explorer-drop-agent', agentId)
       const settings = useSettings.getState().settings
-      const accountId =
+      let accountId =
         agentId === 'claude'
           ? resolveNewNodeAccount(undefined, project, settings.claudeAccounts)
           : undefined
+      if (agentId === 'claude') {
+        const decision = await resolveClaudeAccountForLaunch({
+          selectedAccountId: accountId,
+          projectDefaultAccountId: project.defaultAccountId,
+          accounts: settings.claudeAccounts,
+          systemLabel: settings.systemAccountLabel,
+          projectId: project.id,
+          projectIsRemote: !!project.ssh,
+          settings: normalizeClaudeAccountRotation(settings.claudeAccountRotation),
+          fetchUsage: (id) => window.nodeTerminal.usage.fetch(id)
+        })
+        accountId = decision.accountId
+        if (decision.reason === 'rotated') {
+          notify({
+            kind: 'info',
+            title: 'Claude account rotated for this new session',
+            body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`
+          })
+        } else if (decision.reason === 'no-alternative') {
+          notify({
+            kind: 'warning',
+            title: 'No lower-usage Claude account is available',
+            body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`
+          })
+        }
+      }
+      if (useProjects.getState().activeProjectId !== drop.projectId) {
+        notify({
+          kind: 'warning',
+          title: 'Agent drop cancelled',
+          body: 'The active project changed while account usage was being checked. No node was created.'
+        })
+        return
+      }
       setNodes((current) => {
         const liveSource = current.find((node) => node.id === drop.nodeId)
         if (!liveSource || createdAgentId(liveSource.data) !== agentId) return current
@@ -9335,7 +9444,7 @@ export function Canvas() {
   // NOT through the board's pruned commit path: the fresh node isn't in the derived session
   // list until the next render, and a pruned commit would strip the assignment right back off.
   const createNodeInColumn = useCallback(
-    (choice: KanbanCreateChoice, columnId: string | null) => {
+    async (choice: KanbanCreateChoice, columnId: string | null): Promise<void> => {
       const project = useProjects.getState().getProject(activeProjectId)
       if (
         choice.kind === 'terminal' &&
@@ -9357,35 +9466,70 @@ export function Canvas() {
       }
       const index = nodesRef.current.length
       const at = emptyNodePos() // board has no cursor — drop it in free canvas space, not on a pile
-      const node =
-        choice.kind === 'terminal'
-          ? createTerminalNode(
-              index,
-              project?.cwd,
-              at,
-              undefined,
-              project?.ssh,
-              terminalCreationOptionsFor(activeProjectId, choice.profileId)
-            )
-          : choice.kind === 'sticky'
-            ? createStickyNode(index, at)
-            : choice.kind === 'browser'
-              ? createBrowserNode(index, '', at)
-              : createAgentNode(
-                choice.agentId,
-                index,
-                project?.cwd,
-                at,
-                undefined,
-                project?.ssh,
-                resolveNewNodeAccount(
-                  undefined,
-                  project,
-                  useSettings.getState().settings.claudeAccounts
-                ),
-                activeAgentLaunchPlan('kanban-new-agent', choice.agentId),
-                terminalCreationOptionsFor(activeProjectId)
-              )
+      let node: CanvasNode
+      if (choice.kind === 'terminal') {
+        node = createTerminalNode(
+          index,
+          project?.cwd,
+          at,
+          undefined,
+          project?.ssh,
+          terminalCreationOptionsFor(activeProjectId, choice.profileId)
+        )
+      } else if (choice.kind === 'sticky') {
+        node = createStickyNode(index, at)
+      } else if (choice.kind === 'browser') {
+        node = createBrowserNode(index, '', at)
+      } else {
+        const settings = useSettings.getState().settings
+        const selectedAccount = resolveNewNodeAccount(undefined, project, settings.claudeAccounts)
+        const decision =
+          choice.agentId === 'claude'
+            ? await resolveClaudeAccountForLaunch({
+                selectedAccountId: selectedAccount,
+                projectDefaultAccountId: project?.defaultAccountId,
+                accounts: settings.claudeAccounts,
+                systemLabel: settings.systemAccountLabel,
+                projectId: project?.id,
+                projectIsRemote: !!project?.ssh,
+                settings: normalizeClaudeAccountRotation(settings.claudeAccountRotation),
+                fetchUsage: (id) => window.nodeTerminal.usage.fetch(id)
+              })
+            : null
+        const account = decision?.accountId ?? selectedAccount
+        if (decision?.reason === 'rotated') {
+          notify({
+            kind: 'info',
+            title: 'Claude account rotated for this new session',
+            body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`
+          })
+        } else if (decision?.reason === 'no-alternative') {
+          notify({
+            kind: 'warning',
+            title: 'No lower-usage Claude account is available',
+            body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`
+          })
+        }
+        node = createAgentNode(
+          choice.agentId,
+          index,
+          project?.cwd,
+          at,
+          undefined,
+          project?.ssh,
+          choice.agentId === 'claude' ? account : undefined,
+          activeAgentLaunchPlan('kanban-new-agent', choice.agentId),
+          terminalCreationOptionsFor(activeProjectId)
+        )
+      }
+      if (useProjects.getState().activeProjectId !== activeProjectId) {
+        notify({
+          kind: 'warning',
+          title: 'New session cancelled',
+          body: 'The active project changed while account usage was being checked. No node was created.'
+        })
+        return
+      }
       setNodes((ns) => [...ns, node])
       const board = project?.kanban ?? seedBoard
       if (columnId) {
@@ -10510,7 +10654,7 @@ export function Canvas() {
               })
               return
             }
-            const account =
+            let account =
               agentId === 'codex'
                 ? args.account
                   ? requestedAccount
@@ -10520,6 +10664,37 @@ export function Canvas() {
                     project,
                     settings.claudeAccounts
                   )
+            if (agentId === 'claude' && !args.resume) {
+              const decision = await resolveClaudeAccountForLaunch({
+                explicitAccountId: src.data.accountId as string | undefined,
+                selectedAccountId: resolveNewNodeAccount(
+                  src.data.accountId as string | undefined,
+                  project,
+                  settings.claudeAccounts
+                ),
+                projectDefaultAccountId: project?.defaultAccountId,
+                accounts: settings.claudeAccounts,
+                systemLabel: settings.systemAccountLabel,
+                projectId: project?.id,
+                projectIsRemote: !!project?.ssh,
+                settings: normalizeClaudeAccountRotation(settings.claudeAccountRotation),
+                fetchUsage: (id) => window.nodeTerminal.usage.fetch(id)
+              })
+              account = decision.accountId
+              if (decision.reason === 'rotated') {
+                notify({
+                  kind: 'info',
+                  title: 'Claude account rotated for this new session',
+                  body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`
+                })
+              } else if (decision.reason === 'no-alternative') {
+                notify({
+                  kind: 'warning',
+                  title: 'No lower-usage Claude account is available',
+                  body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`
+                })
+              }
+            }
             const after = resolveAfter()
             if (after === null) return // bad --after, already replied
             const requestedCwd = args.cwd || groupCwd || srcCwd
@@ -13156,6 +13331,7 @@ export function Canvas() {
     // docs/command-palette.md. ----
     const s = useSettings.getState().settings
     const update = useSettings.getState().update
+    const rotation = normalizeClaudeAccountRotation(s.claudeAccountRotation)
     cmds.push(
       {
         id: 'open-settings',
@@ -13168,6 +13344,48 @@ export function Canvas() {
         label: 'Open notification centre',
         icon: <IconBellFilled />,
         run: () => setNotifCenterOpen(true)
+      },
+      {
+        id: 'setting-claude-account-rotation',
+        label: 'Automatic Claude account rotation',
+        section: 'Settings',
+        icon: <IconGear />,
+        control: {
+          type: 'toggle',
+          checked: rotation.enabled,
+          ariaLabel: 'Automatic Claude account rotation',
+          onToggle: (v) => update({ claudeAccountRotation: { ...rotation, enabled: v } })
+        },
+        run: () => update({ claudeAccountRotation: { ...rotation, enabled: !rotation.enabled } }),
+        onSecondary: () => openSettingsTo('usage', 'Automatic Claude account rotation'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
+        id: 'setting-claude-account-rotation-threshold',
+        label: 'Claude rotation usage threshold',
+        section: 'Settings',
+        icon: <IconGear />,
+        run: () => openSettingsTo('usage', 'Rotate at usage'),
+        onSecondary: () => openSettingsTo('usage', 'Rotate at usage'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
+        id: 'setting-claude-account-rotation-recovery',
+        label: 'Claude rotation recovery margin',
+        section: 'Settings',
+        icon: <IconGear />,
+        run: () => openSettingsTo('usage', 'Recovery margin'),
+        onSecondary: () => openSettingsTo('usage', 'Recovery margin'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
+        id: 'setting-claude-account-rotation-cooldown',
+        label: 'Claude rotation cooldown',
+        section: 'Settings',
+        icon: <IconGear />,
+        run: () => openSettingsTo('usage', 'Rotation cooldown'),
+        onSecondary: () => openSettingsTo('usage', 'Rotation cooldown'),
+        secondaryLabel: 'Open in Settings'
       },
       {
         id: 'setting-notify-done',

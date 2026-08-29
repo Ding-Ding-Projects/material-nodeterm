@@ -41,6 +41,10 @@ side by side, each isolated by giving it its own configuration directory — nod
 handles or stores your credentials itself; the agent CLI's own login flow does, scoped to that
 directory.
 
+When several local Claude accounts are configured, the optional [Claude account rotation](./claude-account-rotation.md)
+policy can choose the best headroom for a **new** default session after the selected account reaches
+its usage threshold. Explicit account choices stay pinned and live sessions are never interrupted.
+
 **Context links** let two agent-capable nodes read each other's conversation transcript on
 demand by drawing a connection between them on the canvas — a pull, not a push: nothing is
 sent automatically, an agent has to ask for the linked context when it wants it.
@@ -50,6 +54,8 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - **Settings → Agents** — default permission mode, agent hibernation (auto-exiting an idle,
   fully offscreen agent's CLI while keeping its shell and history, to save memory on very
   long-lived canvases), and the custom-agent list (command, label, color).
+- **Settings → Usage**: opt-in Claude account rotation, its 90% default threshold, recovery
+  margin, and cooldown. See [Claude account rotation](./claude-account-rotation.md).
 - Per-project — an override permission mode, so a project that genuinely needs broader
   permissions doesn't require changing your global default.
 - Per-node — which agent CLI launches, and (for Claude Code) which managed account.
