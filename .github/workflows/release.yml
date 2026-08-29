@@ -234,7 +234,7 @@ jobs:
         id: package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run dist:win
+        run: npm run dist:win -- --require-published-source-icon
 
       - name: Validate complete Squirrel asset set
         id: assets
