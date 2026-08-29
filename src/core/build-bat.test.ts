@@ -891,7 +891,9 @@ describeWindows('fresh-machine Windows batch entry points', () => {
   it.each([
     ['BAT_TEST_RELEASES_BAD_SHA', 'SHA1 mismatch'],
     ['BAT_TEST_RELEASES_BAD_SIZE', 'size mismatch'],
-    ['BAT_TEST_RELEASES_BAD_NAME', 'missing on disk'],
+    // Exact-three policy rejects a RELEASES row that names anything other than the one expected
+    // full package before the generic missing-file check can run.
+    ['BAT_TEST_RELEASES_BAD_NAME', 'RELEASES must contain exactly one row'],
     ['BAT_TEST_EXTRA_RELEASE_ASSET', 'unexpected Squirrel output entry']
   ])('rejects a packaged inventory mutation through %s', (name, message) => {
     const result = run('build-installer.bat', { [name]: '1' })
