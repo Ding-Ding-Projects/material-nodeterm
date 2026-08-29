@@ -265,7 +265,7 @@ const FEATURES = [
     contentChecks: [
       ['src/core/trigger-scheduler.ts', 'export class TriggerScheduler'],
       ['src/core/trigger-ipc.ts', 'export function registerTriggerIpc('],
-      ['src/renderer/nodes/TriggerNode.tsx', 'export function TriggerNode('],
+      ['src/renderer/nodes/TriggerNode.tsx', 'export default function TriggerNode'],
     ],
     docs: ['docs/features/automation/triggers.md'],
   },
@@ -632,9 +632,10 @@ const FEATURES = [
       ['src/core/portable-bindings.ts', 'export type PortableBindingAction'],
       ['src/core/portable-bindings.ts', 'export class LocalNodeBindingStore'],
       ['src/renderer/components/PortableBindingWizard.tsx', 'export function PortableBindingWizard('],
-      ['src/main/index.ts', 'IPC.portableBindingState'],
-      ['src/main/index.ts', 'IPC.portableBindingApply'],
-      ['src/renderer/bridge/ws-bridge.ts', 'Destination bindings are available only in the desktop app.']
+      ['src/core/provider-services.ts', 'platform.handle(IPC.portableBindingState'],
+      ['src/core/provider-services.ts', 'platform.handle(IPC.portableBindingApply'],
+      ['src/main/index.ts', 'registerProviderServicesIpc(corePlatform)'],
+      ['src/renderer/bridge/ws-bridge.ts', 'portableBindings: {']
     ],
     docs: ['docs/features/projects/portable-bindings.md', 'docs/features/projects/portable-schema3.md']
   },
@@ -2102,6 +2103,103 @@ const NON_FEATURE_DOCS = new Map([
   ['features/source-control/README.md', 'source-control documentation category index; the worktree article is inventoried separately'],
   ['features/speech/README.md', 'speech-documentation category index; dictation is inventoried separately'],
   ['features/terminals/README.md', 'terminal-feature category index; continuity, profiles, and word separators are inventoried separately']
+  ,['codex-accounts-acceptance.md', 'acceptance evidence for the agent-support integration, not a separate user-facing feature']
+  ,['copilot-agent.md', 'per-agent implementation note, covered by the agent-support feature row']
+  ,['features/agents/agent-continuation.md', 'agent-continuation implementation article, tracked by the dedicated feature inventory row and its continuation review surface']
+  ,['features/agents/agent-drag-collaboration.md', 'supporting article for agent support and collaboration, not a separate contract row']
+  ,['features/agents/agent-messaging.md', 'supporting article for linked-agent inbox notifications, covered by that feature row']
+  ,['features/agents/codex-account-behavior.md', 'provider-specific behavior note, covered by the agent-support row']
+  ,['features/agents/context-window-progress.md', 'supporting agent-status article, covered by the agent-support row']
+  ,['features/agents/custom-agent-harness.md', 'supporting custom-agent article, covered by the agent-support row']
+  ,['features/agents/devin-cli.md', 'per-agent implementation note, covered by the agent-support row']
+  ,['features/agents/model-switching.md', 'supporting agent configuration article, covered by the agent-support row']
+  ,['features/agents/usage-account-rotation.md', 'supporting account lifecycle article, covered by the agent-support row']
+  ,['features/appearance/build-provenance.md', 'supporting provenance evidence article, covered by the start-screen provenance contract']
+  ,['features/appearance/desktop-clipping-inventory.md', 'layout audit record, covered by the Material Design surface audit']
+  ,['features/appearance/easter-eggs.md', 'implementation notes for dim-sum and mascot behavior, not a separate surface']
+  ,['features/appearance/personal-vocabulary-tools.md', 'supporting vocabulary implementation article, covered by the personal-vocabulary row']
+  ,['features/automation/README.md', 'automation category index, with its trigger article inventoried separately']
+  ,['features/aws/README.md', 'AWS category index, not an individual user-facing contract']
+  ,['features/aws/cloud-control.md', 'provider integration detail, covered by the shared provider-services contract']
+  ,['features/aws/resource-explorer.md', 'provider integration detail, covered by the shared provider-services contract']
+  ,['features/browser/README.md', 'browser category index, with its feature articles inventoried separately']
+  ,['features/browser/browser-portal.md', 'supporting browser-node article, covered by the browser node contract']
+  ,['features/calendar/README.md', 'calendar category index for planned integrations, not a shipped surface']
+  ,['features/canvas/annotations.md', 'supporting canvas-node article, covered by the canvas and node-kinds rows']
+  ,['features/canvas/aws-universe.md', 'provider node detail, covered by provider-services and canvas rows']
+  ,['features/canvas/comment-attachments.md', 'supporting canvas attachment article, covered by the canvas row']
+  ,['features/canvas/door-construction.md', 'supporting canvas navigation article, covered by the canvas row']
+  ,['features/canvas/door-entry.md', 'supporting canvas navigation article, covered by the canvas row']
+  ,['features/canvas/door-only-universe-navigation.md', 'supporting canvas navigation article, covered by the canvas row']
+  ,['features/canvas/grouping-and-drill-through.md', 'supporting canvas interaction article, covered by the canvas row']
+  ,['features/canvas/link-endpoint-model.md', 'supporting canvas link article, covered by the canvas row']
+  ,['features/canvas/media-gallery.md', 'supporting canvas media article, covered by the canvas and node-kinds rows']
+  ,['features/canvas/multiverse-canvases.md', 'supporting canvas article, covered by the canvas row']
+  ,['features/canvas/node-catalog.md', 'supporting node-catalog article, covered by node-kinds']
+  ,['features/canvas/node-icons.md', 'supporting node presentation article, covered by node-kinds']
+  ,['features/canvas/portal-lifecycle.md', 'supporting canvas lifecycle article, covered by the canvas row']
+  ,['features/canvas/project-aware-navigation.md', 'supporting project navigation article, covered by projects and tabs']
+  ,['features/canvas/recovery-game.md', 'supporting unlock-ladder article, covered by the unlock-ladder row']
+  ,['features/canvas/timer-nodes.md', 'supporting scheduled-node article, covered by alarm-clock and trigger scheduling']
+  ,['features/canvas/wheel-zoom-speed.md', 'supporting canvas settings article, covered by the canvas row']
+  ,['features/canvas/wild-dim-sum-node.md', 'supporting dim-sum article, covered by the dim-sum surprise row']
+  ,['features/canvas/zones-and-saved-layouts.md', 'supporting canvas layout article, covered by the canvas row']
+  ,['features/converter/advanced-pipelines.md', 'supporting converter article, covered by the file-converter row']
+  ,['features/converter/README.md', 'converter category index, with its feature article inventoried separately']
+  ,['features/dependencies/automatic-node-dependencies.md', 'dependency implementation article, covered by build and dependency contracts']
+  ,['features/dependencies/aws-cli-v2.md', 'dependency packaging article, not a standalone user-facing feature']
+  ,['features/dependencies/README.md', 'dependency category index, not an individual user-facing feature']
+  ,['features/files/files-node.md', 'supporting files-node article, covered by the canvas and node-kinds rows']
+  ,['features/files/markdown-preview.md', 'supporting files-node article, covered by the canvas and node-kinds rows']
+  ,['features/files/README.md', 'files category index, with its feature articles inventoried separately']
+  ,['features/hosting/open-webui-hosting.md', 'supporting hosting integration article, covered by provider-services']
+  ,['features/hosting/README.md', 'hosting category index, with its feature article inventoried separately']
+  ,['features/integrations/aws-all-services.md', 'provider catalog article, covered by provider-services']
+  ,['features/integrations/aws-cli-model-documentation.md', 'provider documentation article, covered by provider-services']
+  ,['features/integrations/aws-container-database-cost-managers.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/aws-core-services.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/aws-identity.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/aws-resource-managers.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/aws-universe-shop.md', 'supporting Shop-node article, covered by the open Shop contract']
+  ,['features/integrations/backup-restore.md', 'supporting backup article, covered by the hosting integration contract']
+  ,['features/integrations/cdk-manager.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/cloudflare-core-managers.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/cloudflare-tunnel-handoff.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/cloudflare-zero-trust-managers.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/cloudformation-manager.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/github-api.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/github-cli-accounts.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/github-work-items.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/gitlab-hosting.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/home-assistant-client.md', 'provider integration article, covered by scheduled settings']
+  ,['features/integrations/home-assistant-controls.md', 'provider integration article, covered by scheduled settings']
+  ,['features/integrations/home-assistant-sensor-display.md', 'provider integration article, covered by scheduled settings']
+  ,['features/integrations/nextcloud-aio-hosting.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/nextcloud-managed.md', 'provider integration article, covered by provider-services']
+  ,['features/integrations/planner-occurrences.md', 'open planner implementation article, not a verified shipped feature']
+  ,['features/integrations/provider-services.md', 'provider category architecture article, not a standalone surface']
+  ,['features/integrations/usage-popover-default-account.md', 'supporting usage settings article, covered by usage settings']
+  ,['features/projects/cross-project-link-transport.md', 'supporting project transport article, covered by projects and tabs']
+  ,['features/projects/persisted-link-migration.md', 'supporting project migration article, covered by projects and tabs']
+  ,['features/projects/portable-canvas-projection.md', 'supporting portable-project article, covered by portable bindings']
+  ,['features/projects/portable-media-assets.md', 'supporting portable-project article, covered by portable bindings']
+  ,['features/remote/browser-debug-sessions.md', 'remote debugging implementation note, covered by Server Edition']
+  ,['features/remote/cloudflare-tunnel-inventory.md', 'remote provider implementation note, covered by remote SSH and provider services']
+  ,['features/remote/cloudflare-tunnel-state.md', 'remote provider implementation note, covered by remote SSH and provider services']
+  ,['features/remote/cloudflare-tunnel-wizard.md', 'remote provider implementation note, covered by remote SSH and provider services']
+  ,['features/remote/cloudflared-runtimes.md', 'open runtime integration article, not a verified shipped feature']
+  ,['features/remote/kiosk-pwa-sessions.md', 'remote session implementation note, covered by Server Edition']
+  ,['features/remote/oauth-callbacks.md', 'authentication implementation note, covered by Server Edition']
+  ,['features/source-control/dependency-operations.md', 'supporting source-control article, covered by source-control-worktrees']
+  ,['features/torrents/README.md', 'torrent category index, with its open feature article inventoried separately']
+  ,['features/torrents/torrent-downloader.md', 'open torrent integration article, not a verified shipped feature']
+  ,['features/windows/README.md', 'Windows category index, with diagnostics inventoried separately']
+  ,['features/windows/windows-diagnostics.md', 'open Windows diagnostics article, not a verified shipped feature']
+  ,['plans/2026-08-26-material3-full-audit.md', 'historical implementation plan, not a user-facing surface']
+  ,['plans/2026-08-26-portable-node-universes-and-hosting-program.md', 'historical implementation plan, not a user-facing surface']
+  ,['plans/README.md', 'planning category index, not a user-facing surface']
+  ,['troubleshooting-codex-snap.md', 'troubleshooting guide for agent identity, covered by agent-support']
+  ,['uninstall.md', 'operational uninstall guide, not a user-facing application feature']
 ])
 
 {

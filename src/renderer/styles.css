@@ -1518,7 +1518,7 @@ body,
 }
 
 /* Claude Code status: RUNNING badge while working, unread dot when finished. */
-/* The walking agent mascot inside the RUNNING
+/* The walking agent mascot inside the RUNNING status badge. */
 .term-node__status {
   display: inline-flex;
   align-items: center;
