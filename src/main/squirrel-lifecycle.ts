@@ -51,6 +51,13 @@ const PUBLIC_BOOTSTRAP_ERROR_NAMES = new Set([
   'SyntaxError',
   'TypeError'
 ])
+const ELECTRON_DUPLICATE_HANDLER_MESSAGE =
+  /^Attempted to register a second handler for '[^'\r\n]+'$/u
+
+function isElectronDuplicateHandlerFailure(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : undefined
+  return typeof message === 'string' && ELECTRON_DUPLICATE_HANDLER_MESSAGE.test(message)
+}
 
 /**
  * Decide whether this invocation belongs to Squirrel.Windows. Only argv[1] is considered: that is
@@ -142,6 +149,9 @@ export function executeSquirrelCommand(
 
 /** Preserve a useful failure category without serializing an import error's local file path. */
 export function publicDesktopBootstrapFailure(error: unknown): string {
+  if (isElectronDuplicateHandlerFailure(error)) {
+    return '[startup] Desktop bootstrap failed (DUPLICATE_HANDLER).'
+  }
   const candidate = error as { code?: unknown; name?: unknown } | null
   const code = candidate?.code
   if (typeof code === 'string' && PUBLIC_BOOTSTRAP_CODES.has(code)) {
@@ -163,6 +173,18 @@ export function desktopBootstrapFailureDialog(error: unknown): DesktopBootstrapF
   const publicFailure = publicDesktopBootstrapFailure(error)
   const category = /\(([^)]+)\)/u.exec(publicFailure)?.[1]
   const missingModule = category === 'MODULE_NOT_FOUND' || category === 'ERR_MODULE_NOT_FOUND'
+  if (category === 'DUPLICATE_HANDLER') {
+    return {
+      title: 'nodeterm could not start',
+      content: [
+        'nodeterm stopped because it detected a duplicate startup handler while registering its startup handlers.',
+        '',
+        'Error category: DUPLICATE_HANDLER',
+        '',
+        'Install a newer repaired release and try again. Your nodeterm settings and projects were not removed.'
+      ].join('\n')
+    }
+  }
   return {
     title: 'nodeterm could not start',
     content: missingModule
@@ -181,6 +203,27 @@ export function desktopBootstrapFailureDialog(error: unknown): DesktopBootstrapF
           'Install a newer repaired release and try again. Your nodeterm settings and projects were not removed.'
         ].join('\n')
   }
+}
+
+export interface DesktopBootstrapFailureReporter {
+  log(message: string): void
+  showErrorBox(title: string, content: string): void
+  exit(code: number): void
+}
+
+/** Report a normal-bootstrap failure through one sanitized, testable recovery seam. */
+export function reportDesktopBootstrapFailure(
+  error: unknown,
+  reporter: DesktopBootstrapFailureReporter
+): void {
+  reporter.log(publicDesktopBootstrapFailure(error))
+  const failure = desktopBootstrapFailureDialog(error)
+  try {
+    reporter.showErrorBox(failure.title, failure.content)
+  } catch {
+    // The sanitized log remains available when the operating system cannot show UI.
+  }
+  reporter.exit(1)
 }
 
 export interface DesktopStartupDependencies {

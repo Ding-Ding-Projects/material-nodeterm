@@ -69,9 +69,12 @@ exception messages never enter that dialog.
 
 The asynchronous `app.whenReady()` registration chain has the same recovery boundary. A duplicate
 IPC owner or a rejected startup service cannot leave a windowless or black host process running:
-the chain reports the sanitized category in the native dialog and exits. Shared provider services
-own the portable-binding channels exactly once; the desktop shell does not register a competing
-copy after that shared registrar returns.
+the chain reports the sanitized category through the shared startup reporter, shows a native
+recovery dialog, and exits with status 1. Electron's duplicate handler error is classified as
+`DUPLICATE_HANDLER`; the internal channel name is never copied into the log or dialog. The
+reporter remains injectable so dialog failure and exit behavior are tested together. Shared
+provider services own the portable-binding channels exactly once; the desktop shell does not
+register a competing copy after that shared registrar returns.
 
 **Windows auto-update.** Packaged Windows builds use Electron's built-in Squirrel updater. On
 launch and every six hours, it reads the stable release asset root at

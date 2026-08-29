@@ -4,6 +4,7 @@ import {
   decideSquirrelLifecycle,
   executeSquirrelCommand,
   publicDesktopBootstrapFailure,
+  reportDesktopBootstrapFailure,
   runDesktopStartup,
   SQUIRREL_LIFECYCLE_TIMEOUT_MS,
   SQUIRREL_SHORTCUT_EXECUTABLE,
@@ -137,6 +138,65 @@ describe('structured Squirrel.Windows command execution', () => {
 })
 
 describe('normal bootstrap error reporting', () => {
+  it('classifies Electron duplicate-handler failures without exposing the channel', () => {
+    const failure = new Error(
+      "Attempted to register a second handler for 'portable-binding:state'"
+    )
+
+    const message = publicDesktopBootstrapFailure(failure)
+
+    expect(message).toBe('[startup] Desktop bootstrap failed (DUPLICATE_HANDLER).')
+    expect(message).not.toContain('portable-binding:state')
+  })
+
+  it('builds a duplicate-handler recovery dialog without exposing the channel', () => {
+    const failure = new Error(
+      "Attempted to register a second handler for 'portable-binding:state'"
+    )
+
+    const dialog = desktopBootstrapFailureDialog(failure)
+
+    expect(dialog.title).toBe('nodeterm could not start')
+    expect(dialog.content).toContain('duplicate startup handler')
+    expect(dialog.content).toContain('Error category: DUPLICATE_HANDLER')
+    expect(dialog.content).not.toContain('portable-binding:state')
+  })
+
+  it('reports the public category, shows the recovery dialog, and exits 1', () => {
+    const failure = new Error(
+      "Attempted to register a second handler for 'portable-binding:state'"
+    )
+    const reporter = {
+      log: vi.fn<(message: string) => void>(),
+      showErrorBox: vi.fn<(title: string, content: string) => void>(),
+      exit: vi.fn<(code: number) => void>()
+    }
+
+    reportDesktopBootstrapFailure(failure, reporter)
+
+    expect(reporter.log).toHaveBeenCalledWith(
+      '[startup] Desktop bootstrap failed (DUPLICATE_HANDLER).'
+    )
+    expect(reporter.showErrorBox).toHaveBeenCalledOnce()
+    expect(reporter.showErrorBox.mock.calls[0]?.[1]).not.toContain('portable-binding:state')
+    expect(reporter.exit).toHaveBeenCalledWith(1)
+  })
+
+  it('exits 1 even when showing the recovery dialog throws', () => {
+    const reporter = {
+      log: vi.fn<(message: string) => void>(),
+      showErrorBox: vi.fn<(title: string, content: string) => void>(() => {
+        throw new Error('native dialog unavailable')
+      }),
+      exit: vi.fn<(code: number) => void>()
+    }
+
+    reportDesktopBootstrapFailure(new Error('startup failed'), reporter)
+
+    expect(reporter.exit).toHaveBeenCalledOnce()
+    expect(reporter.exit).toHaveBeenCalledWith(1)
+  })
+
   it('retains a safe module failure code without leaking its private path', () => {
     const failure = Object.assign(
       new Error(`Cannot find module at ${String.raw`C:\Users\Example User\private\main.js`}`),
