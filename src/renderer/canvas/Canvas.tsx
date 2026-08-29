@@ -488,6 +488,7 @@ import {
 import { armedTerminalLaunchIntent } from '../terminal/armed-launch-intent'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
 import { mapNativeNotification } from '../lib/personalVocabulary/hostMessage'
 import { usePersonalVocabulary } from '../state/personalVocabulary'
 import { prepareQuickOpenFiles, type QuickOpenIndexedFile } from '../lib/quickOpenSearch'
@@ -1270,6 +1271,12 @@ export function Canvas() {
   useSessionRelock()
   const profileText = useLocalizedVocabularyText()
   const vocab = useVocabularyMapper()
+  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
+  const vocabularyAllowed = schoolModeAllowsOptionalFeatures({
+    enabled: schoolModeEnabled,
+    hydrated: schoolModeHydrated
+  })
   const terminalProfiles = useTerminalProfiles((state) => state.profiles)
   const terminalProfilesError = useTerminalProfiles((state) => state.error)
   const terminalProfilesLoading = useTerminalProfiles((state) => state.loading)
@@ -17233,32 +17240,36 @@ export function Canvas() {
         icon: <IconBellFilled />,
         run: () => setNotifCenterOpen(true)
       },
-      {
-        id: 'open-personal-vocabulary',
-        label: usePersonalVocabulary.getState().status === 'loaded'
-          ? 'Replace personal vocabulary file'
-          : 'Upload personal vocabulary file',
-        section: 'Settings',
-        icon: <IconGear />,
-        run: () => openSettingsTo('vocabulary')
-      },
-      {
-        id: 'personal-vocabulary-status',
-        label: 'Personal vocabulary status',
-        hint: `${usePersonalVocabulary.getState().entryCount} entries loaded locally`,
-        section: 'Settings',
-        icon: <IconGear />,
-        run: () => openSettingsTo('vocabulary')
-      },
-      {
-        id: 'clear-personal-vocabulary',
-        label: 'Clear personal vocabulary',
-        section: 'Settings',
-        icon: <IconGear />,
-        disabled: usePersonalVocabulary.getState().status !== 'loaded',
-        note: 'No personal vocabulary file is loaded.',
-        run: () => usePersonalVocabulary.getState().clear()
-      },
+      ...(vocabularyAllowed
+        ? [
+            {
+              id: 'open-personal-vocabulary',
+              label: usePersonalVocabulary.getState().status === 'loaded'
+                ? 'Replace personal vocabulary file'
+                : 'Upload personal vocabulary file',
+              section: 'Settings',
+              icon: <IconGear />,
+              run: () => openSettingsTo('vocabulary')
+            },
+            {
+              id: 'personal-vocabulary-status',
+              label: 'Personal vocabulary status',
+              hint: `${usePersonalVocabulary.getState().entryCount} entries loaded locally`,
+              section: 'Settings',
+              icon: <IconGear />,
+              run: () => openSettingsTo('vocabulary')
+            },
+            {
+              id: 'clear-personal-vocabulary',
+              label: 'Clear personal vocabulary',
+              section: 'Settings',
+              icon: <IconGear />,
+              disabled: usePersonalVocabulary.getState().status !== 'loaded',
+              note: 'No personal vocabulary file is loaded.',
+              run: () => usePersonalVocabulary.getState().clear()
+            }
+          ]
+        : []),
       {
         id: 'setting-notify-done',
         label: 'Notify when a turn finishes in the background',
@@ -17506,7 +17517,8 @@ export function Canvas() {
     // rebuilds the list and the inline toggle rows' `checked` stays live rather than frozen at
     // whatever it read when the palette was opened.
     settings,
-    deleteSavedLayout
+    deleteSavedLayout,
+    vocabularyAllowed
   ])
 
   // Build the palette's command list only when its inputs change — the inline `buildCommands()`
