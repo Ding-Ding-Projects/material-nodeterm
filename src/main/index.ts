@@ -278,7 +278,7 @@ import { getDeviceId } from '../core/device-id'
 import { initRemoteStatusPush } from './remote-ssh/remote-status-push'
 import { runGitRemoteOp } from '../core/git-remote-proxy'
 import { initCanvasSync } from '../core/canvas-sync'
-import { composeNativeNotification, isPreparedNativeNotification, retainUntilDismissed } from './notifications'
+import { composeNativeNotification, retainUntilDismissed } from './notifications'
 import { composeNativeNotification, prepareNativeNotification, retainUntilDismissed } from './notifications'
 import { installManagedAgentHooks } from '../core/agents/hooks'
 import { createSubagentTail } from '../core/subagent-tail'
@@ -2149,8 +2149,6 @@ app.whenReady().then(async () => {
       // `force` (permission request / confirmation) shows even when focused; normal
       // completion notifications only show when the window is in the background.
       if (!payload.force && win.isFocused()) return 'skipped'
-      if (!isPreparedNativeNotification(payload)) return 'failed'
-      const copy = composeNativeNotification(payload)
       const copy = composeNativeNotification(prepared)
       const n = new Notification(copy)
       n.on('click', () => {
@@ -4655,7 +4653,7 @@ app.whenReady().then(async () => {
     () => ({
       tmuxScrollback: settingsStore.get().tmuxScrollback,
       terminalWordSeparators: settingsStore.get().terminalWordSeparators
-    })
+    }),
     // The standalone relay bundle uploaded to a Linux host for managed Codex accounts (S6 PR 6).
     // Only executable code is ever uploaded — never a credential (Property 1). Reading it is
     // single-fd (openSync→fstatSync→readFileSync(fd)) so there is no stat-then-read TOCTOU on the
@@ -4811,9 +4809,6 @@ app.on('before-quit', (e) => {
   // Menu Quit / Cmd+Q / Ctrl+Q reach here directly (no window-close event first), so the confirm
   // gate is repeated here for that path. `quitConfirmed` short-circuits this on the re-issued
   // app.quit() below once the user has answered, or on the win.close() gate's own re-issue.
-  if (shouldConfirmQuit()) {
-  // gate is repeated here for that path. quitConfirmed short-circuits this on the re-issued
-  // app.quit() below once the user has answered, and on the win.close() gate's own re-issue.
   if (!quitConfirmed && !skipQuitConfirmation) {
     e.preventDefault()
     void confirmQuit(getMainWindow() as unknown as BrowserWindow | null).then((ok) => {
