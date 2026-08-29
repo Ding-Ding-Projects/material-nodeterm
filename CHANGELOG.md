@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Open `md`, `markdown`, `mdown`, and `mkd` files in the rendered editor preview by default, with a
+  one-shot migration that preserves a user's later opt-out. The Behavior setting is searchable,
+  available to the command palette and scheduled-settings editor, and the preview bar no longer
+  repeats its label. Add a one-shot Explorer pin hint after the exact file-open-and-close flow.
+
+  `md`、`markdown`、`mdown` 同 `mkd` 檔案而家預設用 rendered preview 開，舊設定會一次過遷移，
+  之後用戶揀 off 就會保留。Behavior 設定有搜尋、command palette 同 scheduled-settings 路徑，
+  preview bar 唔再重複標籤。由 Explorer 開檔再關閉時，亦會顯示一次 pin 提示。
+
 - Add byte-identical sanitized shared-instruction blocks to `AGENTS.md` and `CLAUDE.md`, preserve
   all project-specific guidance outside the managed markers, and add deterministic synchronization,
   private-vocabulary validation, public-detail scanning, parity checks, sensitive-input refusal,

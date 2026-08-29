@@ -2511,6 +2511,11 @@ export interface Settings {
    */
   rainbowSpeed: number
   doubleClickFocus: boolean
+  /** Open Markdown files in rendered preview instead of the editor. The node Preview/Edit
+   *  toggle and markdown shortcut still work either way. Existing files are migrated once. */
+  openMarkdownPreview: boolean
+  /** One-shot marker for the default-on Markdown preview migration. */
+  openMarkdownPreviewMigrated: boolean
   /**
    * Let a MIDDLE CLICK inside a terminal paste (Linux in practice — macOS and Windows have no
    * PRIMARY selection and no tmux middle-click habit, so the guard changes nothing visible there).
@@ -2958,6 +2963,8 @@ export const DEFAULT_SETTINGS: Settings = {
   panHoverDelay: 600,
   rainbowSpeed: 3,
   doubleClickFocus: true,
+  openMarkdownPreview: true,
+  openMarkdownPreviewMigrated: true,
   terminalMiddleClickPaste: false,
   wheelZoom: true,
   wheelZoomSpeed: 1,

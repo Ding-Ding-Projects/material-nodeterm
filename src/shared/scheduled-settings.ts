@@ -91,7 +91,8 @@ export const SCHEDULABLE_SETTING_KEYS = [
   'terminalLetterSpacing',
   'terminalGpuRendering',
   'funnyLevelEn',
-  'funnyLevelYue'
+  'funnyLevelYue',
+  'openMarkdownPreview'
 ] as const satisfies readonly (keyof Settings)[]
 
 export type SchedulableSettingKey = (typeof SCHEDULABLE_SETTING_KEYS)[number]
@@ -124,7 +125,8 @@ const FIELD_VALIDATORS: Record<SchedulableSettingKey, FieldValidator> = {
   terminalLetterSpacing: (v) => typeof v === 'number' && Number.isFinite(v) && v >= -5 && v <= 20,
   terminalGpuRendering: (v) => v === 'auto' || v === 'on' || v === 'off' || v === 'shared',
   funnyLevelEn: isFunnyLevel,
-  funnyLevelYue: isFunnyLevel
+  funnyLevelYue: isFunnyLevel,
+  openMarkdownPreview: (v) => typeof v === 'boolean'
 }
 
 /** Drop any key not in `SCHEDULABLE_SETTING_KEYS` and any value that fails its validator. Used for

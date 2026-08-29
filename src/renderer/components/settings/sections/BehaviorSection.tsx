@@ -13,6 +13,8 @@ import { DEFAULT_SETTINGS } from '@shared/types'
 import { useI18n } from '@renderer/lib/i18n'
 import { clampWheelZoomSpeed } from '@renderer/canvas/wheel-zoom'
 import { Slider } from '@renderer/ui/md3'
+import { SectionReset } from '../SectionReset'
+import { BEHAVIOR_RESET_KEYS } from '@renderer/lib/settingsReset'
 
 const ROWS = {
   defaultView: {
@@ -31,6 +33,10 @@ const ROWS = {
   },
   panHover: { title: 'Pan-hover delay (ms)', keywords: ['pan', 'hover', 'delay', 'focus', 'guard'] },
   doubleClick: { title: 'Double-click to focus', keywords: ['double', 'click', 'focus'] },
+  mdPreview: {
+    title: 'Open Markdown in preview',
+    keywords: ['markdown', 'md', 'mdown', 'mkd', 'preview', 'render', 'editor', 'docs', 'readme', 'file']
+  },
   sidebarCollapse: {
     title: 'Sidebar: collapse inactive by default',
     keywords: ['sidebar', 'sessions', 'collapse', 'expand', 'project', 'switch', 'group', 'tree']
@@ -67,7 +73,8 @@ const ROWS = {
   confirmQuit: {
     title: 'Confirm before quitting',
     keywords: ['quit', 'exit', 'close', 'confirm', 'dialog', 'ask']
-  }
+  },
+  reset: { title: 'Reset behavior', keywords: ['reset', 'defaults', 'behavior'] }
 }
 const ENTRIES = Object.values(ROWS)
 
@@ -234,6 +241,19 @@ export function BehaviorSection({ isActive }: { isActive: boolean }): React.JSX.
           }
         />
       </SearchableRow>
+      <SearchableRow {...ROWS.mdPreview}>
+        <FieldRow
+          label="Open Markdown in preview"
+          description="Markdown files open rendered instead of as editable text. The Preview/Edit toggle still switches either way."
+          control={
+            <Switch
+              checked={settings.openMarkdownPreview}
+              onChange={(v) => update({ openMarkdownPreview: v })}
+              ariaLabel="Open Markdown in preview"
+            />
+          }
+        />
+      </SearchableRow>
       <SearchableRow {...ROWS.sidebarCollapse}>
         <FieldRow
           label="Sidebar: collapse inactive by default"
@@ -385,6 +405,13 @@ export function BehaviorSection({ isActive }: { isActive: boolean }): React.JSX.
               ariaLabel="Confirm before quitting"
             />
           }
+        />
+      </SearchableRow>
+      <SearchableRow {...ROWS.reset}>
+        <SectionReset
+          keys={BEHAVIOR_RESET_KEYS}
+          label="Reset behavior"
+          what="the behavior settings"
         />
       </SearchableRow>
     </SettingsSection>

@@ -616,6 +616,17 @@ const VALUE_FIELDS: {
         onChange={(e) => onChange(Number(e.target.value))}
       />
     )
+  },
+  {
+    key: 'openMarkdownPreview',
+    label: 'Open Markdown in preview',
+    render: (v, onChange) => (
+      <Switch
+        checked={(v as boolean) ?? DEFAULT_SETTINGS.openMarkdownPreview}
+        onChange={onChange}
+        ariaLabel="Open Markdown in preview"
+      />
+    )
   }
 ]
 
