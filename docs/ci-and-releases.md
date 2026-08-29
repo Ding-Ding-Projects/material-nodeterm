@@ -82,8 +82,10 @@ job:
    tag and release, rejects a non-newer version or a tag already owned by another commit, and binds
    this candidate to the exact source SHA. `0.4.0` is the candidate after `0.3.0`.
 8. **Install dependencies** — `npm ci`, which also runs the project's own `postinstall` hook
-   (`scripts/patch-node-pty.mjs` + `electron-rebuild -f -w node-pty,smart-whisper` against
-   this runner's Electron ABI). `windows-latest` already ships the Visual Studio Build Tools
+   (`scripts/patch-node-pty.mjs` + `scripts/rebuild-electron-native.mjs` against this runner's
+   Electron ABI). The wrapper uses `@electron/rebuild --only` for exactly `node-pty` and
+   `smart-whisper`, then loads both under Electron before it reports success. It retries once only
+   for the measured MSBuild runtime/JIT signatures. `windows-latest` already ships the Visual Studio Build Tools
    and Python that native module compilation needs; nothing extra is bootstrapped for that.
    If a future dependency needs a tool the runner image does not carry, add a check-then-
    install step here, immediately before it is needed.

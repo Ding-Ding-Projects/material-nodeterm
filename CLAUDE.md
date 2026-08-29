@@ -44,12 +44,12 @@ means — and what you may assume when writing a feature — is three tiers, not
 ## Commands
 
 ```bash
-npm install        # deps + rebuilds node-pty against Electron's ABI (postinstall hook)
+npm install        # deps + patches node-pty, rebuilds two required addons, then proves Electron ABI loads
 npm run dev        # dev mode with renderer HMR
 npm run build      # production build into out/
 npm start          # preview the production build (electron-vite preview)
 npm run typecheck  # tsc for both node (main/preload) and web (renderer) projects
-npm run rebuild    # re-run electron-rebuild for node-pty if you hit ABI/native errors
+npm run rebuild    # preflight, patch, rebuild node-pty + smart-whisper, and prove both ABI loads
 ```
 
 **`rebuild` and `postinstall` both run `scripts/patch-node-pty.mjs` first, and that is not
@@ -57,6 +57,17 @@ optional.** node-pty 1.1.0's darwin `pty_posix_spawn` leaks a ptmx device on eve
 (an off-by-one in the low-fd cleanup) and master+slave on every FAILED one; on this app's spawn
 churn that exhausts `kern.tty.ptmx_max` within hours, and terminals then simply stop opening. The
 script rewrites `node_modules/node-pty/src/unix/pty.cc` before electron-rebuild compiles it.
+
+Both commands then call `scripts/rebuild-electron-native.mjs`. It invokes the locked
+`@electron/rebuild` CLI with `--only node-pty,smart-whisper`; `--which-module` is deliberately not
+used because it maps to `extraModules` and still rebuilds every detected native package. The wrapper
+owns both packages' native install lifecycles through explicit `allowScripts: false` entries, so
+`npm ci` does not compile either package once before the root postinstall compiles them again. It
+streams the full compiler output while retaining a bounded diagnostic tail. It retries once only
+when that tail proves the observed MSBuild runtime failure (`InvalidProgramException` or the
+regex-runner `AccessViolationException`, or the `Microsoft.Build.CPPTasks` no-implementation form), and ordinary source or linker failures
+return immediately. After a successful rebuild it runs Electron as Node and requires both packages,
+so a command is not successful merely because two output paths happen to exist.
 
 `src/main/node-pty-patch.test.ts` asserts the marker is present in those sources, so a node-pty
 upgrade that silently drops the patch fails loudly. **If that test is red, your `node_modules` is
@@ -3100,7 +3111,7 @@ Voice-to-text input captured via microphone, turned into terminal text via on-de
 - **Cloud contract (iOS parity)** — `/v1/transcribe` multipart endpoint (not built yet; SDK `transcribe()` call matches iOS byte-for-byte) for future remote transcription. IPC channels `speech:*` (in `src/shared/ipc.ts`) wired in **both** Electron and Server: `speech:transcribe` (returns `Promise<{text}>`), `speech:models`, `speech:model-download`, `speech:model-delete`, `speech:progress` (main/server → renderer download-progress broadcast), and `speech:mic-consent` (Electron mic-prompt only, server always true). There is no `speech:synthesize` / `speech:cancel` and no audio in the reply.
 - **Renderer capture** — `PcmCapture` AudioWorklet (16kHz single-channel PCM, WebAudio or fallback SPN) + DictationOverlay (⌘⇧D dock mic / Cmd key; Settings → Speech section for model choice + progress). **Send** appends text + Enter to the terminal; **Insert** sends text-only via `sendText(…, {enter: false})`. **Nothing auto-submits** (user always decides when to send).
 - **Browser constraints** — `getUserMedia` requires HTTPS or `localhost`; mic permission prompt is the browser's own (not handled by nodeterm). Model downloads land on the **server's data dir** (accessible across sessions).
-- **Electron + native dep** — smart-whisper is externalized + `asarUnpack`'d (not bundled); `postinstall` rebuilds it against Electron's ABI. Device verification of the ABI rebuild is not yet exercised on a dev machine — test paths exist but have not been run in CI.
+- **Electron + native dep** — smart-whisper is externalized + `asarUnpack`'d (not bundled); `postinstall` rebuilds it against Electron's ABI, then the native rebuild wrapper runs Electron as Node and loads both `smart-whisper` and `node-pty`. A missing or mismatched binding therefore fails installation before packaging.
 
 ## Packaging & auto-update
 
@@ -3385,6 +3396,15 @@ not probed because current Windows aliases can install or open UI. Canonical win
 the exact python.org URL/SHA fallback. Exit zero is followed by an isolated exact patch/architecture
 probe, and the absolute executable crosses `setlocal` in process-local `PYTHON`,
 `NODE_GYP_FORCE_PYTHON`, and `npm_config_python` so stale inherited node-gyp settings cannot win.
+
+The native rebuild list is exact rather than discovery-based. `@electron/rebuild --which-module`
+adds named packages to its normal walk, while `--only` filters the walk. The wrapper uses the latter
+for `node-pty` and `smart-whisper`, so optional native packages such as `bufferutil`,
+`utf-8-validate`, and `utp-native` keep their installed prebuilds and cannot manufacture an
+unrelated compiler failure. MSBuild 17.14 can intermittently raise an internal CLR JIT
+`InvalidProgramException` or report a CPP task method with no implementation. Only those measured
+runtime signatures, plus an `AccessViolationException` in the same compiled-regex runner path, get
+one retry; a real C++ or linker diagnostic gets none.
 
 The preflight placement means both root BAT entry points name the exact locked file and PID even on
 a machine that started with no Node on `PATH`. The old pre-dependency placement skipped the check

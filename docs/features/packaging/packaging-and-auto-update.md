@@ -36,6 +36,16 @@ instance with matching x86/x64 Spectre libraries, and returns that exact install
 An older mitigated toolset elsewhere on the machine cannot hide missing libraries in the instance
 MSBuild will actually use, and the bootstrap does not modify an unrelated complete installation.
 
+The Electron native rebuild is also bounded by package name. `scripts/rebuild-electron-native.mjs`
+uses `@electron/rebuild --only node-pty,smart-whisper`; the similar-looking `--which-module`
+option is an addition list and still walks other detected native packages. The wrapper streams the
+full build log and retains only a bounded diagnostic tail for classification. Root `allowScripts`
+entries disable both packages' own native install lifecycles, so the controlled postinstall is the
+only native compilation for them. The wrapper retries one observed MSBuild runtime/JIT failure once
+and fails ordinary compiler errors immediately. Success is followed
+by an Electron-as-Node load of both packages, which proves the installed bindings match the runtime
+ABI rather than merely proving that files were written.
+
 The supported Windows entry point is `npm run dist:win`. Its wrapper starts from a clean checkout,
 regenerates the committed seven-frame ICO, proves that the bytes match the current commit, derives
 an immutable raw URL from that full source SHA, and verifies the public download byte-for-byte.

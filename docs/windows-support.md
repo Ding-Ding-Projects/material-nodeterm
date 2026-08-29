@@ -357,6 +357,13 @@ outside that branding gate because the pinned builder has no supported resource-
    one is **not** a user-facing problem — it was set in an agent harness's process environment, not
    in the User or Machine registry — so it is recorded here only so the next person who meets it
    does not spend a build on it. Clear it for the build process only; never for the machine.
+5. **MSBuild 17.14 intermittently fails inside its own CLR runtime.** Observed forms include
+   `System.InvalidProgramException: JIT Compiler encountered an internal limitation` and a
+   `Microsoft.Build.CPPTasks` method reported as having no implementation. The same broken compiled
+   regex path has also raised `System.AccessViolationException`. These are not C++
+   diagnostics. The native rebuild wrapper retains a bounded diagnostic tail and retries one exact
+   runtime-signature failure once. A repeated runtime failure and every ordinary compiler or linker
+   failure remain fatal. The wrapper never broadens the module list during that retry.
 
 ## Testing generated POSIX shell
 
