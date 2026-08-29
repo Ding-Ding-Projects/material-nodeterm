@@ -36,15 +36,18 @@
       <h2>Behaviour</h2>
       <p>An agent node's live state (working, waiting for you, blocked, or done) comes from a normalized event stream fed by each agent's own hook mechanism, posted to a small local loopback server the app runs. A busy-to-idle transition while the window is unfocused marks the node unread and can fire a desktop notification. Capable agents also expose subagent visualization, context-window metering, session-name syncing between the CLI and the node's title, and — for Claude specifically — branching a conversation into a new resumed session.</p>
         <p>Custom, user-defined agents (anything not built in) still get a launch command and a terminal-title-derived status, just without the hook-driven extras.</p>
+      <p>When enabled in Settings → Notifications, an authenticated agent may run <code>notify --node &lt;id&gt;</code> to signal a linked agent to check its configured coordination inbox. The command submits one fixed prompt only: it cannot carry a subject, transcript excerpt, or caller-supplied text. The target node becomes unread and the notification centre offers an Open agent action without exposing conversation content.</p>
 
       <h2>Configuration</h2>
       <p>Per-agent permission mode (how readily the agent may act without asking) is configurable globally and per-project, on whichever agents support the concept. Managed Claude accounts let you run several signed-in identities side by side, each in its own config directory.</p>
+      <p>The linked-agent inbox signal is off by default. It is additionally subject to the existing project consent, authenticated ownership checks, idle delivery queue, and per-source-target flow budget.</p>
 
       <h2>Failure modes</h2>
       <p>An agent capability is a membership list, not a hardcoded check — a feature meant for one agent should never silently light up for another that merely resembles it. A guess an agent's status can't confidently make (an unreadable hook payload, an unsupported CLI version) degrades to "unknown," never to a fabricated status.</p>
 
       <h2>Security considerations</h2>
       <p>Each terminal node's hook identity is a capability derived from a restart-stable secret local to the machine, never sent anywhere off it; hook payloads are validated before being trusted for anything sensitive like canvas control.</p>
+      <p>The notification record stores only stable project and node identifiers plus fixed local copy. Runtime callbacks and transcript text are excluded from persistence and export, and display-only lineage ropes never authorize a signal.</p>
 
       <h2>Verification</h2>
       <p>Each agent's hook dialect (event names, field shapes, quirks) is measured against the real CLI rather than assumed from another agent's behaviour, and recorded in a dedicated per-agent document alongside its own device checklist.</p>
