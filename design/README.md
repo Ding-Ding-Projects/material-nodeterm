@@ -37,6 +37,11 @@ is the current target.
 
 ## Comparing
 
+The v2 screen inventory and receipt contract live in
+[`docs/features/appearance/design-reference-parity.md`](../docs/features/appearance/design-reference-parity.md).
+The source guard is `npm run check:design-parity`. It names all ten references and keeps runtime
+receipts pending until the approved Lowlevel headless comparison pass has captured both sides.
+
 ```bash
 npm run dev            # start the app (serves the renderer on :5173)
 npm run design:compare # in a second terminal
