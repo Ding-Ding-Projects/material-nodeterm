@@ -61,6 +61,11 @@ later commit, since this file will not be kept in lockstep with every merge).
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification
       remain outstanding.
+- [ ] **Portal lifecycle and child-content recovery**: `src/shared/portal-lifecycle.ts` now owns
+      immutable door pairs, deterministic universe Shops, depth-eight hierarchy validation,
+      import repair, orphan detection/recovery, deletion preservation, and idempotent append-only
+      history/peer events. Interactive portal construction, archive production, and verification
+      remain outstanding.
 
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the

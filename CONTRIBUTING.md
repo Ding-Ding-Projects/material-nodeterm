@@ -632,6 +632,13 @@ Project overlays belong only in the machine-local workspace index and never in
 `.nodeterm/project.json`, whose cloned content must not inject executable, credential, path, or
 host-local fields.
 
+Portable child canvases use `src/shared/portal-lifecycle.ts`. Keep one parentless root, reject
+cycles and hierarchy depth above eight, and preserve malformed children as recoverable orphans
+during import. Universe Shops have deterministic ids and are structural, while portal entry and
+return-door relationships are non-deletable. Project deletion must preserve child content, and
+portal lifecycle event ids must remain idempotent across local history, restart replay, and peers.
+Use the existing two-key destructive confirmation for project, child-canvas, and portal removal.
+
 Remote-access UI calls the free encrypted flow **Docker host**. Preserve single-use pairing and
 mutual SAS approval. Never add a purchase or entitlement check to the first host connection, and
 never fabricate a credential for an anonymous free pairing request.

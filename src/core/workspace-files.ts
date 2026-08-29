@@ -20,6 +20,7 @@ import type {
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import { repairPortablePortalHierarchy, type PortablePortalHierarchy, type PortalRepairRecord } from '../shared/portal-lifecycle'
 
 export const PROJECT_DIR = '.nodeterm'
 export const PROJECT_FILE = 'project.json'
@@ -72,6 +73,10 @@ export interface ProjectFileV1 {
    */
   viewport?: Viewport
   nodes: CanvasNodeState[]
+  /** Portable child-canvas hierarchy. No host bindings or credentials are permitted here. */
+  portalHierarchy?: PortablePortalHierarchy
+  /** Non-secret import repair notices, kept with the portable project until reviewed. */
+  portalRepairs?: PortalRepairRecord[]
   bridges?: BridgeLink[]
   ropes?: BridgeLink[]
   /**
@@ -208,6 +213,8 @@ export function projectToFile(
   // entry instead (`localNodeExec` / `IndexEntryV3.localExec`). See @shared/node-exec.
   const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes)
   const icon = sanitizeProjectIcon(p.icon)
+  const repairedPortal = p.portalHierarchy ? repairPortablePortalHierarchy(p.portalHierarchy) : undefined
+  const existingPortalRepairs = validPortalRepairs(p.portalRepairs)
   return {
     version: 1,
     rev,
@@ -217,6 +224,7 @@ export function projectToFile(
     color: p.color,
     viewport: framingViewport(nodes),
     nodes,
+    ...(repairedPortal ? { portalHierarchy: repairedPortal.hierarchy, ...(repairedPortal.repairs.length > 0 ? { portalRepairs: [...(existingPortalRepairs ?? []), ...repairedPortal.repairs] } : existingPortalRepairs?.length ? { portalRepairs: existingPortalRepairs } : {}) } : existingPortalRepairs?.length ? { portalRepairs: existingPortalRepairs } : {}),
     ...(icon ? { icon } : {}),
     ...(p.bridges ? { bridges: p.bridges } : {}),
     ...(p.ropes ? { ropes: p.ropes } : {}),
@@ -260,6 +268,26 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
   return cleaned.length > 0 ? cleaned : undefined
 }
 
+/** Repair notices are user-visible but never authority-bearing. Keep only a bounded, plain copy
+ * so a hand-edited project file cannot smuggle paths, credentials, or unbounded text into UI. */
+function validPortalRepairs(v: unknown): PortalRepairRecord[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const repairs = v.filter((item): item is PortalRepairRecord => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false
+    const record = item as Partial<PortalRepairRecord>
+    if (typeof record.id !== 'string' || record.id.length === 0 || record.id.length > 256) return false
+    if (!['orphaned-canvas', 'rebuilt-shop', 'removed-duplicate-shop', 'rebuilt-door'].includes(String(record.kind))) return false
+    return typeof record.detail === 'string' && record.detail.length > 0 && record.detail.length <= 16_384
+  }).map((record) => ({
+    id: record.id,
+    kind: record.kind,
+    ...(typeof record.canvasId === 'string' ? { canvasId: record.canvasId } : {}),
+    ...(typeof record.nodeId === 'string' ? { nodeId: record.nodeId } : {}),
+    detail: record.detail
+  }))
+  return repairs.length > 0 ? repairs.slice(0, 2048) : undefined
+}
+
 /**
  * The shared file plus this machine's own half of the project.
  *
@@ -295,6 +323,19 @@ export function fileToProject(
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
   const browserProfiles = validBrowserProfiles(f.browserProfiles)
   const icon = sanitizeProjectIcon(f.icon)
+  let portalHierarchy: PortablePortalHierarchy | undefined
+  let portalRepairs: PortalRepairRecord[] | undefined = validPortalRepairs(f.portalRepairs)
+  if (f.portalHierarchy) {
+    try {
+      const repaired = repairPortablePortalHierarchy(f.portalHierarchy)
+      portalHierarchy = repaired.hierarchy
+      portalRepairs = [...(portalRepairs ?? []), ...repaired.repairs]
+    } catch {
+      // A malformed child hierarchy must not make the whole project unreadable. Keep the canvas
+      // and surface a bounded repair record; no unvalidated portal data is hydrated.
+      portalRepairs = [...(portalRepairs ?? []), { id: 'repair-portal-hierarchy', kind: 'orphaned-canvas', detail: 'The child-canvas hierarchy could not be trusted and needs repair.' }]
+    }
+  }
   return {
     id: base.id,
     name: f.name,
@@ -304,6 +345,8 @@ export function fileToProject(
     // applyLocalNodeExec DROPS whatever the file carried in the exec fields (it is not ours) and
     // re-attaches only what this machine typed. See @shared/node-exec.
     nodes: applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec),
+    ...(portalHierarchy ? { portalHierarchy } : {}),
+    ...(portalRepairs?.length ? { portalRepairs } : {}),
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),

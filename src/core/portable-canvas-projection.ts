@@ -8,6 +8,7 @@
  */
 
 import type { BridgeLink, CanvasNodeState, Project, Viewport } from '../shared/types'
+import { validatePortablePortalHierarchy, type PortablePortalHierarchy } from '../shared/portal-lifecycle'
 import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEMA_VERSION } from './portable-project-v3'
 import { sanitizeProjectIcon } from '../shared/project-icon'
 
@@ -62,6 +63,8 @@ export interface PortableCanvasProjectionV3 {
   canvases: PortableCanvasV3[]
   nodes: PortableCanvasNodeV3[]
   relationships: PortableRelationshipV3[]
+  /** Child canvases, portal doors, and structural Shops. Omitted for projects without portals. */
+  portalHierarchy?: PortablePortalHierarchy
   appearance?: Record<string, unknown>
 }
 
@@ -69,6 +72,7 @@ export interface PortableCanvasProjectionInput {
   /** Future child canvases may be supplied without changing the root Project type. */
   canvases?: Array<Omit<PortableCanvasV3, 'nodeIds'> & { nodeIds?: string[] }>
   appearance?: Record<string, unknown>
+  portalHierarchy?: PortablePortalHierarchy
 }
 
 export const PORTABLE_CANVAS_LIMITS = {
@@ -81,7 +85,7 @@ export const PORTABLE_CANVAS_LIMITS = {
 } as const
 
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
-const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'appearance'])
+const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'portalHierarchy', 'appearance'])
 const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
@@ -200,8 +204,9 @@ export function projectToPortableCanvasV3(project: Project, input: PortableCanva
   const canvases = [root, ...children].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
   const icon = project.icon && sanitizeProjectIcon(project.icon)
   const portableIcon = icon?.type === 'emoji' ? { type: icon.type, name: icon.emoji } : icon ? { type: icon.type, name: icon.name } : undefined
-  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: relationships(project), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}) }
+  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: relationships(project), ...(input.portalHierarchy ? { portalHierarchy: validatePortablePortalHierarchy(input.portalHierarchy) } : {}), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}) }
   if (result.relationships.length > PORTABLE_CANVAS_LIMITS.maxRelationships) throw new PortableProjectV3Error('entry-limit', 'Portable relationship count exceeds its bound.')
+  if (result.portalHierarchy) validatePortablePortalHierarchy(result.portalHierarchy)
   return validatePortableCanvasProjectionV3(result)
 }
 
@@ -235,6 +240,10 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
   }
   text(value.rootCanvasId, 'root canvas id')
   if (value.canvases.length > PORTABLE_CANVAS_LIMITS.maxCanvases || value.nodes.length > PORTABLE_CANVAS_LIMITS.maxNodes || value.relationships.length > PORTABLE_CANVAS_LIMITS.maxRelationships) throw new PortableProjectV3Error('entry-limit', 'Portable canvas projection exceeds its bounds.')
+  let normalizedPortalHierarchy: PortablePortalHierarchy | undefined
+  if (value.portalHierarchy !== undefined) {
+    try { normalizedPortalHierarchy = validatePortablePortalHierarchy(value.portalHierarchy) } catch (error) { throw new PortableProjectV3Error('manifest', error instanceof Error ? error.message : 'Portable portal hierarchy is invalid.') }
+  }
   const ids = new Set<string>()
   const normalizedNodes: PortableCanvasNodeV3[] = []
   for (const node of value.nodes) {
@@ -294,7 +303,7 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
   if (!canvasIds.has(value.rootCanvasId)) throw new PortableProjectV3Error('manifest', 'Portable root canvas is missing.')
   if (value.appearance !== undefined) safeAppearance(value.appearance)
   const normalizedRelationships = value.relationships.map((link) => ({ id: link.id, kind: link.kind as 'bridge' | 'rope', source: link.source, target: link.target, order: link.order }))
-  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: value.project.name, color: value.project.color, ...(icon ? { icon } : {}) }, rootCanvasId: value.rootCanvasId, canvases: normalizedCanvases, nodes: normalizedNodes, relationships: normalizedRelationships, ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}) }
+  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: value.project.name, color: value.project.color, ...(icon ? { icon } : {}) }, rootCanvasId: value.rootCanvasId, canvases: normalizedCanvases, nodes: normalizedNodes, relationships: normalizedRelationships, ...(normalizedPortalHierarchy ? { portalHierarchy: normalizedPortalHierarchy } : {}), ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}) }
 }
 
 export function parsePortableCanvasProjectionV3(bytes: Uint8Array): PortableCanvasProjectionV3 {

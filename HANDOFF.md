@@ -1,5 +1,31 @@
 # Handoff
 
+## 2026-08-26, portal lifecycle and child-content recovery
+
+Implemented `src/shared/portal-lifecycle.ts`, a platform-free lifecycle model for portable child
+canvases. It validates one parentless root, parent existence, cycle freedom, depth eight, exact node
+membership, one deterministic Shop per universe, and non-deletable portal door and return-door
+relationships. `createPortalRecords()` creates stable entry and return ids, while the delete guard
+requires the existing two-key destructive confirmation flow for project, child-canvas, portal, and
+door actions.
+
+`repairPortablePortalHierarchy()` repairs missing or duplicate Shops and detaches malformed children
+as preserved orphans. `deleteProjectPreservingChildren()` removes only the deleted root's own nodes,
+keeps child content, and marks the child canvas and surviving door records for recovery.
+`detectPortalOrphans()` reports the reason and preserved node ids, and `recoverPortalOrphan()` clears
+the marker only after revalidation. Immutable lifecycle event ids make local replay, restart replay,
+and peer retries idempotent. Undo emits a new recovery event and refuses to remove structural door
+records.
+
+`Project.portalHierarchy` and `ProjectFileV1.portalHierarchy` now use the repaired, portable shape;
+unrecoverable imported hierarchy data stays out of hydration and leaves a non-secret repair notice.
+The schema 3 canvas projection accepts the same hierarchy through its optional `portalHierarchy`
+input, and the new feature article is `docs/features/projects/portal-lifecycle.md`.
+
+This lane intentionally did not run tests, type checking, lint, builds, packaging, runtime
+interaction, or screen captures. Archive production/import wiring, interactive portal UI, and
+release evidence remain open for later lanes. No commit or dew was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

@@ -16,6 +16,7 @@ import { DEFAULT_SHORTCUTS } from './shortcuts'
 import type { FunnyLevel, LanguageMode } from './i18n/types'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
+import type { PortablePortalHierarchy, PortalRepairRecord } from './portal-lifecycle'
 import type {
   ToyLockBeginTotpInput,
   ToyLockBeginTotpResult,
@@ -821,6 +822,10 @@ export interface Project {
   ssh?: { server: import('./ssh').SshConnection; remoteCwd: string }
   viewport: Viewport
   nodes: CanvasNodeState[]
+  /** Portable child canvases, portal doors, and structural Shops. Machine bindings stay out. */
+  portalHierarchy?: PortablePortalHierarchy
+  /** Import-repair notices retained until the user reviews or exports them. */
+  portalRepairs?: PortalRepairRecord[]
   /** Default managed Claude account for new Claude/chat nodes in this project. */
   defaultAccountId?: string
   /** Permission mode for new Claude TERMINAL (CLI) sessions in this project. SDK chat nodes are

@@ -101,6 +101,7 @@ and then never edited this file.
 | Feature | What is missing | Closes when | Notes |
 | --- | --- | --- | --- |
 | Status Hub | The registration half only. | `manual:the shared Hub is an external service; nothing in this repository can observe whether registration happened` | **Narrowed 2026-08-20, and the app half is now in the Shipped table above as its own contract row.** The surface shipped in `3e96ad78` — `src/renderer/components/StatusSurface.tsx`, `src/shared/project-status.ts`, `docs/status-surface.md`, 31 tests in `src/shared/project-status.test.ts`, and a `status-surface` row in `scripts/check-app-contract.mjs`. What remains is reporting *into* the shared Hub, which is a service outside this tree — hence the `manual:` predicate rather than a machine-checkable one. |
+| Portal lifecycle, import repair, and child-content recovery | The implementation is present, but focused tests, built-artifact interaction, and captures were intentionally not run in this lane. | `manual:run the focused lifecycle checks and built-artifact evidence` | The portable hierarchy foundation is documented; interactive door construction and universe catalogs remain separate lanes. |
 
 ---
 
