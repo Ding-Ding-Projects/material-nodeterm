@@ -654,6 +654,9 @@ const api: NodeTerminalApi = {
   },
   claude: {
     cliCaps: () => ipcRenderer.invoke(IPC.claudeCliCaps),
+    skills: {
+      list: () => ipcRenderer.invoke(IPC.claudeSkillsList)
+    },
     readTranscript: (sessionId, cwd, accountId, nodeId) =>
       ipcRenderer.invoke(IPC.claudeReadTranscript, sessionId, cwd, accountId, nodeId)
   },

@@ -15,6 +15,11 @@ import { mediaCachePruneList, remoteMediaCacheName } from '../../core/remote-ssh
 import { removeAtomic, renameAtomic } from '../../core/fs-atomic'
 import { allowMediaPath } from '../media-protocol'
 import { remoteAccountConfigDir, isSupportedClaudeVersion } from '../../core/claude-accounts-core'
+import {
+  parseRemoteClaudeSkillsOutput,
+  remoteClaudeSkillEntries,
+  type ClaudeSkillScope
+} from '../../core/claude-skills'
 import type { PushGrant } from '../../core/push-grants'
 import { REMOTE_GRANT_SCAN_CMD, parseRemoteGrants } from '../../core/remote-push-grants'
 import { supportsAutoPermissionMode, supportsFullscreenTui } from '../../shared/agents/config'
@@ -141,6 +146,10 @@ interface Runners {
   /** Mints this instance's per-node token, or null when there is no node-auth secret at all
    *  (legacy everywhere). Resolved per pass so one connect's tokens all come from one secret. */
   nodeTokenMinter?: () => ((nodeId: string) => string) | null
+}
+
+function assertClaudeAccountId(accountId: string): void {
+  if (!/^[A-Za-z0-9_-]+$/.test(accountId)) throw new Error('invalid Claude account id')
 }
 
 /** Backoff after a FAILED remote claude probe (no markers = claude not found on that attempt).
@@ -1752,6 +1761,57 @@ export class SshProjectManager {
       childArgs(c.conn, c.controlPath, `cat ${quoteRemotePath(file)} 2>/dev/null`)
     )
     return code === 0 && stdout ? stdout : null
+  }
+
+  /**
+   * Read only the names of skills in a remote Claude config scope. The command never cats a
+   * SKILL.md, so provider-authored prompts, paths, credentials, and other private content cannot
+   * cross the SSH boundary. A line-oriented status header keeps missing and unavailable distinct.
+   */
+  async remoteClaudeSkills(
+    projectId: string,
+    accountId?: string
+  ): Promise<Pick<ClaudeSkillScope, 'state' | 'reason' | 'skills'>> {
+    const c = this.conns.get(projectId)
+    if (!c?.remoteHome) {
+      return {
+        state: 'unavailable',
+        reason: 'The SSH host or its home directory is unavailable.',
+        skills: remoteClaudeSkillEntries(parseRemoteClaudeSkillsOutput('UNAVAILABLE'))
+      }
+    }
+    if (accountId) assertClaudeAccountId(accountId)
+    const configDir = accountId
+      ? remoteAccountConfigDir(accountId)
+      : `${c.remoteHome}/.claude`
+    const skillsDir = `${configDir}/skills`
+    // `basename` is used instead of find -printf for portability across POSIX hosts. Names are
+    // validated again after the SSH response is parsed, so hostile output is only discarded data.
+    const command = [
+      `if [ ! -d ${quoteRemotePath(skillsDir)} ]; then printf '%s\\n' MISSING;`,
+      `elif [ ! -r ${quoteRemotePath(skillsDir)} ]; then printf '%s\\n' UNAVAILABLE;`,
+      `else printf '%s\\n' OK; for nt_skill in ${quoteRemotePath(skillsDir)}/*; do`,
+      `[ -d "$nt_skill" ] || continue; [ -f "$nt_skill/SKILL.md" ] || continue;`,
+      `basename -- "$nt_skill"; done; fi`
+    ].join(' ')
+    try {
+      const result = await this.r.run(childArgs(c.conn, c.controlPath, command))
+      if (result.code !== 0) {
+        return {
+          state: 'unavailable',
+          reason: 'Claude skills could not be read on this host.',
+          skills: remoteClaudeSkillEntries(parseRemoteClaudeSkillsOutput('UNAVAILABLE'))
+        }
+      }
+      const parsed = parseRemoteClaudeSkillsOutput(result.stdout)
+      return { state: parsed.state, reason: parsed.reason, skills: remoteClaudeSkillEntries(parsed) }
+    } catch {
+      return {
+        state: 'unavailable',
+        reason: 'Claude skills could not be read on this host.',
+        skills: remoteClaudeSkillEntries(parseRemoteClaudeSkillsOutput('UNAVAILABLE'))
+      }
+    }
   }
 
   /** Delete a managed remote account's config dir (`rm -rf`). No-op when not connected. The id is

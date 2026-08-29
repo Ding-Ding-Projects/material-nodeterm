@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add Claude skill visibility across local, managed-account, and connected remote configuration
+  scopes. Settings now exposes metadata-only discovery with searchable regex support and explicit
+  available, missing, and unavailable states. Skill files and credentials never cross the API
+  boundary. This ultra-speed lane intentionally ran no tests, builds, runtime interaction, or
+  captures, so release verification remains pending.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

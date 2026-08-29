@@ -204,6 +204,8 @@ import {
 } from './codex-accounts'
 import { resolveForeignThreadAt } from './codex-relay-daemon'
 import { claudeCliCaps, registerClaudeCliIpc, type ClaudeCliCaps } from '../core/claude-cli'
+import { discoverLocalClaudeSkills } from '../core/claude-skills'
+import type { ClaudeSkillScope } from '../shared/claude-skills'
 import { refreshCodexIdentityCaps, registerCodexIdentityIpc } from '../core/codex-identity-caps'
 import {
   bindCodexThreadIdentity,
@@ -1150,6 +1152,48 @@ app.whenReady().then(async () => {
     process.platform === 'darwin' ? systemPreferences.askForMediaAccess('microphone') : true
   )
   registerClaudeCliIpc()
+  ipcMain.handle(IPC.claudeSkillsList, async () => {
+    const accounts = settingsStore
+      .get()
+      .claudeAccounts.filter((account) => !account.pending)
+    const local = await discoverLocalClaudeSkills(
+      accounts.filter((account) => !account.host).map((account) => account.id)
+    )
+    const scopes: ClaudeSkillScope[] = [...local.scopes]
+    const manager = sshProjectManager
+    if (manager) {
+      const hosts = new Map<string, string>()
+      for (const { projectId, hostKey } of manager.connectedHosts()) {
+        if (!hosts.has(hostKey)) hosts.set(hostKey, projectId)
+      }
+      for (const [hostKey, projectId] of hosts) {
+        const system = await manager.remoteClaudeSkills(projectId)
+        scopes.push({
+          id: `remote-system:${hostKey}`,
+          kind: 'remote-system',
+          label: `Remote Claude · ${hostKey}`,
+          location: '~/.claude',
+          state: system.state,
+          reason: system.reason,
+          skills: system.skills
+        })
+        const remoteAccounts = accounts.filter((account) => account.host === hostKey)
+        for (const account of remoteAccounts) {
+          const result = await manager.remoteClaudeSkills(projectId, account.id)
+          scopes.push({
+            id: `remote-account:${hostKey}:${account.id}`,
+            kind: 'remote-account',
+            label: `Remote Claude account · ${account.label || account.id} · ${hostKey}`,
+            location: `~/.nodeterm/claude-accounts/${account.id}`,
+            state: result.state,
+            reason: result.reason,
+            skills: result.skills
+          })
+        }
+      }
+    }
+    return { scopes, refreshedAt: Date.now() }
+  })
   registerCodexIdentityIpc()
   // Warm the `claude --version` probe now (it spawns a login shell + node, ~sub-second) so the
   // renderer's first `claude.cliCaps()` — awaited on the launch path of a cold-restored agent

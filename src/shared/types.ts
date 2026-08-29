@@ -16,6 +16,7 @@ import { DEFAULT_SHORTCUTS } from './shortcuts'
 import type { FunnyLevel, LanguageMode } from './i18n/types'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
+import type { ClaudeSkillsApi } from './claude-skills'
 import type {
   ToyLockBeginTotpInput,
   ToyLockBeginTotpResult,
@@ -3396,6 +3397,8 @@ export interface ClaudeApi {
   /** Capabilities of the local Claude CLI (memoized in the shell; safe to call repeatedly).
    *  Never rejects — an unknown version resolves to the fail-open caps. */
   cliCaps(): Promise<ClaudeCliCaps>
+  /** Read-only catalogue of local and connected remote Claude skill scopes. */
+  skills: ClaudeSkillsApi
   /**
    * Reads a Claude session's full transcript as flat searchable lines ([] if unavailable).
    * Resolves by `sessionId` when known (exact); otherwise falls back to `cwd` (durable —

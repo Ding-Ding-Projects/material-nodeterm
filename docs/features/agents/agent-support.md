@@ -53,6 +53,10 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - Per-project — an override permission mode, so a project that genuinely needs broader
   permissions doesn't require changing your global default.
 - Per-node — which agent CLI launches, and (for Claude Code) which managed account.
+- **Settings → Claude skills** — a metadata-only catalogue of the local system scope, managed
+  account scopes, and connected SSH scopes. It distinguishes available, missing, and unavailable
+  state and has plain-text search with an adjacent anchored regex builder. See
+  [Claude skill visibility](./claude-skills.md).
 
 ## Failure modes
 
@@ -66,6 +70,9 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - **A hook event never arrives** (the agent crashed, or hooks were never installed for it): the
   node's status simply never updates rather than being guessed. An unknown state is never
   treated as "finished" — that distinction matters for dependent nodes waiting on this one.
+- **A skill scope is missing or unavailable**: Settings keeps the scope visible and says whether
+  the directory was absent or could not be read. It never reports an empty healthy catalogue when
+  the read failed.
 
 ## Security considerations
 
@@ -77,6 +84,9 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - Canvas control (an agent creating or managing nodes from inside its own session) is
   explicitly opt-in per environment and scoped to the session that requested it; an agent
   cannot control a canvas it wasn't given that capability in.
+- Skill visibility is metadata-only. The catalogue does not read or transmit `SKILL.md`, provider
+  credentials, session transcripts, or absolute machine paths. Remote rows use the existing SSH
+  ControlMaster and return only validated skill folder names and state.
 
 ## Verification
 
@@ -89,6 +99,9 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - Connect two agent-capable nodes with a context link and confirm one can pull the other's
   transcript on request, and that a plain terminal or an agent outside the capability list is
   not offered the option.
+- Open Settings → Claude skills, refresh, and confirm the local system and managed-account rows
+  distinguish available, missing, and unavailable state. Connect an SSH project and confirm its
+  system and account rows appear without exposing skill-file contents.
 
 ## Suggested articles
 

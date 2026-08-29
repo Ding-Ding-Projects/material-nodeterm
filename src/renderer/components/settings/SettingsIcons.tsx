@@ -69,6 +69,13 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
   agents: (
     <path d="M8 2.3 9.4 5.9 13 7.3 9.4 8.7 8 12.3 6.6 8.7 3 7.3 6.6 5.9z" />
   ),
+  'claude-skills': (
+    <>
+      <path d="M3 3.2h8.2a1.8 1.8 0 0 1 1.8 1.8v7.8H4.8A1.8 1.8 0 0 1 3 11V3.2Z" />
+      <path d="M5.2 6h5.2M5.2 8.4h3.8M5.2 10.8h2.5" />
+      <path d="M12.8 5.5h.2a1 1 0 0 1 1 1v5.2" />
+    </>
+  ),
   usage: (
     <>
       <path d="M2.5 12.5a5.5 5.5 0 1 1 11 0" />

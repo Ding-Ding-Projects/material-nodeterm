@@ -13,6 +13,7 @@ export type SettingsSectionId =
   | 'adhd-modes'
   | 'shortcuts'
   | 'agents'
+  | 'claude-skills'
   | 'usage'
   | 'accounts'
   | 'custom-agents'
@@ -59,6 +60,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     title: 'AI capabilities',
     sections: [
       { id: 'agents', title: 'Agents' },
+      { id: 'claude-skills', title: 'Claude skills' },
       { id: 'accounts', title: 'Accounts' },
       { id: 'custom-agents', title: 'Custom agents' },
       { id: 'usage', title: 'Usage' },

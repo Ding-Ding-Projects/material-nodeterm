@@ -17,6 +17,7 @@ import type { SettingsStore } from '../../core/settings-store'
 import type { WorkspaceStore } from '../../core/workspace-store'
 import { describeSettingsChange } from '../../shared/settings-diff'
 import { claudeCliCaps, registerClaudeCliIpc } from '../../core/claude-cli'
+import { discoverLocalClaudeSkills } from '../../core/claude-skills'
 import { registerCodexIdentityIpc } from '../../core/codex-identity-caps'
 import { UNKNOWN_CODEX_IDENTITY_CAPS } from '@shared/types'
 import { startUsageService } from '../../core/usage/usage-service'
@@ -143,6 +144,17 @@ export function registerCoreHandlers(
   // The browser needs the same `--permission-mode auto` version gate as desktop: the server's own
   // claude CLI is the one that will run the terminal nodes. Warm it so the first call is cached.
   registerClaudeCliIpc()
+  // The Server Edition runs on the machine that owns its Claude config. It exposes the same
+  // metadata-only catalogue as desktop, with no remote SSH scopes in this shell. Skill contents
+  // are never read or placed on the WS wire.
+  platform.handle(IPC.claudeSkillsList, () =>
+    discoverLocalClaudeSkills(
+      deps
+        .getSettings()
+        .claudeAccounts.filter((account) => !account.pending && !account.host)
+        .map((account) => account.id)
+    )
+  )
   void claudeCliCaps()
 
   // ---- Codex shared identity: a DELIBERATE degrade, not an omission ----------------------------

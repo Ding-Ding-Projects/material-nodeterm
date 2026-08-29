@@ -18,6 +18,7 @@ import { ScheduleSection } from './sections/ScheduleSection'
 import { AdhdModesSection } from './sections/AdhdModesSection'
 import { ShortcutsSection } from './sections/ShortcutsSection'
 import { AgentsSection } from './sections/AgentsSection'
+import { ClaudeSkillsSection } from './sections/ClaudeSkillsSection'
 import { UsageSection } from './sections/UsageSection'
 import { AccountsSection } from './sections/AccountsSection'
 import { CustomAgentsSection } from './sections/CustomAgentsSection'
@@ -188,6 +189,7 @@ export function SettingsPage({
             <AdhdModesSection isActive={active === 'adhd-modes'} />
             <ShortcutsSection isActive={active === 'shortcuts'} />
             <AgentsSection isActive={active === 'agents'} />
+            <ClaudeSkillsSection isActive={active === 'claude-skills'} />
             <UsageSection isActive={active === 'usage'} />
             <AccountsSection isActive={active === 'accounts'} />
             <CustomAgentsSection isActive={active === 'custom-agents'} />

@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-08-26, Claude skill visibility lane
+
+Implemented the issue #83 / upstream issue #438 lane in the assigned `feat/program-72` checkout.
+The new `src/core/claude-skills.ts` catalogue discovers local system and managed-account config
+scopes without reading skill contents, and parses the bounded metadata response used by the remote
+SSH reader. Desktop now exposes `claude.skills.list` through the new `claude-skills:list` channel;
+the handler includes connected remote system and managed-account scopes through
+`SshProjectManager.remoteClaudeSkills`. The Server Edition exposes its own local scopes and keeps
+SSH scopes explicitly out of that shell. Preload, WS bridge, and browser stubs carry the same
+surface.
+
+Settings now has a first-class Claude skills section with local plain-text search and an adjacent
+anchored full regex builder. Scope rows distinguish available, missing, and unavailable states,
+including explicit entries for nodeterm's `manage-nodeterm-canvas` and `get-linked-context` skills.
+Only validated folder names and relative scope labels cross the API; skill files, credentials,
+provider sessions, transcripts, and absolute machine paths do not.
+
+Documentation was updated in `docs/features/agents/claude-skills.md`, the Agents category index,
+`docs/features/agents/agent-support.md`, `ROADMAP.md`, and this handoff. This lane deliberately
+ran no tests, type checks, lint, security review, build, packaging, installer execution, runtime
+interaction, or captures, as requested. No commit or dew was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

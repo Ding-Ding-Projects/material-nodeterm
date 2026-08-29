@@ -143,7 +143,13 @@ export const DOC_ARTICLES: DocArticle[] = [
     path: "docs/features/agents/README.md",
     title: "Agents",
     section: "Agents",
-    body: "# Agents\n\nnodeterm is a pluggable multi-agent system. Claude Code, Codex, Gemini, opencode, and Grok are\nbuilt in; any other CLI can be added as a custom agent.\n\n- [Agent support](./agent-support.md) — the shared status model, hook-driven detection,\n  permission modes, managed accounts, and the capability system that decides which agent gets\n  which feature.\n\nSee also [Canvas → Node kinds](../canvas/README.md) for the agent node itself,\n[Kanban](../kanban/README.md) for how agent status renders on a board card, and\n[Remote & SSH](../remote/README.md) for running an agent on a remote host.\n"
+    body: "# Agents\n\nnodeterm is a pluggable multi-agent system. Claude Code, Codex, Gemini, opencode, and Grok are\nbuilt in; any other CLI can be added as a custom agent.\n\n- [Agent support](./agent-support.md) — the shared status model, hook-driven detection,\n  permission modes, managed accounts, and the capability system that decides which agent gets\n  which feature.\n- [Claude skill visibility](./claude-skills.md) — metadata-only discovery across local, managed,\n  and connected remote configuration scopes, with explicit missing and unavailable states.\n\nSee also [Canvas → Node kinds](../canvas/README.md) for the agent node itself,\n[Kanban](../kanban/README.md) for how agent status renders on a board card, and\n[Remote & SSH](../remote/README.md) for running an agent on a remote host.\n"
+  },
+  {
+    path: "docs/features/agents/claude-skills.md",
+    title: "Claude skill visibility",
+    section: "Agents",
+    body: "# Claude skill visibility\n\nSettings → Claude skills shows metadata-only discovery for local, managed-account, and connected remote Claude configuration scopes. Available, missing, and unavailable states stay distinct. The catalogue never reads or transmits SKILL.md contents, credentials, provider sessions, transcripts, or absolute machine paths.\n\n## Search\n\nThe panel has plain-text search and an adjacent anchored full regex builder. Searching a scope matches its label, relative location, state, and diagnosis; searching a skill matches its validated folder name and state.\n\n## Verification boundary\n\nImplementation lives in `src/core/claude-skills.ts`, `src/main/index.ts`, `src/main/remote-ssh/ssh-project.ts`, `src/server/handlers/index.ts`, and `src/renderer/components/settings/sections/ClaudeSkillsSection.tsx`. This lane deliberately ran no tests, type checks, lint, security review, build, packaging, runtime interaction, or captures, as requested.\n\n## Suggested articles\n\n- [Agent support](./agent-support.md)\n- [SSH projects](../remote/ssh-projects.md)\n- [Local history](../../local-history.md)\n"
   },
   {
     path: "docs/features/agents/agent-support.md",
