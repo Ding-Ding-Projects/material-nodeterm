@@ -17,6 +17,8 @@ import { useDialogStack } from './dialog-stack'
 import { UnlockLadderPanel, type LadderTransport } from './toylocks/UnlockLadder'
 import type { LadderAnswer } from '@shared/unlock-ladder-types'
 import { activeSessionApi } from '../session/session'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 export interface ArchiveUnlockRequest {
   /** The file being opened. Shown so the user knows WHICH protected file is asking. */
@@ -120,6 +122,7 @@ function ArchiveUnlockDialog({
   onSubmit: (value: string) => void
   onCancel: () => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [value, setValue] = useState('')
   const [remaining, setRemaining] = useState(request.lockedMs ?? 0)
   const [ladderOpen, setLadderOpen] = useState(false)
@@ -145,7 +148,7 @@ function ArchiveUnlockDialog({
     <div className="confirm-overlay" onClick={onCancel}>
       <div className="confirm" onClick={(e) => e.stopPropagation()}>
         <p className="confirm__msg">
-          This project file is password-protected.
+          {vocab('This project file is password-protected.')}
           <br />
           <span className="confirm__path">{request.path}</span>
         </p>
@@ -153,7 +156,11 @@ function ArchiveUnlockDialog({
         {locked ? (
           <>
             <p className="confirm__error" role="alert">
-              Too many wrong passwords. You can try again in {formatWait(remaining)}.
+              {mapOwnedSentence(vocab, [
+                copy('Too many wrong passwords. You can try again in '),
+                fact(formatWait(remaining)),
+                copy('.')
+              ])}
             </p>
             {ladderOpen ? (
               <UnlockLadderPanel
@@ -168,7 +175,7 @@ function ArchiveUnlockDialog({
               />
             ) : request.ladderAvailable ? (
               <button className="confirm__btn" onClick={() => setLadderOpen(true)}>
-                Play your way out of the wait
+                {vocab('Play your way out of the wait')}
               </button>
             ) : null}
           </>
@@ -179,8 +186,9 @@ function ArchiveUnlockDialog({
               type="password"
               autoComplete="off"
               autoFocus
+              aria-label={vocab('Password')}
               value={value}
-              placeholder="Password"
+              placeholder={vocab('Password')}
               spellCheck={false}
               onChange={(e) => setValue(e.target.value)}
               onKeyDown={(e) => {
@@ -203,11 +211,11 @@ function ArchiveUnlockDialog({
 
         <div className="confirm__actions">
           <button className="confirm__btn" onClick={onCancel}>
-            Cancel
+            {vocab('Cancel')}
           </button>
           {!locked && (
             <button className="confirm__btn primary" onClick={() => onSubmit(value)}>
-              Open
+              {vocab('Open')}
             </button>
           )}
         </div>

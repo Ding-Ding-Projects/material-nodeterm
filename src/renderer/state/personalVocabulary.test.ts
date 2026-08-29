@@ -106,4 +106,30 @@ describe('personal vocabulary cache validation', () => {
     usePersonalVocabulary.getState().hydrate()
     expect(usePersonalVocabulary.getState()).toMatchObject({ status: 'no-file', entryCount: 0 })
   })
+
+  it.each([
+    ['missing', null],
+    ['corrupt', '{'],
+    ['stale', JSON.stringify({ version: 1, entries: { terminal: 'shell box' }, entryCount: 1, savedAt: Date.now() - 31 * 24 * 60 * 60 * 1000 })],
+    ['future', JSON.stringify({ version: 1, entries: { terminal: 'shell box' }, entryCount: 1, savedAt: Date.now() + 2 * 24 * 60 * 60 * 1000 })],
+    ['unsupported', JSON.stringify({ version: 99, entries: { terminal: 'shell box' }, entryCount: 1, savedAt: Date.now() })]
+  ] as const)('clears the prior live dictionary and invalid storage for a %s cache', (_kind, raw) => {
+    expect(usePersonalVocabulary.getState().upload(
+      '{"version":1,"entries":{"terminal":"shell box"}}'
+    )).toEqual({ ok: true, entryCount: 1 })
+
+    if (raw === null) localStorage.removeItem(CACHE_KEY)
+    else localStorage.setItem(CACHE_KEY, raw)
+
+    usePersonalVocabulary.getState().hydrate()
+
+    expect(usePersonalVocabulary.getState()).toMatchObject({
+      status: 'no-file',
+      entries: {},
+      entryCount: 0,
+      loadedAt: null,
+      lastError: null
+    })
+    expect(localStorage.getItem(CACHE_KEY)).toBeNull()
+  })
 })

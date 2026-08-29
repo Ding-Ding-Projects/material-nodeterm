@@ -6,6 +6,7 @@
 // overwrote the user's real settings — see app/shared/school-state.js.
 
 import { registerSettingsCard } from '../core/engine.js'
+import { authoredPart, factPart, openInputDialog } from '../core/input-dialog.js'
 import { setPin, verifyPin, SHIPPED_NAME } from '../shared/school-state.js'
 
 export function registerSchoolMode(store, deps, registerAction, registerBinding) {
@@ -13,21 +14,58 @@ export function registerSchoolMode(store, deps, registerAction, registerBinding)
     const state = s.state
     if (state.school) {
       if (state.schoolPin) {
-        const pin = window.prompt('Type the PIN to turn ' + SHIPPED_NAME + ' off.')
-        if (!pin) return
-        const ok = await verifyPin(pin, state.schoolPin)
-        if (!ok) {
-          h.toast('❌', 'Wrong PIN', SHIPPED_NAME + ' stays on.')
-          return
-        }
+        openInputDialog(s, {
+          id: 'school-mode-unlock',
+          kind: 'pin',
+          maxLength: 256,
+          titleParts: [authoredPart('Turn '), factPart(SHIPPED_NAME), authoredPart(' off')],
+          body: 'Enter the PIN that was set when this mode was turned on.',
+          label: 'PIN',
+          submitLabel: 'Check the PIN',
+          onSubmit: async (pin) => {
+            const ok = await verifyPin(pin, s.state.schoolPin)
+            if (!ok) {
+              h.toast('❌', 'Wrong PIN', SHIPPED_NAME + ' stays on.', '', {
+                bodyParts: [factPart(SHIPPED_NAME), authoredPart(' stays on.')],
+              })
+              return
+            }
+            h.save({ school: false }, SHIPPED_NAME + ' off', {
+              titleParts: [factPart(SHIPPED_NAME), authoredPart(' off')],
+            })
+            h.toast('🎒', SHIPPED_NAME + ' off', 'Your own settings came straight back.', '', {
+              titleParts: [factPart(SHIPPED_NAME), authoredPart(' off')],
+            })
+          },
+        })
+        return
       }
-      h.save({ school: false }, SHIPPED_NAME + ' off')
-      h.toast('🎒', SHIPPED_NAME + ' off', 'Your own settings came straight back.')
+      h.save({ school: false }, SHIPPED_NAME + ' off', {
+        titleParts: [factPart(SHIPPED_NAME), authoredPart(' off')],
+      })
+      h.toast('🎒', SHIPPED_NAME + ' off', 'Your own settings came straight back.', '', {
+        titleParts: [factPart(SHIPPED_NAME), authoredPart(' off')],
+      })
     } else {
-      const pin = window.prompt('Pick a PIN so it cannot be switched off again in a hurry. Leave it blank for no PIN.')
-      const hash = await setPin(pin)
-      h.save({ school: true, schoolPin: hash }, SHIPPED_NAME + ' on')
-      h.toast('🎒', SHIPPED_NAME + ' on', 'Plain English, no jokes, no surprise dim sum.')
+      openInputDialog(s, {
+        id: 'school-mode-pin',
+        kind: 'pin',
+        maxLength: 256,
+        allowEmpty: true,
+        titleParts: [authoredPart('Turn '), factPart(SHIPPED_NAME), authoredPart(' on')],
+        body: 'Choose a PIN so this mode cannot be switched off again in a hurry, or leave the field empty for no PIN.',
+        label: 'New PIN',
+        submitLabel: 'Turn it on',
+        onSubmit: async (pin) => {
+          const hash = await setPin(pin)
+          h.save({ school: true, schoolPin: hash }, SHIPPED_NAME + ' on', {
+            titleParts: [factPart(SHIPPED_NAME), authoredPart(' on')],
+          })
+          h.toast('🎒', SHIPPED_NAME + ' on', 'Plain English, no jokes, no surprise dim sum.', '', {
+            titleParts: [factPart(SHIPPED_NAME), authoredPart(' on')],
+          })
+        },
+      })
     }
   })
 

@@ -13,6 +13,8 @@
 // The reveal is deliberately OFF by default and resets whenever the field is remounted: a revealed
 // password is on screen for anyone behind the user, and for any capture the app itself takes.
 import { useEffect, useId, useRef, useState } from 'react'
+import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export function PasswordField({
   label,
@@ -40,6 +42,8 @@ export function PasswordField({
   disabled?: boolean
   inputRef?: React.RefObject<HTMLInputElement>
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
+  const labelText = vocab(label)
   const [revealed, setRevealed] = useState(false)
   const [capsLock, setCapsLock] = useState(false)
   const ownRef = useRef<HTMLInputElement>(null) as React.RefObject<HTMLInputElement>
@@ -63,7 +67,7 @@ export function PasswordField({
   return (
     <div className="toylock-field">
       <label className="toylock-field__label" htmlFor={id}>
-        {label}
+        {labelText}
       </label>
       <div className="toylock-passwordfield">
         <input
@@ -92,7 +96,10 @@ export function PasswordField({
           className="toylock-passwordfield__reveal"
           // The accessible name says what the button DOES next, which is what a screen-reader user
           // needs, rather than describing the current state and leaving them to infer it.
-          aria-label={revealed ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+          aria-label={mapOwnedSentence(vocab, [
+            copy(revealed ? 'Hide ' : 'Show '),
+            fact(labelText.toLowerCase())
+          ])}
           aria-pressed={revealed}
           disabled={disabled}
           onClick={() => {
@@ -104,11 +111,9 @@ export function PasswordField({
         </button>
       </div>
       {capsLock && (
-        <div className="toylock-field__warn" role="status">
-          Caps Lock is on.
-        </div>
+        <div className="toylock-field__warn" role="status">{vocab('Caps Lock is on.')}</div>
       )}
-      {hint && <div className="toylock-field__hint">{hint}</div>}
+      {hint && <div className="toylock-field__hint">{vocab(hint)}</div>}
     </div>
   )
 }

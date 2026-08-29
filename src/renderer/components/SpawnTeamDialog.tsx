@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
 interface SpawnTeamDialogProps {
   /** False on SSH projects / non-repos — the toggle renders disabled with `worktreeNote` beside it. */
@@ -27,6 +29,7 @@ export function SpawnTeamDialog({
   const [task, setTask] = useState('')
   const [worktrees, setWorktrees] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const vocab = useVocabularyMapper()
   // In the modal stack so a ConfirmDialog underneath does not also answer Escape (its listener
   // is on `window`); Enter never leaves the textarea, so nothing else is needed.
   useDialogStack()
@@ -44,14 +47,14 @@ export function SpawnTeamDialog({
     <div className="confirm-overlay" onClick={onCancel}>
       <div className="confirm" onClick={(e) => e.stopPropagation()}>
         <p className="confirm__msg">
-          Spawn a team — describe the task, and a conductor agent will split it into workstreams
-          and open the team on the canvas.
+          {vocab('Spawn a team — describe the task, and a conductor agent will split it into workstreams and open the team on the canvas.')}
         </p>
         <textarea
           ref={inputRef}
           className="confirm__input confirm__textarea"
           value={task}
-          placeholder="What should the team build?"
+          placeholder={vocab('What should the team build?')}
+          aria-label={vocab('Team task')}
           rows={4}
           spellCheck={false}
           onChange={(e) => setTask(e.target.value)}
@@ -72,15 +75,15 @@ export function SpawnTeamDialog({
             disabled={!worktreesAvailable}
             onChange={(e) => setWorktrees(e.target.checked)}
           />
-          Give each workstream its own git worktree
-          {!worktreesAvailable && worktreeNote ? ` — ${worktreeNote}` : ''}
+          {mapOwnedSentence(vocab, [copy('Give each workstream its own '), fact('git worktree')])}
+          {!worktreesAvailable && worktreeNote ? mapOwnedSentence(vocab, [copy(' — '), fact(worktreeNote)]) : ''}
         </label>
         <div className="confirm__actions">
           <button className="confirm__btn" onClick={onCancel}>
-            Cancel
+            {vocab('Cancel')}
           </button>
           <button className="confirm__btn primary" disabled={!canSubmit} onClick={submit}>
-            Spawn team
+            {vocab('Spawn team')}
           </button>
         </div>
       </div>

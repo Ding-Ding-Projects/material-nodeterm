@@ -126,7 +126,7 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
                 id="personal-vocabulary-file"
                 type="file"
                 accept="application/json,.json"
-                aria-label="Choose a personal vocabulary JSON file"
+                aria-label={vocab('Choose a personal vocabulary JSON file')}
                 disabled={busy}
                 className="sr-only"
                 onChange={(e) => {

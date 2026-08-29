@@ -5,6 +5,8 @@ import { Dialog } from '../ui/md3/Dialog'
 import { TextField } from '../ui/md3/TextField'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
 export interface GitHubWorkItemAttachmentDialogProps {
   open: boolean
@@ -30,6 +32,7 @@ export function GitHubWorkItemAttachmentDialog({
   onClose,
   onAttach
 }: GitHubWorkItemAttachmentDialogProps): React.JSX.Element | null {
+  const vocab = useVocabularyMapper()
   const search = useRegexSearchField()
   const searchRef = useRef<HTMLInputElement>(null)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
@@ -80,17 +83,17 @@ export function GitHubWorkItemAttachmentDialog({
         const bounded = collected.slice(0, 300)
         if (bounded.length < collected.length) partial = true
         setPullRequests(bounded)
-        if (partial) setProviderError('The approved GitHub API returned a bounded partial pull-request list. Refresh to try again.')
+        if (partial) setProviderError(vocab('The approved GitHub API returned a bounded partial pull-request list. Refresh to try again.'))
         setProviderState('ready')
       } catch (error) {
         if (cancelled) return
-        setProviderError(error instanceof Error ? error.message : 'Pull requests are unavailable from the approved GitHub API.')
+        setProviderError(error instanceof Error ? error.message : vocab('Pull requests are unavailable from the approved GitHub API.'))
         setProviderState('unavailable')
       }
     }
     void load()
     return () => { cancelled = true }
-  }, [open, projectId, repository])
+  }, [open, projectId, repository, vocab])
   const availableItems = useMemo(() => {
     const seen = new Set<string>()
     return [...items, ...pullRequests].filter((item) => {
@@ -116,11 +119,12 @@ export function GitHubWorkItemAttachmentDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      title="Attach GitHub work item"
+      title={vocab('Attach GitHub work item')}
+      vocabularyMode="factual"
       className="github-work-item-attachment-dialog"
       actions={(
         <>
-          <button type="button" onClick={onClose}>Cancel</button>
+          <button type="button" onClick={onClose}>{vocab('Cancel')}</button>
           <button
             type="button"
             disabled={!selected}
@@ -135,14 +139,13 @@ export function GitHubWorkItemAttachmentDialog({
               onClose()
             }}
           >
-            {adopt ? 'Adopt on this frame' : 'Attach to this node'}
+            {vocab(adopt ? 'Adopt on this frame' : 'Attach to this node')}
           </button>
         </>
       )}
     >
       <p className="github-work-item-attachment-dialog__hint">
-        Choose an item from the provider-backed records already loaded for this project. The chip will
-        appear on this session node. A frame pill appears only for this node's owning frame.
+        {vocab("Choose an item from the provider-backed records already loaded for this project. The chip will appear on this session node. A frame pill appears only for this node's owning frame.")}
       </p>
       <TextField
         ref={searchRef}
@@ -155,13 +158,19 @@ export function GitHubWorkItemAttachmentDialog({
         placeholder="Search by repository, number, or title"
         aria-controls="github-work-item-attachment-results"
         trailingSlot={<AnchoredRegexBuilder search={search} fieldRef={searchRef} label="Regex: work item search" />}
-        supportText={search.error ?? (providerState === 'loading' ? 'Loading provider-backed issues and pull requests…' : providerError ?? `${filteredItems.length} provider-backed item${filteredItems.length === 1 ? '' : 's'} available`)}
+        supportText={search.error ? undefined : (providerState === 'loading'
+          ? vocab('Loading provider-backed issues and pull requests…')
+          : providerError
+            ? undefined
+            : mapOwnedSentence(vocab, [fact(String(filteredItems.length)), copy(` provider-backed item${filteredItems.length === 1 ? '' : 's'} available`)]))}
         invalid={!!search.error}
       />
-      <div id="github-work-item-attachment-results" className="github-work-item-attachment-dialog__list" role="listbox" aria-label="Provider-backed GitHub work items">
+      {search.error && <p className="github-work-item-attachment-dialog__error" role="alert">{search.error}</p>}
+      {providerError && <p className="github-work-item-attachment-dialog__error" role="alert">{providerError}</p>}
+      <div id="github-work-item-attachment-results" className="github-work-item-attachment-dialog__list" role="listbox" aria-label={mapOwnedSentence(vocab, [copy('Provider-backed '), fact('GitHub'), copy(' work items')])}>
         {filteredItems.length === 0 ? (
           <p className="github-work-item-attachment-dialog__empty" role="status">
-            {providerState === 'loading' ? 'Loading provider-backed issues and pull requests…' : providerState === 'unavailable' ? 'Provider-backed work items are unavailable. Check the approved GitHub API capability, then reopen this guide.' : 'No provider-backed work items are available. Refresh the GitHub issue surface, then reopen this guide.'}
+            {vocab(providerState === 'loading' ? 'Loading provider-backed issues and pull requests…' : providerState === 'unavailable' ? 'Provider-backed work items are unavailable. Check the approved GitHub API capability, then reopen this guide.' : 'No provider-backed work items are available. Refresh the GitHub issue surface, then reopen this guide.')}
           </p>
         ) : filteredItems.map((item) => {
           const key = `${item.repository}#${item.number}`
@@ -176,17 +185,19 @@ export function GitHubWorkItemAttachmentDialog({
               onClick={() => setSelectedKey(key)}
             >
               <strong>{item.repository} #{item.number}</strong>
-              <span>{item.title || 'Untitled work item'}</span>
-              <small>{item.kind === 'pull-request' ? 'Pull request' : 'Issue'} · {item.state}</small>
+              <span>{item.title || vocab('Untitled work item')}</span>
+              <small>{mapOwnedSentence(vocab, [copy(item.kind === 'pull-request' ? 'Pull request' : 'Issue'), copy(' · '), fact(item.state)])}</small>
             </button>
           )
         })}
       </div>
       {selected && (
         <div className="github-work-item-attachment-dialog__review" role="status">
-          <strong>Review before attach</strong>
-          <span>{selected.repository} #{selected.number}: {selected.title}</span>
-          <span>{adopt ? `Exact head ref ${selected.headRef} matches frame branch ${frameBranch}.` : 'No exact head-ref adoption was established. This will remain an explicit node attachment.'}</span>
+          <strong>{vocab('Review before attach')}</strong>
+          <span>{mapOwnedSentence(vocab, [fact(selected.repository), copy(' #'), fact(String(selected.number)), copy(': '), fact(selected.title)])}</span>
+          <span>{adopt
+            ? mapOwnedSentence(vocab, [copy('Exact head ref '), fact(selected.headRef ?? ''), copy(' matches frame branch '), fact(frameBranch ?? ''), copy('.')])
+            : vocab('No exact head-ref adoption was established. This will remain an explicit node attachment.')}</span>
         </div>
       )}
     </Dialog>

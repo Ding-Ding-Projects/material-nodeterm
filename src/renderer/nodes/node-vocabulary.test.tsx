@@ -2,6 +2,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { usePersonalVocabulary } from '../state/personalVocabulary'
 import { useSchoolMode } from '../state/schoolMode'
 import { BrowserStartPage } from './BrowserStartPage'
@@ -170,5 +172,28 @@ describe('node renderer personal vocabulary boundaries', () => {
     act(() => root.render(<DiscardedPlate restoring />))
     expect(host.textContent).toContain('Reopening…')
     expect(host.textContent).not.toContain('Opening again…')
+  })
+
+  it('keeps dynamic media, provider, lifecycle, model, and AWS facts outside mapped prose', () => {
+    const map = (value: string) => value.replace('Select', 'Pick').replace('Open', 'Launch').replace('Run', 'Start')
+    expect(mapAroundExactFacts('Select ./assets/media/abc123.jpg', ['./assets/media/abc123.jpg'], map)).toBe('Pick ./assets/media/abc123.jpg')
+    expect(mapAroundExactFacts('Open Open WebUI at http://127.0.0.1:8080', ['Open WebUI', 'http://127.0.0.1:8080'], map)).toBe('Launch Open WebUI at http://127.0.0.1:8080')
+    expect(mapAroundExactFacts('Run AWS ec2:DescribeInstances in us-east-1', ['AWS', 'ec2:DescribeInstances', 'us-east-1'], map)).toBe('Start AWS ec2:DescribeInstances in us-east-1')
+  })
+
+  it('registers every remaining node copy surface at an exact mapper boundary', () => {
+    const contracts = [
+      ['PhotoNode.tsx', ["vocab('Close')", "vocab('Loading photo…')", "vocab('No photo selected.')"]],
+      ['GalleryNode.tsx', ["vocab('Gallery preview')", "vocab('Remove selected')", 'mapAroundExactFacts(`Select ${asset.portablePath}`']],
+      ['KioskPwaNode.tsx', ["vocab('Retry')", "vocab('This session is unavailable on this host."]],
+      ['GitLabHostingNode.tsx', ["mapAroundExactFacts('GitLab hosting'", "vocab('Rename')"]],
+      ['OpenWebUiHostingNode.tsx', ["copy('Open WebUI hosting'", "copy('Deploy / start')", "copy('Cancel')"]],
+      ['ShopNode.tsx', ["copy('Search AWS services'", "copy('Run modeled operation')", "copy('AWS operation preview'"]]
+    ] as const
+    for (const [file, needles] of contracts) {
+      const source = readFileSync(join(__dirname, file), 'utf8')
+      expect(source, `${file} must import the mapper`).toMatch(/useVocabularyMapper/)
+      for (const needle of needles) expect(source, `${file} missing exact mapper boundary ${needle}`).toContain(needle)
+    }
   })
 })

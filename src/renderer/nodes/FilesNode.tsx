@@ -34,6 +34,8 @@ import { useProjects } from '../state/projects'
 import { promptDialog } from '../components/promptDialog'
 import { ContextMenu, type MenuItem } from '../components/ContextMenu'
 import { isBrowserRuntime } from '../bridge/runtime'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
 /** Surface a transient error the way every other node does (Canvas listens for this). */
 const toast = (message: string): void => {
@@ -42,11 +44,11 @@ const toast = (message: string): void => {
 
 function EntryGlyph({ dir }: { dir: boolean }) {
   return dir ? (
-    <svg className="files-node__glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <svg aria-hidden="true" className="files-node__glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
       <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
     </svg>
   ) : (
-    <svg className="files-node__glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <svg aria-hidden="true" className="files-node__glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
       <path d="M6 3h8l4 4v14H6z" />
       <path d="M14 3v4h4" />
     </svg>
@@ -54,6 +56,7 @@ function EntryGlyph({ dir }: { dir: boolean }) {
 }
 
 export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { updateNodeData, deleteElements, setNodes } = useReactFlow()
   const [showColors, setShowColors] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -140,29 +143,31 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const create = useCallback(
     async (dir: string, kind: 'file' | 'folder') => {
       const name = await promptDialog({
+        // InputDialog owns this prompt's vocabulary boundary. Keep its copy raw here so the
+        // singleton host maps it exactly once while the submitted name remains user data.
         message: kind === 'file' ? 'New file name:' : 'New folder name:',
         confirmLabel: 'Create'
       })
       if (name === null) return
       const target = newEntryPath(dir, name)
       if (!target) {
-        toast('That name cannot be used.')
+        toast(vocab('That name cannot be used.'))
         return
       }
       if (await fs.exists(target)) {
-        toast(`${name.trim()} already exists.`)
+        toast(mapOwnedSentence(vocab, [fact(name.trim()), copy(' already exists.')]))
         return
       }
       // A nested name ("a/b/c.ts") needs its intermediate directories first — mkdir is recursive,
       // so one call on the deepest one is enough.
       const parents = ancestorDirs(dir, name)
       if (parents.length && !(await fs.mkdir(parents[parents.length - 1]))) {
-        toast('Could not create that folder.')
+        toast(vocab('Could not create that folder.'))
         return
       }
       const ok = kind === 'folder' ? await fs.mkdir(target) : await fs.write(target, '')
       if (!ok) {
-        toast(kind === 'folder' ? 'Could not create that folder.' : 'Could not create that file.')
+        toast(vocab(kind === 'folder' ? 'Could not create that folder.' : 'Could not create that file.'))
         return
       }
       setVersion((v) => v + 1)
@@ -172,7 +177,7 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
         )
       }
     },
-    [fs, isSshFs]
+    [fs, isSshFs, vocab]
   )
 
   const openMenu = useCallback(
@@ -183,11 +188,11 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
       const dir = entry ? createTargetDir(path, entry.dir) : cwd
       const items: MenuItem[] = []
       if (entry) {
-        items.push({ label: entry.dir ? 'Open folder' : 'Open', onClick: () => open(entry) })
+        items.push({ label: vocab(entry.dir ? 'Open folder' : 'Open'), onClick: () => open(entry) })
       }
       if (!entry || entry.dir) {
         items.push({
-          label: 'New terminal here',
+          label: vocab('New terminal here'),
           onClick: () =>
             window.dispatchEvent(
               new CustomEvent('nodeterm:open-terminal', { detail: { cwd: entry ? path : cwd } })
@@ -195,19 +200,19 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
         })
       }
       items.push({ type: 'separator' })
-      items.push({ label: 'New file…', onClick: () => void create(dir, 'file') })
-      items.push({ label: 'New folder…', onClick: () => void create(dir, 'folder') })
+      items.push({ label: vocab('New file…'), onClick: () => void create(dir, 'file') })
+      items.push({ label: vocab('New folder…'), onClick: () => void create(dir, 'folder') })
       items.push({ type: 'separator' })
       items.push({
-        label: 'Copy path',
+        label: vocab('Copy path'),
         onClick: () => api.clipboard.writeText(path)
       })
       if (canReveal) {
-        items.push({ label: 'Reveal in file manager', onClick: () => api.shell.reveal(path) })
+        items.push({ label: vocab('Reveal in file manager'), onClick: () => api.shell.reveal(path) })
       }
       setMenu({ x: e.clientX, y: e.clientY, items })
     },
-    [cwd, open, create, api, canReveal]
+    [cwd, open, create, api, canReveal, vocab]
   )
 
   const toggleCollapse = () =>
@@ -243,13 +248,15 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
       />
 
       <div className="files-node__header" style={{ background: `${data.color}22` }}>
-        <button className="term-node__collapse" title={collapsed ? 'Expand' : 'Collapse'} onClick={toggleCollapse}>
+        <button type="button" className="term-node__collapse" title={vocab(collapsed ? 'Expand' : 'Collapse')} aria-label={vocab(collapsed ? 'Expand files node' : 'Collapse files node')} onClick={toggleCollapse}>
           {collapsed ? '▸' : '▾'}
         </button>
         <button
+          type="button"
           className="term-node__color"
           style={{ background: data.color as string }}
-          title="Color"
+          title={vocab('Color')}
+          aria-label={vocab('Choose node color')}
           onClick={() => setShowColors((v) => !v)}
         />
         {showColors && (
@@ -258,6 +265,8 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
               <button
                 key={c}
                 style={{ background: c }}
+                type="button"
+                aria-label={mapOwnedSentence(vocab, [copy('Color '), fact(c)])}
                 onClick={() => {
                   updateNodeData(id, { color: c })
                   setShowColors(false)
@@ -270,6 +279,7 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <input
             className="term-node__title nodrag"
             value={(data.title as string) ?? ''}
+            aria-label={vocab('File node title')}
             spellCheck={false}
             autoFocus
             // A hand rename stops the title tracking the folder — same contract as an agent
@@ -290,10 +300,19 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
         ) : (
           <span
             className="term-node__title-text nodrag"
-            title="Click to rename"
+            title={vocab('Click to rename')}
+            role="button"
+            tabIndex={0}
             onClick={() => {
               setTitleBefore((data.title as string) ?? '')
               setEditingTitle(true)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setTitleBefore((data.title as string) ?? '')
+                setEditingTitle(true)
+              }
             }}
           >
             {(data.title as string) || folderTitle(cwd)}
@@ -303,7 +322,8 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
         {!editingTitle && <span className="term-node__spacer" />}
         <button
           className="files-node__btn nodrag"
-          title="Up one folder"
+          title={vocab('Up one folder')}
+          aria-label={vocab('Up one folder')}
           disabled={cwd === '/'}
           onClick={() => navigate(parentDir(cwd))}
         >
@@ -311,12 +331,13 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
         </button>
         <button
           className="files-node__btn nodrag"
-          title="Refresh"
+          title={vocab('Refresh')}
+          aria-label={vocab('Refresh')}
           onClick={() => setVersion((v) => v + 1)}
         >
           ⟳
         </button>
-        <button className="term-node__close" title="Close" onClick={() => deleteElements({ nodes: [{ id }] })}>
+        <button type="button" className="term-node__close" title={vocab('Close')} aria-label={vocab('Close files node')} onClick={() => deleteElements({ nodes: [{ id }] })}>
           ×
         </button>
       </div>
@@ -329,7 +350,7 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
                 {/* No separator after the ROOT crumb — its own label is already "/", and a
                     separator there renders the doubled "/ / …" this replaced. */}
                 {i > 0 && crumbs[i - 1].name !== '/' && <span className="files-node__sep">/</span>}
-                <button className="files-node__crumb" title={c.path} onClick={() => navigate(c.path)}>
+                <button type="button" className="files-node__crumb" title={c.path} aria-label={mapOwnedSentence(vocab, [copy('Open folder '), fact(c.path)])} onClick={() => navigate(c.path)}>
                   {c.name}
                 </button>
               </span>
@@ -342,8 +363,8 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
               className="files-node__filter"
               type="search"
               value={search.value}
-              placeholder={search.mode === 'regex' ? 'Filter files… (regex)' : 'Filter files…'}
-              aria-label="Filter files"
+              placeholder={vocab(search.mode === 'regex' ? 'Filter files… (regex)' : 'Filter files…')}
+              aria-label={vocab('Filter files')}
               spellCheck={false}
               onChange={(e) => search.setValue(e.target.value)}
               onKeyDown={(e) => {
@@ -353,7 +374,7 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
                 }
               }}
             />
-            <AnchoredRegexBuilder search={search} fieldRef={searchRef} label="Regex builder for Files node filter" />
+            <AnchoredRegexBuilder search={search} fieldRef={searchRef} label={vocab('Regex builder for Files node filter')} />
           </div>
           {search.error && <p className="files-node__search-error" role="alert">{search.error}</p>}
 
@@ -366,21 +387,30 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
                 collapsing any of them into a blank pane is exactly the failure this repo's
                 house rules call out. */}
             {entries === null ? (
-              <div className="files-node__empty">Loading…</div>
+              <div className="files-node__empty">{vocab('Loading…')}</div>
             ) : error ? (
-              <div className="files-node__empty files-node__empty--error">{error}</div>
+              <div className="files-node__empty files-node__empty--error">{vocab(error)}</div>
             ) : entries.length === 0 ? (
-              <div className="files-node__empty">This folder is empty.</div>
+              <div className="files-node__empty">{vocab('This folder is empty.')}</div>
             ) : shown.length === 0 ? (
-              <div className="files-node__empty">Nothing matches “{search.value.trim()}”.</div>
+              <div className="files-node__empty">{mapOwnedSentence(vocab, [copy('Nothing matches “'), fact(search.value.trim()), copy('”.')])}</div>
             ) : (
               shown.map((entry) => (
                 <div
                   key={entry.name}
                   className={`files-node__row${entry.ignored ? ' is-ignored' : ''}`}
                   title={childPath(cwd, entry.name)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={mapOwnedSentence(vocab, [copy(entry.dir ? 'Open folder ' : 'Open file '), fact(entry.name)])}
                   onClick={() => open(entry)}
                   onContextMenu={(e) => openMenu(e, entry)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      open(entry)
+                    }
+                  }}
                 >
                   <EntryGlyph dir={entry.dir} />
                   <span className="files-node__name">{entry.name}</span>

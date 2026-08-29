@@ -7,6 +7,8 @@ import type {
 } from '@shared/project-settings'
 import { oneLine } from '@shared/one-line'
 import { ConfirmDialog } from './ConfirmDialog'
+import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '@renderer/lib/personalVocabulary/ownedCopy'
 
 /**
  * THE TRUST GATE for a git-shared setup/archive script — the last thing between a cloned repo's
@@ -119,6 +121,7 @@ export function SetupConsentDialog(): React.JSX.Element | null {
   // the re-render drops the head — main treats an unknown/stale id as a no-op, but a second answer
   // must never leave this component in the first place.
   const answeredRef = useRef<Set<string>>(new Set())
+  const vocab = useVocabularyMapper()
 
   useEffect(() => {
     const api = window.nodeTerminal.projectSetup
@@ -159,21 +162,18 @@ export function SetupConsentDialog(): React.JSX.Element | null {
   const view =
     head.family === 'agents'
       ? {
-          message: `Use the shared agent launch settings for "${name}"?`,
           confirmLabel: 'Approve',
           changed: 'These settings have changed since you approved them for this project.',
           intro: (
             <>
-              They come from the project&apos;s shared <code>.nodeterm/settings.json</code>, so anyone
-              who can commit to the repo can change them. One answer covers the launch command and
-              every variable below.
+              {vocab("They come from the project's shared")} <code>.nodeterm/settings.json</code>{vocab(', so anyone who can commit to the repo can change them. One answer covers the launch command and every variable below.')}
             </>
           ),
           detail: (
             <>
               {head.launchCmd !== undefined ? (
                 <div className="space-y-1">
-                  <p className="text-[12px] font-semibold text-text">Launch command</p>
+                  <p className="text-[12px] font-semibold text-text">{vocab('Launch command')}</p>
                   {/* Text child, never markup — and never truncated: this is what is approved. */}
                   <pre
                     style={BIDI_PIN}
@@ -186,7 +186,7 @@ export function SetupConsentDialog(): React.JSX.Element | null {
               ) : null}
               {head.env ? (
                 <div className="space-y-1">
-                  <p className="text-[12px] font-semibold text-text">Environment</p>
+                  <p className="text-[12px] font-semibold text-text">{vocab('Environment')}</p>
                   {/* Every pair, verbatim: an env var is code's blast radius (PATH/LD_PRELOAD), so
                       it is inside the hash and must be inside the question. The whole ROW is pinned
                       to byte order, key included — a `KEY=value` line that renders in some other
@@ -207,19 +207,16 @@ export function SetupConsentDialog(): React.JSX.Element | null {
         }
       : head.family === 'shell'
         ? {
-            message: `Use the shared terminal shell for "${name}"?`,
             confirmLabel: 'Approve',
             changed: 'This setting has changed since you approved it for this project.',
             intro: (
               <>
-                It comes from the project&apos;s shared <code>.nodeterm/settings.json</code>, so anyone
-                who can commit to the repo can change it. Every terminal you open for this project
-                starts this program.
+                {vocab("It comes from the project's shared")} <code>.nodeterm/settings.json</code>{vocab(', so anyone who can commit to the repo can change it. Every terminal you open for this project starts this program.')}
               </>
             ),
             detail: (
               <div className="space-y-1">
-                <p className="text-[12px] font-semibold text-text">Shell</p>
+                <p className="text-[12px] font-semibold text-text">{vocab('Shell')}</p>
                 <pre
                   style={BIDI_PIN}
                   data-shell=""
@@ -231,13 +228,11 @@ export function SetupConsentDialog(): React.JSX.Element | null {
             )
           }
         : {
-            message: `Run the ${KIND_LABEL[head.kind].toLowerCase()} script for "${name}"?`,
             confirmLabel: 'Run once',
             changed: 'These scripts have changed since you approved them for this project.',
             intro: (
               <>
-                They come from the project&apos;s shared <code>.nodeterm/settings.json</code>, so
-                anyone who can commit to the repo can change them. One answer covers both.
+                {vocab("They come from the project's shared")} <code>.nodeterm/settings.json</code>{vocab(', so anyone who can commit to the repo can change them. One answer covers both.')}
               </>
             ),
             detail: (
@@ -245,7 +240,7 @@ export function SetupConsentDialog(): React.JSX.Element | null {
                 {orderedScripts(head).map((s) => (
                   <div key={s.kind} className="space-y-1">
                     <p className="text-[12px] font-semibold text-text">
-                      {KIND_LABEL[s.kind]} script{s.kind === head.kind ? ' (about to run)' : ''}
+                      {mapOwnedSentence(vocab, [fact(KIND_LABEL[s.kind]), copy(' script'), ...(s.kind === head.kind ? [copy(' (about to run)')] : [])])}
                     </p>
                     {/* Text child, never markup — and never truncated: this is what is being
                         approved. `BIDI_PIN` pins the DISPLAY order to the byte order, so a U+202E in
@@ -276,13 +271,20 @@ export function SetupConsentDialog(): React.JSX.Element | null {
         <div className="confirm__msg space-y-2">
           <p className="text-[13px] text-muted">{location}</p>
           {head.previouslyApproved ? (
-            <p className="text-[13px] text-[color:var(--warn)]">{view.changed}</p>
+            <p className="text-[13px] text-[color:var(--warn)]">{vocab(view.changed)}</p>
           ) : null}
           <p className="text-[13px] text-muted">{view.intro}</p>
           {view.detail}
         </div>
       }
-      message={view.message}
+      message=""
+      messageSegments={[
+        ...(head.family === 'agents'
+          ? [copy('Use the shared agent launch settings for "'), fact(name), copy('"?')]
+          : head.family === 'shell'
+            ? [copy('Use the shared terminal shell for "'), fact(name), copy('"?')]
+            : [copy('Run the '), fact(KIND_LABEL[head.kind].toLowerCase()), copy(' script for "'), fact(name), copy('"?')])
+      ]}
       confirmLabel={view.confirmLabel}
       cancelLabel="Skip"
       // The confirm button is the grant, so it carries the danger styling; no button takes focus.
