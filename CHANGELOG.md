@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Complete the Windows shutdown lifecycle by signaling and awaiting the exact detached Codex relay
+  child that the current application instance spawned. The bounded stop uses the retained child
+  handle rather than a pid scan or process-name match, so it cannot terminate an older relay or an
+  unrelated process. Persistent terminal backends and signed thread identity records remain intact
+  for the next launch.
+
+  補齊 Windows shutdown 最後一格：只會 signal 同等候目前 application instance 自己 spawn 嘅
+  detached Codex relay child。收尾有時限，而且用保留住嘅 child handle，唔會靠 pid scan 或
+  process name 撈魚，舊 relay 同無關 process 唔會俾人亂掂。Persistent terminal backend 同 signed
+  thread identity record 會保留，下一次開啟可以正常接返。
+
 - Fix the normal Windows title-bar close path so it enters the bounded application shutdown
   lifecycle immediately instead of waiting for every auxiliary window to disappear. The shutdown
   now closes the HUD, detaches persistent terminal clients, releases application-owned services and

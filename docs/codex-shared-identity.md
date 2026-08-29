@@ -20,6 +20,15 @@ The node ↔ thread mapping is what makes that survivable. It has to outlive the
 sessions do: a running Codex client can outlive the Electron process that started it, and after a
 restart nothing in memory knows whose conversation is whose.
 
+The local relay is detached from renderer and window lifetime, but it is not an unowned background
+service. A graceful desktop quit retains the exact spawned child handle, signals only that process,
+and awaits its exit inside the bounded shutdown flush. It never scans process names, parent trees,
+or pid files to find something to terminate. Signed thread identity records and the persistent
+terminal backend remain intact, so the next application launch rebuilds the route from durable
+identity rather than depending on an old application-owned process. An abrupt crash can still leave
+the detached relay alive; the exclusive relay lock lets the next instance reuse it instead of
+starting a competing listener.
+
 ### What it requires: an install channel, not a version
 
 `codex app-server daemon start` — the whole feature's foundation — runs the app-server out of a
@@ -405,10 +414,11 @@ come first. Items 1, 2 and 5 fall out of a single capture run on one fresh node.
    banner appears once, and **nothing is written into the pane**.
 6. **The session name.** Let codex name a thread, confirm the node title adopts it within a poll
    cycle, and confirm a hand-renamed node (`titleAuto` false) is left alone.
-7. **Restart and reboot.** Restart the app with Codex nodes running: the tmux clients survive, the
-   records are still trusted, and hooks from a Codex TOOL shell (which has only `CODEX_THREAD_ID`)
-   still move the right node's badge — that last one is the prelude, and it is only exercised by a
-   tool call, not by a plain turn.
+7. **Restart and reboot.** Restart the app with Codex nodes running: the persistent terminal
+   backend survives, the signed records are still trusted, and the relaunched client resumes the
+   same thread through a newly established relay route. Confirm that hooks from a Codex TOOL shell
+   (which has only `CODEX_THREAD_ID`) still move the right node's badge; that last part is the
+   prelude, and it is only exercised by a tool call, not by a plain turn.
 8. **Deletion prunes.** Delete a Codex node permanently and confirm its records are gone from
    `<userDataDir>/codex-thread-nodes/` while other nodes' remain.
 9. **Two nodes, one thread.** Point a second node at a thread the first still owns (a `resume` with

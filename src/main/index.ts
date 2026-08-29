@@ -418,6 +418,7 @@ import { registerWindowsTerminalProfileIpc } from './windows-terminal-profiles'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
 import { createStartupHealthTracker } from './startup-health'
 import { settleShutdownWithin } from './bounded-shutdown'
+import { stopOwnedCodexRelayProcess } from './codex-relay-lifecycle'
 import { TriggerArmStore } from '../core/trigger-arm-store'
 import { TriggerScheduler, type TriggerDeliveryResult } from '../core/trigger-scheduler'
 import { registerTriggerIpc, triggerIpcNotify } from '../core/trigger-ipc'
@@ -618,15 +619,18 @@ const windowsTerminalProfiles = new WindowsTerminalProfileService({
 })
 const ptyManager = new PtyManager({ terminalProfiles: windowsTerminalProfiles })
 let agentContinuationService: AgentContinuationService | undefined
-// One tiny detached relay is shared by every Codex node/account. Keeping it outside Electron
-// preserves live TUI connections across app restarts while the authenticated app-server remains
-// shared per account.
+// One tiny detached relay is shared by every Codex node/account. Keeping it outside the renderer
+// preserves live TUI connections through window and renderer restarts while the authenticated
+// app-server remains shared per account. A graceful application quit still signals this exact
+// retained child and awaits its bounded exit; persisted thread identity and terminal backends own
+// the later relaunch handoff, not an untracked process left behind.
 const codexRelayScript = app.isPackaged
   ? join(process.resourcesPath, 'codex-relay.js')
   : join(__dirname, 'codex-relay.js')
 hookServer.setCodexRelayRuntime(process.execPath, codexRelayScript)
-// Start/ensure the one persistent relay before the renderer can create a Codex node. The daemon's
-// exclusive lock makes concurrent app starts harmless; detached + unref keeps it alive on Cmd+Q.
+// Start/ensure the one relay before the renderer can create a Codex node. The daemon's exclusive
+// lock makes concurrent app starts harmless; detached + unref keeps renderer/window teardown from
+// killing it early, while the before-quit flush below owns its final bounded application shutdown.
 const codexRelayProcess = spawn(process.execPath, [codexRelayScript, 'serve'], {
   detached: true,
   stdio: 'ignore',
@@ -4937,6 +4941,7 @@ app.on('before-quit', (e) => {
   destroyNotchHud()
   const scheduledSettingsStop = scheduledSettingsRuntime.stop()
   const plannerStop = plannerRuntime.stop()
+  const codexRelayStop = stopOwnedCodexRelayProcess(codexRelayProcess)
   alarmPlannerRuntime.stop()
   triggerScheduler?.stop()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log
@@ -4986,7 +4991,8 @@ app.on('before-quit', (e) => {
     remoteWorkspaceIO.flush(),
     ptyManager.killAll(),
     scheduledSettingsStop,
-    plannerStop
+    plannerStop,
+    codexRelayStop
   ])
   void Promise.race([flush, new Promise((r) => setTimeout(r, 1500))])
     // Then let whisper go. A dictation still transcribing when Electron tears down the main
