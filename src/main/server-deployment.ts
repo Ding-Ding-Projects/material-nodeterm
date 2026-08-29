@@ -33,8 +33,17 @@ export function classifyComposeFailure(rawMessage: string): string {
     lower.includes('copy failed') ||
     lower.includes('dockerfile')
   ) {
-    const lastLine = message.split('\n').filter(Boolean).slice(-1)[0] ?? message
-    return `The server image failed to build: ${lastLine}`
+    const detail = message
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(
+        (line) =>
+          line.length > 0 &&
+          !line.startsWith('docker-desktop://') &&
+          !line.toLowerCase().startsWith('view build details:')
+      )
+      .slice(-1)[0] ?? message
+    return `The server image failed to build: ${detail}`
   }
   if (lower.includes('permission denied') || lower.includes('access is denied')) {
     return `Docker refused a required action (permission denied). Make sure Docker Desktop is running as the current user, then try again. (${message.split('\n').filter(Boolean).pop() ?? message})`

@@ -355,6 +355,11 @@
   frame adoption requires an exact match between provider head ref and app-owned worktree branch.
   Existing detail nodes remain lossless legacy records. No tests, builds, packaging, runtime interaction,
   reviews, audits, or captures were run in this ultra-speed lane.
+- Submit context-link notices immediately after an agent-to-agent drag instead of leaving the
+  notice in the target composer. The delivery now requests Enter explicitly and uses the unified
+  local, remote, and Windows session-host text-delivery path.
+- Preserve the actionable server-image build error in the device-deployment dialog instead of
+  replacing it with Docker Desktop's dashboard metadata URL.
 
 - Use a bounded Node HTTPS stream for the production immutable icon download, retaining the
   fetch-style injection seam for tests. The wrapper rejects redirects and invalid status or length,

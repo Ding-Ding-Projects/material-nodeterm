@@ -4483,7 +4483,8 @@ export function Canvas() {
           const { shimPath } = await window.nodeTerminal.contextLink.info()
           void api.pty.sendText(
             selfId,
-            buildContextLinkNote(agentIdOf(selfId), titleOf(otherId), shimPath)
+            buildContextLinkNote(agentIdOf(selfId), titleOf(otherId), shimPath),
+            { enter: true }
           )
         }
         void note(source, target)
@@ -4501,7 +4502,7 @@ export function Canvas() {
         (sticky?.data.text as string) ?? '',
         agentIdOf(target)
       )
-      if (msg) void api.pty.sendText(target, msg)
+      if (msg) void api.pty.sendText(target, msg, { enter: true })
     },
     [linkEndpointOf, agentIdOf, setLinkEdges, setNodes, markDirty, nodes]
   )

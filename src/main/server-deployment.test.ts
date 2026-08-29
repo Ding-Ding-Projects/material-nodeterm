@@ -55,6 +55,17 @@ describe('classifyComposeFailure', () => {
     expect(msg).toMatch(/^The server image failed to build:/)
   })
 
+  it('reports the build error instead of Docker Desktop dashboard metadata', () => {
+    const msg = classifyComposeFailure([
+      'failed to solve: process "npm run build" did not complete successfully: exit code: 1',
+      'View build details: docker-desktop://dashboard/build/default/default/abc123'
+    ].join('\n'))
+    expect(msg).toBe(
+      'The server image failed to build: failed to solve: process "npm run build" did not complete successfully: exit code: 1'
+    )
+    expect(msg).not.toContain('docker-desktop://')
+  })
+
   it('names a permission failure distinctly', () => {
     const msg = classifyComposeFailure('Error response from daemon: mkdir /var/lib/docker/volumes/x: permission denied')
     expect(msg).toMatch(/^Docker refused a required action/)
