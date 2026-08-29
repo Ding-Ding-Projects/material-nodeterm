@@ -570,6 +570,24 @@ export const IPC = {
   /** main/server → renderer: a streamed chat token/finish/error for the session named in the
    *  payload. One shared channel (not per-session) — the renderer filters by sessionId. */
   ollamaChatStream: 'ollama:chat-stream',
+  // Home Assistant multi-instance manager. Configuration, bindings and registry snapshots stay
+  // on the serving machine. Access tokens are write-only into the host vault and have no getter.
+  homeAssistantList: 'home-assistant:list',
+  homeAssistantCreate: 'home-assistant:create',
+  homeAssistantUpdate: 'home-assistant:update',
+  homeAssistantRemove: 'home-assistant:remove',
+  homeAssistantStatus: 'home-assistant:status',
+  homeAssistantSnapshot: 'home-assistant:snapshot',
+  homeAssistantRefresh: 'home-assistant:refresh',
+  homeAssistantConnect: 'home-assistant:connect',
+  homeAssistantDisconnect: 'home-assistant:disconnect',
+  homeAssistantSetToken: 'home-assistant:set-token',
+  homeAssistantTokenStatus: 'home-assistant:token-status',
+  homeAssistantBindings: 'home-assistant:bindings',
+  homeAssistantBind: 'home-assistant:bind',
+  homeAssistantUnbind: 'home-assistant:unbind',
+  homeAssistantCall: 'home-assistant:call',
+  homeAssistantUpdateEvent: 'home-assistant:update-event',
   // Local Minecraft server create-and-manage (docs/minecraft-server-manager.md). Registered on
   // BOTH shells over the same `platform.handle`/`platform.broadcast` seam as Ollama above, so it
   // manages whichever machine is actually running the shell. NOT carried over the relay (a peer

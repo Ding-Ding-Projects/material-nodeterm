@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { HomeAssistantApi } from '../../shared/home-assistant'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,28 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+export function buildHomeAssistantApi(client: RpcClient): Pick<NodeTerminalApi, 'homeAssistant'> {
+  const homeAssistant: HomeAssistantApi = {
+    list: () => client.request(IPC.homeAssistantList) as ReturnType<HomeAssistantApi['list']>,
+    create: (input) => client.request(IPC.homeAssistantCreate, input) as ReturnType<HomeAssistantApi['create']>,
+    update: (input) => client.request(IPC.homeAssistantUpdate, input) as ReturnType<HomeAssistantApi['update']>,
+    remove: (id) => client.request(IPC.homeAssistantRemove, id) as Promise<void>,
+    status: (id) => client.request(IPC.homeAssistantStatus, id) as ReturnType<HomeAssistantApi['status']>,
+    snapshot: (id) => client.request(IPC.homeAssistantSnapshot, id) as ReturnType<HomeAssistantApi['snapshot']>,
+    refresh: (id) => client.request(IPC.homeAssistantRefresh, id) as ReturnType<HomeAssistantApi['refresh']>,
+    connect: (id) => client.request(IPC.homeAssistantConnect, id) as ReturnType<HomeAssistantApi['connect']>,
+    disconnect: (id) => client.request(IPC.homeAssistantDisconnect, id) as Promise<void>,
+    setToken: (id, token) => client.request(IPC.homeAssistantSetToken, id, token) as Promise<void>,
+    tokenStatus: () => client.request(IPC.homeAssistantTokenStatus) as ReturnType<HomeAssistantApi['tokenStatus']>,
+    listBindings: (id) => client.request(IPC.homeAssistantBindings, id) as ReturnType<HomeAssistantApi['listBindings']>,
+    bind: (input) => client.request(IPC.homeAssistantBind, input) as ReturnType<HomeAssistantApi['bind']>,
+    unbind: (id) => client.request(IPC.homeAssistantUnbind, id) as Promise<void>,
+    call: (input) => client.request(IPC.homeAssistantCall, input) as ReturnType<HomeAssistantApi['call']>,
+    onUpdate: (listener) => client.subscribe(IPC.homeAssistantUpdateEvent, listener as Listener)
+  }
+  return { homeAssistant }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1398,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildHomeAssistantApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

@@ -13293,6 +13293,16 @@ export function Canvas() {
           content: bufferCache[n.id],
           run: () => goToNode(n)
         })
+        if (n.type === 'homeassistant') {
+          cmds.push({
+            id: `homeassistant-controls-${n.id}`,
+            label: `Open Home Assistant controls for ${n.data.title}`,
+            section: 'Opened service managers',
+            hint: 'discover instances entities domains services live state call',
+            icon: <IconTerminal />,
+            run: () => goToNode(n)
+          })
+        }
         // Keyboard-reachable equivalent to right-click → Edit appearance… (only terminal/agent
         // nodes carry a `data-appearance-id` anchor today — see TerminalNode.tsx). Focus the
         // node first so its header is actually mounted before the anchor lookup, matching the

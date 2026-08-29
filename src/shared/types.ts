@@ -1,5 +1,6 @@
 import { DEFAULT_WORD_SEPARATORS } from './word-separators'
 import type { ServiceConnection } from './node-exec'
+import type { HomeAssistantLocalBinding, HomeAssistantNodeIntent } from './home-assistant'
 import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
 // Types shared across the main, preload, and renderer processes.
 
@@ -514,6 +515,10 @@ export interface CanvasNodeState {
    * reasons. It never carries a secret; see `ServiceConnection` in shared/node-exec.ts.
    */
   serviceConnection?: ServiceConnection
+  /** Safe Home Assistant service intent that may travel with a portable project. */
+  homeAssistantIntent?: HomeAssistantNodeIntent
+  /** Machine-local Home Assistant binding. It is stripped from shared project files. */
+  homeAssistantBinding?: HomeAssistantLocalBinding
   /**
    * nsis-only, GIT-SHARED: the installer's description (app name, version, publisher, output
    * filename, install root, shortcut/uninstaller/compression choices). Nothing here names a
@@ -3796,6 +3801,8 @@ export interface NodeTerminalApi {
   converter: import('./converter').ConverterApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Home Assistant multi-instance REST/WebSocket manager. */
+  homeAssistant: import('./home-assistant').HomeAssistantApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
   ssh: SshApi

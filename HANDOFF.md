@@ -1459,3 +1459,31 @@ switcher and FAB menu on a real screen — nothing above substitutes for that. T
 the `.mc-console` styling defect and the two atomic-write violations found above are worth a
 one-line fix before the next release, since both are small, both are diagnosed, and neither
 requires touching anything MD3-specific to correct.
+## 2026-08-26, Home Assistant Control node lane (#27)
+
+Implemented the canvas Home Assistant Control node surface in the assigned `feat/program-16`
+checkout. `src/shared/home-assistant.ts` defines bounded catalog, entity, service-schema, typed
+field, permission, preview and call-result contracts, plus normalization and final payload
+validation. `src/renderer/components/homeassistant/HomeAssistantControlPanel.tsx` adds endpoint and
+opaque vault-key configuration, independently searchable instance/entity/domain/service pickers,
+anchored regex builders, schema-driven boolean/number/duration/colour/select/entity/text controls,
+an explicit unknown-schema fallback, live state refresh, permission-aware disabled states and a
+reviewable call confirmation surface. `ServiceNode.tsx` now mounts it for `homeassistant` nodes.
+
+`homeAssistantIntent` is portable schema 3 data limited to safe domain and service intent. The
+endpoint, credential key, instance binding and entity binding are machine-local; the existing
+node-exec overlay now strips, validates, stores and restores the binding without allowing it into
+the shared project file. Documentation and roadmap entries describe the host-bridge boundary and
+the explicit Configure/Rebind path on another machine.
+
+The standalone feature article is [`docs/features/integrations/home-assistant-controls.md`](docs/features/integrations/home-assistant-controls.md).
+The generated in-app docs module still needs regeneration through
+`scripts/build-docs-bundle.mjs`.
+
+The Electron and Server Edition host bridges now register the p15 multi-instance client and its
+structured call channel. Relay tabs receive a refusal stub because their peer must not reach the
+host vault or service calls. The generated in-app docs module still needs regeneration through
+`scripts/build-docs-bundle.mjs`; builds, packaging, runtime interaction, tests, captures, release
+publication and issue closeout are not included here and remain for the parent integration lane.
+No tests, type checks, lint, reviews, security checks, builds, packaging, installer execution, UI
+interaction or captures were run. No commit or dew was made by this lane.

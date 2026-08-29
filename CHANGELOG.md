@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add Home Assistant Control canvas nodes with a bounded schema-driven catalog, typed domain/service
+  controls, searchable instance and entity pickers, live state refresh, permission-aware disabled
+  states, and review-before-call confirmation. Safe domain/service intent is portable in schema 3;
+  endpoints, bindings, credentials and live state remain local. Host bridge registration and all
+  verification evidence remain pending for the parent integration lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

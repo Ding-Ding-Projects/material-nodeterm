@@ -13518,3 +13518,31 @@ body.focus-mode .dock:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Home Assistant control node. The panel uses the same M3 field and button primitives as the
+   rest of the canvas, while keeping every picker and schema field readable in a narrow node. */
+.homeassistant-node__body { display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow: auto; max-height: 100%; color: var(--md-on-surface); }
+.homeassistant-node__section { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--md-outline-variant); border-radius: 16px; background: var(--md-surface-container-low); }
+.homeassistant-node__section-title { font-size: 13px; font-weight: 700; color: var(--md-on-surface); }
+.homeassistant-node__field, .homeassistant-node__picker { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.homeassistant-node__label { font-size: 11px; font-weight: 700; color: var(--md-on-surface-variant); }
+.homeassistant-node__control { width: 100%; }
+.homeassistant-node__search-row { display: flex; gap: 5px; align-items: center; min-width: 0; }
+.homeassistant-node__search-row > input { min-width: 0; flex: 1; }
+.homeassistant-node__search-row .md3-regex-trigger { flex: 0 0 32px; }
+.homeassistant-node__hint { margin: 0; color: var(--md-on-surface-variant); font-size: 10px; line-height: 1.35; }
+.homeassistant-node__empty, .homeassistant-node__notice, .homeassistant-node__warning, .homeassistant-node__error { margin: 0; padding: 8px 10px; border-radius: 12px; font-size: 11px; line-height: 1.4; }
+.homeassistant-node__empty { color: var(--md-on-surface-variant); background: var(--md-surface-container); }
+.homeassistant-node__notice { color: var(--md-on-primary-container); background: var(--md-primary-container); }
+.homeassistant-node__warning { color: var(--md-on-tertiary-container); background: var(--md-tertiary-container); }
+.homeassistant-node__error { color: var(--md-on-error-container); background: var(--md-error-container); }
+.homeassistant-node__schema { display: flex; flex-direction: column; gap: 9px; padding-top: 4px; }
+.homeassistant-node__state { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; padding-top: 8px; border-top: 1px solid var(--md-outline-variant); }
+.homeassistant-node__state span, .homeassistant-node__state small { color: var(--md-on-surface-variant); font-size: 11px; }
+.homeassistant-node__state small { grid-column: 1 / -1; }
+.homeassistant-node__state button { grid-column: 1 / -1; justify-self: start; }
+.homeassistant-node__confirmation { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 2px solid var(--md-primary); border-radius: 16px; background: var(--md-surface-container-high); box-shadow: var(--md-elevation-3, 0 8px 24px rgba(0,0,0,.25)); }
+.homeassistant-node__confirmation p { margin: 0; font-size: 11px; line-height: 1.4; }
+.homeassistant-node__confirmation pre { margin: 0; max-height: 160px; overflow: auto; padding: 8px; border-radius: 8px; background: var(--md-surface-container); color: var(--md-on-surface); font: 10px/1.4 var(--font-mono, monospace); white-space: pre-wrap; word-break: break-word; }
+.homeassistant-node__actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.homeassistant-node__bulk { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.homeassistant-node__token-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }

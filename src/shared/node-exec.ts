@@ -29,6 +29,7 @@
 import { BUILTIN_AGENT_IDS, isPermissionMode } from './agents/config'
 import { sshExtraArgsEnableLocalExec } from './ssh'
 import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from './types'
+import type { HomeAssistantLocalBinding } from './home-assistant'
 import type { NsisLocalPaths } from './nsis-form-types'
 
 /** Per-node exec values the LOCAL machine typed. Persisted only in the machine-local index. */
@@ -59,6 +60,8 @@ export interface LocalNodeExec {
    * endpoint with a password embedded in it is refused rather than stored.
    */
   serviceConnection?: ServiceConnection
+  /** Home Assistant instance/entity selection for this machine, never a shared project value. */
+  homeAssistantBinding?: HomeAssistantLocalBinding
   /**
    * `NodeState.nsisLocalPaths` — the NSIS installer-builder node's source/license/icon paths on
    * this machine. Belongs on this boundary for the same reason `serviceConnection` does: it is
@@ -315,6 +318,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
     n.terminalProfileId === undefined &&
     n.pendingLaunch === undefined &&
     n.serviceConnection === undefined &&
+    n.homeAssistantBinding === undefined &&
     n.nsisLocalPaths === undefined &&
     n.ssh?.extraArgs === undefined &&
     n.ssh?.execTrusted === undefined
@@ -325,6 +329,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   delete out.terminalProfileId
   delete out.pendingLaunch
   delete out.serviceConnection
+  delete out.homeAssistantBinding
   delete out.nsisLocalPaths
   if (out.ssh) {
     // `execTrusted` goes with the value it vouches for. It is a MACHINE-LOCAL provenance marker:
@@ -356,6 +361,19 @@ export function stripSharedNodeExec(nodes: CanvasNodeState[]): CanvasNodeState[]
  */
 export function sanitizeInboundNode(node: CanvasNodeState): CanvasNodeState {
   return stripNodeExec(node)
+}
+
+const SAFE_HA_INSTANCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/
+const SAFE_HA_ENTITY_ID = /^[a-z0-9_]+\.[a-z0-9_]+$/i
+
+/** Keep only a discovered Home Assistant binding. Unknown or malformed values are unbound. */
+function safeHomeAssistantBinding(value: unknown): HomeAssistantLocalBinding | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const raw = value as Record<string, unknown>
+  const out: HomeAssistantLocalBinding = {}
+  if (typeof raw.instanceId === 'string' && SAFE_HA_INSTANCE_ID.test(raw.instanceId)) out.instanceId = raw.instanceId
+  if (typeof raw.entityId === 'string' && SAFE_HA_ENTITY_ID.test(raw.entityId)) out.entityId = raw.entityId
+  return out.instanceId || out.entityId ? out : undefined
 }
 
 /**
@@ -412,12 +430,14 @@ export function carryLocalNodeExec(
   const extraArgs = prev.ssh?.extraArgs
   const pendingLaunch = next.kind === 'terminal' ? clonePendingLaunch(prev.pendingLaunch) : undefined
   const nsisPaths = safeNsisLocalPaths(prev.nsisLocalPaths)
+  const homeAssistantBinding = safeHomeAssistantBinding(prev.homeAssistantBinding)
   if (
     prev.shell === undefined &&
     prev.terminalProfileId === undefined &&
     extraArgs === undefined &&
     pendingLaunch === undefined &&
     nsisPaths === undefined
+    && homeAssistantBinding === undefined
   )
     return next
   const out: CanvasNodeState = { ...next }
@@ -427,6 +447,7 @@ export function carryLocalNodeExec(
     out.ssh = { ...out.ssh, extraArgs, execTrusted: prev.ssh?.execTrusted }
   if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
   if (nsisPaths !== undefined) out.nsisLocalPaths = nsisPaths
+  if (homeAssistantBinding !== undefined) out.homeAssistantBinding = homeAssistantBinding
   return out
 }
 
@@ -471,6 +492,8 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     // endpoint into the trusted store — the exact laundering `sanitizeInboundNode` exists to stop.
     const conn = safeServiceConnection(n.serviceConnection)
     if (conn) entry.serviceConnection = conn
+    const binding = safeHomeAssistantBinding(n.homeAssistantBinding)
+    if (binding) entry.homeAssistantBinding = binding
     const nsisPaths = safeNsisLocalPaths(n.nsisLocalPaths)
     if (nsisPaths) entry.nsisLocalPaths = nsisPaths
     if (
@@ -479,6 +502,7 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
       entry.sshExtraArgs ||
       entry.pendingLaunch ||
       entry.serviceConnection ||
+      entry.homeAssistantBinding ||
       entry.nsisLocalPaths
     )
       map[n.id] = entry
@@ -516,6 +540,8 @@ export function applyLocalNodeExec(
     // that would be refused today must not be honoured merely because it is already on disk.
     const conn = safeServiceConnection(mine?.serviceConnection)
     if (conn) out.serviceConnection = conn
+    const binding = safeHomeAssistantBinding(mine?.homeAssistantBinding)
+    if (binding) out.homeAssistantBinding = binding
     const nsisPaths = safeNsisLocalPaths(mine?.nsisLocalPaths)
     if (nsisPaths) out.nsisLocalPaths = nsisPaths
     return out

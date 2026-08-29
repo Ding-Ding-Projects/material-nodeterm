@@ -1,10 +1,11 @@
-# Service nodes (manager placeholders)
+# Service nodes and Home Assistant controls
 
-Status: **implemented as canvas objects; not yet connected to anything.** This is the honest
-midpoint between "planned" and "working": the node exists, drags and resizes and persists like
-any other node, and it stores where it would reach a service — but nothing dials that address yet.
-Read this document alongside the "what does not work yet" section below before assuming a control
-does more than it says.
+Status: **implemented as canvas objects, with a real Home Assistant control surface.** The other
+service kinds still store and validate their local endpoint without dialing it. A Home Assistant
+node additionally consumes an optional trusted client bridge: it discovers the instance catalog,
+offers searchable typed controls, reads live entity state, and previews every write before asking
+for confirmation. When the bridge is absent, the node says so and keeps configuration available;
+it never renders a fake connection or a guessed catalog.
 
 ## The six kinds, and why one is called a manager and not a host
 
@@ -29,10 +30,8 @@ but the node itself, as shipped, is exactly as inert as its five siblings; see
 [`minecraft-server.md`](minecraft-server.md) for the researched design of the part that would
 actually create one.
 
-None of the six kinds appear in `docs/features/integrations/README.md`'s old "planned, not yet
-researched" list by accident of naming — they are the same six products that list already named.
-What changed is that the canvas object for each now exists; the research and the real client work
-for most of them has not started.
+The canvas object for each now exists. Home Assistant is the first member with a schema-driven
+control surface; the remaining client work is still explicitly documented below.
 
 ## Creating one
 
@@ -99,13 +98,16 @@ service nodes simply inherit it because they use the same colour helpers as ever
 
 ## What persists in the shared file, and what stays on this machine — and why
 
-A service node's persisted record has exactly two fields beyond the ordinary node shape
-(`id`, `kind`, `position`, `size`, `title`, `color`, `group`):
+A service node's persisted record has safe display and intent fields beyond the ordinary node shape
+(`id`, `kind`, `position`, `size`, `title`, `color`, `group`), while connection and binding fields
+remain machine-local:
 
 | field | where it lives | why |
 | --- | --- | --- |
 | `serviceLabel` | `.nodeterm/project.json` — the **shared**, git-committed canvas file | It is a display name the user typed for their own node (`"Home server"`, `"Home lab"`), with nothing about a machine or a credential in it. Sharing it is exactly as safe as sharing a terminal node's title. |
 | `serviceConnection` (`{ endpoint, credentialKey? }`) | the **machine-local** `workspace.json` index, keyed by node id (`IndexEntryV3.localExec.serviceConnection`) | It names a real address — a host, a port, sometimes an internal-network name — and for some kinds it is *exec-adjacent* (see below). None of that is meaningful, or safe, to hand to everyone who clones the project. |
+| `homeAssistantIntent` (`{ domain?, service? }`) | `.nodeterm/project.json`, schema 3 safe intent | It records what kind of service the user means without naming a host, instance or entity. |
+| `homeAssistantBinding` (`{ instanceId?, entityId? }`) | machine-local `workspace.json` index (`localExec`) | It identifies the local instance and entity selected from discovery. It is removed from shared files and re-bound on another computer. |
 
 This split exists because `.nodeterm/project.json` is **hostile input**, not a private settings
 file: it is git-shared, hand-editable, auto-adopted the moment someone opens the folder, and — for
@@ -121,7 +123,7 @@ retrofitted after one exists.
 The connection record is enforced at every boundary that could otherwise let a value in sideways
 (`src/shared/node-exec.ts`):
 
-- **`stripSharedNodeExec`** removes `serviceConnection` (along with `shell`, `terminalProfileId`,
+- **`stripSharedNodeExec`** removes `serviceConnection` and the Home Assistant binding (along with `shell`, `terminalProfileId`,
   `pendingLaunch`, and SSH's `extraArgs`/`execTrusted`) from every node before it is written to the
   shared project file — a strip, not a wipe, so everything else about the node (title, colour,
   position, the label) is untouched.
@@ -131,12 +133,13 @@ The connection record is enforced at every boundary that could otherwise let a v
   harvest whatever the peer set into *this* machine's own trusted index, silently re-attaching a
   stranger's endpoint as this machine's own on every future load.
 - **`localNodeExec`** — the collector that writes the machine-local index — re-validates the
-  connection with `safeServiceConnection` on the way **in**, not just the way out, because the live
+  connection and Home Assistant binding on the way **in**, not just the way out, because the live
   node it reads from can itself have been touched by a peer mutation moments earlier.
-- **`applyLocalNodeExec`** re-validates again with `safeServiceConnection` on the way the index is
-  read back out at load time, because `workspace.json` is still a file: a hand edit, a partial
-  write, or a record left behind by an older build can all reach this point, and a connection that
-  would be refused today is not grandfathered in merely because it is already on disk.
+- **`applyLocalNodeExec`** re-validates again with `safeServiceConnection` and the binding validator
+  on the way the index is read back out at load time, because `workspace.json` is still a file: a
+  hand edit, a partial write, or a record left behind by an older build can all reach this point,
+  and a value that would be refused today is not grandfathered in merely because it is already on
+  disk.
 
 ### Endpoint rules
 
@@ -199,23 +202,79 @@ field could ever store. `ssh://localhost` is: bare `ssh://` with no `user@` defa
 platform and every OS the same way the plain `ssh` command does, to whoever is currently logged in
 — there is nothing to branch on per platform and nothing to go and ask the OS for.
 
+## Home Assistant Control node
+
+The Home Assistant body is a guided, schema-driven manager in
+`src/renderer/components/homeassistant/HomeAssistantControlPanel.tsx`. It is intentionally not a
+raw request editor and never asks the user to invent an arbitrary shell command.
+
+### Discovery and safe local binding
+
+The address is validated with the same `safeServiceEndpoint` predicate used by the existing
+service-connection boundary. Embedded credentials are rejected. An optional credential vault key
+is only an opaque lookup name; the access token remains in the host's credential store and never
+crosses the renderer boundary. Press **Discover domains and entities** to ask the host bridge for a
+bounded `HomeAssistantCatalog` (`src/shared/home-assistant.ts`). The catalog carries a revision,
+refresh time, completeness flag, discovered instances, every discovered entity, and permission
+reasons. A partial response stays visibly partial rather than being presented as a complete list.
+
+Instances, entities, domains and services each use their own picker and local plain-text search.
+Every search has an adjacent anchored full regex builder. Unavailable entities and services remain
+listed and disabled with the reason returned by the host. A selected instance and entity are
+machine-local bindings, so reopening a project on another computer starts with an explicit
+Configure or Rebind action instead of contacting the old host or leaking its identity.
+
+### Rich service controls
+
+The selected service's fields come from its published schema. Boolean, bounded number and duration,
+colour, enumerated choice, entity, and text selectors render as their corresponding controls. Each
+choice picker has its own search and regex builder. Unknown or newly introduced selectors use a
+bounded text fallback labelled **Schema fallback value**; the UI never silently drops a field or
+turns the whole request into an unreviewed JSON box. Required fields and numeric bounds are checked
+again by `validateHomeAssistantServiceData` immediately before a call.
+
+### Live state and calls
+
+The selected entity's state is read on demand and refreshed on a bounded ten-second interval. The
+state text, availability and last-change time are shown beside a manual **Refresh state** action.
+Read-only or unavailable entities stay visible with their permission explanation. A service whose
+credential cannot call it is likewise visible but disabled.
+
+**Review service call** opens an in-node confirmation surface showing the exact instance, domain,
+service, entity and typed payload. Only **Confirm and call** invokes the host bridge. A successful
+call reports whether state changed, then refreshes the live state. A rejected or partial-permission
+call stays an error notification with its recovery text and never turns into a success message.
+
+### Host bridge contract
+
+The shared `HomeAssistantApi` exposes instance listing, snapshot refresh, live connection state,
+binding, and structured `call` operations. It accepts instance identifiers and typed payloads, but
+no token. The Electron or Server Edition host owns HTTP(S) validation, bounded response handling,
+timeout and redirect policy, token lookup, and the actual Home Assistant request. The relay surface
+deliberately exposes a refusal stub because a relay peer must not reach the host's vault or service
+calls.
+
+### Portable schema 3 boundary
+
+`homeAssistantIntent` carries only the safe domain and service intent in schema 3 project JSON.
+Endpoints, credential keys, instance ids, entity ids, live state, permission results, caches and
+host-specific identifiers remain machine-local. The intent is therefore safe to reopen elsewhere,
+where the user can Configure or Rebind without import performing a network call or mutation.
+
 ## What does not work yet
 
 State this plainly, because CLAUDE.md's rule against decorative controls cuts both ways: it forbids
 a control that *looks* wired and is not, and it equally forbids a document that implies more than
 the control actually does.
 
-- **Nothing dials the address.** The endpoint field validates and stores a URL; no code anywhere in
-  this repository opens a connection to it, tests it, or does anything with it beyond keeping it
-  around for a future feature to read.
+- **The other four unimplemented kinds do not dial their addresses.** Their endpoint fields still
+  validate and store a URL, but no client is attached to Docker, Proxmox, GitLab or FreePBX yet.
 - **There is no console.** `minecraft`, `dockerhost` and `proxmox` are sized as if a console will
   eventually live in their body (`SERVICE_CONSOLE_SIZE`), but the body today holds only the address
   field and two lines of static explanatory text — no terminal, no log tail, no command input.
-- **There is no status.** No online/offline indicator, no health check, no version, no resource
-  count. A service node cannot currently tell you whether the thing it names is even reachable.
-- **There is no credential UI.** `credentialKey` exists in the data model and in the storage/
-  validation boundary described above, but no control in `ServiceNode.tsx` sets one; there is
-  nowhere yet to pick or create a vault entry from the node itself.
+- **Home Assistant's host bridge is optional.** This lane defines and consumes the shared contract,
+  but a host build that has not registered `window.nodeTerminal.homeAssistant` cannot discover,
+  read or call. The node reports that exact capability gap and remains safe to configure.
 - **There is exactly one creation path** (the pane context menu's Managers submenu) — no
   command-palette entry, no dock button.
 

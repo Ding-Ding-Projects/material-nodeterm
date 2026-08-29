@@ -62,6 +62,12 @@ later commit, since this file will not be kept in lockstep with every merge).
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification
       remain outstanding.
 
+- [ ] **Home Assistant Control nodes (#27)**: schema-driven domain and service controls, searchable
+      instance/entity pickers, local binding separation, live state and reviewed calls now exist in
+      `src/shared/home-assistant.ts` and `src/renderer/components/homeassistant/`. Host bridge
+      registration, generated offline-doc bundle refresh, and the requested ultra-speed no-test
+      release evidence remain outstanding.
+
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the
       notification-filtering half of Low stimulation were wired 2026-08-20 (`d697f78f`). Still
@@ -155,7 +161,8 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
-- [ ] Add Home Assistant multi-instance controls and sensor displays.
+- [ ] Add Home Assistant multi-instance controls and sensor displays. The canvas Control node lane
+      is implemented in #27, but host registration and packaged verification remain outstanding.
 - [ ] Add Calendar, Timer, Alarm Clock, and planner occurrence services.
 
 ### Multiverse and AWS
