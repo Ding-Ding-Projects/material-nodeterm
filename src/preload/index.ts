@@ -311,6 +311,18 @@ const api: NodeTerminalApi = {
     transition: (id: string, state: string) => ipcRenderer.invoke(IPC.timerOccurrenceTransition, id, state),
     lap: (id: string, elapsedMs: number) => ipcRenderer.invoke(IPC.timerOccurrenceLap, id, elapsedMs)
   },
+  trigger: {
+    status: (projectId, nodeId) => ipcRenderer.invoke(IPC.triggerStatus, projectId, nodeId),
+    arm: (projectId, nodeId, spec) => ipcRenderer.invoke(IPC.triggerArm, projectId, nodeId, spec),
+    disarm: (projectId, nodeId) => ipcRenderer.invoke(IPC.triggerDisarm, projectId, nodeId),
+    runNow: (projectId, nodeId) => ipcRenderer.invoke(IPC.triggerRunNow, projectId, nodeId),
+    history: (projectId, nodeId) => ipcRenderer.invoke(IPC.triggerHistory, projectId, nodeId),
+    onChanged: (listener) => {
+      const handler = (_event: unknown, receipt: import('../shared/trigger').TriggerRunReceipt) => listener(receipt)
+      ipcRenderer.on(IPC.triggerChanged, handler)
+      return () => ipcRenderer.removeListener(IPC.triggerChanged, handler)
+    }
+  },
   serverDeployment: {
     start: () => ipcRenderer.invoke(IPC.serverDeploymentStart),
     currentTotp: () => ipcRenderer.invoke(IPC.serverDeploymentTotp),

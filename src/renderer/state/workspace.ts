@@ -112,6 +112,7 @@ const LINUX_VM_SIZE = { width: 760, height: 560 }
 const WINDOWS_DIAGNOSTICS_SIZE = { width: 760, height: 560 }
 const TIMER_SIZE = { width: 380, height: 360 }
 const ALARM_SIZE = { width: 380, height: 360 }
+const TRIGGER_SIZE = { width: 380, height: 320 }
 const OPEN_WEBUI_SIZE = { width: 680, height: 560 }
 const VERACRYPT_SIZE = { width: 700, height: 560 }
 const UNIGETUI_SIZE = { width: 520, height: 360 }
@@ -180,6 +181,8 @@ export interface NodeData {
   alarmNarratorEnabled?: boolean
   alarmNextOccurrenceAt?: number
   alarmHistory?: AlarmOccurrence[]
+  /** Trigger schedule and delivery definition. Arm state never enters renderer persistence. */
+  trigger?: import('@shared/trigger').TriggerSpec
   /** Agent nodes only: when true, this node's subagent/loop fan-out cards are hidden. */
   hideFanout?: boolean
   /** Expanded height to restore when un-collapsing (kept out of the persisted size). */
@@ -2582,6 +2585,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   'homeassistant-control': true,
   timer: true,
   alarm: true,
+  trigger: true,
   sticky: true,
   group: true,
   editor: true,
@@ -2647,6 +2651,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   'homeassistant-control': HOME_ASSISTANT_CONTROL_SIZE,
   timer: TIMER_SIZE,
   alarm: ALARM_SIZE,
+  trigger: TRIGGER_SIZE,
   sticky: STICKY_SIZE,
   group: GROUP_SIZE,
   editor: EDITOR_SIZE,
@@ -3101,6 +3106,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         alarmNarratorEnabled: n.alarmNarratorEnabled,
         alarmNextOccurrenceAt: n.alarmNextOccurrenceAt,
         alarmHistory: n.alarmHistory,
+        trigger: n.trigger,
         premaxRect: n.premaxRect,
         shell: n.shell,
         terminalProfileId: n.ssh ? undefined : n.terminalProfileId,
@@ -3266,6 +3272,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         alarmNarratorEnabled: n.data.alarmNarratorEnabled,
         alarmNextOccurrenceAt: n.data.alarmNextOccurrenceAt,
         alarmHistory: n.data.alarmHistory,
+        trigger: n.data.trigger,
         hideFanout: n.data.hideFanout,
         parentId: n.parentId,
         shell: n.data.shell,

@@ -345,6 +345,12 @@ export const IPC = {
   timerOccurrenceSchedule: 'timer:occurrence-schedule',
   timerOccurrenceTransition: 'timer:occurrence-transition',
   timerOccurrenceLap: 'timer:occurrence-lap',
+  triggerStatus: 'trigger:status',
+  triggerArm: 'trigger:arm',
+  triggerDisarm: 'trigger:disarm',
+  triggerRunNow: 'trigger:run-now',
+  triggerHistory: 'trigger:history',
+  triggerChanged: 'trigger:changed',
   workspaceSave: 'workspace:save',
   workspaceProbeFolder: 'workspace:probe-folder',
   /** Explicit split/join for a local project's storage encoding (project-parts.ts). See
