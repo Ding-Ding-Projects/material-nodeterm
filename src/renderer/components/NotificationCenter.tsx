@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNotifications, type AppNotification, type NotificationKind } from '../state/notifications'
 import { Checkbox } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { saveBlobDownload } from '../lib/exportSave'
 
 type FilterKind = 'all' | 'unread' | NotificationKind
 
@@ -70,16 +71,7 @@ export function notificationToExportRecord(
 }
 
 function downloadText(filename: string, text: string, mime: string): void {
-  const blob = new Blob([text], { type: mime })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  // Give the click a tick to start before revoking, then release the blob URL.
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  saveBlobDownload(new Blob([text], { type: mime }), filename)
 }
 
 export interface NotificationCenterProps {

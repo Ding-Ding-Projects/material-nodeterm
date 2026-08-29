@@ -21,6 +21,7 @@ import { SearchableRow } from '../SearchableRow'
 import { Select } from '@renderer/ui/Select'
 import { Radio } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { saveBlobDownload } from '../../../lib/exportSave'
 
 const ROW = {
   title: 'Authenticator',
@@ -417,15 +418,7 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
       const res = await window.nodeTerminal.authenticator.exportSecrets({ ids: entries.map((e) => e.id), confirmed: true })
       if (!res.ok) return
       const body = res.entries.map((e) => `${e.issuer} — ${e.account}\n${e.otpauthUri}\n`).join('\n')
-      const blob = new Blob([body], { type: 'text/plain' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'nodeterm-authenticator-secrets.txt'
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      saveBlobDownload(new Blob([body], { type: 'text/plain' }), 'nodeterm-authenticator-secrets.txt')
       setExportedFile('nodeterm-authenticator-secrets.txt')
       setShowExportGate(false)
     } finally {
