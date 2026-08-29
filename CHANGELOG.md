@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add the typed S3, EC2, IAM, STS, Lambda, CloudWatch, and Logs manager catalog plus the shared
+  schema executor. Forms reject unknown or unsafe values, permissions are checked before transport,
+  pagination, waiters, bounded streaming, retries, progress, cancellation, bulk outcomes, and
+  expiring destructive previews share one implementation. Runtime and packaging verification remain
+  pending for issue #46.
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

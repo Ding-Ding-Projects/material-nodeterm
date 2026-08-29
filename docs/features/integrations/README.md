@@ -6,11 +6,16 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 
 | feature | status |
 | --- | --- |
-| [Service nodes](service-nodes.md) | implemented as canvas objects (Minecraft, Docker host, Proxmox, GitLab, Home Assistant, FreePBX); none of them dial anything yet |
+| [Service nodes](service-nodes.md) | implemented as canvas objects (Minecraft, Docker host, Proxmox, GitLab, Home Assistant, FreePBX); the AWS manager layer is available to the AWS Universe wiring |
+| [AWS service managers](aws-managers.md) | typed S3, EC2, IAM, STS, Lambda, CloudWatch, and Logs operation catalog with one shared executor |
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |
 
 Planned, not yet researched here:
+
+- **AWS managers** — the typed core catalog and shared executor are implemented in
+  `src/core/aws`; canvas AWS Universe and Shop wiring, runtime verification, and captures remain
+  pending.
 
 - **Proxmox** — a MANAGER for an existing instance. It is a bare-metal hypervisor distribution, so
   there is nothing to host from a right-click; the node drives its API.

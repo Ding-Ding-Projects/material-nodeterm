@@ -1,5 +1,21 @@
 # Handoff
 
+## 2026-08-26, AWS service manager implementation
+
+Added `src/shared/aws-managers.ts` and `src/core/aws/{catalog.ts,schema-executor.ts,managers.ts,index.ts}`
+for the issue #46 lane. The catalog contains typed S3, EC2, IAM, STS, Lambda, CloudWatch, and Logs
+operations, including required permissions, pagination, waiter, stream, destructive, and bulk
+metadata. `AwsSchemaExecutor` validates fields and targets, checks permissions, retries only
+transient service errors with bounded backoff, preserves partial pages on cancellation, emits
+progress events, runs bounded waiters, streams bounded records, and requires a single-use expiring
+preview nonce for destructive actions. The service facades expose typed methods while sharing that
+executor. `toPortableIntent()` strips file handles, sensitive values, and other machine-local data.
+
+Added the categorized article `docs/features/integrations/aws-managers.md` and its integrations
+index row. The roadmap and changelog record the implementation as present but unverified. This lane
+did not run tests, type checks, lint, security checks, builds, packaging, installer execution,
+runtime interaction, or captures. No commit or dew was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through
