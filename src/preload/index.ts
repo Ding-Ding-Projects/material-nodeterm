@@ -23,7 +23,7 @@ import type {
 import type { ScheduledSettingsActiveState, ScheduledSettingsFile } from '../shared/scheduled-settings'
 import type { HistoryFilters } from '../shared/local-history'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
-import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
+import type { AdvancedPipelineQueueItem, AdvancedPipelineQueueState, ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
 
@@ -62,6 +62,8 @@ const subscribeConverterItem = subscribe<[ConvertQueueItem]>(IPC.converterItem)
 const subscribeConverterSummary = subscribe<
   [Pick<ConverterQueueState, 'running' | 'scanning' | 'concurrency' | 'total'>]
 >(IPC.converterSummary)
+const subscribeConverterAdvancedItem = subscribe<[AdvancedPipelineQueueItem]>(IPC.converterAdvancedItem)
+const subscribeConverterAdvancedSummary = subscribe<[{ running: boolean; active: number; queued: number; total: number }]>(IPC.converterAdvancedSummary)
 const subscribeOllamaPullItem = subscribe<[PullQueueItem]>(IPC.ollamaPullItem)
 const subscribeOllamaPullSummary = subscribe<[Pick<PullQueueState, 'running' | 'concurrency'>]>(
   IPC.ollamaPullSummary
@@ -892,7 +894,19 @@ const api: NodeTerminalApi = {
     clearFinished: () => ipcRenderer.invoke(IPC.converterClearFinished),
     setConcurrency: (n) => ipcRenderer.invoke(IPC.converterSetConcurrency, n),
     onItem: (listener) => subscribeConverterItem(listener),
-    onSummary: (listener) => subscribeConverterSummary(listener)
+    onSummary: (listener) => subscribeConverterSummary(listener),
+    advanced: {
+      catalog: () => ipcRenderer.invoke(IPC.converterAdvancedCatalog),
+      state: () => ipcRenderer.invoke(IPC.converterAdvancedState),
+      add: (request) => ipcRenderer.invoke(IPC.converterAdvancedAdd, request),
+      start: () => ipcRenderer.invoke(IPC.converterAdvancedStart),
+      pause: () => ipcRenderer.invoke(IPC.converterAdvancedPause),
+      cancel: (id) => ipcRenderer.invoke(IPC.converterAdvancedCancel, id),
+      retry: (id) => ipcRenderer.invoke(IPC.converterAdvancedRetry, id),
+      setConcurrency: (value) => ipcRenderer.invoke(IPC.converterAdvancedSetConcurrency, value),
+      onItem: (listener) => subscribeConverterAdvancedItem(listener),
+      onSummary: (listener) => subscribeConverterAdvancedSummary(listener)
+    }
   },
   ollama: {
     status: () => ipcRenderer.invoke(IPC.ollamaStatus),

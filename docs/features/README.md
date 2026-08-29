@@ -21,6 +21,7 @@ the deep architecture reference these articles are distilled from.
 | [Appearance](./appearance/README.md) | Design tokens, themes, and the measured state of the Material Design 3 migration. |
 | [Remote & SSH](./remote/README.md) | Opening a project on a remote host, and the self-hosted browser edition. |
 | [Speech](./speech/README.md) | On-device dictation into any terminal. |
+| [Converter pipelines](./converter/README.md) | Bounded offline file, image, ZIP, PDF, OCR, and structured-data conversion. |
 | [Packaging](./packaging/README.md) | How builds are produced, distributed, and kept up to date. |
 | [Global and project settings](./global-and-project-settings.md) | Durable app defaults and complete sparse per-project overlays. |
 | [Help](./help/README.md) | The in-app offline documentation browser these articles are read in. |

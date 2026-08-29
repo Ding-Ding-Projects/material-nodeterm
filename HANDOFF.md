@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-08-26, advanced converter pipeline lane
+
+Issue #22 and plan lane 11 now have an implementation on `feat/program-11`. Added
+`src/core/converter/advanced-pipelines.ts` with bounded image re-encoding and resize, ZIP creation
+and traversal-safe extraction, PDF page and metadata inspection, selectable-text extraction, JSONL
+transforms, and an allowlisted argv runner for future verified qpdf, rasterizer, OCR, audio, and
+video tools. Added `advanced-queue.ts` for schema-versioned multi-output persistence, bounded
+concurrency, stage progress, cancellation, retry, and crash recovery. The ordinary converter
+registry now wires image, PDF report/text, and JSONL single-output adapters, and detection recognizes
+JSON Lines. `sharp` is now a production dependency so packaged builds can carry its verified codec.
+
+The catalog keeps unsupported native tools visible and disabled with exact reasons. No PATH lookup,
+arbitrary shell, network service, credential, or unvalidated environment reaches a pipeline. ZIP
+entries, output names, sizes, symlinks, and destination writes are bounded and checked before
+publication. Documentation was expanded in `docs/file-converter.md` and the categorized article
+`docs/features/converter/README.md`; `docs/features/README.md` and `ROADMAP.md` now index the lane.
+
+This lane deliberately ran no tests, type checking, linting, security or accessibility checks,
+builds, packaging, installer execution, runtime interaction, or captures. No commit or dew was
+made. The next owner must run the focused Chuts against the built Windows artifact, wire the
+advanced multi-output panel and IPC route if required by the release scope, and verify package
+dependency inclusion before marking the roadmap item complete. The generated offline article
+bundle `src/shared/docs-data.ts` was not regenerated because the requested no-build boundary was
+kept; regenerate it with `node scripts/build-docs-bundle.mjs` before the next build Chut.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

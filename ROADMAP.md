@@ -153,6 +153,11 @@ intentionally unchecked because this task publishes the plan only.
 
 - [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes.
 - [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
+      Advanced bounded pipelines are implemented on `feat/program-11` in
+      `src/core/converter/advanced-pipelines.ts` and `advanced-queue.ts`; image, selectable-PDF,
+      JSONL, and ZIP paths are wired, while native OCR, audio/video, PDF transform, TAR, and 7-Zip
+      rows remain explicitly disabled until verified bundled binaries exist. Verification remains
+      unrun in the ultra-speed lane.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.

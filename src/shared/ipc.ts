@@ -533,6 +533,16 @@ export const IPC = {
   converterSetConcurrency: 'converter:set-concurrency',
   converterItem: 'converter:item',
   converterSummary: 'converter:summary',
+  converterAdvancedCatalog: 'converter:advanced-catalog',
+  converterAdvancedState: 'converter:advanced-state',
+  converterAdvancedAdd: 'converter:advanced-add',
+  converterAdvancedStart: 'converter:advanced-start',
+  converterAdvancedPause: 'converter:advanced-pause',
+  converterAdvancedCancel: 'converter:advanced-cancel',
+  converterAdvancedRetry: 'converter:advanced-retry',
+  converterAdvancedSetConcurrency: 'converter:advanced-set-concurrency',
+  converterAdvancedItem: 'converter:advanced-item',
+  converterAdvancedSummary: 'converter:advanced-summary',
   /** Electron only: a multi-file picker (dialog:select-file only returns one path). Browser (Server
    *  Edition) uses a plain `<input type="file" multiple>` + files.saveUpload instead — see
    *  FileConverterPanel.tsx. */

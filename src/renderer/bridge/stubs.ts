@@ -538,7 +538,19 @@ export function buildStubApi(): Omit<
       clearFinished: U('converter.clearFinished'),
       setConcurrency: U('converter.setConcurrency'),
       onItem: noopUnsub,
-      onSummary: noopUnsub
+      onSummary: noopUnsub,
+      advanced: {
+        catalog: U('converter.advanced.catalog'),
+        state: U('converter.advanced.state'),
+        add: U('converter.advanced.add'),
+        start: U('converter.advanced.start'),
+        pause: U('converter.advanced.pause'),
+        cancel: U('converter.advanced.cancel'),
+        retry: U('converter.advanced.retry'),
+        setConcurrency: U('converter.advanced.setConcurrency'),
+        onItem: noopUnsub,
+        onSummary: noopUnsub
+      }
     },
     ollama: {
       status: U('ollama.status'),

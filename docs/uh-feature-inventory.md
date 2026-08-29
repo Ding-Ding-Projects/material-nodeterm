@@ -65,7 +65,7 @@ and then never edited this file.
 | Infinite colour picker + translator | `src/renderer/components/color/ColorPicker.tsx` | `docs/colour-picker.md` | `src/renderer/components/color/ColorPicker.test.tsx` |
 | App rename (display name only) | `src/renderer/components/settings/sections/AppIdentitySection.tsx` | `docs/app-rename.md` | `src/renderer/components/settings/sections/AppIdentitySection.test.tsx` |
 | App-logo customization + safe conversion | `src/renderer/components/settings/sections/AppIdentitySection.tsx` | `docs/app-logo.md` | `src/renderer/components/settings/sections/AppIdentitySection.test.tsx` |
-| Universal file converter | `src/core/converter/service.ts` | `docs/file-converter.md` | `src/core/converter/service.atomic-write.test.ts` |
+| Universal file converter and advanced pipelines | `src/core/converter/service.ts`, `src/core/converter/advanced-pipelines.ts`, `src/core/converter/advanced-queue.ts` | `docs/file-converter.md`, `docs/features/converter/README.md`, `site/docs/converter-pipelines.html` | `src/core/converter/service.atomic-write.test.ts` (advanced lane verification pending) |
 | Local Ollama suite manager | `src/core/ollama/catalog-pure.ts` | `docs/ollama-manager.md` | `src/core/ollama/catalog-pure.test.ts` |
 | Tabbed navigation | `src/renderer/components/ProjectSwitcher.tsx` | `docs/features/projects/projects-and-tabs.md` | `src/renderer/state/projects.test.ts` |
 | Toy locks on every element | `src/core/secure-store.ts` | `docs/toy-locks.md` | `src/core/secure-store.test.ts` |

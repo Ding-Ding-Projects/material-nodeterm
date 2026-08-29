@@ -880,7 +880,19 @@ export function buildConverterApi(client: RpcClient): Pick<NodeTerminalApi, 'con
     clearFinished: () => client.request(IPC.converterClearFinished) as Promise<void>,
     setConcurrency: (n) => client.request(IPC.converterSetConcurrency, n) as Promise<number>,
     onItem: (listener) => client.subscribe(IPC.converterItem, listener as Listener),
-    onSummary: (listener) => client.subscribe(IPC.converterSummary, listener as Listener)
+    onSummary: (listener) => client.subscribe(IPC.converterSummary, listener as Listener),
+    advanced: {
+      catalog: () => client.request(IPC.converterAdvancedCatalog) as ReturnType<NonNullable<ConverterApi['advanced']>['catalog']>,
+      state: () => client.request(IPC.converterAdvancedState) as ReturnType<NonNullable<ConverterApi['advanced']>['state']>,
+      add: (request) => client.request(IPC.converterAdvancedAdd, request) as ReturnType<NonNullable<ConverterApi['advanced']>['add']>,
+      start: () => client.request(IPC.converterAdvancedStart) as Promise<void>,
+      pause: () => client.request(IPC.converterAdvancedPause) as Promise<void>,
+      cancel: (id) => client.request(IPC.converterAdvancedCancel, id) as Promise<void>,
+      retry: (id) => client.request(IPC.converterAdvancedRetry, id) as Promise<void>,
+      setConcurrency: (value) => client.request(IPC.converterAdvancedSetConcurrency, value) as Promise<number>,
+      onItem: (listener) => client.subscribe(IPC.converterAdvancedItem, listener as Listener),
+      onSummary: (listener) => client.subscribe(IPC.converterAdvancedSummary, listener as Listener)
+    }
   }
   return { converter }
 }

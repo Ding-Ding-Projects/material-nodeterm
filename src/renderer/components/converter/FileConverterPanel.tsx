@@ -18,6 +18,7 @@ import { bytesToBase64 } from '../../lib/browserBytes'
 import { useActiveSessionApi } from '../../session/session'
 import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { AdapterCatalog } from './AdapterCatalog'
+import { AdvancedPipelinePanel } from './AdvancedPipelinePanel'
 import { Checkbox } from '@renderer/ui/md3'
 
 export interface FileConverterPanelProps {
@@ -683,6 +684,7 @@ function FileConverterPanelForApi({
               </ul>
             )}
           </section>
+          <AdvancedPipelinePanel api={api} />
         </div>
       </aside>
     </div>,

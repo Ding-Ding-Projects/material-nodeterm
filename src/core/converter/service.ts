@@ -466,7 +466,7 @@ export class ConverterService {
     item.progressBytes = Math.round(item.totalBytes * 0.7)
     this.touch(item)
 
-    const validationError = adapter.validate(output)
+    const validationError = await adapter.validate(output)
     if (validationError) return bail('failed', validationError)
 
     // Re-check overwrite right before the write — the destination could have appeared since the

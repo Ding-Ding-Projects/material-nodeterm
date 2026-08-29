@@ -14,6 +14,9 @@ src/shared/converter.ts        pure types + the declarative CONVERTER_CATALOG (e
 src/core/converter/
   detect.ts                    bounded byte-signature + content sniffing (never reads more than
                                 CONVERTER_SNIFF_BYTES = 64 KiB of a file)
+  advanced-pipelines.ts        bounded image, ZIP, PDF, OCR and JSON Lines pipelines; verified
+                                argv runner for optional bundled native tools
+  advanced-queue.ts             durable multi-output queue with pause/resume/cancel/retry
   structured-codec.ts          hand-rolled JSON/YAML/TOML/XML/CSV/TSV parse+serialize
   text-codec.ts                line-ending + text-encoding + Markdown→HTML adapters
   binary-codec.ts              base64/hex encode-decode + gzip/brotli (Node's own zlib)
@@ -56,7 +59,8 @@ failure rather than a button that silently does nothing.
 
 Everything else is listed **disabled**, with the exact missing dependency named in
 `unavailableReason` — the catalog never hides a format it can't yet convert. For this pass, the
-genuinely bundled adapters are the ones expressible in pure JS/Node with zero new dependencies:
+genuinely bundled adapters include the existing zero-new-dependency codecs plus the verified
+production `sharp` image codec and the in-process PDF and JSON Lines readers:
 
 - **Structured Data / Spreadsheets** — the full mesh among JSON, YAML, TOML, XML, CSV and TSV (30
   directed pairs), through hand-rolled parsers/serializers in `structured-codec.ts`. These are
@@ -76,14 +80,40 @@ genuinely bundled adapters are the ones expressible in pure JS/Node with zero ne
   DOMPurify; raw HTML embedded in the Markdown source passes through unsanitized into the file,
   which is disclosed as a lossy note).
 - **Binary Encodings** — any file ⇄ Base64 text, any file ⇄ hex text (plain `Buffer` encodings).
-- **Archives** — any file ⇄ `.gz` and any file ⇄ `.br`, via Node's built-in `zlib`. Full ZIP/TAR/
-  7-Zip container support is **listed, disabled** (`requires a ZIP container library…`, etc.) —
-  none of those are bundled in this pass.
+- **Archives** — any file ⇄ `.gz` and any file ⇄ `.br` via Node's built-in `zlib`. The advanced
+  path adds ZIP creation and extraction through `unzipper`, with relative-path, symlink, entry,
+  expanded-byte, and atomic-write checks. TAR and 7-Zip stay visible but disabled until their
+  verified bundled readers are shipped.
+- **Images** — PNG, JPEG, WebP, GIF, BMP, ICO, SVG and HEIC conversions use the production
+  `sharp` dependency. Decoder metadata, pixel count, output byte size, animation policy and colour
+  profile loss are reported before a lossy conversion is accepted.
+- **Documents/PDF** — PDF signature, page count, title/author metadata and selectable text are
+  available offline through bounded in-process parsing. Extraction is explicitly lossy for scanned
+  pages. Split, merge, rotation and rasterization remain disabled until a verified bundled qpdf or
+  PDF rasterizer is present.
+- **JSON Lines** — JSONL/NDJSON is a first-class structured-data kind with bounded one-record-per-
+  line parsing and JSON-array export. The array-to-JSONL route requires an actual array and
+  discloses that an object envelope would be dropped.
 
-**Documents/PDF, Images, Audio and Video have no bundled adapters at all** — every row in those
-categories is listed disabled with its exact missing dependency (e.g. `pdf-to-text` needs
-`pdf-parse`, `png-to-jpeg` needs an image codec such as `sharp`, `mp3-to-wav` needs `ffmpeg`).
-Adding real support for any of these is a good next-pass target — see "Known gaps" below.
+### Advanced pipeline execution
+
+`runAdvancedPipeline()` and `AdvancedPipelineQueue` cover operations that can emit more than one
+file. The queue stores a schema-versioned snapshot in the app-data converter directory, turns an
+interrupted `running` record back into `queued`, limits workers to four, and reports each stage
+(`inspect`, `read`, `convert`, `validate`, `write`, `complete`) with byte counts. Cancellation is
+checked before every bounded stage and aborts a running child process when one is used.
+
+Native media, OCR, PDF split/merge/rotate and rasterization tools are never discovered from PATH.
+`executeVerifiedTool()` accepts only a registered tool id, a digest-checked executable beneath the
+private `converter-tools` resource directory, fixed allowlisted flags, a scrubbed environment,
+`shell: false`, bounded runtime and bounded stdout/stderr. No arbitrary command, script text,
+network service, URL, credential, or environment expansion can reach the child. A missing or
+unverified binary remains a disabled catalog row naming the exact dependency and recovery action.
+
+ZIP extraction validates every entry before writing, refuses absolute or traversal names and
+symlinks, caps entry count and expanded bytes, and writes each result through the shared atomic
+publisher. ZIP creation accepts selected file paths and optional safe relative entry names, rejects
+duplicates, compresses with a fixed bounded level, and writes collision-free output atomically.
 
 ## Detection
 
@@ -174,15 +204,13 @@ unavailable, file missing, over the size limit, not a regular file). Every queue
 state is one of `done | failed | cancelled | skipped`, each shown distinctly in the panel — a
 partially-successful batch is never presented as a uniform success or a uniform failure.
 
-## Known gaps (deliberately out of scope this pass)
+## Known gaps (honest disabled states)
 
-- **No document/image/audio/video adapters are bundled.** Every row in those four categories is
-  listed disabled. Adding real ones (e.g. `pdf-parse` for PDF text extraction, `sharp` for images,
-  `ffmpeg`/`fluent-ffmpeg` for audio/video) is real, valuable follow-up work — but each is a new
-  native or sizeable dependency and was out of scope for this pass's "no new dependency" bundled
-  rule.
-- **No ZIP/TAR/7-Zip container support**, bundled or otherwise — listed disabled with their exact
-  missing library.
+- **Audio and video transcodes remain disabled** until a verified, bundled ffmpeg adapter is
+  shipped. The catalog names the missing dependency and never falls back to a PATH executable.
+- **PDF split, merge, rotate, rasterization and OCR remain disabled** until qpdf, a PDF rasterizer,
+  and an OCR engine are bundled, digest-checked and exercised through the allowlisted argv runner.
+- **TAR and 7-Zip containers remain disabled** until their readers and output validators are bundled.
 - **Per-category search is plain substring matching**, not the full anchored regex-builder popover
   described in the house UI contract. A future pass should give each category's search field (and
   every other search field in these two panels) a real regex-builder affordance.

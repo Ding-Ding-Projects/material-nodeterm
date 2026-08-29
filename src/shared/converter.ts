@@ -51,6 +51,7 @@ export type ConverterKind =
   | 'xml'
   | 'csv'
   | 'tsv'
+  | 'jsonl'
   | 'text'
   | 'markdown'
   | 'gzip'
@@ -88,6 +89,7 @@ export const CONVERTER_KIND_LABELS: Record<ConverterKind, string> = {
   xml: 'XML',
   csv: 'CSV',
   tsv: 'TSV',
+  jsonl: 'JSON Lines (NDJSON)',
   text: 'Plain text',
   markdown: 'Markdown',
   gzip: 'Gzip',
@@ -488,16 +490,33 @@ const ARCHIVE_ROWS: ConverterAdapterDescriptor[] = [
 ]
 
 const DOCUMENT_ROWS: ConverterAdapterDescriptor[] = [
-  disabled({
+  {
     id: 'pdf-to-text',
     category: 'documents',
     fromKind: 'pdf',
     toKind: 'text',
     label: 'PDF → plain text',
+    bundled: true,
+    available: true,
     sourceExt: ['.pdf'],
     targetExt: '.txt',
-    reason: 'requires a PDF text-extraction library (e.g. pdf-parse), not bundled in this build'
-  }),
+    lossy: true,
+    lossyNotes: ['Only selectable text objects are extracted; scanned page pixels require OCR.'],
+    maxInputBytes: 256 * MB
+  },
+  {
+    id: 'pdf-inspect',
+    category: 'documents',
+    fromKind: 'pdf',
+    toKind: 'text',
+    label: 'PDF → metadata and page report (JSON)',
+    bundled: true,
+    available: true,
+    sourceExt: ['.pdf'],
+    targetExt: '.info.json',
+    lossy: false,
+    maxInputBytes: 256 * MB
+  },
   disabled({
     id: 'docx-to-markdown',
     category: 'documents',
@@ -553,17 +572,51 @@ const IMAGE_ROWS: ConverterAdapterDescriptor[] = (
     ['heic', 'jpeg']
   ] as [ConverterKind, ConverterKind][]
 ).map(([from, to]) =>
-  disabled({
+  ({
     id: `${from}-to-${to}`,
     category: 'images',
     fromKind: from,
     toKind: to,
     label: `${CONVERTER_KIND_LABELS[from]} → ${CONVERTER_KIND_LABELS[to]}`,
+    bundled: true,
+    available: true,
+    lossy: from !== 'png' || to !== 'png',
+    lossyNotes: ['The bundled sharp codec may flatten animation and convert colour profiles.'],
     sourceExt: [`.${from}`],
     targetExt: `.${to === 'jpeg' ? 'jpg' : to}`,
-    reason: 'requires an image codec (e.g. sharp/libvips), not bundled in this build'
+    maxInputBytes: 256 * MB
   })
 )
+
+const ADVANCED_ARCHIVE_AND_OCR_ROWS: ConverterAdapterDescriptor[] = [
+  disabled({
+    id: 'zip-extract-bounded', category: 'archives', fromKind: 'zip', toKind: 'any',
+    label: 'ZIP → files (bounded extraction)', sourceExt: ['.zip'], targetExt: '.directory',
+    reason: 'requires the verified bundled unzipper extraction pipeline; no PATH or network tools are used'
+  }),
+  disabled({
+    id: 'zip-create-bounded', category: 'archives', fromKind: 'any', toKind: 'zip',
+    label: 'Files → ZIP (bounded archive)', sourceExt: [], targetExt: '.zip',
+    reason: 'requires the multi-file advanced pipeline surface rather than the single-output queue'
+  }),
+  disabled({
+    id: 'ocr-image-to-text', category: 'documents', fromKind: 'png', toKind: 'text',
+    label: 'Image/PDF → OCR text', sourceExt: ['.png', '.jpg', '.jpeg', '.pdf'], targetExt: '.ocr.txt',
+    reason: 'requires a verified bundled OCR engine; network OCR and arbitrary executables are refused'
+  })
+]
+
+const JSONL_ROWS: ConverterAdapterDescriptor[] = [
+  {
+    id: 'jsonl-to-json', category: 'data', fromKind: 'jsonl', toKind: 'json', label: 'JSON Lines → JSON array',
+    bundled: true, available: true, lossy: false, sourceExt: ['.jsonl', '.ndjson'], targetExt: '.json', maxInputBytes: 64 * MB
+  },
+  {
+    id: 'json-to-jsonl', category: 'data', fromKind: 'json', toKind: 'jsonl', label: 'JSON array → JSON Lines',
+    bundled: true, available: true, lossy: true, lossyNotes: ['The source must be an array; object envelope keys are not retained.'],
+    sourceExt: ['.json'], targetExt: '.jsonl', maxInputBytes: 64 * MB
+  }
+]
 
 const AUDIO_ROWS: ConverterAdapterDescriptor[] = (
   [
@@ -611,7 +664,9 @@ export const CONVERTER_CATALOG: ConverterAdapterDescriptor[] = [
   ...AUDIO_ROWS,
   ...VIDEO_ROWS,
   ...ARCHIVE_ROWS,
+  ...ADVANCED_ARCHIVE_AND_OCR_ROWS,
   ...buildStructuredMesh(),
+  ...JSONL_ROWS,
   ...CODE_TEXT_ROWS,
   ...BINARY_ROWS
 ]
@@ -697,6 +752,62 @@ export interface ConverterDetectionResult {
   compatibleAdapterIds: string[]
 }
 
+export interface AdvancedPipelineDescriptor {
+  id: string
+  category: 'images' | 'audio' | 'video' | 'archives' | 'documents' | 'ocr' | 'data'
+  label: string
+  inputKinds: string[]
+  outputKinds: string[]
+  bundled: boolean
+  available: boolean
+  dependency?: string
+  unavailableReason?: string
+  lossy: boolean
+  disclosure: string[]
+  limits: Record<string, number>
+}
+
+export interface AdvancedPipelineOutput {
+  path: string
+  bytes: number
+  sha256: string
+  metadata?: Record<string, unknown>
+}
+
+export interface AdvancedPipelineQueueItem {
+  id: string
+  pipelineId: string
+  inputPath: string
+  outputDirectory: string
+  options?: Record<string, unknown>
+  status: 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled'
+  progress?: { stage: string; completedBytes: number; totalBytes: number; message: string }
+  result?: { id: string; outputs: AdvancedPipelineOutput[]; warnings: string[] }
+  error?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface AdvancedPipelineQueueState {
+  schemaVersion: 1
+  items: AdvancedPipelineQueueItem[]
+  concurrency: number
+  running: boolean
+}
+
+export interface AdvancedConverterApi {
+  catalog(): Promise<AdvancedPipelineDescriptor[]>
+  state(): Promise<AdvancedPipelineQueueState>
+  add(request: { pipelineId: string; inputPath: string; outputDirectory: string; options?: Record<string, unknown> }): Promise<AdvancedPipelineQueueItem>
+  start(): Promise<void>
+  pause(): Promise<void>
+  cancel(id: string): Promise<void>
+  retry(id: string): Promise<void>
+  setConcurrency(value: number): Promise<number>
+  onItem(listener: (item: AdvancedPipelineQueueItem) => void): () => void
+  onSummary(listener: (summary: { running: boolean; active: number; queued: number; total: number }) => void): () => void
+}
+
 export const CONVERTER_DEFAULT_CONCURRENCY = 2
 export const CONVERTER_MAX_CONCURRENCY = 6
 /** Bytes sampled from the head of a file for signature/content sniffing — bounded, never the whole
@@ -743,4 +854,7 @@ export interface ConverterApi {
   onSummary(
     listener: (summary: Pick<ConverterQueueState, 'running' | 'scanning' | 'concurrency' | 'total'>) => void
   ): () => void
+  /** Multi-output media/archive/PDF/OCR queue. */
+  /** Present on desktop and Server Edition; older relay bindings intentionally omit it. */
+  advanced?: AdvancedConverterApi
 }

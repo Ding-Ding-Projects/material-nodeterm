@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add bounded offline conversion pipelines for image re-encoding and resizing, ZIP creation and
+  safe extraction, PDF metadata and selectable-text reports, and JSON Lines transforms. Persist
+  multi-output jobs with stage progress, cancellation, retry, and crash recovery. Native OCR,
+  audio/video, PDF transformation, TAR, and 7-Zip support remain visible as disabled until their
+  verified bundled tools are available. No tests, type checks, lint, security review, accessibility
+  review, builds, packaging, installer execution, runtime interaction, or captures were run in the
+  assigned ultra-speed implementation lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

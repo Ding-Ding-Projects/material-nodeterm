@@ -4,6 +4,7 @@
 // catalog and the registry must never drift, or the UI would offer a conversion the engine can't run.
 
 import { CONVERTER_CATALOG, type ConverterKind } from '../../shared/converter'
+import { convertAdvancedBuffer, pdfInfoFromBuffer } from './advanced-pipelines'
 import {
   anyToBase64,
   anyToBrotli,
@@ -48,10 +49,10 @@ export interface AdapterRunResult {
 export interface ConverterAdapter {
   /** Run the conversion. Throws on malformed/unsupported input — the caller (service.ts) catches
    *  this and reports the item `failed` with the exact message; the source file is never touched. */
-  convert(input: Buffer): AdapterRunResult
+  convert(input: Buffer): AdapterRunResult | Promise<AdapterRunResult>
   /** Validate the produced bytes before they are written to disk. Returns an error message when
    *  invalid, or null when the output is accepted. */
-  validate(output: Buffer): string | null
+  validate(output: Buffer): string | null | Promise<string | null>
 }
 
 const structuredCodecs: Record<
@@ -115,6 +116,13 @@ function nonEmpty(output: Buffer): string | null {
   return output.length === 0 ? 'Produced empty output' : null
 }
 
+function advanced(id: string, options: Record<string, unknown> = {}): ConverterAdapter {
+  return {
+    convert: async (input) => convertAdvancedBuffer(id, input, options),
+    validate: (output) => output.length === 0 ? 'Produced empty output' : null
+  }
+}
+
 const REGISTRY: Record<string, ConverterAdapter> = {}
 
 // Structured-data mesh — generated from the same STRUCTURED_KINDS pairing as the catalog.
@@ -165,6 +173,23 @@ REGISTRY['any-to-brotli'] = simple(anyToBrotli, (out) => {
   }
 })
 REGISTRY['brotli-to-any'] = simple(brotliToAny)
+
+// Advanced single-output pipelines.  The multi-output ZIP/PDF/OCR entries are intentionally
+// represented by the separate advanced pipeline catalog until the panel can show a per-output
+// result list.  These adapters still run locally, with bounded bytes, and never invoke a shell.
+REGISTRY['pdf-to-text'] = advanced('pdf-extract-text')
+REGISTRY['pdf-inspect'] = {
+  convert: (input) => ({ output: Buffer.from(JSON.stringify(pdfInfoFromBuffer(input), null, 2) + '\n', 'utf8'), warnings: [] }),
+  validate: (output) => {
+    try { JSON.parse(output.toString('utf8')); return null } catch { return 'Produced PDF report is not valid JSON' }
+  }
+}
+REGISTRY['jsonl-to-json'] = advanced('jsonl-to-json')
+REGISTRY['json-to-jsonl'] = advanced('json-to-jsonl')
+for (const id of ['png-to-jpeg', 'jpeg-to-png', 'webp-to-png', 'png-to-webp', 'svg-to-png', 'gif-to-png', 'bmp-to-png', 'ico-to-png', 'heic-to-jpeg']) {
+  const target = id.endsWith('-jpeg') ? 'jpeg' : id.endsWith('-webp') ? 'webp' : 'png'
+  REGISTRY[id] = advanced('image-reencode', { format: target })
+}
 
 export function getAdapter(id: string): ConverterAdapter | undefined {
   return REGISTRY[id]
