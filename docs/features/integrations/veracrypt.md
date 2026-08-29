@@ -6,9 +6,11 @@ encryption.
 
 ## Behavior
 
-The manager discovers `VeraCrypt.exe` from the validated Windows installation locations and the
-system executable lookup. A container must be an existing regular file. Directories, reparse
-points, control characters, missing files, and unavailable paths are rejected before launch.
+The manager discovers `VeraCrypt.exe` from the validated Windows installation locations first. A
+system executable lookup is only accepted when its result is an absolute regular file under one of
+those trusted installation roots. PATH shadowing, directories, reparse points, control characters,
+missing files, and unavailable paths are rejected before launch. When an executable is found, its
+reported version is probed and exposed when the installed build reports one.
 
 The drive-letter picker checks every logical drive root on the host and offers letters whose roots
 are absent. The chosen letter is checked again immediately before mount. Mount arguments are a
@@ -21,17 +23,22 @@ VeraCrypt has no documented volume-list command, so the manager does not enumera
 host mounts. It retains a mapping only for mounts started by this manager, then verifies the
 requested drive root exists after mount and is absent after unmount. Explore is available only for
 one of these independently verified manager-created mounts. Normal unmount is the default. Force
-unmount is reserved for the app's destructive-action confirmation surface.
+unmount is available from the node's destructive-action confirmation surface and is sent as the
+explicit `/f` option only after that confirmation completes.
 
-Favorites are stored only in the machine-local application-data directory. They contain the
-container path, preferred letter, safe mount flags, and the Explore-after-mount choice. They do not
-contain credentials or keyfile contents. The explicit Wipe password cache action invokes only the
-documented VeraCrypt `/w` cache-wipe command.
+Favorites are stored only in the machine-local application-data directory. Each save or removal is
+serialized with a cross-process transaction lock and published with the shared atomic-file writer.
+They contain the container path, preferred letter, safe mount flags, and the Explore-after-mount
+choice. They do not contain credentials or keyfile contents. The explicit Wipe password cache action
+uses the app's two-key destructive confirmation and invokes only the documented VeraCrypt `/w`
+cache-wipe command.
 
 ## Unsupported surfaces and failure modes
 
-The Server Edition, relay sessions, and mobile companion expose an explicit unsupported state. They
-never fall through to the viewing computer's VeraCrypt installation. A missing executable,
+The Server Edition does not register VeraCrypt handlers because the capability is desktop-host local
+and must not expose container mounting to browser clients. Relay sessions and the mobile companion
+expose an explicit unsupported state. They never fall through to the viewing computer's VeraCrypt
+installation. A missing executable,
 unreadable container, occupied letter, failed native prompt, timeout, cancelled process, failed
 volume observation, or failed file-manager launch is reported as a non-success operation state.
 
