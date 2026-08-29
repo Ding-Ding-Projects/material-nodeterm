@@ -15,7 +15,9 @@
 //                            file as sensitive as that password, which the export UI states.
 //   repo/repository.bundle   `git bundle create --all` of the project's OWN repository
 //   files/<relative path>    working files: tracked files at their CURRENT on-disk content plus
-//                            untracked-but-not-ignored files
+//                            untracked-but-not-ignored files, and the explicit comment namespace
+//                            `.nodeterm/board-log.jsonl` plus referenced attachment blobs even
+//                            when the project ignores `.nodeterm`.
 //
 // The inclusion rule, stated rather than implied: what git tracks travels, at working-tree
 // content, plus everything untracked that .gitignore does not exclude, plus the complete history
@@ -37,11 +39,15 @@ import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import type { Project, ProjectArchiveContents, ProjectArchiveExclusion } from '../shared/types'
 import { freshProjectId } from '../shared/project-id'
 import { fileToProject, projectToFile, serializeProjectFile, type ProjectFileV1 } from './workspace-files'
 import { LocalHistoryStore } from './local-history'
 import { looksLikeContainer, openContainer, packContainer, type ContainerEntry } from './project-archive-container'
+import { parseLines } from './board-log'
+import { validBoardLogAttachment, BOARD_LOG_ATTACHMENT_LIMITS } from '../shared/board-log-attachments'
+import { renameAtomic } from './fs-atomic'
 
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
@@ -64,12 +70,40 @@ const MAX_LISTED_EXCLUSIONS = 2_000
 const GIT_TIMEOUT_MS = 120_000
 const GIT_OUTPUT_CAP = 64 * 1024 * 1024
 const MIMETYPE = 'application/x-nodeterm-project'
+const LOG_DIR = '.nodeterm'
+const LOG_FILE = 'board-log.jsonl'
 
 const READ_LIMITS = {
   maxArchiveBytes: MAX_ARCHIVE_BYTES,
   maxTotalBytes: MAX_RAW_PAYLOAD_BYTES,
   maxEntryBytes: MAX_RAW_PAYLOAD_BYTES,
   maxEntries: 65_500
+}
+
+function ancestors(root: string, target: string): string[] {
+  const out: string[] = []
+  let current = path.resolve(target)
+  const base = path.resolve(root)
+  while (current !== base && current.startsWith(base + path.sep)) {
+    out.push(current)
+    current = path.dirname(current)
+  }
+  return out.reverse()
+}
+
+/** Check every existing path component, including ancestors above the destination. A final
+ * lstat immediately before publication narrows, but cannot eliminate, the replacement race. */
+async function assertNoSymlinkAncestors(target: string): Promise<void> {
+  const resolved = path.resolve(target)
+  const parsed = path.parse(resolved)
+  let current = parsed.root
+  const rest = resolved.slice(parsed.root.length).split(path.sep).filter(Boolean)
+  for (const segment of rest) {
+    current = path.join(current, segment)
+    const stat = await fs.lstat(current).catch(() => null)
+    if (!stat) throw new Error(`Destination component is missing: ${current}`)
+    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Destination component is an unsafe link: ${current}`)
+  }
 }
 
 interface ProjectArchiveV1 {
@@ -616,6 +650,15 @@ export class ProjectArchiveService {
       }
     }
 
+    // `.nodeterm` is commonly ignored, but comment attachments are an explicit archive namespace,
+    // not build output. Include only blobs referenced by valid board-log metadata and verify every
+    // recorded length and digest before the archive is built.
+    const commentFiles = await this.captureCommentAttachments(cwd, seen)
+    for (const file of commentFiles) {
+      files.push(file)
+      workingBytes += file.data.length
+    }
+
     // Ignored paths: grouped per ignored root (--directory), each measured so the user is told
     // the count and the bytes they are NOT carrying, not just that "some" files were skipped.
     const ignored = await this.git(cwd, ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z', '--', '.'])
@@ -675,6 +718,42 @@ export class ProjectArchiveService {
         ...finalized
       }
     }
+  }
+
+  private async captureCommentAttachments(cwd: string, seen: Set<string>): Promise<{ path: string; data: Buffer }[]> {
+    const logPath = path.join(cwd, LOG_DIR, LOG_FILE)
+    const raw = await fs.readFile(logPath, 'utf8').catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return ''
+      throw error
+    })
+    if (!raw) return []
+    const out: { path: string; data: Buffer }[] = []
+    const logRel = `${LOG_DIR}/${LOG_FILE}`
+    if (!seen.has(logRel)) {
+      const logStat = await fs.lstat(logPath).catch(() => null)
+      if (!logStat || logStat.isSymbolicLink() || !logStat.isFile()) throw new Error('The board-log archive entry is not a regular file.')
+      const logData = Buffer.from(raw, 'utf8')
+      if (logData.length > BOARD_LOG_ATTACHMENT_LIMITS.maxTotalBytes) throw new Error('The board-log attachment manifest exceeds its bound.')
+      out.push({ path: logRel, data: logData })
+      seen.add(logRel)
+    }
+    const referenced = parseLines(raw, { all: true }).flatMap((entry) => entry.attachments ?? [])
+    for (const attachment of referenced) {
+      if (!validBoardLogAttachment(attachment)) throw new Error(`The comment attachment metadata is invalid: ${attachment.id}`)
+      if (out.length >= BOARD_LOG_ATTACHMENT_LIMITS.maxPerComment * 1000) throw new Error('Too many comment attachments for an archive.')
+      const rel = `.nodeterm/board-attachments/${attachment.id}.bin`
+      if (seen.has(rel)) continue
+      const full = path.join(cwd, '.nodeterm', 'board-attachments', `${attachment.id}.bin`)
+      const stat = await fs.lstat(full).catch(() => null)
+      if (!stat || stat.isSymbolicLink() || !stat.isFile()) throw new Error(`The referenced comment attachment is missing or unsafe: ${attachment.id}`)
+      if (stat.size !== attachment.bytes || stat.size > BOARD_LOG_ATTACHMENT_LIMITS.maxBytes) throw new Error(`The referenced comment attachment has an unexpected length: ${attachment.id}`)
+      const data = await fs.readFile(full)
+      const digest = createHash('sha256').update(data).digest('hex')
+      if (digest !== attachment.sha256) throw new Error(`The referenced comment attachment failed its SHA-256 check: ${attachment.id}`)
+      seen.add(rel)
+      out.push({ path: rel, data })
+    }
+    return out
   }
 
   /** No git repo: there is no ignore rule to respect, so EVERYTHING regular is included (the size
@@ -745,8 +824,9 @@ export class ProjectArchiveService {
   // ── Import-side restore ───────────────────────────────────────────────────────────────────────
 
   private async assertEmptyDestination(destination: string): Promise<void> {
-    const st = await fs.stat(destination).catch(() => null)
-    if (!st?.isDirectory()) throw new Error(`The destination is not a folder: ${destination}`)
+    await assertNoSymlinkAncestors(destination)
+    const st = await fs.lstat(destination).catch(() => null)
+    if (!st?.isDirectory() || st.isSymbolicLink()) throw new Error(`The destination is not a safe folder: ${destination}`)
     const children = await fs.readdir(destination)
     if (children.length > 0) {
       throw new Error(
@@ -758,14 +838,44 @@ export class ProjectArchiveService {
 
   private async extractFiles(destination: string, fileEntries: { rel: string; data: Buffer }[]): Promise<void> {
     const root = path.resolve(destination)
+    await assertNoSymlinkAncestors(root)
+    const rootStat = await fs.lstat(root).catch(() => null)
+    if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) throw new Error('The destination contains an unsafe link.')
+    this.validateArchivedCommentAttachments(fileEntries)
     for (const entry of fileEntries) {
       // openContainer already refused unsafe names; this is the belt-and-braces resolve check.
       const target = path.resolve(root, ...entry.rel.split('/'))
       if (target !== root && !target.startsWith(root + path.sep)) {
         throw new Error(`Refusing to write outside the destination: ${entry.rel}`)
       }
+      for (const ancestor of ancestors(root, path.dirname(target))) {
+        const stat = await fs.lstat(ancestor).catch(() => null)
+        if (stat?.isSymbolicLink() || (stat && !stat.isDirectory())) throw new Error(`Refusing to follow an unsafe destination ancestor: ${entry.rel}`)
+      }
       await fs.mkdir(path.dirname(target), { recursive: true })
-      await fs.writeFile(target, entry.data)
+      const parentStat = await fs.lstat(path.dirname(target))
+      if (parentStat.isSymbolicLink() || !parentStat.isDirectory()) throw new Error(`Refusing to write through an unsafe destination ancestor: ${entry.rel}`)
+      await assertNoSymlinkAncestors(path.dirname(target))
+      const temp = `${target}.${randomUUID()}.tmp`
+      try {
+        await fs.writeFile(temp, entry.data, { flag: 'wx' })
+        await renameAtomic(temp, target)
+      } finally {
+        await fs.rm(temp, { force: true }).catch(() => {})
+      }
+    }
+  }
+
+  private validateArchivedCommentAttachments(fileEntries: { rel: string; data: Buffer }[]): void {
+    const log = fileEntries.find((entry) => entry.rel === '.nodeterm/board-log.jsonl')
+    if (!log) return
+    const blobs = new Map(fileEntries.filter((entry) => entry.rel.startsWith('.nodeterm/board-attachments/')).map((entry) => [entry.rel, entry.data]))
+    for (const entry of parseLines(log.data.toString('utf8'), { all: true })) {
+      for (const attachment of entry.attachments ?? []) {
+        if (!validBoardLogAttachment(attachment)) throw new Error(`Imported comment attachment metadata is invalid: ${attachment.id}`)
+        const data = blobs.get(attachment.ref)
+        if (!data || data.length !== attachment.bytes || createHash('sha256').update(data).digest('hex') !== attachment.sha256) throw new Error(`Imported comment attachment failed integrity verification: ${attachment.id}`)
+      }
     }
   }
 

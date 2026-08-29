@@ -1,5 +1,41 @@
 # Handoff
 
+## 2026-08-26, comment attachment composer implementation
+
+Implemented the Comments & activity attachment lane on `feat/comment-attachments`. The shared
+attachment contract lives in `src/shared/board-log-attachments.ts`: names, ids, media kinds,
+SHA-256 metadata, and byte limits are bounded, and type classification inspects signatures before
+granting a media preview. Unknown bytes remain generic attachments even when a MIME type or
+filename claims a media format. `BoardLogEntry` now carries validated attachment
+metadata, while `BoardLogStore.saveAttachment` writes bytes to the project-relative
+`.nodeterm/board-attachments/<uuid>.bin` location. Existing project archive file capture therefore
+keeps the bytes portable without serializing absolute paths. The SSH bridge uses atomic base64
+stdin writes, and relay scope checks include the new operation.
+
+`src/renderer/components/kanban/BoardLogPanel.tsx` now provides a semantic multi-file picker,
+drag-and-drop, clipboard paste, pre-post queue, per-item read/upload status, safe bounded PNG
+previews, explicit JPEG/GIF/audio/video preview-unavailable messaging, removal, independent queued and
+posted search fields with anchored regex builders, multi-select/select-all/invert, bounded export,
+and a distinct Post comment action. Each post uses a host-owned, expiring upload session with a
+64 MB reservation, serialized append consumption, and ownership-scoped rollback. Styling is in
+`src/renderer/styles.css`.
+Directly related documentation, roadmap, and changelog records were updated.
+
+Limits are 4 MB per attachment, 20 attachments per comment, and 64 MB of queued bytes in the
+shared contract. Generic files remain attachable even when they do not have a preview signature;
+media previews are local object URLs and never execute or fetch arbitrary content. Imported board
+log rows preserve the comment envelope while reporting invalid attachment members, and the host
+validates bytes and recomputes their SHA-256 before writing. Failed append operations use an
+explicit unreferenced-blob rollback path, and opening an existing attachment rechecks its length
+and SHA-256 before exposing it to the browser.
+
+This lane intentionally ran no tests, type checks, builds, packaging, captures, UI interaction,
+reviews, or audits, and made no commit, merge, dew, or Cup Chun. Integration must independently
+verify renderer typing, Electron and Server Edition handlers, SSH and relay attachment transfer,
+archive export/import of `.nodeterm/board-attachments/`, keyboard and screen-reader behavior,
+responsive/high-scale rendering, and real built-artifact interaction before marking the roadmap
+item complete.
+
 ## 2026-08-26, automatic node dependency foundation
 
 Implemented the shared node-feature dependency foundation in `src/shared/node-dependencies.ts` and

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a bounded comment attachment composer with multi-file selection, drag-and-drop, clipboard
+  image paste, byte-based media classification, local image/audio/video previews, and portable
+  project-relative attachment references. Verification remains pending for this implementation.
+
 - Add the shared automatic node-dependency foundation: an explicit manifest, canonical HTTPS
   sources, SHA-256 verification, reusable machine-local cache, bounded download and extraction,
   atomic user-scoped publication, health probes, cancellation, repair, restart reconciliation, and

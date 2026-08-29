@@ -722,6 +722,14 @@ export function buildFilesApi(
   const boardLog: BoardLogApi = {
     append: (projectId, entry) =>
       client.request(IPC.boardLogAppend, projectId, entry) as Promise<boolean>,
+    saveAttachment: (projectId, upload) =>
+      client.request(IPC.boardLogSaveAttachment, projectId, upload) as ReturnType<BoardLogApi['saveAttachment']>,
+    createAttachmentSession: (projectId) =>
+      client.request(IPC.boardLogCreateAttachmentSession, projectId) as ReturnType<BoardLogApi['createAttachmentSession']>,
+    removeAttachments: (projectId, sessionId, ids) =>
+      client.request(IPC.boardLogRemoveAttachments, projectId, sessionId, ids) as ReturnType<BoardLogApi['removeAttachments']>,
+    readAttachment: (projectId, attachment) =>
+      client.request(IPC.boardLogReadAttachment, projectId, attachment) as ReturnType<BoardLogApi['readAttachment']>,
     read: (projectId, opts) =>
       client.request(IPC.boardLogRead, projectId, opts) as Promise<BoardLogReadResult>,
     onChanged: (projectId, cb) => {

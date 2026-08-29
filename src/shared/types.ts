@@ -762,6 +762,10 @@ export interface BoardLogEntry {
   kind: 'comment' | 'event'
   text?: string
   event?: BoardLogEvent
+  attachments?: import('./board-log-attachments').BoardLogAttachment[]
+  attachmentSessionId?: string
+  /** Non-sensitive integrity summary when one member of an imported attachment list was invalid. */
+  attachmentIssues?: string
 }
 
 /** Max chars kept for a comment's `text`. On an SSH project the whole JSON line becomes one
@@ -783,6 +787,8 @@ export interface BoardLogReadOpts {
 export interface BoardLogReadResult {
   entries: BoardLogEntry[]
   unsupported?: boolean
+  /** True when the log could not be read. It is distinct from a valid empty log. */
+  readFailed?: boolean
 }
 
 /** The board-log surface on `window.nodeTerminal`. Project-routed: the main/server side resolves
@@ -800,6 +806,13 @@ export interface NavStop {
 export interface BoardLogApi {
   /** Append one entry. Resolves `false` on any failure (unsupported project, fs/exec error). */
   append(projectId: string, entry: BoardLogEntry): Promise<boolean>
+  /** Store bounded bytes in the project's portable attachment directory and return metadata. */
+  saveAttachment(projectId: string, upload: import('./board-log-attachments').BoardLogAttachmentUpload): Promise<import('./board-log-attachments').BoardLogAttachment | null>
+  createAttachmentSession(projectId: string): Promise<import('./board-log-attachments').BoardLogAttachmentSession | null>
+  /** Remove only unreferenced attachment ids from one upload session after a failed append. */
+  removeAttachments(projectId: string, sessionId: string, ids: string[]): Promise<boolean>
+  /** Read and re-check one attachment, returning bytes only after length and SHA-256 validation. */
+  readAttachment(projectId: string, attachment: import('./board-log-attachments').BoardLogAttachment): Promise<{ ok: true; dataBase64: string } | { ok: false; error: string }>
   /** Read the log newest-first (see BoardLogReadResult). */
   read(projectId: string, opts?: BoardLogReadOpts): Promise<BoardLogReadResult>
   /** Subscribe to change pushes for one project; returns an unsubscribe. */

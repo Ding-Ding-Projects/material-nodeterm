@@ -154,6 +154,10 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // `onChanged` casts subscribe/unsubscribe (fire-and-forget, no reject) and rides the host push.
     boardLog: {
       append: (projectId, entry) => files.boardLog.append(projectId, entry).catch(() => false),
+      saveAttachment: (projectId, upload) => files.boardLog.saveAttachment(projectId, upload).catch(() => null),
+      createAttachmentSession: (projectId) => files.boardLog.createAttachmentSession(projectId).catch(() => null),
+      removeAttachments: (projectId, sessionId, ids) => files.boardLog.removeAttachments(projectId, sessionId, ids).catch(() => false),
+      readAttachment: (projectId, attachment) => files.boardLog.readAttachment(projectId, attachment).catch(() => ({ ok: false, error: 'Attachment is unavailable on this relay.' })),
       read: (projectId, opts) =>
         files.boardLog.read(projectId, opts).catch(() => ({ entries: [], unsupported: true })),
       onChanged: (projectId, cb) => files.boardLog.onChanged(projectId, cb)

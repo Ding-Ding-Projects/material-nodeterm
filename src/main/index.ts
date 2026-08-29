@@ -241,7 +241,7 @@ import { loadOrCreatePeerKeyPair } from './remote/peer-identity'
 import { initSshProject } from './remote-ssh/ssh-project'
 import { resyncProjectAgents, RESYNC_TRANSCRIPT_TAIL_BYTES } from './remote-ssh/agent-resync'
 import { setGitRemoteResolver, type GitRemoteRef } from '../core/remote-ssh/remote-git'
-import { SshFs, sshAppendArgs, sshTailArgs, sshSizeArgs, sshWriteArgs } from './ssh-fs'
+import { SshFs, sshAppendArgs, sshTailArgs, sshSizeArgs, sshWriteArgs, sshWriteBase64Args, sshRemoveAttachmentArgs, sshReadAttachmentArgs } from './ssh-fs'
 import { makeRemoteWorkspaceIO } from './remote-workspace-io'
 import {
   registerMediaScheme,
@@ -1544,7 +1544,21 @@ app.whenReady().then(async () => {
           },
           tail: async (p, lines) => {
             const { code, stdout } = await run(sshTailArgs(ref.conn, ref.controlPath, p, lines))
-            return code === 0 ? stdout : ''
+            if (code !== 0) throw new Error('board-log ssh tail failed')
+            return stdout
+          },
+          saveAttachment: async (p, dataBase64, expectedBytes) => {
+            const { code } = await run(sshWriteBase64Args(ref.conn, ref.controlPath, p, expectedBytes), dataBase64)
+            if (code !== 0) throw new Error('board-log ssh attachment write failed')
+          },
+          removeAttachment: async (p) => {
+            const { code } = await run(sshRemoveAttachmentArgs(ref.conn, ref.controlPath, p))
+            if (code !== 0) throw new Error('board-log ssh attachment removal failed')
+          },
+          readAttachment: async (p) => {
+            const { code, stdout } = await run(sshReadAttachmentArgs(ref.conn, ref.controlPath, p))
+            if (code !== 0) throw new Error('board-log ssh attachment read failed')
+            return stdout.trim()
           }
         }
         const remotePath = boardLogRemotePath(ref.remoteCwd)

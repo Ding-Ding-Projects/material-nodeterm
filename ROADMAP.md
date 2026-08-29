@@ -57,6 +57,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Comment attachments** — the Comments & activity composer now queues generic files plus
+      image, audio, and video previews, persists validated bytes below `.nodeterm/board-attachments/`,
+      and records bounded project-relative metadata. Host, relay, archive round-trip, accessibility,
+      and packaged UI verification remain outstanding.
+
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification

@@ -100,6 +100,10 @@ const RELAY_REQUEST_METHODS = new Set<string>([
   IPC.githubIssuesCreateLabels,
   IPC.githubIssuesClearCache,
   IPC.boardLogAppend,
+  IPC.boardLogSaveAttachment,
+  IPC.boardLogCreateAttachmentSession,
+  IPC.boardLogRemoveAttachments,
+  IPC.boardLogReadAttachment,
   IPC.boardLogRead,
   IPC.presenceHello,
 

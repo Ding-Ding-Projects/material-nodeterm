@@ -142,6 +142,10 @@ export const IPC = {
   /** Board-log (`.nodeterm/board-log.jsonl`): request/response append + read, routed per project
    *  (local cwd / desktop-ssh / unsupported) in core/board-log-handlers.ts. */
   boardLogAppend: 'board-log:append',
+  boardLogSaveAttachment: 'board-log:save-attachment',
+  boardLogCreateAttachmentSession: 'board-log:create-attachment-session',
+  boardLogRemoveAttachments: 'board-log:remove-attachments',
+  boardLogReadAttachment: 'board-log:read-attachment',
   boardLogRead: 'board-log:read',
   /** Fire-and-forget ref-counted subscribe/unsubscribe: the first subscriber for a project starts
    *  the local fs.watch (or the desktop-ssh 5s poll); the last one stops it. */

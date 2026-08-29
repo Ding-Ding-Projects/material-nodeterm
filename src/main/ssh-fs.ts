@@ -43,6 +43,33 @@ export function sshWriteArgs(conn: SshConnection, cp: string, path: string): str
   // Per-call uniqueness is load-bearing: two app instances can write this remote path at once.
   return childArgs(conn, cp, remoteAtomicWrite(path).command)
 }
+
+function remoteNoLinkCheck(path: string): string {
+  return `nt_path=${quoteRemotePath(path)}; nt_rest="\${nt_path#\#/}"; nt_prefix=/; while [ -n "$nt_rest" ]; do nt_part="\${nt_rest%%/*}"; nt_rest="\${nt_rest#*/}"; [ "$nt_rest" = "$nt_part" ] && nt_rest=; nt_prefix="\${nt_prefix%/}/$nt_part"; test ! -L "$nt_prefix" || exit 1; done`
+}
+/** Same atomic stdin route for base64 attachment payloads, avoiding binary shell arguments. */
+export function sshWriteBase64Args(conn: SshConnection, cp: string, path: string, expectedBytes?: number): string[] {
+  const atomic = remoteAtomicWrite(path, { makeParent: false })
+  const parent = dirname(path)
+  const grand = dirname(parent)
+  // GNU uses -d while BSD/macOS uses -D. Probe help without consuming the payload, and reject
+  // symlink ancestors before mkdir so a project cannot redirect writes outside itself.
+  const temp = quoteRemotePath(atomic.temporaryPath)
+  const limit = Number.isSafeInteger(expectedBytes) ? expectedBytes : 4 * 1024 * 1024
+  const atomicDecode = atomic.command.replace(`cat > ${temp}`, `{ if [ "$(printf 'Tg==' | base64 -d 2>/dev/null)" = 'N' ]; then base64 -d; else base64 -D; fi; } > ${temp} && test "$(wc -c < ${temp})" -eq ${limit}`)
+  const encoded = `${remoteNoLinkCheck(path)} && test ! -L ${quoteRemotePath(grand)} && test ! -L ${quoteRemotePath(parent)} && mkdir -p ${quoteRemotePath(parent)} && ${atomicDecode}`
+  return childArgs(conn, cp, encoded)
+}
+export function sshRemoveAttachmentArgs(conn: SshConnection, cp: string, path: string): string[] {
+  const parent = dirname(path)
+  const grand = dirname(parent)
+  return childArgs(conn, cp, `${remoteNoLinkCheck(path)} && test ! -L ${quoteRemotePath(grand)} && test ! -L ${quoteRemotePath(parent)} && test ! -L ${quoteRemotePath(path)} && rm -f -- ${quoteRemotePath(path)}`)
+}
+export function sshReadAttachmentArgs(conn: SshConnection, cp: string, path: string): string[] {
+  const parent = dirname(path)
+  const grand = dirname(parent)
+  return childArgs(conn, cp, `${remoteNoLinkCheck(path)} && test ! -L ${quoteRemotePath(grand)} && test ! -L ${quoteRemotePath(parent)} && test ! -L ${quoteRemotePath(path)} && test $(wc -c < ${quoteRemotePath(path)}) -le 4194304 && base64 ${quoteRemotePath(path)}`)
+}
 export function sshMkdirArgs(conn: SshConnection, cp: string, path: string): string[] {
   return childArgs(conn, cp, `mkdir -p ${quoteRemotePath(path)}`)
 }

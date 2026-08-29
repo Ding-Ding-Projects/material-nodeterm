@@ -809,6 +809,10 @@ const api: NodeTerminalApi = {
   },
   boardLog: {
     append: (projectId, entry) => ipcRenderer.invoke(IPC.boardLogAppend, projectId, entry),
+    saveAttachment: (projectId, upload) => ipcRenderer.invoke(IPC.boardLogSaveAttachment, projectId, upload),
+    createAttachmentSession: (projectId) => ipcRenderer.invoke(IPC.boardLogCreateAttachmentSession, projectId),
+    removeAttachments: (projectId, sessionId, ids) => ipcRenderer.invoke(IPC.boardLogRemoveAttachments, projectId, sessionId, ids),
+    readAttachment: (projectId, attachment) => ipcRenderer.invoke(IPC.boardLogReadAttachment, projectId, attachment),
     read: (projectId, opts) => ipcRenderer.invoke(IPC.boardLogRead, projectId, opts),
     onChanged: (projectId, cb) => {
       const ch = IPC.boardLogChanged(projectId)

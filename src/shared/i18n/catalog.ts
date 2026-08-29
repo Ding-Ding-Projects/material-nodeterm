@@ -37,6 +37,32 @@ function flat(text: string): FiveVariants {
 }
 
 export const CATALOG: Catalog = {
+  'kanban.comments.addFiles': { en: flat('Add files'), yue: flat('加入檔案') },
+  'kanban.comments.dropHint': { en: flat('Drop files here, paste an image, or attach any file'), yue: flat('拖放檔案、貼上圖片，或者加入任何檔案') },
+  'kanban.comments.post': { en: flat('Post comment'), yue: flat('發表留言') },
+  'kanban.comments.posting': { en: flat('Posting…'), yue: flat('發表中…') },
+  'kanban.comments.remove': { en: flat('Remove'), yue: flat('移除') },
+  'kanban.comments.reading': { en: flat('Reading file…'), yue: flat('讀取檔案中…') },
+  'kanban.comments.uploading': { en: flat('Uploading…'), yue: flat('上載中…') },
+  'kanban.comments.attached': { en: flat('Attached'), yue: flat('已加入') },
+  'kanban.comments.previewUnavailable': { en: flat('Media preview is unavailable; the file can still be attached.'), yue: flat('媒體預覽未能使用，檔案仍然可以加入。') },
+  'kanban.comments.open': { en: flat('Download'), yue: flat('下載') },
+  'kanban.comments.openAgain': { en: flat('Download again'), yue: flat('再次下載') },
+  'kanban.comments.integrityFailure': { en: flat('Unavailable or changed'), yue: flat('未能使用或已變更') },
+  'kanban.comments.searchQueued': { en: flat('Search queued attachments'), yue: flat('搜尋待加入檔案') },
+  'kanban.comments.searchPosted': { en: flat('Search comments and attachments'), yue: flat('搜尋留言及附件') },
+  'kanban.comments.selectAll': { en: flat('Select all shown'), yue: flat('選取所有顯示項目') },
+  'kanban.comments.invert': { en: flat('Invert shown'), yue: flat('反轉顯示項目') },
+  'kanban.comments.export': { en: flat('Export selected'), yue: flat('匯出已選項目') },
+  'kanban.comments.select': { en: flat('Select'), yue: flat('選取') },
+  'kanban.comments.previewLimit': { en: flat('Image preview exceeds the safe pixel limit; the file can still be attached.'), yue: flat('圖片預覽超出安全像素上限，檔案仍然可以加入。') },
+  'kanban.comments.previewDimensions': { en: flat('Image preview dimensions could not be checked safely; the file can still be attached.'), yue: flat('未能安全檢查圖片預覽尺寸，檔案仍然可以加入。') },
+  'kanban.comments.previewError': { en: flat('Image preview is unavailable; the file can still be attached.'), yue: flat('圖片預覽未能使用，檔案仍然可以加入。') },
+  'kanban.comments.mediaPreview': { en: flat('Media preview is unavailable; the file can still be attached.'), yue: flat('媒體預覽未能使用，檔案仍然可以加入。') },
+  'kanban.comments.fileReadError': { en: flat('The file could not be read.'), yue: flat('檔案未能讀取。') },
+  'kanban.comments.sessionError': { en: flat('Attachment upload session could not be created.'), yue: flat('未能建立附件上載工作階段。') },
+  'kanban.comments.saveError': { en: flat('The attachment could not be saved.'), yue: flat('附件未能儲存。') },
+  'kanban.comments.postError': { en: flat('The comment could not be saved. Attachments were rolled back.'), yue: flat('留言未能儲存，附件已回復。') },
   // ---------------------------------------------------------------------------------------
   // Settings navigation — group headings shown in the sidebar (SettingsSidebar.tsx). A group
   // heading is a category label, not a message, so it stays level-invariant.

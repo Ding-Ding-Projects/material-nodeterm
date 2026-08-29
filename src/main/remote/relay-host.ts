@@ -220,6 +220,12 @@ export function connectRelayHost(opts: ConnectRelayHostOptions): RelayHostSessio
   const boardLogRefusal = (method: string, id: number): RpcOk =>
     method === IPC.boardLogRead
       ? { t: 'res', id, ok: true, result: { entries: [], unsupported: true } }
+      : method === IPC.boardLogSaveAttachment
+        ? { t: 'res', id, ok: true, result: null }
+      : method === IPC.boardLogCreateAttachmentSession
+        ? { t: 'res', id, ok: true, result: null }
+      : method === IPC.boardLogReadAttachment
+        ? { t: 'res', id, ok: true, result: { ok: false, error: 'This project is outside the session scope.' } }
       : { t: 'res', id, ok: true, result: false }
 
   const githubIssuesProject = (method: string, args: unknown[]): {
@@ -318,7 +324,7 @@ export function connectRelayHost(opts: ConnectRelayHostOptions): RelayHostSessio
         // Board-log read/append naming a project outside this session's scope: refuse WITHOUT
         // dispatching (the host router never resolves it), degrading exactly as an unknown project.
         if (
-          (m.method === IPC.boardLogAppend || m.method === IPC.boardLogRead) &&
+          (m.method === IPC.boardLogAppend || m.method === IPC.boardLogRead || m.method === IPC.boardLogSaveAttachment || m.method === IPC.boardLogCreateAttachmentSession || m.method === IPC.boardLogRemoveAttachments || m.method === IPC.boardLogReadAttachment) &&
           boardLogOutOfScope(m.args[0])
         ) {
           socket.sendTunnelText(JSON.stringify(boardLogRefusal(m.method, m.id)))

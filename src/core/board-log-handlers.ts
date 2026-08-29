@@ -2,6 +2,7 @@ import type { CorePlatform } from './platform'
 import { BoardLogStore, type RemoteLogExec } from './board-log'
 import { IPC } from '../shared/ipc'
 import type { BoardLogEntry, BoardLogReadOpts, BoardLogReadResult } from '../shared/types'
+import type { BoardLogAttachmentUpload } from '../shared/board-log-attachments'
 
 // Board-log RPC surface, registered ONCE for every shell (Electron main + Server Edition) through
 // CorePlatform — the same seam fs-handlers.ts uses, so the two can never drift. The pure log I/O is
@@ -38,14 +39,40 @@ export function registerBoardLogHandlers(platform: CorePlatform, router: BoardLo
     if (r.kind === 'remote') return new BoardLogStore({ remote: r.exec }).append(r.remoteCwd, entry)
     return false
   })
+  platform.handle(IPC.boardLogSaveAttachment, async (projectId: string, upload: BoardLogAttachmentUpload) => {
+    const r = router.route(projectId)
+    if (r.kind === 'local') return new BoardLogStore({}).saveAttachment(r.cwd, upload)
+    if (r.kind === 'remote') return new BoardLogStore({ remote: r.exec }).saveAttachment(r.remoteCwd, upload)
+    return null
+  })
+  platform.handle(IPC.boardLogCreateAttachmentSession, async (projectId: string) => {
+    const r = router.route(projectId)
+    if (r.kind === 'local') return new BoardLogStore({}).createAttachmentSession(r.cwd)
+    if (r.kind === 'remote') return new BoardLogStore({ remote: r.exec }).createAttachmentSession(r.remoteCwd)
+    return null
+  })
+  platform.handle(IPC.boardLogRemoveAttachments, async (projectId: string, sessionId: string, ids: string[]) => {
+    const r = router.route(projectId)
+    if (r.kind === 'local') return new BoardLogStore({}).removeAttachments(r.cwd, sessionId, ids)
+    if (r.kind === 'remote') return new BoardLogStore({ remote: r.exec }).removeAttachments(r.remoteCwd, sessionId, ids)
+    return false
+  })
+  platform.handle(IPC.boardLogReadAttachment, async (projectId: string, attachment) => {
+    const r = router.route(projectId)
+    if (r.kind === 'local') return new BoardLogStore({}).readAttachment(r.cwd, attachment)
+    if (r.kind === 'remote') return new BoardLogStore({ remote: r.exec }).readAttachment(r.remoteCwd, attachment)
+    return { ok: false, error: 'This project has no reachable folder.' }
+  })
 
   platform.handle(
     IPC.boardLogRead,
     async (projectId: string, opts?: BoardLogReadOpts): Promise<BoardLogReadResult> => {
       const r = router.route(projectId)
-      if (r.kind === 'local') return { entries: await localStore.read(r.cwd, opts) }
-      if (r.kind === 'remote')
-        return { entries: await new BoardLogStore({ remote: r.exec }).read(r.remoteCwd, opts) }
+      if (r.kind === 'local') { const result = await localStore.readDetailed(r.cwd, opts); return { entries: result.entries, ...(result.failed ? { readFailed: true } : {}) } }
+      if (r.kind === 'remote') {
+        const result = await new BoardLogStore({ remote: r.exec }).readDetailed(r.remoteCwd, opts)
+        return { entries: result.entries, ...(result.failed ? { readFailed: true } : {}) }
+      }
       return { entries: [], unsupported: true }
     }
   )
