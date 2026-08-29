@@ -38,6 +38,14 @@ export interface AnnotationRect extends FlowRect {
  * an action that could only ever be a no-op.
  */
 export const ANNOTATION_MIN_DRAG_PX = 12
+export const ANNOTATION_MIN_THICKNESS = 1
+export const ANNOTATION_MAX_THICKNESS = 24
+export const ANNOTATION_DEFAULT_THICKNESS = 3
+
+export function clampAnnotationThickness(value: unknown): number {
+  const n = typeof value === 'number' && Number.isFinite(value) ? value : ANNOTATION_DEFAULT_THICKNESS
+  return Math.min(ANNOTATION_MAX_THICKNESS, Math.max(ANNOTATION_MIN_THICKNESS, n))
+}
 
 /**
  * Axis-aligned bounding rect of two freely-ordered points (a drag start and end, in flow/canvas

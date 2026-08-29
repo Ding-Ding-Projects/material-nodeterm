@@ -218,6 +218,8 @@ export interface NodeData {
   annotationVariant?: 'line' | 'arrow'
   /** annotation-only: which corner-to-corner diagonal of the node's box the line/arrow follows. */
   annotationDir?: 'tl-br' | 'tr-bl'
+  annotationLabel?: string
+  annotationThickness?: number
   [key: string]: unknown
 }
 
@@ -1156,7 +1158,9 @@ export function createAnnotationNode(
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
       annotationVariant: variant,
-      annotationDir: rect.dir
+      annotationDir: rect.dir,
+      annotationLabel: variant === 'arrow' ? 'Arrow' : 'Line',
+      annotationThickness: 3
     }
   }
 }
@@ -1939,7 +1943,9 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         sshFs: n.sshFs,
         worktree: n.worktree,
         annotationVariant: n.annotationVariant,
-        annotationDir: n.annotationDir
+        annotationDir: n.annotationDir,
+        annotationLabel: n.annotationLabel,
+        annotationThickness: n.annotationThickness
       }
     }
   })
@@ -2013,7 +2019,9 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         sshFs: n.data.sshFs,
         worktree: n.data.worktree,
         annotationVariant: n.data.annotationVariant,
-        annotationDir: n.data.annotationDir
+        annotationDir: n.data.annotationDir,
+        annotationLabel: n.data.annotationLabel,
+        annotationThickness: n.data.annotationThickness
       }
     })
 }

@@ -20,6 +20,7 @@ export function parseAppearanceId(id: string): { kind: string; key: string } {
 export const APPEARANCE_KIND_LABELS: Record<string, string> = {
   tab: 'Project tab',
   node: 'Canvas node',
+  annotation: 'Canvas annotation',
   app: 'App chrome'
 }
 

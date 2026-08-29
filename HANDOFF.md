@@ -1459,3 +1459,16 @@ switcher and FAB menu on a real screen — nothing above substitutes for that. T
 the `.mc-console` styling defect and the two atomic-write violations found above are worth a
 one-line fix before the next release, since both are small, both are diagnosed, and neither
 requires touching anything MD3-specific to correct.
+# 2026-08-26 — annotation labels and thickness lane (#76 / #145)
+
+Implemented in this Gerk Tong Hui without upstream cherry-picking. Annotation nodes now carry a
+bounded 1–24 px stroke width and an editable 120-character label, render the label beside the
+mark, expose named keyboard-accessible controls, and retain the existing line/arrow and frame
+drawing tools. The label, variant, diagonal, and thickness are included in schema 3 portable
+canvas projection validation. Annotation nodes expose the existing per-element appearance editor
+target and the Canvas feature index links to `docs/features/canvas/annotation-labels.md`.
+
+Verification was intentionally not run in this lane, per the orchestrator brief: no tests, builds,
+captures, commits, or dews. The next owner must run the focused annotation, workspace round-trip,
+portable projection, appearance editor, and built-artifact accessibility checks before claiming
+the lane verified.

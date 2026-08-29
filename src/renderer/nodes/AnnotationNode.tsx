@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import { NODE_COLORS, type CanvasNode } from '../state/workspace'
-import { annotationEndpoints, type AnnotationDiagonal, type AnnotationVariant } from '../lib/annotation'
+import { annotationEndpoints, clampAnnotationThickness, type AnnotationDiagonal, type AnnotationVariant } from '../lib/annotation'
 import { ColorMenu } from '../components/color/ColorMenu'
+import { Input } from '../ui/Input'
+import { NumberField } from '../ui/NumberField'
+import { appearanceId } from '../lib/appearance/registry'
 
 /** Line thickness and arrowhead size, both in the node's own local px space (see AnnotationNode). */
-const STROKE_WIDTH = 3
 const ARROW_MARKER_PX = 9
 /** Fallback box when React Flow has not yet reported a measured/explicit size (never hit for a
  *  node this factory always creates with an explicit width/height — defensive only). */
@@ -42,10 +44,17 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
   const midX = (from.x + to.x) / 2
   const midY = (from.y + to.y) / 2
   const color = (data.color as string) || NODE_COLORS[0]
+  const thickness = clampAnnotationThickness(data.annotationThickness)
+  const label = typeof data.annotationLabel === 'string' ? data.annotationLabel : (variant === 'arrow' ? 'Arrow' : 'Line')
   const markerId = `annotation-arrowhead-${id}`
 
   return (
-    <div className={`annotation-node${selected ? ' selected' : ''}`}>
+    <div
+      className={`annotation-node${selected ? ' selected' : ''}`}
+      data-appearance-id={appearanceId('node', id)}
+      role="img"
+      aria-label={`${variant === 'arrow' ? 'Arrow' : 'Line'} annotation${label ? `: ${label}` : ''}`}
+    >
       <NodeResizer
         minWidth={24}
         minHeight={24}
@@ -75,7 +84,7 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
           x2={to.x}
           y2={to.y}
           stroke={color}
-          strokeWidth={STROKE_WIDTH}
+          strokeWidth={thickness}
           strokeLinecap="round"
           markerEnd={variant === 'arrow' ? `url(#${markerId})` : undefined}
         />
@@ -83,6 +92,7 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
 
       {/* A small floating toolbar at the line's midpoint — same idea as GroupNode's label pill,
           scaled down since an annotation carries no name. Shown on hover/selected only (CSS). */}
+      {label && <div className="annotation-node__label" style={{ left: midX, top: midY - thickness * 2, color }}>{label}</div>}
       <div
         className="annotation-node__toolbar nodrag"
         style={{ left: midX, top: midY }}
@@ -91,10 +101,26 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
           className="annotation-node__dot"
           style={{ background: color }}
           title="Color"
+          aria-label="Choose annotation color"
           onClick={(e) => {
             const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
             setColorAnchor((a) => (a ? null : { x: r.left, y: r.bottom }))
           }}
+        />
+        <Input
+          className="annotation-node__label-input"
+          value={label}
+          maxLength={120}
+          aria-label="Annotation label"
+          onChange={(e) => updateNodeData(id, { annotationLabel: e.target.value, title: e.target.value || (variant === 'arrow' ? 'Arrow' : 'Line') })}
+        />
+        <NumberField
+          value={thickness}
+          min={1}
+          max={24}
+          step={1}
+          ariaLabel="Line thickness in pixels"
+          onChange={(value) => updateNodeData(id, { annotationThickness: clampAnnotationThickness(value) })}
         />
         {colorAnchor && (
           <ColorMenu
@@ -108,6 +134,7 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
         <button
           className="annotation-node__variant"
           title={variant === 'arrow' ? 'Arrowhead on — click for a plain line' : 'Plain line — click to add an arrowhead'}
+          aria-label={variant === 'arrow' ? 'Change to line' : 'Change to arrow'}
           onClick={() =>
             updateNodeData(id, { annotationVariant: variant === 'arrow' ? 'line' : 'arrow' })
           }
@@ -117,6 +144,7 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
         <button
           className="annotation-node__close"
           title="Delete"
+          aria-label="Delete annotation"
           onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×

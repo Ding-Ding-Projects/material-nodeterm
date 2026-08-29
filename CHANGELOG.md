@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Annotation labels and line thickness.** Canvas frames, lines, and arrows now retain an editable
+  label and a bounded 1–24 px stroke width, with live color and thickness controls, keyboard names,
+  appearance-editor integration, and portable-project projection.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

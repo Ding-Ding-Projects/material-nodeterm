@@ -572,6 +572,10 @@ export interface CanvasNodeState {
    *  `annotationRectFromPoints` (src/renderer/lib/annotation.ts) from the draw gesture; unaffected
    *  by a later resize, which just stretches the same diagonal to the new box. */
   annotationDir?: 'tl-br' | 'tr-bl'
+  /** annotation-only: user-authored label rendered alongside the mark. */
+  annotationLabel?: string
+  /** annotation-only: bounded SVG stroke width in canvas pixels. */
+  annotationThickness?: number
 }
 
 /**

@@ -5332,6 +5332,22 @@ body,
   pointer-events: none;
 }
 
+.annotation-node__label {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  max-width: min(240px, 80%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--md-surface-dim) 88%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  font-size: 11px;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
 /* Midpoint toolbar: color dot, arrowhead toggle, delete. Same idea as .group-node__label, scaled
    down (an annotation carries no name to edit). Hidden until hover/selected so a canvas full of
    small arrows doesn't grow permanent chrome on every one of them. */
@@ -5376,6 +5392,18 @@ body,
   line-height: 1;
   padding: 3px 6px;
   cursor: pointer;
+}
+
+.annotation-node__label-input {
+  width: 92px;
+  min-height: 28px;
+  font-size: 11px;
+}
+
+.annotation-node__toolbar input[type='number'] {
+  width: 58px;
+  min-height: 28px;
+  font-size: 11px;
 }
 
 /* The next drag on the canvas creates an area/line/arrow — a crosshair says so before the click. */

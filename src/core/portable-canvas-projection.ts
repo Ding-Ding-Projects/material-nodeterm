@@ -38,6 +38,10 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  annotationVariant?: 'line' | 'arrow'
+  annotationDir?: 'tl-br' | 'tr-bl'
+  annotationLabel?: string
+  annotationThickness?: number
 }
 
 export interface PortableRelationshipV3 {
@@ -86,7 +90,7 @@ const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'annotationVariant', 'annotationDir', 'annotationLabel', 'annotationThickness'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
@@ -166,6 +170,16 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.kind === 'annotation') {
+    if (node.annotationVariant !== undefined && !['line', 'arrow'].includes(node.annotationVariant)) throw new PortableProjectV3Error('manifest', 'Portable annotation variant is invalid.')
+    if (node.annotationDir !== undefined && !['tl-br', 'tr-bl'].includes(node.annotationDir)) throw new PortableProjectV3Error('manifest', 'Portable annotation direction is invalid.')
+    if (node.annotationVariant !== undefined) out.annotationVariant = node.annotationVariant
+    if (node.annotationDir !== undefined) out.annotationDir = node.annotationDir
+    if (node.annotationLabel !== undefined && typeof node.annotationLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable annotation label is invalid.')
+    if (node.annotationThickness !== undefined && (typeof node.annotationThickness !== 'number' || !Number.isFinite(node.annotationThickness) || node.annotationThickness < 1 || node.annotationThickness > 24)) throw new PortableProjectV3Error('manifest', 'Portable annotation thickness is outside 1–24 px.')
+    if (node.annotationLabel !== undefined) out.annotationLabel = content(node.annotationLabel, 'annotation label')
+    if (node.annotationThickness !== undefined) out.annotationThickness = finite(node.annotationThickness, 'annotation thickness')
+  }
   if (node.browserTabs !== undefined) {
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
     out.browserTabs = node.browserTabs.map((tab) => { if (!record(tab)) throw new PortableProjectV3Error('manifest', 'Portable browser tab is invalid.'); exactKeys(tab, ALLOWED_TAB, 'browser tab'); const url = safeUrl(tab.url, 'browser tab URL'); return { id: text(tab.id, 'browser tab id'), ...(url ? { url } : {}), title: content(tab.title, 'browser tab title') } })
