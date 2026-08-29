@@ -6,7 +6,7 @@ import { useProjects } from '../state/projects'
 import { accountsForProject, sshAccountsHint } from '../state/workspace'
 import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
-import { IconLock } from './icons'
+import { IconLock, IconPortal } from './icons'
 import { writeAuthenticatorDrag } from '../lib/explorerNodeDrag'
 
 export interface FabMenuProps {
@@ -24,6 +24,7 @@ export interface FabMenuProps {
    *  lets it land where the pointer is rather than at the default placement. */
   onAddAuthenticator: () => void
   onAddDino: () => void
+  onAddPortalRecovery?: () => void
   onAddAgent: (agentId: AgentId, accountId?: string) => void
   onOpenFile: () => void
   onAddRemote: () => void
@@ -48,6 +49,7 @@ export function FabMenu({
   onAddLoop,
   onAddAuthenticator,
   onAddDino,
+  onAddPortalRecovery = () => {},
   onAddAgent,
   onOpenFile,
   onAddRemote,
@@ -271,6 +273,10 @@ export function FabMenu({
                 <button role="menuitem" onClick={pick(onAddDino)}>
                   <DinoIcon />
                   <span>Dino Game</span>
+                </button>
+                <button role="menuitem" onClick={pick(onAddPortalRecovery)}>
+                  <IconPortal />
+                  <span>Portal Recovery</span>
                 </button>
                 <button role="menuitem" onClick={pick(onOpenFile)}>
                   <EditorIcon />

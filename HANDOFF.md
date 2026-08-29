@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-08-26, portal recovery game implementation
+
+Added the `portal` canvas node and `src/shared/portal-recovery.ts`. The node exposes a deterministic
+12×8 top-down map with three energy keys, five hazards, three energy units, a core activation goal,
+keyboard and touch controls, named grid-cell state for assistive technology, and reduced-motion
+handling. It is reachable from the canvas context menu, FAB, and command palette, and is registered
+with the canvas node factory, size table, serializer, and node restore path.
+
+Completion persists only schema-versioned bounded progress (`completed`, `attempts`, and
+`bestMoves`) in the project node record. The game cannot authenticate, clear a lockout, create a
+session, set a cookie, or bypass a portal code or passphrase. School mode keeps the game available
+but switches the surface to English-only copy. See
+[`docs/features/canvas/portal-recovery.md`](docs/features/canvas/portal-recovery.md).
+
+This lane deliberately did not run tests, type checking, linting, builds, packaging, runtime
+interaction, or captures, and it did not create a commit or dew. The next owner must run the
+focused and full checks, interact with the built artifact, and capture the node before marking the
+roadmap item verified.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

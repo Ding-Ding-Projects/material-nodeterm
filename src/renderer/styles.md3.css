@@ -11230,3 +11230,107 @@ button.term-node__title-text:focus-visible {
 .icon-menu__reset-btn {
   align-self: flex-start;
 }
+
+/* Portal recovery game (issue #36): a bounded keyboard/touch map with explicit text status.
+   The board deliberately uses CSS transitions only for cosmetic movement and removes them for
+   reduced motion; game state itself advances one cell per accepted input, never by a timer. */
+.portal-recovery-node {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 24px;
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+  box-shadow: none;
+}
+.portal-recovery-node.selected { border-color: var(--md-primary); }
+.portal-recovery-node__header {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 2px solid;
+  background: var(--md-surface-container-high);
+}
+.portal-recovery-node__header .term-node__title { min-width: 0; flex: 1; }
+.portal-recovery-node__badge {
+  flex: 0 0 auto;
+  color: var(--md-on-surface-variant);
+  font: 600 11px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: nowrap;
+}
+.portal-recovery-node__body {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px;
+  outline: none;
+}
+.portal-recovery-node__body:focus-visible { box-shadow: inset 0 0 0 2px var(--md-primary); }
+.portal-recovery-node__intro { display: grid; gap: 3px; font-size: 12px; }
+.portal-recovery-node__intro strong { font-size: 14px; }
+.portal-recovery-node__safety { color: var(--md-on-surface-variant); font-size: 11px; }
+.portal-recovery-node__board {
+  display: grid;
+  gap: 2px;
+  width: min(100%, 560px);
+  aspect-ratio: 3 / 2;
+  align-self: center;
+  padding: 4px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 16px;
+  background: var(--md-surface-container-low);
+}
+.portal-recovery-node__cell {
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--md-outline-variant) 55%, transparent);
+  border-radius: 5px;
+  background: var(--md-surface-container);
+  color: var(--md-on-surface-variant);
+  font-size: clamp(11px, 2.4vw, 18px);
+  cursor: pointer;
+  transition: background-color 180ms ease, transform 180ms ease;
+}
+.portal-recovery-node__cell:hover,
+.portal-recovery-node__cell:focus-visible { background: var(--md-secondary-container); outline: 2px solid var(--md-primary); outline-offset: 1px; }
+.portal-recovery-node__cell.is-player { background: var(--md-primary); color: var(--md-on-primary); transform: scale(.88); }
+.portal-recovery-node__cell.is-key { background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); }
+.portal-recovery-node__cell.is-hazard { background: var(--md-error-container); color: var(--md-on-error-container); }
+.portal-recovery-node__cell.is-core { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.portal-recovery-node__legend,
+.portal-recovery-node__progress,
+.portal-recovery-node__hint { color: var(--md-on-surface-variant); font-size: 11px; }
+.portal-recovery-node__legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.portal-recovery-node__controls { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; }
+.portal-recovery-node__controls button {
+  min-width: 40px;
+  min-height: 40px;
+  border: 1px solid var(--md-outline);
+  border-radius: 12px;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-size: 18px;
+  cursor: pointer;
+}
+.portal-recovery-node__controls button:disabled { opacity: .5; cursor: not-allowed; }
+.portal-recovery-node__controls button:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+.portal-recovery-node__controls .portal-recovery-node__reset { padding-inline: 14px; font-size: 12px; }
+.portal-recovery-node__hint { margin: 0; text-align: center; }
+.portal-recovery-node.reduce-motion .portal-recovery-node__cell { transition: none; }
+@media (max-width: 520px) {
+  .portal-recovery-node__body { padding: 8px; }
+  .portal-recovery-node__legend { gap: 5px; font-size: 10px; }
+  .portal-recovery-node__safety { font-size: 10px; }
+}

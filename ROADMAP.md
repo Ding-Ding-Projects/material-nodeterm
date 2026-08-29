@@ -62,6 +62,11 @@ later commit, since this file will not be kept in lockstep with every merge).
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification
       remain outstanding.
 
+- [ ] **Portal recovery game**: the `portal` canvas node and shared bounded reducer now provide a
+  deterministic three-key, hazard, and activation-core exercise with keyboard, touch, screen-reader,
+  reduced-motion, School mode, and non-authenticating recovery semantics. Tests, build verification,
+  runtime interaction, and captures remain outstanding.
+
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the
       notification-filtering half of Low stimulation were wired 2026-08-20 (`d697f78f`). Still

@@ -11,6 +11,7 @@ import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from '
 import type { WhisperModelInfo } from './speech'
 import type { ProjectKanbanGitHub } from './github-issues'
 import type { ProjectIcon } from './project-icon'
+import type { PortalRecoveryProgress } from './portal-recovery'
 import type { ShortcutMap } from './shortcuts'
 import { DEFAULT_SHORTCUTS } from './shortcuts'
 import type { FunnyLevel, LanguageMode } from './i18n/types'
@@ -343,6 +344,7 @@ export type NodeKind =
   | 'loop'
   | 'scheduler'
   | 'dino'
+  | 'portal'
   | 'annotation'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
@@ -498,6 +500,8 @@ export interface CanvasNodeState {
   text?: string
   // dino-only: best score reached in the T-Rex Runner game.
   highScore?: number
+  /** portal-only: portable completion metadata, never credentials or authentication state. */
+  portalRecoveryProgress?: PortalRecoveryProgress
   /**
    * service-kinds only: the display name the user gave this manager ("Home lab Proxmox", "Survival
    * server"). This is the ONLY thing a service node persists, and the restraint is deliberate — the

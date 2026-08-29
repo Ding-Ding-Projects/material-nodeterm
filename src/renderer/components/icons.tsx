@@ -51,6 +51,14 @@ export const IconDino = () => (
   </svg>
 )
 
+export const IconPortal = () => (
+  <svg {...S}>
+    <circle cx="12" cy="12" r="8" />
+    <circle cx="12" cy="12" r="3" />
+    <path d="M4 12h5M15 12h5M12 4v5M12 15v5" />
+  </svg>
+)
+
 export const IconChat = () => (
   <svg {...S}>
     <path d="M4 5h16v11H9l-4 3v-3H4z" />

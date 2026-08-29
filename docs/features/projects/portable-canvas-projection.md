@@ -10,9 +10,11 @@ not open files, start processes, hydrate sessions, or contact a provider.
 The projection contains a stable schema identifier and version, project name, colour and safe icon,
 canvas identifiers and scope, node geometry, kind, title, colour, group, collapse state, tags,
 safe text and browser tab presentation, service labels, bridge and rope relationships, and an
-optional bounded global appearance record. Per-element appearance is postponed until its typed
-schema exists. Child canvases are represented now so later universe and portal
-features can add their own records without changing the root contract. A universe scope is either
+optional bounded global appearance record. Portal recovery nodes additionally carry only their
+bounded schema-versioned completion metadata (`completed`, `attempts`, and `bestMoves`), never access
+state. Per-element appearance is postponed until its typed schema exists. Child canvases are
+represented now so later universe features can add their own records without changing the root
+contract. A universe scope is either
 `multiverse` or `aws-universe`; the root scope is `root`.
 
 ## Excluded data

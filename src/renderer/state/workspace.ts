@@ -25,6 +25,7 @@ import { useSettings } from './settings'
 import type { SessionSource } from '../session/session'
 import { supportsWindowsTerminalProfiles } from './terminal-profiles'
 import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
+import type { PortalRecoveryProgress } from '@shared/portal-recovery'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -53,6 +54,7 @@ export const WORKTREE_GROUP_SIZE = { width: 760, height: 540 }
 const EDITOR_SIZE = { width: 660, height: 460 }
 const DIFF_SIZE = { width: 860, height: 500 }
 const DINO_SIZE = { width: 600, height: 200 }
+const PORTAL_RECOVERY_SIZE = { width: 620, height: 520 }
 const VIDEO_SIZE = { width: 640, height: 420 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
@@ -167,6 +169,8 @@ export interface NodeData {
   commitOid?: string
   /** dino-only: best score reached in the T-Rex Runner game. */
   highScore?: number
+  /** portal-only: portable progress only; no credential, token, or access decision is stored. */
+  portalRecoveryProgress?: PortalRecoveryProgress
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
@@ -1101,6 +1105,28 @@ export function createDinoNode(
   }
 }
 
+/** Creates a deterministic, offline portal recovery game. Progress is portable and non-secret. */
+export function createPortalRecoveryNode(
+  index: number,
+  center?: { x: number; y: number },
+  progress?: PortalRecoveryProgress
+): CanvasNode {
+  return {
+    id: nextId('portal'),
+    type: 'portal',
+    position: placeAt(center, index, PORTAL_RECOVERY_SIZE.width, PORTAL_RECOVERY_SIZE.height),
+    width: PORTAL_RECOVERY_SIZE.width,
+    height: PORTAL_RECOVERY_SIZE.height,
+    style: { width: PORTAL_RECOVERY_SIZE.width, height: PORTAL_RECOVERY_SIZE.height },
+    data: {
+      title: 'Portal recovery',
+      color: '#7c4dff',
+      group: null,
+      portalRecoveryProgress: progress
+    }
+  }
+}
+
 /** Creates a group frame node at a given position/size (children get parentId = its id). */
 export function createGroupNode(
   position: { x: number; y: number },
@@ -1459,6 +1485,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   loop: true,
   scheduler: true,
   dino: true,
+  portal: true,
   annotation: true,
   minecraft: true,
   dockerhost: true,
@@ -1498,6 +1525,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   loop: NATIVE_LOOP_SIZE,
   scheduler: NATIVE_LOOP_SIZE,
   dino: DINO_SIZE,
+  portal: PORTAL_RECOVERY_SIZE,
   annotation: ANNOTATION_SIZE,
   minecraft: SERVICE_CONSOLE_SIZE,
   dockerhost: SERVICE_CONSOLE_SIZE,
@@ -1927,6 +1955,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         diffStaged: n.diffStaged,
         commitOid: n.commitOid,
         highScore: n.highScore,
+        portalRecoveryProgress: n.portalRecoveryProgress,
         agentId,
         accountId: n.accountId,
         // Migrate the old title-only identity into an explicit true/false on the next save.
@@ -2002,6 +2031,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         diffStaged: n.data.diffStaged,
         commitOid: n.data.commitOid,
         highScore: n.data.highScore,
+        portalRecoveryProgress: n.data.portalRecoveryProgress,
         agentId: n.data.agentId,
         accountId: n.data.accountId,
         accountLogin: n.data.accountLogin,

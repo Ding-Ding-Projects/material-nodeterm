@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the portal recovery canvas node: a deterministic 12×8 top-down exercise with three energy
+  keys, hazards, an activation core, keyboard and touch controls, named screen-reader state, and
+  reduced-motion support. Completion stores only bounded portable progress; it never authenticates,
+  clears a lockout, creates a session, or bypasses a portal code or passphrase. Verification remains
+  pending for this implementation lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

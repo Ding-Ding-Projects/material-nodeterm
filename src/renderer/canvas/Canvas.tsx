@@ -96,6 +96,7 @@ import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
+import PortalRecoveryNode from '../nodes/PortalRecoveryNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
 import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
@@ -151,6 +152,7 @@ import {
   IconGrid,
   IconGroup,
   IconDino,
+  IconPortal,
   IconJump,
   IconKanban,
   IconCanvasView,
@@ -568,6 +570,7 @@ import {
   createBrowserNode,
   defaultBrowserTabs,
   createDinoNode,
+  createPortalRecoveryNode,
   createDiffNode,
   createEditorNode,
   createGroupNode,
@@ -1799,6 +1802,7 @@ export function Canvas() {
       loop: withNodeBoundary(LoopNode),
       scheduler: withNodeBoundary(NativeLoopNode),
       dino: withNodeBoundary(DinoNode),
+      portal: withNodeBoundary(PortalRecoveryNode),
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
@@ -4639,6 +4643,14 @@ export function Canvas() {
       markDirty()
     },
     [setNodes, markDirty, viewCenter, activeProjectId]
+  )
+
+  const addPortalRecovery = useCallback(
+    (center?: { x: number; y: number }) => {
+      setNodes((ns) => [...ns, createPortalRecoveryNode(ns.length, center ?? viewCenter())])
+      markDirty()
+    },
+    [setNodes, markDirty, viewCenter]
   )
 
   const addWebView = useCallback(
@@ -8933,6 +8945,11 @@ export function Canvas() {
               onClick: () => addDino(at)
             },
             {
+              label: 'New portal recovery game',
+              icon: <IconPortal />,
+              onClick: () => addPortalRecovery(at)
+            },
+            {
               label: 'Open file…',
               icon: <IconEditor />,
               onClick: () => void openFileDialog(at)
@@ -9048,6 +9065,7 @@ export function Canvas() {
       addNsis,
       addNativeLoop,
       addDino,
+      addPortalRecovery,
       addBrowser,
       openFileDialog,
       newProjectFile,
@@ -13034,6 +13052,13 @@ export function Canvas() {
             run: () => addDino()
           },
           {
+            id: 'new-portal-recovery',
+            label: 'New portal recovery game',
+            hint: 'Three energy keys, hazards, activation core, no authentication bypass',
+            icon: <IconPortal />,
+            run: () => addPortalRecovery()
+          },
+          {
             id: 'open-file',
             label: 'Open file…',
             icon: <IconEditor />,
@@ -13378,6 +13403,7 @@ export function Canvas() {
     addNsis,
     addNativeLoop,
     addDino,
+    addPortalRecovery,
     addWebView,
     addBrowser,
     openFileDialog,
@@ -13962,6 +13988,7 @@ export function Canvas() {
             onAddAuthenticator={() => addAuthenticator()}
             onAddLoop={addNativeLoop}
             onAddDino={addDino}
+            onAddPortalRecovery={addPortalRecovery}
             onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
             onOpenFile={() => void openFileDialog()}
             onAddRemote={() =>
