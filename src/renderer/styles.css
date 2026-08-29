@@ -13264,6 +13264,98 @@ body.focus-mode .dock:hover {
   color: var(--md-error, #ff453a);
 }
 
+/* Hosted-service Cloudflare Tunnel handoff. The provider binding is deliberately a local seam:
+ * this panel can render and verify an origin without carrying credentials or pretending that the
+ * Cloudflare manager has performed a mutation. */
+.hosted-tunnel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 560px;
+  padding: 12px;
+  overflow: auto;
+  border-top: 1px solid var(--md-outline-variant, #3a3a3c);
+  background: var(--md-surface-container-low, #242426);
+}
+.hosted-tunnel__heading,
+.hosted-tunnel__search-row,
+.hosted-tunnel__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.hosted-tunnel__heading h3 {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 13px;
+}
+.hosted-tunnel__state {
+  padding: 3px 7px;
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  border-radius: 999px;
+  color: var(--md-on-surface-variant, #9a9a9e);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.hosted-tunnel__state--ready,
+.hosted-tunnel__state--connected { color: var(--md-success, #32d74b); }
+.hosted-tunnel__state--failed,
+.hosted-tunnel__state--rolled-back { color: var(--md-error, #ff453a); }
+.hosted-tunnel__origins,
+.hosted-tunnel__picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hosted-tunnel__search-row .service-node__input { min-width: 120px; }
+.hosted-tunnel__search-row .md3-regex-trigger { flex: none; }
+.hosted-tunnel__picker-help,
+.hosted-tunnel__availability,
+.hosted-tunnel__privacy {
+  margin: 0;
+  color: var(--md-on-surface-variant, #9a9a9e);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.hosted-tunnel__availability { color: var(--md-tertiary, #ff9f0a); }
+.hosted-tunnel__option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow: auto;
+}
+.hosted-tunnel__option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 7px 9px;
+  color: var(--md-on-surface, #f2f2f7);
+  background: var(--md-surface-container-highest, #2c2c2e);
+  border: 1px solid var(--md-outline-variant, #3a3a3c);
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.hosted-tunnel__option.is-selected {
+  border-color: var(--md-primary, #0a84ff);
+  background: var(--md-primary-container, #173a5e);
+}
+.hosted-tunnel__option small { color: var(--md-on-surface-variant, #9a9a9e); }
+.hosted-tunnel__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (max-width: 520px) {
+  .hosted-tunnel__grid { grid-template-columns: 1fr; }
+}
+
 /* Minecraft server create-and-manage (docs/minecraft-server-manager.md). Reuses every
  * .service-node__* token above (field/input/note/state) and adds only what that shared surface
  * doesn't already have: buttons, a progress bar, and the console. */

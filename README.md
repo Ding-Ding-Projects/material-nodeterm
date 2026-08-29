@@ -156,6 +156,12 @@ over HTTP/WebSocket from a host you own, reached from any browser, with passkey 
 One command (`./host.sh`, or `host.bat` on Windows) builds and starts it in a container. Phone
 pairing is a free feature, not a paywalled one.
 
+Hosted service nodes also provide a private-first Cloudflare Tunnel handoff seam: a typed local
+origin is health-checked before the provider action can run, Cloudflare Access is required, and
+provider account, zone, hostname, tunnel, and connector state stay machine-local. See the
+[hosted-service Tunnel handoff article](docs/features/remote/hosted-service-tunnel.md) for the
+current availability boundary.
+
 ### Source control and git worktrees
 
 A full git panel — stage/unstage, discard, diff nodes, branch switch/create, commit (with an

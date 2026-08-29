@@ -1,5 +1,36 @@
 # Handoff
 
+## 2026-08-26, hosted-service Cloudflare Tunnel handoff seam
+
+Implemented issue #56's private-first hosted-service handoff lane. The new
+`src/shared/hosted-service-tunnel.ts` contract validates typed HTTP(S) origins, normalizes origin
+candidates, defines the schema 3 safe intent, requires Cloudflare Access, and carries explicit
+handoff states. `src/core/hosted-service-tunnel.ts` adds a bounded local-health coordinator with a
+freshness window, provider callback seam, failure preservation, and rollback. No Cloudflare token,
+account session, tunnel id, connector state, process state, machine path, or provider credential is
+accepted by the portable contract.
+
+`src/shared/node-exec.ts` keeps the account, zone, hostname, origin, and handoff state in the
+machine-local service connection overlay. `src/core/portable-canvas-projection.ts` and the renderer
+workspace serializer carry only the safe private-first intent and health path. The GitLab service
+node now renders `src/renderer/components/HostedServiceTunnelPanel.tsx` with typed origin discovery,
+local health verification, separate searchable account and zone pickers, an anchored regex builder
+for each list, Access-required handoff, disabled-state reasons, and rollback. The panel does not
+pretend the Cloudflare manager exists; its provider callback remains unavailable until the separate
+Cloudflare manager lane supplies it.
+
+Documentation was added at
+[`docs/features/remote/hosted-service-tunnel.md`](docs/features/remote/hosted-service-tunnel.md),
+indexed in the Remote feature category, and represented in the committed offline article bundle.
+The roadmap records the scoped seam as complete while keeping Cloudflare API/catalog and connector
+runtimes in their separate Wave G lanes. The changelog entry is recorded under Unreleased below.
+
+This lane did not run tests, type checking, linting, security checks, accessibility review, builds,
+packaging, installer execution, runtime interaction, or captures. The documentation bundle generator
+was attempted but could not start because the checkout has no installed `esbuild` package; the
+offline article entry was recorded directly in `src/shared/docs-data.ts` and must be regenerated
+from the source article once dependencies are available. No commit or dew was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

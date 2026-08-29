@@ -7,6 +7,7 @@ Two different ways nodeterm reaches a machine that isn't the one in front of you
 - [Server Edition](./server-edition.md) — the same renderer, self-hosted and served to any
   browser over plain HTTP/WebSocket.
 - [Docker host](./docker-host.md) — free encrypted project sharing through a Docker-hosted relay.
+- [Hosted-service Cloudflare Tunnel handoff](./hosted-service-tunnel.md): private-first local health verification and typed provider handoff seam.
 
 See also [Agents](../agents/README.md) for how agent hooks and permission modes work across an
 SSH connection, and [Packaging](../packaging/README.md) for how the headless notification host

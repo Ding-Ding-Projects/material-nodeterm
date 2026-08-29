@@ -10,6 +10,7 @@
 import type { BridgeLink, CanvasNodeState, Project, Viewport } from '../shared/types'
 import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEMA_VERSION } from './portable-project-v3'
 import { sanitizeProjectIcon } from '../shared/project-icon'
+import { validateHostedServiceTunnelIntent, type HostedServiceTunnelIntent } from '../shared/hosted-service-tunnel'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -38,6 +39,7 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  hostedServiceTunnel?: HostedServiceTunnelIntent
 }
 
 export interface PortableRelationshipV3 {
@@ -86,7 +88,7 @@ const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'hostedServiceTunnel'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
@@ -159,6 +161,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.parentId !== undefined && typeof node.parentId !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node parent is invalid.')
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
+  if (strict && node.hostedServiceTunnel !== undefined && !validateHostedServiceTunnelIntent(node.hostedServiceTunnel)) throw new PortableProjectV3Error('manifest', 'Portable hosted-service tunnel intent is invalid.')
   if (strict && node.browserTabs !== undefined && !Array.isArray(node.browserTabs)) throw new PortableProjectV3Error('manifest', 'Portable browser tabs must be an array.')
   if (node.collapsed !== undefined) out.collapsed = node.collapsed
   if (node.parentId !== undefined) out.parentId = text(node.parentId, 'parent id')
@@ -166,6 +169,11 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.hostedServiceTunnel !== undefined) {
+    const intent = validateHostedServiceTunnelIntent(node.hostedServiceTunnel)
+    if (!intent) throw new PortableProjectV3Error('manifest', 'Portable hosted-service tunnel intent is invalid.')
+    out.hostedServiceTunnel = intent
+  }
   if (node.browserTabs !== undefined) {
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
     out.browserTabs = node.browserTabs.map((tab) => { if (!record(tab)) throw new PortableProjectV3Error('manifest', 'Portable browser tab is invalid.'); exactKeys(tab, ALLOWED_TAB, 'browser tab'); const url = safeUrl(tab.url, 'browser tab URL'); return { id: text(tab.id, 'browser tab id'), ...(url ? { url } : {}), title: content(tab.title, 'browser tab title') } })

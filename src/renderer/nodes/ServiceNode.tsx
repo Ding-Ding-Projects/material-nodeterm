@@ -8,6 +8,7 @@ import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
+import { HostedServiceTunnelPanel } from '../components/HostedServiceTunnelPanel'
 
 /**
  * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
@@ -300,6 +301,27 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
               would connect.
             </p>
           </div>
+        )}
+
+        {!collapsed && kind === 'gitlab' && (
+          <HostedServiceTunnelPanel
+            serviceKind="gitlab"
+            endpoint={data.serviceConnection?.endpoint}
+            intentHealthPath={data.hostedServiceTunnel?.healthPath}
+            initialBinding={data.serviceConnection?.tunnel}
+            onIntentChange={(healthPath) => updateNodeData(id, {
+              hostedServiceTunnel: { provider: 'cloudflare-tunnel', exposure: 'private-first', access: 'required', healthPath }
+            })}
+            onBindingChange={(binding) => {
+              const connection = data.serviceConnection
+              if (!connection) return
+              updateNodeData(id, {
+                serviceConnection: binding
+                  ? { ...connection, tunnel: binding }
+                  : { ...connection, tunnel: undefined }
+              })
+            }}
+          />
         )}
       </div>
     </>

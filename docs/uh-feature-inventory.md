@@ -101,6 +101,7 @@ and then never edited this file.
 | Feature | What is missing | Closes when | Notes |
 | --- | --- | --- | --- |
 | Status Hub | The registration half only. | `manual:the shared Hub is an external service; nothing in this repository can observe whether registration happened` | **Narrowed 2026-08-20, and the app half is now in the Shipped table above as its own contract row.** The surface shipped in `3e96ad78` — `src/renderer/components/StatusSurface.tsx`, `src/shared/project-status.ts`, `docs/status-surface.md`, 31 tests in `src/shared/project-status.test.ts`, and a `status-surface` row in `scripts/check-app-contract.mjs`. What remains is reporting *into* the shared Hub, which is a service outside this tree — hence the `manual:` predicate rather than a machine-checkable one. |
+| Hosted-service Cloudflare Tunnel handoff | Provider catalog and callback are not connected until the separate Cloudflare manager lane lands; no focused test or built-artifact capture was run in this ultra-speed lane. | `manual:connect the Cloudflare manager catalog and callback, then run the full health, handoff, rollback, portability, and capture matrix` | Typed contract, schema 3 safe intent, local-only binding boundary, and GitLab panel are implemented. |
 
 ---
 

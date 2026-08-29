@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add a private-first hosted-service Cloudflare Tunnel handoff seam for the GitLab service node,
+  with typed local-origin discovery, bounded health verification, Access-required account and zone
+  picker hooks, explicit handoff status, provider failure preservation, and rollback. Portable
+  schema 3 state carries only safe intent; provider bindings remain machine-local. The Cloudflare
+  manager, API catalog, DNS routing, and connector runtime remain separate lanes. This ultra-speed
+  lane did not run tests, type checks, lint, security or accessibility checks, builds, packaging,
+  runtime interaction, or screenshots.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

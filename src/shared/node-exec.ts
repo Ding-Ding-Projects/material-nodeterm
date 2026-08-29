@@ -30,6 +30,7 @@ import { BUILTIN_AGENT_IDS, isPermissionMode } from './agents/config'
 import { sshExtraArgsEnableLocalExec } from './ssh'
 import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from './types'
 import type { NsisLocalPaths } from './nsis-form-types'
+import { validateHostedServiceTunnelBinding, type HostedServiceTunnelBinding } from './hosted-service-tunnel'
 
 /** Per-node exec values the LOCAL machine typed. Persisted only in the machine-local index. */
 export interface LocalNodeExec {
@@ -82,6 +83,8 @@ export interface ServiceConnection {
    * token in it would be a token on disk, and the vault exists precisely so that never happens.
    */
   credentialKey?: string
+  /** Local-only Cloudflare handoff state. Provider credentials and connector state never live here. */
+  tunnel?: HostedServiceTunnelBinding
 }
 
 /**
@@ -148,6 +151,10 @@ export function safeServiceConnection(value: unknown): ServiceConnection | undef
   const out: ServiceConnection = { endpoint: raw.endpoint }
   if (typeof raw.credentialKey === 'string' && SAFE_CREDENTIAL_KEY.test(raw.credentialKey)) {
     out.credentialKey = raw.credentialKey
+  }
+  if (raw.tunnel !== undefined) {
+    const tunnel = validateHostedServiceTunnelBinding(raw.tunnel)
+    if (tunnel) out.tunnel = tunnel
   }
   return out
 }

@@ -175,6 +175,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add GitLab Server CE and EE hosting profiles with backup and restore.
 - [ ] Add Nextcloud AIO and managed no-socket hosting profiles.
 - [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
+- [x] Add the private-first hosted-service Cloudflare Tunnel handoff seam: typed local-origin
+      discovery, bounded health verification, Access-required account/zone selection, explicit
+      status and rollback contracts, and local-only provider bindings. Cloudflare API/catalog and
+      connector runtimes remain the separate Wave G lanes.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
 - [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.

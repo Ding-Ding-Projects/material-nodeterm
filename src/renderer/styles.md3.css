@@ -2261,6 +2261,38 @@ button.term-node__title-text:focus-visible {
 .service-node__input {
   border-radius: var(--md-shape-sm);
 }
+.hosted-tunnel {
+  background: var(--md-surface-container-low);
+  border-top-color: var(--md-outline-variant);
+}
+.hosted-tunnel__state {
+  border-color: var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+}
+.hosted-tunnel__state--ready,
+.hosted-tunnel__state--connected {
+  color: var(--md-success);
+}
+.hosted-tunnel__state--failed,
+.hosted-tunnel__state--rolled-back {
+  color: var(--md-error);
+}
+.hosted-tunnel__picker-help,
+.hosted-tunnel__availability,
+.hosted-tunnel__privacy,
+.hosted-tunnel__option small {
+  color: var(--md-on-surface-variant);
+}
+.hosted-tunnel__availability { color: var(--md-tertiary); }
+.hosted-tunnel__option {
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-highest);
+  border-color: var(--md-outline-variant);
+}
+.hosted-tunnel__option.is-selected {
+  border-color: var(--md-primary);
+  background: var(--md-primary-container);
+}
 .ctx-colors__rainbow.is-active {
   outline-color: var(--md-primary);
 }

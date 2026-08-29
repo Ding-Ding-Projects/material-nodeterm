@@ -1,5 +1,6 @@
 import { DEFAULT_WORD_SEPARATORS } from './word-separators'
 import type { ServiceConnection } from './node-exec'
+import type { HostedServiceTunnelIntent } from './hosted-service-tunnel'
 import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
 // Types shared across the main, preload, and renderer processes.
 
@@ -514,6 +515,8 @@ export interface CanvasNodeState {
    * reasons. It never carries a secret; see `ServiceConnection` in shared/node-exec.ts.
    */
   serviceConnection?: ServiceConnection
+  /** Safe hosted-service intent. Provider account, zone, hostname and connector state stay local. */
+  hostedServiceTunnel?: HostedServiceTunnelIntent
   /**
    * nsis-only, GIT-SHARED: the installer's description (app name, version, publisher, output
    * filename, install root, shortcut/uninstaller/compression choices). Nothing here names a

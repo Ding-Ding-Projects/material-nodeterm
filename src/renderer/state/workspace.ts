@@ -1,6 +1,7 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
 import type { ServiceConnection } from '@shared/node-exec'
+import type { HostedServiceTunnelIntent } from '@shared/hosted-service-tunnel'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
@@ -172,6 +173,7 @@ export interface NodeData {
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  hostedServiceTunnel?: HostedServiceTunnelIntent
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
   nsisSpec?: NsisSpec
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
@@ -1024,7 +1026,10 @@ export function createServiceNode(
       title: SERVICE_NODE_LABELS[kind],
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
-      serviceLabel: ''
+      serviceLabel: '',
+      ...(kind === 'gitlab'
+        ? { hostedServiceTunnel: { provider: 'cloudflare-tunnel' as const, exposure: 'private-first' as const, access: 'required' as const, healthPath: '/' } }
+        : {})
     }
   }
 }
@@ -1916,6 +1921,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         text: n.text,
         serviceLabel: n.serviceLabel,
         serviceConnection: n.serviceConnection,
+        hostedServiceTunnel: n.hostedServiceTunnel,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
         filePath: n.filePath,
@@ -1991,6 +1997,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
         serviceConnection: n.data.serviceConnection,
+        hostedServiceTunnel: n.data.hostedServiceTunnel,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
         filePath: n.data.filePath,

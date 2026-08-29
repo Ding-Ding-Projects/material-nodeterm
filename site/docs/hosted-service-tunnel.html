@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hosted-service Cloudflare Tunnel handoff - nodeterm</title>
+    <meta name="description" content="Private-first local health verification and typed Cloudflare Tunnel handoff for hosted services." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Remote and hosted services</p>
+      <h1>Hosted-service Cloudflare Tunnel handoff</h1>
+      <p>Hosted service nodes use a private-first handoff. The local HTTP(S) origin must answer a real bounded health request before any provider action can be enabled.</p>
+      <h2>How it works</h2>
+      <ol>
+        <li>Save the service address and choose a typed local origin candidate.</li>
+        <li>Verify local health. A timeout or non-success response leaves handoff unavailable.</li>
+        <li>Choose a Cloudflare account and zone from searchable catalogs, then enter a validated hostname.</li>
+        <li>Hand off with Cloudflare Access required. A future Cloudflare manager supplies the provider operation.</li>
+      </ol>
+      <p>The panel reports <code>unbound</code>, <code>discovering-origin</code>, <code>checking-local-health</code>, <code>ready</code>, <code>handing-off</code>, <code>connected</code>, <code>failed</code>, and <code>rolled-back</code> states. A failed operation leaves the local service unchanged.</p>
+      <h2>Portability and privacy</h2>
+      <p>Schema 3 carries only private-first intent and the health path. Account, zone, hostname, origin, tunnel, connector, process, machine path, and credential state remain local. Import does not contact Cloudflare, start a process, change DNS, or change an Access policy.</p>
+      <h2>Availability</h2>
+      <p>This lane supplies the typed contract and GitLab desktop panel. Cloudflare API authentication, catalogs, DNS routing, and connector runtimes are separate features. Until those features are connected, the provider action remains disabled with an explanation.</p>
+      <h2>Verification status</h2>
+      <p>This ultra-speed implementation lane did not run tests, type checks, linting, security checks, accessibility review, builds, packaging, installer execution, runtime interaction, or screenshots. A later verification pass must exercise health success and failure, malformed origins, picker search, provider failure, rollback, and import side-effect refusal.</p>
+      <p><a href="./projects-and-tabs.html">Portable projects</a> · <a href="./server-edition.html">Server Edition</a> · <a href="./remote-ssh-projects.html">Remote and SSH projects</a></p>
+    </article>
+  </body>
+</html>

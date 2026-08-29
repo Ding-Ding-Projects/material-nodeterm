@@ -20,6 +20,7 @@ import type {
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import { validateHostedServiceTunnelIntent } from '../shared/hosted-service-tunnel'
 
 export const PROJECT_DIR = '.nodeterm'
 export const PROJECT_FILE = 'project.json'
@@ -206,7 +207,12 @@ export function projectToFile(
   // The project file is a SHARED document (git, or the remote host). Exec-enabling node fields
   // (`shell`, `ssh.extraArgs`) never leave this machine in it — they ride the machine-local index
   // entry instead (`localNodeExec` / `IndexEntryV3.localExec`). See @shared/node-exec.
-  const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes)
+  const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes).map((node) => {
+    if (node.hostedServiceTunnel === undefined || validateHostedServiceTunnelIntent(node.hostedServiceTunnel)) return node
+    const safe = { ...node }
+    delete safe.hostedServiceTunnel
+    return safe
+  })
   const icon = sanitizeProjectIcon(p.icon)
   return {
     version: 1,
@@ -303,7 +309,12 @@ export function fileToProject(
     viewport: base.viewport ?? f.viewport ?? framingViewport(f.nodes),
     // applyLocalNodeExec DROPS whatever the file carried in the exec fields (it is not ours) and
     // re-attaches only what this machine typed. See @shared/node-exec.
-    nodes: applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec),
+    nodes: applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec).map((node) => {
+      if (node.hostedServiceTunnel === undefined || validateHostedServiceTunnelIntent(node.hostedServiceTunnel)) return node
+      const safe = { ...node }
+      delete safe.hostedServiceTunnel
+      return safe
+    }),
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),
