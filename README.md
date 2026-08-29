@@ -223,6 +223,10 @@ Identical on desktop and in the browser.
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See
   [`docs/ollama-manager.md`](./docs/ollama-manager.md).
+- **AWS CDK manager** — a guided local project-folder picker with detected application and runtime
+  facts, manifest trust review, pinned CDK dependency bootstrap, and typed synth, diff, deploy, and
+  destroy workflows. It never exposes an arbitrary shell command; credentials and generated runtime
+  state stay local. See [`docs/features/integrations/cdk-manager.md`](./docs/features/integrations/cdk-manager.md).
 - **Scheduled settings** — rules that automatically overlay appearance/customization settings
   for a date+time window ("dark theme after 22:00"), with an optional Home Assistant boolean
   source. See [`docs/scheduled-settings.md`](./docs/scheduled-settings.md).

@@ -3798,6 +3798,8 @@ export interface NodeTerminalApi {
   ollama: import('./ollama').OllamaApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** AWS Cloud Development Kit manager — local verified CLI and typed workflows only. */
+  cdk: import('./cdk').CdkApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

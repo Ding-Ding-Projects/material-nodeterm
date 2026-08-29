@@ -13518,3 +13518,14 @@ body.focus-mode .dock:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* AWS CDK manager: facts and bounded command evidence stay readable in a narrow drawer. */
+.cdk-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+.cdk-facts > div { padding: 10px 12px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; background: var(--md-sys-color-surface-container-low); }
+.cdk-facts dt { color: var(--md-sys-color-on-surface-variant); font-size: 0.78rem; }
+.cdk-facts dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.cdk-output { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high); }

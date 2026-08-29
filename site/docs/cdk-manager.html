@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AWS CDK manager · nodeterm</title>
+  <meta name="description" content="Guided local AWS CDK project inspection and reviewed workflows in nodeterm.">
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <main class="docs-page">
+    <p><a href="./index.html">Documentation</a> / Integrations</p>
+    <h1>AWS CDK manager</h1>
+    <p>The AWS CDK manager guides a local project from folder selection through trust review,
+      dependency bootstrap, synth, diff, reviewed deploy, and reviewed destroy. It is a local
+      management surface, not a hosted AWS console or a replacement for the installed CDK app.</p>
+    <h2>Workflow</h2>
+    <ol>
+      <li>Choose the project root with the folder picker.</li>
+      <li>Inspect the detected application, language, runtime, entrypoint, and manifests.</li>
+      <li>Review the entrypoint and manifest fingerprints, then acknowledge the intended change.</li>
+      <li>Bootstrap the pinned local toolkit or run a fixed synth, diff, deploy, or destroy action.</li>
+      <li>Read bounded output and generated asset hashes in the Output tab.</li>
+    </ol>
+    <h2>Safety and portability</h2>
+    <p>The manager never exposes an arbitrary shell field. It executes only the project-local CDK
+      launcher with fixed arguments and shell execution disabled. Credentials, provider sessions,
+      caches, generated output, process state, and machine paths stay local and are omitted from
+      portable project data. A different computer must explicitly Configure or Rebind its local
+      folder before an operation can run.</p>
+    <h2>Current verification boundary</h2>
+    <p>This feature lane intentionally skips tests, type checks, lint, security and accessibility
+      checks, installer execution, runtime interaction checks, and UI captures. Build and packaging
+      evidence proves artifact production only.</p>
+  </main>
+</body>
+</html>

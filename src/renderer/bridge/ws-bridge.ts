@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { CdkApi } from '../../shared/cdk'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,22 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+/** AWS CDK manager over the authenticated Server Edition/relay RPC boundary. */
+export function buildCdkApi(client: RpcClient): Pick<NodeTerminalApi, 'cdk'> {
+  const cdk: CdkApi = {
+    inspect: (folder) => client.request(IPC.cdkInspect, folder) as ReturnType<CdkApi['inspect']>,
+    status: (folder) => client.request(IPC.cdkStatus, folder) as ReturnType<CdkApi['status']>,
+    bootstrap: (folder) => client.request(IPC.cdkBootstrap, folder) as ReturnType<CdkApi['bootstrap']>,
+    synth: (folder, review) => client.request(IPC.cdkSynth, folder, review) as ReturnType<CdkApi['synth']>,
+    diff: (folder, review) => client.request(IPC.cdkDiff, folder, review) as ReturnType<CdkApi['diff']>,
+    deploy: (folder, review) => client.request(IPC.cdkDeploy, folder, review) as ReturnType<CdkApi['deploy']>,
+    destroy: (folder, review) => client.request(IPC.cdkDestroy, folder, review) as ReturnType<CdkApi['destroy']>,
+    cancel: (folder) => client.request(IPC.cdkCancel, folder) as ReturnType<CdkApi['cancel']>,
+    onEvent: (listener) => client.subscribe(IPC.cdkEvent, listener as Listener)
+  }
+  return { cdk }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1392,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildCdkApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

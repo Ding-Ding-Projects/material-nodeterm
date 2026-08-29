@@ -160,6 +160,9 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Multiverse and AWS
 
+- [x] Add the guided AWS CDK manager with folder picker, project detection, trust review, verified
+  toolkit bootstrap, bounded synth/diff/deploy/destroy workflows, and explicit portability boundary.
+
 - [ ] Add door-only Multiverse canvases to depth 8.
 - [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
 - [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.

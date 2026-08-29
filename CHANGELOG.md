@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add the guided AWS CDK manager with a project-folder picker, detected application/language/
+  environment facts, trust review, pinned dependency bootstrap, typed synth/diff/deploy/destroy
+  workflows, bounded output and asset evidence, and an explicit local-only portability boundary.
+  This ultra-speed lane did not run tests, type checks, lint, security or accessibility checks,
+  installer execution, runtime interaction checks, or UI captures; build and packaging evidence
+  proves artifact production only.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

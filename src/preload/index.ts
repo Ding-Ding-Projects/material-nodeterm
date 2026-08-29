@@ -924,6 +924,21 @@ const api: NodeTerminalApi = {
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
   },
+  cdk: {
+    inspect: (folder) => ipcRenderer.invoke(IPC.cdkInspect, folder),
+    status: (folder) => ipcRenderer.invoke(IPC.cdkStatus, folder),
+    bootstrap: (folder) => ipcRenderer.invoke(IPC.cdkBootstrap, folder),
+    synth: (folder, review) => ipcRenderer.invoke(IPC.cdkSynth, folder, review),
+    diff: (folder, review) => ipcRenderer.invoke(IPC.cdkDiff, folder, review),
+    deploy: (folder, review) => ipcRenderer.invoke(IPC.cdkDeploy, folder, review),
+    destroy: (folder, review) => ipcRenderer.invoke(IPC.cdkDestroy, folder, review),
+    cancel: (folder) => ipcRenderer.invoke(IPC.cdkCancel, folder),
+    onEvent: (listener) => {
+      const handler = (_event: unknown, payload: Parameters<typeof listener>[0]) => listener(payload)
+      ipcRenderer.on(IPC.cdkEvent, handler)
+      return () => ipcRenderer.removeListener(IPC.cdkEvent, handler)
+    }
+  },
   minecraft: {
     versions: () => ipcRenderer.invoke(IPC.minecraftVersions),
     status: (id) => ipcRenderer.invoke(IPC.minecraftStatus, id),

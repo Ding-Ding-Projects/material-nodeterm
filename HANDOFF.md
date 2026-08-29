@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-08-26, AWS CDK manager implementation
+
+Implemented the guided AWS CDK manager for issue #48. The shared contract is in
+`src/shared/cdk.ts`; the Electron-free manager and IPC registrar are in `src/core/cdk/`; desktop
+and Server Edition wiring is present in `src/main/index.ts`, `src/server/handlers/index.ts`,
+`src/preload/index.ts`, and the renderer bridges. The drawer at
+`src/renderer/components/cdk/CdkManagerPanel.tsx` provides folder selection, detected application,
+language, environment, entrypoint, manifest search, trust fingerprint acknowledgement, pinned
+dependency bootstrap, and fixed synth/diff/deploy/destroy workflows. Command output is bounded and
+generated `cdk.out` assets are listed with byte counts and hashes. Relay sessions intentionally
+refuse this machine-local capability rather than operating AWS against the wrong host.
+
+Documentation is in `docs/features/integrations/cdk-manager.md` and `site/docs/cdk-manager.html`,
+with the integrations index, site documentation index, roadmap, and changelog updated. Portable
+project data remains limited to safe intent; credentials, provider sessions, caches, generated
+runtime state, and machine paths remain local.
+
+This ultra-speed lane deliberately did not run tests, type checks, lint, security checks,
+accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.
+No commit or dew was made in this lane. The next owner should review the diff, regenerate the
+offline documentation bundle, run the focused checks, and perform the built-artifact interaction
+and release work in the owning integration pass.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

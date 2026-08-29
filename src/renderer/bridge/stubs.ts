@@ -570,6 +570,17 @@ export function buildStubApi(): Omit<
       chatStop: U('ollama.chatStop'),
       onChatStream: noopUnsub
     },
+    cdk: {
+      inspect: U('cdk.inspect'),
+      status: U('cdk.status'),
+      bootstrap: U('cdk.bootstrap'),
+      synth: U('cdk.synth'),
+      diff: U('cdk.diff'),
+      deploy: U('cdk.deploy'),
+      destroy: U('cdk.destroy'),
+      cancel: U('cdk.cancel'),
+      onEvent: noopUnsub
+    },
     minecraft: {
       versions: U('minecraft.versions'),
       status: U('minecraft.status'),

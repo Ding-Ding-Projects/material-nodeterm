@@ -594,6 +594,17 @@ export const IPC = {
   // Shell → renderer: one multiplexed status/console stream, like ollama:chat-stream above.
   // Payload: MinecraftEvent. A listener filters to the instance id it owns.
   minecraftEvent: 'minecraft:event',
+  // AWS CDK manager (docs/cdk-manager.md). The core executes only the verified project-local CDK
+  // launcher with fixed typed workflows; review is required before synth, diff, deploy, or destroy.
+  cdkInspect: 'cdk:inspect',
+  cdkStatus: 'cdk:status',
+  cdkBootstrap: 'cdk:bootstrap',
+  cdkSynth: 'cdk:synth',
+  cdkDiff: 'cdk:diff',
+  cdkDeploy: 'cdk:deploy',
+  cdkDestroy: 'cdk:destroy',
+  cdkCancel: 'cdk:cancel',
+  cdkEvent: 'cdk:event',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).

@@ -355,6 +355,13 @@ export const IconOllama = () => (
   </svg>
 )
 
+/** Cloud outline for the AWS CDK infrastructure manager. */
+export const IconCloud = () => (
+  <svg {...S}>
+    <path d="M7.2 18.5h9.7a3.6 3.6 0 0 0 .3-7.2A5.3 5.3 0 0 0 7 9.8a4.4 4.4 0 0 0 .2 8.7Z" />
+  </svg>
+)
+
 /** The "Canvas objects" group of the pane menu (sticky notes, browsers, loops, files, the dino):
  *  three plain shapes. Deliberately NOT a note/file glyph — those already label individual rows
  *  inside the group, and a submenu wearing one of its children's icons reads as that child. */
