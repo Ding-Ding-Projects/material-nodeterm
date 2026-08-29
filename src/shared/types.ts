@@ -6,6 +6,7 @@ import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
 import type { CloneProgress } from './clone-url'
 import type { NormalizedAgentEvent } from './agents/normalize'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId, PromptInjectionMode } from './agents/config'
+import type { AgentMessageDeliverRequest, AgentMessageReply } from './agents/agent-messaging'
 import type { GroupWorktree } from './worktree'
 import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from './presence'
 import type { WhisperModelInfo } from './speech'
@@ -2064,6 +2065,9 @@ export interface Settings {
    *  hook holds briefly for a phone/canvas Approve/Deny before falling through to the normal
    *  interactive prompt. Off ⇒ the env var is absent ⇒ exact legacy behavior. Claude-only. */
   hookReplyApprovals: boolean
+  /** Opt-in bypass for per-message write confirmations. Only agent-to-node messaging is affected;
+   *  close always remains confirmation-gated. */
+  agentSeamlessWrites: boolean
   /** Hold an idle-sleep power assertion while a LOCAL agent node is working, so long runs
    *  survive an unattended laptop. Released when the last one stops (or goes stale). Cannot
    *  hold through a closed lid. Asked in the setup tour; Settings → Behavior. */
@@ -2272,6 +2276,9 @@ export const DEFAULT_SETTINGS: Settings = {
   // Deterministic hook-reply approvals default ON (existing users pick it up on hydrate). Only
   // affects Claude terminal sessions; off reproduces the pre-feature launch bit-for-bit.
   hookReplyApprovals: true,
+  // Seamless agent messaging is deliberately opt-in. It removes the per-message confirmation for
+  // writes only, while close remains behind the existing destructive-action confirmation.
+  agentSeamlessWrites: false,
   // Keep-awake-while-agents-work default ON (existing users pick it up on hydrate — deliberate,
   // same note style as hookReplyApprovals). Held only while a local agent is actually working.
   keepAwakeWhileAgentsWork: true,
@@ -3935,4 +3942,8 @@ export interface NodeTerminalApi {
     result?: unknown
     error?: string
   }): void
+  /** Deliver an authenticated agent message through the core delivery service. */
+  agentMessage: {
+    deliver(req: AgentMessageDeliverRequest): Promise<AgentMessageReply>
+  }
 }

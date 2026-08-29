@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add authenticated agent messaging with shared send/reply/status wire types, bounded delivery and
+  expiry outcomes, receipt traces, identity-aware routing, and an opt-in seamless write setting.
+  This implementation lane intentionally has no test, build, package, runtime, or capture verdict.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

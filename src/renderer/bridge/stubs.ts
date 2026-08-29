@@ -516,6 +516,9 @@ export function buildStubApi(): Omit<
     }),
     onAgentControl: noopUnsub,
     sendAgentControlResult: noop,
+    agentMessage: {
+      deliver: async () => ({ ok: false, error: 'agent messaging is unavailable on this surface' })
+    },
     // Both overridden with the REAL implementation by ws-bridge.ts's buildConverterApi/
     // buildOllamaApi (the Server Edition runs the identical core engine as desktop — see
     // docs/file-converter.md / docs/ollama-manager.md). This stub only matters where nothing

@@ -1,5 +1,18 @@
 # Handoff
 
+## 2026-08-26, seamless authenticated agent messaging lane
+
+The messaging lane adds shared `send`, `reply`, and `notify` wire types, platform-free delivery
+decision and framing modules, bounded queue and expiry handling, delivery traces, renderer and
+desktop integration, the Server Edition's explicit refusal, identity-aware context-link notes, and
+the Settings → Agents seamless write switch. The 130 second hook handler ceiling remains in place
+after the receive-phase slow-client guard, and `close` remains confirmation-gated.
+
+The current lane did not run tests, type checks, lint, security checks, accessibility checks,
+builds, packaging, installer execution, runtime interaction, or captures. No commit or push was
+made. The next owner should run the focused messaging checks, verify the desktop and Server Edition
+bridges, and then refresh the release evidence before marking the roadmap item complete.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

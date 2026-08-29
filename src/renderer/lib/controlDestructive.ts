@@ -31,6 +31,8 @@ interface CloseConfirmationRequest {
 
 interface DestructiveControlDependencies {
   confirmationBusy(): boolean
+  /** Global opt-in for write-only seamless agent messaging. Close never uses this path. */
+  seamlessWrites?(): boolean
   openWriteConfirmation(request: WriteConfirmationRequest): void
   openCloseConfirmation(request: CloseConfirmationRequest): boolean
   performWrite(nodeId: string, text: string): Promise<ControlActionReply>
@@ -64,7 +66,12 @@ export function dispatchDestructiveControl(
     return true
   }
 
-  if (dependencies.confirmationBusy()) {
+  // A seamless write never opens or replaces a confirmation surface, so an unrelated pending
+  // dialog must not turn this already-approved delivery into a false refusal. Close remains gated.
+  if (
+    dependencies.confirmationBusy() &&
+    !(request.verb === 'write' && dependencies.seamlessWrites?.() === true)
+  ) {
     dependencies.reply(pendingConfirmationReply())
     return true
   }
@@ -72,6 +79,22 @@ export function dispatchDestructiveControl(
   const cancel = (): void => dependencies.reply({ ok: false, error: 'denied by user' })
 
   if (request.verb === 'write') {
+    if (dependencies.seamlessWrites?.() === true) {
+      let actionReply: ControlActionReply | undefined
+      void guardConcurrentRestart(nodeId, async () => {
+        actionReply = await dependencies.performWrite(nodeId, request.args.text ?? '')
+        return 'performed' as const
+      })().then((outcome) => {
+        dependencies.reply(
+          outcome === 'not-eligible'
+            ? { ok: false, error: 'target is busy with a restart or wake — try again' }
+            : (actionReply ?? { ok: false, error: 'write did not return a result' })
+        )
+      }).catch((error) => {
+        dependencies.reply({ ok: false, error: String(error) })
+      })
+      return true
+    }
     dependencies.openWriteConfirmation({
       message: `Agent "${request.sourceTitle}" wants to send to ${nodeId}:\n\n${request.args.text ?? ''}`,
       confirmLabel: 'Send',

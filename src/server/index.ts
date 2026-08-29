@@ -490,6 +490,14 @@ export async function startServer(
   // and an agent retries an outage. Keep the shared installer here so the refusal contract stays
   // identical for boot and for the focused hook-server tests. See `control-unsupported.ts`.
   installServerEditionControlHandler(hookServer)
+  // Keep the renderer/core/server contract explicit: the browser bridge exposes the same
+  // agentMessage namespace, but this headless edition has no user-facing pane confirmation owner
+  // for cross-agent delivery. Return the named permanent refusal instead of letting RPC report an
+  // opaque missing-handler error that a caller would retry.
+  platform.handle(IPC.agentMessageDeliver, async () => ({
+    ok: false,
+    error: 'agent messaging is not available on the Server Edition. Do not retry.'
+  }))
 
   // ---- Node identity (src/core/agents/node-auth-secret.ts) ------------------------------------
   // First time the Server Edition arms node identity. Headless Linux has no OS keychain, so the

@@ -57,6 +57,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Seamless authenticated agent messaging** — shared send/reply/status wire types, bounded
+  delivery and expiry outcomes, identity-aware context-link routing, and the opt-in seamless write
+  setting are implemented in this lane. The current ultra-speed lane deliberately leaves tests,
+  packaged interaction, and captures unrun.
+
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification

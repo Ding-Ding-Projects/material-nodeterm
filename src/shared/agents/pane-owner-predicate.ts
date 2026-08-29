@@ -24,6 +24,10 @@ export interface PaneOwner {
   tty: string
   command: string
   argv: readonly string[]
+  /** Stable tmux pane identity when the host exposes it. Older hosts omit this field. */
+  paneId?: string
+  /** Foreground process ids aligned with argv, when the host collector provides them. */
+  pids?: readonly number[]
 }
 
 /**
@@ -223,4 +227,22 @@ export function isAgentPane(
     if (wanted.includes(effectiveBinary(line))) return 'agent'
   }
   return 'not-agent'
+}
+
+/** Return the process id of the expected agent in the foreground group, when the host supplied
+ * aligned process ids. Older collectors that only expose argv intentionally return null. */
+export function agentPidIn(
+  owner: PaneOwner | null | undefined,
+  expected: string,
+  binaries?: readonly string[] | null
+): number | null {
+  if (!owner?.argv || !owner.pids) return null
+  const wanted = binaries ?? binariesFor(expected)
+  if (!wanted?.length) return null
+  for (let i = 0; i < owner.argv.length; i++) {
+    if (!wanted.includes(effectiveBinary(owner.argv[i]))) continue
+    const pid = owner.pids[i]
+    return typeof pid === 'number' && pid > 0 ? pid : null
+  }
+  return null
 }

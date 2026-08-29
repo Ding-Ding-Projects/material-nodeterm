@@ -9801,6 +9801,140 @@ export function Canvas() {
       const reply = (r: { ok: boolean; message?: string; result?: unknown; error?: string }) =>
         api.sendAgentControlResult({ requestId, ...r })
 
+      if (verb === 'status') {
+        const message = agentMailbox().get(args.message ?? '')
+        if (!message) {
+          reply({ ok: false, error: `status: unknown message (${args.message ?? 'missing'})` })
+          return
+        }
+        const projectId = useProjects.getState().projects.find((project) =>
+          project.nodes.some((node) => node.id === sourceNodeId)
+        )?.id
+        const participant =
+          (message.sender.projectId === projectId && message.sender.nodeId === sourceNodeId) ||
+          (message.recipient.projectId === projectId && message.recipient.nodeId === sourceNodeId)
+        if (!participant) {
+          reply({ ok: false, error: 'status: this node is not a participant' })
+          return
+        }
+        reply({
+          ok: true,
+          message: `${message.status} ${message.id}`,
+          result: { id: message.id, status: message.status, deliveredAt: message.deliveredAt }
+        })
+        return
+      }
+
+      // Agent messaging is answered by the core service before source-project routing. A sender
+      // working in a background project must not pull the user's visible canvas to the front, and
+      // the delivery target is a terminal pane rather than a React node. Main re-resolves the
+      // authenticated scope and target state, then returns one typed send/reply/status outcome.
+      if (verb === 'send' || verb === 'reply' || verb === 'notify') {
+        const original = verb === 'reply' ? agentMailbox().get(args.message ?? '') : undefined
+        if (verb === 'reply' && !original) {
+          reply({ ok: false, error: `reply: unknown message (${args.message ?? 'missing'})` })
+          return
+        }
+        const targetId = (verb === 'reply' ? original?.sender.nodeId : args.node ?? '').trim()
+        if (!targetId) {
+          reply({ ok: false, error: `${verb} requires --node` })
+          return
+        }
+        if (verb === 'notify' && args.text) {
+          reply({ ok: false, error: 'notify does not accept --text' })
+          return
+        }
+        if (verb === 'send' && !args.subject) {
+          reply({ ok: false, error: 'send requires --subject' })
+          return
+        }
+        if (verb !== 'notify' && !args.text) {
+          reply({ ok: false, error: `${verb} requires --text` })
+          return
+        }
+        const controlState = useProjects.getState()
+        const stored = controlState.projects
+          .flatMap((project) => project.nodes)
+          .find((node) => node.id === sourceNodeId)
+        const live = nodesRef.current.find((node) => node.id === sourceNodeId)
+        if (!stored && !live) {
+          reply({ ok: false, error: 'source node is not in any open project' })
+          return
+        }
+        if (!sourceIsControlCapable(live?.data.agentId ?? stored?.agentId)) {
+          reply({ ok: false, error: 'source node is not a control-capable agent' })
+          return
+        }
+        const sourceProject = controlState.projects.find((project) =>
+          project.nodes.some((node) => node.id === sourceNodeId)
+        )
+        const targetStored = sourceProject?.nodes.find((node) => node.id === targetId)
+        let localMessage: AgentMessage | undefined
+        if (verb !== 'notify') {
+          try {
+            localMessage = agentMailbox().create({
+              id: `msg-${crypto.randomUUID()}`,
+              conversationId: original?.conversationId,
+              replyTo: original?.id,
+              sender: {
+                projectId: sourceProject?.id ?? controlState.activeProjectId ?? 'unknown',
+                nodeId: sourceNodeId,
+                title: String(live?.data.title ?? stored?.title ?? sourceNodeId),
+                agentId: String(live?.data.agentId ?? stored?.agentId ?? '') as AgentId
+              },
+              recipient: {
+                projectId: sourceProject?.id ?? controlState.activeProjectId ?? 'unknown',
+                nodeId: targetId,
+                title: String(targetStored?.title ?? targetId),
+                agentId: targetStored?.agentId
+              },
+              ...(verb === 'reply' && original ? { subject: `RE: ${original.subject}` } :
+                { subject: args.subject ?? 'Agent message' }),
+              body: args.text ?? ''
+            })
+          } catch (error) {
+            reply({ ok: false, error: `${verb}: ${String(error)}` })
+            return
+          }
+        }
+        let delivered: { ok: boolean; message?: string; result?: unknown; error?: string } | null = null
+        const outcome = await guardConcurrentRestart(targetId, async () => {
+          delivered = await api.agentMessage.deliver({
+            verb,
+            sourceNodeId,
+            targetNodeId: targetId,
+            ...(verb === 'send' && args.subject
+              ? { subject: args.subject }
+              : verb === 'reply' && original
+                ? { subject: `RE: ${original.subject}` }
+                : {}),
+            body: args.text ?? ''
+          })
+          return 'done' as const
+        })()
+        if (outcome === 'not-eligible') {
+          reply({
+            ok: false,
+            error: 'targetBusy: the target is mid-restart or mid-wake. Retryable — wait, then try once more.'
+          })
+          return
+        }
+        if (localMessage && delivered?.ok) {
+          const outcome = delivered.result as { kind?: string } | undefined
+          if (outcome?.kind === 'delivered' || outcome?.kind === 'stalled') {
+            agentMailbox().markDelivered(localMessage.id)
+          }
+          delivered = {
+            ...delivered,
+            result: { ...(outcome ?? {}), id: localMessage.id, status: outcome?.kind ?? 'queued' }
+          }
+        } else if (localMessage && delivered && !delivered.ok) {
+          agentMailbox().markFailed(localMessage.id, delivered.error ?? 'delivery failed')
+        }
+        reply(delivered ?? { ok: false, error: 'delivery produced no reply' })
+        return
+      }
+
       // Which canvas answers? React Flow holds only the ACTIVE project's nodes, but every OTHER
       // project's tmux sessions keep running and are re-adopted on the next app start — so after a
       // restart the agents of every project the app did NOT come up on were answered by a canvas
@@ -10132,6 +10266,7 @@ export function Canvas() {
             { verb, args, sourceTitle: srcTitle },
             {
               confirmationBusy: confirmBusy,
+              seamlessWrites: () => useSettings.getState().settings.agentSeamlessWrites,
               openWriteConfirmation: (request) =>
                 setConfirm({
                   message: request.message,

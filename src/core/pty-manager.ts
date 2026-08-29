@@ -3645,6 +3645,18 @@ export class PtyManager {
     }
   }
 
+  /** Core agent-messaging actuator. The delivery service supplies the raw envelope; this method
+   * routes it through the same guarded, bracketed-paste-aware path as every other terminal write.
+   * Keeping the actuator here gives Desktop and Server Edition one transport implementation. */
+  async sendFramedPayload(persistKey: string, payload: string): Promise<boolean> {
+    return this.sendText(persistKey, payload, { enter: true })
+  }
+
+  /** Synchronous live-session check used by the delivery service's pre-probe facts. */
+  hasLiveSession(persistKey: string): boolean {
+    return this.liveSessionForPersistKey(persistKey) !== undefined
+  }
+
   /**
    * The command currently in the foreground of a node's tmux pane (e.g. 'claude', 'zsh') — how
    * the in-place agent restart observes that the CLI has exited and a shell owns the pane again.

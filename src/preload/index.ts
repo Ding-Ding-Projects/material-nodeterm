@@ -872,6 +872,9 @@ const api: NodeTerminalApi = {
     return () => ipcRenderer.removeListener(IPC.agentControl, handler)
   },
   sendAgentControlResult: (payload) => ipcRenderer.send(IPC.agentControlResult, payload),
+  agentMessage: {
+    deliver: (req) => ipcRenderer.invoke(IPC.agentMessageDeliver, req)
+  },
   converter: {
     catalog: () => ipcRenderer.invoke(IPC.converterCatalog),
     detect: (path) => ipcRenderer.invoke(IPC.converterDetect, path),

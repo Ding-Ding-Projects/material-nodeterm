@@ -187,6 +187,14 @@ import { buildHandoff, type HandoffRemote } from './handoff'
 import { initContextLink, setNodeTranscript } from '../core/context-link'
 import { transcriptPathOf } from '../core/context-link-core'
 import { initCanvasControl, installCanvasSkillInto } from './canvas-control'
+import {
+  createDeliveryQueue,
+  deliverFromControl,
+  isDeliverRequest,
+  onMessagingAgentEvent,
+  setDeliveryQueue,
+  type AgentMessagingDeps
+} from './agent-messaging'
 import { initTranscriptIndex } from '../core/transcript-index'
 import { initTelemetry } from './telemetry'
 import { initClaudeUsage } from './claude-usage'
@@ -1559,6 +1567,36 @@ app.whenReady().then(async () => {
     }
   })
 
+  // Agent messaging is a core delivery path, not a renderer-owned terminal write. The renderer
+  // supplies only node ids and message text; this service re-resolves project membership, pane
+  // identity, live state, and queue limits here before it can reach a terminal. Keeping the
+  // handler beside the shared board-log registration gives Desktop one authoritative seam, while
+  // Server Edition wires the same service through its own RPC handler.
+  const messagingDeps: AgentMessagingDeps = {
+    paneOwner: (id) => ptyManager.paneOwner(id),
+    sendFramedPayload: (id, payload) => ptyManager.sendFramedPayload(id, payload),
+    hasLiveSession: (id) => ptyManager.hasLiveSession(id),
+    projects: () => workspaceStore.persistedCanvases(),
+    isRemoteNode: (id) => !!ptyManager.sshRemoteForNode(id),
+    // Authenticated delivery remains available for send/reply/status. The separate global
+    // setting controls the legacy write verb's confirmation bypass, and never enables close.
+    messagingEnabled: () => true,
+    // The current store is the authoritative node index for this shell. A future runtime ledger
+    // can tighten this further without changing the IPC or renderer contract.
+    paneOwnerProject: (id) => workspaceStore.persistedCanvases().find((p) => p.nodes.some((n) => n.id === id))?.id,
+    customAgents: () => settingsStore.get().customAgents,
+    appendBoardLog: async () => false
+  }
+  messagingDeps.queue = createDeliveryQueue(messagingDeps)
+  setDeliveryQueue(messagingDeps.queue)
+  ipcMain.handle(IPC.agentMessageDeliver, async (_event, raw: unknown) => {
+    if (!isDeliverRequest(raw)) {
+      return { ok: false, error: 'malformed agent-message request. Do not retry.' }
+    }
+    const { reply } = await deliverFromControl(raw, messagingDeps)
+    return reply
+  })
+
   // Password managers (core/password-manager/): v1 is local-only, same starting scope board-log
   // above shipped with — an SSH-ref or cwd-less inline project answers `unsupported` rather than
   // guessing at a remote vault path.
@@ -2429,6 +2467,10 @@ app.whenReady().then(async () => {
     sendToMain(IPC.agentStatus, enriched)
     // Feed the macOS Notch HUD its prompt (ev.task on newTurn) + subagent grouping (no-op off/non-darwin).
     notchHudOnAgentEvent(enriched)
+    // Messaging receipts and deliver-on-idle flushing consume this same verified event stream.
+    // Keeping one fan-out point prevents the mailbox, canvas badge, and external mirror from
+    // disagreeing about whether a target has actually advanced.
+    onMessagingAgentEvent(enriched)
   }
   hookServer.setListener(emitAgentStatus)
   for (const event of pendingCodexIdentityEvents.splice(0)) emitAgentStatus(event)

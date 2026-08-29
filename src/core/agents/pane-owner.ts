@@ -60,13 +60,18 @@
 import type { PaneOwner } from '../../shared/agents/pane-owner-predicate'
 
 /** What one `display-message` round-trip yields: everything but the argv. */
-export type PaneIdentity = Omit<PaneOwner, 'argv'>
+export interface PaneIdentity {
+  panePid: number
+  tty: string
+  command: string
+  paneId?: string
+}
 
 /**
  * One round-trip for the three fields the read needs. Same `|` separator as `session-memory.ts`'s
  * `PANE_FMT`, for the same reason: one string, one parser, no second copy to drift.
  */
-export const PANE_OWNER_FMT = '#{pane_pid}|#{pane_tty}|#{pane_current_command}'
+export const PANE_OWNER_FMT = '#{pane_pid}|#{pane_tty}|#{pane_current_command}|#{pane_id}'
 
 /**
  * Parse `display-message -p '<PANE_OWNER_FMT>'`.
@@ -87,7 +92,9 @@ export function parsePaneOwner(stdout: string | null | undefined): PaneIdentity 
   const tty = parts[1].trim()
   const command = parts[2].trim()
   if (!tty || !command) return null
-  return { panePid, tty, command }
+  const rawPaneId = parts[3]?.trim()
+  const paneId = rawPaneId && /^%\d+$/.test(rawPaneId) ? rawPaneId : undefined
+  return { panePid, tty, command, ...(paneId ? { paneId } : {}) }
 }
 
 /**
@@ -191,6 +198,14 @@ export function parseForegroundArgv(stdout: string | null | undefined, pgid: num
     .map((row) => row.args)
 }
 
+/** Process ids aligned with the foreground argv list, for post-write identity checks. */
+export function parseForegroundPids(stdout: string | null | undefined, pgid: number): number[] {
+  if (!Number.isInteger(pgid) || pgid <= 0) return []
+  return parsePsRows(stdout)
+    .filter((row) => row.pgid === pgid)
+    .map((row) => row.pid)
+}
+
 /**
  * The two round-trips joined: a parsed pane identity plus the `ps` output for its tty.
  *
@@ -205,9 +220,10 @@ export function paneOwnerFrom(
   if (!identity) return null
   const pgid = foregroundPgid(psStdout)
   const argv = pgid === null ? [] : parseForegroundArgv(psStdout, pgid)
+  const pids = pgid === null ? [] : parseForegroundPids(psStdout, pgid)
   // The ONE null-vs-owner decision, deliberately not two: "no foreground group marked" and "no rows
   // in it" are the same fact — we could not see who owns the pane — and a second guard for the
   // second phrasing would be a line no test can reach.
   if (argv.length === 0) return null
-  return { ...identity, argv }
+  return { ...identity, argv, pids }
 }
