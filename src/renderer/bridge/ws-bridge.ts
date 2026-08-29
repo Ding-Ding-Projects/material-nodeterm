@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { AwsApi } from '../../shared/aws'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -922,6 +923,26 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+/** AWS identity manager. Provider credentials stay on the server host; this bridge carries only
+ * profile metadata, identity summaries, expiry, and permission verdicts. */
+export function buildAwsApi(client: RpcClient): Pick<NodeTerminalApi, 'aws'> {
+  const aws: AwsApi = {
+    profiles: () => client.request(IPC.awsProfiles) as ReturnType<AwsApi['profiles']>,
+    saveProfile: (draft) => client.request(IPC.awsSaveProfile, draft) as ReturnType<AwsApi['saveProfile']>,
+    removeProfile: (name) => client.request(IPC.awsRemoveProfile, name) as Promise<void>,
+    refresh: () => client.request(IPC.awsRefresh) as ReturnType<AwsApi['refresh']>,
+    ssoLogin: (name, mode) => client.request(IPC.awsSsoLogin, name, mode) as ReturnType<AwsApi['ssoLogin']>,
+    assumeRole: (input) => client.request(IPC.awsAssumeRole, input) as ReturnType<AwsApi['assumeRole']>,
+    callerIdentity: (name) => client.request(IPC.awsCallerIdentity, name) as ReturnType<AwsApi['callerIdentity']>,
+    permissions: (name, actions) => client.request(IPC.awsPermissions, name, actions) as ReturnType<AwsApi['permissions']>,
+    regions: (name) => client.request(IPC.awsRegions, name) as ReturnType<AwsApi['regions']>,
+    setEndpoint: (region, endpoint) => client.request(IPC.awsSetEndpoint, region, endpoint) as ReturnType<AwsApi['setEndpoint']>,
+    clearMachineCache: () => client.request(IPC.awsClearMachineCache) as Promise<void>,
+    trustCredentialProcess: (name) => client.request(IPC.awsTrustCredentialProcess, name) as ReturnType<AwsApi['trustCredentialProcess']>
+  }
+  return { aws }
+}
+
 /** Local Minecraft server create-and-manage (docs/minecraft-server-manager.md) — same core engine
  *  as desktop; the server process is the one downloading, spawning and owning `java`, exactly as
  *  main does. */
@@ -1374,6 +1395,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSpeechApi(client),
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
+    ...buildAwsApi(client),
     ...buildMinecraftApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),

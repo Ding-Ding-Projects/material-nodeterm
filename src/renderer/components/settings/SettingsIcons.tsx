@@ -142,6 +142,13 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
       <path d="M4.6 6.2 6.4 8l-1.8 1.8M8 10h3" />
     </>
   ),
+  aws: (
+    <>
+      <path d="M3 4.2h10v7.6H3z" />
+      <path d="M5.2 6.5h5.6M5.2 9h2.2M9 9h1.8" />
+      <path d="M6.2 2.2h3.6" />
+    </>
+  ),
   updates: <path d="M8 2.6v7M5 6.6 8 9.6l3-3M3.6 12.6h8.8" />,
   privacy: <path d="M8 2.4 12.4 4.2V8c0 3-2 4.8-4.4 5.6C5.6 12.8 3.6 11 3.6 8V4.2Z" />,
   // A speech bubble with a globe grid inside it — "the language this app speaks".

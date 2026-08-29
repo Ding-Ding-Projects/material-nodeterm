@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { AwsApi } from '../shared/aws'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -924,6 +925,20 @@ const api: NodeTerminalApi = {
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
   },
+  aws: {
+    profiles: () => ipcRenderer.invoke(IPC.awsProfiles),
+    saveProfile: (draft) => ipcRenderer.invoke(IPC.awsSaveProfile, draft),
+    removeProfile: (name) => ipcRenderer.invoke(IPC.awsRemoveProfile, name),
+    refresh: () => ipcRenderer.invoke(IPC.awsRefresh),
+    ssoLogin: (name, mode) => ipcRenderer.invoke(IPC.awsSsoLogin, name, mode),
+    assumeRole: (input) => ipcRenderer.invoke(IPC.awsAssumeRole, input),
+    callerIdentity: (name) => ipcRenderer.invoke(IPC.awsCallerIdentity, name),
+    permissions: (name, actions) => ipcRenderer.invoke(IPC.awsPermissions, name, actions),
+    regions: (name) => ipcRenderer.invoke(IPC.awsRegions, name),
+    setEndpoint: (region, endpoint) => ipcRenderer.invoke(IPC.awsSetEndpoint, region, endpoint),
+    clearMachineCache: () => ipcRenderer.invoke(IPC.awsClearMachineCache),
+    trustCredentialProcess: (name) => ipcRenderer.invoke(IPC.awsTrustCredentialProcess, name)
+  } satisfies AwsApi,
   minecraft: {
     versions: () => ipcRenderer.invoke(IPC.minecraftVersions),
     status: (id) => ipcRenderer.invoke(IPC.minecraftStatus, id),

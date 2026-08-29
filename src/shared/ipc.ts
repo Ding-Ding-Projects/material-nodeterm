@@ -570,6 +570,20 @@ export const IPC = {
   /** main/server → renderer: a streamed chat token/finish/error for the session named in the
    *  payload. One shared channel (not per-session) — the renderer filters by sessionId. */
   ollamaChatStream: 'ollama:chat-stream',
+  // AWS identity manager (profiles, AWS SSO, role sessions, MFA, regions and endpoints). Secrets
+  // remain in the local AWS credential boundary and never cross these renderer channels.
+  awsProfiles: 'aws:profiles',
+  awsSaveProfile: 'aws:save-profile',
+  awsRemoveProfile: 'aws:remove-profile',
+  awsRefresh: 'aws:refresh',
+  awsSsoLogin: 'aws:sso-login',
+  awsAssumeRole: 'aws:assume-role',
+  awsCallerIdentity: 'aws:caller-identity',
+  awsPermissions: 'aws:permissions',
+  awsRegions: 'aws:regions',
+  awsSetEndpoint: 'aws:set-endpoint',
+  awsClearMachineCache: 'aws:clear-machine-cache',
+  awsTrustCredentialProcess: 'aws:trust-credential-process',
   // Local Minecraft server create-and-manage (docs/minecraft-server-manager.md). Registered on
   // BOTH shells over the same `platform.handle`/`platform.broadcast` seam as Ollama above, so it
   // manages whichever machine is actually running the shell. NOT carried over the relay (a peer

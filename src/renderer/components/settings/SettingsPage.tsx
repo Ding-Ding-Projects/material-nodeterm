@@ -31,6 +31,7 @@ import { PresenceIdentitySection } from './sections/PresenceIdentitySection'
 import { RemoteSection } from './sections/RemoteSection'
 import { TeamAccessSection } from './sections/TeamAccessSection'
 import { SshSection } from './sections/SshSection'
+import { AwsSection } from './sections/AwsSection'
 import { UpdatesSection } from './sections/UpdatesSection'
 import { PrivacySection } from './sections/PrivacySection'
 import { GitHubIssuesSection } from './sections/GitHubIssuesSection'
@@ -202,6 +203,7 @@ export function SettingsPage({
             <RemoteSection isActive={active === 'remote'} onClose={onClose} />
             <TeamAccessSection isActive={active === 'team-access'} onClose={onClose} />
             <SshSection isActive={active === 'ssh'} onNavigate={setActive} />
+            <AwsSection isActive={active === 'aws'} />
             <UpdatesSection isActive={active === 'updates'} />
             <PrivacySection isActive={active === 'privacy'} />
             <SchoolModeSection isActive={active === 'school-mode'} />

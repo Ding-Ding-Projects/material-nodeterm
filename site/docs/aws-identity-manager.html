@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AWS identity manager — nodeterm</title>
+    <meta name="description" content="Guided local AWS profiles, SSO, role sessions, MFA, regions, endpoints, identity, and permissions in nodeterm." />
+    <meta property="og:title" content="AWS identity manager — nodeterm" />
+    <meta property="og:description" content="Guided local AWS identity workflows with a machine-local credential boundary." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://ding-ding-projects.github.io/material-nodeterm/docs/aws-identity-manager.html" />
+    <meta property="og:image" content="https://ding-ding-projects.github.io/material-nodeterm/assets/social-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="nodeterm desktop app on a terminal canvas" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#6750a4" />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="./index.html">← Documentation</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Integrations</p>
+      <h1>AWS identity manager</h1>
+      <p>Settings → AWS identity provides a guided local surface for AWS profile metadata, SSO login, role sessions, MFA, caller identity, permissions, regions, and endpoint overrides.</p>
+      <h2>What it does</h2>
+      <ul>
+        <li>Reads profile metadata from the local AWS configuration files without returning credentials or SSO tokens.</li>
+        <li>Starts AWS SSO through supported PKCE login, with device-code mode for headless environments.</li>
+        <li>Assumes a validated IAM role and writes one-time MFA input only through protected stdin.</li>
+        <li>Checks caller identity and IAM policy permissions, reporting unknown instead of guessing allowed.</li>
+        <li>Lists verified regions and stores HTTPS endpoint overrides in machine-local application data.</li>
+      </ul>
+      <h2>Credential boundary</h2>
+      <p>Access keys, role credentials, SSO tokens, MFA values, credential-process output, private paths, and provider cache contents never enter project files, portable exports, renderer state, logs, or ordinary history. Import performs no network request, provider mutation, process launch, or download.</p>
+      <p>An imported <code>credential_process</code> remains untrusted until the user explicitly reviews it. The manager does not accept arbitrary shell text or execute a command supplied by project data.</p>
+      <h2>Honest failure states</h2>
+      <p>Missing AWS CLI, unavailable SSO, failed role trust, invalid MFA, unavailable caller identity, failed IAM simulation, and offline region discovery remain visible states with recovery guidance. An unknown permission result is not treated as permission.</p>
+      <h2>Verification status</h2>
+      <p>The implementation is present in the shared contract, core manager, IPC registrars, preload, browser bridge, and Settings surface. Automated checks, builds, packaging, runtime interaction, and captures remain pending for the owning integration pass.</p>
+      <h2>Suggested articles</h2>
+      <ul><li><a href="./projects-and-tabs.html">Projects and tabs</a></li><li><a href="./exports-and-history.html">Exports and local history</a></li><li><a href="./remote-ssh-projects.html">Remote and SSH projects</a></li></ul>
+    </article>
+  </body>
+</html>

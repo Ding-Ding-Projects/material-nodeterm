@@ -1,5 +1,22 @@
 # Handoff
 
+## 2026-08-26, AWS identity manager implementation
+
+Implemented the AWS identity manager lane from issue #44 in `src/shared/aws.ts`,
+`src/core/aws/aws-profile-manager.ts`, `src/core/aws/register-ipc.ts`, the shared IPC/preload and
+Desktop/Server Edition registrations, and `src/renderer/components/settings/sections/AwsSection.tsx`.
+The guided surface lists local profile metadata, starts AWS SSO through PKCE or device-code mode,
+assumes roles with one-time MFA input written only to child-process stdin, reviews credential-process
+trust without executing arbitrary shell text, checks caller identity and IAM permissions, lists
+regions, and stores HTTPS endpoint overlays in machine-local application data. Credentials, SSO
+tokens, role credentials, MFA values, private paths, and process output are not exposed or persisted
+by the manager.
+
+Added `docs/aws-identity-manager.md`, the categorized integrations article and index entry, plus
+roadmap and changelog records. This lane intentionally did not run tests, type checking, lint,
+builds, packaging, runtime interaction, or UI captures. The feature remains unverified until those
+checks are performed by the owning integration pass.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

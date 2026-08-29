@@ -3796,6 +3796,9 @@ export interface NodeTerminalApi {
   converter: import('./converter').ConverterApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Local AWS identity manager — docs/aws-identity-manager.md. Credentials and provider cache
+   *  remain machine-local and are never part of a portable project projection. */
+  aws: import('./aws').AwsApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
   ssh: SshApi

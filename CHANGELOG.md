@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add the guided AWS identity manager for profile metadata, SSO PKCE/device-code login, role
+  sessions with stdin MFA, credential-process trust review, caller identity, permission checks,
+  regions, HTTPS endpoint overrides, and machine-local cache boundaries. Verification and release
+  evidence remain pending for this implementation lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

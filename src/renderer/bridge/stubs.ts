@@ -570,6 +570,20 @@ export function buildStubApi(): Omit<
       chatStop: U('ollama.chatStop'),
       onChatStream: noopUnsub
     },
+    aws: {
+      profiles: U('aws.profiles'),
+      saveProfile: U('aws.saveProfile'),
+      removeProfile: U('aws.removeProfile'),
+      refresh: U('aws.refresh'),
+      ssoLogin: U('aws.ssoLogin'),
+      assumeRole: U('aws.assumeRole'),
+      callerIdentity: U('aws.callerIdentity'),
+      permissions: U('aws.permissions'),
+      regions: U('aws.regions'),
+      setEndpoint: U('aws.setEndpoint'),
+      clearMachineCache: U('aws.clearMachineCache'),
+      trustCredentialProcess: U('aws.trustCredentialProcess')
+    },
     minecraft: {
       versions: U('minecraft.versions'),
       status: U('minecraft.status'),

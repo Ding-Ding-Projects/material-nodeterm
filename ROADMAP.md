@@ -160,6 +160,10 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Multiverse and AWS
 
+- [ ] **#44 AWS identity manager implementation** — profile metadata, AWS SSO PKCE/device-code login,
+      role sessions with MFA via stdin, credential-process trust review, caller identity, permission
+      checks, regions, HTTPS endpoint overrides, and machine-local cache boundary are wired; tests,
+      builds, runtime interaction, and captures remain pending.
 - [ ] Add door-only Multiverse canvases to depth 8.
 - [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
 - [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
