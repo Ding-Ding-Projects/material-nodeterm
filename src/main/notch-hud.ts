@@ -203,8 +203,8 @@ class NotchHudController {
     this.onModelChange(() => this.model.applyAgentEvent(ev))
   }
 
-  /** Feed a context-update {sessionId, model, usedPercent} (the model name). */
-  onContextUpdate(p: { sessionId?: string; model?: string; usedPercent?: number }): void {
+  /** Feed a provider/source-qualified context update with validated numerator and denominator. */
+  onContextUpdate(p: { sessionId?: string; agentId?: string; source?: string; model?: string; usedTokens?: number; windowTokens?: number; updatedAt?: number }): void {
     this.onModelChange(() => this.model.applyContextUpdate(p))
   }
 
@@ -432,8 +432,12 @@ export function notchHudOnAgentEvent(ev: NormalizedAgentEvent): void {
 }
 export function notchHudOnContextUpdate(p: {
   sessionId?: string
+  agentId?: string
+  source?: string
   model?: string
-  usedPercent?: number
+  usedTokens?: number
+  windowTokens?: number
+  updatedAt?: number
 }): void {
   controller?.onContextUpdate(p)
 }

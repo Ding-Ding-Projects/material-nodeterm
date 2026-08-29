@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a top-of-node context-window progress bar for every agent node, including resumed, custom,
+  and ephemeral subagent cards. Claude Code, Codex, and Gemini show exact provider-reported used,
+  total, remaining, and percentage values; unsupported or delayed telemetry stays explicitly
+  labelled without a fabricated percentage. The implementation is present in the task branch, with
+  verification intentionally pending for the integration lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

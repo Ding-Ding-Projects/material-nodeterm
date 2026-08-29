@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '../state/workspace'
 import { useAgentNodes } from '../state/agentNodes'
+import { ContextMeter } from '../components/ContextMeter'
+import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 
 function fmtDur(ms: number): string {
   const s = Math.round(ms / 1000)
@@ -12,6 +14,23 @@ function fmtDur(ms: number): string {
 function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
 }
+
+/**
+ * The collapsed contract is calculated from the children that are actually rendered. The old
+ * fixed floor was shorter than the task and metadata lines, so a resize could hide the very
+ * information that identifies a subagent. Keep the context strip and card chrome in the same
+ * arithmetic as the rendered children, with a small border/spacing allowance.
+ */
+export function subagentCollapsedHeight(hasTask: boolean, hasMeta: boolean): number {
+  const contextStrip = 54
+  const header = 34
+  const task = hasTask ? 24 : 0
+  const metadata = hasMeta ? 24 : 0
+  const bordersAndGaps = 20
+  return contextStrip + header + task + metadata + bordersAndGaps
+}
+
+export const SUBAGENT_MIN_HEIGHT = subagentCollapsedHeight(true, true)
 
 /**
  * Subagent node — a first-class canvas node (select/drag/resize) visualizing a subagent the
@@ -25,6 +44,7 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const tokens = data.subagentTokens as number | undefined
   const toolUses = data.subagentToolUses as number | undefined
   const result = (data.subagentResult as string) || ''
+  const text = useLocalizedVocabularyText()
   // Live transcript: subscribed here per-id (not passed through Canvas's ephemeral node data)
   // so streaming chunks re-render only this card, never the whole canvas.
   const activity = useAgentNodes((s) => s.activityById[id]) || ''
@@ -46,12 +66,14 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
 
   const elapsed = working && startedAt ? fmtDur(now - startedAt) : durationMs ? fmtDur(durationMs) : ''
   const meta = [
-    elapsed,
-    tokens != null ? `↓ ${fmtTokens(tokens)} tokens` : null,
-    toolUses ? `${toolUses} tool${toolUses === 1 ? '' : 's'}` : null
+    elapsed ? text('subagent.elapsed', '{duration}', { duration: elapsed }) : null,
+    tokens != null ? text('subagent.tokens', '↓ {tokens} tokens', { tokens: fmtTokens(tokens) }) : null,
+    toolUses ? text('subagent.tools', '{count} tools', { count: String(toolUses) }) : null
   ]
     .filter(Boolean)
     .join(' · ')
+
+  const collapsedHeight = subagentCollapsedHeight(!!data.title, !!meta)
 
   // The cards are `selectable: false` in React Flow (a rubber band must not sweep a fan-out
   // into the selection), so selecting one — which is what reveals its resize frame — is ours.
@@ -59,12 +81,13 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
 
   return (
     <div onPointerDownCapture={select} className={`subagent-node${working ? ' working' : ' done'}`}>
-      <NodeResizer isVisible={selected} minWidth={180} minHeight={84} color="#d97757" />
+      <NodeResizer isVisible={selected} minWidth={180} minHeight={collapsedHeight} color="#d97757" />
+      <ContextMeter agentId="claude" sessionId={null} telemetryAvailable={false} source="local" />
       <Handle type="target" position={Position.Top} isConnectable={false} />
       <div className="subagent-node__head nodrag" onClick={toggle} style={{ cursor: 'pointer' }}>
         <button
           className="subagent-node__expand"
-          title={expanded ? 'Collapse' : 'Open output'}
+          title={expanded ? text('subagent.collapse', 'Collapse') : text('subagent.openOutput', 'Open output')}
           onClick={(e) => {
             e.stopPropagation()
             toggle()
@@ -73,15 +96,15 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
           {expanded ? '▾' : '▸'}
         </button>
         <span className="subagent-node__dot" />
-        <span className="subagent-node__type">{(data.subagentType as string) || 'subagent'}</span>
-        <span className="subagent-node__state">{working ? 'working' : 'done'}</span>
+        <span className="subagent-node__type">{(data.subagentType as string) || text('subagent.type', 'subagent')}</span>
+        <span className="subagent-node__state">{working ? text('subagent.working', 'working') : text('subagent.done', 'done')}</span>
       </div>
       {data.title && !expanded && <div className="subagent-node__task">{data.title as string}</div>}
       {meta && <div className="subagent-node__meta">{meta}</div>}
       {expanded && (
         <div className="subagent-node__term nodrag nowheel" ref={bodyRef}>
           {data.title ? <div className="subagent-node__result-task">{data.title as string}</div> : null}
-          {body || (working ? 'Working… (live output appears here)' : 'No output.')}
+          {body || (working ? text('subagent.workingOutput', 'Working... live output appears here') : text('subagent.noOutput', 'No output.'))}
         </div>
       )}
     </div>

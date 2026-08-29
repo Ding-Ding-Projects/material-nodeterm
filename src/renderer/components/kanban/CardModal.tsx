@@ -17,6 +17,7 @@ import { BrowserSurface } from '../../nodes/BrowserSurface'
 import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 import { TextArea } from '@renderer/ui/md3'
+import { contextSourceForNode } from '@shared/context-source'
 
 interface CardModalProps {
   session: KanbanSession
@@ -109,6 +110,7 @@ export function CardModal({
   const [title, setTitle] = useState(session.title)
   const [searchOpen, setSearchOpen] = useState(false)
   const agentSessionId = useAgentStatus((st) => st.byId[session.id]?.sessionId)
+  const liveAgentId = useAgentStatus((st) => st.byId[session.id]?.agentId)
   const [naming, setNaming] = useState(false)
   // Comments & activity panel: OPEN by default in the modal; the header 💬 collapses it. The
   // choice is remembered (localStorage) — once collapsed, later cards open collapsed too.
@@ -116,6 +118,11 @@ export function CardModal({
   const togglePanel = useCardPanel((s) => s.toggle)
   const isTerminal = session.kind === 'terminal'
   const isBrowser = session.kind === 'browser'
+  const contextSource = contextSourceForNode({
+    agentId: session.agentId ?? liveAgentId,
+    ssh: session.spawn.ssh,
+    sshRemoteTmux: session.spawn.sshRemoteTmux
+  })
 
   const nameWithAi = async () => {
     setNaming(true)
@@ -199,7 +206,12 @@ export function CardModal({
           {isTerminal && (
             <>
               {/* Same context-window pill + popover as the node header (null until usage data). */}
-              <ContextMeter sessionId={agentSessionId ?? null} />
+              <ContextMeter
+                agentId={session.agentId ?? liveAgentId}
+                sessionId={agentSessionId ?? null}
+                telemetryAvailable={contextSource.telemetryAvailable}
+                source={contextSource.source}
+              />
               {/* ADHD time awareness. The card modal is a second live view of the SAME session, and
                 it is a place work actually happens — so the readout belongs here for the same
                 reason it belongs on the node: a clock the user has to go and look for does nothing

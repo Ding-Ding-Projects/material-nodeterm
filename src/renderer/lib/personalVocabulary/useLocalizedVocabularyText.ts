@@ -19,15 +19,16 @@ export function useLocalizedVocabularyText(): (
   const { ts } = useI18n()
   const entries = usePersonalVocabulary((state) => state.entries)
   const schoolModeEnabled = useSchoolMode((state) => state.enabled)
+  const schoolModeHydrated = useSchoolMode((state) => state.hydrated)
 
   return useCallback(
     (id: string, fallback: string, params?: Record<string, string>): string => {
       const localized = ts(id, fallback)
-      const prose = schoolModeEnabled ? localized : applyVocabulary(localized, entries)
+      const prose = !schoolModeHydrated || schoolModeEnabled ? localized : applyVocabulary(localized, entries)
       // Substitute dynamic facts last: a personal-vocabulary entry must never rewrite a detected
       // distro name, host error, executable path, or other verbatim value passed as a parameter.
       return params ? formatText(prose, params) : prose
     },
-    [entries, schoolModeEnabled, ts]
+    [entries, schoolModeEnabled, schoolModeHydrated, ts]
   )
 }

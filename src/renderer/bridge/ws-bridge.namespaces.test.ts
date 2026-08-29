@@ -80,7 +80,7 @@ describe('buildFilesApi', () => {
     api.context.ensure('sid', '/cwd', undefined)
     const un = api.context.onUpdate(() => {})
     const un2 = api.git.onCloneProgress(() => {})
-    expect(c.calls[0]).toEqual({ kind: 'cast', method: IPC.contextEnsure, args: ['sid', '/cwd', undefined] })
+    expect(c.calls[0]).toEqual({ kind: 'cast', method: IPC.contextEnsure, args: ['sid', '/cwd', undefined, undefined, undefined] })
     expect(c.calls[1]).toEqual({ kind: 'subscribe', method: IPC.contextUpdate, args: [] })
     expect(c.calls[2]).toEqual({ kind: 'subscribe', method: IPC.gitCloneProgress, args: [] })
     expect(typeof un).toBe('function')

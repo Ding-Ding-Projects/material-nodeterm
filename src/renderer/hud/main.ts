@@ -9,6 +9,13 @@ import { HUD_BRAND_PULSE_CLASS, brandPulseBackground, brandPulsePlan } from '../
 import { createGrokMarkSvg } from '../lib/grokMark'
 import { orderIndicatorAgents } from './indicator'
 import codexPet from '../assets/pet-codex.webp'
+import { contextPercentFromCounts } from '@shared/context-source'
+import { formatText, normalizeLanguageMode, ts as resolveText } from '@shared/i18n'
+import { useSettings } from '../state/settings'
+import { useSchoolMode } from '../state/schoolMode'
+import { usePersonalVocabulary } from '../state/personalVocabulary'
+import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
+import { applyVocabulary } from '../lib/personalVocabulary/apply'
 
 // Local mirror of the preload's HUD contract (src/preload/hud.ts) — kept self-contained so this
 // renderer entry has no cross-project (main/preload) type dependency.
@@ -26,6 +33,11 @@ interface HudRow {
   prompt?: string
   activity?: string
   contextPercent?: number
+  contextUsed?: number
+  contextTotal?: number
+  contextRemaining?: number
+  contextState?: 'healthy' | 'warning' | 'critical' | 'stale'
+  contextSource?: string
   subagents: HudSubagentRow[]
   updatedAt: number
 }
@@ -75,6 +87,26 @@ let notchWidthPx = 168
 let hoverExpand = true
 // Which subagent disclosures the user has opened (by nodeId), preserved across re-renders.
 const openSubs = new Set<string>()
+
+// The HUD has its own renderer entry and therefore does not pass through App's normal hydration
+// sequence. Load the already-validated local vocabulary cache before the first row is painted.
+usePersonalVocabulary.getState().hydrate()
+
+/** HUD is a plain DOM entry, so it cannot call a React hook. It still crosses the same
+ * localized and personal-vocabulary boundary as ContextMeter and SessionRow, using the live
+ * store snapshots at render time. Dynamic provider facts are appended only after this resolves. */
+function hudText(id: string, fallback: string, params?: Record<string, string>): string {
+  const settings = useSettings.getState().settings
+  const school = useSchoolMode.getState()
+  const allowed = schoolModeAllowsOptionalFeatures({ enabled: school.enabled, hydrated: school.hydrated })
+  const mode = allowed ? normalizeLanguageMode(settings.languageMode) : 'en'
+  const levels = allowed
+    ? { en: settings.funnyLevelEn, yue: settings.funnyLevelYue }
+    : { en: 1, yue: 1 }
+  const resolved = resolveText(id, fallback, mode, levels)
+  const prose = !school.hydrated || school.enabled ? resolved : applyVocabulary(resolved, usePersonalVocabulary.getState().entries)
+  return params ? formatText(prose, params) : prose
+}
 
 // ---- Interaction: click-through hotspot + expand/collapse ----------------------------------
 
@@ -284,14 +316,18 @@ function buildRow(row: HudRow): HTMLElement {
   const parts: string[] = []
   if (row.model) parts.push(row.model)
   parts.push(reltime(row.updatedAt))
-  if (typeof row.contextPercent === 'number') parts.push(`${Math.round(row.contextPercent)}%`)
+  const contextPercent = contextPercentFromCounts(row.contextUsed, row.contextTotal)
+  if (contextPercent !== null) {
+    parts.push(`${row.contextUsed} / ${row.contextTotal} · ${row.contextRemaining ?? Math.max(0, row.contextTotal! - row.contextUsed!)} remaining · ${Math.round(contextPercent)}%`)
+  }
+  if (row.contextState) parts.push(hudText(`contextMeter.level.${row.contextState}`, row.contextState))
   tag.textContent = parts.join(' · ')
 
   const sub = document.createElement('div')
   sub.className = 'hud-row__sub'
   if (row.prompt) {
     const b = document.createElement('b')
-    b.textContent = 'You: '
+    b.textContent = hudText('hud.you', 'You: ')
     sub.append(b, document.createTextNode(row.prompt))
   } else if (row.activity) {
     sub.textContent = row.activity
@@ -315,15 +351,15 @@ function buildRow(row: HudRow): HTMLElement {
 
   const close = document.createElement('button')
   close.className = 'hud-row__close'
-  close.title = 'Remove from HUD'
-  close.setAttribute('aria-label', 'Remove from HUD')
+  close.title = hudText('hud.remove', 'Remove from HUD')
+  close.setAttribute('aria-label', hudText('hud.remove', 'Remove from HUD'))
   close.textContent = '×'
   close.addEventListener('click', dismiss)
   el.append(close)
 
   const go = document.createElement('button')
   go.className = 'hud-row__go'
-  go.textContent = 'Go'
+  go.textContent = hudText('hud.go', 'Go')
   go.addEventListener('click', (e) => {
     e.stopPropagation()
     window.hud.focusNode(row.nodeId)
@@ -335,10 +371,10 @@ function buildRow(row: HudRow): HTMLElement {
 }
 
 function stateLabel(state: HudRow['state']): string {
-  if (state === 'working') return 'Working…'
-  if (state === 'needsYou') return 'Needs you'
-  if (state === 'done') return 'Finished'
-  return 'Idle'
+  if (state === 'working') return hudText('hud.state.working', 'Working…')
+  if (state === 'needsYou') return hudText('hud.state.needsYou', 'Needs you')
+  if (state === 'done') return hudText('hud.state.done', 'Finished')
+  return hudText('hud.state.idle', 'Idle')
 }
 
 function buildSubs(row: HudRow): HTMLElement {
@@ -347,7 +383,8 @@ function buildSubs(row: HudRow): HTMLElement {
   const isOpen = openSubs.has(row.nodeId)
   const toggle = document.createElement('div')
   toggle.className = 'hud-subs__toggle'
-  toggle.textContent = `${isOpen ? '▾' : '▸'} ${row.subagents.length} subagent${row.subagents.length === 1 ? '' : 's'}`
+  const count = hudText('hud.subagents', '{count} subagents', { count: String(row.subagents.length) })
+  toggle.textContent = `${isOpen ? '▾' : '▸'} ${count}`
   toggle.addEventListener('click', (e) => {
     e.stopPropagation()
     if (openSubs.has(row.nodeId)) openSubs.delete(row.nodeId)
@@ -368,7 +405,7 @@ function buildSubItem(s: HudSubagentRow): HTMLElement {
   const li = document.createElement('li')
   const dot = document.createElement('span')
   dot.className = `hud-subs__dot hud-subs__dot--${s.state}`
-  li.append(dot, document.createTextNode(s.label || s.state))
+  li.append(dot, document.createTextNode(s.label || hudText(`hud.state.${s.state}`, s.state)))
   return li
 }
 
@@ -414,6 +451,19 @@ function applyGeometry(push: HudPush): void {
 window.hud.onRows((push: HudPush) => {
   applyGeometry(push)
   render(push.rows ?? [])
+})
+
+// The HUD is a plain DOM entry, so subscribe explicitly to the same stores that React surfaces
+// use. A language, School-mode, or personal-vocabulary change must repaint existing rows without
+// waiting for another agent event to arrive.
+useSettings.subscribe(() => {
+  if (latestRows.length) render(latestRows)
+})
+useSchoolMode.subscribe(() => {
+  if (latestRows.length) render(latestRows)
+})
+usePersonalVocabulary.subscribe(() => {
+  if (latestRows.length) render(latestRows)
 })
 
 // Refresh reltimes every 20s even without a push.

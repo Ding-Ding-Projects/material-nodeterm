@@ -75,8 +75,10 @@ const ANNOTATION_SIZE = { width: 240, height: 160 }
 const SERVICE_CONSOLE_SIZE = { width: 720, height: 520 }
 const SERVICE_SUMMARY_SIZE = { width: 520, height: 400 }
 
-/** Height of a node when collapsed (header only). */
+/** Height of a non-agent node when collapsed. */
 export const COLLAPSED_HEIGHT = 40
+/** Header geometry from styles.md3.css: 52 px header + 5 px top/bottom meter padding + 44 px hit target. */
+export const AGENT_COLLAPSED_HEIGHT = 52 + 5 + 44 + 5
 
 /** User data carried in the React Flow node's data field. */
 export interface NodeData {
@@ -1868,12 +1870,12 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         text: `This was a chat node — the chat node type was removed.${resume}`
       }
     }
-    const collapsed = !!n.collapsed
-    const height = collapsed ? COLLAPSED_HEIGHT : n.size.height
     // Legacy migration: nodes saved before `agentId` existed marked Claude via the 'claude'
     // tag. Backfill agentId so saved workspaces keep working.
     let agentId = n.agentId
     if (!agentId && Array.isArray(n.tags) && n.tags.includes('claude')) agentId = 'claude'
+    const collapsed = !!n.collapsed
+    const height = collapsed ? (agentId ? AGENT_COLLAPSED_HEIGHT : COLLAPSED_HEIGHT) : n.size.height
     // Legacy migration: a browser node saved before tabs existed carries only `url`/`title`.
     // Synthesize a single tab from them so the tab strip has something to show — this is a
     // read-side migration only (not written back to disk until the user actually edits a tab).

@@ -3,6 +3,7 @@
 // offset-based read + shared-interval pattern of subagent-tail.ts. Pushed to the renderer
 // as ContextWindowUsage keyed by sessionId.
 import fs from 'fs'
+import { randomUUID } from 'crypto'
 import type { ContextWindowUsage } from '../shared/types'
 import { cachedWindowFor, resolveModelWindow } from './model-window'
 import { splitCompleteLines } from './subagent-tail'
@@ -13,6 +14,18 @@ const POLL_MS = 1000
 // Only the LATEST assistant usage matters, so a tail of the file is enough; the partial first
 // line is dropped naturally by the JSON.parse guard.
 const INITIAL_READ_CAP = 1024 * 1024 // 1 MB
+const MAX_RETIRED_EPOCHS = 4096
+const MAX_CONTEXT_TOKENS = 100_000_000
+
+function contextCount(value: unknown): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= MAX_CONTEXT_TOKENS ? value : 0
+}
+
+function validParsedUsage(value: { used: number; window?: number | null; model: string | null }): boolean {
+  return contextCount(value.used) > 0 &&
+    (value.window === undefined || value.window === null || contextCount(value.window) > 0) &&
+    (value.model === null || (typeof value.model === 'string' && value.model.length <= 256))
+}
 
 /** The scanners accept a pre-split line array so one read can split its chunk ONCE and share
  *  it — three scanners each running their own `split('\n')` tripled the allocation per tick. */
@@ -46,8 +59,14 @@ export function parseLatestUsage(
     }
     if (o.type !== 'assistant' || !o.message?.usage) continue
     const u = o.message.usage
-    const used =
-      (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
+    const input = contextCount(u.input_tokens)
+    const cacheRead = contextCount(u.cache_read_input_tokens)
+    const cacheCreation = contextCount(u.cache_creation_input_tokens)
+    if (u.input_tokens !== undefined && input !== u.input_tokens) continue
+    if (u.cache_read_input_tokens !== undefined && cacheRead !== u.cache_read_input_tokens) continue
+    if (u.cache_creation_input_tokens !== undefined && cacheCreation !== u.cache_creation_input_tokens) continue
+    const used = input + cacheRead + cacheCreation
+    if (used > MAX_CONTEXT_TOKENS) continue
     if (used <= 0) continue
     if (!found) {
       found = true
@@ -157,6 +176,10 @@ export interface ContextTailOptions {
   parse?: (
     text: string | string[]
   ) => { used: number; window?: number | null; model: string | null } | null
+  /** Provider identity attached to each emitted reading. */
+  agentId?: string
+  /** Local source identity attached to each emitted reading. */
+  source?: string
 }
 
 interface Tracked {
@@ -183,6 +206,12 @@ interface Tracked {
    * usage in it leaves the last known window alone.
    */
   parsedWindow: number | null
+  epoch: string
+  epochHistory: string[]
+  incarnation: number
+  producerId: string
+  lifecycle: number
+  producerHistory: string[]
 }
 
 export interface ContextTail {
@@ -197,6 +226,13 @@ export function createContextTail(
   opts?: ContextTailOptions
 ): ContextTail {
   const sessions = new Map<string, Tracked>()
+  const generations = new Map<string, number>()
+  const producerEpoch = randomUUID()
+  let nextLifecycle = 0
+  const nextEpoch = (): { epoch: string; lifecycle: number } => {
+    const lifecycle = ++nextLifecycle
+    return { lifecycle, epoch: `${producerEpoch}:${lifecycle}` }
+  }
   let timer: ReturnType<typeof setInterval> | null = null
   // A custom parser also OWNS the window (see the window reconcile in `read`), so keep the
   // "is this claude's tail?" question to one place.
@@ -206,6 +242,8 @@ export function createContextTail(
   const parse: NonNullable<ContextTailOptions['parse']> = customParse ?? parseLatestUsage
 
   const push = (sessionId: string, t: Tracked): void => {
+    const generation = (generations.get(sessionId) ?? 0) + 1
+    generations.set(sessionId, generation)
     const usedPercent = Math.min(100, Math.max(0, (t.used / t.window) * 100))
     const payload: ContextWindowUsage = {
       sessionId,
@@ -213,7 +251,16 @@ export function createContextTail(
       windowTokens: t.window,
       usedPercent,
       model: t.model,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      generation,
+      epoch: t.epoch,
+      incarnation: t.incarnation,
+      producerId: t.producerId,
+      lifecycle: t.lifecycle,
+      agentId: opts?.agentId ?? 'claude',
+      source: opts?.source ?? 'local',
+      epochHistory: t.epochHistory,
+      producerHistory: t.producerHistory
     }
     send(payload)
   }
@@ -224,6 +271,7 @@ export function createContextTail(
   // sat on the same main thread that services all PTY streaming and IPC.
   const read = async (sessionId: string, t: Tracked): Promise<void> => {
     if (t.reading) return
+    const readEpoch = t.epoch
     t.reading = true
     try {
       let size = -1
@@ -234,7 +282,24 @@ export function createContextTail(
       }
       if (size >= 0) {
         const before = t.offset
-        if (size < t.offset) t.offset = 0 // truncated/rotated → re-read from start
+        if (size < t.offset) {
+          const priorEpoch = t.epoch
+          t.offset = 0 // truncated/rotated → re-read from start
+          t.carry = null
+          t.used = 0
+          t.window = 0
+          t.model = null
+          t.lastUsed = 0
+          t.lastModel = null
+          t.lastWindow = 0
+          t.parsedWindow = null
+          const next = nextEpoch()
+          t.epoch = next.epoch
+          t.lifecycle = next.lifecycle
+          t.incarnation = t.lifecycle
+          t.epochHistory = [...t.epochHistory, priorEpoch].slice(-MAX_RETIRED_EPOCHS)
+          generations.set(sessionId, 0)
+        }
         // First read of a large transcript: skip to the last INITIAL_READ_CAP bytes.
         if (t.offset === 0 && size > INITIAL_READ_CAP) t.offset = size - INITIAL_READ_CAP
         // Cap deltas too: a huge append burst (resume/compact rewriting MBs between ticks)
@@ -266,7 +331,7 @@ export function createContextTail(
           const lines = combined.toString('utf-8').split('\n')
           const completeLines = lines.slice(0, -1)
           const latest = parse(lines)
-          if (latest) {
+          if (latest && validParsedUsage(latest)) {
             t.used = latest.used
             t.model = latest.model ?? t.model
             t.parsedWindow = latest.window ?? t.parsedWindow
@@ -296,7 +361,7 @@ export function createContextTail(
       // exactly as before, always > 0, so the added guard can never fire for it.
       const win = customParse ? t.parsedWindow : cachedWindowFor(t.model)
 
-      if (!sessions.has(sessionId)) return // untracked while this async read was in flight
+      if (sessions.get(sessionId) !== t || t.epoch !== readEpoch) return // untracked or replaced while in flight
       if (
         t.used > 0 &&
         win !== null &&
@@ -328,12 +393,27 @@ export function createContextTail(
       const existing = sessions.get(sessionId)
       if (existing) {
         if (existing.path !== transcriptPath) {
+          const priorEpoch = existing.epoch
           existing.path = transcriptPath
           existing.offset = 0
           existing.carry = null
+          existing.used = 0
+          existing.window = 0
+          existing.model = null
+          existing.lastUsed = 0
+          existing.lastModel = null
+          existing.lastWindow = 0
+          existing.parsedWindow = null
+          const next = nextEpoch()
+          existing.epoch = next.epoch
+          existing.lifecycle = next.lifecycle
+          existing.incarnation = existing.lifecycle
+          existing.epochHistory = [...existing.epochHistory, priorEpoch].slice(-MAX_RETIRED_EPOCHS)
+          generations.set(sessionId, 0)
         }
         return
       }
+      const { epoch, lifecycle } = nextEpoch()
       const t: Tracked = {
         path: transcriptPath,
         offset: 0,
@@ -345,7 +425,13 @@ export function createContextTail(
         lastWindow: 0,
         reading: false,
         carry: null,
-        parsedWindow: null
+        parsedWindow: null,
+        epoch,
+        epochHistory: [],
+        incarnation: lifecycle,
+        producerId: producerEpoch,
+        lifecycle,
+        producerHistory: []
       }
       sessions.set(sessionId, t)
       void read(sessionId, t) // immediate first value (resumed sessions already have content)
@@ -354,6 +440,7 @@ export function createContextTail(
     untrack(sessionId) {
       if (!sessionId) return
       sessions.delete(sessionId)
+      generations.delete(sessionId)
       if (!sessions.size && timer) {
         clearInterval(timer)
         timer = null

@@ -162,7 +162,7 @@ describe('prompt / model / context join', () => {
   it('joins model by sessionId and context% by now-change', () => {
     const m = createHudModel()
     m.applyStateChange(stateChange({ nodeId: 'a', state: 'working', agentId: 'claude', sessionId: 's1' }))
-    m.applyContextUpdate({ sessionId: 's1', model: 'claude-opus-4', usedPercent: 42 })
+    m.applyContextUpdate({ sessionId: 's1', agentId: 'claude', source: 'local', model: 'claude-opus-4', usedTokens: 42, windowTokens: 100 })
     m.applyNowChange(nowChange({ nodeId: 'a', activity: 'Editing file.ts' }))
     const row = rowFor(m.buildRows(T0, titleOf), 'a')!
     expect(row.model).toBe('claude-opus-4')

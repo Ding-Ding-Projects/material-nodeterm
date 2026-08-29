@@ -37,6 +37,49 @@ function flat(text: string): FiveVariants {
 }
 
 export const CATALOG: Catalog = {
+  'subagent.collapse': { en: flat('Collapse'), yue: flat('收埋') },
+  'subagent.openOutput': { en: flat('Open output'), yue: flat('打開輸出') },
+  'subagent.type': { en: flat('subagent'), yue: flat('subagent') },
+  'subagent.working': { en: flat('working'), yue: flat('工作中') },
+  'subagent.done': { en: flat('done'), yue: flat('完成') },
+  'subagent.workingOutput': { en: flat('Working... live output appears here'), yue: flat('工作中……即時輸出會喺呢度出現') },
+  'subagent.noOutput': { en: flat('No output.'), yue: flat('冇輸出。') },
+  'subagent.elapsed': { en: flat('{duration}'), yue: flat('{duration}') },
+  'subagent.tokens': { en: flat('↓ {tokens} tokens'), yue: flat('↓ {tokens} tokens') },
+  'subagent.tools': { en: flat('{count} tools'), yue: flat('{count} 個工具') },
+  // Context-window progress. Provider numbers are supplied by the caller, while state words and
+  // surrounding copy stay in the same language and funny-level pipeline as every other surface.
+  'contextMeter.state.known': { en: flat('reported'), yue: flat('已回報') },
+  'contextMeter.state.stale': { en: flat('stale'), yue: flat('過期') },
+  'contextMeter.state.unknown': { en: flat('unknown'), yue: flat('未知') },
+  'contextMeter.state.not-reported': { en: flat('not reported'), yue: flat('未有回報') },
+  'contextMeter.state.unavailable': { en: flat('unavailable'), yue: flat('未能提供') },
+  'contextMeter.title': { en: flat('Context window'), yue: flat('上下文視窗') },
+  'contextMeter.staleTelemetry': { en: flat('stale telemetry'), yue: flat('遙測過期') },
+  'contextMeter.updated': { en: flat('Updated {time}'), yue: flat('{time} 更新') },
+  'contextMeter.level.healthy': { en: flat('healthy'), yue: flat('健康') },
+  'contextMeter.level.warning': { en: flat('warning'), yue: flat('警告') },
+  'contextMeter.level.critical': { en: flat('critical'), yue: flat('危險') },
+  'contextMeter.contextState': {
+    en: ['Context: {state}', 'Context: {state}', 'Context: {state}', 'Context: {state}', 'Context: {state}, the meter is taking a tea break.'],
+    yue: ['上下文：{state}', '上下文：{state}', '上下文：{state}', '上下文：{state}', '上下文：{state}，個計數器去咗飲茶。']
+  },
+  'contextMeter.summary': {
+    en: ['Used {used} / {total} tokens · {remaining} remaining · {percent}%', 'Used {used} / {total} tokens · {remaining} remaining · {percent}%', 'Used {used} / {total} tokens · {remaining} remaining · {percent}%', 'Used {used} / {total} tokens · {remaining} remaining · {percent}%', 'Used {used} / {total} tokens · {remaining} remaining · {percent}%, the context cupboard has spoken.'],
+    yue: ['用咗 {used} / {total} tokens · 剩返 {remaining} · {percent}%', '用咗 {used} / {total} tokens · 剩返 {remaining} · {percent}%', '用咗 {used} / {total} tokens · 剩返 {remaining} · {percent}%', '用咗 {used} / {total} tokens · 剩返 {remaining} · {percent}%', '用咗 {used} / {total} tokens · 剩返 {remaining} · {percent}%——個上下文櫃已經出聲。']
+  },
+  'contextMeter.telemetryState': {
+    en: ['Telemetry: {state}', 'Telemetry: {state}', 'Telemetry: {state}', 'Telemetry: {state}', 'Telemetry: {state}, no guessing allowed.'],
+    yue: ['遙測：{state}', '遙測：{state}', '遙測：{state}', '遙測：{state}', '遙測：{state}，唔估數。']
+  },
+  'hud.you': { en: flat('You: '), yue: flat('你：') },
+  'hud.remove': { en: flat('Remove from HUD'), yue: flat('喺 HUD 移除') },
+  'hud.go': { en: flat('Go'), yue: flat('去') },
+  'hud.subagents': { en: flat('{count} subagents'), yue: flat('{count} 個 subagent') },
+  'hud.state.working': { en: flat('Working…'), yue: flat('工作中……') },
+  'hud.state.needsYou': { en: flat('Needs you'), yue: flat('等你處理') },
+  'hud.state.done': { en: flat('Finished'), yue: flat('完成') },
+  'hud.state.idle': { en: flat('Idle'), yue: flat('閒置') },
   // ---------------------------------------------------------------------------------------
   // Settings navigation — group headings shown in the sidebar (SettingsSidebar.tsx). A group
   // heading is a category label, not a message, so it stays level-invariant.

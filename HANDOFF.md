@@ -1,5 +1,38 @@
 # Handoff
 
+## 2026-08-26, context-window progress on every agent node
+
+Issue #89 implementation is present in the task branch. `ContextMeter` now renders a top-of-node
+progress track and exact used, total, remaining, and percentage text for Claude Code, Codex, and
+Gemini readings. Grok, OpenCode, custom agents, resumed sessions without a first reading, stale
+readings, and ephemeral subagent cards remain explicit about `unknown`, `not reported`, `stale`, or
+`unavailable` state, and never receive an invented denominator. The existing provider transcript
+readers are used for rehydration, with Codex and Gemini routed to their own local transcript roots.
+
+Accepted readings carry a producer epoch plus a monotonic per-session generation. The renderer
+compares generations only inside one epoch and accepts a fresh epoch after restart, while rejecting
+older readings, so delayed telemetry cannot overwrite newer state. Context values remain in the renderer's local
+cache and are not added to portable project data, exports, captures, logs, or provider prompts.
+Material Design 3 roles, accessible progress text, non-colour state text, narrow-layout rules, and
+reduced-motion handling are included. The feature article and implementation plan are
+`docs/features/agents/context-window-meter.md` and
+`docs/plans/2026-08-26-context-window-progress.md`.
+
+This implementation lane deliberately ran no tests, type checking, linting, builds, packaging,
+runtime interaction, or captures, and made no commit or push. The roadmap item stays unchecked until
+the integration lane verifies the provider matrix and built artifact evidence.
+
+### Refuter repair pass
+
+The follow-up review tightened restart and source boundaries. Readings now carry provider, source,
+epoch, generation, and retired-epoch history; delayed reads are rejected by epoch history and by
+exact tracked-object identity. Cache keys include provider, source, and session. SSH nodes suppress
+local rehydration, while the Server Edition rehydrates Claude Code, Codex, and Gemini through its
+own provider locators. Codex and Gemini locators use bounded shared indexes, and remote reads use a
+required absolute byte cursor. Payload counts are finite, integer, non-negative, bounded, and the
+renderer derives percentage from used and total after validation. Compact session rows expose the
+same state and threshold text as node cards. Verification remains intentionally unrun.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

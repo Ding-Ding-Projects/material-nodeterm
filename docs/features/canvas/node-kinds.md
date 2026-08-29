@@ -11,7 +11,7 @@ way, while each contributes its own body content and header actions.
 | Kind | What it is |
 | --- | --- |
 | **Terminal** | A real shell backed by tmux or the standalone Windows session host. See [Session continuity](../terminals/session-continuity.md). Supports content search, AI-generated naming, markdown rendering of captured output, and clickable file/URL links in its output. |
-| **Agent** | A terminal preset that launches an agent CLI (Claude Code, Codex, Gemini, opencode, Grok, or a custom command) as its first command. Adds status badges, a context-window meter, subagent cards, and (for capable agents) session renaming and conversation branching. See [Agent support](../agents/agent-support.md). |
+| **Agent** | A terminal preset that launches an agent CLI (Claude Code, Codex, Gemini, opencode, Grok, or a custom command) as its first command. Adds status badges, a top-of-node context-window progress bar with explicit unknown states, subagent cards, and (for capable agents) session renaming and conversation branching. See [Agent support](../agents/agent-support.md). |
 | **Sticky note** | A free-text, colorable note. Can be linked to a terminal or agent node to feed its text into that session as context on demand. |
 | **Group** | A real container node — other nodes can live *inside* it, and groups can nest inside groups. A group can optionally be bound to a git worktree, so every node created inside it inherits that worktree's directory. See [Source control & worktrees](../source-control/source-control-and-worktrees.md). |
 | **Editor** | A Monaco-based code editor bound to a file path, with save, dirty-state tracking, and a markdown preview toggle for `.md` files. Image files render as an `<img>` preview instead of source text. |

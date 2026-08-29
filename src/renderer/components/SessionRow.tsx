@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { IconBellFilled, IconCircleCheck } from './icons'
 import type { SessionRowVM } from '../lib/sessionList'
-import { useContextWindow } from '../state/contextWindow'
+import { contextUsageKey, useContextWindow } from '../state/contextWindow'
 import { useSessionNaming } from '../state/sessionNaming'
+import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { contextSourceForNode, CONTEXT_STALE_AFTER_MS, contextPercentFromCounts } from '@shared/context-source'
+import { useContextClock } from '../lib/contextClock'
 
 export interface SessionRowProps {
   row: SessionRowVM
@@ -27,6 +30,8 @@ function dirName(p?: string): string {
   return parts[parts.length - 1] || p
 }
 
+const compactTokens = (n: number): string => new Intl.NumberFormat('en-US').format(Math.round(n))
+
 export function SessionRow({
   row,
   onClick,
@@ -42,7 +47,43 @@ export function SessionRow({
   // Naming progress lives in a store keyed by node id, so the spinner persists across the row
   // unmounting (sidebar close / hover-peek collapse) while the name is still generating.
   const naming = useSessionNaming((s) => !!s.byId[row.id])
-  const usage = useContextWindow((s) => (row.sessionId ? s.bySessionId[row.sessionId] : undefined))
+  const text = useLocalizedVocabularyText()
+  const contextSource = contextSourceForNode({
+    agentId: row.agentId,
+    sshRemoteTmux: row.sshRemote,
+    source: row.contextSource
+  })
+  const usage = useContextWindow((s) => {
+    const candidate = contextSource.telemetryAvailable && row.sessionId && row.agentId
+      ? s.bySessionId[contextUsageKey(row.sessionId, row.agentId, row.contextSource)]
+      : undefined
+    if (candidate && row.agentId && candidate.agentId && candidate.agentId !== row.agentId) return undefined
+    if (candidate && candidate.source !== row.contextSource) return undefined
+    return candidate
+  })
+  const clockNow = useContextClock(!!usage)
+  const telemetryAvailable = contextSource.telemetryAvailable
+  const state = usage
+    ? clockNow - usage.updatedAt > CONTEXT_STALE_AFTER_MS
+      ? 'stale'
+      : 'known'
+    : telemetryAvailable
+      ? row.sessionId
+        ? 'unknown'
+        : 'not-reported'
+      : 'unavailable'
+  const stateCopy = text(`contextMeter.state.${state}`, state === 'known' ? 'reported' : state)
+  const rawPercent = usage ? (contextPercentFromCounts(usage.usedTokens, usage.windowTokens) ?? 0) : 0
+  const levelKey = !usage || state === 'stale' ? null : rawPercent > 85 ? 'critical' : rawPercent >= 60 ? 'warning' : 'healthy'
+  const levelCopy = levelKey ? text(`contextMeter.level.${levelKey}`, levelKey) : ''
+  const compactSummary = usage
+    ? text('contextMeter.summary', 'Used {used} / {total} tokens · {remaining} remaining · {percent}%', {
+        used: compactTokens(usage.usedTokens),
+        total: compactTokens(usage.windowTokens),
+        remaining: compactTokens(Math.max(0, usage.windowTokens - usage.usedTokens)),
+        percent: String(Math.round(rawPercent))
+      }) + ` · ${state === 'stale' ? text('contextMeter.staleTelemetry', 'stale telemetry') : levelCopy}`
+    : text('contextMeter.contextState', 'Context: {state}', { state: stateCopy })
 
   const commit = (): void => {
     const t = draft.trim()
@@ -124,9 +165,22 @@ export function SessionRow({
               {row.loop.kind} · {row.loop.count}
             </span>
           )}
-          {row.usesContext && usage && (
-            <span className="ss-ctx" style={{ background: ctxColor(usage.usedPercent) }}>
-              {Math.round(usage.usedPercent)}%
+          {row.agentId && (
+            <span
+              className={`ss-ctx ss-ctx--${state}`}
+              role="progressbar"
+              aria-label={compactSummary}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              {...(usage
+                ? {
+                    'aria-valuenow': Math.round(rawPercent),
+                    'aria-valuetext': compactSummary
+                  }
+                : { 'aria-valuetext': compactSummary })}
+              style={usage ? { background: ctxColor(rawPercent) } : undefined}
+            >
+              {usage ? `${Math.round(rawPercent)}% ${stateCopy}` : stateCopy}
             </span>
           )}
           <button

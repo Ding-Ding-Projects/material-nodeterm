@@ -9,6 +9,7 @@ landed.
 | Date | Plan | Status |
 | --- | --- | --- |
 | 2026-08-26 | [Portable Node Universes and Hosting Program](./2026-08-26-portable-node-universes-and-hosting-program.md) | Planned, source baseline `27ecfa62e5b3180070abaa241f8bac6b1e079861` |
+| 2026-08-26 | [Context-window progress on agent nodes](./2026-08-26-context-window-progress.md) | Implemented in task branch, verification intentionally pending |
 
 When implementation begins, update the plan status only with evidence from the actual default
 branch, release, and issue records. Keep public wording ordinary and do not place credentials or

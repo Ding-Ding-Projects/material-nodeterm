@@ -169,6 +169,7 @@ import { useWorktrees } from '../state/worktrees'
 import { useSystemAccount } from '../state/systemAccount'
 import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { isRemoteSessionNode } from '@shared/worktree'
+import { contextSourceForNode } from '@shared/context-source'
 import { useSession, useActiveSessionPresence } from '../session/session'
 import { isBrowserRuntime } from '../bridge/runtime'
 import { useToyLocks } from '../state/toylocks'
@@ -176,6 +177,7 @@ import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
 import { isNodeLockEngaged, nodeLockTeardownMode } from '@shared/toylock'
 import {
   accountChipLabel,
+  AGENT_COLLAPSED_HEIGHT,
   agentLaunchOverride,
   COLLAPSED_HEIGHT,
   NODE_COLORS,
@@ -185,7 +187,6 @@ import {
   hasHooks,
   canRecur,
   canContextLink,
-  hasUsage,
   canChat,
   canResume,
   canRename,
@@ -1590,7 +1591,6 @@ export function TerminalNode({
   const showStatus = !!agentId && hasHooks(agentId) // status badge + session-title capture
   const showLoop = !!agentId && canRecur(agentId) // /loop · /schedule · /cron chrome
   const contextLinkCapable = !!agentId && canContextLink(agentId) // context-link tip wording only; handles render on all terminals
-  const showUsage = !!agentId && hasUsage(agentId) // per-node context-window meter
   const showChat = !!agentId && canChat(agentId) // Cmd+M opens a chat panel instead of markdown
   // Everything that reads the conversation through CLAUDE's transcript readers (`context.ensure`'s
   // mount-time meter rehydration, the find bar's transcript index) — deliberately NOT `showUsage`,
@@ -1648,6 +1648,11 @@ export function TerminalNode({
   // The affordance is absent, not merely refused on click.
   const sshProject = useProjects((s) => !!s.projects.find((p) => p.id === s.activeProjectId)?.ssh)
   const remoteSession = sshProject || isRemoteSessionNode(data)
+  const contextSource = contextSourceForNode({
+    agentId,
+    ssh: sshConnection,
+    sshRemoteTmux: remoteSession
+  })
   // Stable ids are the only profile data the renderer may send. The optional desktop bridge is
   // also the capability check that keeps the same Windows renderer bundle inert in Server Edition.
   // A missing node snapshot is a legacy node, so it follows the current machine default on its
@@ -1904,18 +1909,21 @@ export function TerminalNode({
   // continuing tmux session is idle and emits no event, so the main-process tailer is never
   // re-fed. Re-runs if the sessionId changes (track is idempotent). cwd is a path fallback.
   //
-  // CLAUDE ONLY (`claudeTranscript`, not `showUsage`). The handler resolves this sessionId through
-  // claude's `resolveTranscript`, whose cwd fallback answers *the newest claude transcript for that
-  // cwd* — for a codex/gemini node that is a stranger's session, tracked on the CLAUDE tail under
-  // this node's session id, so its meter would show another agent's fill and then flap against the
-  // correct tail. The cost of the gate: a codex/gemini meter fills on the first hook event after
-  // mount instead of instantly. Their tails need no resolver (the hook envelope carries the path),
-  // so nothing else is lost. Per-agent rehydration is a follow-up task — see transcriptGates.ts.
+  // Rehydrate every provider whose session transcript can be located locally. Claude uses its
+  // account-scoped resolver, while Codex and Gemini use their own provider-root locators. Grok,
+  // OpenCode, and custom agents stay explicit in ContextMeter when no verified window telemetry
+  // exists rather than borrowing another provider's transcript.
   useEffect(() => {
     const sid = status?.sessionId
-    if (claudeTranscript && sid)
-      window.nodeTerminal.context.ensure(sid, (data.cwd as string) || undefined, data.accountId)
-  }, [claudeTranscript, status?.sessionId, data.cwd, data.accountId])
+    if (sid && agentId && !remoteSession)
+      window.nodeTerminal.context.ensure(
+        sid,
+        (data.cwd as string) || undefined,
+        agentId === 'claude' ? data.accountId : undefined,
+        agentId,
+        id
+      )
+  }, [agentId, status?.sessionId, data.cwd, data.accountId, remoteSession])
   const updateNodeInternals = useUpdateNodeInternals()
 
   const [searchOpen, setSearchOpen] = useState(false)
@@ -2040,8 +2048,8 @@ export function TerminalNode({
     sessionId: status?.sessionId,
     cwd: data.cwd as string | undefined,
     accountId: data.accountId,
-    // The transcript index reads claude's JSONL through the same resolver, so it is gated on the
-    // claude-transcript fact, NOT on the meter's `showUsage` — see lib/transcriptGates.ts.
+    // The transcript index reads Claude's JSONL through the same resolver, so it is gated on the
+    // Claude transcript fact, independently of the node context meter.
     searchTranscript: claudeTranscript,
     open: searchOpen,
     readBuffer
@@ -4417,7 +4425,9 @@ export function TerminalNode({
         const next = !n.data.collapsed
         const expandedHeight =
           (n.data.expandedHeight as number) ?? n.measured?.height ?? (n.height as number) ?? 300
-        const height = next ? COLLAPSED_HEIGHT : expandedHeight
+        const height = next
+          ? (agentId ? AGENT_COLLAPSED_HEIGHT : COLLAPSED_HEIGHT)
+          : expandedHeight
         return {
           ...n,
           height,
@@ -4811,6 +4821,14 @@ export function TerminalNode({
           isVisible={selected && !collapsed}
           color="var(--md-primary)"
         />
+        {agentId && (
+          <ContextMeter
+            agentId={agentId}
+            sessionId={status?.sessionId ?? null}
+            telemetryAvailable={contextSource.telemetryAvailable}
+            source={contextSource.source}
+          />
+        )}
         {/* Invisible source handle so edges to subagent/loop nodes can attach. */}
         <Handle
           id="flow-out"
@@ -4983,7 +5001,6 @@ export function TerminalNode({
               SSH {(data.ssh as SshConnection).user}@{(data.ssh as SshConnection).host}
             </span>
           ) : null}
-          {showUsage && <ContextMeter sessionId={status?.sessionId ?? null} />}
           {/* ADHD time awareness — beside the session chip, because a clock in a menu does nothing
             for time blindness. Renders nothing at all while the mode is off. */}
           <AdhdElapsedChip nodeId={id} />
@@ -5167,9 +5184,9 @@ export function TerminalNode({
               </button>
             </Tooltip>
           )}
-          {/* `claudeTranscript`, NOT `showUsage`: the transcript leg of the search is gated on the
-            claude-transcript fact (see the `useTerminalSearch` call above), so keying the label on
-            the meter promised a codex/gemini node a conversation search it does not run. */}
+          {/* The transcript leg of the search is gated on the Claude transcript fact (see the
+            `useTerminalSearch` call above), so a Codex or Gemini node is not promised a
+            conversation search it does not run. */}
           <Tooltip
             label={claudeTranscript ? 'Search terminal + conversation' : 'Search this terminal'}
           >

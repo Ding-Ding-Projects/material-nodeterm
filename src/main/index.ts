@@ -172,6 +172,8 @@ import {
   remoteTranscriptRoots
 } from '../core/remote-transcript-locate'
 import { registerTranscriptIpc, resolveTranscript } from '../core/transcript-ipc'
+import { locateCodex, locateGemini } from '../core/handoff/locate'
+import { contextSourceForNode, contextPercentFromCounts } from '../shared/context-source'
 import { createRemoteContextTail } from './remote-context-tail'
 import { createRemoteSubagentTail } from './remote-subagent-tail'
 import { RemoteFile, type RemoteFileRef } from './remote-ssh/remote-file'
@@ -551,7 +553,10 @@ const browserGuests = new Map<number, BrowserGuest>()
 // poll) and subagent-tail (400ms poll) would keep stat/read-ing forever. Keyed by node id.
 // nodeId → the agent session id of whichever hook-capable CLI runs in that node (claude's, and
 // since the grok branch in the raw listener, grok's).
-const nodeContextSession = new Map<string, string>()
+  const nodeContextSession = new Map<string, string>()
+  const nodeContextIdentity = new Map<string, { sessionId: string; agentId: string; source: string }>()
+  const contextSource = (agentId: string, source: string): string =>
+    contextSourceForNode({ agentId, sshRemoteTmux: source !== 'local', source }).source
 const nodeSubagents = new Map<string, Set<string>>() // nodeId → active subagent tool_use_ids
 const browserUseBackend = new NodeTermBrowserUseBackend((sessionId) => {
   for (const [nodeId, mappedSessionId] of nodeContextSession) {
@@ -2156,29 +2161,35 @@ app.whenReady().then(async () => {
   const pushContextUpdate = (payload: unknown): void => {
     if (!win.isDestroyed()) win.webContents.send(IPC.contextUpdate, payload)
     // Feed the macOS Notch HUD the model name (keyed by sessionId; no-op off/non-darwin).
-    notchHudOnContextUpdate(payload as { sessionId?: string; model?: string; usedPercent?: number })
+    notchHudOnContextUpdate(payload as { sessionId?: string; agentId?: string; source?: string; model?: string; usedTokens?: number; windowTokens?: number; updatedAt?: number })
     // Feed the mirror's per-node context ring (mobile-usage-inbox). The context tail keys by
     // sessionId; map it back to the node via the raw-listener's nodeId↔sessionId association.
-    const cw = payload as { sessionId?: string; usedPercent?: number }
-    for (const [nid, sid] of nodeContextSession) {
-      if (sid === cw.sessionId && typeof cw.usedPercent === 'number') {
-        recordContextUsage(nid, cw.usedPercent)
+    const cw = payload as { sessionId?: string; agentId?: string; source?: string; usedTokens?: number; windowTokens?: number }
+    const contextPercent = contextPercentFromCounts(cw.usedTokens, cw.windowTokens)
+    for (const [nid, identity] of nodeContextIdentity) {
+      if (
+        identity.sessionId === cw.sessionId &&
+        identity.agentId === cw.agentId &&
+        identity.source === cw.source &&
+        contextPercent !== null
+      ) {
+        recordContextUsage(nid, contextPercent)
         break
       }
     }
   }
-  const contextTail = createContextTail(pushContextUpdate, { onTaskNotification, onToolResult })
+  const contextTail = createContextTail(pushContextUpdate, { onTaskNotification, onToolResult, agentId: 'claude', source: 'local' })
   // ONE TAIL PER AGENT, each with its own parser — not one tail switching on an agent id, which
   // would mean changing `ContextTail.track(sessionId, path)` and the four call sites that depend on
   // it. The poller (offset reads, torn-line carry, change-gated push) is written once in
   // createContextTail; only the token keys differ, so only `parse` differs. Neither gets
   // onTaskNotification/onToolResult: both are claude transcript features (subagent cards, the
   // declined-ask rescue), and neither agent is in SUBAGENT_CAPABLE.
-  const geminiContextTail = createContextTail(pushContextUpdate, { parse: geminiContextParse })
+  const geminiContextTail = createContextTail(pushContextUpdate, { parse: geminiContextParse, agentId: 'gemini', source: 'local' })
   // Hand the gemini session-name reader its path authority (declared above the handlers that use
   // it, assigned here where the tail exists).
   geminiTranscriptPathFor = (sessionId) => geminiContextTail.pathFor(sessionId)
-  const codexContextTail = createContextTail(pushContextUpdate, { parse: codexContextParse })
+  const codexContextTail = createContextTail(pushContextUpdate, { parse: codexContextParse, agentId: 'codex', source: 'local' })
   // Remote (SSH-project) counterparts: a node whose pty runs on a remote host has its Claude
   // transcript on that host, so its meter / subagent transcript / search must read over the
   // project's ControlMaster. One RemoteFile bound to the SSH-project manager's own ssh runner
@@ -2355,11 +2366,30 @@ app.whenReady().then(async () => {
   // Shares core's `resolveTranscript` with the read channels — including its `accountId`-scoped
   // cwd fallback. This copy dropped the account, so a managed-account node could track (and then
   // meter, and then SERVE as the chat's first-choice path) an unrelated session's transcript.
-  corePlatform.on(IPC.contextEnsure, async (sessionId?: string, cwd?: string, accountId?: string) => {
-    if (!sessionId || !SESSION_ID_RE.test(sessionId)) return
-    const p = await resolveTranscript({ sessionId, cwd, accountId }, (s) => contextTail.pathFor(s))
-    if (p) contextTail.track(sessionId, p)
-  })
+  corePlatform.on(
+    IPC.contextEnsure,
+    async (sessionId?: string, cwd?: string, accountId?: string, agentId?: string, nodeId?: string) => {
+      if (!sessionId || !SESSION_ID_RE.test(sessionId)) return
+      if (agentId === 'codex' || agentId === 'gemini') {
+        // These providers own their transcript roots and carry no Claude account scope. Their
+        // locators walk only the provider's documented local tree, then the same jail used by
+        // hook-fed paths prevents a malformed result from widening the read boundary.
+        const located = agentId === 'codex' ? await locateCodex(sessionId) : await locateGemini(sessionId)
+        const p = safeTranscriptPath(located)
+        if (p) (agentId === 'codex' ? codexContextTail : geminiContextTail).track(sessionId, p)
+        if (nodeId && p) nodeContextIdentity.set(nodeId, { sessionId, agentId, source: contextSource(agentId, 'local') })
+        if (nodeId && p) nodeContextSession.set(nodeId, sessionId)
+        return
+      }
+      if (agentId && agentId !== 'claude') return
+      const p = await resolveTranscript({ sessionId, cwd, accountId }, (s) => contextTail.pathFor(s))
+      if (p) contextTail.track(sessionId, p)
+      if (nodeId && p) {
+        nodeContextSession.set(nodeId, sessionId)
+        nodeContextIdentity.set(nodeId, { sessionId, agentId: agentId ?? 'claude', source: contextSource(agentId ?? 'claude', 'local') })
+      }
+    }
+  )
   // The remote half of a handoff. Same three-line shape as the context-link deps above and for
   // the same reason: reading (and here also WRITING) on an SSH project's host is the one thing
   // the handoff builder cannot answer for itself. Absent deps ⇒ local-only, as before.
@@ -2686,7 +2716,11 @@ app.whenReady().then(async () => {
       // snake_case) are decoded in exactly one place.
       const g = grokRawFields(payload)
       // 1. node → session: read by the phone's context ring and the ⌘K session lookup.
-      if (nodeId && g.sessionId) nodeContextSession.set(nodeId, g.sessionId)
+      if (nodeId && g.sessionId) {
+        nodeContextSession.set(nodeId, g.sessionId)
+        const remote = nodeId ? ptyManager.sshRemoteForNode(nodeId) : undefined
+        nodeContextIdentity.set(nodeId, { sessionId: g.sessionId, agentId, source: contextSource(agentId, remote ? `${sshHostKey(remote.conn)}:${remote.conn.port ?? 22}` : 'local') })
+      }
       // 2. session → its session DIRECTORY, derived from (cwd, sessionId) — the two fields every
       // grok hook does carry — and remembered here, the one place they arrive together. That is
       // what lets the session-name read (core/grok-session.ts) be a direct open rather than a scan
@@ -2731,7 +2765,10 @@ app.whenReady().then(async () => {
       const transcriptPath = safeTranscriptPath(p.transcript_path)
       const tail = agentId === 'gemini' ? geminiContextTail : codexContextTail
       if (p.session_id && transcriptPath) tail.track(p.session_id, transcriptPath)
-      if (nodeId && p.session_id) nodeContextSession.set(nodeId, p.session_id)
+      if (nodeId && p.session_id) {
+        nodeContextSession.set(nodeId, p.session_id)
+        nodeContextIdentity.set(nodeId, { sessionId: p.session_id, agentId, source: contextSource(agentId, 'local') })
+      }
       // gemini subscribes SessionEnd (GEMINI_HOOK_EVENTS); codex does NOT today (CODEX_EVENTS stops
       // at Stop), so for codex the tail is released by `releaseNodeTails` on pty:destroy/recycle
       // instead. Handling it here regardless costs nothing and is correct the day codex's event
@@ -2766,7 +2803,10 @@ app.whenReady().then(async () => {
         remoteContextTail.track(p.session_id, ref)
         remoteTranscriptBySession.set(p.session_id, ref)
       }
-      if (nodeId && p.session_id) nodeContextSession.set(nodeId, p.session_id)
+      if (nodeId && p.session_id) {
+        nodeContextSession.set(nodeId, p.session_id)
+        nodeContextIdentity.set(nodeId, { sessionId: p.session_id, agentId, source: contextSource(agentId, `${sshHostKey(rt.conn)}:${rt.conn.port ?? 22}`) })
+      }
       // Context Link: remember the node's transcript path for remote nodes too. This branch used
       // to `return` without it, which is why a remote node was never readable through a link —
       // the local locators are no substitute (they search the wrong machine's disk, so
@@ -2820,7 +2860,10 @@ app.whenReady().then(async () => {
     const transcriptPath = safeTranscriptPath(p.transcript_path)
     // Context-window meter: tail the session transcript (any event carrying both fields).
     if (p.session_id && transcriptPath) contextTail.track(p.session_id, transcriptPath)
-    if (nodeId && p.session_id) nodeContextSession.set(nodeId, p.session_id)
+    if (nodeId && p.session_id) {
+      nodeContextSession.set(nodeId, p.session_id)
+      nodeContextIdentity.set(nodeId, { sessionId: p.session_id, agentId, source: contextSource(agentId, 'local') })
+    }
     if (nodeId && p.session_id && transcriptPath) setNodeTranscript(nodeId, p.session_id, transcriptPath)
     if (p.hook_event_name === 'SessionEnd' && p.session_id) contextTail.untrack(p.session_id)
     // Subagent live transcript: track on PreToolUse / finish on PostToolUse for subagent tools.
@@ -2868,6 +2911,7 @@ app.whenReady().then(async () => {
       remoteTranscriptBySession.delete(sessionId)
       locatedTranscriptSessions.delete(sessionId)
       nodeContextSession.delete(nodeId)
+      nodeContextIdentity.delete(nodeId)
     }
     const subs = nodeSubagents.get(nodeId)
     if (subs) {

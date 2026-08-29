@@ -20,6 +20,7 @@
     "check-changelog": "node scripts/check-changelog.mjs",
     "build-docs": "node scripts/build-docs-bundle.mjs",
     "check-docs": "node scripts/check-docs-bundle.mjs",
+    "check-context-article": "node scripts/check-context-window-article-parity.mjs",
     "preview": "electron-vite preview",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && node scripts/check-paste-frame-parity.mjs",

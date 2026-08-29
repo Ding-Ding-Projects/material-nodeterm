@@ -5,6 +5,7 @@
 // local tail; differs only in being async (the read is an ssh round-trip), so it async-polls
 // with a per-session in-flight `reading` flag that skips a tick instead of overlapping reads.
 import { type BrowserWindow } from 'electron'
+import { randomUUID } from 'crypto'
 import { IPC } from '../shared/ipc'
 import type { ContextWindowUsage } from '../shared/types'
 import { cachedWindowFor, resolveModelWindow } from '../core/model-window'
@@ -15,13 +16,16 @@ import {
   type ContextTailOptions
 } from '../core/context-tail'
 import { splitCompleteLines } from '../core/subagent-tail'
-import type { RemoteFile, RemoteFileRef } from './remote-ssh/remote-file'
+import { sshHostKey } from '../shared/ssh'
+import { MAX_REMOTE_FILE_BYTES, type RemoteFile, type RemoteFileRef } from './remote-ssh/remote-file'
 
 const POLL_MS = 1000
 // Cap the first read like the local tail: a resumed transcript can be many MB. Only the LATEST
 // assistant usage matters, so a tail of the file is enough. Defined locally (not imported) so
 // context-tail.ts stays untouched; value mirrors its INITIAL_READ_CAP.
 const INITIAL_READ_CAP = 1024 * 1024 // 1 MB
+const MAX_RETIRED_EPOCHS = 4096
+const remoteSource = (ref: RemoteFileRef): string => `${sshHostKey(ref.conn)}:${ref.conn.port ?? 22}`
 
 interface Tracked {
   ref: RemoteFileRef
@@ -37,6 +41,13 @@ interface Tracked {
   lastWindow: number
   /** Partial trailing line held back until the next read completes it (see subagent-tail.ts). */
   carry: Buffer | null
+  epoch: string
+  source: string
+  epochHistory: string[]
+  incarnation: number
+  producerId: string
+  lifecycle: number
+  producerHistory: string[]
 }
 
 export interface RemoteContextTail {
@@ -52,6 +63,13 @@ export function createRemoteContextTail(
   opts?: ContextTailOptions
 ): RemoteContextTail {
   const sessions = new Map<string, Tracked>()
+  const generations = new Map<string, number>()
+  const producerEpoch = randomUUID()
+  let nextLifecycle = 0
+  const nextEpoch = (): { epoch: string; lifecycle: number } => {
+    const lifecycle = ++nextLifecycle
+    return { lifecycle, epoch: `${producerEpoch}:${lifecycle}` }
+  }
   let timer: ReturnType<typeof setInterval> | null = null
 
   // Usage parses the whole read (carry included) — it tolerates torn lines and the latest
@@ -79,6 +97,8 @@ export function createRemoteContextTail(
 
   const push = (sessionId: string, t: Tracked): void => {
     if (win.isDestroyed()) return
+    const generation = (generations.get(sessionId) ?? 0) + 1
+    generations.set(sessionId, generation)
     const usedPercent = Math.min(100, Math.max(0, (t.used / t.window) * 100))
     const payload: ContextWindowUsage = {
       sessionId,
@@ -86,7 +106,16 @@ export function createRemoteContextTail(
       windowTokens: t.window,
       usedPercent,
       model: t.model,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      generation,
+      epoch: t.epoch,
+      incarnation: t.incarnation,
+      producerId: t.producerId,
+      lifecycle: t.lifecycle,
+      agentId: opts?.agentId ?? 'claude',
+      source: t.source,
+      epochHistory: t.epochHistory,
+      producerHistory: t.producerHistory
     }
     win.webContents.send(IPC.contextUpdate, payload)
   }
@@ -95,22 +124,49 @@ export function createRemoteContextTail(
   // error, so a failed read keeps the last value. The `reading` flag skips overlapping ticks.
   const read = async (sessionId: string, t: Tracked): Promise<void> => {
     if (t.reading) return
+    const readEpoch = t.epoch
     t.reading = true
     try {
       if (t.offset === 0) {
-        // First read: grab the tail of the (possibly huge) file in one shot. We can't stat the
-        // remote size, so advance the offset by the bytes we actually received.
-        const text = await remoteFile.readTail(t.ref, INITIAL_READ_CAP)
-        t.offset = Buffer.byteLength(text)
-        scan(sessionId, t, text)
+        // First read: size is mandatory. Without it, a tail-only read cannot establish an
+        // absolute cursor, and the next poll would either replay bytes or skip appended bytes.
+        const size = await remoteFile.readSize(t.ref)
+        if (size === null) return
+        const start = Math.max(0, size - INITIAL_READ_CAP)
+        const initial = await remoteFile.readFromCapped(t.ref, start, INITIAL_READ_CAP)
+        // Base64 preserves byte length even when the cap cuts a UTF-8 sequence. The cursor is
+        // therefore an absolute source offset, not an offset guessed from decoded text.
+        t.offset = Math.min(MAX_REMOTE_FILE_BYTES, Math.max(start, initial.newOffset))
+        if (initial.data.length) scan(sessionId, t, initial.data.toString('utf8'))
       } else {
-        const { text, newOffset } = await remoteFile.readFrom(t.ref, t.offset)
-        t.offset = newOffset
-        if (text) scan(sessionId, t, text)
+        const size = await remoteFile.readSize(t.ref)
+        if (size === null) return
+        if (size < t.offset) {
+          const priorEpoch = t.epoch
+          t.offset = 0
+          t.carry = null
+          t.used = 0
+          t.window = 0
+          t.model = null
+          t.lastUsed = 0
+          t.lastModel = null
+          t.lastWindow = 0
+          const next = nextEpoch()
+          t.epoch = next.epoch
+          t.lifecycle = next.lifecycle
+          t.incarnation = t.lifecycle
+          t.epochHistory = [...t.epochHistory, priorEpoch].slice(-MAX_RETIRED_EPOCHS)
+          generations.set(sessionId, 0)
+        }
+        const { data, newOffset } = await remoteFile.readFromCapped(t.ref, t.offset, INITIAL_READ_CAP)
+        t.offset = Math.min(MAX_REMOTE_FILE_BYTES, Math.max(t.offset, newOffset))
+        if (data.length) scan(sessionId, t, data.toString('utf8'))
       }
     } finally {
       t.reading = false
     }
+
+    if (sessions.get(sessionId) !== t || t.epoch !== readEpoch) return
 
     // Reconcile the window every pass, same resolution as the local tail.
     if (t.model) void resolveModelWindow(t.model)
@@ -138,13 +194,36 @@ export function createRemoteContextTail(
       if (!sessionId || !ref) return
       const existing = sessions.get(sessionId)
       if (existing) {
-        if (existing.ref.path !== ref.path) {
+        const sameSource = existing.ref.path === ref.path &&
+          existing.ref.controlPath === ref.controlPath &&
+          existing.ref.conn.user === ref.conn.user &&
+          existing.ref.conn.host === ref.conn.host &&
+          (existing.ref.conn.port ?? 22) === (ref.conn.port ?? 22) &&
+          (existing.ref.conn.identityFile ?? '') === (ref.conn.identityFile ?? '') &&
+          (existing.ref.conn.extraArgs ?? '') === (ref.conn.extraArgs ?? '') &&
+          !!existing.ref.conn.execTrusted === !!ref.conn.execTrusted
+        if (!sameSource) {
+          const priorEpoch = existing.epoch
           existing.ref = ref
           existing.offset = 0
           existing.carry = null
+          existing.used = 0
+          existing.window = 0
+          existing.model = null
+          existing.lastUsed = 0
+          existing.lastModel = null
+          existing.lastWindow = 0
+          const next = nextEpoch()
+          existing.epoch = next.epoch
+          existing.lifecycle = next.lifecycle
+          existing.incarnation = existing.lifecycle
+          existing.epochHistory = [...existing.epochHistory, priorEpoch].slice(-MAX_RETIRED_EPOCHS)
+          generations.set(sessionId, 0)
+          existing.source = remoteSource(ref)
         }
         return
       }
+      const { epoch, lifecycle } = nextEpoch()
       const t: Tracked = {
         ref,
         offset: 0,
@@ -155,7 +234,14 @@ export function createRemoteContextTail(
         lastUsed: 0,
         lastModel: null,
         lastWindow: 0,
-        carry: null
+        carry: null,
+        epoch,
+        source: remoteSource(ref),
+        epochHistory: [],
+        incarnation: lifecycle,
+        producerId: producerEpoch,
+        lifecycle,
+        producerHistory: []
       }
       sessions.set(sessionId, t)
       void read(sessionId, t) // immediate first value (resumed sessions already have content)
@@ -164,6 +250,7 @@ export function createRemoteContextTail(
     untrack(sessionId) {
       if (!sessionId) return
       sessions.delete(sessionId)
+      generations.delete(sessionId)
       if (!sessions.size && timer) {
         clearInterval(timer)
         timer = null

@@ -3151,18 +3151,36 @@ export interface UsageApi {
   onUpdate(listener: (usage: ClaudeUsage) => void): () => void
 }
 
-/** A Claude session's context-window fill, pushed per sessionId from the transcript tailer. */
+/** A provider session's context-window fill, pushed per sessionId from its local transcript tailer. */
 export interface ContextWindowUsage {
   sessionId: string
   /** input + cache_read + cache_creation tokens of the latest assistant message. */
   usedTokens: number
   /** Model context window (200k default, 1M for 1m-context models). */
   windowTokens: number
-  /** 0–100 fullness. */
+  /** 0–100 fullness. Only present when both counts are trustworthy. */
   usedPercent: number
   /** Model id from the transcript, or null if not seen yet. */
   model: string | null
   updatedAt: number
+  /** Monotonic per-session generation used to fence delayed provider reads. */
+  generation: number
+  /** Producer lifecycle epoch. Generations are comparable only within this epoch. */
+  epoch: string
+  /** Stable producer identity for lifecycle ordering, independent of wall-clock time. */
+  producerId: string
+  /** Monotonic lifecycle sequence within producerId. */
+  lifecycle: number
+  /** Monotonic producer incarnation ordering epochs within a provider/source process. */
+  incarnation: number
+  /** Provider identity that produced this reading, when the producer knows it. */
+  agentId: string
+  /** Local or host source identity, used to prevent cross-host cache reuse. */
+  source: string
+  /** Previously retired producer epochs for this session, bounded for delayed-read rejection. */
+  epochHistory: string[]
+  /** Previously observed producer identities, retained so old producers cannot replay forever. */
+  producerHistory: string[]
 }
 
 export interface ContextApi {
@@ -3174,7 +3192,7 @@ export interface ContextApi {
    * the continuing session is idle. `cwd` is a transcript-path fallback only.
    * `accountId` scopes resolution to a managed Claude account's transcript root (default `~/.claude`).
    */
-  ensure(sessionId: string, cwd?: string, accountId?: string): void
+  ensure(sessionId: string, cwd?: string, accountId?: string, agentId?: string, nodeId?: string): void
 }
 
 /**

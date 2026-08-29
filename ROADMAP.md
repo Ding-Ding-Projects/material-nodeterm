@@ -84,6 +84,11 @@ later commit, since this file will not be kept in lockstep with every merge).
       section; subagent visualization and Context Link remain claude-only/unbuilt for Grok
       specifically (`SUBAGENT_CAPABLE`/`CONTEXT_LINK_CAPABLE` exclude Grok — its
       `updates.jsonl` parser is unbuilt).
+- [ ] **#89 context-window progress on every agent node** — top-of-node progress is implemented
+      for Claude Code, Codex, Gemini, Grok, OpenCode, custom, resumed, kanban, and ephemeral
+      subagent cards. Exact provider telemetry is shown when available, with explicit unknown,
+      not-reported, stale, and unavailable states otherwise. Integration verification, runtime
+      interaction, and captures remain pending.
 
 ## Known open defects (filed, unfixed)
 

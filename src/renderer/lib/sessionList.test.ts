@@ -311,6 +311,7 @@ describe('projectSignalCounts', () => {
       statusKind: 'idle' as const,
       stateLabel: 'Idle',
       unread: false,
+      contextSource: 'local',
       usesContext: false,
       ...s
     }))

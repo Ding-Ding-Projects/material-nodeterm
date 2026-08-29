@@ -45,6 +45,13 @@ directory.
 demand by drawing a connection between them on the canvas — a pull, not a push: nothing is
 sent automatically, an agent has to ask for the linked context when it wants it.
 
+**Context-window metering** is a top-of-node progress bar on every agent card, including custom,
+resumed, grouped, minimized, and ephemeral subagent cards. Claude Code, Codex, and Gemini use
+their own local transcript telemetry and show exact used, total, remaining, and percentage values.
+Grok, OpenCode, custom agents, and subagents show an explicit `unknown`, `not reported`,
+`stale`, or `unavailable` state when no verified pair exists. See [Context-window meter](./context-window-meter.md)
+for provider sources, generation fencing, privacy, accessibility, and warning thresholds.
+
 ## Configuration
 
 - **Settings → Agents** — default permission mode, agent hibernation (auto-exiting an idle,
@@ -89,6 +96,8 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - Connect two agent-capable nodes with a context link and confirm one can pull the other's
   transcript on request, and that a plain terminal or an agent outside the capability list is
   not offered the option.
+- Confirm a known Claude, Codex, or Gemini node shows exact context values, while Grok, OpenCode,
+  custom, and subagent cards show an explicit non-numeric state without a fabricated percentage.
 
 ## Suggested articles
 

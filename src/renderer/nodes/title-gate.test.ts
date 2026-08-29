@@ -93,30 +93,24 @@ describe('session-name title gates', () => {
 })
 
 /**
- * The claude-transcript gates: `claudeTranscript` (`readsClaudeTranscript(agentId)`), NOT `showUsage`
- * (`hasUsage(agentId)`).
- *
- * `USAGE_CAPABLE` grew to claude + codex + gemini, so `showUsage` is now true for three agents while
- * only ONE of them has a claude transcript. Both readers behind these gates resolve a session id
- * through claude's `resolveTranscript`, whose cwd fallback answers *the newest claude transcript for
- * that cwd* — so on a codex or gemini node they resolve an UNRELATED claude session and then meter
- * it, and search it, under this node's session id. That was this branch's own Critical fix, and
- * reverting either gate to `showUsage` left the full suite green: nothing in this repo renders
- * `TerminalNode`, so this file is the only thing standing between the bug and a re-landing.
+ * The provider transcript gate keeps Claude-only transcript search separate from the shared
+ * context meter. Claude, Codex, and Gemini each resolve their own local transcript for rehydration;
+ * a remote node never calls the local ensure route, so host telemetry cannot be confused with a
+ * local file. Nothing in this repository renders TerminalNode in isolation, so the provider seam
+ * assertions below document the exact wiring boundary.
  *
  * Asserted per LINE rather than with `toContain` over a 6000-line file: a whole-file `toContain`
  * failure dumps the file as its diff, and a per-line assertion names the site instead.
  */
-describe('claude-transcript gates', () => {
+describe('provider transcript gates', () => {
   const lines = terminalNode.split('\n')
   /** The lines mentioning `needle`, 1-indexed, as `[lineNo, text]`. */
   const sites = (needle: string): [number, string][] =>
     lines.map((l, i) => [i + 1, l] as [number, string]).filter(([, l]) => l.includes(needle))
 
-  it('is derived from the agent, not from the meter', () => {
-    // The fact itself, kept separate from `showUsage` one line above it.
+  it('keeps Claude transcript search separate from provider meter rendering', () => {
     expect(terminalNode).toContain('const claudeTranscript = readsClaudeTranscript(agentId)')
-    expect(terminalNode).toContain('const showUsage = !!agentId && hasUsage(agentId)')
+    expect(terminalNode).not.toMatch(/const showUsage\s*=/)
   })
 
   it('gates the mount-time meter rehydration (`context.ensure`)', () => {
@@ -124,9 +118,8 @@ describe('claude-transcript gates', () => {
     expect(found.length).toBe(1)
     const [lineNo] = found[0]
     // The `if (…) ensure(…)` guard is the line above the call.
-    const guard = lines.slice(Math.max(0, lineNo - 3), lineNo).join('\n')
-    expect(guard, `${lineNo}: context.ensure guard`).toContain('claudeTranscript')
-    expect(guard, `${lineNo}: context.ensure guard`).not.toContain('showUsage')
+    const guard = lines.slice(Math.max(0, lineNo - 4), lineNo).join('\n')
+    expect(guard, `${lineNo}: context.ensure guard`).toContain('sid && agentId && !remoteSession')
   })
 
   it('gates the find bar’s transcript index (`searchTranscript`)', () => {
@@ -147,12 +140,12 @@ describe('claude-transcript gates', () => {
     expect(text, `${lineNo}: ${text.trim()}`).not.toContain('showUsage')
   })
 
-  it('leaves the meter itself on the meter capability', () => {
-    // The inverse mistake: `USAGE_CAPABLE` is what decides whether a meter is shown at all, and
-    // narrowing THAT to claude would take codex's and gemini's meters away.
+  it('renders the meter for every agent and carries provider-aware semantics', () => {
     const found = sites('<ContextMeter')
     expect(found.length).toBe(1)
     const [lineNo, text] = found[0]
-    expect(text, `${lineNo}: ${text.trim()}`).toContain('showUsage &&')
+    expect(text, `${lineNo}: ${text.trim()}`).toContain('agentId={agentId}')
+    const block = lines.slice(lineNo - 1, lineNo + 5).join('\n')
+    expect(block).toContain('telemetryAvailable=')
   })
 })
