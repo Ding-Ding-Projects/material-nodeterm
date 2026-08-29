@@ -56,6 +56,7 @@ const DINO_SIZE = { width: 600, height: 200 }
 const VIDEO_SIZE = { width: 640, height: 420 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
+const KIOSK_SIZE = { width: 900, height: 620 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
@@ -163,6 +164,10 @@ export interface NodeData {
   browserTabs?: BrowserTab[]
   /** Browser-only: which `browserTabs[].id` is currently shown. Undefined = the first tab. */
   browserActiveTabId?: string
+  /** Kiosk-only portable intent. Its browser profile id is deliberately absent here. */
+  kioskMode?: import('@shared/kiosk-sessions').KioskDisplayMode
+  kioskManifest?: import('@shared/kiosk-sessions').KioskManifestMetadata
+  kioskProfileLabel?: string
   diffStaged?: boolean
   commitOid?: string
   /** dino-only: best score reached in the T-Rex Runner game. */
@@ -907,6 +912,31 @@ export function createBrowserNode(
   }
 }
 
+/** Creates a Kiosk/PWA node with a dedicated machine-local browser profile. */
+export function createKioskNode(
+  index: number,
+  url = '',
+  center?: { x: number; y: number }
+): CanvasNode {
+  const safeUrl = url.trim()
+  return {
+    id: nextId('kiosk'),
+    type: 'kiosk',
+    position: placeAt(center, index, KIOSK_SIZE.width, KIOSK_SIZE.height),
+    width: KIOSK_SIZE.width,
+    height: KIOSK_SIZE.height,
+    style: { width: KIOSK_SIZE.width, height: KIOSK_SIZE.height },
+    data: {
+      title: safeUrl ? safeUrl.replace(/^https?:\/\//, '').slice(0, 40) : 'Kiosk session',
+      color: '#32d74b',
+      group: null,
+      ...(safeUrl ? { url: safeUrl } : {}),
+      kioskMode: 'bounded',
+      kioskProfileLabel: 'Private kiosk profile'
+    }
+  }
+}
+
 /** Creates a diff editor node for a changed file (relative path + repo cwd). */
 export function createDiffNode(
   index: number,
@@ -1455,6 +1485,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   video: true,
   web: true,
   browser: true,
+  kiosk: true,
   subagent: true,
   loop: true,
   scheduler: true,
@@ -1492,6 +1523,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   video: VIDEO_SIZE,
   web: WEB_SIZE,
   browser: BROWSER_SIZE,
+  kiosk: KIOSK_SIZE,
   // Ephemeral kinds are never persisted (they are derived from live hook events), so these are
   // defensive floors rather than values a project.json will ever carry.
   subagent: TERMINAL_SIZE,
@@ -1924,6 +1956,9 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         browserProfileId: n.browserProfileId,
         browserTabs,
         browserActiveTabId,
+        kioskMode: n.kioskMode,
+        kioskManifest: n.kioskManifest,
+        kioskProfileLabel: n.kioskProfileLabel,
         diffStaged: n.diffStaged,
         commitOid: n.commitOid,
         highScore: n.highScore,
@@ -1999,6 +2034,9 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         browserProfileId: n.data.browserProfileId,
         browserTabs: n.data.browserTabs,
         browserActiveTabId: n.data.browserActiveTabId,
+        kioskMode: n.data.kioskMode,
+        kioskManifest: n.data.kioskManifest,
+        kioskProfileLabel: n.data.kioskProfileLabel,
         diffStaged: n.data.diffStaged,
         commitOid: n.data.commitOid,
         highScore: n.data.highScore,

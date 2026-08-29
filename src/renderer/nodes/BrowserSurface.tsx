@@ -16,6 +16,7 @@ type WebviewEl = HTMLElement & {
   canGoBack(): boolean
   canGoForward(): boolean
   getWebContentsId(): number
+  executeJavaScript?(code: string, userGesture?: boolean): Promise<unknown>
   /** Throws before the guest attaches — always go through `webviewAudible`. */
   isCurrentlyAudible?: () => boolean
 }
@@ -41,6 +42,14 @@ interface BrowserSurfaceProps {
    * a live guest across sessions — see `CanvasNodeState.browserProfileId`.
    */
   partition?: string
+  /** Optional PWA manifest probe. The callback receives only page-declared JSON and its URL. */
+  onManifestDiscovered?: (value: unknown, pageUrl: string) => void
+  /** Kiosk surfaces do not expose extension management in their own toolbar. */
+  hideExtensions?: boolean
+  /** Optional navigation validator used by kiosk sessions to keep every persisted and live URL HTTP(S). */
+  validateUrl?: (url: string) => string | null
+  /** Kiosk sessions keep navigation inside the node and therefore disable guest popups. */
+  allowPopups?: boolean
 }
 
 /**
@@ -56,7 +65,11 @@ export function BrowserSurface({
   url,
   onUrlChange,
   onTitleChange,
-  partition
+  partition,
+  onManifestDiscovered,
+  hideExtensions = false,
+  validateUrl,
+  allowPopups = true
 }: BrowserSurfaceProps) {
   const ref = useRef<WebviewEl | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -99,6 +112,13 @@ export function BrowserSurface({
     }
     const onNav = (e: Event): void => {
       const u = (e as unknown as { url: string }).url
+      const safeUrl = validateUrl ? validateUrl(u) : u
+      if (!safeUrl) {
+        restoringNavRef.current = null
+        wv.stop()
+        setFailed('This session accepts only safe HTTP(S) pages.')
+        return
+      }
       // A memory-saver restore replays the URL we were already on, and its did-navigate is
       // indistinguishable from a real one. Reporting it would make MERELY LOOKING at a node dirty
       // the project (updateNodeData → dirty + rev bump + SSH mirror write) and bump an unchanged
@@ -109,23 +129,25 @@ export function BrowserSurface({
       // an echo, and after a FAILED restore (no did-navigate ever arrives) the stuck flag swallowed
       // the next address-bar navigation to ANY url — leaving `data.url` stale and filing that
       // page's title under the previous one.
-      const echo = restoringNavRef.current !== null && u === restoringNavRef.current
+      const echo = restoringNavRef.current !== null && safeUrl === restoringNavRef.current
       restoringNavRef.current = null
-      setAddress(u)
-      locationRef.current = u
+      setAddress(safeUrl)
+      locationRef.current = safeUrl
       setFailed('')
       if (echo) return
       // A genuine navigation re-opens the title gate below: the first title of the NEW page always
       // records, however it compares to the old page's.
       lastTitleRef.current = null
-      onUrlChange(u)
-      lastUrlRef.current = u
-      useBrowserHistory.getState().record(u, u)
+      onUrlChange(safeUrl)
+      lastUrlRef.current = safeUrl
+      useBrowserHistory.getState().record(safeUrl, safeUrl)
     }
     const onNavInPage = (e: Event): void => {
       const u = (e as unknown as { url: string }).url
-      setAddress(u)
-      locationRef.current = u
+      const safeUrl = validateUrl ? validateUrl(u) : u
+      if (!safeUrl) return
+      setAddress(safeUrl)
+      locationRef.current = safeUrl
     }
     const onTitle = (e: Event): void => {
       const title = (e as unknown as { title: string }).title
@@ -162,7 +184,7 @@ export function BrowserSurface({
     // `discarded` is a dep because a discard UNMOUNTS the <webview> element (dropping `src` alone
     // would leave the guest process alive): the restored element is a different node, so the
     // listeners have to be re-attached to it.
-  }, [onUrlChange, onTitleChange, discarded])
+  }, [onUrlChange, onTitleChange, discarded, validateUrl])
 
   // Registers the guest so main can route its new-window requests. `discarded` is a dep for the
   // same reason as above — and it is what makes a discard UNREGISTER the dead wcId through this
@@ -174,13 +196,27 @@ export function BrowserSurface({
     const onReady = (): void => {
       wcId = wv.getWebContentsId()
       window.nodeTerminal.browser.register(wcId, nodeId, ownerNodeId)
+      if (onManifestDiscovered && wv.executeJavaScript) {
+        // This is a fixed, read-only probe evaluated in the guest. It never receives caller input,
+        // never reads cookies, and bounds the manifest before it crosses into the renderer.
+        void wv
+          .executeJavaScript(
+            "(async()=>{const l=document.querySelector('link[rel~=manifest]');if(!l)return null;const u=new URL(l.href,location.href).href;const r=await fetch(u,{credentials:'omit',redirect:'error'});const t=await r.text();if(t.length>262144)throw new Error('manifest-too-large');return {url:u,manifest:JSON.parse(t)}})()",
+            false
+          )
+          .then((result) => {
+            if (!result || typeof result !== 'object') return
+            const candidate = result as { url?: unknown; manifest?: unknown }
+            if (typeof candidate.url === 'string') onManifestDiscovered(candidate.manifest, candidate.url)
+          })
+          .catch(() => undefined)
     }
     wv.addEventListener('dom-ready', onReady)
     return () => {
       wv.removeEventListener('dom-ready', onReady)
       if (wcId) window.nodeTerminal.browser.unregister(wcId)
     }
-  }, [nodeId, ownerNodeId, discarded])
+  }, [nodeId, ownerNodeId, discarded, onManifestDiscovered])
 
   // ── Memory saver ────────────────────────────────────────────────────────────────────────────
   // A browser node parked off-screen is a whole Chromium renderer process doing nothing, and the
@@ -229,17 +265,18 @@ export function BrowserSurface({
 
   const go = (): void => {
     const safe = searchOrUrl(address)
-    if (!safe) {
+    const validated = safe ? (validateUrl ? validateUrl(safe) : safe) : null
+    if (!validated) {
       setFailed('Enter a URL or search term')
       return
     }
-    setAddress(safe)
+    setAddress(validated)
     setFailed('')
     // A navigation with an initiator: whatever it navigates to is not a restore echo.
     restoringNavRef.current = null
-    locationRef.current = safe
-    if (safe === src) ref.current?.reload()
-    else setSrc(safe)
+    locationRef.current = validated
+    if (validated === src) ref.current?.reload()
+    else setSrc(validated)
   }
 
   return (
@@ -268,7 +305,7 @@ export function BrowserSurface({
             if (e.key === 'Enter') go()
           }}
         />
-        <div className="browser-ext-panel__anchor">
+        {!hideExtensions && <div className="browser-ext-panel__anchor">
           <button
             className="browser-node__btn"
             onClick={() => setShowExtensions((v) => !v)}
@@ -281,7 +318,7 @@ export function BrowserSurface({
           {showExtensions && (
             <BrowserExtensionsPanel partition={partition} onClose={() => setShowExtensions(false)} />
           )}
-        </div>
+        </div>}
       </div>
       <div className="browser-node__view nodrag nowheel">
         {/* The element is UNMOUNTED while discarded — that is what ends the guest process; an
@@ -291,7 +328,7 @@ export function BrowserSurface({
           <webview
             ref={ref as unknown as React.Ref<HTMLElement>}
             src={src || undefined}
-            allowpopups={true}
+            allowpopups={allowPopups}
             {...(partition ? { partition } : {})}
             style={{ width: '100%', height: '100%' }}
           />

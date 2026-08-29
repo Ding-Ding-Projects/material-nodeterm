@@ -10,6 +10,7 @@ import {
   createVideoNode,
   createWebNode,
   createBrowserNode,
+  createKioskNode,
   createDiffNode,
   createStickyNode,
   createDinoNode,
@@ -173,6 +174,18 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createWebNode(0, { url: d.url, filePath: d.filePath })
     case 'browser':
       return createBrowserNode(0, d.url ?? '', undefined, undefined, d.browserProfileId)
+    case 'kiosk': {
+      const node = createKioskNode(0, d.url ?? '')
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          kioskMode: d.kioskMode,
+          kioskManifest: d.kioskManifest,
+          kioskProfileLabel: d.kioskProfileLabel
+        }
+      }
+    }
     case 'dino':
       return createDinoNode(0, undefined, d.highScore ?? 0)
     default:

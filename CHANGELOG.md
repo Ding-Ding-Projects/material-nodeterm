@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add Kiosk and PWA canvas sessions with safe HTTP(S) navigation, machine-local isolated profiles,
+  bounded or full-screen presentation, manifest discovery, explicit Rebind and recovery controls,
+  and portable metadata that excludes cookies, credentials, caches, process state, and profile
+  identifiers. Runtime interaction and packaging verification remain pending in this lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

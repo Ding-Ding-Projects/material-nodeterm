@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-08-26, Kiosk and PWA session node implementation
+
+Implemented the Kiosk/PWA lane in `src/renderer/nodes/KioskNode.tsx` and
+`src/shared/kiosk-sessions.ts`. The canvas now exposes a dedicated `kiosk` node kind and creation
+paths from the canvas menu and command palette. Kiosk navigation accepts only bounded HTTP(S)
+URLs without embedded credentials, discovers a page-declared installable manifest through a
+bounded read-only guest probe, and renders honest unavailable/recovery states. The node supports
+bounded and platform full-screen presentation, Escape and explicit exit controls, profile rebind,
+and a fresh isolated persistent partition per project/node profile.
+
+Portable schema fields carry only safe URL/title/mode/profile-label/manifest intent. The opaque
+profile key, cookies, service workers, cache, local storage, browser profile directory, proxy
+state, process identifiers, and credentials remain machine-local or in the guest partition and
+are never serialized into the project projection. Strict projection validation now accepts and
+checks the Kiosk fields. BrowserSurface gained a bounded manifest probe, extension-toolbar hiding,
+and an optional URL validator used by Kiosk.
+
+Documentation was added at `docs/features/browser/kiosk-pwa-sessions.md` with a browser category
+index, and the feature was recorded in the roadmap and changelog. The docs bundle, builds,
+packaging, installer execution, tests, runtime interaction, security review, and UI captures were
+not run in this ultra-speed lane. The feature must remain unticked until those checks are run by
+the parent release lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

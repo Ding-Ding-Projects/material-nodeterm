@@ -1088,6 +1088,7 @@ describe('duplicateNode across every node kind', () => {
     video: 'video',
     web: 'web',
     browser: 'browser',
+    kiosk: 'kiosk',
     subagent: 'subagent',
     loop: 'loop',
     scheduler: 'scheduler',

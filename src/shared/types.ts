@@ -339,6 +339,9 @@ export type NodeKind =
   | 'video'
   | 'web'
   | 'browser'
+  // Kiosk and installable PWA session. The URL, title and manifest summary are portable intent;
+  // the isolated browser profile itself is machine-local and is recreated on another computer.
+  | 'kiosk'
   | 'subagent'
   | 'loop'
   | 'scheduler'
@@ -558,6 +561,12 @@ export interface CanvasNodeState {
   browserTabs?: BrowserTab[]
   /** browser-only: which `browserTabs[].id` is currently shown. Absent = the first tab. */
   browserActiveTabId?: string
+  /** kiosk-only: safe HTTP(S) page intent and display mode. */
+  kioskMode?: import('./kiosk-sessions').KioskDisplayMode
+  /** kiosk-only: a sanitized installable manifest summary, never page storage or credentials. */
+  kioskManifest?: import('./kiosk-sessions').KioskManifestMetadata
+  /** kiosk-only: human label for the machine-local isolated profile. */
+  kioskProfileLabel?: string
   /** diff-only: true = staged diff (HEAD vs index), false = unstaged (index vs working). */
   diffStaged?: boolean
   /** diff-only: when set, the diff shows parent (<oid>^) vs commit (<oid>) for a file from history. */

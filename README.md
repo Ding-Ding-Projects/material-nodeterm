@@ -156,6 +156,14 @@ over HTTP/WebSocket from a host you own, reached from any browser, with passkey 
 One command (`./host.sh`, or `host.bat` on Windows) builds and starts it in a container. Phone
 pairing is a free feature, not a paywalled one.
 
+### Kiosk and PWA sessions
+
+The canvas also offers dedicated **Kiosk or PWA sessions** for dashboards and installable web
+applications. Each node uses its own machine-local browser profile, keeps only safe HTTP(S) intent
+in the shared project file, discovers a page-declared manifest when available, and can switch
+between bounded and full-screen presentation. **Rebind** starts a fresh local profile without
+copying cookies, service workers, caches, credentials, or process state to another computer.
+
 ### Source control and git worktrees
 
 A full git panel — stage/unstage, discard, diff nodes, branch switch/create, commit (with an

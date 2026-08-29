@@ -19,6 +19,7 @@ const KIND_LABEL: Partial<Record<NodeKind, string>> = {
   video: 'video',
   web: 'web',
   browser: 'browser',
+  kiosk: 'kiosk',
   dino: 'dino',
   group: 'group'
 }

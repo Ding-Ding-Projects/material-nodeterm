@@ -38,6 +38,16 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  kioskMode?: 'bounded' | 'fullscreen'
+  kioskProfileLabel?: string
+  kioskManifest?: {
+    url: string
+    name: string
+    shortName?: string
+    startUrl?: string
+    display?: string
+    iconUrl?: string
+  }
 }
 
 export interface PortableRelationshipV3 {
@@ -86,10 +96,11 @@ const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'kioskMode', 'kioskProfileLabel', 'kioskManifest'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
+const ALLOWED_KIOSK_MANIFEST = new Set(['url', 'name', 'shortName', 'startUrl', 'display', 'iconUrl'])
 const ALLOWED_RELATIONSHIP = new Set(['id', 'kind', 'source', 'target', 'order'])
 const ALLOWED_APPEARANCE = new Set(['theme', 'density', 'seedColor', 'fontFamily', 'fontSize', 'fontWeight', 'motion'])
 
@@ -160,17 +171,42 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
   if (strict && node.browserTabs !== undefined && !Array.isArray(node.browserTabs)) throw new PortableProjectV3Error('manifest', 'Portable browser tabs must be an array.')
+  if (strict && node.kioskMode !== undefined && node.kioskMode !== 'bounded' && node.kioskMode !== 'fullscreen') throw new PortableProjectV3Error('manifest', 'Portable kiosk mode is invalid.')
+  if (strict && node.kioskProfileLabel !== undefined && typeof node.kioskProfileLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable kiosk profile label is invalid.')
   if (node.collapsed !== undefined) out.collapsed = node.collapsed
   if (node.parentId !== undefined) out.parentId = text(node.parentId, 'parent id')
   if (node.tags !== undefined) { if (node.tags.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable tag count exceeds its bound.'); out.tags = node.tags.map((tag) => text(tag, 'node tag')).sort() }
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.kioskMode !== undefined) out.kioskMode = node.kioskMode === 'fullscreen' ? 'fullscreen' : 'bounded'
+  if (node.kioskProfileLabel !== undefined) out.kioskProfileLabel = content(node.kioskProfileLabel, 'kiosk profile label')
+  if (node.kioskManifest !== undefined) {
+    if (!record(node.kioskManifest)) throw new PortableProjectV3Error('manifest', 'Portable kiosk manifest is invalid.')
+    exactKeys(node.kioskManifest, ALLOWED_KIOSK_MANIFEST, 'kiosk manifest')
+    const manifestUrl = safeUrl(node.kioskManifest.url, 'kiosk manifest URL')
+    if (!manifestUrl || !node.kioskManifest.name) throw new PortableProjectV3Error('manifest', 'Portable kiosk manifest is missing its name or URL.')
+    out.kioskManifest = {
+      url: manifestUrl,
+      name: content(node.kioskManifest.name, 'kiosk manifest name'),
+      ...(node.kioskManifest.shortName !== undefined ? { shortName: content(node.kioskManifest.shortName, 'kiosk manifest short name') } : {}),
+      ...(node.kioskManifest.startUrl !== undefined ? { startUrl: safeUrl(node.kioskManifest.startUrl, 'kiosk manifest start URL') } : {}),
+      ...(node.kioskManifest.display !== undefined ? { display: kioskDisplay(node.kioskManifest.display) } : {}),
+      ...(node.kioskManifest.iconUrl !== undefined ? { iconUrl: safeUrl(node.kioskManifest.iconUrl, 'kiosk manifest icon URL') } : {})
+    }
+  }
   if (node.browserTabs !== undefined) {
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
     out.browserTabs = node.browserTabs.map((tab) => { if (!record(tab)) throw new PortableProjectV3Error('manifest', 'Portable browser tab is invalid.'); exactKeys(tab, ALLOWED_TAB, 'browser tab'); const url = safeUrl(tab.url, 'browser tab URL'); return { id: text(tab.id, 'browser tab id'), ...(url ? { url } : {}), title: content(tab.title, 'browser tab title') } })
   }
   return out
+}
+
+function kioskDisplay(value: unknown): string {
+  if (typeof value !== 'string' || !['fullscreen', 'standalone', 'minimal-ui', 'browser', 'window-controls-overlay', 'unknown'].includes(value)) {
+    throw new PortableProjectV3Error('manifest', 'Portable kiosk manifest display is invalid.')
+  }
+  return value
 }
 
 function safeUrl(value: unknown, label: string): string | undefined {

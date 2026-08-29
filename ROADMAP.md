@@ -181,7 +181,10 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Clean-room features and upstream parity
 
-- [ ] Add clean-room browser, kiosk, PWA, proxy, and read-only diagnostics nodes.
+- [ ] Add clean-room browser, kiosk, PWA, proxy, and read-only diagnostics nodes. Kiosk/PWA node
+      implementation is present in `src/renderer/nodes/KioskNode.tsx` with safe URL validation,
+      isolated machine-local profiles, manifest discovery, and portable metadata; runtime and
+      package verification remain pending.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.
