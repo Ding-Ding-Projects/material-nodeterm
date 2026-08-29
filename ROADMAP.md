@@ -151,7 +151,8 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Media, torrents, virtual machines, and planning
 
-- [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes.
+- [ ] Add Photo, Video, and mixed-media Gallery nodes.
+- [x] Add one-percent wild Dim Sum nodes with immutable events and public-catalog metadata resolution. Runtime interaction and packaging remain unverified in the current ultra-speed lane.
 - [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.

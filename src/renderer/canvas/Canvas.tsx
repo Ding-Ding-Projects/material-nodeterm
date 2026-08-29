@@ -89,6 +89,8 @@ import {
   WEBGL_GESTURE_SETTLE_MS
 } from '../terminal/webgl-budget'
 import { StickyNode } from '../nodes/StickyNode'
+import WildDimSumNode from '../nodes/WildDimSumNode'
+import { drawWildDimSumForNode } from '../lib/dimsum/wild'
 import { GroupNode, setWorktreeActionHandler, setWslActionHandler } from '../nodes/GroupNode'
 import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
@@ -1049,6 +1051,9 @@ export function Canvas() {
     if (sessionSource === 'local') void useTerminalProfiles.getState().ensureLoaded()
   }, [sessionSource])
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([])
+  const wildObservedProjectRef = useRef<string | null>(null)
+  const wildObservedNodeIdsRef = useRef<Set<string>>(new Set())
+  const wildHydrationReadyRef = useRef(false)
   // Persistent context links between Claude nodes (separate from ephemeral subagent/loop edges).
   const [linkEdges, setLinkEdges, onLinkEdgesChange] = useEdgesState<Edge>([])
   const linkEdgesRef = useRef<Edge[]>([])
@@ -1718,6 +1723,39 @@ export function Canvas() {
   )
   nodesRef.current = nodes
   useEffect(() => {
+    if (wildObservedProjectRef.current !== activeProjectId) {
+      wildObservedProjectRef.current = activeProjectId
+      wildObservedNodeIdsRef.current = new Set(nodes.map((n) => n.id))
+      wildHydrationReadyRef.current = false
+      return
+    }
+    if (!wildHydrationReadyRef.current) {
+      wildObservedNodeIdsRef.current = new Set(nodes.map((n) => n.id))
+      wildHydrationReadyRef.current = true
+      return
+    }
+    const prior = wildObservedNodeIdsRef.current
+    const added = nodes.filter((n) => !prior.has(n.id) && n.type !== 'wild-dimsum')
+    for (const node of added) {
+      const drawn = drawWildDimSumForNode(node.id, nodes)
+      if (!drawn) continue
+      setNodes((current) => current.some((n) => n.data.wildEventId === drawn.node.data.wildEventId) ? current : [...current, drawn.node])
+      markDirty()
+      void drawn.resolve().then((items) => {
+        const dish = items[0]
+        if (!dish) return
+        setNodes((current) => current.map((n) => n.id === drawn.node.id ? {
+          ...n,
+          data: { ...n.data, title: `${dish.name.en} · ${dish.name.zhHant}`, wildDishId: dish.id,
+            wildDishNameEn: dish.name.en, wildDishNameZhHant: dish.name.zhHant, wildImageUrl: dish.image,
+            wildCatalogRevision: dish.revision }
+        } : n))
+        markDirty()
+      })
+    }
+    wildObservedNodeIdsRef.current = new Set(nodes.map((n) => n.id))
+  }, [activeProjectId, nodes, setNodes, markDirty])
+  useEffect(() => {
     const onPrepareAgentFolder = (event: Event): void => {
       const nodeId = (event as CustomEvent<{ nodeId?: unknown }>).detail?.nodeId
       if (typeof nodeId !== 'string') return
@@ -1790,6 +1828,7 @@ export function Canvas() {
     () => ({
       terminal: withNodeBoundary(TerminalNode),
       sticky: withNodeBoundary(StickyNode),
+      'wild-dimsum': withNodeBoundary(WildDimSumNode),
       group: withNodeBoundary(GroupNode),
       annotation: withNodeBoundary(AnnotationNode),
       authenticator: withNodeBoundary(AuthenticatorNode),

@@ -167,6 +167,12 @@ export interface NodeData {
   commitOid?: string
   /** dino-only: best score reached in the T-Rex Runner game. */
   highScore?: number
+  wildEventId?: string
+  wildDishId?: string
+  wildDishNameEn?: string
+  wildDishNameZhHant?: string
+  wildImageUrl?: string
+  wildCatalogRevision?: string
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
@@ -979,6 +985,28 @@ export function createStickyNode(index: number, center?: { x: number; y: number 
   }
 }
 
+const WILD_DIM_SUM_SIZE = { width: 360, height: 250 }
+
+/** Create a wild dish node with one immutable launch event id. */
+export function createWildDimSumNode(
+  index: number,
+  center?: { x: number; y: number },
+  dish?: { id: string; en: string; zhHant: string; image?: string; revision?: string },
+  eventId?: string
+): CanvasNode {
+  const d = dish ?? { id: 'har-gow', en: 'Shrimp dumpling', zhHant: '蝦餃' }
+  const id = eventId ?? (globalThis.crypto?.randomUUID?.() ?? `wild-${Date.now().toString(36)}-${index}`)
+  return {
+    id: nextId('wild-dimsum'), type: 'wild-dimsum',
+    position: placeAt(center, index, WILD_DIM_SUM_SIZE.width, WILD_DIM_SUM_SIZE.height),
+    width: WILD_DIM_SUM_SIZE.width, height: WILD_DIM_SUM_SIZE.height,
+    style: { width: WILD_DIM_SUM_SIZE.width, height: WILD_DIM_SUM_SIZE.height },
+    data: { title: `${d.en} · ${d.zhHant}`, color: NODE_COLORS[index % NODE_COLORS.length], group: null,
+      wildEventId: id, wildDishId: d.id, wildDishNameEn: d.en, wildDishNameZhHant: d.zhHant,
+      wildImageUrl: d.image, wildCatalogRevision: d.revision }
+  }
+}
+
 /**
  * Human-readable name and default title per service kind. One table, so the menu row, the node
  * header and any future palette entry cannot disagree about what a kind is called.
@@ -1467,6 +1495,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   homeassistant: true,
   freepbx: true,
   nsis: true
+  , 'wild-dimsum': true
 }
 
 /**
@@ -1506,6 +1535,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
   nsis: NSIS_SIZE
+  , 'wild-dimsum': WILD_DIM_SUM_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1927,6 +1957,12 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         diffStaged: n.diffStaged,
         commitOid: n.commitOid,
         highScore: n.highScore,
+        wildEventId: n.wildEventId,
+        wildDishId: n.wildDishId,
+        wildDishNameEn: n.wildDishNameEn,
+        wildDishNameZhHant: n.wildDishNameZhHant,
+        wildImageUrl: n.wildImageUrl,
+        wildCatalogRevision: n.wildCatalogRevision,
         agentId,
         accountId: n.accountId,
         // Migrate the old title-only identity into an explicit true/false on the next save.
@@ -2002,6 +2038,12 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         diffStaged: n.data.diffStaged,
         commitOid: n.data.commitOid,
         highScore: n.data.highScore,
+        wildEventId: n.data.wildEventId,
+        wildDishId: n.data.wildDishId,
+        wildDishNameEn: n.data.wildDishNameEn,
+        wildDishNameZhHant: n.data.wildDishNameZhHant,
+        wildImageUrl: n.data.wildImageUrl,
+        wildCatalogRevision: n.data.wildCatalogRevision,
         agentId: n.data.agentId,
         accountId: n.data.accountId,
         accountLogin: n.data.accountLogin,

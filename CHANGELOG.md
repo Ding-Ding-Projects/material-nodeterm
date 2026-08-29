@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add one-percent wild dim-sum nodes for live canvas creation, with immutable event ids,
+  non-overlapping placement, School mode suppression, and public-catalog metadata resolution with
+  a bounded local cache. Runtime and packaging verification remain pending for this lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

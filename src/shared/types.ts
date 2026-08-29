@@ -343,6 +343,7 @@ export type NodeKind =
   | 'loop'
   | 'scheduler'
   | 'dino'
+  | 'wild-dimsum'
   | 'annotation'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
@@ -498,6 +499,13 @@ export interface CanvasNodeState {
   text?: string
   // dino-only: best score reached in the T-Rex Runner game.
   highScore?: number
+  /** wild-dimsum-only: immutable launch event and resolved public-catalog dish. */
+  wildEventId?: string
+  wildDishId?: string
+  wildDishNameEn?: string
+  wildDishNameZhHant?: string
+  wildImageUrl?: string
+  wildCatalogRevision?: string
   /**
    * service-kinds only: the display name the user gave this manager ("Home lab Proxmox", "Survival
    * server"). This is the ONLY thing a service node persists, and the restraint is deliberate — the

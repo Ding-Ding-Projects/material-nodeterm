@@ -10258,6 +10258,22 @@ body,
    Non-blocking, auto-dismissing, bottom-right so it never competes with the bottom-left pills
    cluster or the sessions sidebar. z-index sits above the canvas/kanban board (25/26) but below
    every modal surface (ConfirmDialog/palette at 70) — it must never trap focus or cover a dialog. */
+.wild-dimsum-node {
+  min-width: 260px;
+  min-height: 180px;
+  padding: 16px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: 20px;
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-2);
+}
+.wild-dimsum-node header { display: flex; justify-content: space-between; align-items: center; }
+.wild-dimsum-node header button { min-width: 40px; min-height: 40px; }
+.wild-dimsum-node img { display: block; width: 96px; height: 96px; object-fit: contain; margin: 12px auto; }
+.wild-dimsum-node__name { margin-top: 14px; font-size: 1.1rem; font-weight: 600; }
+.wild-dimsum-node__empty { margin-top: 18px; opacity: .8; }
+
 .dimsum-toast {
   position: fixed;
   right: 18px;

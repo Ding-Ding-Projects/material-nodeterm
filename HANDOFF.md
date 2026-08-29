@@ -1,5 +1,17 @@
 # Handoff
 
+## 2026-08-26, wild dim-sum node lane
+
+Added the one-percent runtime wild dim-sum draw for newly created canvas nodes. It uses an
+idempotent per-requested-node ledger, immutable event ids, non-overlapping placement, School mode
+suppression, and no disable control. `WildDimSumNode` resolves bilingual dish metadata from the
+public catalog with a bounded local browser-storage cache and keeps import/hydration side-effect
+free. Persisted node fields carry the dish and catalog revision without credentials or machine
+state. Added the feature article, index entry, roadmap item, and Material surface styling.
+
+This lane deliberately ran no tests, type checks, lint, builds, packaging, runtime interaction,
+or captures, and made no commit or dew. The UI and package evidence remain unverified.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through
