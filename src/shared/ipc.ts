@@ -658,5 +658,14 @@ export const IPC = {
   passwordManagerCredentialCode: 'password-manager:credential-code',
   /** Every credential in one manager as non-secret metadata. Closes the gap that left a
    *  credential from an earlier session visible only as a number. */
-  passwordManagerListCredentials: 'password-manager:list-credentials'
+  passwordManagerListCredentials: 'password-manager:list-credentials',
+  // Portal entry credentials (docs/portal-door-entry.md). This namespace is deliberately
+  // independent from toylock: portal entry controls navigation, and its secret is sealed in the
+  // application-data vault rather than written to project.json.
+  portalDoorList: 'portal-door:list',
+  portalDoorConfigure: 'portal-door:configure',
+  portalDoorRemove: 'portal-door:remove',
+  portalDoorStatus: 'portal-door:status',
+  portalDoorVerify: 'portal-door:verify',
+  portalDoorRelock: 'portal-door:relock'
 } as const

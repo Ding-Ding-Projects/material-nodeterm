@@ -66,6 +66,7 @@ import type {
   VaultStatus,
   VaultUnlockResult
 } from './password-manager'
+import type { PortalDoorApi, PortablePortalDoorEntry } from './portal-door'
 
 /** Profile-switch replacement intent. The trusted core validates and re-resolves it before teardown. */
 export interface PtyRecycleTarget {
@@ -507,6 +508,9 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** Portal nodes only: safe presence metadata for child-canvas entry. The value itself never
+   * carries a code or passphrase; those remain in the local portal-door sealed store. */
+  portalEntry?: PortablePortalDoorEntry
   /**
    * service-kinds only, and MACHINE-LOCAL: where this node reaches its service. Stripped from
    * every project file we write and from every node arriving over the wire, then restored from the
@@ -3844,6 +3848,9 @@ export interface NodeTerminalApi {
   toylock: ToylockApi
   authenticator: AuthenticatorApi
   passwordManager: PasswordManagerApi
+  /** Portal-door entry checks. Separate from toylock: secrets stay in the local sealed store and
+   * only non-secret presence metadata may be projected into a portable project. */
+  portalDoor: PortalDoorApi
   /** "Escape to widget" — one node's session in its own always-on-top-configurable window. */
   canvasWidget: CanvasWidgetApi
   /** Fires when the user presses Cmd/Ctrl+M (toggle markdown view). Returns unsubscribe. */

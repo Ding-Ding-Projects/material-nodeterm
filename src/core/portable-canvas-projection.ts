@@ -8,6 +8,7 @@
  */
 
 import type { BridgeLink, CanvasNodeState, Project, Viewport } from '../shared/types'
+import type { PortablePortalDoorEntry } from '../shared/portal-door'
 import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEMA_VERSION } from './portable-project-v3'
 import { sanitizeProjectIcon } from '../shared/project-icon'
 
@@ -38,6 +39,7 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  portalEntry?: PortablePortalDoorEntry
 }
 
 export interface PortableRelationshipV3 {
@@ -86,10 +88,11 @@ const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'portalEntry'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
+const ALLOWED_PORTAL_ENTRY = new Set(['enabled', 'mode', 'duration', 'durationMinutes', 'lockedOnLaunch'])
 const ALLOWED_RELATIONSHIP = new Set(['id', 'kind', 'source', 'target', 'order'])
 const ALLOWED_APPEARANCE = new Set(['theme', 'density', 'seedColor', 'fontFamily', 'fontSize', 'fontWeight', 'motion'])
 
@@ -111,6 +114,19 @@ function text(value: unknown, label: string): string {
 function content(value: unknown, label: string): string {
   if (typeof value !== 'string' || new TextEncoder().encode(value).byteLength > PORTABLE_CANVAS_LIMITS.maxStringBytes) throw new PortableProjectV3Error('manifest', `Portable ${label} exceeds its UTF-8 bound.`)
   return value
+}
+
+function portalEntry(value: unknown): PortablePortalDoorEntry {
+  if (!record(value)) throw new PortableProjectV3Error('manifest', 'Portable portal entry metadata is invalid.')
+  exactKeys(value, ALLOWED_PORTAL_ENTRY, 'portal entry')
+  if (typeof value.enabled !== 'boolean' || !['numeric-code', 'passphrase'].includes(String(value.mode)) || !['session', 'minutes', 'until-close'].includes(String(value.duration)) || typeof value.lockedOnLaunch !== 'boolean') {
+    throw new PortableProjectV3Error('manifest', 'Portable portal entry metadata is invalid.')
+  }
+  if (value.duration === 'minutes' && (!Number.isInteger(value.durationMinutes) || Number(value.durationMinutes) < 1 || Number(value.durationMinutes) > 7 * 24 * 60)) {
+    throw new PortableProjectV3Error('manifest', 'Portable portal entry duration is invalid.')
+  }
+  if (value.duration !== 'minutes' && value.durationMinutes !== undefined) throw new PortableProjectV3Error('manifest', 'Portable portal entry durationMinutes is not allowed here.')
+  return { enabled: value.enabled, mode: value.mode as PortablePortalDoorEntry['mode'], duration: value.duration as PortablePortalDoorEntry['duration'], ...(value.durationMinutes !== undefined ? { durationMinutes: value.durationMinutes } : {}), lockedOnLaunch: value.lockedOnLaunch }
 }
 
 function finite(value: unknown, label: string): number {
@@ -170,6 +186,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
     out.browserTabs = node.browserTabs.map((tab) => { if (!record(tab)) throw new PortableProjectV3Error('manifest', 'Portable browser tab is invalid.'); exactKeys(tab, ALLOWED_TAB, 'browser tab'); const url = safeUrl(tab.url, 'browser tab URL'); return { id: text(tab.id, 'browser tab id'), ...(url ? { url } : {}), title: content(tab.title, 'browser tab title') } })
   }
+  if (node.portalEntry !== undefined) out.portalEntry = portalEntry(node.portalEntry)
   return out
 }
 

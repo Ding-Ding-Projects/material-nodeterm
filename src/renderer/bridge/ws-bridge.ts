@@ -59,8 +59,15 @@ import {
   type WorkspaceApi,
   type ToylockApi,
   type AuthenticatorApi,
-  type PasswordManagerApi
+  type PasswordManagerApi,
+  type PortalDoorApi
 } from '../../shared/types'
+import type {
+  PortalDoorConfigureInput,
+  PortalDoorRelockInput,
+  PortalDoorStatusInput,
+  PortalDoorVerifyInput
+} from '../../shared/portal-door'
 import type {
   ToyLockBeginTotpInput,
   ToyLockBeginTotpResult,
@@ -1177,6 +1184,22 @@ export function buildPasswordManagerApi(client: RpcClient): Pick<NodeTerminalApi
   return { passwordManager }
 }
 
+/** Build the portal-door entry namespace over the same local core service as Electron. The
+ * namespace deliberately exposes only non-secret metadata and one-shot verification; it never
+ * reads a stored entry value into the renderer. Relay peers receive the documented unsupported
+ * stub because portal admission belongs to the viewer's own machine. */
+export function buildPortalDoorApi(client: RpcClient): Pick<NodeTerminalApi, 'portalDoor'> {
+  const portalDoor: PortalDoorApi = {
+    list: (projectId: string) => client.request(IPC.portalDoorList, projectId) as Promise<import('../../shared/portal-door').PortalDoorEntryRecord[]>,
+    configure: (input: PortalDoorConfigureInput) => client.request(IPC.portalDoorConfigure, input) as Promise<import('../../shared/portal-door').PortalDoorConfigureResult>,
+    remove: (input: PortalDoorRelockInput) => client.request(IPC.portalDoorRemove, input) as Promise<import('../../shared/portal-door').PortalDoorRemoveResult>,
+    status: (input: PortalDoorStatusInput) => client.request(IPC.portalDoorStatus, input) as Promise<import('../../shared/portal-door').PortalDoorStatus>,
+    verify: (input: PortalDoorVerifyInput) => client.request(IPC.portalDoorVerify, input) as Promise<import('../../shared/portal-door').PortalDoorVerifyResult>,
+    relock: (input: PortalDoorRelockInput) => client.request(IPC.portalDoorRelock, input) as Promise<void>
+  }
+  return { portalDoor }
+}
+
 /**
  * Build the `claude` namespace over an RpcClient. `cliCaps` is a REAL handler on the server
  * (`registerClaudeCliIpc` runs in the server shell too), so the browser resolves the very same
@@ -1383,6 +1406,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildToylockApi(client),
     ...buildAuthenticatorApi(client),
     ...buildPasswordManagerApi(client),
+    ...buildPortalDoorApi(client),
     ...buildGitHubApi(client),
     codex: buildCodexApi(client),
     // `claude` is assembled from two builders: `cliCaps` from the relay-shared one, and the

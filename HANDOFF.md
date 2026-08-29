@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-08-26, portal-door numeric code and passphrase entry
+
+Added the portal-only entry contract in `src/shared/portal-door.ts`, the core verifier in
+`src/core/portal-door-service.ts`, the Electron and Server Edition bridge registrations, and the
+anchored renderer surface in `src/renderer/components/portals/PortalDoorEntryPopover.tsx`. Owners
+can choose a 4-12 digit numeric code or bounded passphrase, select session/minutes/until-close
+duration, and explicitly relock. Verification seals a verifier in the application-data store,
+keeps neutral metadata separate from the secret, rate-limits after three failures with a capped
+exponential wait, and starts locked after restart. The entry surface has keyboard submission,
+focus return through `AnchoredPopover`, neutral failure copy, and a settings recovery route.
+
+The portable projection accepts only `portalEntry` presence metadata and rejects extra secret-shaped
+fields, so project files carry no code, passphrase, hash, credential id, path, host identity, or
+vault content. Relay sessions do not receive this machine-local credential namespace. No recovery
+game or toy-lock call is present in this lane.
+
+This lane intentionally did not run tests, type checking, linting, reviews, security checks, builds,
+packaging, installer execution, UI interaction, or captures. The code and documentation are
+**unverified** until a later lane runs the focused Chuts and built-artifact evidence. No commit or
+dew was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

@@ -3775,6 +3775,82 @@ button.term-node__title-text:focus-visible {
   animation: md3-pop-in var(--md3-motion-spatial);
 }
 
+/* ---- MD3: Portal-door entry --------------------------------------------------------------- */
+.portal-door-entry-popover {
+  color: var(--md-on-surface);
+}
+.portal-door-entry__title {
+  font-family: var(--md3-font-ui);
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.portal-door-entry__explanation,
+.portal-door-entry__status,
+.portal-door-entry__field {
+  font-family: var(--md3-font-ui);
+}
+.portal-door-entry__explanation {
+  color: var(--md-on-surface-variant);
+  line-height: 1.45;
+  margin: 0 0 16px;
+}
+.portal-door-entry__field {
+  display: grid;
+  gap: 6px;
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+  font-weight: 600;
+}
+.portal-door-entry__field input {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--md-outline);
+  border-radius: 12px;
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-surface);
+  font: inherit;
+}
+.portal-door-entry__field input:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+  border-color: var(--md-primary);
+}
+.portal-door-entry__status {
+  min-height: 20px;
+  margin-top: 8px;
+  color: var(--md-error);
+  font-size: 12px;
+}
+.portal-door-entry__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+.portal-door-entry__actions .md3-button {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-family: var(--md3-font-ui);
+  font-weight: 650;
+}
+.portal-door-entry__recovery {
+  display: block;
+  margin: 14px 0 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--md-primary);
+  font-family: var(--md3-font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+.portal-door-entry__recovery:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
 /* ---- MD3: Tooltip ----
    A plain tonal surface rather than MD3's inverse-surface: this app's --md-inverse-* roles
    are not defined anywhere yet (only the design bundle has them), and a fallback literal here

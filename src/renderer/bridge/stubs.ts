@@ -168,6 +168,7 @@ export function buildStubApi(): Omit<
   | 'toylock'
   | 'authenticator'
   | 'passwordManager'
+  | 'portalDoor'
 > {
   const api = {
     ssh: {
@@ -601,6 +602,7 @@ export function buildStubApi(): Omit<
     | 'toylock'
     | 'authenticator'
     | 'passwordManager'
+    | 'portalDoor'
     | 'fs'
     | 'git'
     | 'files'

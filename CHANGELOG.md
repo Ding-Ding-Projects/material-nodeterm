@@ -6,6 +6,11 @@
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.
 
+- Add optional portal-door numeric code or passphrase entry as a credential service independent of
+  toy locks, with sealed local verifiers, bounded rate limits, expiry/relock, accessible anchored
+  entry and settings recovery, and portable presence-only metadata. Focused Chuts and built-artifact
+  verification remain pending for this implementation lane.
+
 - Add the platform-free schema 3 portable-project manifest validator with canonical required
   entries, bounded raw and compressed budgets, deterministic SHA-256 metadata, safe path and
   collision refusal, omission reporting, and pure V1/V2 migration filtering. Verification is
