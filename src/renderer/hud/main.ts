@@ -14,6 +14,7 @@ import { HUD_ROW_CAP, overflowLabel, splitPanelRows } from './panel-rows'
 import { percentText } from '../lib/usageFormat'
 import codexPet from '../assets/pet-codex.webp'
 import { mapLocalVocabularyText, setHostVocabularySchoolState } from '../lib/personalVocabulary/hostMessage'
+import { copy, fact, mapOwnedSentence, type DisplaySegment } from '../lib/personalVocabulary/ownedCopy'
 
 // Local mirror of the preload's HUD contract (src/preload/hud.ts) — kept self-contained so this
 // renderer entry has no cross-project (main/preload) type dependency.
@@ -136,12 +137,12 @@ function setExpanded(next: boolean): void {
 
 function reltime(ts: number): string {
   const s = Math.max(0, Math.round((Date.now() - ts) / 1000))
-  if (s < 5) return 'now'
-  if (s < 60) return `${s}s`
+  if (s < 5) return mapOwnedSentence(mapLocalVocabularyText, [copy('now')])
+  if (s < 60) return mapOwnedSentence(mapLocalVocabularyText, [fact(String(s)), copy('s')])
   const m = Math.round(s / 60)
-  if (m < 60) return `${m}m`
+  if (m < 60) return mapOwnedSentence(mapLocalVocabularyText, [fact(String(m)), copy('m')])
   const h = Math.round(m / 60)
-  return `${h}h`
+  return mapOwnedSentence(mapLocalVocabularyText, [fact(String(h)), copy('h')])
 }
 
 // ---- Mascot / icon builders ----------------------------------------------------------------
@@ -276,7 +277,7 @@ function renderPanel(rows: HudRow[]): void {
     }
     panel.append(buildRow(row))
   })
-  const label = overflowLabel(hidden)
+  const label = overflowLabel(hidden, mapLocalVocabularyText)
   if (label || showAllRows) panel.append(buildMore(label))
 }
 
@@ -285,11 +286,25 @@ function renderPanel(rows: HudRow[]): void {
 function buildMore(label: string | undefined): HTMLElement {
   const el = document.createElement('div')
   el.className = 'hud-panel__more'
-  el.textContent = showAllRows ? 'Show fewer' : (label ?? '')
-  el.addEventListener('click', (e) => {
-    e.stopPropagation()
+  el.setAttribute('role', 'button')
+  el.tabIndex = 0
+  const text = showAllRows ? mapLocalVocabularyText('Show fewer') : (label ?? '')
+  el.textContent = text
+  el.setAttribute('aria-label', text)
+  el.setAttribute('aria-expanded', String(showAllRows))
+  const toggle = (): void => {
     showAllRows = !showAllRows
     renderPanel(latestRows)
+  }
+  el.addEventListener('click', (e) => {
+    e.stopPropagation()
+    toggle()
+  })
+  el.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    e.stopPropagation()
+    toggle()
   })
   return el
 }
@@ -297,11 +312,23 @@ function buildMore(label: string | undefined): HTMLElement {
 function buildRow(row: HudRow): HTMLElement {
   const el = document.createElement('div')
   el.className = 'hud-row'
-  el.addEventListener('click', (e) => {
-    // Don't hijack the disclosure toggle click.
-    if ((e.target as HTMLElement).closest('.hud-subs__toggle')) return
+  el.setAttribute('role', 'button')
+  el.tabIndex = 0
+  el.setAttribute('aria-label', `${row.title} — ${stateLabel(row.state)}`)
+  const focusRow = (): void => {
     window.hud.focusNode(row.nodeId)
     setExpanded(false)
+  }
+  el.addEventListener('click', (e) => {
+    // Don't hijack the disclosure toggle click.
+    if ((e.target as HTMLElement).closest('button, .hud-subs__toggle')) return
+    focusRow()
+  })
+  el.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    if ((e.target as HTMLElement).closest('button, .hud-subs__toggle')) return
+    e.preventDefault()
+    focusRow()
   })
 
   const icon = document.createElement('div')
@@ -320,19 +347,19 @@ function buildRow(row: HudRow): HTMLElement {
   if (row.unread) {
     const badge = document.createElement('span')
     badge.className = 'hud-row__badge'
-    badge.textContent = 'Unread'
+    badge.textContent = mapLocalVocabularyText('Unread')
     title.append(badge)
   }
 
   const tag = document.createElement('div')
   tag.className = `hud-row__tag hud-row__tag--${row.state}`
-  const parts: string[] = []
-  if (row.model) parts.push(row.model)
-  parts.push(reltime(row.updatedAt))
+  const parts: DisplaySegment[] = []
+  if (row.model) parts.push(fact(row.model), copy(' · '))
+  parts.push(fact(reltime(row.updatedAt)))
   // Labeled, not a bare number: "42% used" / "58% left" per the display setting — the label is
   // what keeps a context percentage from reading as provider quota.
-  if (typeof row.contextPercent === 'number') parts.push(percentText(row.contextPercent, percentMode))
-  tag.textContent = parts.join(' · ')
+  if (typeof row.contextPercent === 'number') parts.push(copy(' · '), fact(percentText(row.contextPercent, percentMode)))
+  tag.textContent = mapOwnedSentence((text) => text, parts)
 
   const sub = document.createElement('div')
   sub.className = 'hud-row__sub'
@@ -403,11 +430,24 @@ function buildSubs(row: HudRow): HTMLElement {
   toggle.className = 'hud-subs__toggle'
   const noun = row.subagents.length === 1 ? mapLocalVocabularyText('subagent') : mapLocalVocabularyText('subagents')
   toggle.textContent = `${isOpen ? '▾' : '▸'} ${row.subagents.length} ${noun}`
-  toggle.addEventListener('click', (e) => {
-    e.stopPropagation()
+  toggle.setAttribute('role', 'button')
+  toggle.tabIndex = 0
+  toggle.setAttribute('aria-expanded', String(isOpen))
+  toggle.setAttribute('aria-label', `${row.subagents.length} ${noun}`)
+  const toggleSubs = (): void => {
     if (openSubs.has(row.nodeId)) openSubs.delete(row.nodeId)
     else openSubs.add(row.nodeId)
     render(latestRows)
+  }
+  toggle.addEventListener('click', (e) => {
+    e.stopPropagation()
+    toggleSubs()
+  })
+  toggle.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    e.stopPropagation()
+    toggleSubs()
   })
   wrap.append(toggle)
   if (isOpen) {

@@ -1,30 +1,41 @@
 // Pure formatting helpers for the usage indicator.
 
+import { copy, fact, mapOwnedSentence } from './personalVocabulary/ownedCopy'
+import { mapLocalVocabularyText } from './personalVocabulary/hostMessage'
+
+function usageCopy(parts: Parameters<typeof mapOwnedSentence>[1]): string {
+  return mapOwnedSentence(mapLocalVocabularyText, parts)
+}
+
 /** "just now" / "5m ago" / "2h ago". */
 export function formatTimeAgo(ts: number): string {
   const diff = Date.now() - ts
-  if (diff < 60_000) return 'just now'
+  if (diff < 60_000) return usageCopy([copy('just now')])
   const mins = Math.floor(diff / 60_000)
-  if (mins < 60) return `${mins}m ago`
+  if (mins < 60) return usageCopy([fact(String(mins)), copy('m ago')])
   const hours = Math.floor(mins / 60)
-  return `${hours}h ago`
+  return usageCopy([fact(String(hours)), copy('h ago')])
 }
 
 /** "Resets now" / "Resets in 1h 2m" / "Resets in 2d 4h". */
 export function formatResetCountdown(resetsAt: number | null): string {
   if (resetsAt == null) return ''
   const ms = resetsAt - Date.now()
-  if (ms <= 0) return 'Resets now'
+  if (ms <= 0) return usageCopy([copy('Resets now')])
   const totalMins = Math.floor(ms / 60_000)
-  if (totalMins < 60) return `Resets in ${totalMins}m`
+  if (totalMins < 60) return usageCopy([copy('Resets in '), fact(String(totalMins)), copy('m')])
   const hours = Math.floor(totalMins / 60)
   const mins = totalMins % 60
   if (hours >= 24) {
     const days = Math.floor(hours / 24)
     const remHours = hours % 24
-    return remHours > 0 ? `Resets in ${days}d ${remHours}h` : `Resets in ${days}d`
+    return remHours > 0
+      ? usageCopy([copy('Resets in '), fact(String(days)), copy('d '), fact(String(remHours)), copy('h')])
+      : usageCopy([copy('Resets in '), fact(String(days)), copy('d')])
   }
-  return mins > 0 ? `Resets in ${hours}h ${mins}m` : `Resets in ${hours}h`
+  return mins > 0
+    ? usageCopy([copy('Resets in '), fact(String(hours)), copy('h '), fact(String(mins)), copy('m')])
+    : usageCopy([copy('Resets in '), fact(String(hours)), copy('h')])
 }
 
 /**
@@ -91,8 +102,8 @@ export function severityColor(severity: string | null, leftPercent: number): str
  */
 export function percentText(usedPercent: number, mode: 'used' | 'remaining' | 'tokens'): string {
   return mode === 'remaining'
-    ? `${Math.round(100 - usedPercent)}% left`
-    : `${Math.round(usedPercent)}% used`
+    ? usageCopy([fact(String(Math.round(100 - usedPercent))), copy('% left')])
+    : usageCopy([fact(String(Math.round(usedPercent))), copy('% used')])
 }
 
 /** Compact form for the pill: the bare number, no suffix (the segment label follows it). */
