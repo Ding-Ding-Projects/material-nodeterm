@@ -779,10 +779,9 @@ async function collectWindowsReleaseAssets(directory, identity) {
     .filter((entry) => /\.nupkg$/i.test(entry.name))
     .sort((left, right) => left.name.localeCompare(right.name))
   const fullName = `${identity.packageId}-${identity.version}-full.nupkg`
-  const deltaName = `${identity.packageId}-${identity.version}-delta.nupkg`
   for (const entry of packageEntries) {
-    if (entry.name !== fullName && entry.name !== deltaName) {
-      fail(`unexpected Squirrel package name: expected ${fullName} and optional ${deltaName}, got ${entry.name}`)
+    if (entry.name !== fullName) {
+      fail(`unexpected Squirrel package name: expected exactly ${fullName}; delta packages are not release assets`)
     }
   }
   const allowedNames = new Set([setupName, 'RELEASES', ...packageEntries.map((entry) => entry.name)])
@@ -796,11 +795,14 @@ async function collectWindowsReleaseAssets(directory, identity) {
   const packages = []
   for (const entry of packageEntries) packages.push(await regularReleaseAsset(root, entry))
   const fullPackages = packages.filter((asset) => /-full\.nupkg$/i.test(asset.name))
-  if (fullPackages.length !== 1 || fullPackages[0].name !== fullName) {
+  if (packages.length !== 1 || fullPackages.length !== 1 || fullPackages[0].name !== fullName) {
     fail(`expected exactly one full Squirrel package named ${fullName}`)
   }
 
   const releaseRows = parseReleases(await readFile(releases.path, 'utf8'))
+  if (releaseRows.length !== 1 || releaseRows[0].name !== fullName) {
+    fail(`RELEASES must contain exactly one row for ${fullName}; delta packages are not release assets`)
+  }
   const rowsByName = new Map(releaseRows.map((row) => [row.name, row]))
   const packagesByName = new Map(packages.map((asset) => [asset.name, asset]))
   for (const row of releaseRows) {
@@ -984,7 +986,12 @@ async function buildWindowsInstaller() {
   await runStage('write Windows icon contract metadata', () => writeMetadataAtomic(metadataFile, metadata))
   const npmCli = process.env.npm_execpath
   if (!npmCli) fail('npm_execpath is required; invoke the Windows installer through npm run dist:win')
-  await runStage('application build', () => run(process.execPath, [npmCli, 'run', 'build'], { description: 'application build' }))
+  // Release packaging deliberately runs the application build only. Quality checks stay local;
+  // pulling them into this publishing route makes a release depend on checks the delivery policy
+  // explicitly keeps out of the publishing job. Packaging integrity remains below: the wrapper
+  // still clears stale output, freezes source identity, verifies the icon/PE contract, and checks
+  // the exact Squirrel asset set after electron-builder returns.
+  await runStage('application build', () => run(process.execPath, [npmCli, 'run', 'build:app'], { description: 'application build' }))
   const builderCli = await runStage('resolve electron-builder CLI', () => require.resolve('electron-builder/cli.js'))
   await runStage('electron-builder Squirrel packaging', () => run(
     process.execPath,

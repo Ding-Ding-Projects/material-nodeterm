@@ -12,6 +12,13 @@ const RELEASE_LINE_RE = /^([0-9a-f]{40})\s+(\S+)\s+(\d+)$/i
 const STABLE_VERSION_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const SEMVER_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 const PACKAGE_ID_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/
+function requiredSquirrelAssetNames(identity) {
+  return [
+    'RELEASES',
+    `${identity.productName}-Setup-${identity.version}.exe`,
+    `${identity.packageId}-${identity.version}-full.nupkg`,
+  ]
+}
 
 function fail(message) {
   throw new Error(message)
@@ -488,16 +495,8 @@ export async function collectReleaseAssets(directory, expectedVersion, expectedP
     (entry) => entry.name,
   )
   const expectedFullName = `${expected.packageId}-${expected.version}-full.nupkg`
-  const expectedDeltaName = `${expected.packageId}-${expected.version}-delta.nupkg`
-  const allowedPackageNames = new Set([expectedFullName, expectedDeltaName])
-
-  for (const entry of packageEntries) {
-    if (!allowedPackageNames.has(entry.name)) {
-      fail(
-        `unexpected Squirrel package name: expected ${expectedFullName}` +
-          ` and optional ${expectedDeltaName}, got ${entry.name}`,
-      )
-    }
+  if (packageEntries.length !== 1 || packageEntries[0].name !== expectedFullName) {
+    fail(`expected exactly one full Squirrel package named ${expectedFullName}; delta packages are not release assets`)
   }
 
   const allowedNames = new Set([expectedSetupName, 'RELEASES', ...packageEntries.map((entry) => entry.name)])
@@ -518,30 +517,15 @@ export async function collectReleaseAssets(directory, expectedVersion, expectedP
     packages.push(asset)
   }
 
-  if (setup.name !== expectedSetupName) {
-    fail(`Setup identity/version mismatch: expected ${expectedSetupName}, got ${setup.name}`)
-  }
   const fullPackages = packages.filter((asset) => FULL_NUPKG_RE.test(asset.name))
   if (fullPackages.length !== 1 || fullPackages[0].name !== expectedFullName) {
     fail(`expected exactly one full Squirrel package named ${expectedFullName}`)
   }
 
-  if (setup.name !== expectedSetupName) {
-    fail(`Setup identity/version mismatch: expected ${expectedSetupName}, got ${setup.name}`)
-  }
-  for (const asset of packages) {
-    if (!allowedPackageNames.has(asset.name)) {
-      fail(
-        `unexpected Squirrel package name: expected ${expectedFullName}` +
-          ` and optional ${expectedDeltaName}, got ${asset.name}`,
-      )
-    }
-  }
-  if (!packages.some((asset) => asset.name === expectedFullName)) {
-    fail(`expected exactly one full Squirrel package named ${expectedFullName}`)
-  }
-
   const releaseRows = parseReleases(await readFile(releases.path, 'utf8'))
+  if (releaseRows.length !== 1 || releaseRows[0].name !== expectedFullName) {
+    fail(`RELEASES must contain exactly one row for ${expectedFullName}; delta packages are not release assets`)
+  }
   const rowsByName = new Map(releaseRows.map((row) => [row.name, row]))
   const packagesByName = new Map(packages.map((asset) => [asset.name, asset]))
 
@@ -589,7 +573,7 @@ function validateExpectedManifest(value) {
     fail('expected release asset manifest must contain an assets array')
   }
   const identity = requireReleaseIdentity(value.version, value.packageId, value.productName)
-  if (value.assets.length === 0) fail('expected release asset manifest assets must not be empty')
+  if (value.assets.length !== 3) fail('expected release asset manifest must contain exactly three Squirrel assets')
   const names = new Set()
   const assets = sorted(
     value.assets.map((asset, index) => {
@@ -612,6 +596,11 @@ function validateExpectedManifest(value) {
     }),
     (asset) => asset.name,
   )
+  const requiredNames = requiredSquirrelAssetNames(identity)
+  const actualNames = assets.map((asset) => asset.name)
+  if (JSON.stringify(actualNames) !== JSON.stringify([...requiredNames].sort())) {
+    fail(`expected exactly the three Squirrel assets: ${requiredNames.join(', ')}`)
+  }
   return { ...identity, assets }
 }
 

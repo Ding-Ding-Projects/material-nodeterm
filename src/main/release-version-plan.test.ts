@@ -42,6 +42,16 @@ describe('planReleaseVersion', () => {
     expect(planReleaseVersion('0.1.0', [], [], HEAD)).toMatchObject({ action: 'keep', version: '0.1.0' })
   })
 
+  it('keeps the deliberate 1.0.0 major transition after the hosted v0.4.152 baseline', () => {
+    const plan = planReleaseVersion(
+      '1.0.0',
+      [tag('v0.4.152', OTHER)],
+      [release('v0.4.152', OTHER)],
+      HEAD,
+    )
+    expect(plan).toMatchObject({ action: 'keep', version: '1.0.0', highest: '0.4.152' })
+  })
+
   it('is a retry — not a bump — when the highest tag already points at THIS commit', () => {
     // Re-running a publish that failed after tagging. Bumping here would strand the half-staged
     // draft under a number nobody can find.

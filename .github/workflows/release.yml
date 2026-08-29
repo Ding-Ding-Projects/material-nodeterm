@@ -221,22 +221,6 @@ jobs:
           gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/releases-before-build.json"
           node scripts/release-assets.mjs assert-version "$RELEASE_VERSION" "$RUNNER_TEMP/tags-before-build.json" "$RUNNER_TEMP/releases-before-build.json" "$GITHUB_SHA"
 
-      # The repository's own guards, run FIRST and under their own name.
-      #
-      # `npm run dist:win` already runs every one of these, so this step gates nothing new. What it
-      # buys is a truthful failure name: both times this release has ever gone red it was a stale
-      # generated docs bundle, and both times the refusal surfaced inside a step called "Package
-      # Windows installer", which reads as a packaging or toolchain problem. Nothing shipped until
-      # somebody opened the log and scrolled. Thirty seconds here turns that into a step that says
-      # what actually failed.
-      - name: Verify repository guards (changelog, docs bundle, inventory)
-        id: guards
-        shell: bash
-        run: |
-          node scripts/check-changelog.mjs
-          node scripts/check-docs-bundle.mjs
-          node scripts/check-uh-inventory.mjs
-
       # Unsigned, permanently. No CSC_LINK/CSC_KEY_PASSWORD is ever set in this workflow, so
       # electron-builder has no certificate to sign with in the first place;
       # CSC_IDENTITY_AUTO_DISCOVERY=false additionally stops it from opportunistically
@@ -347,8 +331,8 @@ jobs:
           done < <(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets,isPrerelease --jq '.assets[].name')
 
           mapfile -t assets < <(printf '%s\n' "$ASSET_PATHS" | sed 's/\r$//' | sed '/^$/d')
-          if [ "${#assets[@]}" -lt 3 ]; then
-            echo "::error::the validated release asset list unexpectedly became incomplete"
+          if [ "${#assets[@]}" -ne 3 ]; then
+            echo "::error::the validated release asset list must contain exactly Setup.exe, RELEASES, and one full nupkg"
             exit 1
           fi
           gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"

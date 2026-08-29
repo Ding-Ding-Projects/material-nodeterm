@@ -8,17 +8,24 @@ Keep the split — a user reading "what degrades" should not have to wade throug
 and a contributor about to touch a path needs the archaeology.
 
 **The Windows installer workflow accepts pushes to `main` and manual dispatch on `windows-latest`.**
-It builds a real unsigned Squirrel.Windows set (`Setup.exe`, full `.nupkg`, `RELEASES`, and any
-matching delta), stages it as a draft, verifies the complete hosted inventory, and only then makes
-it non-draft and downloadable. The workflow contains no test or lint step. The active delivery
-scope is Windows only, and ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only parallel routes
-are not supported.
+It builds a real unsigned Squirrel.Windows set containing exactly three files (`Setup.exe`, one
+full `.nupkg`, and `RELEASES`), stages it as a draft, verifies the complete hosted inventory, and
+only then makes it non-draft and downloadable. Delta packages are intentionally not published.
+The workflow contains no test or lint step. The active delivery scope is Windows only, and ZIP,
+NSIS-only, MSI-only, MSIX-only, and portable-only parallel routes are not supported.
 
 **A prior revision also built locally**, which it did not for most of this work. At
 `19e8296b9f355e0e11e5ee7ab25856f9d3351cef`, `build.bat /s` completed in about 107 s and
 `build-installer.bat /s` in about 199 s, producing a three-artifact `0.3.0` Squirrel set, unsigned
 per policy. That run predates the current source-provenance, immutable-icon, identity, and
 PE-resource wrapper gates; it is not package evidence for the final `0.4.0` tree.
+
+The installed-version acceptance record has a separate schema and verifier,
+`scripts/windows-installer-upgrade-receipt.mjs`. It is reserved for a real isolated Windows
+run that installs the hosted `0.4.152` baseline, applies the `1.0.0` Setup, and records close,
+relaunch, stable-identity, state-migration, and session-reattach observations. The verifier
+refuses a plan-only record, an unpacked build, a reused source commit, or any missing lifecycle
+receipt. No such production-identity run is claimed by this checkout yet.
 
 What has NOT happened for the profile work described below is a completed packaged-app interaction
 and evidence pass. The resolver, spawn boundary, persistence, and attach failure paths are covered

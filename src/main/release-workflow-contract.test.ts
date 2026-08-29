@@ -310,6 +310,12 @@ describe('release workflow semantic contract', () => {
     expect(resourceEditingDisabled.output).toMatch(/default resource editing/i)
   })
 
+  it('requires the release upload to contain exactly three Squirrel assets', () => {
+    const weakened = check(replaceOnce(WORKFLOW, '[ "${#assets[@]}" -ne 3 ]', '[ "${#assets[@]}" -lt 3 ]'))
+    expect(weakened.status).toBe(1)
+    expect(weakened.output).toMatch(/exactly the three Squirrel assets/i)
+  })
+
   it('keeps write credentials out of checkout and build subprocesses', () => {
     const persisted = check(replaceOnce(WORKFLOW, 'persist-credentials: false', 'persist-credentials: true'))
     expect(persisted.status).toBe(1)

@@ -764,6 +764,9 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   ) {
     issues.push('draft upload must fail loudly and be retry-safe with --clobber')
   }
+  if (!uploadCommands.some((command) => /\[\s*"\$\{#assets\[@\]\}"\s+-ne\s+3\s*\]/.test(command))) {
+    issues.push('draft upload must require exactly the three Squirrel assets (Setup.exe, RELEASES, and one full nupkg)')
+  }
 
   if (!conditionUsesDraftResult(steps[notesAt]) || !conditionUsesDraftResult(steps[publishAt])) {
     issues.push('notes and publish steps must skip an already-published retry')
