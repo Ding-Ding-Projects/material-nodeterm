@@ -9,6 +9,7 @@ import type { HomeAssistantControlConfig } from '@shared/home-assistant-control'
 import { DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG, validateHomeAssistantControlConfig } from '@shared/home-assistant-control'
 import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
+import type { TriggerSpec } from '@shared/trigger'
 import type { ServiceConnection } from '@shared/node-exec'
 import { OPEN_WEBUI_DEFAULT_INTENT, type OpenWebUiIntent, type OpenWebUiLocalBinding } from '@shared/open-webui-hosting'
 import { DEFAULT_GITLAB_HOSTING_CONFIG, type GitLabHostingConfig } from '@shared/gitlab-hosting'
@@ -1972,6 +1973,29 @@ export function createAlarmClockNode(index: number, center?: { x: number; y: num
       alarmSoundEnabled: true,
       alarmNarratorEnabled: true,
       alarmHistory: []
+    }
+  }
+}
+
+/** Creates a disarmed, content-bound trigger. Arm consent never enters this shared node data. */
+export function createTriggerNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const trigger: TriggerSpec = {
+    schedule: { kind: 'interval', everyMinutes: 60 },
+    payload: '',
+    target: ''
+  }
+  return {
+    id: nextId('trigger'),
+    type: 'trigger',
+    position: placeAt(center, index, TRIGGER_SIZE.width, TRIGGER_SIZE.height),
+    width: TRIGGER_SIZE.width,
+    height: TRIGGER_SIZE.height,
+    style: { width: TRIGGER_SIZE.width, height: TRIGGER_SIZE.height },
+    data: {
+      title: 'Trigger',
+      color: '#ffb340',
+      group: null,
+      trigger
     }
   }
 }

@@ -392,7 +392,7 @@ export function buildRealApi(
   client: RpcClient
 ): Pick<
   NodeTerminalApi,
-  'pty' | 'workspace' | 'timer' | 'serverDeployment' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'planner' | 'userDataDir'
+  'pty' | 'workspace' | 'timer' | 'trigger' | 'serverDeployment' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'planner' | 'userDataDir'
   | 'projectSettings'
   | 'projectSetup'
   | 'worktree'
@@ -541,6 +541,14 @@ export function buildRealApi(
     schedule: (timerId, scheduledAt) => client.request(IPC.timerOccurrenceSchedule, timerId, scheduledAt) as Promise<import('../../shared/timer').TimerOccurrence | null>,
     transition: (id, state) => client.request(IPC.timerOccurrenceTransition, id, state) as Promise<import('../../shared/timer').TimerOccurrence | null>,
     lap: (id, elapsedMs) => client.request(IPC.timerOccurrenceLap, id, elapsedMs) as Promise<number[] | null>
+  }
+  const trigger: NonNullable<NodeTerminalApi['trigger']> = {
+    status: (projectId, nodeId) => client.request(IPC.triggerStatus, projectId, nodeId) as ReturnType<NonNullable<NodeTerminalApi['trigger']>['status']>,
+    arm: (projectId, nodeId, spec) => client.request(IPC.triggerArm, projectId, nodeId, spec) as ReturnType<NonNullable<NodeTerminalApi['trigger']>['arm']>,
+    disarm: (projectId, nodeId) => client.request(IPC.triggerDisarm, projectId, nodeId) as ReturnType<NonNullable<NodeTerminalApi['trigger']>['disarm']>,
+    runNow: (projectId, nodeId) => client.request(IPC.triggerRunNow, projectId, nodeId) as ReturnType<NonNullable<NodeTerminalApi['trigger']>['runNow']>,
+    history: (projectId, nodeId) => client.request(IPC.triggerHistory, projectId, nodeId) as ReturnType<NonNullable<NodeTerminalApi['trigger']>['history']>,
+    onChanged: (listener) => client.subscribe(IPC.triggerChanged, listener as Listener)
   }
   // REAL: WorkspaceStore (core) registers the project-settings:* channels too — same
   // registerIpc() call as workspace above — so the server serves this on both shells.
@@ -695,7 +703,7 @@ export function buildRealApi(
     onProgress: () => () => {}
   }
   return {
-    pty, workspace, timer, serverDeployment, settings, schoolMode, kidsMode,
+    pty, workspace, timer, trigger, serverDeployment, settings, schoolMode, kidsMode,
     scheduledSettings, planner, projectSettings, projectSetup, worktree, agent, userDataDir
   }
 }

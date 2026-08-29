@@ -22,6 +22,13 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## Shipped and verified
 
+- [ ] **Content-bound trigger scheduling:** desktop and Server Edition runtime wiring, guided
+      editor, catalog and Canvas registration, local consent, bounded history, safe terminal and
+      agent delivery, localization, and documentation are implemented on
+      `feat/pak-mun-working-triggers-20260829`. Focused trigger tests are green; full typecheck,
+      packaging, built-artifact interaction, and captures remain pending for the release-grade
+      integration pass.
+
 - [x] **Sanitized shared-instruction mirrors:** preserve project-specific guidance while keeping
       one byte-identical managed public block in `AGENTS.md` and `CLAUDE.md`; validate canonical
       private-vocabulary output when the private source exists; reject sensitive input; prove

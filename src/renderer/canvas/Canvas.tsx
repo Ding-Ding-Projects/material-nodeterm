@@ -144,6 +144,7 @@ import { GitHubWorkItemAttachmentDialog } from '../nodes/GitHubWorkItemAttachmen
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import TimerNode from '../nodes/TimerNode'
 import AlarmClockNode from '../nodes/AlarmClockNode'
+import TriggerNode from '../nodes/TriggerNode'
 import {
   loopMessageId,
   loopRunDue,
@@ -745,6 +746,7 @@ import {
   createNativeLoopNode,
   createTimerNode,
   createAlarmClockNode,
+  createTriggerNode,
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createAuthenticatorNode,
@@ -2349,6 +2351,7 @@ export function Canvas() {
       scheduler: withNodeBoundary(NativeLoopNode),
       timer: withNodeBoundary(TimerNode),
       alarm: withNodeBoundary(AlarmClockNode),
+      trigger: withNodeBoundary(TriggerNode),
       dino: withNodeBoundary(DinoNode),
       'recovery-game': withNodeBoundary(RecoveryGameNode),
       photo: withNodeBoundary(PhotoNode),
@@ -5926,6 +5929,18 @@ export function Canvas() {
     [setNodes, markDirty, emptyNodePos]
   )
 
+  const addTrigger = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createTriggerNode(ns.length, center ?? emptyNodePos())
+        const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
+        return appended.nodes
+      })
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
   /** Add a directory-listing node rooted at the active project or bound group folder. */
   const addFiles = useCallback(
     (center?: { x: number; y: number }, groupId?: string) => {
@@ -6042,6 +6057,7 @@ export function Canvas() {
             if (catalogEntry.id === 'recovery-game') return createRecoveryGameNode(index, center)
             if (catalogEntry.id === 'loop') return createNativeLoopNode(index, center)
             if (catalogEntry.id === 'alarm') return createAlarmClockNode(index, center)
+            if (catalogEntry.id === 'trigger') return createTriggerNode(index, center)
             if (catalogEntry.id === 'nsis') return createNsisNode(index, center)
             if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
             if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
@@ -11816,6 +11832,11 @@ export function Canvas() {
           onClick: () => addAlarmClock(at, groupId)
         },
         {
+          label: 'New Trigger',
+          icon: <span aria-hidden="true">⚡</span>,
+          onClick: () => addTrigger(at, groupId)
+        },
+        {
           label: 'New authenticator',
           icon: <IconLock />,
           onClick: () => addAuthenticator(at, groupId)
@@ -11891,6 +11912,7 @@ export function Canvas() {
       addNativeLoop,
       addTimer,
       addAlarmClock,
+      addTrigger,
       addToExistingGroup,
       groupSelection
     ]
@@ -12067,6 +12089,11 @@ export function Canvas() {
               onClick: () => addNativeLoop(at)
             },
             {
+              label: 'New Trigger',
+              icon: <span aria-hidden="true">⚡</span>,
+              onClick: () => addTrigger(at)
+            },
+            {
               label: 'New authenticator',
               icon: <IconLock />,
               onClick: () => addAuthenticator(at)
@@ -12223,6 +12250,7 @@ export function Canvas() {
       addNativeLoop,
       addTimer,
       addAlarmClock,
+      addTrigger,
       addDino,
       addBrowser,
       openFileDialog,
@@ -17070,6 +17098,13 @@ export function Canvas() {
             run: () => addAlarmClock()
           },
           {
+            id: 'new-trigger',
+            label: 'New Trigger',
+            hint: 'cron interval once local consent payload target history',
+            icon: <span aria-hidden="true">⚡</span>,
+            run: () => addTrigger()
+          },
+          {
             id: 'new-authenticator',
             label: 'New authenticator',
             icon: <IconLock />,
@@ -17524,7 +17559,8 @@ export function Canvas() {
     addTorrent,
     addNativeLoop,
     addTimer,
-    addAlarmClock,
+      addAlarmClock,
+      addTrigger,
     addDino,
     addWebView,
     addBrowser,

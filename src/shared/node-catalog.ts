@@ -710,6 +710,20 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     dependencies: ['planner-service'],
     availability: alwaysAvailable
   },
+  {
+    id: 'trigger',
+    nodeKind: 'trigger',
+    category: 'automation',
+    label: 'Trigger',
+    description: 'Run a reviewed payload on a cron, interval, or one-shot schedule.',
+    keywords: ['trigger', 'schedule', 'cron', 'interval', 'once', 'automation', 'payload'],
+    documentationPath: 'docs/features/automation/triggers.md',
+    safeDefaults: { schedule: { kind: 'interval', everyMinutes: 60 }, payload: '', target: '', note: '' },
+    dependencies: ['local-consent', 'terminal-session'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    availability: alwaysAvailable
+  },
   plannedEntry('planner', 'automation', 'Planner', 'Create a planner occurrence definition with explicit local binding.', 'planner-service'),
   plannedEntry('multiverse-portal', 'universes', 'Multiverse portal', 'Create a door-only Multiverse canvas below the depth limit.', 'multiverse-service', 'multiverse', 8),
   awsUniverseEntry,
@@ -935,6 +949,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'calendar', state: 'planned', scope: 'any', reason: 'calendar service not implemented' },
   { id: 'timer', state: 'planned', scope: 'any', reason: 'timer service not implemented' },
   { id: 'alarm', state: 'current', scope: 'any', reason: 'persisted Alarm Clock node with host planner' },
+  { id: 'trigger', state: 'current', scope: 'any', reason: 'content-bound scheduled delivery with local consent' },
   { id: 'planner', state: 'planned', scope: 'any', reason: 'planner service not implemented' },
   { id: 'multiverse-portal', state: 'planned', scope: 'multiverse', reason: 'Multiverse portal not implemented' },
   { id: 'aws-universe', state: 'current', scope: 'root', reason: 'AWS-only Universe portal and child canvas' },
