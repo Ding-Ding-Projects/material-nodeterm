@@ -221,16 +221,18 @@ export function MultiverseNavigator({ onNavigate, onCreate, onConstructDoor }: M
         </div>
         {message && <p className="multiverse-nav__message" role="status">{message}</p>}
       </AnchoredPopover>
-      <DoorConstructionDialog
-        open={pendingDoor !== null}
-        onClose={() => setPendingDoor(null)}
-        canvasId={pendingDoor?.parentCanvasId ?? ROOT_CANVAS_ID}
-        targetCanvasId={pendingDoor?.childCanvasId ?? ''}
-        doorId={pendingDoor?.entryDoorId ?? 'door-pending-entry'}
-        pairedDoorId={pendingDoor?.returnDoorId ?? 'door-pending-return'}
-        initialLabel={pendingDoor?.title}
-        onConstruct={finishDoorConstruction}
-      />
+      {pendingDoor && (
+        <DoorConstructionDialog
+          open
+          onClose={() => setPendingDoor(null)}
+          canvasId={pendingDoor.parentCanvasId}
+          targetCanvasId={pendingDoor.childCanvasId}
+          doorId={pendingDoor.entryDoorId}
+          pairedDoorId={pendingDoor.returnDoorId}
+          initialLabel={pendingDoor.title}
+          onConstruct={finishDoorConstruction}
+        />
+      )}
     </>
   )
 }
