@@ -65,7 +65,10 @@ async function post(
   return { status: stdout.trim(), body }
 }
 
-describe('hook server unix-socket listener', () => {
+// Node's AF_UNIX listener is deliberately disabled on Windows by hook-server.ts. The production
+// contract is TCP-only there, so keep these real socket checks honest instead of pretending an
+// empty path is a bound socket or weakening the owner-only filesystem assertions.
+describe.skipIf(process.platform === 'win32')('hook server unix-socket listener', () => {
   it('binds hook.sock at 0600 inside a 0700 sock/ dir under the data dir', () => {
     const sock = hookServer.getSockPath()
     expect(sock).toBe(path.join(dir, 'sock', 'hook.sock'))
@@ -127,7 +130,7 @@ describe('hook server unix-socket listener', () => {
 
 // The per-node identity machinery must be transport-agnostic: the verified-only verbs (sticky &
 // co.) demand a token THIS instance minted for THAT node id, on the socket exactly as on TCP.
-describe('unix-socket listener — verified-only verbs keep their gate', () => {
+describe.skipIf(process.platform === 'win32')('unix-socket listener — verified-only verbs keep their gate', () => {
   const SECRET = Buffer.alloc(32, 9)
 
   beforeAll(() => {

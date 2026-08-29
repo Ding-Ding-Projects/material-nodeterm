@@ -38,6 +38,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { execFileSync } from 'child_process'
+import { environmentForPosixShell, REAL_POSIX_SHELL } from '../core/testing/posix-shell'
 import {
   existsSync,
   mkdirSync,
@@ -216,16 +217,15 @@ describe('S6 acceptance gate — the merged machine-scoped-Codex-account chain c
       IPC.codexAccountsTransferThreadToSsh,
       owner,
       THREAD,
-      '/work',
-      'proj-1',
+      LOCAL,
       undefined,
-      LOCAL
-    )) as { threadId: string; imported: boolean }
-    expect(xfer.imported).toBe(true)
+      { projectId: 'proj-1' }
+    )) as { threadId: string }
+    expect(xfer).toEqual({ threadId: THREAD })
     expect(remoteCodexImportThread).toHaveBeenCalledTimes(1)
     // The importer is handed the containment-validated relative path + the REAL local rollout, which
     // is never moved (the far-side landing / discover / rollback are PR 6, owed on a real host).
-    const [, , , sessionsRelativePath, localRolloutPath] = remoteCodexImportThread.mock
+    const [, , , localRolloutPath, sessionsRelativePath] = remoteCodexImportThread.mock
       .calls[0] as unknown[]
     expect(sessionsRelativePath).toBe(`sessions/2026/08/rollout-${THREAD}.jsonl`)
     expect(localRolloutPath).toBe(rollout)
@@ -349,8 +349,10 @@ describe('S6 acceptance gate — the merged machine-scoped-Codex-account chain c
     writeFileSync(rollout, `{"id":"${THREAD}"}\n`)
     readThread.mockResolvedValue({ id: THREAD, name: null, path: rollout })
     await expect(
-      call(IPC.codexAccountsTransferThreadToSsh, makeSender(1), THREAD, '/work', 'proj-1', undefined, LOCAL)
-    ).rejects.toThrow(/Remote Codex import is unavailable/)
+      call(IPC.codexAccountsTransferThreadToSsh, makeSender(1), THREAD, LOCAL, undefined, {
+        projectId: 'proj-1'
+      })
+    ).rejects.toThrow(/SSH Codex account manager is unavailable/)
   })
 
   // ---- LEG (both shells): the record-signing secret arms on the Server Edition shell -------------
@@ -366,7 +368,11 @@ describe('S6 acceptance gate — the merged machine-scoped-Codex-account chain c
     const entries = readdirSync(userDataDir)
     expect(entries).toContain('node-auth-key.bin')
     expect(entries).not.toContain('node-auth-key.json')
-    expect(statSync(path.join(userDataDir, 'node-auth-key.bin')).mode & 0o777).toBe(0o600)
+    if (process.platform === 'win32') {
+      expect(statSync(path.join(userDataDir, 'node-auth-key.bin')).isFile()).toBe(true)
+    } else {
+      expect(statSync(path.join(userDataDir, 'node-auth-key.bin')).mode & 0o777).toBe(0o600)
+    }
     // …and the Codex record layer is now armed to sign on this shell (records verify instead of throwing).
     expect(hookServer.setNodeAuthSecret).toHaveBeenCalledOnce()
     expect(proxy.codexThreadIdentityAvailable()).toBe(true)
@@ -389,8 +395,8 @@ describe('S6 acceptance gate — the merged machine-scoped-Codex-account chain c
  *  NODETERM_CODEX_ACCOUNT_ID vary per call. */
 function runResolver(prelude: string, env: Record<string, string>): string {
   const script = `${prelude}\nprintf '%s' "\${NODETERM_NODE_ID-}"`
-  return execFileSync('/bin/sh', ['-c', script], {
-    env: { PATH: process.env.PATH ?? '', ...env },
+  return execFileSync(REAL_POSIX_SHELL, ['-c', script], {
+    env: environmentForPosixShell({ PATH: process.env.PATH ?? '', ...env }),
     encoding: 'utf8'
   }).trim()
 }

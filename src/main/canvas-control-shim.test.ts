@@ -18,7 +18,8 @@ import {
   environmentForPosixShell,
   REAL_POSIX_SHELL,
   pathForPosixShell,
-  pathsForPosixShellEnv
+  pathsForPosixShellEnv,
+  posixShellScriptArgs
 } from '../core/testing/posix-shell'
 
 const run = promisify(execFile)
@@ -60,8 +61,8 @@ function callShim(
   })
 }
 
-function runShim(args: string[], env: Record<string, string> = {}): Promise<{ stdout: string; stderr: string }> {
-  return run(REAL_POSIX_SHELL, [pathForPosixShell(shim), ...args], {
+function runShim(args: string[], env: Record<string, string> = {}, fixtureBin?: string): Promise<{ stdout: string; stderr: string }> {
+  return run(REAL_POSIX_SHELL, posixShellScriptArgs(shim, args, fixtureBin), {
     env: environmentForPosixShell(pathsForPosixShellEnv({
       PATH: process.env.PATH ?? '',
       ...env
@@ -140,13 +141,15 @@ describe('canvas-control shim', () => {
     })
   })
 
-  it('carries inter-agent send, reply and status envelopes unchanged', async () => {
-    await callShim(['send', '--node', 'node-2', '--subject', 'MCP NOTICE', '--text', 'line one\nline two'])
-    expect(received.at(-1)).toMatchObject({
-      verb: 'send', args: { node: 'node-2', subject: 'MCP NOTICE', text: 'line one\nline two' }
+  it('refuses inter-agent messaging without a per-node capability and carries status unchanged', async () => {
+    const before = received.length
+    await expect(
+      callShim(['send', '--node', 'node-2', '--subject', 'MCP NOTICE', '--text', 'line one\nline two'])
+    ).rejects.toMatchObject({ stderr: expect.stringContaining('Agent messaging refused.') })
+    await expect(callShim(['reply', '--message', 'msg-1', '--text', 'ACK'])).rejects.toMatchObject({
+      stderr: expect.stringContaining('Agent messaging refused.')
     })
-    await callShim(['reply', '--message', 'msg-1', '--text', 'ACK'])
-    expect(received.at(-1)).toMatchObject({ verb: 'reply', args: { message: 'msg-1', text: 'ACK' } })
+    expect(received.length).toBe(before)
     await callShim(['status', '--message', 'msg-1'])
     expect(received.at(-1)).toMatchObject({ verb: 'status', args: { message: 'msg-1' } })
   })
@@ -942,7 +945,7 @@ describe('sticky through the shim (verified-only verb)', () => {
   })
 
   it('carries a markdown body (backticks, #, newlines) verbatim, --create yes riding along', async () => {
-    const md = '# Tickets\n\n- [ENG-1] `fix build` — **urgent**\n- [ENG-2] $PATH & <em>'
+    const md = '# Tickets\n\n- [ENG-1] `fix build` - **urgent**\n- [ENG-2] $PATH & <em>'
     await callVerified(['sticky', '--node', 'sticky-3', '--append', md, '--create', 'yes'])
     expect(received.at(-1)).toMatchObject({
       verb: 'sticky',
