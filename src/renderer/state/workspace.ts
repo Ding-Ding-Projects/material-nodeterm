@@ -13,6 +13,8 @@ import {
   withSessionId
 } from '@shared/agents/config'
 import { withPermissionMode } from '@shared/agents/approval-mode'
+import { agentAccountColor } from '@shared/agents/account-color'
+import { boundAccountId } from '@shared/agents/account-binding'
 import { uuid } from '@renderer/lib/uuid'
 import {
   claudeCliCapsNow,
@@ -30,6 +32,7 @@ import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
 // reflector.
 export { applyCanvasMutation } from '@shared/canvas-mutations'
+export { accountNodeColor, agentAccountColor } from '@shared/agents/account-color'
 import { acceptNewInboundNode, sanitizeInboundNode } from '@shared/node-exec'
 
 /** Preset color palette — macOS system colors (dark mode). */
@@ -503,7 +506,14 @@ export function createAgentNode(
   launchPlanOrPermission?: ActiveAgentLaunchPlan | AgentPermissionMode,
   options?: TerminalNodeCreationOptions
 ): CanvasNode {
-  const { label, color, launchCmd } = resolveAgent(agentId)
+  const { label, color: agentColor, launchCmd } = resolveAgent(agentId)
+  const bound = boundAccountId(accountId, agentId)
+  const accountSettings = useSettings.getState().settings
+  const color =
+    agentAccountColor(agentId, bound, {
+      claude: accountSettings.claudeAccounts ?? [],
+      codex: accountSettings.codexAccounts ?? []
+    }) ?? agentColor
   // A SHARED_IDENTITY_CAPABLE agent (codex) launches through its managed launcher when this
   // machine actually has one — otherwise the bare CLI, byte-identical to before. Asked through the
   // capability helper, never `agentId === 'codex'`; `codexSharedIdentity` folds in the SSH answer
@@ -604,11 +614,11 @@ export function createAgentNode(
       group: null,
       tags: [],
       agentId,
-      ...(accountId && agentId === 'claude' ? { accountId } : {}),
+      ...(bound && agentId === 'claude' ? { accountId: bound } : {}),
       // Persisted alongside the node (unlike initialCommand, which is consumed on first open), so
       // a cold restore months later still knows which conversation this node owns.
       ...(mintedSessionId ? { agentSessionId: mintedSessionId } : {}),
-      ...(accountId && agentId === 'codex' ? { codexAccountId: accountId } : {}),
+      ...(bound && agentId === 'codex' ? { codexAccountId: bound } : {}),
       cwd: ssh ? ssh.remoteCwd : cwd,
       initialCommand,
       agentLaunchIntent,

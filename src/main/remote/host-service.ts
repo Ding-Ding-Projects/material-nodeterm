@@ -191,7 +191,7 @@ export function createHostHandlers(
   git?: HostGitOps,
   // Registers a phone-started session as a project node (WorkspaceStore.appendRemoteNode).
   // Absent ⇒ `projects.registerNode` is not served.
-  registerNode?: (projectId: string, node: { id: string; title?: string; agentId?: string }) => Promise<boolean>
+  registerNode?: (projectId: string, node: { id: string; title?: string; agentId?: string; accountId?: string }) => Promise<boolean>
 ): HostHandlers {
   // streamId -> Stream. PTY callbacks close over their own `streamId` directly, so no
   // reverse (sessionId -> streamId) index is needed.
@@ -443,11 +443,13 @@ export function createHostHandlers(
       socket.respond(req.id, false, { message: 'projects.registerNode requires projectId and node.id.' })
       return
     }
-    const input: { id: string; title?: string; agentId?: string } = { id }
+    const input: { id: string; title?: string; agentId?: string; accountId?: string } = { id }
     const title = str(node.title)
     if (title !== undefined) input.title = title
     const agentId = str(node.agentId)
     if (agentId !== undefined) input.agentId = agentId
+    const accountId = str(node.accountId)
+    if (accountId !== undefined) input.accountId = accountId
     void registerNode(projectId, input)
       .then((registered) => socket.respond(req.id, true, { registered }))
       .catch(() => socket.respond(req.id, true, { registered: false }))
@@ -731,7 +733,7 @@ export interface HostSessionOptions {
   /** Typed, jailed `git.*` bridge (see HostGitOps). Optional: absent ⇒ the verbs are not served. */
   git?: HostGitOps
   /** Registers a phone-started session as a project node (`projects.registerNode`). Optional. */
-  registerNode?: (projectId: string, node: { id: string; title?: string; agentId?: string }) => Promise<boolean>
+  registerNode?: (projectId: string, node: { id: string; title?: string; agentId?: string; accountId?: string }) => Promise<boolean>
   /** Extra fs/git jail roots beyond the shared canvas's node cwds — production passes the
    *  workspace's local project cwds: the phone browses EVERY project over `projects.list`, so a
    *  canvas-only jail denied whichever project the desktop didn't happen to have focused. */
@@ -871,7 +873,7 @@ export function connectHostSession(opts: HostSessionOptions): HostSession {
  *  phone node registration). One bag so the init signatures stop growing positionally. */
 export interface HostBridgeDeps {
   git?: HostGitOps
-  registerNode?: (projectId: string, node: { id: string; title?: string; agentId?: string }) => Promise<boolean>
+  registerNode?: (projectId: string, node: { id: string; title?: string; agentId?: string; accountId?: string }) => Promise<boolean>
   /** Workspace-level jail roots (local project cwds) merged with the canvas node cwds. */
   workspaceRoots?: () => string[]
 }

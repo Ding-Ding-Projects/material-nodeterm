@@ -1496,6 +1496,8 @@ export interface ClaudeAccount {
   host?: string
   /** True until `claude /login` completes in the account dir and the email is captured. */
   pending?: boolean
+  /** Optional default node colour for new nodes opened under this account. */
+  color?: string
   createdAt: number
 }
 
@@ -1510,6 +1512,8 @@ export interface CodexAccount {
   remoteCwd?: string
   /** True until the official `codex login --device-auth` flow completes. */
   pending?: boolean
+  /** Optional default node colour for new nodes opened under this account. */
+  color?: string
   createdAt: number
 }
 

@@ -9,12 +9,14 @@
 // an unsafe id (it becomes a tmux session name).
 
 import { agentConfig } from '../shared/agents/config'
+import { boundAccountId } from '../shared/agents/account-binding'
 
 /** What the phone is allowed to choose; everything else is host-derived. */
 export interface RemoteNodeInput {
   id: string
   title?: string
   agentId?: string
+  accountId?: string
 }
 
 /** The desktop id shape (`term-<base36 ms>-<token>`). Anything else is refused — the id is
@@ -51,7 +53,12 @@ function stripRawNodeExec(node: Record<string, unknown>): Record<string, unknown
   return { ...portable, ssh: connection }
 }
 
-export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date): string | null {
+export function appendProjectNode(
+  raw: string,
+  input: RemoteNodeInput,
+  now: Date,
+  accountColor?: string
+): string | null {
   if (!SAFE_NODE_ID.test(input.id)) return null
   let root: Record<string, unknown>
   try {
@@ -89,7 +96,9 @@ export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date
   // An agent node looks exactly like one minted by the canvas (createAgentNode): the agent's
   // label as the starting title and the agent's color — titleAuto then lets the agent's own
   // session name take over, same as desktop. A plain terminal keeps the mobile defaults.
-  const agent = typeof input.agentId === 'string' ? agentConfig(input.agentId) : undefined
+  const agentId = typeof input.agentId === 'string' ? input.agentId : undefined
+  const bound = boundAccountId(input.accountId, agentId)
+  const agent = agentId !== undefined ? agentConfig(agentId) : undefined
   const node: Record<string, unknown> = {
     id: input.id,
     kind: 'terminal',
@@ -100,14 +109,16 @@ export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date
         ? input.title.slice(0, TITLE_MAX)
         : (agent?.label ?? 'Mobile session'),
     titleAuto: true,
-    color: agent?.color ?? '#7aa2f7',
+    color: (bound ? accountColor : undefined) ?? agent?.color ?? '#7aa2f7',
     group: null,
     tags: [],
     collapsed: false,
     // Sibling nodes carry the project's portable cwd (usually "./…").
     cwd: typeof sibling?.cwd === 'string' ? sibling.cwd : '.'
   }
-  if (typeof input.agentId === 'string') node.agentId = input.agentId
+  if (agentId !== undefined) node.agentId = agentId
+  if (bound && agentId === 'claude') node.accountId = bound
+  if (bound && agentId === 'codex') node.codexAccountId = bound
   // Desktop remote nodes carry the connection spec PER NODE — a sibling terminal in the same
   // project has the right portable connection values. Machine-local execution fields were
   // stripped above and therefore cannot be copied onto the new node.

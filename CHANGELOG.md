@@ -2138,3 +2138,8 @@ git tag --sort=-creatordate
 or on GitHub's [tags](https://github.com/eneskirca/nodeterm/tags) and
 [releases](https://github.com/eneskirca/nodeterm/releases) pages.
 
+# Unreleased
+
+- Added per-account default node colours for new Claude and Codex nodes. Account bindings remain
+  provider-specific, persist with account settings, update live for newly-created nodes, and fall
+  back safely to the built-in agent colour when an account value is invalid.

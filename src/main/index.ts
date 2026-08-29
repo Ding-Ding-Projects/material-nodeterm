@@ -159,6 +159,7 @@ import { geminiContextParse } from '../core/gemini-session'
 import { codexContextParse } from '../core/codex-session'
 import { codexHome } from '../core/usage/codex-usage'
 import { grokRawFields, isAsyncSubagentLaunch, type NormalizedAgentEvent } from '../shared/agents/normalize'
+import { agentAccountColor } from '../shared/agents/account-color'
 import { grokSessionDir, grokSessionsDir } from '../core/agents/grok-paths'
 import { forgetGrokSession, rememberGrokSessionDir } from '../core/grok-session'
 import {
@@ -3020,12 +3021,16 @@ app.whenReady().then(async () => {
   // the canvas adopts the node live).
   const hostBridge = {
     git: gitService,
-    registerNode: (projectId: string, node: { id: string; title?: string; agentId?: string }) =>
+    registerNode: (projectId: string, node: { id: string; title?: string; agentId?: string; accountId?: string }) =>
       workspaceStore.appendRemoteNode(
         projectId,
         node,
         undefined,
-        process.platform === 'win32' ? settingsStore.get().defaultTerminalProfileId : undefined
+        process.platform === 'win32' ? settingsStore.get().defaultTerminalProfileId : undefined,
+        agentAccountColor(node.agentId, node.accountId, {
+          claude: settingsStore.get().claudeAccounts ?? [],
+          codex: settingsStore.get().codexAccounts ?? []
+        })
       ),
     // Jail roots beyond the active canvas: the phone browses EVERY project (projects.list), so
     // its fs/git access spans every local project root — not just the tab the desktop happens

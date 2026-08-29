@@ -6,6 +6,8 @@ built in; any other CLI can be added as a custom agent.
 - [Agent support](./agent-support.md) — the shared status model, hook-driven detection,
   permission modes, managed accounts, and the capability system that decides which agent gets
   which feature.
+- [Per-account node colours and bindings](./account-node-colours.md) — provider-aware account
+  colours, persistence, live creation-time resolution, and safe fallback.
 
 See also [Canvas → Node kinds](../canvas/README.md) for the agent node itself,
 [Kanban](../kanban/README.md) for how agent status renders on a board card, and

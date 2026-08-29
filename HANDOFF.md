@@ -1459,3 +1459,20 @@ switcher and FAB menu on a real screen — nothing above substitutes for that. T
 the `.mc-console` styling defect and the two atomic-write violations found above are worth a
 one-line fix before the next release, since both are small, both are diagnosed, and neither
 requires touching anything MD3-specific to correct.
+# Per-account node colour and binding lane
+
+Implemented issue #71 and plan item 60 on `feat/program-60`.
+
+- Added provider-aware account binding and colour resolution in `src/shared/agents/account-binding.ts`
+  and `src/shared/agents/account-color.ts`.
+- Added optional persisted `color` fields to Claude and Codex account records.
+- Applied account colours when creating renderer nodes and when the host registers a phone-created
+  node. Host registration validates the provider binding and resolves colour from the matching
+  provider list.
+- Added labelled, keyboard-operable colour swatches to local and remote Claude and Codex account
+  rows. The default swatch restores the provider colour.
+- Documented behaviour in `docs/features/agents/account-node-colours.md` and indexed it.
+
+Verification was intentionally not run in this lane because the parent brief excludes tests,
+builds, captures, commits, and pushes. The parent lane must perform those checks and reconcile any
+type or integration issues before landing the change.
