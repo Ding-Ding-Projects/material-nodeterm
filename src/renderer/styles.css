@@ -3444,7 +3444,7 @@ body,
 }
 /* Pinned explorer: no scrim, clicks pass through to the canvas. The drawer is a floating
    card on the right — same shape as the sessions sidebar on the left — so the controls
-   cluster (top: 54px, right: 14px, 34px tall) stays reachable. z 26 sits with that cluster
+   cluster (top: calc(var(--app-bar-h) + 10px), right: 14px, 34px tall) stays reachable. z 26 sits with that cluster
    above the kanban board (25) and below the tab bar (30) / dialogs (55+). pointer-events
    on the overlay is load-bearing: a transparent overlay that still captures would freeze
    the canvas even with the click-to-close handler removed. */
@@ -5879,8 +5879,8 @@ button.group-node__setup:disabled {
 }
 
 /* ---- Resume-where-you-left-off card (breadcrumb trail, once per project activation) ---- */
-/* Anchored in .flow-wrap under the controls cluster (top: 54px, 34px tall) rather than beside it,
-   so the two never overlap; the left side is the sessions sidebar's (top: 54px, left: 14px).
+/* Anchored in .flow-wrap under the controls cluster (top: calc(var(--app-bar-h) + 10px), 34px tall) rather than beside it,
+   so the two never overlap; the left side is the sessions sidebar's (top: calc(var(--app-bar-h) + 10px), left: 14px).
    z-index 11 sits above the canvas and BELOW the sidebar (12) — a card the user has not dismissed
    must never cover a panel they deliberately opened — and below the kanban overlay (25), where the
    canvas and everything on it is correctly hidden. */
@@ -10138,9 +10138,6 @@ button.group-node__setup:disabled {
 .ss-meta__project { color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ss-meta__project + .ss-meta__cwd::before { content: '· '; }
 
-.sessions-icon-cluster { position: absolute; top: 54px; left: 14px; z-index: 11; }
-.sessions-icon-cluster button { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; background: rgba(var(--menu-rgb), 0.92); border: 1px solid var(--border); border-radius: 9px; color: var(--text); cursor: pointer; box-shadow: 0 6px 20px rgba(0, 0, 0, calc(0.3 * var(--shadow-k))); }
-.sessions-icon-cluster button:hover { background: var(--panel-header); }
 
 .label-picker__createrow {
   position: relative;

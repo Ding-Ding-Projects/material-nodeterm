@@ -2655,7 +2655,7 @@ button.term-node__title-text:focus-visible {
 .alarm-clock-node__history li { border-bottom: 1px solid var(--md-outline-variant); padding: 4px 0; }
 .trigger-node { min-width: 360px; min-height: 380px; overflow: hidden; }
 .trigger-node__glyph { font-size: 17px; margin-right: 5px; }
-.trigger-node__body { display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow: auto; }
+.trigger-node__body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 8px; padding: 10px; overflow: auto; }
 .trigger-node__body label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
 .trigger-node__body input, .trigger-node__body select, .trigger-node__body textarea { min-height: 30px; min-width: 0; flex: 1; border: 1px solid var(--md-outline); border-radius: 8px; padding: 4px 7px; background: var(--md-surface-container); color: var(--md-on-surface); }
 .trigger-node__body textarea { resize: vertical; font: inherit; }

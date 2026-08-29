@@ -16,6 +16,7 @@ import {
 } from '@shared/ollama'
 import { E_UNSUPPORTED } from '@shared/rpc'
 import { formatBytes } from '../../lib/bytesFormat'
+import { saveBlobDownload } from '../../lib/exportSave'
 import { useActiveSessionApi } from '../../session/session'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
@@ -1241,13 +1242,7 @@ function ChatTab({
     if (!active) return
     const text = await ollama.chatExport(active.id, 'markdown')
     if (!text) return
-    const blob = new Blob([text], { type: 'text/markdown' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${active.title.replace(/[^\w.-]+/g, '_')}.md`
-    a.click()
-    URL.revokeObjectURL(url)
+    saveBlobDownload(new Blob([text], { type: 'text/markdown' }), `${active.title.replace(/[^\w.-]+/g, '_')}.md`)
   }, [active, ollama])
 
   const handleSend = useCallback(async () => {

@@ -9,22 +9,14 @@ import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { saveBlobDownload } from '../lib/exportSave'
+import { graphEdgeEndpoints } from '../lib/repositoryGraphVisual'
 
 const MODES: readonly RepositoryGraphMode[] = ['code', 'dependencies', 'combined']
 const EXPORTS: readonly RepositoryGraphExportInput['format'][] = ['json', 'jsonl', 'csv', 'tsv', 'markdown', 'html', 'graphml', 'dot']
 
 function modeLabel(mode: RepositoryGraphMode): string {
   return mode === 'code' ? 'Code' : mode === 'dependencies' ? 'Dependency' : 'Combined'
-}
-
-function download(content: string, filename: string): void {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
-  URL.revokeObjectURL(url)
 }
 
 export default function RepositoryGraphNode({ id, data, selected }: NodeProps<CanvasNode>): React.JSX.Element {
@@ -86,7 +78,7 @@ export default function RepositoryGraphNode({ id, data, selected }: NodeProps<Ca
   const doExport = async (): Promise<void> => {
     if (!projectId) return
     const result = await api.repositoryGraph.export({ projectId, mode, format: exportFormat })
-    download(result.content, result.filename)
+    saveBlobDownload(new Blob([result.content], { type: 'text/plain;charset=utf-8' }), result.filename)
   }
 
   const headerFill = nodeHeaderFillStyle(data.color)
@@ -117,7 +109,7 @@ export default function RepositoryGraphNode({ id, data, selected }: NodeProps<Ca
         {visualNodes.length > 0 && <div className="repository-graph-node__visual" aria-label={vocab('Interactive graph preview')}>
           <svg viewBox={`0 0 760 ${Math.max(120, Math.ceil(visualNodes.length / 4) * 76 + 30)}`} role="img" aria-label={vocab('Graph relationships')}>
             <defs><marker id={`${id}-arrow`} markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="currentColor" /></marker></defs>
-            {visualEdges.map((edge) => { const from = visualPositions.get(edge.from)!; const to = visualPositions.get(edge.to)!; return <line key={edge.id} x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="currentColor" strokeOpacity=".45" markerEnd={`url(#${id}-arrow)`}><title>{`${edge.kind}: ${edge.from} → ${edge.to}`}</title></line> })}
+            {visualEdges.map((edge) => { const from = visualPositions.get(edge.from)!; const to = visualPositions.get(edge.to)!; const endpoints = graphEdgeEndpoints(from, to); return <line key={edge.id} x1={endpoints.source.x} y1={endpoints.source.y} x2={endpoints.target.x} y2={endpoints.target.y} stroke="currentColor" strokeOpacity=".45" markerEnd={`url(#${id}-arrow)`}><title>{`${edge.kind}: ${edge.from} → ${edge.to}`}</title></line> })}
             {visualNodes.map((node) => { const point = visualPositions.get(node.id)!; return <g key={node.id} role="button" tabIndex={0} aria-label={`${node.label}, ${node.kind}`} transform={`translate(${point.x - 72},${point.y - 20})`} onClick={() => { const expanded = new Set(intent.expandedNodeIds ?? []); expanded.has(node.id) ? expanded.delete(node.id) : expanded.add(node.id); setIntent({ expandedNodeIds: [...expanded].slice(0, 2000) }) }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.dispatchEvent(new MouseEvent('click', { bubbles: true })) } }}><rect width="144" height="40" rx="10" fill="var(--md-sys-color-secondary-container)" stroke="var(--md-sys-color-outline)" /><text x="72" y="17" textAnchor="middle" fontSize="11" fill="var(--md-sys-color-on-secondary-container)">{node.label.length > 20 ? `${node.label.slice(0, 19)}…` : node.label}</text><text x="72" y="31" textAnchor="middle" fontSize="9" fill="var(--md-sys-color-on-secondary-container)">{node.kind}</text></g> })}
           </svg>
         </div>}
