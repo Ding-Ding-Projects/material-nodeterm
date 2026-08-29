@@ -1,5 +1,23 @@
 # Handoff
 
+## 2026-08-26, Home Assistant sensor display nodes
+
+Implemented issue #28 on `feat/program-17`: added the `homeassistant-sensor` canvas kind, safe
+portable sensor intent, machine-local endpoint/token binding, guided entity catalogue picker with
+anchored regex search, numeric/binary/enum/gauge/trend/event/weather/calendar/attributes views,
+unit and device-class formatting, bounded history, live Home Assistant WebSocket updates, and
+truthful stale/offline states. Desktop and Server Edition registration share
+`src/core/home-assistant/sensor-service.ts` through `CorePlatform`; the token is resolved only in
+the host credential store and never crosses into project JSON.
+
+Changed files include `src/shared/home-assistant.ts`, `src/shared/types.ts`, `src/shared/ipc.ts`,
+`src/core/home-assistant/{sensor-service,register-ipc}.ts`, preload and Server Edition bridges,
+`src/renderer/components/homeassistant/HomeAssistantSensorPanel.tsx`, `ServiceNode.tsx`,
+`workspace.ts`, `Canvas.tsx`, and `styles.md3.css`, plus the integration documentation, roadmap,
+changelog, and this handoff. No tests, type checks, builds, packaging, runtime interaction,
+security review, accessibility review, or captures were run, per the assigned lane boundary. No
+commit or dew was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

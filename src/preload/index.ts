@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { HomeAssistantSensorUpdate } from '../shared/home-assistant'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -70,6 +71,7 @@ const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
+const subscribeHomeAssistantUpdate = subscribe<[HomeAssistantSensorUpdate]>(IPC.homeAssistantSensorUpdate)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -942,6 +944,15 @@ const api: NodeTerminalApi = {
     restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
+  },
+  homeAssistant: {
+    listEntities: (connection) => ipcRenderer.invoke(IPC.homeAssistantListEntities, connection),
+    read: (nodeId, connection, config) => ipcRenderer.invoke(IPC.homeAssistantReadSensor, nodeId, connection, config),
+    watch: (nodeId, connection, config) => ipcRenderer.invoke(IPC.homeAssistantWatchSensor, nodeId, connection, config),
+    unwatch: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantUnwatchSensor, nodeId),
+    setToken: (credentialKey, token) => ipcRenderer.invoke(IPC.homeAssistantSetToken, credentialKey, token),
+    tokenStatus: (credentialKey) => ipcRenderer.invoke(IPC.homeAssistantTokenStatus, credentialKey),
+    onUpdate: (listener) => subscribeHomeAssistantUpdate(listener)
   }
 }
 

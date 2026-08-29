@@ -13,6 +13,7 @@ import type { ProjectKanbanGitHub } from './github-issues'
 import type { ProjectIcon } from './project-icon'
 import type { ShortcutMap } from './shortcuts'
 import { DEFAULT_SHORTCUTS } from './shortcuts'
+import type { HomeAssistantApi, HomeAssistantSensorConfig } from './home-assistant'
 import type { FunnyLevel, LanguageMode } from './i18n/types'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
@@ -372,6 +373,7 @@ export type NodeKind =
   | 'proxmox'
   | 'gitlab'
   | 'homeassistant'
+  | 'homeassistant-sensor'
   | 'freepbx'
 
 /**
@@ -385,6 +387,7 @@ export const SERVICE_NODE_KINDS = [
   'proxmox',
   'gitlab',
   'homeassistant',
+  'homeassistant-sensor',
   'freepbx'
 ] as const
 
@@ -514,6 +517,8 @@ export interface CanvasNodeState {
    * reasons. It never carries a secret; see `ServiceConnection` in shared/node-exec.ts.
    */
   serviceConnection?: ServiceConnection
+  /** Safe Home Assistant sensor display intent. The endpoint and credential key remain local. */
+  homeAssistantSensor?: HomeAssistantSensorConfig
   /**
    * nsis-only, GIT-SHARED: the installer's description (app name, version, publisher, output
    * filename, install root, shortcut/uninstaller/compression choices). Nothing here names a
@@ -3798,6 +3803,8 @@ export interface NodeTerminalApi {
   ollama: import('./ollama').OllamaApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** Home Assistant sensor display nodes. Tokens are resolved only inside the host shell. */
+  homeAssistant?: HomeAssistantApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

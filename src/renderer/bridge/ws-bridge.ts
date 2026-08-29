@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { HomeAssistantApi } from '../../shared/home-assistant'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,19 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+export function buildHomeAssistantApi(client: RpcClient): Pick<NodeTerminalApi, 'homeAssistant'> {
+  const homeAssistant: HomeAssistantApi = {
+    listEntities: (connection) => client.request(IPC.homeAssistantListEntities, connection) as ReturnType<HomeAssistantApi['listEntities']>,
+    read: (nodeId, connection, config) => client.request(IPC.homeAssistantReadSensor, nodeId, connection, config) as ReturnType<HomeAssistantApi['read']>,
+    watch: (nodeId, connection, config) => client.request(IPC.homeAssistantWatchSensor, nodeId, connection, config) as ReturnType<HomeAssistantApi['watch']>,
+    unwatch: (nodeId) => client.request(IPC.homeAssistantUnwatchSensor, nodeId) as Promise<void>,
+    setToken: (credentialKey, token) => client.request(IPC.homeAssistantSetToken, credentialKey, token) as Promise<void>,
+    tokenStatus: (credentialKey) => client.request(IPC.homeAssistantTokenStatus, credentialKey) as Promise<boolean>,
+    onUpdate: (listener) => client.subscribe(IPC.homeAssistantSensorUpdate, listener as Listener)
+  }
+  return { homeAssistant }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1389,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildHomeAssistantApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

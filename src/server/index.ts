@@ -256,7 +256,7 @@ export async function startServer(
   // between the RPC side (which mints) and the HTTP side (which redeems) — one instance, so a
   // ticket minted over the socket is redeemable by the GET that follows it.
   const downloadTickets = new DownloadTickets()
-  const { gitService, minecraftServers } = registerCoreHandlers(platform, {
+  const { gitService, minecraftServers, homeAssistantSensors } = registerCoreHandlers(platform, {
     getSettings: () => settingsStore.get(),
     downloadTickets,
     localProjectCwd: (projectId: string) => workspaceStore.localCwdForProject(projectId),
@@ -655,6 +655,7 @@ export async function startServer(
         // scheduled-settings poller here. Missing this one line leaves its 30s interval and store
         // listener live after SIGTERM-driven teardown (including NODETERM_HEADLESS containers).
         await scheduledSettingsRuntime.stop()
+        await homeAssistantSensors.close()
         ackSweeper.stop()
         pendingSweeper.stop()
         sessionReaper.stop()
@@ -715,6 +716,7 @@ export async function startServer(
     async close() {
       // Detach PTY clients — tmux sessions keep running (Phase 1 contract; never kill the server).
       await scheduledSettingsRuntime.stop()
+      await homeAssistantSensors.close()
       ackSweeper.stop()
       pendingSweeper.stop()
       sessionReaper.stop()

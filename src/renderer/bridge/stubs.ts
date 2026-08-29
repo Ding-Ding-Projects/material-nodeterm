@@ -588,6 +588,15 @@ export function buildStubApi(): Omit<
       restoreBackup: U('minecraft.restoreBackup'),
       deleteBackup: U('minecraft.deleteBackup'),
       onEvent: noopUnsub
+    },
+    homeAssistant: {
+      listEntities: U('homeAssistant.listEntities'),
+      read: U('homeAssistant.read'),
+      watch: U('homeAssistant.watch'),
+      unwatch: U('homeAssistant.unwatch'),
+      setToken: U('homeAssistant.setToken'),
+      tokenStatus: U('homeAssistant.tokenStatus'),
+      onUpdate: noopUnsub
     }
   } satisfies Omit<
     NodeTerminalApi,

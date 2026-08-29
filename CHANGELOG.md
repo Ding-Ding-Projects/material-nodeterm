@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add Home Assistant sensor display nodes with guided entity catalog selection, live WebSocket
+  updates, numeric/binary/enum/gauge/trend/event/weather/calendar/attribute views, unit and device
+  class formatting, stale/offline states, and bounded local history. Tests, builds, packaging,
+  runtime interaction, and captures were intentionally not run in this lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

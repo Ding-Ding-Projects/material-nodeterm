@@ -155,7 +155,7 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
-- [ ] Add Home Assistant multi-instance controls and sensor displays.
+- [ ] Add Home Assistant sensor display nodes with guided entity selection, live updates, stale/offline states, and bounded history. Source wiring and coverage files exist, but runtime and packaged-artifact checks remain pending.
 - [ ] Add Calendar, Timer, Alarm Clock, and planner occurrence services.
 
 ### Multiverse and AWS

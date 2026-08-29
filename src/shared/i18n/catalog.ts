@@ -968,5 +968,68 @@ export const CATALOG: Catalog = {
   'announce.dismiss': {
     en: flat('Dismiss'),
     yue: flat('關閉')
-  }
+  },
+
+  'homeAssistant.address': {
+    en: flat('Home Assistant address'),
+    yue: flat('Home Assistant 地址')
+  },
+  'homeAssistant.addressNote': {
+    en: flat('Use HTTPS for a Home Assistant address. Credentials stay local and importing this node never connects.'),
+    yue: flat('Home Assistant 地址請用 HTTPS。憑證只留喺本機，匯入呢個節點唔會連線。')
+  },
+  'homeAssistant.accessToken': {
+    en: flat('Access token'),
+    yue: flat('存取權杖')
+  },
+  'homeAssistant.saveToken': {
+    en: flat('Save token'),
+    yue: flat('儲存權杖')
+  },
+  'homeAssistant.clearToken': {
+    en: flat('Clear token'),
+    yue: flat('清除權杖')
+  },
+  'homeAssistant.entity': {
+    en: flat('Entity'),
+    yue: flat('實體')
+  },
+  'homeAssistant.display': {
+    en: flat('Display'),
+    yue: flat('顯示')
+  },
+  'service.expand': {
+    en: flat('Expand'),
+    yue: flat('展開')
+  },
+  'service.collapse': {
+    en: flat('Collapse'),
+    yue: flat('收起')
+  },
+  'service.color': {
+    en: flat('Color'),
+    yue: flat('顏色')
+  },
+  'service.rename': {
+    en: flat('Rename'),
+    yue: flat('改名')
+  },
+  'service.homeAssistantSensor': {
+    en: flat('Home Assistant sensor display'),
+    yue: flat('Home Assistant 感測器顯示')
+  },
+  'service.generic': {
+    en: flat('Service'),
+    yue: flat('服務')
+  },
+  'homeAssistant.mode.numeric': { en: flat('Numeric value'), yue: flat('數值') },
+  'homeAssistant.mode.binary': { en: flat('Binary state'), yue: flat('二元狀態') },
+  'homeAssistant.mode.enum': { en: flat('Enum state'), yue: flat('列舉狀態') },
+  'homeAssistant.mode.gauge': { en: flat('Gauge'), yue: flat('儀表') },
+  'homeAssistant.mode.trend': { en: flat('Trend'), yue: flat('趨勢') },
+  'homeAssistant.mode.event': { en: flat('Event'), yue: flat('事件') },
+  'homeAssistant.mode.weather': { en: flat('Weather'), yue: flat('天氣') },
+  'homeAssistant.mode.calendar': { en: flat('Calendar'), yue: flat('日曆') },
+  'homeAssistant.mode.attributes': { en: flat('Attributes'), yue: flat('屬性') }
+  
 }

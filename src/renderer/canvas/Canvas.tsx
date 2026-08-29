@@ -482,6 +482,7 @@ import {
   useTerminalProfiles
 } from '../state/terminal-profiles'
 import { useSchoolMode } from '../state/schoolMode'
+import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
 import { useScheduledSettings } from '../state/scheduledSettings'
 import {
   activeAgentLaunchPlan,
@@ -1811,6 +1812,7 @@ export function Canvas() {
       proxmox: withNodeBoundary(ServiceNode),
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
+      'homeassistant-sensor': withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode)
     }),
     []
@@ -8856,6 +8858,7 @@ export function Canvas() {
       const project = useProjects.getState().getProject(activeProjectId)
       const hasCwd = !!(project?.ssh?.remoteCwd ?? project?.cwd)
       const agentItems = agentCreationItems(at)
+      const optionalIntegrationsAllowed = schoolModeAllowsOptionalFeatures(useSchoolMode.getState())
       setMenu({
         x: e.clientX,
         y: e.clientY,
@@ -8890,7 +8893,7 @@ export function Canvas() {
           // rather than six product rows: six names spliced into an already long pane menu is the
           // clutter the menu filter exists to avoid, and a submenu still matches on its children’s
           // labels, so typing “prox” reaches Proxmox from the top level anyway.
-          ...paneMenuGroup('Managers', <IconRemote />, [
+          ...(optionalIntegrationsAllowed ? paneMenuGroup('Managers', <IconRemote />, [
             {
               type: 'submenu' as const,
               label: 'New manager…',
@@ -8900,7 +8903,7 @@ export function Canvas() {
                 onClick: () => addService(kind, at)
               }))
             }
-          ]),
+          ]) : []),
           ...paneMenuGroup('Canvas objects', <IconShapes />, [
             {
               label: 'New browser',

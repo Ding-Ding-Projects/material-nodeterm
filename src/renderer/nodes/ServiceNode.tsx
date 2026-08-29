@@ -8,6 +8,11 @@ import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
+import { HomeAssistantSensorPanel } from '../components/homeassistant/HomeAssistantSensorPanel'
+import { useSchoolMode } from '../state/schoolMode'
+import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
+import { useI18n } from '../lib/i18n'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
@@ -47,6 +52,7 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   proxmox: 'https://proxmox.local:8006',
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
+  'homeassistant-sensor': 'https://homeassistant.local:8123',
   freepbx: 'https://pbx.local'
 }
 
@@ -100,6 +106,9 @@ function describeEndpointProblem(value: string): string {
 }
 export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>) {
   const { updateNodeData, setNodes } = useReactFlow()
+  const { ts } = useI18n()
+  const vocab = useVocabularyMapper()
+  const copy = (copyId: string, fallback: string): string => vocab(ts(copyId, fallback))
   /** Viewport anchor for the colour surface, or null when closed — coordinates rather than a
   *  boolean because ColorMenu is a body portal. */
   const [colorAnchor, setColorAnchor] = useState<{ x: number; y: number } | null>(null)
@@ -112,6 +121,9 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
    * string. Falling back to a neutral name keeps a mangled record rendering instead of throwing.
    */
   const kind: ServiceNodeKind | null = isServiceNodeKind(type) ? type : null
+  const schoolModeHydrated = useSchoolMode((state) => state.hydrated)
+  const schoolModeEnabled = useSchoolMode((state) => state.enabled)
+  const optionalIntegrationsAllowed = schoolModeAllowsOptionalFeatures({ hydrated: schoolModeHydrated, enabled: schoolModeEnabled })
   /**
    * The address is a DRAFT until it parses. Committing on every keystroke would mean the node
    * flickers through a dozen invalid states while somebody types a hostname, and — worse — would
@@ -146,8 +158,12 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
   // and rainbow has to reach both or the node animates on one edge and not the other.
   const rootBorder = nodeBorderStyle(data.color)
   const headerTint = nodeColorStyle(data.color, 0.2)
-  const productName = kind ? SERVICE_NODE_LABELS[kind] : data.title || 'Service'
+  const productName = kind === 'homeassistant-sensor'
+    ? copy('service.homeAssistantSensor', SERVICE_NODE_LABELS[kind])
+    : kind ? SERVICE_NODE_LABELS[kind] : data.title || copy('service.generic', 'Service')
   const label = data.serviceLabel ?? ''
+
+  if (!optionalIntegrationsAllowed && kind !== null && kind !== 'minecraft') return null
 
   const toggleCollapse = () =>
     setNodes((ns) =>
@@ -187,13 +203,14 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           className={`service-node__header ${headerTint.className}`}
           style={headerTint.style}
         >
-          <button className="term-node__collapse" title={collapsed ? 'Expand' : 'Collapse'} onClick={toggleCollapse}>
+          <button className="term-node__collapse" title={collapsed ? copy('service.expand', 'Expand') : copy('service.collapse', 'Collapse')} onClick={toggleCollapse}>
             {collapsed ? '▸' : '▾'}
           </button>
           <button
             className="term-node__color"
             style={{ background: data.color }}
-            title="Color"
+            title={copy('service.color', 'Color')}
+            aria-label={copy('service.color', 'Color')}
             onClick={(e) => {
               const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
               setColorAnchor((a) => (a ? null : { x: r.left, y: r.bottom }))
@@ -215,7 +232,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
             value={label}
             onChange={(next) => updateNodeData(id, { serviceLabel: next })}
             ariaLabel={`Name for this ${productName}`}
-            title="Rename"
+            title={copy('service.rename', 'Rename')}
             baseTriggerClassName=""
             triggerClassName="service-node__label-text"
             emptyLabel={
@@ -227,7 +244,9 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
 
-        {!collapsed && kind !== 'minecraft' && (
+        {!collapsed && kind === 'homeassistant-sensor' && <HomeAssistantSensorPanel nodeId={id} data={data} />}
+
+        {!collapsed && kind !== 'minecraft' && kind !== 'homeassistant-sensor' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">Address</span>

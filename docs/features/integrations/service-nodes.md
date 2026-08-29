@@ -1,21 +1,22 @@
 # Service nodes (manager placeholders)
 
-Status: **implemented as canvas objects; not yet connected to anything.** This is the honest
+Status: **implemented as canvas objects; Home Assistant sensor displays are connected.** This is the honest
 midpoint between "planned" and "working": the node exists, drags and resizes and persists like
-any other node, and it stores where it would reach a service — but nothing dials that address yet.
+any other node. The Home Assistant sensor display is a live exception; the other manager kinds
+only store where they would reach a service and do not dial it yet.
 Read this document alongside the "what does not work yet" section below before assuming a control
 does more than it says.
 
-## The six kinds, and why one is called a manager and not a host
+## The service kinds, and why one is called a manager and not a host
 
-Six new node kinds join the canvas's `NodeKind` union
+Service node kinds join the canvas's `NodeKind` union
 (`src/shared/types.ts` `SERVICE_NODE_KINDS`): `minecraft`, `dockerhost`, `proxmox`, `gitlab`,
-`homeassistant`, `freepbx`. Each is rendered by the **same** component,
-`src/renderer/nodes/ServiceNode.tsx` — one component with six callers, because the only thing that
+`homeassistant`, `homeassistant-sensor`, `freepbx`. Each is rendered by the **same** component,
+`src/renderer/nodes/ServiceNode.tsx` — one component with service-kind callers, because the only thing that
 varies between them is a label and a starting size, and this codebase's most repeated lesson is
 that a duplicated rule drifts from its copies.
 
-Every one of the six is a **manager for something that already exists elsewhere**, not a thing this
+Every service kind is a **manager for something that already exists elsewhere**, not a thing this
 node hosts. That is deliberate and it is worth stating for Proxmox specifically, because it is the
 kind most likely to be misread: **Proxmox is a bare-metal hypervisor distribution.** You install it
 directly onto a physical machine's disk — it does not run inside Docker, and there is nothing for a
@@ -29,25 +30,27 @@ but the node itself, as shipped, is exactly as inert as its five siblings; see
 [`minecraft-server.md`](minecraft-server.md) for the researched design of the part that would
 actually create one.
 
-None of the six kinds appear in `docs/features/integrations/README.md`'s old "planned, not yet
-researched" list by accident of naming — they are the same six products that list already named.
+The sensor display is documented separately because it is the first service kind with a live
+provider connection. The remaining manager kinds retain the address-only behavior described here.
 What changed is that the canvas object for each now exists; the research and the real client work
 for most of them has not started.
 
 ## Creating one
 
-Right-click empty canvas → **Managers** → **New manager…** opens a submenu listing all six kinds by
+Right-click empty canvas → **Managers** → **New manager…** opens a submenu listing the service kinds by
 their human-readable label (`SERVICE_NODE_LABELS`, e.g. "Docker host", "Home Assistant"). Picking
 one calls `addService(kind, at)` in `src/renderer/canvas/Canvas.tsx`, which is the one handler for
-every kind — the kind is data, not six copies of the same three lines. The **Managers** group is
-folded into a single submenu row deliberately: six product names spliced directly into the pane
+every kind — the kind is data, not copies of the same three lines. The **Managers** group is
+folded into a single submenu row deliberately: product names spliced directly into the pane
 menu would have been exactly the clutter the menu's own search filter exists to avoid, and the
 submenu still matches on its children's labels, so typing "prox" into the pane-menu filter reaches
 Proxmox from the top level anyway (see the sectioned/filterable pane-menu behavior in the root
 `CLAUDE.md`).
 
-There is currently no other creation path — no command-palette entry, no dock button — only the
-pane context menu.
+The Home Assistant sensor display opens its guided entity catalogue and live state panel after
+the local endpoint and token are configured. The other manager kinds retain the address-only
+placeholder behavior described below. There is currently no other creation path — no
+command-palette entry, no dock button — only the pane context menu.
 
 ### What you get, and its starting size
 
@@ -205,24 +208,21 @@ State this plainly, because CLAUDE.md's rule against decorative controls cuts bo
 a control that *looks* wired and is not, and it equally forbids a document that implies more than
 the control actually does.
 
-- **Nothing dials the address.** The endpoint field validates and stores a URL; no code anywhere in
-  this repository opens a connection to it, tests it, or does anything with it beyond keeping it
-  around for a future feature to read.
+- **Other manager kinds do not dial the address.** The endpoint field validates and stores a URL;
+  no code opens a connection for Docker, Proxmox, GitLab, or FreePBX. The Home Assistant sensor
+  display is the deliberate exception, and its live connection, token boundary, stale/offline
+  behavior, and recovery are documented in [Home Assistant sensor displays](home-assistant-sensors.md).
 - **There is no console.** `minecraft`, `dockerhost` and `proxmox` are sized as if a console will
   eventually live in their body (`SERVICE_CONSOLE_SIZE`), but the body today holds only the address
   field and two lines of static explanatory text — no terminal, no log tail, no command input.
-- **There is no status.** No online/offline indicator, no health check, no version, no resource
-  count. A service node cannot currently tell you whether the thing it names is even reachable.
-- **There is no credential UI.** `credentialKey` exists in the data model and in the storage/
-  validation boundary described above, but no control in `ServiceNode.tsx` sets one; there is
-  nowhere yet to pick or create a vault entry from the node itself.
+- **Other manager kinds have no status or credential UI.** The sensor display has an explicit
+  status, token field, entity picker, and live state panel; see the dedicated article.
 - **There is exactly one creation path** (the pane context menu's Managers submenu) — no
   command-palette entry, no dock button.
 
-The body copy on every node says as much in place — "Talking to a real {product} is not built yet,
-so this node stores where it would connect and nothing more. There is deliberately no button here
-that looks like it would connect." — so a user reading the node itself gets the same honest answer
-this document does.
+The body copy on each address-only node says as much in place — "Talking to a real {product} is
+not built yet, so this node stores where it would connect and nothing more." The sensor display
+instead reports its live connection and recovery state in its own panel.
 
 ## Surfaces
 

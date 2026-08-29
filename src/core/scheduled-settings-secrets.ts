@@ -48,6 +48,13 @@ function validRuleId(id: string): boolean {
   return RULE_ID_RE.test(id)
 }
 
+/** Shared validation for Home Assistant node credentials. Sensor IPC uses this exact predicate
+ * rather than a second, looser key grammar, so a reference accepted by the UI always addresses
+ * the same vault file the store accepts. */
+export function isValidHomeAssistantTokenKey(id: unknown): id is string {
+  return typeof id === 'string' && validRuleId(id)
+}
+
 function validToken(token: string): boolean {
   return token.trim() === token && token.length > 0 && token.length <= 8192 && !/[\r\n\0]/u.test(token)
 }

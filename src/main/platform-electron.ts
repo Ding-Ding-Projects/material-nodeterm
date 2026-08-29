@@ -28,6 +28,14 @@ const RELAY_LOCAL_ONLY_METHODS = new Set<string>([
   IPC.ptyRecycleConfirmed,
   IPC.ptyExecuteLaunchIntent,
   IPC.workspaceSave,
+  // Home Assistant endpoint bindings and access tokens belong to the host that owns the desktop
+  // session. Relay viewers must not read, mutate, or subscribe to that host-local integration.
+  IPC.homeAssistantListEntities,
+  IPC.homeAssistantReadSensor,
+  IPC.homeAssistantWatchSensor,
+  IPC.homeAssistantUnwatchSensor,
+  IPC.homeAssistantSetToken,
+  IPC.homeAssistantTokenStatus,
   // Host-security control plane (registered on raw ipcMain, never on this CorePlatform table, so
   // dispatch's handler lookup already misses them) — listed here too as defense in depth and as
   // the explicit, reviewable statement that a relay peer must never revoke anyone or enumerate who

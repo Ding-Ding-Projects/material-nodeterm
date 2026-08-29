@@ -594,6 +594,13 @@ export const IPC = {
   // Shell → renderer: one multiplexed status/console stream, like ollama:chat-stream above.
   // Payload: MinecraftEvent. A listener filters to the instance id it owns.
   minecraftEvent: 'minecraft:event',
+  homeAssistantListEntities: 'home-assistant:list-entities',
+  homeAssistantReadSensor: 'home-assistant:read-sensor',
+  homeAssistantWatchSensor: 'home-assistant:watch-sensor',
+  homeAssistantUnwatchSensor: 'home-assistant:unwatch-sensor',
+  homeAssistantSetToken: 'home-assistant:set-token',
+  homeAssistantTokenStatus: 'home-assistant:token-status',
+  homeAssistantSensorUpdate: 'home-assistant:sensor-update',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).

@@ -44,6 +44,7 @@ import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
+import { registerHomeAssistantIpc } from '../core/home-assistant/register-ipc'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
@@ -316,6 +317,7 @@ initPlatform(corePlatform)
 // live managed server to shut down gracefully. See requestGracefulStopAll's own doc comment for
 // why that call is synchronous and unawaited rather than joining the flush Promise.allSettled below.
 let minecraftServers: ReturnType<typeof registerMinecraftIpc>['manager'] | undefined
+let homeAssistantSensors: ReturnType<typeof registerHomeAssistantIpc>['service'] | undefined
 
 // Only hand the OS a URL with a vetted scheme. Blocks file://, smb://, and custom
 // protocol-handler schemes that could be smuggled in via remote announcement feeds or
@@ -1469,6 +1471,7 @@ app.whenReady().then(async () => {
   registerConverterIpc(corePlatform)
   registerOllamaIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
+  homeAssistantSensors = registerHomeAssistantIpc(corePlatform).service
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({
@@ -3330,7 +3333,8 @@ app.on('before-quit', (e) => {
   const flush = Promise.allSettled([
     remoteWorkspaceIO.flush(),
     ptyManager.killAll(),
-    scheduledSettingsStop
+    scheduledSettingsStop,
+    homeAssistantSensors?.close()
   ])
   void Promise.race([flush, new Promise((r) => setTimeout(r, 1500))])
     // Then let whisper go. A dictation still transcribing when Electron tears down the main

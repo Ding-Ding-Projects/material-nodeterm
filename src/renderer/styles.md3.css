@@ -11230,3 +11230,30 @@ button.term-node__title-text:focus-visible {
 .icon-menu__reset-btn {
   align-self: flex-start;
 }
+/* Home Assistant sensor display nodes. Uses existing surface tokens so live, stale and offline
+   states remain legible in both themes without turning data colour into product chrome. */
+.homeassistant-sensor-panel { display: flex; flex-direction: column; gap: 10px; padding: 12px; color: var(--md-on-surface); background: var(--md-surface-container); border-radius: 14px; }
+.homeassistant-sensor-panel__status { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; }
+.homeassistant-sensor-panel__status strong { color: var(--md-primary); }
+.homeassistant-sensor-panel__token { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.homeassistant-sensor-panel__token small { grid-column: 1 / -1; color: var(--md-on-surface-variant); }
+.homeassistant-sensor-panel__picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.homeassistant-sensor-panel__picker select { grid-column: 1 / -1; }
+.homeassistant-sensor-panel__settings { display: flex; gap: 8px; }
+.homeassistant-sensor-panel__settings label { display: grid; gap: 4px; flex: 1; font-size: 12px; }
+.homeassistant-sensor-panel__value { display: grid; gap: 5px; padding: 12px; border: 1px solid var(--md-outline-variant); border-radius: 12px; background: var(--md-surface); }
+.homeassistant-sensor-panel__value.is-stale { border-color: var(--md-tertiary); }
+.homeassistant-sensor-panel__reading { font-size: 26px; font-weight: 650; overflow-wrap: anywhere; }
+.homeassistant-sensor-panel__gauge { height: 10px; overflow: hidden; background: var(--md-surface-container-high); border-radius: 999px; }
+.homeassistant-sensor-panel__gauge span { display: block; height: 100%; background: var(--md-primary); border-radius: inherit; }
+.homeassistant-sensor-panel__meta { color: var(--md-on-surface-variant); font-size: 12px; }
+.homeassistant-sensor-panel__history { display: flex; align-items: end; gap: 2px; height: 72px; border-bottom: 1px solid var(--md-outline-variant); }
+.homeassistant-sensor-panel__history span { min-width: 3px; flex: 1; max-width: 10px; background: var(--md-primary); border-radius: 3px 3px 0 0; }
+.homeassistant-sensor-panel :is(button, input, select) { min-height: 44px; }
+.homeassistant-sensor-panel__history:where(table) { display: table; width: 100%; height: auto; border-collapse: collapse; }
+.homeassistant-sensor-panel__history:where(table) th, .homeassistant-sensor-panel__history:where(table) td { padding: 6px 8px; text-align: start; border-bottom: 1px solid var(--md-outline-variant); }
+.homeassistant-sensor-panel__attributes { display: grid; gap: 4px; max-height: 160px; overflow: auto; margin: 0; }
+.homeassistant-sensor-panel__attributes div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--md-outline-variant); padding: 4px 0; }
+.homeassistant-sensor-panel__attributes dt { color: var(--md-on-surface-variant); overflow-wrap: anywhere; }
+.homeassistant-sensor-panel__attributes dd { margin: 0; text-align: end; overflow-wrap: anywhere; }
+@media (max-width: 520px) { .homeassistant-sensor-panel__token { grid-template-columns: 1fr; } .homeassistant-sensor-panel__token label, .homeassistant-sensor-panel__token small { grid-column: 1; } .homeassistant-sensor-panel__settings { flex-direction: column; } }

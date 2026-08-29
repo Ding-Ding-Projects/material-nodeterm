@@ -9,6 +9,8 @@ import { registerFsHandlers } from '../../core/fs-handlers'
 import { registerConverterIpc } from '../../core/converter/register-ipc'
 import { registerOllamaIpc } from '../../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
+import { registerHomeAssistantIpc } from '../../core/home-assistant/register-ipc'
+import type { HomeAssistantSensorService } from '../../core/home-assistant/sensor-service'
 import type { MinecraftServerManager } from '../../core/minecraft/server-manager'
 import { registerVsCodeHandlers } from '../../core/vscode-handlers'
 import { LocalHistoryStore } from '../../core/local-history'
@@ -43,7 +45,7 @@ export function registerCoreHandlers(
     settingsStore?: SettingsStore
     workspaceStore?: WorkspaceStore
   }
-): { gitService: GitService; minecraftServers: MinecraftServerManager } {
+): { gitService: GitService; minecraftServers: MinecraftServerManager; homeAssistantSensors: HomeAssistantSensorService } {
   // Explorer downloads: mint a one-shot ticket over this (authenticated) channel; the transfer
   // itself is a plain HTTP GET the browser performs (src/server/download.ts). Statting here keeps
   // the URL honest about the name — a folder arrives as `<name>.tar.gz`.
@@ -71,6 +73,7 @@ export function registerCoreHandlers(
   registerConverterIpc(platform)
   registerOllamaIpc(platform)
   const { manager: minecraftServers } = registerMinecraftIpc(platform)
+  const { service: homeAssistantSensors } = registerHomeAssistantIpc(platform)
   // "Open in Visual Studio Code" + local settings history — same registrars the desktop shell
   // uses (src/main/index.ts), over the generic platform.handle seam, so the browser gets the
   // identical feature acting on the SERVER's own machine (docs/exports.md, docs/local-history.md).
@@ -183,5 +186,5 @@ export function registerCoreHandlers(
     buildMirrorUsage(usageService.snapshot(), deps.getSettings().claudeAccounts ?? [], Date.now())
   )
 
-  return { gitService, minecraftServers }
+  return { gitService, minecraftServers, homeAssistantSensors }
 }

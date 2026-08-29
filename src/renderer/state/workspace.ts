@@ -1,6 +1,7 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
 import type { ServiceConnection } from '@shared/node-exec'
+import { defaultHomeAssistantSensorConfig, validateHomeAssistantSensorConfig, type HomeAssistantSensorConfig } from '@shared/home-assistant'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
@@ -172,6 +173,8 @@ export interface NodeData {
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  /** Safe, git-shared Home Assistant sensor display intent. */
+  homeAssistantSensor?: HomeAssistantSensorConfig
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
   nsisSpec?: NsisSpec
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
@@ -989,6 +992,7 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   proxmox: 'Proxmox',
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
+  'homeassistant-sensor': 'Home Assistant sensor display',
   freepbx: 'FreePBX'
 }
 
@@ -1024,7 +1028,8 @@ export function createServiceNode(
       title: SERVICE_NODE_LABELS[kind],
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
-      serviceLabel: ''
+      serviceLabel: '',
+      ...(kind === 'homeassistant-sensor' ? { homeAssistantSensor: defaultHomeAssistantSensorConfig() } : {})
     }
   }
 }
@@ -1465,6 +1470,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   proxmox: true,
   gitlab: true,
   homeassistant: true,
+  'homeassistant-sensor': true,
   freepbx: true,
   nsis: true
 }
@@ -1504,6 +1510,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   proxmox: SERVICE_CONSOLE_SIZE,
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
+  'homeassistant-sensor': SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
   nsis: NSIS_SIZE
 }
@@ -1884,6 +1891,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
           ? defaultBrowserTabs(n.id, n.url, n.title)
           : undefined
     const browserActiveTabId = n.browserActiveTabId ?? browserTabs?.[0]?.id
+    const homeAssistantSensor = validateHomeAssistantSensorConfig(n.homeAssistantSensor)
     return {
       id: n.id,
       // Default to 'terminal' for nodes saved before the kind field existed.
@@ -1916,6 +1924,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         text: n.text,
         serviceLabel: n.serviceLabel,
         serviceConnection: n.serviceConnection,
+        homeAssistantSensor: homeAssistantSensor ?? undefined,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
         filePath: n.filePath,
@@ -1991,6 +2000,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
         serviceConnection: n.data.serviceConnection,
+        homeAssistantSensor: n.data.homeAssistantSensor,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
         filePath: n.data.filePath,

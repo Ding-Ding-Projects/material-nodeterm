@@ -209,7 +209,11 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // server is ONE machine's filesystem/java/process table, and there is no remote-routed core
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG
     // machine (`...local` would run java on the VIEWER, not the host it joined).
-    minecraft: stub.minecraft
+    minecraft: stub.minecraft,
+    // Home Assistant tokens and sockets are machine-local. Until the relay has an explicit,
+    // project-scoped carrier, refuse this namespace rather than silently querying the viewer's
+    // Home Assistant from a remote canvas tab.
+    homeAssistant: stub.homeAssistant
   } satisfies NodeTerminalApi
 
   return {
