@@ -46,6 +46,12 @@ against the same source and changed to paused after reconciliation. A missing or
 snapshot does not invent downloads or block application startup. Completed, cancelled, and failed
 tasks remain available for review, retry, or removal.
 
+Packaged Windows builds use WebTorrent's TCP peer transport and DHT with optional uTP disabled.
+The native uTP listener can be refused by the operating system after WebTorrent's constructor has
+already returned, so it cannot be allowed to decide whether the desktop process survives startup.
+Other supported runtimes may use uTP, but its asynchronous bind error is contained by the service
+and falls back to the still-working TCP transport.
+
 ## Failure modes
 
 - A malformed magnet URI is rejected before WebTorrent is called.
@@ -53,6 +59,9 @@ tasks remain available for review, retry, or removal.
   is refused with the exact reason.
 - Missing WebTorrent is reported as unavailable while the service attempts the pinned user-scoped
   auto-install route. The node never claims the runtime is bundled when it was not loaded.
+- An optional uTP bind error cannot escape as an uncaught main-process exception. The runtime stays
+  available over TCP and records the degraded transport detail. A fatal client error is contained,
+  marks the runtime unavailable, and marks active tasks failed without ending the application.
 - A missing, unwritable, non-folder, or undersized destination disables the start path and names the
   recovery action.
 - A runtime error moves only that task to `failed`; other tasks remain intact and a retry action is
@@ -86,10 +95,10 @@ are omitted from project export/import. Import has no network, process, or downl
 
 The focused verification matrix covers valid and invalid magnets, torrent-file metadata, file
 selection, traversal rejection, destination preflight, progress/speed/peers/ETA, pause/resume,
-cancel/retry, restart reconciliation, corrupt snapshots, bounded seeding, and the relay refusal.
-This ultra-speed lane intentionally does not run tests, builds, installer execution, runtime
-interaction checks, UI captures, or other verification commands; those remain explicit follow-up
-checks for the release pass.
+cancel/retry, restart reconciliation, corrupt snapshots, bounded seeding, the relay refusal, the
+packaged Windows uTP policy, asynchronous uTP fallback, and fatal client-error containment. The
+client-error regression is mutation-checked by removing the listener, observing the exact emitted
+errors fail the focused test, restoring the listener, and observing the focused test pass.
 
 ## Suggested articles
 

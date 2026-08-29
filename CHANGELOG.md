@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Keep packaged Windows startup alive when WebTorrent's optional native uTP listener is refused.
+  The packaged runtime now starts with uTP disabled while retaining TCP and DHT, and the torrent
+  service contains asynchronous client errors instead of allowing an uncaught `error` event to
+  terminate the desktop process. Recoverable uTP errors fall back to TCP; fatal client errors mark
+  the runtime and active tasks failed without taking down the application.
+
+  修正 packaged Windows 啟動時，WebTorrent optional native uTP listener 被拒絕就連 desktop process
+  一齊收工嘅問題。Packaged runtime 保留 TCP 同 DHT，但關閉 uTP；torrent service 亦會接住
+  asynchronous client error，唔再畀 uncaught `error` event 終止程式。uTP 問題會退回 TCP，真正
+  fatal client error 就老實標記 runtime 同 active tasks 失敗，唔會拖全個 application 落水。
+
 - Open `md`, `markdown`, `mdown`, and `mkd` files in the rendered editor preview by default, with a
   one-shot migration that preserves a user's later opt-out. The Behavior setting is searchable,
   available to the command palette and scheduled-settings editor, and the preview bar no longer
