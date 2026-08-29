@@ -46,6 +46,7 @@ export const CONVERTER_CATEGORY_LABELS: Record<ConverterCategoryId, string> = {
 export type ConverterKind =
   | 'any'
   | 'json'
+  | 'jsonl'
   | 'yaml'
   | 'toml'
   | 'xml'
@@ -83,6 +84,7 @@ export type ConverterKind =
 export const CONVERTER_KIND_LABELS: Record<ConverterKind, string> = {
   any: 'Any bytes',
   json: 'JSON',
+  jsonl: 'JSON Lines',
   yaml: 'YAML',
   toml: 'TOML',
   xml: 'XML',

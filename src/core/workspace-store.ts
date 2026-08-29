@@ -978,6 +978,7 @@ export class WorkspaceStore {
         // would re-raise a notice the user already answered the moment the folder remounts.
         if (old?.capabilityAck) e.capabilityAck = old.capabilityAck
         if (old?.breadcrumbs) e.breadcrumbs = old.breadcrumbs
+        if (old?.providerBindings) e.providerBindings = old.providerBindings
         // The clone-notice acknowledgment must also survive an unavailable window: forgetting it
         // would re-raise a notice the user already answered the moment the folder remounts.
         if (old?.capabilityAck) e.capabilityAck = old.capabilityAck
