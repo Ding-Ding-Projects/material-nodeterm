@@ -293,6 +293,8 @@ export interface NodeData {
   /** Safe ownership metadata for a special-universe Shop node. */
   universeCanvasId?: string
   universeScope?: 'multiverse' | 'aws-universe'
+  /** Marker for the machine-owned UniGetUI Global Universe portal. */
+  unigetuiGlobal?: boolean
   /** The Shop is permanently owned by its universe canvas. */
   nonDeletable?: boolean
   /** Last catalog choice is safe user intent only, not an execution or provider binding. */

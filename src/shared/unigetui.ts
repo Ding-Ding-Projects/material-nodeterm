@@ -66,6 +66,69 @@ export interface UniGetUiPackage {
   url: string | null
 }
 
+type UniGetUiRecord = Record<string, unknown>
+
+function isUniGetUiRecord(value: unknown): value is UniGetUiRecord {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function optionalText(value: unknown, max = 8_192): string | null {
+  return typeof value === 'string' && value.length <= max ? value : null
+}
+
+function nullableText(value: unknown, max = 8_192): string | null | undefined {
+  if (value === null || value === undefined) return null
+  return typeof value === 'string' && value.length <= max ? value : undefined
+}
+
+/** Normalize one machine-owned setting response before it crosses the renderer boundary. */
+export function normalizeUniGetUiSetting(value: unknown): UniGetUiSetting | null {
+  if (!isUniGetUiRecord(value)) return null
+  const key = optionalText(value.key, 160)
+  if (!key) return null
+  const settingValue = value.value
+  if (settingValue !== null && typeof settingValue !== 'string' && typeof settingValue !== 'boolean') return null
+  if (typeof value.secure !== 'boolean') return null
+  return { key, value: settingValue, secure: value.secure }
+}
+
+/** Decode a nullable setting response and reject malformed payloads instead of widening them. */
+export function parseUniGetUiSetting(value: unknown): UniGetUiSetting | null {
+  if (value === null) return null
+  const setting = normalizeUniGetUiSetting(value)
+  if (!setting) throw new Error('UniGetUI returned a malformed setting response.')
+  return setting
+}
+
+/** Normalize one package record. Missing nullable metadata is represented explicitly as null. */
+export function normalizeUniGetUiPackage(value: unknown): UniGetUiPackage | null {
+  if (!isUniGetUiRecord(value)) return null
+  const id = optionalText(value.id, 512)
+  if (!id) return null
+  const name = nullableText(value.name)
+  const manager = nullableText(value.manager)
+  const source = nullableText(value.source)
+  const version = nullableText(value.version)
+  const installedVersion = nullableText(value.installedVersion)
+  const description = nullableText(value.description)
+  const publisher = nullableText(value.publisher)
+  const url = nullableText(value.url)
+  if (name === undefined || manager === undefined || source === undefined || version === undefined || installedVersion === undefined || description === undefined || publisher === undefined || url === undefined) return null
+  return { id, name, manager, source, version, installedVersion, description, publisher, url }
+}
+
+/** Decode a package-list response and reject malformed entries before they reach UI consumers. */
+export function parseUniGetUiPackageList(value: unknown): UniGetUiPackage[] {
+  if (!Array.isArray(value)) throw new Error('UniGetUI returned a malformed package list response.')
+  const packages: UniGetUiPackage[] = []
+  for (const item of value) {
+    const normalized = normalizeUniGetUiPackage(item)
+    if (!normalized) throw new Error('UniGetUI returned a malformed package record.')
+    packages.push(normalized)
+  }
+  return packages
+}
+
 export interface UniGetUiSource { manager: string; name: string; url: string | null; enabled: boolean | null }
 export interface UniGetUiManager { id: string; name: string; installed: boolean | null; enabled: boolean | null; detail: string | null }
 export interface UniGetUiSetting { key: string; value: string | boolean | null; secure: boolean }

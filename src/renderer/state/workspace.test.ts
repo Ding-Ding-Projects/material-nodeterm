@@ -1252,6 +1252,8 @@ describe('duplicateNode across every node kind', () => {
     'recovery-game': 'recovery-game',
     'homeassistant-sensor': 'homeassistant-sensor',
     'gitlab-hosting': 'gitlab-hosting',
+    veracrypt: 'veracrypt',
+    'repository-graph': 'repository-graph',
   }
   const ALL_KINDS = Object.keys(EXPECTED_PREFIX) as NodeKind[]
 

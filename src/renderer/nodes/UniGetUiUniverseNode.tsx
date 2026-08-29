@@ -6,7 +6,9 @@ import { MaterialSymbol } from '../components/MaterialSymbol'
 /** Project-safe portal. Package rows and manager state remain in the machine Global Universe. */
 export function UniGetUiUniverseNode({ id, data }: NodeProps<CanvasNode>): React.JSX.Element {
   const vocab = useVocabularyMapper()
-  const open = (): void => window.dispatchEvent(new CustomEvent('nodeterm:open-unigetui-global'))
+  const open = (): void => {
+    window.dispatchEvent(new CustomEvent('nodeterm:open-unigetui-global'))
+  }
   return (
     <div id={id} className="unigetui-universe-node" data-appearance-id={`node:${id}`}>
       <button type="button" className="unigetui-universe-node__open" onClick={open} aria-label={vocab('Open UniGetUI Global Universe')}>
