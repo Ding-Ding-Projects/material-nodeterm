@@ -2905,8 +2905,8 @@ export class PtyManager {
     const programArgs = options.shellArgs ?? []
     // One resolver for BOTH direct node-pty and the persistent session-host backend, so the two
     // paths cannot drift on "which shell" (see resolveLocalSessionShell).
-    const localSessionShell = resolveLocalSessionShell(program, settings.defaultShell)
-    const localSessionArgs = program ? programArgs : []
+    const localSessionShell = resolvedProfile?.shell ?? resolveLocalSessionShell(program, settings.defaultShell)
+    const localSessionArgs = resolvedProfile?.shellArgs ?? (program ? programArgs : [])
 
     // SSH project node: run `ssh -t '<remote tmux attach-or-create>'` as the PTY program. The
     // REMOTE tmux provides persistence (over the project's ControlMaster); the local PTY just
@@ -3082,6 +3082,18 @@ export class PtyManager {
       // on the client's inherited env would leak the first session's values into later ones).
       file = this.tmuxPath
       useLocalTmux = true
+      if (warmWindowsBackend !== 'tmux') {
+        // Gateway and custom-agent values stay in this tmux client's environment; only the
+        // variable names are appended to the shared server's update-environment list. Keeping
+        // values out of `-e` arguments avoids exposing credentials on the long-lived client argv.
+        // The account-scope names also retrofit servers started by an older app, whose config was
+        // read before the current account and custom-agent names existed.
+        this.ensureUpdateEnvKeys([
+          ...ACCOUNT_SCOPE_UPDATE_ENV,
+          ...Object.keys(customEnvMerged),
+          ...Object.keys(projectEnv ?? {})
+        ])
+      }
       if (warmWindowsBackend === 'tmux') {
         // Attach-only is the critical distinction from `new-session -A`: if the proven warm
         // generation disappears in this window, tmux rejects instead of cold-spawning a shell
@@ -3142,55 +3154,6 @@ export class PtyManager {
           args.push(...programArgs)
         }
       }
-      // Gateway env deliberately has NO `-e` pairs: the values are in this tmux CLIENT's process
-      // environment (merged above) and the conf's `update-environment` list copies them into the
-      // session at create/attach — measured on tmux 3.4, including the removal case (a plain
-      // terminal's client lacks the vars, so tmux strips them from its session even on a server
-      // another node's env seeded). `-e KEY=VALUE` parked the API key on the long-lived attached
-      // client's argv — world-readable in /proc/<pid>/cmdline on a multi-user host, the exact
-      // PR #195 leak class. Custom-agent env keys OUTSIDE the baked gateway list still need the
-      // option appended at runtime on a shared server (the conf assignment cannot know them):
-      // The project's keys need the same treatment for the same reason: their VALUES are in this
-      // tmux client's process env (merged above) and must reach the session without ever appearing
-      // on the long-lived client's argv.
-      // The account-scope names lead the list for the LONG-LIVED server case (#419): the conf is
-      // read once at server start, so a server started by a pre-fix app keeps its old
-      // update-environment array forever — these appends are what retrofit it before this
-      // session is created. A fresh server already has them from the conf (the append dedupes).
-      this.ensureUpdateEnvKeys([
-        ...ACCOUNT_SCOPE_UPDATE_ENV,
-        ...Object.keys(customEnvMerged),
-        ...Object.keys(projectEnv ?? {})
-      ])
-      const hookEnvArgs = Object.entries(hookEnv).flatMap(([k, v]) => ['-e', `${k}=${v}`])
-      const pathEnvArgs = env.PATH ? ['-e', `PATH=${env.PATH}`] : []
-      const langEnvArgs = env.LANG ? ['-e', `LANG=${env.LANG}`] : []
-      const colortermEnvArgs = ['-e', 'COLORTERM=truecolor']
-      const accountEnvArgs = accountDir ? accountTmuxEnvArgs(accountDir) : []
-      const attachFlags = tmuxAttachFlags(!!sinks)
-      args = [
-        '-L',
-        TMUX_SOCKET,
-        '-f',
-        this.confPath,
-        'new-session',
-        ...attachFlags,
-        ...hookEnvArgs,
-        ...pathEnvArgs,
-        ...langEnvArgs,
-        ...colortermEnvArgs,
-        ...accountEnvArgs,
-        '-c',
-        cwd,
-        '-s',
-        sessionName(options.persistKey)
-      ]
-      // Honor a custom session program at creation (ignored on reattach).
-      const shell = program || settings.defaultShell
-      if (shell) {
-        args.push(shell)
-        args.push(...programArgs)
-      }
     } else if (
       !options.sshRemote &&
       options.persistKey &&
@@ -3249,6 +3212,10 @@ export class PtyManager {
             settings.tmuxScrollback
           )) as unknown as pty.IPty
     } else {
+      if (!useLocalTmux && !options.sshRemote) {
+        file = localSessionShell
+        args = localSessionArgs
+      }
       try {
         proc = pty.spawn(file, args, {
           name: 'xterm-256color',
@@ -4596,9 +4563,6 @@ export class PtyManager {
       }
       trustedTarget = { profileId: target.profileId, cwd: target.cwd || os.homedir() }
       await this.resolveTrustedWindowsProfile(trustedTarget.profileId, trustedTarget.cwd)
-      // Profile-switch replacement targets land with the windows-terminal-profiles phase; until
-      // then a target can only be refused (the same copy the fork uses without a resolver).
-      throw new Error('Windows terminal profiles are unavailable on this host.')
     }
     const liveId = this.byPersistKey.get(persistKey)
     const live = this.liveSessionForPersistKey(persistKey)
