@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add scoped Multiverse child canvases inside projects. Child content now persists with stable
+  root/parent identity, depth-eight hierarchy validation, schema 3 portable projection, catalog
+  scope enforcement, and a Lang gui canvas navigator that does not add project tabs. Door, code,
+  and game surfaces remain reserved for later Wave D issues. Tests, builds, packaging, and captures
+  were not run in this lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

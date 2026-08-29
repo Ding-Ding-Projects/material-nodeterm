@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Multiverse child canvases — nodeterm</title>
+    <meta name="description" content="Scoped Multiverse child canvases with persistent hierarchy, portable content, and depth-eight validation." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="./index.html">← Documentation</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Projects</p>
+      <h1>Multiverse child canvases</h1>
+      <p>A Multiverse child canvas is scoped content inside one project. It is not a project and never appears as a project tab.</p>
+      <h2>Hierarchy</h2>
+      <p>The stable root identity is <code>root</code>. Each child carries its own identity, parent identity, depth, viewport, and node content. Nesting is bounded at depth 8, with missing parents, cycles, duplicate identities, and depth mismatches rejected.</p>
+      <h2>Portable and safe</h2>
+      <p>Schema 3 projection preserves child content and relationships while omitting credentials, host identifiers, process state, and machine-local execution values. Import validates the complete hierarchy before adopting anything and performs no external side effect.</p>
+      <h2>Canvas scope</h2>
+      <p>The canvas command palette and app bar open the Multiverse navigator. Its searchable list has an adjacent anchored regex builder, a guided parent picker, depth-aware disabled reasons, and a catalog summary. Commands address the active canvas scope, and nodes cannot cross child-canvas boundaries.</p>
+      <p>Door construction, code entry, and the recovery game are intentionally reserved for later Wave D features.</p>
+      <p><a href="./projects-and-tabs.html">Suggested next article: Projects &amp; tabs</a> · <a href="./changelog-viewer.html">Changelog viewer</a></p>
+    </article>
+  </body>
+</html>

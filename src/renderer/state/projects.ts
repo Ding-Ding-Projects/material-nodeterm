@@ -12,6 +12,7 @@ import type {
   Workspace
 } from '@shared/types'
 import type { ProjectIcon } from '@shared/project-icon'
+import { createMultiverseChildCanvas, emptyMultiverseState, enforceMultiverseCommand, MULTIVERSE_CATALOG, multiverseScope, validateMultiverseState } from '../../core/multiverse'
 import type { ProjectCapability } from '@shared/project-capabilities'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
 import { applyEdgeMutation } from '@shared/canvas-mutations'
@@ -94,6 +95,14 @@ interface ProjectsState {
   /** Replaces the project's browser-profile list (create/rename/remove all funnel through this).
    *  See `BrowserProfile` in @shared/types and `shared/browser-profiles.ts`. */
   setProjectBrowserProfiles(id: string, browserProfiles: BrowserProfile[]): void
+  /** Creates a persisted Multiverse child canvas beneath the current scoped parent. */
+  createMultiverseChild(id: string, parentCanvasId: string, title: string, childId: string): boolean
+  /** Selects the active child canvas without creating a project tab. */
+  setActiveMultiverseCanvas(id: string, canvasId: string | undefined): boolean
+  /** Persists content and viewport for one child canvas. */
+  commitMultiverseCanvas(id: string, canvasId: string, nodes: CanvasNodeState[], viewport: Viewport): boolean
+  /** Adds catalog-approved child content while retaining the current canvas scope. */
+  appendMultiverseNode(id: string, canvasId: string, node: CanvasNodeState): boolean
   /** Writes the serialized canvas (nodes + viewport + bridge links + control ropes) back into a project. */
   commitCanvas(
     id: string,
@@ -439,6 +448,89 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, browserProfiles } : p))
     }))
+  },
+
+  createMultiverseChild(id, parentCanvasId, title, childId) {
+    let changed = false
+    set((s) => ({
+      projects: s.projects.map((p) => {
+        if (p.id !== id) return p
+        try {
+          const next = createMultiverseChildCanvas(p.multiverse ?? emptyMultiverseState(), parentCanvasId, title, childId)
+          changed = true
+          return { ...p, multiverse: next }
+        } catch {
+          return p
+        }
+      })
+    }))
+    return changed
+  },
+
+  setActiveMultiverseCanvas(id, canvasId) {
+    let changed = false
+    set((s) => ({
+      projects: s.projects.map((p) => {
+        if (p.id !== id) return p
+        try {
+          const state = validateMultiverseState(p.multiverse ?? emptyMultiverseState())
+          if (canvasId !== undefined) multiverseScope(state, canvasId)
+          changed = true
+          return { ...p, multiverse: { ...state, ...(canvasId ? { activeCanvasId: canvasId } : { activeCanvasId: undefined }) } }
+        } catch {
+          return p
+        }
+      })
+    }))
+    return changed
+  },
+
+  commitMultiverseCanvas(id, canvasId, nodes, viewport) {
+    let changed = false
+    set((s) => ({
+      projects: s.projects.map((p) => {
+        if (p.id !== id || !p.multiverse) return p
+        try {
+          const state = validateMultiverseState(p.multiverse, new Set(p.nodes.map((node) => node.id)))
+          const child = state.children.find((candidate) => candidate.id === canvasId)
+          if (!child) return p
+          changed = true
+          return {
+            ...p,
+            multiverse: {
+              ...state,
+              children: state.children.map((candidate) => candidate.id === canvasId ? { ...candidate, nodes, viewport } : candidate)
+            }
+          }
+        } catch {
+          return p
+        }
+      })
+    }))
+    return changed
+  },
+
+  appendMultiverseNode(id, canvasId, node) {
+    let changed = false
+    set((s) => ({
+      projects: s.projects.map((p) => {
+        if (p.id !== id || !p.multiverse) return p
+        try {
+          const state = validateMultiverseState(p.multiverse, new Set(p.nodes.map((candidate) => candidate.id)))
+          const child = state.children.find((candidate) => candidate.id === canvasId)
+          if (!child) return p
+          const scope = multiverseScope(state, canvasId)
+          enforceMultiverseCommand(state, scope, { kind: 'add-node', canvasId, node })
+          if (!MULTIVERSE_CATALOG.canCreate(node.kind, scope)) return p
+          if (p.nodes.some((candidate) => candidate.id === node.id) || state.children.some((candidate) => candidate.nodes.some((candidateNode) => candidateNode.id === node.id))) return p
+          changed = true
+          return { ...p, multiverse: { ...state, children: state.children.map((candidate) => candidate.id === canvasId ? { ...candidate, nodes: [...candidate.nodes, node] } : candidate) } }
+        } catch {
+          return p
+        }
+      })
+    }))
+    return changed
   },
 
   commitCanvas(id, nodes, viewport, bridges, ropes) {

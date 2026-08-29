@@ -11,6 +11,7 @@ import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from '
 import type { WhisperModelInfo } from './speech'
 import type { ProjectKanbanGitHub } from './github-issues'
 import type { ProjectIcon } from './project-icon'
+import type { MultiverseState } from './multiverse'
 import type { ShortcutMap } from './shortcuts'
 import { DEFAULT_SHORTCUTS } from './shortcuts'
 import type { FunnyLevel, LanguageMode } from './i18n/types'
@@ -821,6 +822,11 @@ export interface Project {
   ssh?: { server: import('./ssh').SshConnection; remoteCwd: string }
   viewport: Viewport
   nodes: CanvasNodeState[]
+  /**
+   * Scoped Multiverse child canvases. This is project content, not project-tab state: every child
+   * has a stable root/parent identity and its own node list, with nesting capped at depth 8.
+   */
+  multiverse?: MultiverseState
   /** Default managed Claude account for new Claude/chat nodes in this project. */
   defaultAccountId?: string
   /** Permission mode for new Claude TERMINAL (CLI) sessions in this project. SDK chat nodes are

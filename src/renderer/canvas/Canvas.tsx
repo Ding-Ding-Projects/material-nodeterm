@@ -122,6 +122,7 @@ import {
 } from '../lib/adhdModes'
 import { TopAppBar } from '../components/TopAppBar'
 import { ProjectSwitcher } from '../components/ProjectSwitcher'
+import { MultiversePanel } from '../components/MultiversePanel'
 import { type MenuItem } from '../components/ContextMenu'
 import { devicePixelSnapOffset } from '../terminal/device-pixel-fit'
 import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
@@ -1182,6 +1183,7 @@ export function Canvas() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [docsOpen, setDocsOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
+  const [multiverseOpen, setMultiverseOpen] = useState(false)
   const unreadNotifCount = useNotifications((s) => selectUnreadCount(s.items))
   // Quick phone-pair popover (top-right phone button); non-null = open, anchored to the button.
   const [phonePairAnchor, setPhonePairAnchor] = useState<{
@@ -13046,6 +13048,7 @@ export function Canvas() {
       { id: 'open-web', label: 'Open web view…', icon: <IconRemote />, run: () => addWebView() },
       { id: 'open-converter', label: 'File converter', icon: <IconConvert />, run: () => setConverterOpen(true) },
       { id: 'open-ollama', label: 'Ollama manager', icon: <IconOllama />, run: () => setOllamaOpen(true) },
+      { id: 'open-multiverse', label: 'Open Multiverse canvases', hint: 'scoped child canvas hierarchy depth 8', icon: <IconCanvasView />, run: () => setMultiverseOpen(true) },
       { id: 'open-browser', label: 'New browser', icon: <IconRemote />, run: () => addBrowser() },
       ...useSshServers.getState().servers.map(
         (srv): Command => ({
@@ -13438,6 +13441,15 @@ export function Canvas() {
           onOpenArchive={() => void importProjectArchive()}
           archiveBusy={() => projectArchiveBusyRef.current}
         />
+        <button
+          type="button"
+          className="md3-button md3-button--tonal multiverse-launch"
+          title="Open Multiverse canvases"
+          aria-label="Open Multiverse canvases"
+          onClick={() => setMultiverseOpen(true)}
+        >
+          Multiverse
+        </button>
         <div className="md3-app-bar__spacer" />
         {/* The docked search bar — the SAME `.cluster-search` button/title the packaged-app
             driver script selects; re-themed, never renamed. */}
@@ -14400,6 +14412,10 @@ export function Canvas() {
             if (transcriptSearchTimer.current) clearTimeout(transcriptSearchTimer.current)
           }}
         />
+      )}
+
+      {multiverseOpen && activeProjectId && (
+        <MultiversePanel projectId={activeProjectId} onClose={() => setMultiverseOpen(false)} />
       )}
 
       {settingsOpen && (

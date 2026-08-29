@@ -11230,3 +11230,51 @@ button.term-node__title-text:focus-visible {
 .icon-menu__reset-btn {
   align-self: flex-start;
 }
+/* Multiverse child-canvas navigator. Child canvases are content scope, never project tabs. */
+.multiverse-panel {
+  position: absolute;
+  inset: 80px 24px auto auto;
+  z-index: 70;
+  width: min(680px, calc(100vw - 48px));
+  max-height: calc(100vh - 112px);
+  overflow: auto;
+  padding: 24px;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 28px;
+  box-shadow: none;
+}
+.multiverse-panel__header,
+.multiverse-panel__create,
+.multiverse-panel__search,
+.multiverse-panel__catalog,
+.multiverse-panel__list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.multiverse-panel__header { justify-content: space-between; }
+.multiverse-panel h2 { margin: 0; }
+.multiverse-panel p { color: var(--md-on-surface-variant); }
+.multiverse-panel__search { position: relative; margin: 16px 0; }
+.multiverse-panel__search input { flex: 1; min-height: 48px; }
+.multiverse-panel__create { align-items: end; flex-wrap: wrap; }
+.multiverse-panel__create label { display: grid; gap: 4px; flex: 1 1 180px; }
+.multiverse-panel__create input,
+.multiverse-panel__create select { min-height: 48px; }
+.multiverse-panel__list { list-style: none; padding: 0; margin: 20px 0; display: grid; gap: 8px; }
+.multiverse-panel__list li { justify-content: space-between; padding: 8px; border-radius: 16px; }
+.multiverse-panel__list li.is-active { background: var(--md-secondary-container, #4a4458); }
+.multiverse-panel__canvas { display: grid; gap: 4px; flex: 1; text-align: left; background: none; border: 0; color: inherit; min-height: 48px; cursor: pointer; }
+.multiverse-panel__canvas span,
+.multiverse-panel__canvas small { overflow-wrap: anywhere; }
+.multiverse-panel__canvas small,
+.multiverse-panel__catalog small { color: var(--md-on-surface-variant); }
+.multiverse-panel__catalog { align-items: flex-start; flex-wrap: wrap; border-top: 1px solid var(--md-outline-variant); padding-top: 16px; }
+.multiverse-panel__catalog small { flex-basis: 100%; }
+@media (max-width: 640px) {
+  .multiverse-panel { inset: 64px 12px 12px; width: auto; padding: 16px; }
+  .multiverse-panel__create { display: grid; align-items: stretch; }
+  .multiverse-panel__list li { align-items: stretch; }
+}

@@ -17,6 +17,8 @@ import type {
   Viewport,
   Workspace
 } from '../shared/types'
+import type { MultiverseState } from '../shared/multiverse'
+import { validateMultiverseState } from './multiverse'
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
@@ -72,6 +74,10 @@ export interface ProjectFileV1 {
    */
   viewport?: Viewport
   nodes: CanvasNodeState[]
+  /** Project-owned Multiverse child canvases. Active canvas identity is portable; no tabs or
+   * machine-local execution state are represented here. Invalid imported state is discarded at
+   * the file boundary rather than partially adopted. */
+  multiverse?: MultiverseState
   bridges?: BridgeLink[]
   ropes?: BridgeLink[]
   /**
@@ -208,6 +214,22 @@ export function projectToFile(
   // entry instead (`localNodeExec` / `IndexEntryV3.localExec`). See @shared/node-exec.
   const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes)
   const icon = sanitizeProjectIcon(p.icon)
+  let multiverse: MultiverseState | undefined
+  if (p.multiverse) {
+    try {
+      const candidate = {
+        ...p.multiverse,
+        children: p.multiverse.children.map((child) => ({
+          ...child,
+          nodes: stripSharedNodeExec(p.cwd ? toPortableNodes(child.nodes, p.cwd) : child.nodes)
+        }))
+      }
+      multiverse = validateMultiverseState(candidate, new Set(nodes.map((node) => node.id)))
+    } catch {
+      // A malformed in-memory child hierarchy must never be written as project content. The
+      // importer applies the same validator, so a later reload cannot disagree with this boundary.
+    }
+  }
   return {
     version: 1,
     rev,
@@ -217,6 +239,7 @@ export function projectToFile(
     color: p.color,
     viewport: framingViewport(nodes),
     nodes,
+    ...(multiverse ? { multiverse } : {}),
     ...(icon ? { icon } : {}),
     ...(p.bridges ? { bridges: p.bridges } : {}),
     ...(p.ropes ? { ropes: p.ropes } : {}),
@@ -295,6 +318,21 @@ export function fileToProject(
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
   const browserProfiles = validBrowserProfiles(f.browserProfiles)
   const icon = sanitizeProjectIcon(f.icon)
+  let multiverse: MultiverseState | undefined
+  if (f.multiverse) {
+    try {
+      const checked = validateMultiverseState(f.multiverse, new Set(f.nodes.map((node) => node.id)))
+      multiverse = {
+        ...checked,
+        children: checked.children.map((child) => ({
+          ...child,
+          nodes: applyLocalNodeExec(base.cwd ? resolveNodes(child.nodes, base.cwd) : child.nodes, base.localExec)
+        }))
+      }
+    } catch {
+      // Import is fail-closed: bad child content never becomes a partially live hierarchy.
+    }
+  }
   return {
     id: base.id,
     name: f.name,
@@ -304,6 +342,7 @@ export function fileToProject(
     // applyLocalNodeExec DROPS whatever the file carried in the exec fields (it is not ours) and
     // re-attaches only what this machine typed. See @shared/node-exec.
     nodes: applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec),
+    ...(multiverse ? { multiverse } : {}),
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),
@@ -470,5 +509,18 @@ export function splitWorkspace(
  * file could be adopted and then mirrored back with its execution fields intact.
  */
 export function serializeProjectFile(f: ProjectFileV1): string {
-  return JSON.stringify({ ...f, nodes: stripSharedNodeExec(f.nodes) }, null, 2)
+  let multiverse: MultiverseState | undefined
+  if (f.multiverse) {
+    try {
+      const checked = validateMultiverseState(f.multiverse, new Set(f.nodes.map((node) => node.id)))
+      multiverse = {
+        ...checked,
+        children: checked.children.map((child) => ({ ...child, nodes: stripSharedNodeExec(child.nodes) }))
+      }
+    } catch {
+      // A remote/cache payload that fails the hierarchy boundary is omitted as one unit. Never
+      // serialize a partial child tree that could be adopted on another computer.
+    }
+  }
+  return JSON.stringify({ ...f, nodes: stripSharedNodeExec(f.nodes), ...(multiverse ? { multiverse } : {}) }, null, 2)
 }

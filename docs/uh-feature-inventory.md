@@ -100,6 +100,7 @@ and then never edited this file.
 
 | Feature | What is missing | Closes when | Notes |
 | --- | --- | --- | --- |
+| Scoped Multiverse child canvases and hierarchy to depth 8 | Implementation and documentation landed, but focused tests, built interaction, and capture evidence were not run in the ultra-speed lane. | `manual:run the focused Multiverse hierarchy/import/scope suite and record built interaction evidence` | `src/core/multiverse.ts`, `src/shared/multiverse.ts`, `src/renderer/components/MultiversePanel.tsx`, `docs/features/projects/multiverse.md`, and `site/docs/multiverse.html` are the implementation and docs surfaces. Door construction, code entry, and recovery game remain later features. |
 | Status Hub | The registration half only. | `manual:the shared Hub is an external service; nothing in this repository can observe whether registration happened` | **Narrowed 2026-08-20, and the app half is now in the Shipped table above as its own contract row.** The surface shipped in `3e96ad78` — `src/renderer/components/StatusSurface.tsx`, `src/shared/project-status.ts`, `docs/status-surface.md`, 31 tests in `src/shared/project-status.test.ts`, and a `status-surface` row in `scripts/check-app-contract.mjs`. What remains is reporting *into* the shared Hub, which is a service outside this tree — hence the `manual:` predicate rather than a machine-checkable one. |
 
 ---

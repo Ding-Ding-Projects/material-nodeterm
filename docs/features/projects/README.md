@@ -1,6 +1,7 @@
 # Projects
 
-A project is one canvas — one page of nodes, with its own working directory and its own tab.
+A project owns a root canvas and one project tab. Multiverse child canvases are nested content
+scopes inside that project, never additional project tabs.
 
 - [Projects & tabs](./projects-and-tabs.md) — how projects are created, switched, closed,
   reopened, and persisted to disk; how a project binds to a folder.
@@ -10,6 +11,8 @@ A project is one canvas — one page of nodes, with its own working directory an
   inventory, deterministic hashes, omissions, and pure legacy migration boundaries.
 - [Portable canvas projection](./portable-canvas-projection.md): deterministic schema 3 canvas
   payloads for root and future universe scopes, with machine-local state excluded.
+- [Multiverse child canvases](./multiverse.md): persistent, scoped child content with stable
+  root/parent identity and an enforced depth-eight hierarchy. Child canvases are not project tabs.
 
 See also [Canvas](../canvas/README.md) for what lives inside a project, and
 [Source control](../source-control/README.md) for how a project's working directory relates to

@@ -160,6 +160,9 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Multiverse and AWS
 
+- [ ] **#33 Scoped Multiverse child canvases and hierarchy to depth 8**: implementation landed in
+      the shared project model, schema 3 projection, canvas scope guard, catalog seam, and Lang gui
+      navigator; tests, build, and packaged interaction verification remain pending by lane policy.
 - [ ] Add door-only Multiverse canvases to depth 8.
 - [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
 - [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.

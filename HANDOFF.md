@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-08-26, scoped Multiverse child canvases and hierarchy
+
+Issue #33 implementation adds `src/shared/multiverse.ts` and `src/core/multiverse.ts` for the
+depth-eight hierarchy, stable `rootCanvasId`/`parentCanvasId` identity, child content, catalog
+registration, and command/canvas scope enforcement. `Project` and `ProjectFileV1` now persist
+validated Multiverse children while stripping machine-local execution values; schema 3 portable
+projection includes child nodes and explicit root/depth metadata. Invalid imports are rejected as
+one unit, cycles and duplicate identities are refused, and child canvases remain content scope
+rather than project tabs.
+
+The renderer has `src/renderer/components/MultiversePanel.tsx`, a Lang gui navigator reachable from
+the canvas app bar and command palette. It offers a child search with an anchored regex builder,
+depth-aware parent selection, active-scope status, and catalog-approved note content. Documentation
+was added at `docs/features/projects/multiverse.md` and `site/docs/multiverse.html`, with index,
+roadmap, and changelog records updated. Door construction, numeric/passphrase entry, and the
+recovery game are intentionally not included in this lane.
+
+Per the lane brief, tests, type checking, linting, security checks, builds, packaging, installer
+execution, runtime interaction, captures, commits, and dews were not performed. The next owner
+should run those checks and complete integration/release evidence before marking the roadmap item
+verified.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

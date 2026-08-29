@@ -8,6 +8,8 @@
  */
 
 import type { BridgeLink, CanvasNodeState, Project, Viewport } from '../shared/types'
+import type { MultiverseState } from '../shared/multiverse'
+import { validateMultiverseState } from './multiverse'
 import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEMA_VERSION } from './portable-project-v3'
 import { sanitizeProjectIcon } from '../shared/project-icon'
 
@@ -21,6 +23,9 @@ export interface PortableCanvasV3 {
   order: number
   viewport?: Viewport
   nodeIds: string[]
+  /** Present for Multiverse children, making root and parent identity explicit. */
+  rootCanvasId?: string
+  depth?: number
 }
 
 export interface PortableCanvasNodeV3 {
@@ -68,6 +73,8 @@ export interface PortableCanvasProjectionV3 {
 export interface PortableCanvasProjectionInput {
   /** Future child canvases may be supplied without changing the root Project type. */
   canvases?: Array<Omit<PortableCanvasV3, 'nodeIds'> & { nodeIds?: string[] }>
+  /** Project-owned Multiverse hierarchy and child content. */
+  multiverse?: MultiverseState
   appearance?: Record<string, unknown>
 }
 
@@ -84,7 +91,7 @@ const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'appearance'])
 const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
-const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
+const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds', 'rootCanvasId', 'depth'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
 const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
@@ -192,15 +199,46 @@ function relationships(project: Project): PortableRelationshipV3[] {
 
 /** Project only the portable presentation and safe intent fields. Forbidden live fields are never read. */
 export function projectToPortableCanvasV3(project: Project, input: PortableCanvasProjectionInput = {}): PortableCanvasProjectionV3 {
-  const nodes = project.nodes.map(projectNode).sort((a, b) => a.id.localeCompare(b.id))
+  const rootNodes = project.nodes.map(projectNode)
+  let childCanvases = input.canvases ?? []
+  let childNodes: CanvasNodeState[] = []
+  let childRelationships: PortableRelationshipV3[] = []
+  if (project.multiverse || input.multiverse) {
+    let multiverse: MultiverseState
+    try {
+      multiverse = validateMultiverseState(project.multiverse ?? input.multiverse, new Set(project.nodes.map((node) => node.id)))
+    } catch (error) {
+      throw new PortableProjectV3Error('manifest', error instanceof Error ? error.message : 'Multiverse state is invalid.')
+    }
+    childCanvases = [
+      ...childCanvases,
+      ...multiverse.children.map((child) => ({
+        id: child.id,
+        scope: 'multiverse' as const,
+        parentCanvasId: child.parentCanvasId,
+        rootCanvasId: child.rootCanvasId,
+        depth: child.depth,
+        title: child.title,
+        order: child.order,
+        viewport: child.viewport,
+        nodeIds: child.nodes.map((node) => node.id)
+      }))
+    ]
+    childNodes = multiverse.children.flatMap((child) => child.nodes)
+    childRelationships = multiverse.children.flatMap((child) => [
+      ...(child.bridges ?? []).map((link, order) => ({ id: text(link.id, 'relationship id'), kind: 'bridge' as const, source: text(link.source, 'relationship source'), target: text(link.target, 'relationship target'), order })),
+      ...(child.ropes ?? []).map((link, order) => ({ id: text(link.id, 'relationship id'), kind: 'rope' as const, source: text(link.source, 'relationship source'), target: text(link.target, 'relationship target'), order }))
+    ])
+  }
+  const nodes = [...rootNodes, ...childNodes.map((node) => projectNode(node))].sort((a, b) => a.id.localeCompare(b.id))
   if (nodes.length > PORTABLE_CANVAS_LIMITS.maxNodes) throw new PortableProjectV3Error('entry-limit', 'Portable node count exceeds its bound.')
-  const root: PortableCanvasV3 = { id: 'root', scope: 'root', title: text(project.name, 'project name'), order: 0, viewport: project.viewport, nodeIds: nodes.map((node) => node.id) }
-  const children = (input.canvases ?? []).map((canvas) => ({ id: text(canvas.id, 'canvas id'), scope: canvas.scope, ...(canvas.parentCanvasId ? { parentCanvasId: text(canvas.parentCanvasId, 'parent canvas id') } : {}), title: text(canvas.title, 'canvas title'), order: finite(canvas.order, 'canvas order'), ...(canvas.viewport ? { viewport: { x: finite(canvas.viewport.x, 'viewport x'), y: finite(canvas.viewport.y, 'viewport y'), zoom: finite(canvas.viewport.zoom, 'viewport zoom') } } : {}), nodeIds: [...(canvas.nodeIds ?? [])].map((id) => text(id, 'canvas node id')).sort() }))
+  const root: PortableCanvasV3 = { id: 'root', scope: 'root', title: text(project.name, 'project name'), order: 0, viewport: project.viewport, nodeIds: rootNodes.map((node) => node.id) }
+  const children = childCanvases.map((canvas) => ({ id: text(canvas.id, 'canvas id'), scope: canvas.scope, ...(canvas.parentCanvasId ? { parentCanvasId: text(canvas.parentCanvasId, 'parent canvas id') } : {}), ...(canvas.rootCanvasId ? { rootCanvasId: text(canvas.rootCanvasId, 'root canvas id') } : {}), ...(canvas.depth !== undefined ? { depth: finite(canvas.depth, 'canvas depth') } : {}), title: text(canvas.title, 'canvas title'), order: finite(canvas.order, 'canvas order'), ...(canvas.viewport ? { viewport: { x: finite(canvas.viewport.x, 'viewport x'), y: finite(canvas.viewport.y, 'viewport y'), zoom: finite(canvas.viewport.zoom, 'viewport zoom') } } : {}), nodeIds: [...(canvas.nodeIds ?? [])].map((id) => text(id, 'canvas node id')).sort() }))
   if (children.length + 1 > PORTABLE_CANVAS_LIMITS.maxCanvases) throw new PortableProjectV3Error('entry-limit', 'Portable canvas count exceeds its bound.')
   const canvases = [root, ...children].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
   const icon = project.icon && sanitizeProjectIcon(project.icon)
   const portableIcon = icon?.type === 'emoji' ? { type: icon.type, name: icon.emoji } : icon ? { type: icon.type, name: icon.name } : undefined
-  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: relationships(project), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}) }
+  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: [...relationships(project), ...childRelationships].map((link, order) => ({ ...link, order })), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}) }
   if (result.relationships.length > PORTABLE_CANVAS_LIMITS.maxRelationships) throw new PortableProjectV3Error('entry-limit', 'Portable relationship count exceeds its bound.')
   return validatePortableCanvasProjectionV3(result)
 }
@@ -253,6 +291,10 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
     if (canvasIds.has(id)) throw new PortableProjectV3Error('manifest', `Duplicate portable canvas: ${id}`)
     canvasIds.add(id)
     if (!['root', 'multiverse', 'aws-universe'].includes(String(canvas.scope))) throw new PortableProjectV3Error('manifest', 'Portable canvas scope is invalid.')
+    if (canvas.scope === 'multiverse') {
+      if (canvas.rootCanvasId !== 'root') throw new PortableProjectV3Error('manifest', 'Portable Multiverse canvas root identity is invalid.')
+      finite(canvas.depth, 'canvas depth')
+    }
     if (!Array.isArray(canvas.nodeIds)) throw new PortableProjectV3Error('manifest', 'Portable canvas nodeIds must be an array.')
     canvas.nodeIds.forEach((nodeId) => text(nodeId, 'canvas node id'))
     const members = new Set<string>()
@@ -261,7 +303,7 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
     if (canvas.viewport !== undefined) { if (!record(canvas.viewport)) throw new PortableProjectV3Error('manifest', 'Portable viewport is invalid.'); exactKeys(canvas.viewport, ALLOWED_VIEWPORT, 'viewport'); finite(canvas.viewport.x, 'viewport x'); finite(canvas.viewport.y, 'viewport y'); finite(canvas.viewport.zoom, 'viewport zoom') }
     if (typeof canvas.title !== 'string') throw new PortableProjectV3Error('manifest', 'Portable canvas title is invalid.')
     text(canvas.title, 'canvas title'); finite(canvas.order, 'canvas order')
-    normalizedCanvases.push({ id, scope: canvas.scope as PortableCanvasScope, ...(canvas.parentCanvasId !== undefined ? { parentCanvasId: text(canvas.parentCanvasId, 'parent canvas id') } : {}), title: canvas.title, order: canvas.order, ...(canvas.viewport ? { viewport: { x: canvas.viewport.x, y: canvas.viewport.y, zoom: canvas.viewport.zoom } } : {}), nodeIds: [...canvas.nodeIds] })
+    normalizedCanvases.push({ id, scope: canvas.scope as PortableCanvasScope, ...(canvas.parentCanvasId !== undefined ? { parentCanvasId: text(canvas.parentCanvasId, 'parent canvas id') } : {}), ...(canvas.rootCanvasId !== undefined ? { rootCanvasId: text(canvas.rootCanvasId, 'root canvas id') } : {}), ...(canvas.depth !== undefined ? { depth: finite(canvas.depth, 'canvas depth') } : {}), title: canvas.title, order: canvas.order, ...(canvas.viewport ? { viewport: { x: canvas.viewport.x, y: canvas.viewport.y, zoom: canvas.viewport.zoom } } : {}), nodeIds: [...canvas.nodeIds] })
   }
   const roots = value.canvases.filter((canvas) => canvas.scope === 'root')
   if (roots.length !== 1 || roots[0].id !== value.rootCanvasId || roots[0].parentCanvasId !== undefined) throw new PortableProjectV3Error('manifest', 'Portable projection must contain exactly one parentless root canvas.')
@@ -279,6 +321,8 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
       current = item?.parentCanvasId
       if (current !== undefined && ++depth > PORTABLE_CANVAS_LIMITS.maxDepth) throw new PortableProjectV3Error('manifest', 'Portable canvas hierarchy exceeds its depth bound.')
     }
+    if (canvas.scope === 'multiverse' && canvas.depth !== depth) throw new PortableProjectV3Error('manifest', 'Portable Multiverse canvas depth does not match its parent hierarchy.')
+    if (canvas.scope === 'multiverse' && canvas.rootCanvasId !== value.rootCanvasId) throw new PortableProjectV3Error('manifest', 'Portable Multiverse canvas root identity does not match the projection root.')
   }
   const membership = new Map<string, number>()
   for (const canvas of value.canvases) for (const nodeId of canvas.nodeIds) membership.set(nodeId, (membership.get(nodeId) ?? 0) + 1)
