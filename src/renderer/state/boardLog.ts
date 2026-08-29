@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { BOARD_LOG_TEXT_MAX, type BoardLogEntry, type NodeTerminalApi } from '@shared/types'
-import type { BoardAttachmentDraft, BoardLogAppendResult } from '@shared/comment-attachments'
 import { loadIdentity } from './presence'
 import { uuid } from '../lib/uuid'
 
@@ -28,7 +27,7 @@ const ANON_AUTHOR = { name: 'you', color: '#8e8e93' }
 const EMPTY: BoardLogEntry[] = []
 
 /** The caller-supplied part of an entry; the store stamps `id`/`ts`/`author`. */
-export type BoardLogAppendInput = Pick<BoardLogEntry, 'kind' | 'nodeId' | 'text' | 'event'>
+export type BoardLogAppendInput = Pick<BoardLogEntry, 'kind' | 'nodeId' | 'text' | 'event' | 'attachments' | 'attachmentSessionId'>
 
 interface BoardLogState {
   /** Loaded entries per project id, NEWEST-FIRST. */
@@ -42,8 +41,7 @@ interface BoardLogState {
   /** Read the log for a project and replace its list; records the unsupported/clears error flags. */
   load(api: NodeTerminalApi, projectId: string): Promise<void>
   /** Stamp + optimistically prepend an entry, then fire-and-forget the api append. */
-  append(api: NodeTerminalApi, projectId: string, input: BoardLogAppendInput): void
-  appendWithAttachments(api: NodeTerminalApi, projectId: string, input: BoardLogAppendInput, drafts: BoardAttachmentDraft[]): Promise<BoardLogAppendResult>
+  append(api: NodeTerminalApi, projectId: string, input: BoardLogAppendInput): Promise<boolean>
   /** Wire `onChanged` → reload for a project; returns the unsubscribe. */
   subscribeChanged(api: NodeTerminalApi, projectId: string): () => void
 }
@@ -59,17 +57,17 @@ export const useBoardLog = create<BoardLogState>((set, get) => ({
     try {
       const res = await api.boardLog.read(projectId)
       set((s) => ({
-        entriesByProject: { ...s.entriesByProject, [projectId]: res.entries },
+        entriesByProject: { ...s.entriesByProject, ...(res.readFailed ? {} : { [projectId]: res.entries }) },
         unsupportedByProject: { ...s.unsupportedByProject, [projectId]: !!res.unsupported },
         // A successful read supersedes any stale append error for this project.
-        errorByProject: { ...s.errorByProject, [projectId]: false }
+        errorByProject: { ...s.errorByProject, [projectId]: !!res.readFailed }
       }))
     } catch {
       // A failed read leaves the last-known list untouched — never blank the panel on a hiccup.
     }
   },
 
-  append: (api, projectId, input) => {
+  append: async (api, projectId, input) => {
     const id = loadIdentity()
     const author = id ? { name: id.name, color: id.color } : ANON_AUTHOR
     // Clamp identically to buildLine (src/core/board-log.ts) so the optimistic entry the user sees
@@ -86,7 +84,9 @@ export const useBoardLog = create<BoardLogState>((set, get) => ({
       kind: input.kind,
       ...(input.nodeId !== undefined ? { nodeId: input.nodeId } : {}),
       ...(text !== undefined ? { text } : {}),
-      ...(input.event !== undefined ? { event: input.event } : {})
+      ...(input.event !== undefined ? { event: input.event } : {}),
+      ...(input.attachments !== undefined ? { attachments: input.attachments } : {}),
+      ...(input.attachmentSessionId !== undefined ? { attachmentSessionId: input.attachmentSessionId } : {})
     }
     // Optimistic newest-first insert.
     set((s) => ({
@@ -97,41 +97,17 @@ export const useBoardLog = create<BoardLogState>((set, get) => ({
     }))
     const flagError = () =>
       set((s) => ({ errorByProject: { ...s.errorByProject, [projectId]: true } }))
-    api.boardLog
-      .append(projectId, entry)
-      .then((ok) => {
-        if (!ok) flagError()
-      })
-      .catch(flagError)
-  },
-
-  appendWithAttachments: async (api, projectId, input, drafts) => {
-    const id = loadIdentity()
-    const author = id ? { name: id.name, color: id.color } : ANON_AUTHOR
-    const text = input.text !== undefined && input.text.length > BOARD_LOG_TEXT_MAX
-      ? input.text.slice(0, BOARD_LOG_TEXT_MAX) + '…'
-      : input.text
-    const entry: BoardLogEntry = {
-      id: uuid(),
-      ts: Date.now(),
-      author,
-      kind: input.kind,
-      ...(input.nodeId !== undefined ? { nodeId: input.nodeId } : {}),
-      ...(text !== undefined ? { text } : {}),
-      ...(input.event !== undefined ? { event: input.event } : {})
-    }
     try {
-      const result = await api.boardLog.appendWithAttachments(projectId, entry, drafts)
-      if (result.ok) {
-        set((s) => ({ entriesByProject: { ...s.entriesByProject, [projectId]: [result.entry, ...(s.entriesByProject[projectId] ?? EMPTY)] } }))
-      } else {
-        set((s) => ({ errorByProject: { ...s.errorByProject, [projectId]: true } }))
+      const ok = await api.boardLog.append(projectId, entry)
+      if (!ok) {
+        flagError()
+        set((s) => ({ entriesByProject: { ...s.entriesByProject, [projectId]: (s.entriesByProject[projectId] ?? EMPTY).filter((item) => item.id !== entry.id) } }))
       }
-      return result
+      return ok
     } catch {
-      const result: BoardLogAppendResult = { ok: false, reason: 'log-failed', message: 'The comment could not be saved.' }
-      set((s) => ({ errorByProject: { ...s.errorByProject, [projectId]: true } }))
-      return result
+      flagError()
+      set((s) => ({ entriesByProject: { ...s.entriesByProject, [projectId]: (s.entriesByProject[projectId] ?? EMPTY).filter((item) => item.id !== entry.id) } }))
+      return false
     }
   },
 

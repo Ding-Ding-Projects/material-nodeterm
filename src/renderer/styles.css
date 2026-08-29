@@ -9650,6 +9650,45 @@ button.group-node__setup:disabled {
   padding: 8px 10px;
   outline: none;
 }
+.board-log__attachments {
+  flex: 0 0 auto;
+  margin: 0 12px 10px;
+  padding: 8px;
+  border: 1px dashed rgba(var(--tint-rgb), 0.18);
+  border-radius: 8px;
+  background: rgba(var(--tint-rgb), 0.025);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+.board-log__file-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.board-log__add-files, .board-log__submit, .board-log__attachment-remove {
+  min-height: 44px;
+  border: 1px solid rgba(var(--tint-rgb), 0.2);
+  border-radius: 7px;
+  padding: 5px 9px;
+  background: rgba(var(--tint-rgb), 0.08);
+  color: rgba(var(--tint-rgb), 0.9);
+  cursor: pointer;
+  font: inherit;
+}
+.board-log__add-files:focus-visible, .board-log__submit:focus-visible, .board-log__attachment-remove:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+.board-log__add-files:disabled, .board-log__submit:disabled { opacity: 0.55; cursor: wait; }
+.board-log__submit { margin-left: auto; background: var(--md-primary); color: var(--md-on-primary); border-color: transparent; }
+.board-log__drop-hint { color: rgba(var(--tint-rgb), 0.48); font-size: 10px; line-height: 1.4; }
+.board-log__attachment-list { flex-basis: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 6px; }
+.board-log__attachment { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 5px; padding: 5px; border-radius: 6px; background: rgba(var(--tint-rgb), 0.06); font-size: 10px; }
+.board-log__attachment input[type="checkbox"], .board-log__posted-attachment input[type="checkbox"] { width: 44px; height: 44px; margin: 0; }
+.board-log__attachment-name { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.board-log__attachment-status { color: rgba(var(--tint-rgb), 0.52); white-space: nowrap; }
+.board-log__attachment--failed { border: 1px solid rgba(255, 120, 120, 0.45); }
+.board-log__attachment-remove { min-height: 44px; padding: 5px 8px; font-size: 10px; }
+.board-log__attachment-image, .board-log__attachment-video { width: 44px; height: 44px; object-fit: cover; border-radius: 4px; }
+.board-log__attachment audio { width: 100%; grid-column: 1 / -1; min-height: 44px; }
+.board-log__posted-attachments { display: grid; gap: 4px; padding: 4px 14px 0; }
+.board-log__posted-attachment { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 6px; border-radius: 5px; background: rgba(var(--tint-rgb), 0.05); font-size: 10px; }
+@media (prefers-reduced-motion: reduce) { .board-log__attachments *, .board-log__attachment { animation: none !important; transition: none !important; } }
 
 .board-log__hint {
   flex: 0 0 auto;

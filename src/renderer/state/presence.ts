@@ -560,7 +560,7 @@ function buildPresenceSession(api: NodeTerminalApi): PresenceSession {
     if (lastFocus === nodeId) return
     if (nodeId !== null && !hasPeers()) return
     lastFocus = nodeId
-    api.presence.focus(nodeId)
+    api?.presence?.focus?.(nodeId)
   }
 
   /** Is anyone else connected? (The table includes me, so "somebody else" is > 1.) */
@@ -583,7 +583,7 @@ function buildPresenceSession(api: NodeTerminalApi): PresenceSession {
   function reportProject(projectId: string | null): void {
     if (lastProject === projectId) return
     lastProject = projectId
-    api.presence.project(projectId)
+    api?.presence?.project?.(projectId)
   }
 
   /** Broadcast the live dino game we are the authority for (null = stopped/idle). Unlike focus/
@@ -593,7 +593,7 @@ function buildPresenceSession(api: NodeTerminalApi): PresenceSession {
    *  (a stop is an edge; and it costs nothing) so a spectator can never be left drawing a ghost. */
   function dino(payload: { nodeId: string; snap: DinoSnapshot } | null): void {
     if (payload !== null && !hasPeers()) return
-    api.presence.dino(payload)
+    api?.presence?.dino?.(payload)
   }
 
   return {

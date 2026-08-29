@@ -1312,6 +1312,7 @@
 .term-node__header--filled .term-node__collapse,
 .term-node__header--filled .term-node__folder-drag,
 .term-node__header--filled .term-node__collaboration-drag,
+.term-node__header--filled .term-node__link-agent,
 .term-node__header--filled .term-node__ai,
 .term-node__header--filled .term-node__move-worktree,
 .term-node__header--filled .term-node__search,
@@ -1328,6 +1329,7 @@
 .term-node__header--filled .term-node__collapse:hover,
 .term-node__header--filled .term-node__folder-drag:hover,
 .term-node__header--filled .term-node__collaboration-drag:hover,
+.term-node__header--filled .term-node__link-agent:hover,
 .term-node__header--filled .term-node__ai:hover:not(:disabled),
 .term-node__header--filled .term-node__move-worktree:hover,
 .term-node__header--filled .term-node__search:hover,
@@ -1354,6 +1356,7 @@
 .term-node__collapse,
 .term-node__folder-drag,
 .term-node__collaboration-drag,
+.term-node__link-agent,
 .term-node__ai,
 .term-node__move-worktree,
 .term-node__search,
@@ -1404,6 +1407,15 @@
   cursor: grab;
 }
 
+.term-node__link-agent {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
 .term-node__close {
   font-size: 16px;
   padding: 2px 6px;
@@ -1431,6 +1443,7 @@
 .term-node__collapse:hover,
 .term-node__folder-drag:hover,
 .term-node__collaboration-drag:hover,
+.term-node__link-agent:hover,
 .term-node__ai:hover:not(:disabled),
 .term-node__move-worktree:hover,
 .term-node__search:hover,

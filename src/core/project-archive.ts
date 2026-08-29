@@ -1,6 +1,5 @@
-// One-file project save/restore (`.nodeterm-project`). New writes use the schema 3 portable
-// projection: safe intent plus local-history bytes. The V1/V2 reader below remains for existing
-// files, while repository, vault, process, and machine-local binding data stay local on new saves.
+// One-file project save/restore (`.nodeterm-project`) — the whole project the way a .docx is the
+// whole document.
 //
 // V2 (this module's writer) is a genuine ZIP container (`project-archive-container.ts`):
 //   mimetype                 application/x-nodeterm-project (identification aid, tolerated absent)
@@ -16,7 +15,9 @@
 //                            file as sensitive as that password, which the export UI states.
 //   repo/repository.bundle   `git bundle create --all` of the project's OWN repository
 //   files/<relative path>    working files: tracked files at their CURRENT on-disk content plus
-//                            untracked-but-not-ignored files
+//                            untracked-but-not-ignored files, and the explicit comment namespace
+//                            `.nodeterm/board-log.jsonl` plus referenced attachment blobs even
+//                            when the project ignores `.nodeterm`.
 //
 // The inclusion rule, stated rather than implied: what git tracks travels, at working-tree
 // content, plus everything untracked that .gitignore does not exclude, plus the complete history
@@ -38,52 +39,19 @@ import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import type { Project, ProjectArchiveContents, ProjectArchiveExclusion } from '../shared/types'
 import { freshProjectId } from '../shared/project-id'
 import { fileToProject, projectToFile, serializeProjectFile, type ProjectFileV1 } from './workspace-files'
 import { LocalHistoryStore } from './local-history'
 import { looksLikeContainer, openContainer, packContainer, type ContainerEntry } from './project-archive-container'
-import {
-  exportPortableProjectV3,
-  importPortableProjectV3,
-  looksLikePortableProjectV3,
-  type PortableProjectV3ImportOptions
-} from './portable-project-import'
-import { parsePortableCanvasProjectionV3, projectToPortableCanvasV3, serializePortableCanvasProjectionV3 } from './portable-canvas-projection'
-import { parsePortableProjectV3Manifest, type PortableProjectOmission } from './portable-project-v3'
-import {
-  collectPortableMedia,
-  createPortableMediaManifest,
-  materializePortableMedia,
-  resolvePortableMediaPreparation,
-  type PortableMediaCollected,
-  type PortableMediaExportPayload,
-  type PortableMediaPreparation
-} from './portable-media-assets'
-import { readBoardAttachment } from './board-attachments'
-import { validEntry } from './board-log'
-import { validateBoardAttachmentRef, type BoardAttachmentRef } from '../shared/comment-attachments'
-import type { MediaAssetReference } from '../shared/media-catalog'
-import type { PortableMediaDecisionRecord } from '../shared/portable-media'
-import type { PortablePlannerDefinitions } from './portable-planner'
-import type { PlannerSchedule } from '../shared/planner-occurrences'
-import type { PortalRepairRecord } from './portal-lifecycle'
-
-function archiveExclusionReason(reason: PortableProjectOmission['reason']): ProjectArchiveExclusion['reason'] {
-  return reason === 'unknown-optional' ? 'unsupported' : reason
-}
+import { parseLines } from './board-log'
+import { validBoardLogAttachment, BOARD_LOG_ATTACHMENT_LIMITS } from '../shared/board-log-attachments'
+import { renameAtomic } from './fs-atomic'
 
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
 export * from './portable-canvas-projection'
-export * from './portable-media-assets'
-export * from './board-attachments'
-export * from './portable-project-import'
-export * from './portable-bindings'
-export * from './portable-planner'
-export * from './universe-shop'
-export * from './portal-lifecycle'
-export * from './backup-restore'
 
 /** V1 JSON-text archives keep their historical cap. */
 const MAX_ARCHIVE_BYTES_V1 = 180 * 1024 * 1024
@@ -102,12 +70,40 @@ const MAX_LISTED_EXCLUSIONS = 2_000
 const GIT_TIMEOUT_MS = 120_000
 const GIT_OUTPUT_CAP = 64 * 1024 * 1024
 const MIMETYPE = 'application/x-nodeterm-project'
+const LOG_DIR = '.nodeterm'
+const LOG_FILE = 'board-log.jsonl'
 
 const READ_LIMITS = {
   maxArchiveBytes: MAX_ARCHIVE_BYTES,
   maxTotalBytes: MAX_RAW_PAYLOAD_BYTES,
   maxEntryBytes: MAX_RAW_PAYLOAD_BYTES,
   maxEntries: 65_500
+}
+
+function ancestors(root: string, target: string): string[] {
+  const out: string[] = []
+  let current = path.resolve(target)
+  const base = path.resolve(root)
+  while (current !== base && current.startsWith(base + path.sep)) {
+    out.push(current)
+    current = path.dirname(current)
+  }
+  return out.reverse()
+}
+
+/** Check every existing path component, including ancestors above the destination. A final
+ * lstat immediately before publication narrows, but cannot eliminate, the replacement race. */
+async function assertNoSymlinkAncestors(target: string): Promise<void> {
+  const resolved = path.resolve(target)
+  const parsed = path.parse(resolved)
+  let current = parsed.root
+  const rest = resolved.slice(parsed.root.length).split(path.sep).filter(Boolean)
+  for (const segment of rest) {
+    current = path.join(current, segment)
+    const stat = await fs.lstat(current).catch(() => null)
+    if (!stat) throw new Error(`Destination component is missing: ${current}`)
+    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Destination component is an unsafe link: ${current}`)
+  }
 }
 
 interface ProjectArchiveV1 {
@@ -128,11 +124,10 @@ interface ArchiveManifestV2 {
 export interface ProjectArchiveExportResult {
   bytes: Buffer
   contents: ProjectArchiveContents
-  archiveVersion?: 3
 }
 
 export interface ProjectArchiveInspection {
-  archiveVersion: 1 | 2 | 3
+  archiveVersion: 1 | 2
   /** True when the archive carries working files / a repository and import therefore needs an
    *  empty destination folder before it can proceed. */
   needsDestination: boolean
@@ -141,16 +136,14 @@ export interface ProjectArchiveInspection {
 
 export interface ProjectArchiveImportResult {
   project: Project
-  archiveVersion: 1 | 2 | 3
+  archiveVersion: 1 | 2
   contents: ProjectArchiveContents
   restoredTo?: string
   /** The password-manager vault the archive carried for a FOLDER-LESS project, verbatim. The
    *  caller writes it to the new project's working-copy root - see the export note below. */
   vault?: Buffer
-  /** Safe planner definitions awaiting an explicit destination Configure action. */
-  plannerDefinitions?: PortablePlannerDefinitions
-  /** Portal metadata repaired during import, with child node ids retained. */
-  repairs?: PortalRepairRecord[]
+  plannerDefinitions?: unknown
+  repairs?: unknown[]
 }
 
 export interface ProjectArchiveExportOptions {
@@ -166,10 +159,6 @@ export interface ProjectArchiveExportOptions {
    * save file is as sensitive as that password, which the export UI says out loud.
    */
   vault?: Buffer
-  /** Single-use, privileged media preparation plus the user's explicit decisions. */
-  portableMedia?: { preparation: PortableMediaPreparation; decisions: PortableMediaDecisionRecord[] }
-  /** Host-owned schedule definitions are copied as safe intent only. */
-  plannerDefinitions?: readonly PlannerSchedule[]
 }
 
 function isProjectFile(value: unknown): value is ProjectFileV1 {
@@ -350,235 +339,17 @@ interface RepositoryCapture {
   contents: ProjectArchiveContents
 }
 
-function mediaReference(collected: PortableMediaCollected): MediaAssetReference | undefined {
-  if (collected.asset.kind !== 'image' && collected.asset.kind !== 'video') return undefined
-  return {
-    assetId: collected.asset.id,
-    kind: collected.asset.kind === 'image' ? 'photo' : 'video',
-    portablePath: `./assets/media/${collected.asset.id}.${collected.asset.extension}`,
-    mime: collected.asset.mime,
-    bytes: collected.asset.bytes,
-    sha256: collected.asset.sha256,
-    ...(collected.asset.width === undefined ? {} : { width: collected.asset.width }),
-    ...(collected.asset.height === undefined ? {} : { height: collected.asset.height }),
-    ...(collected.asset.durationMs === undefined ? {} : { durationMs: collected.asset.durationMs }),
-    ...(collected.source ? { sourcePath: collected.source.path } : {})
-  }
-}
-
-async function collectProjectMedia(project: Project): Promise<{
-  project: Project
-  media: PortableMediaCollected[]
-  omissions: PortableProjectOmission[]
-}> {
-  const bySource = new Map<string, PortableMediaCollected>()
-  const byAsset = new Map<string, PortableMediaCollected>()
-  const omissions: PortableProjectOmission[] = []
-  const omittedPaths = new Set<string>()
-  let missingIndex = 0
-
-  const omit = (fallback?: MediaAssetReference): void => {
-    const candidate = fallback?.portablePath.slice(2)
-    if (candidate && omittedPaths.has(candidate)) return
-    const omissionPath = candidate ?? `media/missing/${++missingIndex}`
-    omittedPaths.add(omissionPath)
-    omissions.push({
-      path: omissionPath,
-      reason: 'machine-local',
-      detail: 'A selected media source was unavailable or changed, so its bytes were not included.'
-    })
-  }
-
-  const collect = async (
-    sourcePath: string | undefined,
-    fallback?: MediaAssetReference
-  ): Promise<MediaAssetReference | undefined> => {
-    if (!sourcePath) {
-      if (fallback) omit(fallback)
-      return undefined
-    }
-    try {
-      let collected = bySource.get(sourcePath)
-      if (!collected) {
-        collected = await collectPortableMedia(sourcePath)
-        bySource.set(sourcePath, collected)
-        byAsset.set(collected.asset.id, collected)
-      }
-      return mediaReference(collected)
-    } catch {
-      omit(fallback)
-      return undefined
-    }
-  }
-
-  const nodes = [] as Project['nodes']
-  for (const node of project.nodes) {
-    if (node.kind === 'photo' || node.kind === 'video') {
-      const sourcePath = node.filePath ?? node.mediaAssets?.[0]?.sourcePath
-      const reference = await collect(sourcePath, node.mediaAssets?.[0])
-      nodes.push({
-        ...node,
-        mediaAssets: reference ? [reference] : node.mediaAssets?.map((asset) => ({ ...asset, missing: true })),
-        mediaActiveAssetId: reference?.assetId ?? node.mediaActiveAssetId
-      })
-      continue
-    }
-    if (node.kind === 'gallery' && node.mediaAssets) {
-      const mediaAssets: MediaAssetReference[] = []
-      let mediaActiveAssetId = node.mediaActiveAssetId
-      for (const asset of node.mediaAssets) {
-        const reference = await collect(asset.sourcePath, asset)
-        if (reference) {
-          mediaAssets.push(reference)
-          if (asset.assetId === node.mediaActiveAssetId) mediaActiveAssetId = reference.assetId
-        } else {
-          const { sourcePath: _sourcePath, ...portable } = asset
-          mediaAssets.push({ ...portable, missing: true })
-        }
-      }
-      nodes.push({ ...node, mediaAssets, mediaActiveAssetId })
-      continue
-    }
-    nodes.push(node)
-  }
-  return { project: { ...project, nodes }, media: [...byAsset.values()], omissions }
-}
-
-interface BoardAttachmentArchiveCapture {
-  entries: Array<{ path: string; data: Buffer }>
-  omissions: PortableProjectOmission[]
-}
-
-/** Capture the board log and only the content-addressed carriers it references. */
-async function collectProjectBoardAttachments(project: Project): Promise<BoardAttachmentArchiveCapture> {
-  if (!project.cwd || project.ssh) return { entries: [], omissions: [{ path: 'comments/board-log.jsonl', reason: 'machine-local', detail: 'This project has no local board-history folder to carry.' }] }
-  const root = project.cwd
-  const entries: Array<{ path: string; data: Buffer }> = []
-  const refs = new Map<string, BoardAttachmentRef>()
-  for (const name of ['board-log.jsonl.1', 'board-log.jsonl']) {
-    const data = await fs.readFile(path.join(root, '.nodeterm', name)).catch(() => null)
-    if (!data) continue
-    entries.push({ path: `comments/${name}`, data })
-    for (const line of data.toString('utf8').split('\n')) {
-      if (!line.trim()) continue
-      let parsed: unknown
-      try { parsed = JSON.parse(line) } catch { continue }
-      if (!validEntry(parsed)) continue
-      for (const attachment of parsed.attachments ?? []) {
-        try { validateBoardAttachmentRef(attachment); refs.set(attachment.id, attachment) } catch { /* import validation keeps malformed references out */ }
-      }
-    }
-  }
-  const omissions: PortableProjectOmission[] = []
-  for (const ref of refs.values()) {
-    try {
-      const data = await readBoardAttachment(root, ref)
-      entries.push({ path: ref.archivePath, data: Buffer.from(data) })
-    } catch {
-      omissions.push({ path: ref.archivePath, reason: 'machine-local', detail: 'The comment attachment carrier was unavailable or failed integrity validation.' })
-    }
-  }
-  return { entries, omissions }
-}
-
 export class ProjectArchiveService {
   constructor(
     private readonly history: LocalHistoryStore,
     private readonly git: ProjectGitRunner = runProjectGit,
-    private readonly readPlannerDefinitions?: () => readonly PlannerSchedule[]
+    _plannerDefinitions?: () => unknown
   ) {}
 
   async export(
     project: Project,
     opts: ProjectArchiveExportOptions = {}
   ): Promise<ProjectArchiveExportResult> {
-    // New saves use the schema 3 portable projection. The legacy V2 writer remains below as a
-    // compatibility reference for older fixtures and readers, but is no longer the production
-    // export path: repository files, vaults, process state, and machine paths must not travel.
-    const mediaCapture = opts.portableMedia
-      ? { project, media: [] as PortableMediaCollected[], omissions: [] as PortableProjectOmission[] }
-      : await collectProjectMedia(project)
-    const boardAttachments = await collectProjectBoardAttachments(mediaCapture.project)
-    let media: PortableMediaExportPayload | undefined
-    if (opts.portableMedia) {
-      media = await resolvePortableMediaPreparation(opts.portableMedia.preparation, opts.portableMedia.decisions)
-    } else if (mediaCapture.media.length > 0) {
-      const assets = [] as PortableMediaExportPayload['manifest']['assets']
-      const files = [] as PortableMediaExportPayload['files']
-      for (const candidate of [...mediaCapture.media].sort((a, b) => a.asset.id.localeCompare(b.asset.id))) {
-        const materialized = await materializePortableMedia(candidate)
-        assets.push(materialized.asset)
-        files.push({
-          path: `assets/media/${materialized.asset.id}.${materialized.asset.extension}`,
-          asset: materialized.asset,
-          data: materialized.data
-        })
-      }
-      media = { manifest: createPortableMediaManifest(assets), files }
-    }
-    const plannerDefinitions = opts.plannerDefinitions ?? this.readPlannerDefinitions?.()
-    const snapshot = projectToPortableCanvasV3(
-      mediaCapture.project,
-      { ...(media ? { media: media.manifest } : {}), ...(plannerDefinitions ? { planner: plannerDefinitions } : {}) }
-    )
-    const snapshotText = Buffer.from(serializePortableCanvasProjectionV3(snapshot))
-    await this.history.record({
-      domain: `project_${project.id}`,
-      filename: 'project.json',
-      content: new TextDecoder().decode(snapshotText),
-      label: `Exported portable project ${project.name}`,
-      action: 'updated'
-    })
-    const historyBundle = await this.history.exportBundle(`project_${project.id}`)
-    if (!historyBundle) throw new Error('The project history repository could not be bundled.')
-    const omissions = [
-      { path: 'machine-local-settings', reason: 'machine-local' as const, detail: 'Machine-local settings are reconfigured on the destination.' },
-      { path: 'credentials', reason: 'credential' as const, detail: 'Credentials and provider sessions never enter a portable project.' },
-      { path: 'process-state', reason: 'unsupported' as const, detail: 'Running processes and session state are not portable project content.' },
-      { path: 'working-directory', reason: 'machine-local' as const, detail: 'Absolute paths are destination-specific and are not carried.' },
-      ...mediaCapture.omissions,
-      ...boardAttachments.omissions,
-      ...(opts.vault ? [{ path: 'vault', reason: 'credential' as const, detail: 'The local vault remains on this machine and must be configured again.' }] : [])
-    ]
-    const portable = await exportPortableProjectV3(mediaCapture.project, {
-      historyBundle,
-      omissions,
-      ...(media ? { media } : {}),
-      ...(plannerDefinitions ? { planner: [...plannerDefinitions] } : {}),
-      ...(boardAttachments.entries.length > 0 ? { commentAttachments: { entries: boardAttachments.entries } } : {})
-    })
-    const mediaOmissions: ProjectArchiveExclusion[] = [
-      ...(media?.manifest.omissions.map((item) => ({
-        path: `assets/media/${item.assetId}`,
-        reason: item.reason,
-        detail: item.detail
-      })) ?? []),
-      ...(media?.manifest.assets.filter((item) => item.unresolved).map((item) => ({
-        path: `assets/media/${item.id}`,
-        reason: 'machine-local' as const,
-        detail: 'Locate Later kept this content-addressed reference unresolved for the destination computer.'
-      })) ?? [])
-    ]
-    const includedMediaBytes = (media?.files.reduce((total, item) => total + item.data.byteLength, 0) ?? 0) + boardAttachments.entries.reduce((total, item) => total + item.data.byteLength, 0)
-    return {
-      bytes: portable.bytes,
-      archiveVersion: 3,
-      contents: {
-        repository: 'portable-projection',
-        repositoryNote: 'Schema 3 carries safe project intent only. Local bindings, credentials, paths, processes, caches, and provider state remain on the source machine.',
-        workingFiles: (media?.files.length ?? 0) + boardAttachments.entries.length,
-        workingBytes: includedMediaBytes,
-        excluded: [
-          ...portable.manifest.omissions.map((item) => ({ path: item.path, reason: archiveExclusionReason(item.reason), detail: item.detail })),
-          ...mediaOmissions,
-          ...boardAttachments.omissions.map((item) => ({ path: item.path, reason: archiveExclusionReason(item.reason), detail: item.detail }))
-        ],
-        excludedFiles: portable.manifest.omissions.length + mediaOmissions.length + boardAttachments.omissions.length,
-        excludedBytes: 0
-      }
-    }
-    /* istanbul ignore next: retained V2 writer for source-history documentation only */
-    /*
     const exportedAt = new Date().toISOString()
     const snapshot = projectToFile(project, 0, exportedAt)
     const snapshotText = serializeProjectFile(snapshot)
@@ -639,23 +410,11 @@ export class ProjectArchiveService {
       )
     }
     return { bytes, contents: capture.contents }
-    */
   }
 
   /** Cheap peek: which schema, and does import need a destination folder first? */
   inspect(bytes: Buffer): ProjectArchiveInspection {
     if (!looksLikeContainer(bytes)) return { archiveVersion: 1, needsDestination: false }
-    if (looksLikePortableProjectV3(bytes)) {
-      const entries = openContainer(bytes, READ_LIMITS)
-      const manifestBytes = entries.get('manifest.json')
-      const projectBytes = entries.get('project.json')
-      if (!manifestBytes || !projectBytes) throw new Error('This portable project is missing its manifest or project snapshot.')
-      const manifest = parsePortableProjectV3Manifest(manifestBytes)
-      const projection = parsePortableCanvasProjectionV3(projectBytes)
-      const needsDestination = projection.media?.assets.some((asset) => asset.unresolved !== true) === true ||
-        [...entries.keys()].some((entryPath) => entryPath.startsWith('comments/') || entryPath.startsWith('assets/attachments/'))
-      return { archiveVersion: 3, needsDestination, projectName: manifest.project.name }
-    }
     let hasPayload = false
     const picked = openContainer(bytes, READ_LIMITS, (name) => {
       if (name === 'repo/repository.bundle' || name.startsWith('files/')) hasPayload = true
@@ -672,30 +431,7 @@ export class ProjectArchiveService {
     }
   }
 
-  async import(bytes: Buffer, opts: PortableProjectV3ImportOptions = {}): Promise<ProjectArchiveImportResult> {
-    if (looksLikePortableProjectV3(bytes)) {
-      const imported = await importPortableProjectV3(bytes, opts as PortableProjectV3ImportOptions)
-      const mediaOmissions: ProjectArchiveExclusion[] = [
-        ...(imported.projection.media?.omissions.map((item) => ({ path: `assets/media/${item.assetId}`, reason: item.reason, detail: item.detail })) ?? []),
-        ...(imported.projection.media?.assets.filter((item) => item.unresolved).map((item) => ({ path: `assets/media/${item.id}`, reason: 'machine-local' as const, detail: 'Locate Later kept this media reference unresolved.' })) ?? [])
-      ]
-      return {
-        project: imported.project,
-        archiveVersion: 3,
-        contents: {
-          repository: imported.stagedPath ? 'portable-projection' : 'portable-projection',
-          repositoryNote: 'Schema 3 imported safe project intent only. No deployment, provider mutation, process launch, download, or local binding was performed.',
-          workingFiles: imported.mediaFiles + imported.commentFiles,
-          workingBytes: imported.mediaBytes + imported.commentBytes,
-          excluded: [...imported.omissions.map((item) => ({ path: item.path, reason: archiveExclusionReason(item.reason), detail: item.detail })), ...mediaOmissions],
-          excludedFiles: imported.omissions.length + mediaOmissions.length,
-          excludedBytes: 0
-        },
-        ...(imported.stagedPath ? { restoredTo: imported.stagedPath } : {}),
-        ...(imported.plannerDefinitions ? { plannerDefinitions: imported.plannerDefinitions } : {}),
-        ...(imported.repairs.length ? { repairs: imported.repairs } : {})
-      }
-    }
+  async import(bytes: Buffer, opts: { destination?: string; signal?: AbortSignal; onProgress?: (progress: unknown) => void } = {}): Promise<ProjectArchiveImportResult> {
     if (!looksLikeContainer(bytes)) {
       const project = await this.importV1(bytes.toString('utf-8'))
       return {
@@ -917,6 +653,15 @@ export class ProjectArchiveService {
       }
     }
 
+    // `.nodeterm` is commonly ignored, but comment attachments are an explicit archive namespace,
+    // not build output. Include only blobs referenced by valid board-log metadata and verify every
+    // recorded length and digest before the archive is built.
+    const commentFiles = await this.captureCommentAttachments(cwd, seen)
+    for (const file of commentFiles) {
+      files.push(file)
+      workingBytes += file.data.length
+    }
+
     // Ignored paths: grouped per ignored root (--directory), each measured so the user is told
     // the count and the bytes they are NOT carrying, not just that "some" files were skipped.
     const ignored = await this.git(cwd, ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z', '--', '.'])
@@ -976,6 +721,43 @@ export class ProjectArchiveService {
         ...finalized
       }
     }
+  }
+
+  private async captureCommentAttachments(cwd: string, seen: Set<string>): Promise<{ path: string; data: Buffer }[]> {
+    const logPath = path.join(cwd, LOG_DIR, LOG_FILE)
+    const raw = await fs.readFile(logPath, 'utf8').catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return ''
+      throw error
+    })
+    if (!raw) return []
+    const out: { path: string; data: Buffer }[] = []
+    const logRel = `${LOG_DIR}/${LOG_FILE}`
+    if (!seen.has(logRel)) {
+      const logStat = await fs.lstat(logPath).catch(() => null)
+      if (!logStat || logStat.isSymbolicLink() || !logStat.isFile()) throw new Error('The board-log archive entry is not a regular file.')
+      const logData = Buffer.from(raw, 'utf8')
+      if (logData.length > BOARD_LOG_ATTACHMENT_LIMITS.maxTotalBytes) throw new Error('The board-log attachment manifest exceeds its bound.')
+      out.push({ path: logRel, data: logData })
+      seen.add(logRel)
+    }
+    const referenced = parseLines(raw, { all: true }).flatMap((entry) => entry.attachments ?? [])
+    for (const attachment of referenced) {
+      const candidate: unknown = attachment
+      if (!validBoardLogAttachment(candidate)) throw new Error('The comment attachment metadata is invalid.')
+      if (out.length >= BOARD_LOG_ATTACHMENT_LIMITS.maxPerComment * 1000) throw new Error('Too many comment attachments for an archive.')
+      const rel = `.nodeterm/board-attachments/${attachment.id}.bin`
+      if (seen.has(rel)) continue
+      const full = path.join(cwd, '.nodeterm', 'board-attachments', `${attachment.id}.bin`)
+      const stat = await fs.lstat(full).catch(() => null)
+      if (!stat || stat.isSymbolicLink() || !stat.isFile()) throw new Error(`The referenced comment attachment is missing or unsafe: ${attachment.id}`)
+      if (stat.size !== attachment.bytes || stat.size > BOARD_LOG_ATTACHMENT_LIMITS.maxBytes) throw new Error(`The referenced comment attachment has an unexpected length: ${attachment.id}`)
+      const data = await fs.readFile(full)
+      const digest = createHash('sha256').update(data).digest('hex')
+      if (digest !== attachment.sha256) throw new Error(`The referenced comment attachment failed its SHA-256 check: ${attachment.id}`)
+      seen.add(rel)
+      out.push({ path: rel, data })
+    }
+    return out
   }
 
   /** No git repo: there is no ignore rule to respect, so EVERYTHING regular is included (the size
@@ -1046,8 +828,9 @@ export class ProjectArchiveService {
   // ── Import-side restore ───────────────────────────────────────────────────────────────────────
 
   private async assertEmptyDestination(destination: string): Promise<void> {
-    const st = await fs.stat(destination).catch(() => null)
-    if (!st?.isDirectory()) throw new Error(`The destination is not a folder: ${destination}`)
+    await assertNoSymlinkAncestors(destination)
+    const st = await fs.lstat(destination).catch(() => null)
+    if (!st?.isDirectory() || st.isSymbolicLink()) throw new Error(`The destination is not a safe folder: ${destination}`)
     const children = await fs.readdir(destination)
     if (children.length > 0) {
       throw new Error(
@@ -1059,14 +842,45 @@ export class ProjectArchiveService {
 
   private async extractFiles(destination: string, fileEntries: { rel: string; data: Buffer }[]): Promise<void> {
     const root = path.resolve(destination)
+    await assertNoSymlinkAncestors(root)
+    const rootStat = await fs.lstat(root).catch(() => null)
+    if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) throw new Error('The destination contains an unsafe link.')
+    this.validateArchivedCommentAttachments(fileEntries)
     for (const entry of fileEntries) {
       // openContainer already refused unsafe names; this is the belt-and-braces resolve check.
       const target = path.resolve(root, ...entry.rel.split('/'))
       if (target !== root && !target.startsWith(root + path.sep)) {
         throw new Error(`Refusing to write outside the destination: ${entry.rel}`)
       }
+      for (const ancestor of ancestors(root, path.dirname(target))) {
+        const stat = await fs.lstat(ancestor).catch(() => null)
+        if (stat?.isSymbolicLink() || (stat && !stat.isDirectory())) throw new Error(`Refusing to follow an unsafe destination ancestor: ${entry.rel}`)
+      }
       await fs.mkdir(path.dirname(target), { recursive: true })
-      await fs.writeFile(target, entry.data)
+      const parentStat = await fs.lstat(path.dirname(target))
+      if (parentStat.isSymbolicLink() || !parentStat.isDirectory()) throw new Error(`Refusing to write through an unsafe destination ancestor: ${entry.rel}`)
+      await assertNoSymlinkAncestors(path.dirname(target))
+      const temp = `${target}.${randomUUID()}.tmp`
+      try {
+        await fs.writeFile(temp, entry.data, { flag: 'wx' })
+        await renameAtomic(temp, target)
+      } finally {
+        await fs.rm(temp, { force: true }).catch(() => {})
+      }
+    }
+  }
+
+  private validateArchivedCommentAttachments(fileEntries: { rel: string; data: Buffer }[]): void {
+    const log = fileEntries.find((entry) => entry.rel === '.nodeterm/board-log.jsonl')
+    if (!log) return
+    const blobs = new Map(fileEntries.filter((entry) => entry.rel.startsWith('.nodeterm/board-attachments/')).map((entry) => [entry.rel, entry.data]))
+    for (const entry of parseLines(log.data.toString('utf8'), { all: true })) {
+      for (const attachment of entry.attachments ?? []) {
+        const candidate: unknown = attachment
+        if (!validBoardLogAttachment(candidate)) throw new Error('Imported comment attachment metadata is invalid.')
+        const data = blobs.get(attachment.ref)
+        if (!data || data.length !== attachment.bytes || createHash('sha256').update(data).digest('hex') !== attachment.sha256) throw new Error(`Imported comment attachment failed integrity verification: ${attachment.id}`)
+      }
     }
   }
 

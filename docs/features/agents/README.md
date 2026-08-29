@@ -21,6 +21,8 @@ Cognition Devin are built in; any other CLI can be added as a custom agent.
   and touch route to the existing context-link behavior.
 - [Context-window progress](./context-window-progress.md) — provider telemetry sources, honest
   unknown and stale states, generation fencing, and the shared meter across node and board views.
+- [Context-window meter](./context-window-meter.md) — provider-qualified telemetry, bounded
+  transcript indexing, and lifecycle-safe refresh behavior.
 - [Per-node model switching](./model-switching.md) — gateway discovery, explicit model choice,
   running-node recycle and resume, ownership checks, persistence, and recovery boundaries.
 - [Managed Codex account behavior](./codex-account-behavior.md) — isolated account lifecycle,
