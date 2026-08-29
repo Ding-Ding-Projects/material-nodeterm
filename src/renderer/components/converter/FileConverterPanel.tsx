@@ -204,7 +204,6 @@ function QueueRow({
  * concurrency queue with pause/resume/cancel/retry.
  *
  * Known gaps versus the full house contract, left for a follow-up (see docs/file-converter.md):
- * the per-category search boxes are plain substring search, not the full anchored regex builder;
  * the overwrite/lossy gate is the app's existing ConfirmDialog-style inline confirm rather than the
  * full two-key destructive-action slider; and the queue list here shows the first page only (no
  * pager control yet) — the engine itself is already paginated (converter.state(offset, limit)).

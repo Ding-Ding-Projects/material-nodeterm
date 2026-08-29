@@ -27,7 +27,43 @@ src/core/converter/
 src/renderer/components/converter/
   AdapterCatalog.tsx           categorized, searchable catalog picker
   FileConverterPanel.tsx       the whole user-facing panel
+src/renderer/nodes/ConverterNode.tsx
+                                first-class canvas node using the same active-project converter API
 ```
+
+## Express File Converter node
+
+The canvas also offers a first-class **New file converter** node. It is intended to sit beside the
+terminal, editor, or project that produced the files, while the existing Tools drawer remains useful
+for a larger queue review. Create it from the canvas context menu's Canvas objects group, from a
+selected group context menu, or from the command palette's **New file converter node** action.
+
+The node keeps the complete workflow in one bounded, keyboard-accessible surface:
+
+- Drop files onto the intake zone or use the native multi-file picker. Browser Edition stages the
+  selected bytes through the authenticated local upload route, while Desktop reads paths on the
+  active machine. A duplicate path is ignored instead of creating two queue entries.
+- Pick a target from the categorized adapter catalog. Every category remains visible, including
+  unavailable formats with the exact missing dependency named. Each category's search is plain text by
+  default and has its own adjacent anchored full regex builder.
+- Review the detected source kind, size, and detection note in the preview. Lossy adapters disclose
+  their known omissions and require an explicit acknowledgement before queueing.
+- Choose an output folder with a native folder picker. Preflight reports folder availability,
+  writability, and free space before queueing. The core service chooses collision-safe destination
+  names and writes atomically, so a failed or cancelled conversion cannot leave a partial result.
+- Switch to Queue to start or pause work, tune bounded parallelism from 1 through 6, cancel one
+  item or the batch, retry failed items, and inspect partial outcomes. Per-item progress, errors,
+  needs-confirmation state, and terminal status remain visible.
+- A completed result can be opened directly in Visual Studio Code through the detected local
+  installation, or revealed in the platform file manager. The node probes for VS Code before
+  enabling the handoff and explains when it is unavailable. The handoff acts on the generated
+  path, not on a display-only preview.
+
+The node's persisted project data is limited to its title, colour, placement, and relationships.
+Queue entries, source paths, output paths, progress, caches, and runtime state stay in the active
+machine's converter queue store. Opening a shared project therefore never publishes one person's
+filesystem layout. A new machine starts with an empty local queue and can immediately choose its
+own files and destination.
 
 ## Session routing and shipped surfaces
 
@@ -183,9 +219,10 @@ partially-successful batch is never presented as a uniform success or a uniform 
   rule.
 - **No ZIP/TAR/7-Zip container support**, bundled or otherwise — listed disabled with their exact
   missing library.
-- **Per-category search is plain substring matching**, not the full anchored regex-builder popover
-  described in the house UI contract. A future pass should give each category's search field (and
-  every other search field in these two panels) a real regex-builder affordance.
+- **The category searches now use the full anchored regex-builder popover.** Plain text remains the
+  default, and each category owns its own query, flags, validation, and regex mode. Other converter
+  surfaces may still have narrower search affordances and should adopt the same component when they
+  are next changed.
 - **The overwrite/lossy confirmation is the app's existing inline `ConfirmDialog`-style flow**
   (a message + explicit acknowledgement), not the full two-key, slider-gated destructive-action
   super-confirmation used elsewhere in the codebase for irreversible actions. Overwriting a file is

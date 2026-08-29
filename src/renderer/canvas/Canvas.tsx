@@ -92,6 +92,7 @@ import { StickyNode } from '../nodes/StickyNode'
 import { GroupNode, setWorktreeActionHandler, setWslActionHandler } from '../nodes/GroupNode'
 import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
+import ConverterNode from '../nodes/ConverterNode'
 import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
@@ -575,6 +576,7 @@ import {
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createAuthenticatorNode,
+  createConverterNode,
   createNsisNode,
   createStickyNode,
   createTerminalNode,
@@ -1793,6 +1795,7 @@ export function Canvas() {
       group: withNodeBoundary(GroupNode),
       annotation: withNodeBoundary(AnnotationNode),
       authenticator: withNodeBoundary(AuthenticatorNode),
+      converter: withNodeBoundary(ConverterNode),
       editor: withNodeBoundary(LazyEditorNode),
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
@@ -4593,6 +4596,19 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createAuthenticatorNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  /** Adds the canvas-local file converter. Its queue is machine-local, while title, colour and
+   * placement remain safe to carry in the shared project projection. */
+  const addConverter = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createConverterNode(ns.length, center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -8748,6 +8764,11 @@ export function Canvas() {
           icon: <IconLock />,
           onClick: () => addAuthenticator(at, groupId)
         },
+        {
+          label: 'New file converter',
+          icon: <IconConvert />,
+          onClick: () => addConverter(at, groupId)
+        },
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
           ? []
@@ -8805,6 +8826,7 @@ export function Canvas() {
       agentCreationItems,
       addSticky,
       addAuthenticator,
+      addConverter,
       addNativeLoop,
       addToExistingGroup,
       groupSelection
@@ -8921,6 +8943,11 @@ export function Canvas() {
               label: 'New authenticator',
               icon: <IconLock />,
               onClick: () => addAuthenticator(at)
+            },
+            {
+              label: 'New file converter',
+              icon: <IconConvert />,
+              onClick: () => addConverter(at)
             },
             {
               label: 'New NSIS installer…',
@@ -9045,6 +9072,7 @@ export function Canvas() {
       agentCreationItems,
       addSticky,
       addAuthenticator,
+      addConverter,
       addNsis,
       addNativeLoop,
       addDino,
@@ -13022,6 +13050,13 @@ export function Canvas() {
             run: () => addAuthenticator()
           },
           {
+            id: 'new-converter',
+            label: 'New file converter node',
+            hint: 'categorized adapter catalog files output folder queue progress cancellation VS Code',
+            icon: <IconConvert />,
+            run: () => addConverter()
+          },
+          {
             id: 'new-nsis',
             label: 'New NSIS installer…',
             icon: <IconEditor />,
@@ -13279,6 +13314,8 @@ export function Canvas() {
           <IconEditor />
         ) : n.type === 'sticky' ? (
           <IconNote />
+        ) : n.type === 'converter' ? (
+          <IconConvert />
         ) : (
           <IconTerminal />
         )
@@ -13375,6 +13412,7 @@ export function Canvas() {
     terminalProfileMenuChoices,
     addAgentNode,
     addSticky,
+    addConverter,
     addNsis,
     addNativeLoop,
     addDino,
@@ -13859,6 +13897,7 @@ export function Canvas() {
                 y: r.top,
                 items: [
                   { label: 'File converter', onClick: () => setConverterOpen(true) },
+                  { label: 'New file converter node', icon: <IconConvert />, onClick: () => addConverter() },
                   { label: 'Ollama manager', onClick: () => setOllamaOpen(true) },
                   {
                     label: 'Password manager',

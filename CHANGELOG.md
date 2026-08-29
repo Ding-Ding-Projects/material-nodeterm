@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an Express File Converter canvas node with drop and picker intake, categorized adapter search
+  with anchored regex builders, detected-file preview, loss disclosure, output-folder preflight,
+  bounded queue progress and cancellation, atomic collision-safe output, and direct VS Code handoff.
+  Implementation and documentation are present; tests, packaging, and built-artifact verification
+  remain pending for this ultra-speed lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

@@ -57,6 +57,7 @@ const VIDEO_SIZE = { width: 640, height: 420 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
+const CONVERTER_SIZE = { width: 760, height: 640 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
@@ -979,6 +980,24 @@ export function createStickyNode(index: number, center?: { x: number; y: number 
   }
 }
 
+/** Creates a project-safe converter view. Queue items are machine-local in the converter store;
+ * this node deliberately persists only its user-facing title, colour and canvas placement. */
+export function createConverterNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('converter'),
+    type: 'converter',
+    position: placeAt(center, index, CONVERTER_SIZE.width, CONVERTER_SIZE.height),
+    width: CONVERTER_SIZE.width,
+    height: CONVERTER_SIZE.height,
+    style: { width: CONVERTER_SIZE.width, height: CONVERTER_SIZE.height },
+    data: {
+      title: 'File converter',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null
+    }
+  }
+}
+
 /**
  * Human-readable name and default title per service kind. One table, so the menu row, the node
  * header and any future palette entry cannot disagree about what a kind is called.
@@ -1448,6 +1467,7 @@ export function groupSelectedNodes(
 const NODE_KIND_TABLE: Record<NodeKind, true> = {
   terminal: true,
   authenticator: true,
+  converter: true,
   sticky: true,
   group: true,
   editor: true,
@@ -1485,6 +1505,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
 const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   terminal: TERMINAL_SIZE,
   authenticator: AUTHENTICATOR_SIZE,
+  converter: CONVERTER_SIZE,
   sticky: STICKY_SIZE,
   group: GROUP_SIZE,
   editor: EDITOR_SIZE,

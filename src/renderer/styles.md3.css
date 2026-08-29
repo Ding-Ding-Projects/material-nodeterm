@@ -8490,6 +8490,89 @@ button.term-node__title-text:focus-visible {
  * Shared primitives -- Ollama + Converter drawers
  * ------------------------------------------------------------------------------------------------- */
 
+/* Canvas converter node. The node reuses the converter service and catalog, but owns its own
+ * bounded surface so conversion stays beside the terminal or editor that produced the file. */
+.converter-node {
+  min-width: 560px;
+  min-height: 380px;
+  overflow: hidden;
+  background: var(--md-surface-container-low);
+  color: var(--md-on-surface);
+  border-top: 3px solid var(--md-primary);
+  box-shadow: var(--md-elevation-1, 0 1px 3px rgb(0 0 0 / 25%));
+}
+.converter-node__body {
+  height: calc(100% - 44px);
+  overflow: auto;
+  padding: 10px 12px 18px;
+  font-family: var(--font-ui);
+}
+.converter-node__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--md-outline-variant);
+  margin: -10px -12px 10px;
+  padding: 6px 12px 0;
+}
+.converter-node__tabs button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--md-shape-small, 8px) var(--md-shape-small, 8px) 0 0;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+.converter-node__tabs button[aria-selected='true'] {
+  border-bottom-color: var(--md-primary);
+  color: var(--md-primary);
+  background: var(--md-secondary-container);
+}
+.converter-node__drop {
+  display: grid;
+  place-items: center;
+  gap: 5px;
+  padding: 18px;
+  border: 1px dashed var(--md-outline);
+  border-radius: var(--md-shape-medium, 12px);
+  background: var(--md-surface-container);
+  text-align: center;
+}
+.converter-node__drop > span { color: var(--md-on-surface-variant); font-size: 11px; }
+.converter-node__body section { padding: 10px 0; border-bottom: 1px solid var(--md-outline-variant); }
+.converter-node__body h4 { margin: 0 0 7px; font-size: 12px; color: var(--md-on-surface-variant); }
+.converter-node__preview { display: grid; gap: 4px; list-style: none; padding: 0; margin: 0; }
+.converter-node__preview li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 7px; border-radius: 8px; background: var(--md-surface-container); font-size: 12px; }
+.converter-node__preview span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.converter-node__preview small { color: var(--md-on-surface-variant); white-space: nowrap; }
+.converter-node__destination .cv-actions > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--md-on-surface-variant); font-size: 11px; }
+.converter-node .cv-catalog { max-height: 270px; overflow: auto; }
+.converter-node .cv-cat__body { padding: 8px; }
+.converter-node .menu-filter__row { display: flex; align-items: center; gap: 5px; }
+.converter-node .menu-filter__input,
+.md3-converter .cv-cat__search .menu-filter__input {
+  min-width: 0;
+  flex: 1;
+  box-sizing: border-box;
+  background: var(--md-surface-container-highest);
+  border: 1px solid transparent;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface);
+  padding: 8px 12px;
+  font-family: var(--font-ui);
+}
+.md3-converter .cv-cat__search .menu-filter__input:focus,
+.converter-node .menu-filter__input:focus {
+  outline: none;
+  border-color: var(--md-primary);
+}
+.converter-node .cv-cat__search { margin-bottom: 6px; }
+.converter-node .cv-queue-controls { align-items: center; flex-wrap: wrap; }
+.converter-node .cv-items { max-height: 360px; overflow: auto; }
+
 .md3-ollama .drawer.ollama,
 .md3-converter .drawer.converter {
   width: 640px;

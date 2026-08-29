@@ -352,6 +352,10 @@ export type NodeKind =
   // persists a title and a colour and nothing else, because an entry id names a credential in
   // this machine's OS vault while project.json is git-shared. See AuthenticatorNode.tsx.
   | 'authenticator'
+  // A canvas-local view of the bounded file conversion queue. Source and destination paths stay
+  // in the active machine's converter store; only the node title and visual state travel with the
+  // project, so opening a shared project never leaks somebody else's filesystem.
+  | 'converter'
   // The SERVICE family: one node per external thing this canvas can manage. They are ordinary
   // nodes — dragged, resized, coloured, grouped, persisted and deleted exactly like a terminal —
   // because a managed service is a thing you arrange on a canvas beside the terminals working on

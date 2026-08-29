@@ -218,7 +218,8 @@ Identical on desktop and in the browser.
   [`docs/exports.md`](./docs/exports.md) and [`docs/bulk-actions.md`](./docs/bulk-actions.md).
 - **Universal file converter** — a local, offline conversion surface (documents/PDF, images,
   audio, video, archives, structured data, code/text, binary encodings) reachable from the nav
-  rail's Tools destination or the command palette. See
+  rail's Tools destination, the command palette, or a first-class **File converter** canvas node.
+  See
   [`docs/file-converter.md`](./docs/file-converter.md).
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See

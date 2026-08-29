@@ -2,7 +2,7 @@
 
 **Category:** [Canvas](./README.md)
 
-Everything on a nodeterm canvas is a node. Six kinds exist today, and every one is rendered by
+Everything on a nodeterm canvas is a node. The core canvas supports several kinds, and every one is rendered by
 the same underlying canvas engine — so they all pan, zoom, resize, group, and persist the same
 way, while each contributes its own body content and header actions.
 
@@ -16,6 +16,7 @@ way, while each contributes its own body content and header actions.
 | **Group** | A real container node — other nodes can live *inside* it, and groups can nest inside groups. A group can optionally be bound to a git worktree, so every node created inside it inherits that worktree's directory. See [Source control & worktrees](../source-control/source-control-and-worktrees.md). |
 | **Editor** | A Monaco-based code editor bound to a file path, with save, dirty-state tracking, and a markdown preview toggle for `.md` files. Image files render as an `<img>` preview instead of source text. |
 | **Diff** | A read-only Monaco diff view comparing HEAD↔index (staged) or index↔working tree (unstaged) for a single file. |
+| **File converter** | An Express File Converter node for dropping or browsing files, choosing a categorized target adapter, previewing loss disclosures, selecting an output folder, and operating the bounded conversion queue. Queue paths and runtime state remain local to the machine. See [Universal file converter](../../file-converter.md). |
 
 Two other things render *on* the canvas but are not persisted node kinds: **subagent cards**
 (ephemeral cards showing an agent's spawned subagents, connected by an edge to the parent
@@ -55,8 +56,10 @@ rather than an in-session loop).
 
 ## Verification
 
-- Create one of each node kind from the canvas right-click menu, the bottom-dock **+** button,
-  and the command palette (`⌘K`) — all three should offer the same set.
+- Create one of each node kind from the canvas right-click menu, the add-node surface, and the
+  command palette (`Ctrl+Shift+F`) where that kind is offered. For the File converter, drop a file,
+  choose a bundled adapter and destination, then confirm the completed output can be opened in the
+  external editor handoff.
 - Reload the app and confirm every node kind's state (position, size, color, and kind-specific
   data such as an editor's open file) survived exactly as it was.
 - Group a mix of node kinds together, collapse the group, and confirm its children stay bound

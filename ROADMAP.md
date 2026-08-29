@@ -153,6 +153,9 @@ intentionally unchecked because this task publishes the plan only.
 
 - [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes.
 - [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
+  The Express File Converter canvas node, categorized adapter catalog, guided intake, preview,
+  bounded queue controls, and VS Code handoff are implemented in the current lane; tests, packaging,
+  and built-artifact verification remain pending.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.

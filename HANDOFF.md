@@ -1459,3 +1459,23 @@ switcher and FAB menu on a real screen — nothing above substitutes for that. T
 the `.mc-console` styling defect and the two atomic-write violations found above are worth a
 one-line fix before the next release, since both are small, both are diagnosed, and neither
 requires touching anything MD3-specific to correct.
+# Express File Converter lane, 2026-08-26
+
+The current lane adds `src/renderer/nodes/ConverterNode.tsx` as a first-class canvas node. It uses
+the active project's existing converter API, so source and destination paths, queue progress, and
+runtime state remain on the machine that owns the queue. The node supports drop and picker intake,
+categorized adapter selection, per-category anchored regex search, detection preview, lossy
+disclosure, output-folder preflight, bounded queue controls, cancellation and retry, atomic
+collision-safe output through the core service, and direct VS Code handoff for completed results.
+
+Canvas wiring is in `src/shared/types.ts`, `src/renderer/state/workspace.ts`, and
+`src/renderer/canvas/Canvas.tsx`. The shared catalog search in
+`src/renderer/components/converter/AdapterCatalog.tsx` now uses the reusable anchored regex
+builder. Styling is in `src/renderer/styles.md3.css`. Documentation was updated in
+`docs/file-converter.md` and `docs/features/canvas/node-kinds.md`; the roadmap and changelog record
+the lane as implementation-present but unverified.
+
+No tests, builds, packaging, commits, pushes, runtime interaction checks, or screenshots were run in
+this lane. The next owner should verify the real built app, exercise the node from each creation
+path, confirm local queue persistence and atomic output, and then complete the normal integration
+and release evidence.
