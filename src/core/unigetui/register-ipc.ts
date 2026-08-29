@@ -6,8 +6,8 @@ import { UniGetUiUniverseStore } from './store'
 
 /** Register the machine-owned UniGetUI Global Universe. No handler accepts activeProjectId. */
 export function registerUniGetUiIpc(platform: CorePlatform): { client: UniGetUiClient; store: UniGetUiUniverseStore } {
-  const client = new UniGetUiClient()
   const store = new UniGetUiUniverseStore(platform.userDataDir)
+  const client = new UniGetUiClient(store)
   platform.handle(IPC.unigetuiStatus, () => client.status())
   platform.handle(IPC.unigetuiUniverseState, () => store.load())
   platform.handle(IPC.unigetuiSaveUniverseState, (state) => store.save(state))

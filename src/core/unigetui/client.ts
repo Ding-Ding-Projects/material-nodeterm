@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import path from 'node:path'
 import { execFile as execFileCallback } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -13,12 +13,15 @@ import type {
   UniGetUiStatus,
   UniGetUiUniverseState
 } from '../../shared/unigetui'
-import { UNIGETUI_DEFAULT_UNIVERSE_STATE, sanitizeUniGetUiState } from '../../shared/unigetui'
+import { UNIGETUI_PAGES } from '../../shared/unigetui'
+import type { UniGetUiUniverseStore } from './store'
 
 const execFile = promisify(execFileCallback)
 const MAX_OUTPUT_BYTES = 1024 * 1024
 const DEFAULT_TIMEOUT_MS = 15_000
 const WAIT_TIMEOUT_MS = 60_000
+const NAVIGATABLE_PAGES = new Set<string>(UNIGETUI_PAGES.filter((page) => page !== 'overview' && page !== 'help'))
+const OPERATION_REORDER_ACTIONS = new Set(['run-now', 'run-next', 'run-last'])
 
 export class UniGetUiClientError extends Error {
   constructor(
@@ -38,6 +41,20 @@ function safeArg(value: unknown, max = 256): string {
     throw new UniGetUiClientError('UniGetUI argument is empty or contains unsupported characters.', 'malformed')
   }
   return trimmed
+}
+
+/** Validate a value that will be paired with a CLI option flag.
+ *
+ * `safeArg` deliberately accepts spaces and a leading dash because it is also used for free-form
+ * queries and identifiers. An option value is different: a leading dash would turn the caller's
+ * value into another CLI flag. Keep this validator conservative at the interpolation boundary.
+ */
+export function optionValue(value: unknown, max = 1024): string {
+  const text = safeArg(value, max)
+  if (text.startsWith('-') || !/^[\w.+:@/-]+$/u.test(text)) {
+    throw new UniGetUiClientError('UniGetUI option values must be plain values, not CLI flags.', 'malformed')
+  }
+  return text
 }
 
 function packageId(value: string): string {
@@ -112,7 +129,7 @@ function boolArg(value: boolean | undefined): string[] {
 
 function optionArgs(options: UniGetUiPackageInstallOptions): string[] {
   const args: string[] = []
-  const add = (flag: string, value: string | undefined) => { if (value !== undefined) args.push(flag, safeArg(value, 1024)) }
+  const add = (flag: string, value: string | undefined) => { if (value !== undefined) args.push(flag, optionValue(value)) }
   add('--manager', options.manager ? managerId(options.manager) : undefined)
   add('--source', options.source)
   add('--version', options.version)
@@ -131,10 +148,12 @@ function optionArgs(options: UniGetUiPackageInstallOptions): string[] {
 export class UniGetUiClient implements UniGetUiApi {
   private executable: string | null = null
 
+  constructor(private readonly universeStore: UniGetUiUniverseStore) {}
+
   private async locate(): Promise<string | null> {
     if (this.executable) return this.executable
     const names = process.platform === 'win32' ? ['unigetui.exe', 'UniGetUI.exe', 'unigetui'] : ['unigetui']
-    const dirs = (process.env.PATH ?? '').split(path.delimiter)
+    const trustedDirs: string[] = []
     if (process.platform === 'win32') {
       const local = process.env.LOCALAPPDATA
       const programFiles = process.env.ProgramFiles
@@ -142,15 +161,18 @@ export class UniGetUiClient implements UniGetUiApi {
       const programW6432 = process.env.ProgramW6432
       for (const root of [local, programFiles, programFilesX86, programW6432]) {
         if (!root) continue
-        dirs.push(root, path.join(root, 'UniGetUI'), path.join(root, 'UniGetUI', 'CLI'))
+        trustedDirs.push(root, path.join(root, 'UniGetUI'), path.join(root, 'UniGetUI', 'CLI'))
       }
     }
+    // Known installation roots win over inherited PATH. PATH remains a compatibility fallback,
+    // but every candidate gets the same regular-file and symlink checks.
+    const dirs = [...new Set([...trustedDirs, ...(process.env.PATH ?? '').split(path.delimiter).filter(Boolean)])]
     for (const dir of dirs) {
-      if (!dir) continue
       for (const name of names) {
         const candidate = path.join(dir, name)
         try {
-          await access(candidate)
+          const stat = await lstat(candidate)
+          if (!stat.isFile() || stat.isSymbolicLink()) continue
           this.executable = candidate
           return candidate
         } catch {
@@ -195,6 +217,7 @@ export class UniGetUiClient implements UniGetUiApi {
       return { json: stdout ? parseJson(stdout) : {}, stdout }
     } catch (error) {
       const e = error as { code?: unknown; killed?: boolean; stdout?: string; stderr?: string; message?: string }
+      if (e.code === 'ENOENT') this.executable = null
       if (e.killed) throw new UniGetUiClientError('The UniGetUI operation exceeded its time limit.', 'unavailable')
       const code = typeof e.code === 'number' ? e.code : null
       const rawDetail = typeof e.stderr === 'string' && e.stderr.trim() ? e.stderr.trim() : String(e.message ?? error)
@@ -216,17 +239,23 @@ export class UniGetUiClient implements UniGetUiApi {
     return (await this.runRaw(args, timeout)).json
   }
 
-  async universeState(): Promise<UniGetUiUniverseState> { return { ...UNIGETUI_DEFAULT_UNIVERSE_STATE } }
-  async saveUniverseState(state: UniGetUiUniverseState): Promise<UniGetUiUniverseState> { return sanitizeUniGetUiState(state) }
+  async universeState(): Promise<UniGetUiUniverseState> { return this.universeStore.load() }
+  async saveUniverseState(state: UniGetUiUniverseState): Promise<UniGetUiUniverseState> { return this.universeStore.save(state) }
   async appStatus(): Promise<unknown> { return this.run(['app', 'status']) }
-  async navigate(page: Exclude<import('../../shared/unigetui').UniGetUiPage, 'overview' | 'help'>): Promise<unknown> { return this.run(['app', 'navigate', '--page', safeArg(page)]) }
+  async navigate(page: Exclude<import('../../shared/unigetui').UniGetUiPage, 'overview' | 'help'>): Promise<unknown> {
+    if (typeof page !== 'string' || !NAVIGATABLE_PAGES.has(page)) throw new UniGetUiClientError('UniGetUI navigation page is not supported.', 'malformed')
+    return this.run(['app', 'navigate', '--page', optionValue(page)])
+  }
   async operations(): Promise<UniGetUiOperation[]> { return asArray<UniGetUiOperation>(await this.run(['operation', 'list'])) }
   async operation(id: string): Promise<UniGetUiOperation | null> { return (await this.run(['operation', 'get', '--id', operationId(id)])) as UniGetUiOperation }
   async operationOutput(id: string, tail = 100): Promise<string[]> { const n = Math.max(1, Math.min(500, Math.floor(tail))); return asArray<string>(await this.run(['operation', 'output', '--id', operationId(id), '--tail', String(n)])) }
   async operationWait(id: string, timeoutSeconds = 60): Promise<UniGetUiOperation | null> { const n = Math.max(1, Math.min(300, Math.floor(timeoutSeconds))); return (await this.run(['operation', 'wait', '--id', operationId(id), '--timeout', String(n)], WAIT_TIMEOUT_MS)) as UniGetUiOperation }
   async operationCancel(id: string): Promise<unknown> { return this.run(['operation', 'cancel', '--id', operationId(id)]) }
-  async operationRetry(id: string, mode = 'default'): Promise<unknown> { return this.run(['operation', 'retry', '--id', operationId(id), '--mode', safeArg(mode, 64)]) }
-  async operationReorder(id: string, action: 'run-now' | 'run-next' | 'run-last'): Promise<unknown> { return this.run(['operation', 'reorder', '--id', operationId(id), '--action', action]) }
+  async operationRetry(id: string, mode = 'default'): Promise<unknown> { return this.run(['operation', 'retry', '--id', operationId(id), '--mode', optionValue(mode, 64)]) }
+  async operationReorder(id: string, action: 'run-now' | 'run-next' | 'run-last'): Promise<unknown> {
+    if (typeof action !== 'string' || !OPERATION_REORDER_ACTIONS.has(action)) throw new UniGetUiClientError('UniGetUI reorder action is not supported.', 'malformed')
+    return this.run(['operation', 'reorder', '--id', operationId(id), '--action', optionValue(action, 32)])
+  }
   async operationForget(id: string): Promise<unknown> { return this.run(['operation', 'forget', '--id', operationId(id)]) }
   async managers(): Promise<UniGetUiManager[]> { return asArray<UniGetUiManager>(await this.run(['manager', 'list'])) }
   async managerAction(manager: string, action: string, input: { path?: string; confirm?: boolean } = {}): Promise<unknown> {
