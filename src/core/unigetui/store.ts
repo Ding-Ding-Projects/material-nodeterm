@@ -34,13 +34,17 @@ export class UniGetUiUniverseStore {
 
   async save(value: unknown): Promise<UniGetUiUniverseState> {
     const next = sanitizeUniGetUiState(value)
-    this.stateValue = { ...next, updatedAt: Date.now() }
+    const snapshot = { ...next, updatedAt: Date.now() }
+    this.stateValue = snapshot
     this.loaded = true
-    this.writeChain = this.writeChain.then(async () => {
+    const run = this.writeChain.then(async () => {
       await mkdir(this.userDataDir, { recursive: true })
-      await writeFileAtomic(this.filePath, JSON.stringify(this.stateValue, null, 2) + '\n', { mode: 0o600 })
+      await writeFileAtomic(this.filePath, JSON.stringify(snapshot, null, 2) + '\n', { mode: 0o600 })
     })
-    await this.writeChain
-    return { ...this.stateValue }
+    // Keep the internal FIFO settled after a failed write so one transient filesystem error
+    // cannot silently disable every later save. The caller still receives this write's error.
+    this.writeChain = run.catch(() => {})
+    await run
+    return { ...snapshot }
   }
 }

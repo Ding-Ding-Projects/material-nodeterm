@@ -101,7 +101,7 @@ function jsonStore(value: unknown): BindingStoreFile {
   return { version: STORE_VERSION, bindings }
 }
 
-class OpenWebUiStore {
+export class OpenWebUiStore {
   private readonly file: string
   private value: BindingStoreFile = { version: STORE_VERSION, bindings: {} }
   private loaded = false
@@ -128,8 +128,14 @@ class OpenWebUiStore {
     await this.load()
     this.value.bindings[nodeId] = binding
     const body = JSON.stringify(this.value, null, 2)
-    this.writing = this.writing.then(() => writeFileAtomic(this.file, body, { mode: 0o600 }))
-    await this.writing
+    const run = this.writing.then(async () => {
+      await fs.mkdir(path.dirname(this.file), { recursive: true })
+      await writeFileAtomic(this.file, body, { mode: 0o600 })
+    })
+    // A failed publication must not poison the FIFO. Later saves still need to reach disk, while
+    // this caller receives the real error from its own write.
+    this.writing = run.catch(() => {})
+    await run
   }
 }
 
