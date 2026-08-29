@@ -1,11 +1,21 @@
 import { describe, it, expect } from 'vitest'
-import { parseRpcMessage, encodeArgs, encodePtyData, decodePtyData } from './rpc'
+import { parseRpcMessage, encodeArgs, encodePtyData, decodePtyData, rpcErrorDetails } from './rpc'
 
 /** What a sender actually puts on the wire: encode the arg slots, then JSON. */
 const wire = (method: string, ...args: unknown[]): string =>
   JSON.stringify({ t: 'cast', method, ...encodeArgs(args) })
 
 describe('rpc protocol', () => {
+  it('round-trips typed WSL error details without accepting arbitrary error object fields', () => {
+    const details = rpcErrorDetails(Object.assign(new Error('parse failed'), {
+      code: 'parse-failed', messageId: 'catalogueParseFailed', facts: ['wsl.exe'], detail: 'header'
+    }))
+    expect(details).toEqual({
+      code: 'parse-failed', messageId: 'catalogueParseFailed', facts: ['wsl.exe'], detail: 'header'
+    })
+    expect(rpcErrorDetails(new Error('plain failure'))).toBeUndefined()
+  })
+
   it('parses each message kind and rejects malformed input', () => {
     expect(parseRpcMessage('{"t":"req","id":1,"method":"pty:create","args":[{}]}')).toEqual({
       t: 'req', id: 1, method: 'pty:create', args: [{}]

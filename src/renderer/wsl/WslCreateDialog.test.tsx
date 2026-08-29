@@ -161,17 +161,17 @@ describe('WslCreateDialog', () => {
     render({
       error: {
         ownership: 'external-factual',
-        text: externalError,
+        text: '',
         facts: ['wsl.exe', 'my-project', 'Ubuntu 24.04 LTS'],
-        authoredPrefix: 'operationErrorPrefix'
+        params: { error: externalError },
+        authoredTemplate: 'failed'
       } satisfies WslExternalFactError
     })
     expect(document.body.textContent).toContain('New Linux instance')
     expect(document.querySelector('input[aria-label="Find distributions"]')).not.toBeNull()
     expect(document.body.textContent).toContain('Ubuntu 24.04 LTS')
     expect(document.body.textContent).toContain('my-project')
-    expect(document.body.textContent).toContain('The Linux operation reported an error:')
-    expect(document.body.textContent).toContain('wsl.exe could not make')
+    expect(document.body.textContent).toMatch(/Linux creation (failed|did not finish|tripped over).*wsl\.exe could not make/)
     expect(document.body.textContent).toContain('Make it happen')
   })
 
@@ -249,6 +249,30 @@ describe('WslCreateDialog', () => {
     expect(document.querySelector(`input[aria-label="${WSL_COPY.filterLabel.fallback}"]`)).not.toBeNull()
     expect(document.querySelector('.wsl-create-dialog__description')?.textContent).toContain('WSL')
     expect(document.body.textContent).toContain('Ubuntu 24.04 LTS')
+  })
+
+  it('fails closed while School state is unhydrated and updates live when the switch changes', () => {
+    usePersonalVocabulary.setState({
+      entries: { 'New WSL instance': 'Secret workspace', WSL: 'Linux' },
+      status: 'loaded',
+      entryCount: 2,
+      loadedAt: Date.now(),
+      lastError: null
+    })
+    useSettings.setState({
+      settings: { ...DEFAULT_SETTINGS, languageMode: 'en', funnyLevelEn: 5, funnyLevelYue: 5 },
+      base: { ...DEFAULT_SETTINGS, languageMode: 'en', funnyLevelEn: 5, funnyLevelYue: 5 },
+      hydrated: true
+    })
+    useSchoolMode.setState({ enabled: false, hydrated: false })
+    render()
+    expect(document.body.textContent).toContain(WSL_COPY.title.fallback)
+    expect(document.body.textContent).not.toContain('Secret workspace')
+    act(() => useSchoolMode.setState({ enabled: true, hydrated: true }))
+    expect(document.body.textContent).toContain(WSL_COPY.title.fallback)
+    expect(document.body.textContent).not.toContain('Secret workspace')
+    act(() => useSchoolMode.setState({ enabled: false, hydrated: true }))
+    expect(document.body.textContent).toContain('Secret workspace')
   })
 
   it('ships five English and Cantonese variants for every WSL dialog copy entry', () => {

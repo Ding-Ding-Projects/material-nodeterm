@@ -313,7 +313,7 @@ export class RpcClient {
       if (!entry) return
       this.pending.delete(m.id)
       if (m.ok) entry.resolve(m.result)
-      else entry.reject(Object.assign(new Error(m.error.message), { code: m.error.code }))
+      else entry.reject(Object.assign(new Error(m.error.message), { code: m.error.code, details: m.error.details }))
     } else if (m.t === 'ev') {
       this.fanOut(m.channel, m.args)
     }

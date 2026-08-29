@@ -578,7 +578,8 @@ import {
 import { WslCreateDialog } from '../wsl/WslCreateDialog'
 import { useWsl } from '../state/wsl'
 import { resolveWslApi } from '../wsl/wslCoreApi'
-import type { WslExternalFactError } from '../wsl/wslCopy'
+import type { WslExternalFactError, WslCopyKey } from '../wsl/wslCopy'
+import type { WslCreateError } from '@shared/wsl'
 import { boundGroups, scmScopes, defaultScmScope, selectedScmGroupId } from '@shared/scm-scope'
 import {
   canvasImageFiles,
@@ -7692,17 +7693,28 @@ export function Canvas() {
       const selectedCatalogueLabel = wslCatalogue.find((entry) => entry.id === v.catalogueId)?.label ?? v.catalogueId
       const res = await resolveWslApi()
         .create({ operationId: v.operationId, catalogueId: v.catalogueId, name: v.name })
-        .catch((e: unknown) => ({
-          ok: false as const,
-          error: e instanceof Error ? e.message : String(e)
-        }))
+        .catch((e: unknown) => {
+          const details = e instanceof Error && 'details' in e ? (e as Error & { details?: unknown }).details : undefined
+          if (details && typeof details === 'object' && !Array.isArray(details) && 'code' in details && 'message' in details) {
+            return { ok: false as const, error: details as WslCreateError }
+          }
+          const detail = e instanceof Error ? e.message : String(e)
+          return {
+            ok: false as const,
+            error: {
+              code: 'create-failed',
+              message: { id: 'failed', params: { error: detail }, facts: [detail] }
+            } satisfies WslCreateError
+          }
+        })
       setWslBusy(false)
       if (!res.ok) {
         setWslError({
           ownership: 'external-factual',
-          text: res.error,
-          facts: ['wsl.exe', v.name, selectedCatalogueLabel],
-          authoredPrefix: 'operationErrorPrefix'
+          text: '',
+          facts: [...res.error.message.facts, selectedCatalogueLabel],
+          params: res.error.message.params,
+          authoredTemplate: res.error.message.id as WslCopyKey
         })
         return
       }

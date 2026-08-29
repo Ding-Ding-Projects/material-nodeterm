@@ -163,4 +163,27 @@ describe('the WSL catalogue and creation progress channels', () => {
     expect(installing.message.facts).toEqual(expect.arrayContaining(['wsl.exe', 'my-project', 'Ubuntu', operationId]))
     expect(progress.every((entry) => typeof entry.message === 'object' && typeof entry.message.id === 'string')).toBe(true)
   })
+
+  it('returns a typed create failure without duplicating the English diagnostic', async () => {
+    const operationId = '123e4567-e89b-42d3-a456-426614174001'
+    const runtime = fakeWslRuntime({
+      responses: {
+        '--status': STATUS_OK,
+        '--list --verbose': VERBOSE_LIST_FIXTURE,
+        '--install --distribution Ubuntu --name my-project --no-launch': {
+          stdout: Buffer.alloc(0), stderr: Buffer.from('permission denied'), exitCode: 1
+        }
+      }
+    })
+    startWslService({ runtime, ownership: inMemoryWslOwnershipStore([]) })
+    const result = await platform.handlers[IPC.wslCreate]({ operationId, catalogueId: 'Ubuntu', name: 'my-project' }) as {
+      ok: false
+      error: { code: string; message: { id: string; params: Record<string, string>; facts: readonly string[] } }
+    }
+    expect(result.ok).toBe(false)
+    expect(result.error.code).toBe('create-failed')
+    expect(result.error.message.id).toBe('failed')
+    expect(result.error.message.params.error).toBe('wsl.exe could not create "my-project" from "Ubuntu".')
+    expect(result.error.message.facts).toEqual(expect.arrayContaining(['wsl.exe', 'my-project', 'Ubuntu']))
+  })
 })

@@ -1912,6 +1912,13 @@ export const CATALOG: Catalog = {
     en: ['WSL instance "{name}" was created before cancellation completed; no canvas frame was bound.', 'WSL instance "{name}" was created before cancellation finished, so no canvas frame was bound.', 'WSL instance "{name}" already existed when cancellation completed; no canvas frame was bound.', 'WSL instance "{name}" beat cancellation to the finish line, so no canvas frame was bound.', 'WSL instance "{name}" crossed the finish line before cancellation, and the canvas wisely kept its hands in its pockets.'],
     yue: ['取消完成之前，WSL 實例「{name}」已建立；沒有綁定畫布框架。', '取消完成之前，WSL 實例「{name}」已建立，所以沒有綁定畫布框架。', '取消完成時 WSL 實例「{name}」已存在；沒有綁定畫布框架。', 'WSL 實例「{name}」跑贏取消先到終點，所以沒有綁定畫布框架。', 'WSL 實例「{name}」早過取消衝線，畫布就醒目咁冇伸手亂拎。']
   },
+  'wsl.create.progress.stage.validating': { en: flat('validating'), yue: flat('驗證中') },
+  'wsl.create.progress.stage.checking': { en: flat('checking'), yue: flat('檢查中') },
+  'wsl.create.progress.stage.installing': { en: flat('installing'), yue: flat('安裝中') },
+  'wsl.create.progress.stage.recording': { en: flat('recording'), yue: flat('記錄中') },
+  'wsl.create.progress.stage.completed': { en: flat('completed'), yue: flat('已完成') },
+  'wsl.create.progress.stage.failed': { en: flat('failed'), yue: flat('失敗') },
+  'wsl.create.progress.stage.cancelled': { en: flat('cancelled'), yue: flat('已取消') },
   'wsl.create.progress.step': { en: flat('Step'), yue: flat('步驟') },
   'wsl.create.progress.of': { en: flat('of'), yue: flat('共') },
   'wsl.create.progress.aria': { en: flat('WSL creation phase progress'), yue: flat('WSL 建立階段進度') },
