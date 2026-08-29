@@ -2392,6 +2392,10 @@ export class PtyManager {
     // advertise it — without this, zsh themes and TUIs quietly clamp to the 256 palette and
     // the canvas terminals never match the user's real terminal colors (issue #78).
     const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' } as Record<string, string>
+    // Named recipes contribute only the already-validated safe environment from the trusted
+    // profile resolver. Protected process variables are rejected by that resolver and the base
+    // environment remains authoritative for PATH, identity and temporary directories.
+    if (resolvedProfile?.environment) Object.assign(env, resolvedProfile.environment)
     // The Server Edition may receive a first-boot password through its own environment. That
     // bootstrap credential belongs to the server process, never to the interactive shells and
     // agent CLIs it launches; inheriting it here would expose it to every terminal node.
@@ -2461,13 +2465,14 @@ export class PtyManager {
       Object.assign(env, codexSessionEnv(platform().userDataDir, options.codexAccountId))
     }
 
+    const effectiveAccountId = options.accountId ?? resolvedProfile?.accountId
     let accountDir =
-      options.accountId && !options.sshRemote ? claudeConfigDirFor(options.accountId) : null
+      effectiveAccountId && !options.sshRemote ? claudeConfigDirFor(effectiveAccountId) : null
     // Missing/deleted account dir (spec: error handling) → fall back to system default
     // instead of pointing claude at a dead dir; the node then behaves like an unbound one.
     // `accountFallback` is surfaced to the renderer (warning chip) via the create() result.
     if (accountDir && !fs.existsSync(accountDir)) {
-      console.warn(`[accounts] config dir missing for ${options.accountId}, using system default`)
+      console.warn(`[accounts] config dir missing for ${effectiveAccountId}, using system default`)
       accountDir = null
       accountFallback = true
     }

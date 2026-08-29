@@ -377,7 +377,13 @@ export const DOC_ARTICLES: DocArticle[] = [
     path: "docs/features/terminals/README.md",
     title: "Terminals",
     section: "Terminals",
-    body: "# Terminals\n\nReal shells running as nodes on the canvas, kept alive across app restarts by tmux or the\nstandalone Windows session host.\n\n- [Session continuity](./session-continuity.md) — how a terminal survives a node remount and app\n  restart, and how cold restore works after a machine reboot.\n- [Windows shell profiles](./windows-shell-profiles.md) — detected PowerShell, Command Prompt,\n  Git Bash, WSL, and custom profiles; defaults, switching, and the machine-local trust boundary.\n\nSee also [Canvas → Node kinds](../canvas/README.md) for how a terminal node fits alongside\nagent, sticky, editor and diff nodes, and [Agents](../agents/README.md) for the agent-specific\nbehaviour layered on top of a terminal node.\n"
+    body: "# Terminals\n\nReal shells running as nodes on the canvas, kept alive across app restarts by tmux or the\nstandalone Windows session host.\n\n- [Session continuity](./session-continuity.md) — how a terminal survives a node remount and app\n  restart, and how cold restore works after a machine reboot.\n- [Windows shell profiles](./windows-shell-profiles.md) — detected PowerShell, Command Prompt,\n  Git Bash, WSL, and custom profiles; defaults, switching, and the machine-local trust boundary.\n- [Named terminal profiles](./named-terminal-profiles.md) — machine-local shell recipes with start\n  directories, startup commands, accounts, and safe environment values.\n\nSee also [Canvas → Node kinds](../canvas/README.md) for how a terminal node fits alongside\nagent, sticky, editor and diff nodes, and [Agents](../agents/README.md) for the agent-specific\nbehaviour layered on top of a terminal node.\n"
+  },
+  {
+    path: "docs/features/terminals/named-terminal-profiles.md",
+    title: "Named terminal profiles",
+    section: "Terminals",
+    body: "# Named terminal profiles\n\nNamed terminal profiles save a local recipe for opening a shell in a known place. A profile has a\ndisplay name, a detected shell profile, an optional start directory, an optional startup command,\none managed local account binding, and bounded environment overrides.\n\nProfiles live in machine-local settings and never enter shared project files, portable archives,\npeer mutations, or exports. Missing or unreadable values fail closed without silently switching\nshells.\n\n## Verification\n\nThis lane intentionally did not run tests, type checks, lint, builds, packaging, runtime interaction,\nor captures. Those checks remain required before a release claim.\n\n## Suggested articles\n\n- [Windows shell profiles](./windows-shell-profiles.md)\n- [Global and project settings](../global-and-project-settings.md)\n- [Session continuity](./session-continuity.md)\n"
   },
   {
     path: "docs/features/terminals/canvas-widget.md",

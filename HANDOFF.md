@@ -1,5 +1,17 @@
 # Handoff
 
+## 2026-08-26, named terminal profiles lane 66
+
+Implemented named terminal profiles for issue #77. Profiles contain a name, detected shell profile,
+optional absolute start directory, optional startup command, one managed account binding, and
+bounded safe environment overrides. The trusted desktop resolver validates and applies the recipe
+before a local Windows spawn. Profile ids remain local node metadata and recipes stay in machine
+settings, never in portable project files, peer mutations, or exports. Added the feature article
+and terminal category index.
+
+This lane intentionally did not run tests, type checks, linting, security checks, builds, packaging,
+installer execution, runtime interaction, or captures. No commit or dew was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

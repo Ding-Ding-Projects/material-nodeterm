@@ -736,6 +736,26 @@ export const CATALOG: Catalog = {
     en: flat('Choose executable…'),
     yue: flat('揀執行檔…')
   },
+  'terminalProfiles.settings.namedTitle': {
+    en: flat('Named terminal profiles'),
+    yue: flat('有名終端機設定檔')
+  },
+  'terminalProfiles.settings.namedDescription': {
+    en: flat('Save a shell, start directory, startup command, account, and safe environment values for this machine. These values never travel in a project file.'),
+    yue: flat('喺呢部機儲存 Shell、啟動目錄、啟動指令、帳戶同安全環境值。呢啲資料唔會放入項目檔。')
+  },
+  'terminalProfiles.settings.nameLabel': { en: flat('Profile name'), yue: flat('設定檔名稱') },
+  'terminalProfiles.settings.namePlaceholder': { en: flat('Projects'), yue: flat('Projects') },
+  'terminalProfiles.settings.shellLabel': { en: flat('Shell profile'), yue: flat('Shell 設定檔') },
+  'terminalProfiles.settings.directoryLabel': { en: flat('Start directory'), yue: flat('啟動目錄') },
+  'terminalProfiles.settings.chooseDirectory': { en: flat('Choose start directory'), yue: flat('揀啟動目錄') },
+  'terminalProfiles.settings.startupLabel': { en: flat('Startup command'), yue: flat('啟動指令') },
+  'terminalProfiles.settings.accountLabel': { en: flat('Account'), yue: flat('帳戶') },
+  'terminalProfiles.settings.noAccount': { en: flat('No account binding'), yue: flat('唔綁定帳戶') },
+  'terminalProfiles.settings.envKey': { en: flat('Environment key'), yue: flat('環境鍵') },
+  'terminalProfiles.settings.envValue': { en: flat('Environment value'), yue: flat('環境值') },
+  'terminalProfiles.settings.addNamed': { en: flat('Save named profile'), yue: flat('儲存有名設定檔') },
+  'terminalProfiles.settings.removeNamed': { en: flat('Remove'), yue: flat('移除') },
 
   'terminalProfiles.create.menuLabel': {
     en: flat('New terminal with profile…'),

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add named terminal profiles for machine-local shell recipes, with detected shell choice,
+  start-directory picker, startup command, managed account binding, and bounded environment values.
+  Recipes stay local and unavailable choices fail closed instead of silently switching shells.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

@@ -326,6 +326,12 @@ function terminalProfileForNewNode(
   return options?.terminalProfileId ?? useSettings.getState().settings.defaultTerminalProfileId
 }
 
+function namedTerminalProfileFor(id: string | undefined) {
+  if (!id?.startsWith('named:')) return undefined
+  const profileId = id.slice('named:'.length)
+  return useSettings.getState().settings.namedTerminalProfiles.find((profile) => profile.id === profileId)
+}
+
 export function createTerminalNode(
   index: number,
   cwd?: string,
@@ -336,6 +342,7 @@ export function createTerminalNode(
 ): CanvasNode {
   const size = terminalNodeSize()
   const terminalProfileId = terminalProfileForNewNode(ssh, options)
+  const namedProfile = namedTerminalProfileFor(terminalProfileId)
   return {
     id: nextId('term'),
     type: 'terminal',
@@ -348,8 +355,8 @@ export function createTerminalNode(
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
       tags: [],
-      cwd: ssh ? ssh.remoteCwd : cwd,
-      initialCommand,
+      cwd: ssh ? ssh.remoteCwd : namedProfile?.startDirectory ?? cwd,
+      initialCommand: initialCommand ?? namedProfile?.startupCommand,
       ...(terminalProfileId !== undefined ? { terminalProfileId } : {}),
       accountLogin: false,
       ...(ssh ? { ssh: ssh.server, sshRemoteTmux: true } : {})

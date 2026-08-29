@@ -962,6 +962,7 @@ export type WindowsTerminalProfileKind =
   | 'git-bash'
   | 'wsl'
   | 'custom'
+  | 'named'
 
 /** Renderer-safe description of a Windows terminal profile. */
 export interface WindowsTerminalProfile {
@@ -970,6 +971,25 @@ export interface WindowsTerminalProfile {
   kind: WindowsTerminalProfileKind
   available: boolean
   unavailableReason?: string
+}
+
+/** A user-authored machine-local terminal recipe. Paths, environment and account bindings never
+ * enter project files or peer payloads; only the stable id may be snapshotted on a local node. */
+export interface NamedTerminalProfile {
+  id: string
+  name: string
+  /** Built-in detected profile id, such as `pwsh`, `cmd`, `git-bash`, or `wsl:<distro>`. */
+  shellProfileId: string
+  /** Optional absolute directory on this machine. */
+  startDirectory?: string
+  /** Optional first command, kept as opaque local launch intent. */
+  startupCommand?: string
+  /** Safe, non-secret environment overrides. */
+  environment: Record<string, string>
+  /** Optional local managed account binding. */
+  accountId?: string
+  createdAt: string
+  updatedAt: string
 }
 
 /** Optional desktop capability for detecting the Windows terminal profiles on this machine. */
@@ -1790,6 +1810,8 @@ export interface Settings {
   defaultTerminalProfileId: string
   /** Compatibility field for the custom profile executable. Empty string = no custom executable. */
   defaultShell: string
+  /** Machine-local named terminal recipes. Never serialized into shared project projections. */
+  namedTerminalProfiles: NamedTerminalProfile[]
   gridSize: number
   snapToGrid: boolean
   /** Default size (px) for NEW terminal/agent nodes on the canvas. Existing nodes keep
@@ -2193,6 +2215,7 @@ export const DEFAULT_SETTINGS: Settings = {
   terminalLetterSpacing: 0,
   defaultTerminalProfileId: 'auto',
   defaultShell: '',
+  namedTerminalProfiles: [],
   gridSize: 24,
   snapToGrid: false,
   defaultNodeWidth: 640,

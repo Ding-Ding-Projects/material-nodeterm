@@ -57,6 +57,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Named terminal profiles from upstream issue #286, tracked as issue #77** — the machine-local
+      recipe model and Shell settings controls are implemented in this lane. Tests, type checks,
+      packaging, runtime interaction, and captures were intentionally not run, so this remains
+      unverified until the release lane completes its checks.
+
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification
