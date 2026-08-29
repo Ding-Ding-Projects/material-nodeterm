@@ -263,6 +263,7 @@ import { requestArchivePassword } from '../components/archiveUnlockDialog'
 import { RemotePicker } from '../components/RemotePicker'
 import { WorktreeDialog } from '../components/WorktreeDialog'
 import { GroupPickerDialog, type GroupPickerOption } from '../components/canvas/GroupPickerDialog'
+import { SavedLayoutsPanel } from '../components/canvas/SavedLayoutsPanel'
 import { NotifyConsentDialog } from '../components/NotifyConsentDialog'
 import { SessionsSidebar } from '../components/SessionsSidebar'
 import type { SessionNodeInput } from '../lib/sessionList'
@@ -507,7 +508,8 @@ import type {
   ProjectKanban,
   SshPassphraseRequest,
   SshProjectStatus,
-  TranscriptHit
+  TranscriptHit,
+  SavedCanvasLayout
 } from '@shared/types'
 import type { KanbanCreateChoice, KanbanSession } from '../components/kanban/KanbanView'
 import { modalSpawnFromNodeData } from '../components/kanban/modal-spawn'
@@ -515,7 +517,7 @@ import { assignNode, assignedTo, defaultKanban, labelsForCard, migrateProjectTag
 import { registerWorkspaceDirty } from '../state/workspaceDirty'
 import { canClearDirty, commitActiveCanvas } from '../state/persistGuards'
 import { isHidden, tidySeparators } from '../lib/ui-visibility'
-import { ZONES, ZONE_ARROW_KEYS, zoneTargetRect, type ZoneId } from '../lib/nodeZones'
+import { ZONES, ZONE_ARROW_KEYS, zoneScreenRect, zoneTargetRect, type ZoneId } from '../lib/nodeZones'
 import {
   explorerIsOpen,
   nextExplorerPin,
@@ -602,10 +604,12 @@ import {
   type CanvasNode,
   type TerminalNodeCreationOptions
 } from '../state/workspace'
+import type { SavedLayoutApplyResult } from '../lib/savedLayouts'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 const GRID = 24
+const EMPTY_SAVED_LAYOUTS: SavedCanvasLayout[] = []
 
 /** Codex accounts usable from this canvas. A local canvas may host remote nodes; a full SSH
  * project remains restricted to its own host. */
@@ -1568,6 +1572,9 @@ export function Canvas() {
   const browserPopupSpawnsRef = useRef<{ url: string; source: string; t: number }[]>([])
   const loadingRef = useRef(false)
   const flowWrapRef = useRef<HTMLDivElement>(null)
+  const layoutButtonRef = useRef<HTMLButtonElement>(null)
+  const [zoneOverlay, setZoneOverlay] = useState<{ nodeId: string; active: ZoneId | null; zones: ZoneId[] } | null>(null)
+  const zoneDragRef = useRef<{ nodeId: string; active: ZoneId | null }>({ nodeId: '', active: null })
   // Undo/redo history (snapshots of the nodes array; arrays are immutable per change).
   const pastRef = useRef<CanvasNode[][]>([])
   const futureRef = useRef<CanvasNode[][]>([])
@@ -1656,6 +1663,8 @@ export function Canvas() {
   }, [getViewport, setViewport])
 
   const activeProjectId = useProjects((s) => s.activeProjectId)
+  const savedLayouts = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.savedLayouts ?? EMPTY_SAVED_LAYOUTS)
+  const [savedLayoutsOpen, setSavedLayoutsOpen] = useState(false)
   const activeProjectSettingsOverrides = useProjects(
     (s) => s.projects.find((p) => p.id === s.activeProjectId)?.settingsOverrides
   )
@@ -7507,6 +7516,74 @@ export function Canvas() {
     [setNodes, markDirty, getViewport]
   )
 
+  /** Reveal all valid zones while a node is dragged with Ctrl/Meta, or when its pointer approaches
+   * an edge.  The active zone is kept in a ref so the drag-stop callback cannot lose the final
+   * hover when React has not painted the last pointer frame yet. */
+  const updateZoneOverlay = useCallback((event: MouseEvent | TouchEvent, nodeId: string) => {
+    const wrap = flowWrapRef.current
+    if (!wrap) return
+    const point = 'clientX' in event
+      ? { x: event.clientX, y: event.clientY }
+      : event.touches[0]
+        ? { x: event.touches[0].clientX, y: event.touches[0].clientY }
+        : null
+    if (!point) return
+    const bounds = wrap.getBoundingClientRect()
+    const x = point.x - bounds.left
+    const y = point.y - bounds.top
+    const modifier = 'ctrlKey' in event && (event.ctrlKey || event.metaKey)
+    const edge = 96
+    const shouldReveal = modifier || x < edge || x > bounds.width - edge || y < edge || y > bounds.height - edge
+    if (!shouldReveal) {
+      zoneDragRef.current = { nodeId, active: null }
+      setZoneOverlay(null)
+      return
+    }
+    const viewport = getViewport()
+    const shift = 'shiftKey' in event && event.shiftKey
+    const alt = 'altKey' in event && event.altKey
+    const availableZones: ZoneId[] = shift
+      ? ['left-third', 'center-third', 'right-third']
+      : alt
+        ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+        : ['left-half', 'right-half', 'top-half', 'bottom-half']
+    const rects = ZONES.filter((zone) => availableZones.includes(zone.id)).map((zone) => ({ zone: zone.id, rect: zoneScreenRect(viewport, bounds.width, bounds.height, zone.id) })).filter((item): item is { zone: ZoneId; rect: NonNullable<ReturnType<typeof zoneScreenRect>> } => !!item.rect)
+    let active = rects.find(({ rect }) => x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height)?.zone ?? null
+    if (!active && rects.length > 0) {
+      const nearest = rects.reduce((best, item) => {
+        const cx = item.rect.x + item.rect.width / 2
+        const cy = item.rect.y + item.rect.height / 2
+        const distance = (cx - x) ** 2 + (cy - y) ** 2
+        return distance < best.distance ? { item, distance } : best
+      }, { item: rects[0], distance: Number.POSITIVE_INFINITY }).item
+      active = nearest.zone
+    }
+    zoneDragRef.current = { nodeId, active }
+    setZoneOverlay({ nodeId, active, zones: availableZones })
+  }, [getViewport])
+
+  const saveCurrentLayout = useCallback((layout: import('@shared/types').SavedCanvasLayout) => {
+    if (!activeProjectId) return
+    const next = [...savedLayouts.filter((item) => item.id !== layout.id), layout]
+    useProjects.getState().setProjectSavedLayouts(activeProjectId, next)
+    markDirty()
+  }, [activeProjectId, savedLayouts, markDirty])
+
+  const applyLayout = useCallback((layout: import('@shared/types').SavedCanvasLayout, result: SavedLayoutApplyResult) => {
+    if (!result.appliedIds.length) return
+    const next = nodeStatesToFlow(result.nodes)
+    nodesRef.current = next
+    setNodes(next)
+    markDirty()
+    fitAll()
+    const details = [
+      `Applied layout "${layout.name}" to ${result.appliedIds.length} node${result.appliedIds.length === 1 ? '' : 's'}.`,
+      ...(result.missingIds.length ? [`${result.missingIds.length} saved node${result.missingIds.length === 1 ? '' : 's'} were not present.`] : []),
+      ...(result.collisionPairs.length ? [`${result.collisionPairs.length} collision${result.collisionPairs.length === 1 ? '' : 's'} remain; review the canvas.`] : [])
+    ]
+    setNotice({ kind: result.collisionPairs.length ? 'error' : 'info', text: details.join(' ') })
+  }, [setNodes, markDirty, fitAll])
+
   const selectAll = useCallback(() => {
     setNodes((ns) => ns.map((n) => ({ ...n, selected: true })))
   }, [setNodes])
@@ -7900,6 +7977,11 @@ export function Canvas() {
       } else if (matchesShortcut(e, shortcuts.shortcutsPanel, isMac)) {
         e.preventDefault()
         setShortcutsOpen((v) => !v)
+      } else if (e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey && e.key.toLowerCase() === 'l') {
+        const tag = (document.activeElement?.tagName || '').toLowerCase()
+        if (tag === 'input' || tag === 'textarea') return
+        e.preventDefault()
+        setSavedLayoutsOpen((v) => !v)
       } else if (zoomShortcutChord(e) !== null) {
         // ⌘/Ctrl+0 = back to 100%, Shift+1 = fit everything. `liveZoomShortcutAction` is the
         // whole decision (see `lib/zoomShortcut.ts`), and the ⌘0 desktop route below asks the same
@@ -7965,11 +8047,10 @@ export function Canvas() {
             )
           })
           .catch(() => setCopyError('Copy failed — the system clipboard is unavailable.'))
-      } else if (isMac && e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey && ZONE_ARROW_KEYS[e.key]) {
-        // Zone snap (issue #394 v1, ported): Ctrl+Alt+Arrow, the Rectangle/Magnet idiom — mac
-        // only. Off-mac this chord is deliberately unbound: Ctrl+Alt (≡ the AltGr some
-        // layouts synthesize) is too easy to trigger by accident there, and quarters/thirds
-        // stay reachable from the node context menu's "Snap to zone" submenu on every platform.
+      } else if (e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey && ZONE_ARROW_KEYS[e.key]) {
+        // Zone snap (issue #394, ported): Ctrl+Alt+Arrow, the Rectangle/Magnet idiom. This is
+        // available on every desktop surface; AltGr layouts can still reach the same action from
+        // the node menu, and the focused-field refusal below keeps text entry untouched.
         if (isKanbanOpen(useProjects.getState().activeProjectId)) return
         const tag = (document.activeElement?.tagName || '').toLowerCase()
         if (tag === 'input' || tag === 'textarea') return
@@ -14022,6 +14103,26 @@ export function Canvas() {
               </svg>
             </div>
           ))}
+        {zoneOverlay && flowWrapRef.current && (
+          <div className="canvas-zone-overlay" role="region" aria-label="Canvas drop zones">
+            <div className="canvas-zone-overlay__hint">Release to snap this node into a highlighted zone</div>
+            {ZONES.filter((zone) => zoneOverlay.zones.includes(zone.id)).map((zone) => {
+              const bounds = flowWrapRef.current!.getBoundingClientRect()
+              const rect = zoneScreenRect(viewportRef.current, bounds.width, bounds.height, zone.id)
+              if (!rect) return null
+              return (
+                <div
+                  key={zone.id}
+                  className={`canvas-zone-overlay__zone${zoneOverlay.active === zone.id ? ' is-active' : ''}`}
+                  style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
+                  aria-label={zone.label}
+                >
+                  <span>{zone.label}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
         {/* First-contact guidance: an empty canvas used to be a black void (field report:
             "didn't know what to do first"). Pointer-events-none so it can never eat a
             right-click or box-select; keyed off the LIVE nodes array, so it reappears on
@@ -14052,9 +14153,18 @@ export function Canvas() {
           onEdgeDoubleClick={onEdgeDoubleClick}
           onMove={onMove}
           onMoveEnd={onMoveEnd}
-          onNodeDragStart={() => (draggingRef.current = true)}
-          onNodeDragStop={() => {
+          onNodeDragStart={(event, node) => {
+            draggingRef.current = true
+            zoneDragRef.current = { nodeId: node.id, active: null }
+            updateZoneOverlay(event, node.id)
+          }}
+          onNodeDrag={(event, node) => updateZoneOverlay(event, node.id)}
+          onNodeDragStop={(_event, node) => {
             draggingRef.current = false
+            const activeZone = zoneDragRef.current.nodeId === node.id ? zoneDragRef.current.active : null
+            setZoneOverlay(null)
+            zoneDragRef.current = { nodeId: '', active: null }
+            if (activeZone) snapNodeToZone(node.id, activeZone)
             // Send the final position now instead of waiting for the throttle's trailing timer.
             publisherRef.current?.flush()
             markDirty()
@@ -14219,7 +14329,41 @@ export function Canvas() {
             <IconSave />
             <span className={`md3-canvas-actions__dirty${dirty ? ' dirty' : ''}`} />
           </button>
+          <button
+            ref={layoutButtonRef}
+            title="Saved layouts"
+            aria-expanded={savedLayoutsOpen}
+            onClick={() => setSavedLayoutsOpen((open) => !open)}
+          >
+            <IconGrid />
+          </button>
         </div>
+        <SavedLayoutsPanel
+          anchorRef={layoutButtonRef}
+          open={savedLayoutsOpen}
+          layouts={savedLayouts}
+          nodes={flowToNodeStates(nodesRef.current)}
+          onClose={() => setSavedLayoutsOpen(false)}
+          onSave={saveCurrentLayout}
+          onApply={applyLayout}
+          onDelete={(layout) => {
+            const rect = layoutButtonRef.current?.getBoundingClientRect()
+            openDestructiveGate({
+              title: `Delete saved layout "${layout.name}"`,
+              description: 'This removes the named arrangement from the shared project file. The current canvas and its nodes are not deleted.',
+              affected: [layout.name],
+              confirmLabel: 'Delete layout',
+              anchor: rect ? { x: rect.left, y: rect.bottom + 6 } : undefined,
+              restoreFocusEl: layoutButtonRef.current,
+              onConfirm: () => {
+                if (!activeProjectId) return
+                const latest = useProjects.getState().projects.find((project) => project.id === activeProjectId)?.savedLayouts ?? []
+                useProjects.getState().setProjectSavedLayouts(activeProjectId, latest.filter((item) => item.id !== layout.id))
+                markDirty()
+              }
+            })
+          }}
+        />
         {/* ADHD 'one thing at a time': the person's own next action, kept visible so it survives a
             context switch. Written by them and never inferred — a guess here would be the app
             deciding what matters, which is exactly the judgement this feature must not make.

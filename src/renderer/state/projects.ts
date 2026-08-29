@@ -8,6 +8,7 @@ import type {
   NavStop,
   Project,
   ProjectKanban,
+  SavedCanvasLayout,
   Viewport,
   Workspace
 } from '@shared/types'
@@ -94,6 +95,8 @@ interface ProjectsState {
   /** Replaces the project's browser-profile list (create/rename/remove all funnel through this).
    *  See `BrowserProfile` in @shared/types and `shared/browser-profiles.ts`. */
   setProjectBrowserProfiles(id: string, browserProfiles: BrowserProfile[]): void
+  /** Replaces the shared named layout catalogue for a project. */
+  setProjectSavedLayouts(id: string, savedLayouts: SavedCanvasLayout[]): void
   /** Writes the serialized canvas (nodes + viewport + bridge links + control ropes) back into a project. */
   commitCanvas(
     id: string,
@@ -438,6 +441,16 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   setProjectBrowserProfiles(id, browserProfiles) {
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, browserProfiles } : p))
+    }))
+  },
+
+  setProjectSavedLayouts(id, savedLayouts) {
+    set((s) => ({
+      projects: s.projects.map((p) =>
+        p.id === id
+          ? { ...p, ...(savedLayouts.length > 0 ? { savedLayouts } : { savedLayouts: undefined }) }
+          : p
+      )
     }))
   },
 

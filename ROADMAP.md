@@ -58,9 +58,14 @@ later commit, since this file will not be kept in lockstep with every merge).
 ## In progress / partially landed
 
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
-      a deterministic, bounded, platform-free projection and validator in
-      `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification
-      remain outstanding.
+  a deterministic, bounded, platform-free projection and validator in
+  `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification
+  remain outstanding.
+- [ ] **Drag zones and saved layouts (#82, upstream #394)**: modifier or edge drag reveals
+  viewport-relative halves, thirds, and quarters; named geometry-only arrangements persist in
+  `.nodeterm/project.json` and the schema 3 projection. Implementation is present in
+  `nodeZones.ts`, `savedLayouts.ts`, `SavedLayoutsPanel.tsx`, and the canvas wiring. Tests,
+  packaged interaction, and screenshots remain pending in this ultra-speed lane.
 
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the

@@ -14,6 +14,7 @@ import type {
   NavStop,
   Project,
   ProjectKanban,
+  SavedCanvasLayout,
   Viewport,
   Workspace
 } from '../shared/types'
@@ -93,6 +94,8 @@ export interface ProjectFileV1 {
   /** Named browser profiles — see `BrowserProfile` in `../shared/types` and
    *  `shared/browser-profiles.ts`. Names only; the cookie jar is machine-local. */
   browserProfiles?: BrowserProfile[]
+  /** Portable named canvas arrangements; only geometry and parent relationships are retained. */
+  savedLayouts?: SavedCanvasLayout[]
 }
 
 /** One workspace.json v3 entry. Exactly one of: `cwd` (local ref), `ssh` (remote ref),
@@ -227,7 +230,8 @@ export function projectToFile(
     ...projectCapabilityFields(p),
     ...(p.dinoHighScore ? { dinoHighScore: p.dinoHighScore } : {}),
     ...(p.kanban ? { kanban: p.kanban } : {}),
-    ...(p.browserProfiles && p.browserProfiles.length > 0 ? { browserProfiles: p.browserProfiles } : {})
+    ...(p.browserProfiles && p.browserProfiles.length > 0 ? { browserProfiles: p.browserProfiles } : {}),
+    ...(p.savedLayouts && p.savedLayouts.length > 0 ? { savedLayouts: p.savedLayouts } : {})
   }
 }
 
@@ -257,6 +261,29 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
       typeof (p as BrowserProfile).name === 'string' &&
       typeof (p as BrowserProfile).color === 'string'
   )
+  return cleaned.length > 0 ? cleaned : undefined
+}
+
+/** Saved layouts are shared presentation records. Invalid rows are ignored at the file boundary,
+ * while valid neighbours survive, just like browser profiles and kanban rows. */
+export function validSavedLayouts(v: unknown): SavedCanvasLayout[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const cleaned = v.filter((layout): layout is SavedCanvasLayout => {
+    if (!layout || typeof layout !== 'object') return false
+    const item = layout as SavedCanvasLayout
+    if (item.version !== 1 || typeof item.id !== 'string' || !item.id.trim() || item.id.length > 128) return false
+    if (typeof item.name !== 'string' || !item.name.trim() || item.name.length > 160) return false
+    if (typeof item.createdAt !== 'string' || item.createdAt.length > 80 || !Array.isArray(item.nodes) || item.nodes.length > 20_000) return false
+    return item.nodes.every((node) => {
+      if (!node || typeof node !== 'object' || typeof node.id !== 'string' || !node.id.trim()) return false
+      const n = node as SavedCanvasLayout['nodes'][number]
+      return !!n.position && Number.isFinite(n.position.x) && Number.isFinite(n.position.y) &&
+        !!n.size && Number.isFinite(n.size.width) && Number.isFinite(n.size.height) &&
+        n.size.width >= 1 && n.size.height >= 1 &&
+        (n.parentId === undefined || typeof n.parentId === 'string') &&
+        (n.collapsed === undefined || typeof n.collapsed === 'boolean')
+    })
+  })
   return cleaned.length > 0 ? cleaned : undefined
 }
 
@@ -295,6 +322,7 @@ export function fileToProject(
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
   const browserProfiles = validBrowserProfiles(f.browserProfiles)
   const icon = sanitizeProjectIcon(f.icon)
+  const savedLayouts = validSavedLayouts(f.savedLayouts)
   return {
     id: base.id,
     name: f.name,
@@ -318,6 +346,7 @@ export function fileToProject(
     ...(f.dinoHighScore ? { dinoHighScore: f.dinoHighScore } : {}),
     ...(validKanban(f.kanban) ? { kanban: f.kanban } : {}),
     ...(browserProfiles ? { browserProfiles } : {}),
+    ...(savedLayouts ? { savedLayouts } : {}),
     ...(base.cwd ? { cwd: base.cwd } : {}),
     ...(base.ssh ? { ssh: base.ssh } : {}),
     ...(base.closed ? { closed: true } : {}),

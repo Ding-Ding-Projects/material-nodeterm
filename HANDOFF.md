@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-08-26, drag zones and saved layouts (#82, upstream #394)
+
+The canvas now exposes a complete drop-zone overlay when a node is dragged with `Ctrl`/`Meta` or
+near an edge. Halves, thirds, and 2x2 quarters share one bounded viewport-relative geometry
+implementation, and `Ctrl+Alt+Arrow` moves one selected expanded node into a half on every desktop
+surface. The existing **Snap to zone** context-menu path now includes every zone.
+
+Named arrangements are implemented in `src/renderer/lib/savedLayouts.ts` and
+`src/renderer/components/canvas/SavedLayoutsPanel.tsx`. The anchored catalogue has plain-text
+search with its own regex builder, guided naming, preview with missing-node and collision reports,
+apply, and delete through the two-key destructive confirmation. Applying goes through the normal
+canvas node state, so undo/redo and autosave remain authoritative. Layout records are geometry-only,
+bounded, validated, and persisted as shared project content through `src/shared/types.ts`,
+`src/core/workspace-files.ts`, and `src/core/portable-canvas-projection.ts`; credentials, paths,
+process state, profiles, sessions, and caches are excluded.
+
+This implementation lane intentionally did not run tests, type checking, lint, security or
+accessibility checks, builds, packaging, installer execution, runtime interaction, or screenshots.
+The roadmap item remains unchecked until those checks run against the exact candidate commit. No
+commit or dew was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

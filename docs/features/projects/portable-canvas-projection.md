@@ -3,14 +3,17 @@
 The portable canvas projection is the platform-free `project.json` payload used by schema 3
 export and import work. It preserves the project display metadata, root canvas, future Multiverse
 and AWS Universe canvas scopes, node presentation, grouping, relationships, and ordering. It does
-not open files, start processes, hydrate sessions, or contact a provider.
+not open files, start processes, hydrate sessions, or contact a provider. Named saved canvas
+layouts are carried as geometry-only records.
 
 ## Preserved data
 
 The projection contains a stable schema identifier and version, project name, colour and safe icon,
 canvas identifiers and scope, node geometry, kind, title, colour, group, collapse state, tags,
 safe text and browser tab presentation, service labels, bridge and rope relationships, and an
-optional bounded global appearance record. Per-element appearance is postponed until its typed
+optional bounded global appearance record. It also preserves up to 256 named saved layouts, each
+with a bounded name and creation timestamp plus node id, position, size, parent frame, and collapsed
+state. Per-element appearance is postponed until its typed
 schema exists. Child canvases are represented now so later universe and portal
 features can add their own records without changing the root contract. A universe scope is either
 `multiverse` or `aws-universe`; the root scope is `root`.
@@ -27,7 +30,7 @@ data; archive publication, local bindings, and runtime hydration remain separate
 ## Determinism and limits
 
 `projectToPortableCanvasV3` selects only safe fields and sorts nodes, child canvases, tags, and
-relationships. `serializePortableCanvasProjectionV3` recursively sorts object keys and emits
+relationships, and saved layouts. `serializePortableCanvasProjectionV3` recursively sorts object keys and emits
 compact UTF-8 JSON bytes suitable for `project.json`. The validator bounds canvases, nodes,
 relationships, nesting, strings, global appearance values, and total JSON bytes. Duplicate node or canvas
 identifiers, dangling relationship endpoints, invalid geometry, unsafe keys, invalid scopes, and

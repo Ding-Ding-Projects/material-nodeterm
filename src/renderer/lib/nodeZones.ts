@@ -33,6 +33,12 @@ export type ZoneId =
   | 'right-half'
   | 'top-half'
   | 'bottom-half'
+  | 'left-third'
+  | 'center-third'
+  | 'right-third'
+  | 'top-third'
+  | 'middle-third'
+  | 'bottom-third'
   | 'top-left'
   | 'top-right'
   | 'bottom-left'
@@ -54,7 +60,13 @@ export const ZONES: readonly { id: ZoneId; label: string; frac: ZoneFraction }[]
   { id: 'top-left', label: 'Top left quarter', frac: { x0: 0, y0: 0, x1: 0.5, y1: 0.5 } },
   { id: 'top-right', label: 'Top right quarter', frac: { x0: 0.5, y0: 0, x1: 1, y1: 0.5 } },
   { id: 'bottom-left', label: 'Bottom left quarter', frac: { x0: 0, y0: 0.5, x1: 0.5, y1: 1 } },
-  { id: 'bottom-right', label: 'Bottom right quarter', frac: { x0: 0.5, y0: 0.5, x1: 1, y1: 1 } }
+  { id: 'bottom-right', label: 'Bottom right quarter', frac: { x0: 0.5, y0: 0.5, x1: 1, y1: 1 } },
+  { id: 'left-third', label: 'Left third', frac: { x0: 0, y0: 0, x1: 1 / 3, y1: 1 } },
+  { id: 'center-third', label: 'Center third', frac: { x0: 1 / 3, y0: 0, x1: 2 / 3, y1: 1 } },
+  { id: 'right-third', label: 'Right third', frac: { x0: 2 / 3, y0: 0, x1: 1, y1: 1 } },
+  { id: 'top-third', label: 'Top third', frac: { x0: 0, y0: 0, x1: 1, y1: 1 / 3 } },
+  { id: 'middle-third', label: 'Middle third', frac: { x0: 0, y0: 1 / 3, x1: 1, y1: 2 / 3 } },
+  { id: 'bottom-third', label: 'Bottom third', frac: { x0: 0, y0: 2 / 3, x1: 1, y1: 1 } }
 ]
 
 const ZONES_BY_ID: ReadonlyMap<ZoneId, ZoneFraction> = new Map(ZONES.map((z) => [z.id, z.frac]))
@@ -97,4 +109,19 @@ export function zoneTargetRect(
     width: (right - left) / viewport.zoom,
     height: (bottom - top) / viewport.zoom
   }
+}
+
+/** Screen-space geometry used by the drag overlay.  Keeping this conversion beside the flow
+ * geometry prevents the overlay and the eventual drop from disagreeing at non-100% zoom. */
+export function zoneScreenRect(
+  viewport: Viewport,
+  containerWidth: number,
+  containerHeight: number,
+  zone: ZoneId,
+  marginPx: number = ZONE_MARGIN_PX,
+  gutterPx: number = ZONE_GUTTER_PX
+): FlowRect | null {
+  const flow = zoneTargetRect(viewport, containerWidth, containerHeight, zone, marginPx, gutterPx)
+  if (!flow) return null
+  return { x: flow.x * viewport.zoom + viewport.x, y: flow.y * viewport.zoom + viewport.y, width: flow.width * viewport.zoom, height: flow.height * viewport.zoom }
 }

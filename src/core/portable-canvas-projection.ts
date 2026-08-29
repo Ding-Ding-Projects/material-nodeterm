@@ -7,7 +7,7 @@
  * module acquiring filesystem or host capabilities.
  */
 
-import type { BridgeLink, CanvasNodeState, Project, Viewport } from '../shared/types'
+import type { BridgeLink, CanvasNodeState, Project, SavedCanvasLayout, Viewport } from '../shared/types'
 import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEMA_VERSION } from './portable-project-v3'
 import { sanitizeProjectIcon } from '../shared/project-icon'
 
@@ -54,6 +54,8 @@ export interface PortableProjectDisplayV3 {
   icon?: { type: string; name: string }
 }
 
+export interface PortableSavedCanvasLayoutV3 extends SavedCanvasLayout {}
+
 export interface PortableCanvasProjectionV3 {
   format: typeof PORTABLE_PROJECT_SCHEMA
   schemaVersion: typeof PORTABLE_PROJECT_SCHEMA_VERSION
@@ -62,6 +64,7 @@ export interface PortableCanvasProjectionV3 {
   canvases: PortableCanvasV3[]
   nodes: PortableCanvasNodeV3[]
   relationships: PortableRelationshipV3[]
+  savedLayouts?: PortableSavedCanvasLayoutV3[]
   appearance?: Record<string, unknown>
 }
 
@@ -81,7 +84,7 @@ export const PORTABLE_CANVAS_LIMITS = {
 } as const
 
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
-const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'appearance'])
+const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'savedLayouts', 'appearance'])
 const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
@@ -91,6 +94,8 @@ const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
 const ALLOWED_RELATIONSHIP = new Set(['id', 'kind', 'source', 'target', 'order'])
+const ALLOWED_SAVED_LAYOUT = new Set(['version', 'id', 'name', 'createdAt', 'nodes'])
+const ALLOWED_SAVED_LAYOUT_NODE = new Set(['id', 'position', 'size', 'parentId', 'collapsed'])
 const ALLOWED_APPEARANCE = new Set(['theme', 'density', 'seedColor', 'fontFamily', 'fontSize', 'fontWeight', 'motion'])
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -190,6 +195,60 @@ function relationships(project: Project): PortableRelationshipV3[] {
   return all.sort((a, b) => a.kind.localeCompare(b.kind) || a.order - b.order || a.id.localeCompare(b.id)).map((link, order) => ({ ...link, order }))
 }
 
+function savedLayouts(project: Project): PortableSavedCanvasLayoutV3[] | undefined {
+  if (!project.savedLayouts?.length) return undefined
+  const layouts: PortableSavedCanvasLayoutV3[] = []
+  for (const layout of project.savedLayouts) {
+    if (!record(layout) || layout.version !== 1 || typeof layout.id !== 'string' || !layout.id.trim() ||
+        typeof layout.name !== 'string' || !layout.name.trim() || typeof layout.createdAt !== 'string' ||
+        !Array.isArray(layout.nodes)) continue
+    const nodes = layout.nodes.filter((node) => record(node) && typeof node.id === 'string' && node.id.trim() &&
+      record(node.position) && Number.isFinite(node.position.x) && Number.isFinite(node.position.y) &&
+      record(node.size) && Number.isFinite(node.size.width) && Number.isFinite(node.size.height) &&
+      node.size.width > 0 && node.size.height > 0 &&
+      (node.parentId === undefined || typeof node.parentId === 'string') &&
+      (node.collapsed === undefined || typeof node.collapsed === 'boolean'))
+      .map((node) => ({
+        id: node.id,
+        position: { x: node.position.x, y: node.position.y },
+        size: { width: node.size.width, height: node.size.height },
+        ...(node.parentId !== undefined ? { parentId: node.parentId } : {}),
+        ...(node.collapsed !== undefined ? { collapsed: node.collapsed } : {})
+      }))
+    if (nodes.length === 0 || nodes.length > 20_000 || layout.id.length > 128 || layout.name.length > 160 || layout.createdAt.length > 80) continue
+    layouts.push({ version: 1, id: layout.id, name: layout.name, createdAt: layout.createdAt, nodes })
+  }
+  return layouts.length ? layouts : undefined
+}
+
+function normalizedSavedLayouts(value: unknown): PortableSavedCanvasLayoutV3[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length > 256) throw new PortableProjectV3Error('entry-limit', 'Portable saved layout count exceeds its bound.')
+  const seen = new Set<string>()
+  const layouts: PortableSavedCanvasLayoutV3[] = []
+  for (const item of value) {
+    if (!record(item)) throw new PortableProjectV3Error('manifest', 'Portable saved layout is invalid.')
+    exactKeys(item, ALLOWED_SAVED_LAYOUT, 'saved layout')
+    if (item.version !== 1 || typeof item.id !== 'string' || !item.id.trim() || item.id.length > 128 || seen.has(item.id)) throw new PortableProjectV3Error('manifest', 'Portable saved layout id is invalid or duplicated.')
+    const rawNodes = item.nodes
+    if (typeof item.name !== 'string' || !item.name.trim() || item.name.length > 160 || typeof item.createdAt !== 'string' || item.createdAt.length > 80 || !Array.isArray(rawNodes) || rawNodes.length === 0 || rawNodes.length > PORTABLE_CANVAS_LIMITS.maxNodes) throw new PortableProjectV3Error('manifest', 'Portable saved layout metadata is invalid.')
+    const nodeIds = new Set<string>()
+    const nodes = rawNodes.map((raw) => {
+      if (!record(raw)) throw new PortableProjectV3Error('manifest', 'Portable saved layout node is invalid.')
+      exactKeys(raw, ALLOWED_SAVED_LAYOUT_NODE, 'saved layout node')
+      if (typeof raw.id !== 'string' || !raw.id.trim() || nodeIds.has(raw.id) || !record(raw.position) || !record(raw.size)) throw new PortableProjectV3Error('manifest', 'Portable saved layout node identity is invalid.')
+      nodeIds.add(raw.id)
+      const x = finite(raw.position.x, 'saved layout x'); const y = finite(raw.position.y, 'saved layout y')
+      const width = finite(raw.size.width, 'saved layout width'); const height = finite(raw.size.height, 'saved layout height')
+      if (width <= 0 || height <= 0 || (raw.parentId !== undefined && typeof raw.parentId !== 'string') || (raw.collapsed !== undefined && typeof raw.collapsed !== 'boolean')) throw new PortableProjectV3Error('manifest', 'Portable saved layout geometry is invalid.')
+      return { id: raw.id, position: { x, y }, size: { width, height }, ...(raw.parentId !== undefined ? { parentId: raw.parentId } : {}), ...(raw.collapsed !== undefined ? { collapsed: raw.collapsed } : {}) }
+    })
+    seen.add(item.id)
+    layouts.push({ version: 1, id: item.id, name: item.name, createdAt: item.createdAt, nodes })
+  }
+  return layouts.length ? layouts : undefined
+}
+
 /** Project only the portable presentation and safe intent fields. Forbidden live fields are never read. */
 export function projectToPortableCanvasV3(project: Project, input: PortableCanvasProjectionInput = {}): PortableCanvasProjectionV3 {
   const nodes = project.nodes.map(projectNode).sort((a, b) => a.id.localeCompare(b.id))
@@ -200,7 +259,8 @@ export function projectToPortableCanvasV3(project: Project, input: PortableCanva
   const canvases = [root, ...children].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
   const icon = project.icon && sanitizeProjectIcon(project.icon)
   const portableIcon = icon?.type === 'emoji' ? { type: icon.type, name: icon.emoji } : icon ? { type: icon.type, name: icon.name } : undefined
-  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: relationships(project), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}) }
+  const portableLayouts = savedLayouts(project)
+  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: relationships(project), ...(portableLayouts ? { savedLayouts: portableLayouts } : {}), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}) }
   if (result.relationships.length > PORTABLE_CANVAS_LIMITS.maxRelationships) throw new PortableProjectV3Error('entry-limit', 'Portable relationship count exceeds its bound.')
   return validatePortableCanvasProjectionV3(result)
 }
@@ -293,8 +353,9 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
   for (const link of value.relationships) { const folded = link.id.toLocaleLowerCase('en-US'); if (relationshipIds.has(link.id) || foldedRelationshipIds.has(folded)) throw new PortableProjectV3Error('manifest', `Duplicate or case-colliding relationship: ${link.id}`); relationshipIds.add(link.id); foldedRelationshipIds.add(folded) }
   if (!canvasIds.has(value.rootCanvasId)) throw new PortableProjectV3Error('manifest', 'Portable root canvas is missing.')
   if (value.appearance !== undefined) safeAppearance(value.appearance)
+  const normalizedLayouts = normalizedSavedLayouts(value.savedLayouts)
   const normalizedRelationships = value.relationships.map((link) => ({ id: link.id, kind: link.kind as 'bridge' | 'rope', source: link.source, target: link.target, order: link.order }))
-  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: value.project.name, color: value.project.color, ...(icon ? { icon } : {}) }, rootCanvasId: value.rootCanvasId, canvases: normalizedCanvases, nodes: normalizedNodes, relationships: normalizedRelationships, ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}) }
+  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: value.project.name, color: value.project.color, ...(icon ? { icon } : {}) }, rootCanvasId: value.rootCanvasId, canvases: normalizedCanvases, nodes: normalizedNodes, relationships: normalizedRelationships, ...(normalizedLayouts ? { savedLayouts: normalizedLayouts } : {}), ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}) }
 }
 
 export function parsePortableCanvasProjectionV3(bytes: Uint8Array): PortableCanvasProjectionV3 {

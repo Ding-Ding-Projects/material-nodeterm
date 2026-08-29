@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add complete canvas drop zones and named saved layouts from upstream issue #394. `Ctrl`/`Meta`
+  drag or an edge gesture reveals halves, thirds, and a 2x2 quarter grid; `Ctrl+Alt+Arrow`
+  provides the keyboard half-zone path. Saved arrangements keep only bounded node geometry,
+  grouping, and collapsed state in the portable project file, with searchable preview/apply/delete
+  controls and destructive confirmation. Tests, packaging, runtime interaction, and captures are
+  intentionally pending in the ultra-speed implementation lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.
