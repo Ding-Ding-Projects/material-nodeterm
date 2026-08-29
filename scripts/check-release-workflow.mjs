@@ -546,7 +546,9 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   const versionAdvanceAt = versionCommands.indexOf(
     'node scripts/release-assets.mjs assert-version "$RELEASE_VERSION" "$RUNNER_TEMP/tags-before-build.json" "$RUNNER_TEMP/releases-before-build.json" "$GITHUB_SHA"',
   )
-  const buildAt = steps.findIndex((step) => logicalCommands(step?.run).includes('npm run dist:win'))
+  const buildAt = steps.findIndex((step) =>
+    logicalCommands(step?.run).includes('npm run dist:win -- --require-published-source-icon'),
+  )
   if (
     // Was `installAt + 1`. The planner and the tag step now sit between them, so what still
     // matters is that the proof happens with dependencies present and BEFORE anything is built.
