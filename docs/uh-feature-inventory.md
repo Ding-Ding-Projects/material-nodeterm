@@ -77,7 +77,7 @@ and then never edited this file.
 | Changelog viewer | `src/renderer/components/changelog/ChangelogPanel.tsx` | `docs/changelog-viewer.md` | `src/shared/changelog.test.ts` |
 | Command palette | `src/renderer/components/CommandPalette.tsx` | `docs/command-palette.md` | `src/renderer/components/CommandPalette.disabled.test.tsx` |
 | Local version history | `src/core/local-history.ts` | `docs/local-history.md` | `src/core/local-history.test.ts` |
-| Personal-vocabulary JSON upload | `src/renderer/state/personalVocabulary.ts` | `docs/personal-vocabulary.md` | `src/renderer/state/personalVocabulary.test.ts` |
+| Personal-vocabulary JSON upload | `src/renderer/state/personalVocabulary.ts`, `scripts/personal-vocabulary-producer-manifest.mjs`, `scripts/check-personal-vocabulary-coverage.mjs` | `docs/personal-vocabulary.md`, `docs/features/appearance/personal-vocabulary-tools.md` | Hand-written producer and focused-test inventories cover School mode, hydration, validated cache, copy/fact mapping, native notification IPC ownership, and privacy sink regressions; runtime capture remains separate evidence |
 | Export everything, in every format | `src/renderer/components/ExportMenu.tsx` | `docs/exports.md` | `src/shared/export/codec-roundtrip.test.ts` |
 | Bulk actions on every list | `src/renderer/components/BulkActionBar.tsx` | `docs/bulk-actions.md` | `scripts/check-app-contract.mjs` (`bulk-actions` row — no behavioral suite covers `BulkActionBar`/`bulkSelection`) |
 | Landing page and documentation site | `site/index.html` | `docs/site.md` | `scripts/check-site-contract.mjs` |
@@ -103,6 +103,7 @@ and then never edited this file.
 
 | Feature | What is missing | Closes when | Notes |
 | --- | --- | --- | --- |
+| Personal-vocabulary producer completion | Rows marked `open` in `scripts/personal-vocabulary-producer-manifest.mjs` still lack an exact mapper/segment consumer or notification ownership boundary. | Every open row is repaired, focused tests run, and the coverage checker reports no open producer. | The manifest is complete for live Canvas registrations, lazy panels, root hosts, widget/HUD/bridge/site entrypoints, and the native-notification boundary. |
 | UniGetUI Global Universe | Focused tests, type checks, runtime interaction, and captures. | `manual:issue #212 accelerated lane intentionally runs no tests` | `src/core/unigetui/register-ipc.ts`, `src/renderer/components/unigetui/UniGetUiUniversePanel.tsx`, and `docs/features/integrations/unigetui-global-universe.md` provide the implementation and documentation. |
 | Home Assistant multi-instance client | Focused tests, built-artifact interaction, and capture evidence. | `manual:issue 26 explicitly forbids checks and captures in its ultra-speed implementation lane` | Source, documentation, machine-local credential and instance persistence, REST and WebSocket discovery, and portable intent are implemented in issue #26. |
 | Automatic node dependency installation | Focused lifecycle/IPC verification, generated offline docs refresh, and Node Catalog `Install and continue` integration. | `manual:the foundation requires the next verification and catalog lanes before this row can be marked shipped` | Manifest, cache, bounded installer, repair, cancellation, restart reconciliation, and desktop/Server Edition typed IPC landed in the 2026-08-26 foundation lane. |

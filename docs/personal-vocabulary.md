@@ -23,20 +23,13 @@ the app forgets your vocabulary ever existed, as if it had never had an opinion 
 first place. The valid local cache is deliberately bounded by the documented cache age, so this is
 not an unbounded persistence promise.
 
-The renderer keeps a hand-written producer inventory in
-scripts/check-personal-vocabulary-coverage.mjs. It covers settings fields and sections, menus,
-dialogs, prompts, notifications, tooltips, canvas and board surfaces, source control, onboarding,
-the dim sum notice, publish/find/remote pickers, browser profiles, password management, conversion,
-Minecraft panels, authenticator and speech settings, toy-lock setup, regex builders, changelog and
-release cards, local history, offline documentation, appearance and colour editors, bulk actions,
-Explorer, project switching, and the local model manager. The checker requires an exact local mapper
-boundary and an audit row for each producer. It also runs deliberate in-memory negative regressions
-for a removed producer row, mapper call, and documentation row.
-Minecraft panels, authenticator and speech settings, and toy-lock setup. The checker requires an
-exact local mapper boundary and an audit row for each producer. Its negative regression copies a
-complete producer and documentation fixture, removes a real mapper call and a real audit row, then
-executes the checker against that mutated fixture so a toothless in-memory assertion cannot report
-a false pass.
+The canonical hand-written producer inventory is
+`scripts/personal-vocabulary-producer-manifest.mjs`. It covers every live Canvas node registration,
+lazy panel, root host, detached widget, HUD, browser bridge, site entrypoint, and native-notification
+boundary. `scripts/check-personal-vocabulary-coverage.mjs` cross-checks those rows against live
+registrations, exact mapper or segment consumers, factual bindings, School-mode and cache policy,
+privacy boundaries, documentation rows, and the focused-test inventory. Discovery can reveal drift,
+but it never defines the required list.
 
 None of this leaves your machine. The file is read, checked, and applied entirely where it sits —
 never uploaded, logged, exported, or synced, not even alongside the rest of your app settings. If
@@ -58,7 +51,8 @@ Reading, validating, and applying the file happens **entirely in the browser con
 Electron renderer or a Server Edition browser tab, identically either way, since the mechanism is
 plain web platform APIs (`<input type="file">` + `FileReader`). There is:
 
-- **no IPC call to the main/server process** for any of this,
+- **no IPC or network transfer of the uploaded JSON, validated entries, cache envelope, mapping
+  table, source filename, or source path**,
 - **no network request**,
 - **no copy of the actual terms, values, filename, or file path** written to logs, exports,
   telemetry, crash reports, prompts, the settings/version-history system, or any other
@@ -69,6 +63,15 @@ The validated result is cached in this browser profile's `localStorage`
 exported with the rest of app settings, or sent anywhere. Hydration passes the cached JSON through
 the **same complete validator** as a new upload; hand-editing `localStorage` is not a second,
 weaker import path.
+
+Native operating-system notifications are a user-facing text boundary. Their renderer-side
+producer applies approved replacements to explicitly authored title/body fields before calling the
+typed notification bridge. The typed bridge may carry only the already-rendered title and body,
+their ownership tags, the destination node identifier, and the focus-control flag. The main process
+validates those fields and composes the notification without reading vocabulary state. The JSON,
+entry map, cache envelope, source filename/path, credentials, exports, and history data never cross
+that bridge. Focused cross-boundary tests require authored fields to map and fact fields to remain
+byte-identical.
 
 The upload shape and the persisted-cache shape are intentionally separate. An upload accepts only
 `version` and `entries`. The cache additionally requires `entryCount` and `savedAt`, rejects unknown
@@ -214,8 +217,7 @@ the substitution without anyone remembering to opt in:
   (`state/notifications.ts`, `NotificationToasts.tsx`); fact bodies remain unchanged by default
 - ✅ The landing page uses the same JSON upload and cache-envelope contract in
   `site/app/shared/vocabulary-state.js` and `site/app/features/vocabulary.js`; it keeps its existing
-  Kids-mode presentation and persists the validated cache only in per-visitor browser storage
-  `useLocalizedVocabularyText` helper (localized shipped prose → vocabulary → dynamic facts last)
+  Kids-mode presentation and persists the validated cache only in per-visitor browser storage.
 
 **Never** applied — these stay verbatim regardless of any uploaded file, by design:
 
@@ -230,10 +232,6 @@ Named exclusions worth knowing, each for a reason above:
   `assessment.reason`, a git failure line, a clipped agent transcript line. The title and the
   action labels are ours; the body is quoted output. A producer that owns a body may explicitly set
   `bodyKind: 'authored'`, which is the only body form that maps through the vocabulary boundary.
-- **`DestructiveConfirmGate`.** Its own contract already says the funny-level/localization rules
-  apply to copy elsewhere and never to that sentence, and its `affected` list names the exact
-  items being destroyed.
-  action labels are ours; the body is quoted output.
 - **`DestructiveConfirmGate`.** Its `title` and `description` prose are mapped through the shared
   template boundary, while the optional `titleParams` and `descriptionParams` values are inserted
   verbatim. Its `affected` list remains an exact list of the items being destroyed.
@@ -265,11 +263,9 @@ uses the same boundary for confirmations that name a user record, path, model, o
 focused `ownedCopy.test.ts` suite proves this distinction with a replacement term inside an exact
 diagnostic.
 
-**Known gap, honestly stated:** the canvas's own right-click menus (node and pane) and the canvas
-command palette's *mount point* live in `Canvas.tsx` and `ContextMenu.tsx`. The palette is covered
-because the substitution happens inside `CommandPalette` itself; the canvas context menus are
-**not** — closing that gap is a one-line swap of `ContextMenu` for `VocabularyContextMenu` at
-`Canvas.tsx`'s single render site, deliberately left out of the change that widened the rest.
+The canvas command palette maps inside `CommandPalette`, and the live Canvas context-menu mount now
+uses `VocabularyContextMenu`. Both registrations are checked explicitly. Remaining gaps are the
+rows marked `open` in the canonical manifest table, not a stale prose list maintained by memory.
 
 The Settings surface is complete at its own boundaries, but the project-wide audit intentionally
 keeps non-Settings producers that belong to other implementation lanes listed as open until their

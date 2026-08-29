@@ -4,6 +4,105 @@ Status: this is the shared source inventory for the current Material Design 3 re
 
 This document is the hand-written surface inventory required by issue #91. The executable companion is `scripts/check-material-audit.mjs`; its required identifier list is intentionally independent from the rows it validates, so deleting a row turns the check red rather than shrinking the inventory and the check together.
 
+## Personal-vocabulary producer manifest
+
+This table is the documentation side of the hand-written producer manifest in
+`scripts/personal-vocabulary-producer-manifest.mjs`. Discovery only checks the list against live
+registrations. An open row remains an implementation gap and must not be reported as covered.
+
+| ID | Family | Classification | Implementation | Boundary or open reason |
+| --- | --- | --- | --- | --- |
+| `canvas-node-terminal` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper(), useLocalizedVocabularyText() |
+| `canvas-node-sticky` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-group` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-annotation` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-authenticator` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-calendar` | `canvas-node` | `mixed` | `open` | The live calendar node still emits authored JSX without a mapper boundary. |
+| `canvas-node-homeassistant-control` | `canvas-node` | `mixed` | `open` | Notification ownership fields are still absent on direct producers. |
+| `canvas-node-homeassistant-sensor` | `canvas-node` | `mixed` | `open` | The live sensor node has no mapper or notification ownership boundary. |
+| `canvas-node-editor` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-diff` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-subagent` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-loop` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-xproject` | `canvas-node` | `mixed` | `open` | The cross-project node still renders authored copy directly. |
+| `canvas-node-scheduler` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-timer` | `canvas-node` | `mixed` | `open` | The timer has no mapper and omits notification ownership fields. |
+| `canvas-node-alarm` | `canvas-node` | `mixed` | `open` | The alarm node emits direct authored copy and unclassified notifications. |
+| `canvas-node-dino` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-recovery-game` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-photo` | `canvas-node` | `mixed` | `open` | The photo node still renders authored copy directly. |
+| `canvas-node-gallery` | `canvas-node` | `mixed` | `open` | The gallery node still renders authored copy directly. |
+| `canvas-node-wild-dim-sum` | `canvas-node` | `mixed` | `covered` | Covered by useLocalizedVocabularyText() |
+| `canvas-node-video` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-web` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-browser` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-files` | `canvas-node` | `mixed` | `open` | The file node and its menu still bypass the vocabulary boundary. |
+| `canvas-node-nsis` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-shop` | `canvas-node` | `mixed` | `covered` | Covered by useLocalizedVocabularyText() |
+| `canvas-node-aws-universe` | `canvas-node` | `mixed` | `covered` | Covered by useLocalizedVocabularyText() |
+| `canvas-node-unigetui` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-torrent` | `canvas-node` | `mixed` | `open` | The torrent node still emits authored copy without a mapper. |
+| `canvas-node-minecraft` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-dockerhost` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-proxmox` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-gitlab` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-homeassistant` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-freepbx` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-cloudflare-tunnel` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-awsidentity` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-cloudflare-zero-trust` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-nextcloud-aio` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-nextcloud-managed` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-open-webui-hosting` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-linux-vm` | `canvas-node` | `mixed` | `open` | The virtual-machine node still renders authored copy directly. |
+| `canvas-node-windows-diagnostics` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-veracrypt` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-repository-graph` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-gitlab-hosting` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-cloudflare-core-managers` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-aws-resource` | `canvas-node` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `canvas-node-github-work-item` | `canvas-node` | `mixed` | `open` | The work-item node and detail dialogs still render authored copy directly. |
+| `lazy-panel-SettingsPage` | `lazy-panel` | `mixed` | `covered` | Covered by useLocalizedVocabularyText() |
+| `lazy-panel-SourceControlPanel` | `lazy-panel` | `mixed` | `open` | The lazy panel still has authored copy outside a mapper boundary. |
+| `lazy-panel-ExplorerPanel` | `lazy-panel` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `lazy-panel-ShortcutsPanel` | `lazy-panel` | `mixed` | `open` | The lazy panel still has authored copy outside a mapper boundary. |
+| `lazy-panel-OnboardingFlow` | `lazy-panel` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `lazy-panel-DictationOverlay` | `lazy-panel` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `lazy-panel-BugReportDialog` | `lazy-panel` | `mixed` | `open` | The lazy panel still has authored copy outside a mapper boundary. |
+| `lazy-panel-PhonePairPopover` | `lazy-panel` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `lazy-panel-LogPanel` | `lazy-panel` | `mixed` | `open` | The lazy panel still has authored copy outside a mapper boundary. |
+| `lazy-panel-KanbanView` | `lazy-panel` | `mixed` | `covered` | Covered by useLocalizedVocabularyText() |
+| `lazy-panel-FileConverterPanel` | `lazy-panel` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `lazy-panel-OllamaManagerPanel` | `lazy-panel` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `lazy-panel-UniGetUiUniversePanel` | `lazy-panel` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `lazy-panel-PasswordManagerPanel` | `lazy-panel` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `root-Canvas` | `root-host` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `root-KidsShell` | `root-host` | `mixed` | `open` | The root surface still renders authored copy directly. |
+| `root-PromptDialogHost` | `root-host` | `mixed` | `covered` | Covered by <InputDialog |
+| `root-NodeIconDialogHost` | `root-host` | `mixed` | `open` | The root surface still renders authored copy directly. |
+| `root-ArchiveUnlockDialogHost` | `root-host` | `mixed` | `open` | The root surface still renders authored copy directly. |
+| `root-DestructiveGateHost` | `root-host` | `mixed` | `covered` | Covered by <DestructiveConfirmGate |
+| `root-NotificationToasts` | `root-host` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `root-AppearanceStyleInjector` | `root-host` | `no-prose` | `covered` | Covered by export function AppearanceStyleInjector |
+| `root-AppearanceEditorHost` | `root-host` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `root-EnableKidsModeDialogHost` | `root-host` | `mixed` | `open` | The root surface still renders authored copy directly. |
+| `root-RemoteOAuthCallbackNotice` | `root-host` | `mixed` | `open` | The root surface still renders authored copy directly. |
+| `root-EasterEggs` | `root-host` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `root-DimSumSurprise` | `root-host` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `root-SessionProvider` | `root-host` | `no-prose` | `covered` | Covered by session={localSession} |
+| `root-ReactFlowProvider` | `root-host` | `no-prose` | `covered` | Covered by <ReactFlowProvider> |
+| `entry-widget` | `widget-entrypoint` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `entry-hud` | `hud-entrypoint` | `mixed` | `covered` | Covered by mapLocalVocabularyText( |
+| `entry-dialog-picker` | `bridge-entrypoint` | `mixed` | `covered` | Covered by useVocabularyMapper() |
+| `entry-ws-reconnect` | `bridge-entrypoint` | `mixed` | `covered` | Covered by mapLocalVocabularyText( |
+| `entry-browser-stubs` | `bridge-entrypoint` | `mixed` | `covered` | Covered by formatHostMessage( |
+| `entry-site-main` | `site-entrypoint` | `mixed` | `covered` | Covered by registerVocabulary( |
+| `entry-site-vocabulary` | `site-entrypoint` | `authored` | `covered` | Covered by validateVocabularyJson( |
+| `entry-site-cache` | `site-entrypoint` | `no-prose` | `covered` | Covered by validateVocabularyCacheJson( |
+| `native-notification-renderer` | `native-notification` | `mixed` | `covered` | Covered by titleKind, bodyKind |
+| `native-notification-ipc` | `native-notification` | `factual-only` | `covered` | Covered by IPC.appNotify |
+| `native-notification-main` | `native-notification` | `factual-only` | `covered` | Covered by isPreparedNativeNotification |
+
 ## Scope and preservation boundary
 
 The desktop audit covers every checked-in rendered shell, node, destination, settings section, overlay, status or empty/error state, and every documentation or landing page. Each row records the implementation file, an exact source marker, the style or primitive marker, and the current source-level status.

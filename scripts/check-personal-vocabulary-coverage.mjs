@@ -2,9 +2,9 @@
 
 // Hand-written producer inventory for the renderer's local personal-vocabulary boundary.
 // Discovery is intentionally not used: a producer removed from this list must make this check red.
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 
@@ -14,7 +14,16 @@ const rootIndex = scriptArgs.indexOf('--root')
 const ROOT = rootIndex >= 0 && scriptArgs[rootIndex + 1]
   ? scriptArgs[rootIndex + 1]
   : join(dirname(SCRIPT_PATH), '..')
+const manifestModule = await import(pathToFileURL(join(ROOT, 'scripts/personal-vocabulary-producer-manifest.mjs')).href + `?coverage=${Date.now()}-${Math.random()}`)
+const {
+  PERSONAL_VOCABULARY_DOCS,
+  PERSONAL_VOCABULARY_FOCUSED_TESTS,
+  PERSONAL_VOCABULARY_POLICIES,
+  PERSONAL_VOCABULARY_PRODUCERS
+} = manifestModule
 const fixtureRun = scriptArgs.includes('--fixture-run')
+const quiet = scriptArgs.includes('--summary')
+const skipMutations = scriptArgs.includes('--skip-mutations')
 const dropSectionIndex = scriptArgs.indexOf('--drop-section')
 const PRODUCERS = [
   ['settings-fields', 'src/renderer/components/settings/FieldRow.tsx', 'useVocabularyText('],
@@ -231,8 +240,6 @@ const PRODUCTION_SURFACES = [
 
 // Independent hand-written manifests. The mutable rows above are implementation evidence; these
 // lists are the required universe, so deleting a row cannot delete its own requirement too.
-const CANONICAL_PRODUCER_IDS = `settings-fields settings-sections personal-vocabulary-upload settings-page-vocabulary-boundary settings-page-registration settings-sidebar-vocabulary-boundary settings-sidebar-registration settings-section-registry settings-search-corpus settings-inline-copy settings-reset settings-font-picker settings-theme-picker settings-section-inline-copy settings-copy-facts settings-resolution-ownership settings-search-policy command-palette context-menus confirm-dialog input-dialog notifications tooltip conflict-banner canvas-prose fab-menu kanban-view kanban-column kanban-session-card kanban-card-modal source-control worktree-dialog onboarding dim-sum-surprise publish-dialog find-bar remote-picker browser-profile-picker wsl-create-dialog terminal-node sticky-node group-node editor-node diff-node browser-node browser-surface browser-start-page browser-extensions-panel discarded-plate video-node web-node loop-node native-loop-node nsis-node service-node authenticator-node annotation-node dino-node subagent-node chat-panel node-fact-preserving-mapper password-manager converter-adapter-catalog converter-panel ollama-manager explorer-panel project-switcher regex-builder anchored-regex-builder changelog-panel release-card local-history-panel docs-browser docs-article-view appearance-editor color-field color-picker bulk-preview-segments bulk-preview-single-title-map project-storage-segments project-other-unread-fact converter-detection-note-fact converter-adapter-id-corpus ollama-staleness-segments ollama-completeness-segments ollama-completeness-reason-fact ollama-queue-phase-fact ollama-fit-evidence-fact appearance-weight-segments appearance-font-preview-fact docs-section-copy history-restore-segments converter-upload-limit minecraft-backups minecraft-players minecraft-properties authenticator-settings speech-settings school-mode-settings kids-mode-settings usage-settings toy-lock-wizard shared-prose-primitives ui-input ui-button-wrapper-delegation ui-md3-button ui-chip ui-menu ui-status-chip ui-switch ui-select ui-number-field ui-text-area ui-text-field ui-fab ui-icon-button ui-segmented-button ui-dialog ui-list-row ui-tabs ui-slider ui-checkbox ui-radio shared-input-controls filterable-menu editable-node-title destructive-confirm-gate personal-vocabulary-surface-mapper personal-vocabulary-application typed-copy-fact-boundary personal-vocabulary-host-message widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs notification-body-classification site-vocabulary-json site-vocabulary-cache native-notification-canvas native-notification-onboarding native-notification-settings personal-vocabulary-template native-notification-browser native-notification-main`.split(/\s+/)
-const CANONICAL_SURFACE_IDS = `app-shell welcome top-app-bar status-surface sessions-sidebar session-row terminal-node sticky-node group-node editor-node diff-node browser-node web-node video-node loop-node service-node native-loop-node nsis-node authenticator-node annotation-node dino-node subagent-node chat-panel browser-surface browser-start-page browser-extensions-panel discarded-plate wsl-dialog regex-builder anchored-regex-builder notification-center notification-toasts changelog-panel release-card local-history docs-browser docs-article appearance-editor color-field color-menu color-picker branch-select bulk-action-bar explorer-panel project-switcher ollama-manager converter-panel pty-pressure update-card resume-card announcement-banner session-memory remote-access-dialog ssh-project-dialog phone-pair-popover dictation-overlay widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs`.split(/\s+/)
 // Every Settings section is listed explicitly. The shared FieldRow/SettingsSection funnels cover
 // their ordinary rows, while SettingsText marks standalone inline prose and the shared primitives
 // cover labels/options. Keeping this list hand-written means deleting a section cannot make its
@@ -366,16 +373,13 @@ function check(label, value) {
   if (!value) {
     failures += 1
     console.error('✗ ' + label)
-  } else console.log('✓ ' + label)
+  } else if (!quiet || label.startsWith('full checker rejects')) console.log('✓ ' + label)
 }
 
 const errors = []
 const ids = new Set()
 const producerIds = PRODUCERS.map(([id]) => id)
 const surfaceIds = PRODUCTION_SURFACES.map(([id]) => id)
-function inventoryMatchesCanonical(ids, canonical) {
-  return ids.length === canonical.length && canonical.every((id, i) => ids[i] === id)
-}
 
 function callArguments(source, name) {
   const calls = []
@@ -415,8 +419,6 @@ function callArguments(source, name) {
   }
   return calls
 }
-check('canonical producer manifest matches implementation rows', inventoryMatchesCanonical(producerIds, CANONICAL_PRODUCER_IDS))
-check('canonical surface manifest matches implementation rows', inventoryMatchesCanonical(surfaceIds, CANONICAL_SURFACE_IDS))
 const canvasNotifyCalls = callArguments(read('src/renderer/canvas/Canvas.tsx') || '', 'notify')
   // Keep only production object payloads. This excludes comments and the two native
   // `window.nodeTerminal.notify` calls while retaining multiline object literals.
@@ -477,17 +479,194 @@ if (!fixtureRun && pendingProductionSurfaces.length > 0) {
 }
 check('producer inventory has no duplicate identifiers', errors.length === 0)
 
+function codeOnly(source, file = 'source.tsx') {
+  const chars = [...source]
+  let quote = ''
+  let escaped = false
+  for (let i = 0; i < chars.length; i += 1) {
+    const ch = chars[i]
+    const next = chars[i + 1]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === quote) quote = ''
+      continue
+    }
+    if (ch === "'" || ch === '"' || ch === '`') { quote = ch; continue }
+    if (ch === '/' && next === '/') {
+      while (i < chars.length && chars[i] !== '\n' && chars[i] !== '\r') { chars[i] = ' '; i += 1 }
+      i -= 1
+    } else if (ch === '/' && next === '*') {
+      chars[i] = chars[i + 1] = ' '
+      i += 2
+      while (i < chars.length && !(chars[i] === '*' && chars[i + 1] === '/')) { if (chars[i] !== '\n' && chars[i] !== '\r') chars[i] = ' '; i += 1 }
+      if (i < chars.length) chars[i] = chars[i + 1] = ' '
+      i += 1
+    }
+  }
+  return chars.join('')
+}
+
+function sameSet(left, right) {
+  return left.size === right.size && [...left].every((value) => right.has(value))
+}
+
+function manifestMarkerPresent(file, markers) {
+  const source = read(file)
+  if (source === null) return false
+  const clean = codeOnly(source, file)
+  return markers.some((marker) => clean.includes(marker))
+}
+
+const manifestIds = PERSONAL_VOCABULARY_PRODUCERS.map((row) => row.id)
+check('canonical producer manifest has unique ids', new Set(manifestIds).size === manifestIds.length)
+check('canonical producer manifest is not empty', manifestIds.length > 0)
+for (const policy of PERSONAL_VOCABULARY_POLICIES) {
+  check(`policy ${policy.id} is uniquely named`, PERSONAL_VOCABULARY_POLICIES.filter((entry) => entry.id === policy.id).length === 1)
+  for (const [file, marker] of policy.markers) check(`policy ${policy.id}: ${file} owns ${marker}`, manifestMarkerPresent(file, [marker]))
+}
+
+const testIds = new Set(PERSONAL_VOCABULARY_FOCUSED_TESTS.map(([id]) => id))
+for (const [id, file, marker] of PERSONAL_VOCABULARY_FOCUSED_TESTS) {
+  check(`focused test ${id}: file exists`, read(file) !== null)
+  check(`focused test ${id}: exact suite marker`, manifestMarkerPresent(file, [marker, 'describe(', 'test(']))
+}
+
+const allowedClassifications = new Set(['authored', 'mixed', 'factual-only', 'provider-literal', 'no-prose'])
+for (const row of PERSONAL_VOCABULARY_PRODUCERS) {
+  check(`${row.id}: source exists`, read(row.file) !== null)
+  check(`${row.id}: classification is explicit`, allowedClassifications.has(row.classification))
+  check(`${row.id}: policy exists`, PERSONAL_VOCABULARY_POLICIES.some((policy) => policy.id === row.policy))
+  check(`${row.id}: implementation state is explicit`, row.implementation === 'covered' || row.implementation === 'open')
+  if (!fixtureRun) check(`${row.id}: implementation gap is closed`, row.implementation === 'covered')
+  if (row.implementation === 'open') check(`${row.id}: open gap has an exact reason`, row.openReason.length > 12)
+  for (const [file, ...alternatives] of row.reachability) check(`${row.id}: exact reachability marker`, manifestMarkerPresent(file, alternatives))
+  if (row.implementation === 'covered' || !fixtureRun) {
+    for (const marker of row.consumptionMarkers) check(`${row.id}: exact mapper or segment consumption ${marker}`, manifestMarkerPresent(row.file, [marker]))
+  }
+  if ((row.classification === 'mixed' || row.classification === 'factual-only' || row.classification === 'provider-literal') && !(fixtureRun && row.implementation === 'open')) {
+    check(`${row.id}: factual binding reason`, row.factReason.length > 12)
+    check(`${row.id}: exact factual binding marker`, row.factMarkers.length > 0 && row.factMarkers.some((marker) => manifestMarkerPresent(row.file, [marker])))
+  } else check(`${row.id}: no-fact reason is explicit`, row.factReason.length > 12)
+  check(`${row.id}: exact audit documentation row`, (read(PERSONAL_VOCABULARY_DOCS.audit) || '').includes(`| \`${row.docsRow}\` |`))
+  check(`${row.id}: focused tests are declared`, row.focusedTests.length > 0 && row.focusedTests.every((id) => testIds.has(id)))
+}
+
+const canvasSource = codeOnly(read('src/renderer/canvas/Canvas.tsx') || '', 'Canvas.tsx')
+const discoveredCanvasKeys = new Set()
+for (const match of canvasSource.matchAll(/(?:^|\n)\s*(?:'([^']+)'|"([^"]+)"|([A-Za-z][A-Za-z0-9-]*))\s*:\s*withNodeBoundary\(/g)) discoveredCanvasKeys.add(match[1] || match[2] || match[3])
+const manifestCanvasKeys = new Set(PERSONAL_VOCABULARY_PRODUCERS.filter((row) => row.family === 'canvas-node').map((row) => row.registrationKey))
+check('Canvas node discovery matches the hand-written manifest exactly', sameSet(discoveredCanvasKeys, manifestCanvasKeys))
+
+const lazySource = codeOnly(read('src/renderer/components/lazyPanels.tsx') || '', 'lazyPanels.tsx')
+const discoveredLazyPanels = new Set([...lazySource.matchAll(/export const ([A-Za-z0-9_]+) = withSuspense\(/g)].map((match) => match[1]))
+const manifestLazyPanels = new Set(PERSONAL_VOCABULARY_PRODUCERS.filter((row) => row.family === 'lazy-panel').map((row) => row.registrationKey))
+check('lazy panel discovery matches the hand-written manifest exactly', sameSet(discoveredLazyPanels, manifestLazyPanels))
+
+const appSource = codeOnly(read('src/renderer/App.tsx') || '', 'App.tsx')
+const discoveredRootComponents = new Set([...appSource.matchAll(/<([A-Z][A-Za-z0-9]*)\b/g)].map((match) => match[1]))
+const manifestRootComponents = new Set(PERSONAL_VOCABULARY_PRODUCERS.filter((row) => row.family === 'root-host').map((row) => row.registrationKey))
+check('root component discovery matches the hand-written manifest exactly', sameSet(discoveredRootComponents, manifestRootComponents))
+
+function listSourceFiles(path) {
+  if (!existsSync(path)) return []
+  const result = []
+  for (const entry of readdirSync(path, { withFileTypes: true })) {
+    const absolute = join(path, entry.name)
+    if (entry.isDirectory()) result.push(...listSourceFiles(absolute))
+    else result.push(absolute)
+  }
+  return result
+}
+
+const discoveredFocusedTests = new Set(
+  [...listSourceFiles(join(ROOT, 'src')), ...listSourceFiles(join(ROOT, 'site'))]
+    .map((file) => file.slice(ROOT.length + 1).replaceAll('\\', '/'))
+    .filter((file) => /(?:\.vocabulary\.test\.|\/vocabulary\.test\.|node-vocabulary\.test\.|personalVocabulary\/.*\.test\.|personalVocabulary\.test\.|vocabulary-state\.test\.|main\/notifications\.test\.)/.test(file))
+)
+const manifestFocusedTests = new Set(PERSONAL_VOCABULARY_FOCUSED_TESTS.map(([, file]) => file))
+check('focused test discovery matches the hand-written test inventory exactly', sameSet(discoveredFocusedTests, manifestFocusedTests))
+if (!sameSet(discoveredFocusedTests, manifestFocusedTests)) {
+  console.error('Focused tests missing from manifest: ' + [...discoveredFocusedTests].filter((file) => !manifestFocusedTests.has(file)).join(', '))
+  console.error('Manifest tests not discovered: ' + [...manifestFocusedTests].filter((file) => !discoveredFocusedTests.has(file)).join(', '))
+}
+
+function topLevelPropertyNames(args) {
+  const names = new Set()
+  let depth = 0
+  let quote = ''
+  let escaped = false
+  for (let i = 0; i < args.length; i += 1) {
+    const ch = args[i]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === quote) quote = ''
+      continue
+    }
+    if (ch === "'" || ch === '"' || ch === '`') { quote = ch; continue }
+    if (ch === '{' || ch === '(' || ch === '[') { depth += 1; continue }
+    if (ch === '}' || ch === ')' || ch === ']') { depth -= 1; continue }
+    if (depth !== 1 || !/[A-Za-z_$]/.test(ch)) continue
+    const match = args.slice(i).match(/^([A-Za-z_$][A-Za-z0-9_$]*)\s*:/)
+    if (match) { names.add(match[1]); i += match[0].length - 1 }
+  }
+  return names
+}
+
+const notificationProblems = []
+for (const file of listSourceFiles(join(ROOT, 'src/renderer')).filter((file) => /\.tsx?$/.test(file) && !/\.(?:test|spec)\./.test(file))) {
+  const source = readFileSync(file, 'utf8')
+  const clean = codeOnly(source, file)
+  const notifyNames = new Set()
+  const storeNames = new Set()
+  const nativeMapperNames = new Set()
+  for (const match of clean.matchAll(/import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+    const moduleName = match[2]
+    for (const item of match[1].split(',')) {
+      const parts = item.trim().split(/\s+as\s+/)
+      const imported = parts[0]?.trim()
+      const local = parts[1]?.trim() || imported
+      if (/(?:state\/notifications|lib\/adhdNotify)$/.test(moduleName) && imported === 'notify') notifyNames.add(local)
+      if (/state\/notifications$/.test(moduleName) && imported === 'useNotifications') storeNames.add(local)
+      if (/personalVocabulary\/hostMessage$/.test(moduleName) && imported === 'mapNativeNotification') nativeMapperNames.add(local)
+    }
+  }
+  const inspectPayload = (args, label) => {
+    if (!/^\s*\{/.test(args)) { notificationProblems.push(`${label}: payload is not a direct object literal`); return }
+    const names = topLevelPropertyNames(args)
+    if (names.has('title') && !names.has('titleKind')) notificationProblems.push(`${label}: titleKind is missing`)
+    if (names.has('body') && !names.has('bodyKind')) notificationProblems.push(`${label}: bodyKind is missing`)
+  }
+  for (const name of notifyNames) for (const args of callArguments(clean, name)) inspectPayload(args, file)
+  for (const name of storeNames) for (const args of callArguments(clean, `${name}.getState().push`)) inspectPayload(args, file)
+  for (const args of callArguments(clean, 'window.nodeTerminal.notify')) {
+    const mapper = [...nativeMapperNames].find((name) => args.trimStart().startsWith(`${name}(`))
+    if (!mapper) notificationProblems.push(`${file}: native notification bypasses mapNativeNotification`)
+    else {
+      const mappedCalls = callArguments(args, mapper)
+      if (mappedCalls.length !== 1) notificationProblems.push(`${file}: native notification mapper payload is ambiguous`)
+      else inspectPayload(mappedCalls[0], file)
+    }
+  }
+}
+if (!fixtureRun) {
+  check('notification producers use comment-safe, top-level ownership properties', notificationProblems.length === 0)
+  if (notificationProblems.length) for (const problem of notificationProblems) console.error('Open notification boundary: ' + problem)
+}
+
+const personalStateCode = codeOnly(read('src/renderer/state/personalVocabulary.ts') || '', 'personalVocabulary.ts')
+check('personal vocabulary state has no IPC or network privacy sink', !/(?:window\.nodeTerminal|ipcRenderer|fetch\s*\(|client\.request\s*\(|WebSocket\s*\()/.test(personalStateCode))
+const preloadCode = codeOnly(read('src/preload/index.ts') || '', 'preload.ts')
+check('native notification IPC sends exactly the typed payload', /notify\s*:\s*\(payload\)\s*=>\s*ipcRenderer\.invoke\(IPC\.appNotify,\s*payload\)/.test(preloadCode))
+const mainNotificationCode = codeOnly(read('src/main/notifications.ts') || '', 'notifications.ts')
+check('main native notification boundary never reads vocabulary state', !/(?:applyVocabulary|readLocalVocabularyEntries|PersonalVocabulary|CACHE_KEY)/.test(mainNotificationCode))
+
 // Deliberate red regressions use the same production predicate against copies of every real
 // producer. Removing all occurrences catches a missing boundary even when a file has multiple
 // calls, while codeOnly prevents a comment or quoted fixture from satisfying the predicate.
 const originalRows = PRODUCERS.map((row) => row.join('|')).join('\n')
 check('negative regression fixture is non-empty', originalRows.length > 0)
-const producerRowsWithoutFirst = PRODUCERS.slice()
-producerRowsWithoutFirst.splice(0, 1)
-const surfaceRowsWithoutFirst = PRODUCTION_SURFACES.slice()
-surfaceRowsWithoutFirst.splice(0, 1)
-check('negative regression catches a removed canonical producer row', !inventoryMatchesCanonical(producerRowsWithoutFirst.map(([id]) => id), CANONICAL_PRODUCER_IDS))
-check('negative regression catches a removed canonical surface row', !inventoryMatchesCanonical(surfaceRowsWithoutFirst.map(([id]) => id), CANONICAL_SURFACE_IDS))
 for (const [id, file, marker] of PRODUCERS) {
   const source = read(file)
   check(`${id}: removed boundary is rejected`, source !== null && !hasMarker(source.split(marker).join(''), marker))
@@ -536,7 +715,20 @@ try {
 // predicate in memory. This catches a broken checker that accidentally passes its own miniature
 // assertion while the real inventory path would still accept a missing producer.
 function copyCompleteFixture(fixtureRoot) {
-  for (const [, file] of [...PRODUCERS, ...PRODUCTION_SURFACES, ...SETTINGS_SECTION_BOUNDARY_MANIFEST, ...MIXED_STRING_BOUNDARY_MANIFEST, ...FOCUSED_TEST_INVENTORY, ['audit-doc', DOC, '']]) {
+  const manifestFiles = new Set([
+    'scripts/personal-vocabulary-producer-manifest.mjs',
+    ...PERSONAL_VOCABULARY_PRODUCERS.flatMap((row) => [row.file, ...row.reachability.map(([file]) => file)]),
+    ...PERSONAL_VOCABULARY_POLICIES.flatMap((policy) => policy.markers.map(([file]) => file)),
+    ...PERSONAL_VOCABULARY_FOCUSED_TESTS.map(([, file]) => file),
+    ...Object.values(PERSONAL_VOCABULARY_DOCS),
+    'src/renderer/state/personalVocabulary.ts',
+    'src/preload/index.ts',
+    'src/main/notifications.ts',
+    'src/main/index.ts',
+    'src/shared/ipc.ts'
+  ])
+  const rows = [...PRODUCERS, ...PRODUCTION_SURFACES, ...SETTINGS_SECTION_BOUNDARY_MANIFEST, ...MIXED_STRING_BOUNDARY_MANIFEST, ...FOCUSED_TEST_INVENTORY, ['audit-doc', DOC, ''], ...[...manifestFiles].map((file) => ['manifest', file, ''])]
+  for (const [, file] of rows) {
     const source = join(ROOT, file)
     const target = join(fixtureRoot, file)
     mkdirSync(dirname(target), { recursive: true })
@@ -549,7 +741,7 @@ function runFreshFixtureMutation(label, mutate, args = []) {
   try {
     copyCompleteFixture(fixtureRoot)
     mutate(fixtureRoot)
-    const result = spawnSync(process.execPath, [SCRIPT_PATH, '--root', fixtureRoot, '--fixture-run', ...args], {
+    const result = spawnSync(process.execPath, [SCRIPT_PATH, '--root', fixtureRoot, '--fixture-run', '--summary', ...args], {
       encoding: 'utf8'
     })
     check(label, result.status !== 0)
@@ -558,11 +750,11 @@ function runFreshFixtureMutation(label, mutate, args = []) {
   }
 }
 
-if (!fixtureRun) {
+if (!fixtureRun && !skipMutations) {
   const baselineRoot = mkdtempSync(join(tmpdir(), 'nodeterm-vocabulary-audit-baseline-'))
   try {
     copyCompleteFixture(baselineRoot)
-    const baselineResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', baselineRoot, '--fixture-run'], { encoding: 'utf8' })
+    const baselineResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', baselineRoot, '--fixture-run', '--summary'], { encoding: 'utf8' })
     if (baselineResult.status !== 0) {
       console.error('Fixture baseline output:\n' + baselineResult.stdout + baselineResult.stderr)
     }
@@ -607,6 +799,49 @@ if (!fixtureRun) {
     const quote = String.fromCharCode(96)
     const lines = readFileSync(path, 'utf8').split(/\r?\n/)
     writeFileSync(path, lines.filter((line) => !line.includes('| ' + quote + 'tooltip' + quote + ' |')).join('\n'), 'utf8')
+  })
+  runFreshFixtureMutation('full checker rejects a canonical manifest row deletion', (root) => {
+    const path = join(root, 'scripts/personal-vocabulary-producer-manifest.mjs')
+    const source = readFileSync(path, 'utf8')
+    writeFileSync(path, source.replace(/^\s*node\('terminal'.*\r?\n/m, ''), 'utf8')
+  })
+  runFreshFixtureMutation('full checker rejects a live Canvas registration deletion', (root) => {
+    const path = join(root, 'src/renderer/canvas/Canvas.tsx')
+    writeFileSync(path, readFileSync(path, 'utf8').replace('terminal: withNodeBoundary(TerminalNode),', ''), 'utf8')
+  })
+  runFreshFixtureMutation('full checker rejects an authored mapper bypass', (root) => {
+    const path = join(root, 'src/renderer/components/Tooltip.tsx')
+    writeFileSync(path, readFileSync(path, 'utf8').replace('useVocabularyMapper()', '(() => (value) => value)()'), 'utf8')
+  })
+  runFreshFixtureMutation('full checker rejects a fact routed through the mapper', (root) => {
+    const path = join(root, 'src/renderer/lib/personalVocabulary/ownedCopy.ts')
+    writeFileSync(path, readFileSync(path, 'utf8').replace("segment.kind === 'copy' ? map(segment.text) : segment.text", 'map(segment.text)'), 'utf8')
+  })
+  runFreshFixtureMutation('full checker rejects School-mode predicate loss', (root) => {
+    const path = join(root, 'src/renderer/lib/personalVocabulary/useVocabularyText.ts')
+    writeFileSync(path, readFileSync(path, 'utf8').replace('schoolModeAllowsOptionalFeatures({', 'Boolean({'), 'utf8')
+  })
+  runFreshFixtureMutation('full checker rejects hydrate loss', (root) => {
+    const path = join(root, 'src/renderer/state/personalVocabulary.ts')
+    writeFileSync(path, readFileSync(path, 'utf8').replace('hydrate: () => {', 'hydrate: () => undefined as never, disabledHydrate: () => {'), 'utf8')
+  })
+  runFreshFixtureMutation('full checker rejects a personal-vocabulary privacy sink', (root) => {
+    const path = join(root, 'src/renderer/state/personalVocabulary.ts')
+    writeFileSync(path, readFileSync(path, 'utf8') + '\nwindow.nodeTerminal.settings.update({ personalVocabulary: usePersonalVocabulary.getState().entries })\n', 'utf8')
+  })
+  runFreshFixtureMutation('full checker rejects a canonical documentation row loss', (root) => {
+    const path = join(root, PERSONAL_VOCABULARY_DOCS.audit)
+    const lines = readFileSync(path, 'utf8').split(/\r?\n/)
+    writeFileSync(path, lines.filter((line) => !line.startsWith('| `canvas-node-terminal` |')).join('\n'), 'utf8')
+  })
+  runFreshFixtureMutation('full checker rejects a focused-test inventory row loss', (root) => {
+    const path = join(root, 'scripts/personal-vocabulary-producer-manifest.mjs')
+    const source = readFileSync(path, 'utf8')
+    writeFileSync(path, source.replace(/^\s*\['apply',.*\r?\n/m, ''), 'utf8')
+  })
+  runFreshFixtureMutation('full checker rejects native IPC vocabulary payload egress', (root) => {
+    const path = join(root, 'src/preload/index.ts')
+    writeFileSync(path, readFileSync(path, 'utf8').replace('ipcRenderer.invoke(IPC.appNotify, payload)', 'ipcRenderer.invoke(IPC.appNotify, payload, payload.vocabularyCache)'), 'utf8')
   })
 }
 

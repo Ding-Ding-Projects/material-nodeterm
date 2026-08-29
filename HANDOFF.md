@@ -5062,3 +5062,13 @@ Catalog entry are in `src/renderer/nodes/RepositoryGraphNode.tsx`, `src/renderer
 Tests, type checks, lint, reviews, accessibility checks, security checks, runtime interaction, and
 screenshots were intentionally not run in the accelerated lane. Build and packaging remain the
 next required commands for this candidate.
+# 2026-08-28, personal vocabulary producer manifest repair
+
+The source coverage checker now reads one hand-written producer manifest covering live Canvas node
+registrations, lazy panels, root hosts, detached renderer entrypoints, browser bridges, site
+entrypoints, and native notifications. Discovery is a cross-check only. Each row records an exact
+reachability marker, authored/mixed/factual/provider/no-prose classification, mapper or segment
+consumer, fact reason, School/cache policy, documentation row, focused tests, and an explicit open
+state where implementation work remains. Native notification documentation now permits only the
+already-rendered typed payload and control metadata across IPC while prohibiting vocabulary JSON,
+entries, cache envelopes, paths, credentials, exports, and history payloads.

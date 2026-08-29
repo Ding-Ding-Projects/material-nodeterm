@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Replace the partial personal-vocabulary checker universe with a hand-written producer manifest,
+  live-registration cross-checks, exact copy/fact classifications, privacy and native-notification
+  boundaries, and deliberate red-then-green fixture mutations.
+
 - Add byte-identical sanitized shared-instruction blocks to `AGENTS.md` and `CLAUDE.md`, preserve
   all project-specific guidance outside the managed markers, and add deterministic synchronization,
   private-vocabulary validation, public-detail scanning, parity checks, sensitive-input refusal,
