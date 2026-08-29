@@ -238,6 +238,9 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     cloudflareZeroTrust: stub.cloudflareZeroTrust,
     ollama: stub.ollama,
     repositoryGraph: stub.repositoryGraph,
+    // Trigger execution is host-local and is not routed by relay v1. Keep the explicit refusal
+    // beside the other host-local managers so a viewer cannot run a payload on itself.
+    trigger: stub.trigger,
     openWebUi: stub.openWebUi,
     // Tunnel credentials and provider state belong to the host machine. Relay v1 does not route
     // this inventory, so the viewer gets an explicit unsupported surface rather than querying its

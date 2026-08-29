@@ -806,6 +806,17 @@ export function buildStubApi(): Omit<
       openSource: () => unsupported('repository graph source navigation'),
       onProgress: noopUnsub
     },
+    // Trigger definitions are shared project data, but arm consent and delivery are host-local.
+    // Relay v1 has no host route for the scheduler, so refuse every operation rather than letting
+    // a relay viewer run a payload against the wrong machine.
+    trigger: {
+      status: U('trigger.status'),
+      arm: U('trigger.arm'),
+      disarm: U('trigger.disarm'),
+      runNow: U('trigger.runNow'),
+      history: U('trigger.history'),
+      onChanged: noopUnsub
+    },
     unigetui: {
       status: U('unigetui.status'),
       universeState: U('unigetui.universeState'),

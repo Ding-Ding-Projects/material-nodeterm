@@ -60,6 +60,14 @@ describe('bridge stubs', () => {
     }).not.toThrow()
   })
 
+  it('keeps trigger execution explicitly unsupported on the browser bridge', async () => {
+    const s = buildStubApi()
+    await expect(s.trigger?.status('project-1', 'trigger-1')).rejects.toMatchObject({ code: E_UNSUPPORTED })
+    const unsubscribe = s.trigger?.onChanged(() => {})
+    expect(typeof unsubscribe).toBe('function')
+    unsubscribe?.()
+  })
+
   it('boot-path promise members resolve benignly', async () => {
     const s = buildStubApi()
     await expect(s.announcements.fetch()).resolves.toEqual([])
