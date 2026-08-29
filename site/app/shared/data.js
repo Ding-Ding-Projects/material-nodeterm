@@ -31,6 +31,7 @@ export const FEATURES = [
   { id: 'kanban', icon: '🗃️', color: 'var(--yellow)', title: 'A board of live sessions', body: 'Every project is also a card board. The cards are the running sessions; drag them while they keep working.' },
   { id: 'ssh', icon: '📡', color: 'var(--blue)', title: 'Someone else’s computer', body: 'Open a project on a remote machine over SSH. Terminals, files, git and the board all run over there.' },
   { id: 'server', icon: '🌍', color: 'var(--pink)', title: 'Server Edition', body: 'The same canvas, self-hosted, in any browser — so you can reach your terminals from anywhere.' },
+  { id: 'debug-browser', icon: '🧪', color: 'var(--blue)', title: 'Isolated debugging browser', body: 'A fresh browser profile, a validated proxy, and a loopback-only DevTools endpoint for safe local debugging.' },
   { id: 'voice', icon: '🎙', color: 'var(--purple)', title: 'Talk to your terminal', body: 'Hold a key, say it out loud, read what it heard, then press send. Your voice never leaves the machine.' },
   { id: 'palette', icon: '✨', color: 'var(--orange)', title: 'Jump anywhere', body: 'A command box that hops to any block, project or action. Plus a file explorer and undo/redo.' },
   { id: 'update', icon: '⬆️', color: 'var(--green)', title: 'Keeps itself fresh', body: 'The app checks its own update feed and shows news right inside the window.' },
@@ -39,6 +40,7 @@ export const FEATURES = [
 
 export const DOCS = [
   ['Agent support', 'Claude, Codex, Gemini, opencode, Grok', 'agent-support'],
+  ['Proxy and isolated debugging browser sessions', 'fresh profiles, validated proxies, and loopback-only debugging', 'proxy-debug-sessions'],
   ['Canvas & node lifecycle', 'how blocks are born and cleaned up', 'canvas-lifecycle'],
   ['Changelog viewer', 'the date picker and the commit links', 'changelog-viewer'],
   ['Dim sum surprise', 'the little treat that shows up one visit in ten', 'dim-sum-surprise'],

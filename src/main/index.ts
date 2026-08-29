@@ -39,6 +39,7 @@ import {
 import { IPC } from '../shared/ipc'
 import { writeFilesToClipboard } from './clipboard-files'
 import { NodeTermBrowserUseBackend } from './browser-use-backend'
+import { DebugBrowserSessionService } from './browser-debug-session'
 import { matchesShortcut } from '../shared/shortcut'
 import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
@@ -545,6 +546,7 @@ let keepAwake: KeepAwakeTracker | undefined
 // belongs to. Used today for new-window capture; every entry is proven to BE a <webview> before it
 // lands here — see `registerBrowserGuestRequest`.
 const browserGuests = new Map<number, BrowserGuest>()
+let debugBrowserSessions: DebugBrowserSessionService | undefined
 
 // Node → live tail bookkeeping, so closing a node (× → pty:destroy) releases its file tailers.
 // Without this, a node closed mid-run never emits SessionEnd/PostToolUse, so context-tail (1s
@@ -1213,6 +1215,27 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle(IPC.browserExtensionsRemove, (_e, partition: string | undefined, dirPath: string) =>
     removeExtensionByPath(partition, dirPath)
+  )
+
+  // Isolated debugging browser sessions are owned by this desktop process. Their profile
+  // directories and loopback CDP ports are runtime-only and are never written to project.json.
+  debugBrowserSessions = new DebugBrowserSessionService(join(app.getPath('userData'), 'debug-browser-profiles'))
+  await mkdirFs(join(app.getPath('userData'), 'debug-browser-profiles'), { recursive: true })
+  ipcMain.handle(IPC.debugBrowserListExecutables, () => debugBrowserSessions?.listExecutables() ?? [])
+  ipcMain.handle(IPC.debugBrowserStart, (_e, spec: unknown, executablePath?: unknown) =>
+    debugBrowserSessions?.start(spec, typeof executablePath === 'string' ? executablePath : undefined)
+      ?? Promise.resolve({ ok: false as const, error: 'The isolated debugging browser service is unavailable.' })
+  )
+  ipcMain.handle(IPC.debugBrowserStatus, (_e, sessionId: unknown) =>
+    typeof sessionId === 'string' ? debugBrowserSessions?.status(sessionId) : undefined
+  )
+  ipcMain.handle(IPC.debugBrowserInspect, (_e, sessionId: unknown) =>
+    typeof sessionId === 'string'
+      ? debugBrowserSessions?.inspect(sessionId)
+      : Promise.resolve({ ok: false as const, error: 'The isolated debugging browser session id is invalid.' })
+  )
+  ipcMain.handle(IPC.debugBrowserStop, (_e, sessionId: unknown) =>
+    typeof sessionId === 'string' ? debugBrowserSessions?.stop(sessionId) ?? false : false
   )
 
   // The naming agent runs LOCALLY on captured output, so it needs a cwd that exists on THIS
@@ -3313,6 +3336,7 @@ app.on('before-quit', (e) => {
     // does not), and a lingering file is one more thing the next start() has to clear.
     askpassServer.stop()
     void browserUseBackend.stop()
+    void debugBrowserSessions?.stopAll()
     // A SIGTERM quit (dev runners, `kill`, logout) arrives through Chromium's shutdown
     // detector, and this pass's re-issued app.quit() cannot resume the OS-initiated
     // termination the first pass preventDefault'ed: both passes run, but will-quit never

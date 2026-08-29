@@ -30,6 +30,8 @@ import { BUILTIN_AGENT_IDS, isPermissionMode } from './agents/config'
 import { sshExtraArgsEnableLocalExec } from './ssh'
 import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from './types'
 import type { NsisLocalPaths } from './nsis-form-types'
+import type { DebugBrowserBinding } from './browser-debug'
+import { normalizeDebugBrowserBinding } from './browser-debug'
 
 /** Per-node exec values the LOCAL machine typed. Persisted only in the machine-local index. */
 export interface LocalNodeExec {
@@ -66,6 +68,8 @@ export interface LocalNodeExec {
    * person's disk paths appearing (or worse, being read) in everybody else's checkout.
    */
   nsisLocalPaths?: NsisLocalPaths
+  /** Isolated debug-browser profile and loopback endpoint, never project-shared. */
+  debugBrowserBinding?: DebugBrowserBinding
 }
 
 /**
@@ -316,6 +320,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
     n.pendingLaunch === undefined &&
     n.serviceConnection === undefined &&
     n.nsisLocalPaths === undefined &&
+    n.debugBrowserBinding === undefined &&
     n.ssh?.extraArgs === undefined &&
     n.ssh?.execTrusted === undefined
   )
@@ -326,6 +331,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   delete out.pendingLaunch
   delete out.serviceConnection
   delete out.nsisLocalPaths
+  delete out.debugBrowserBinding
   if (out.ssh) {
     // `execTrusted` goes with the value it vouches for. It is a MACHINE-LOCAL provenance marker:
     // if it could ride a document or a wire frame, a hostile one would simply set it to true.
@@ -412,12 +418,14 @@ export function carryLocalNodeExec(
   const extraArgs = prev.ssh?.extraArgs
   const pendingLaunch = next.kind === 'terminal' ? clonePendingLaunch(prev.pendingLaunch) : undefined
   const nsisPaths = safeNsisLocalPaths(prev.nsisLocalPaths)
+  const debugBinding = normalizeDebugBrowserBinding(prev.debugBrowserBinding)
   if (
     prev.shell === undefined &&
     prev.terminalProfileId === undefined &&
     extraArgs === undefined &&
     pendingLaunch === undefined &&
-    nsisPaths === undefined
+    nsisPaths === undefined &&
+    debugBinding === undefined
   )
     return next
   const out: CanvasNodeState = { ...next }
@@ -427,6 +435,7 @@ export function carryLocalNodeExec(
     out.ssh = { ...out.ssh, extraArgs, execTrusted: prev.ssh?.execTrusted }
   if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
   if (nsisPaths !== undefined) out.nsisLocalPaths = nsisPaths
+  if (debugBinding !== undefined) out.debugBrowserBinding = debugBinding
   return out
 }
 
@@ -473,13 +482,16 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     if (conn) entry.serviceConnection = conn
     const nsisPaths = safeNsisLocalPaths(n.nsisLocalPaths)
     if (nsisPaths) entry.nsisLocalPaths = nsisPaths
+    const debugBinding = normalizeDebugBrowserBinding(n.debugBrowserBinding)
+    if (debugBinding) entry.debugBrowserBinding = debugBinding
     if (
       entry.shell ||
       entry.terminalProfileId !== undefined ||
       entry.sshExtraArgs ||
       entry.pendingLaunch ||
       entry.serviceConnection ||
-      entry.nsisLocalPaths
+      entry.nsisLocalPaths ||
+      entry.debugBrowserBinding
     )
       map[n.id] = entry
   }
@@ -518,6 +530,8 @@ export function applyLocalNodeExec(
     if (conn) out.serviceConnection = conn
     const nsisPaths = safeNsisLocalPaths(mine?.nsisLocalPaths)
     if (nsisPaths) out.nsisLocalPaths = nsisPaths
+    const debugBinding = normalizeDebugBrowserBinding(mine?.debugBrowserBinding)
+    if (debugBinding) out.debugBrowserBinding = debugBinding
     return out
   })
 }

@@ -7,6 +7,7 @@ import {
   stripSharedNodeExec,
   type LocalNodeExecMap
 } from '../shared/node-exec'
+import { normalizeDebugBrowserSpec } from '../shared/browser-debug'
 import type {
   BridgeLink,
   BrowserProfile,
@@ -206,7 +207,15 @@ export function projectToFile(
   // The project file is a SHARED document (git, or the remote host). Exec-enabling node fields
   // (`shell`, `ssh.extraArgs`) never leave this machine in it — they ride the machine-local index
   // entry instead (`localNodeExec` / `IndexEntryV3.localExec`). See @shared/node-exec.
-  const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes)
+  const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes).map((node) => {
+    if (node.kind !== 'debug-browser') return node
+    const spec = normalizeDebugBrowserSpec(node.debugBrowserSpec)
+    const clean = { ...node }
+    delete clean.debugBrowserBinding
+    if (spec) clean.debugBrowserSpec = spec
+    else delete clean.debugBrowserSpec
+    return clean
+  })
   const icon = sanitizeProjectIcon(p.icon)
   return {
     version: 1,
@@ -303,7 +312,18 @@ export function fileToProject(
     viewport: base.viewport ?? f.viewport ?? framingViewport(f.nodes),
     // applyLocalNodeExec DROPS whatever the file carried in the exec fields (it is not ours) and
     // re-attaches only what this machine typed. See @shared/node-exec.
-    nodes: applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec),
+    nodes: applyLocalNodeExec(
+      (base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes).map((node) => {
+        if (node.kind !== 'debug-browser') return node
+        const spec = normalizeDebugBrowserSpec(node.debugBrowserSpec)
+        const clean = { ...node }
+        if (spec) clean.debugBrowserSpec = spec
+        else delete clean.debugBrowserSpec
+        delete clean.debugBrowserBinding
+        return clean
+      }),
+      base.localExec
+    ),
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),

@@ -182,6 +182,9 @@ intentionally unchecked because this task publishes the plan only.
 ### Clean-room features and upstream parity
 
 - [ ] Add clean-room browser, kiosk, PWA, proxy, and read-only diagnostics nodes.
+- [ ] #65 / lane 54 — add proxy and isolated debugging browser session nodes with fresh profiles,
+      validated proxy schemes and hosts, fixed launch arguments, and loopback-only CDP. Implementation
+      is present locally; tests, builds, packaging, interaction, and capture evidence remain pending.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.

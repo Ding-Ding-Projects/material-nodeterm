@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Proxy and isolated debugging browser sessions — nodeterm docs</title>
+    <meta name="description" content="Fresh browser profiles, validated proxies, fixed launch arguments, and loopback-only debugging targets." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Browser</p>
+      <h1>Proxy and isolated debugging browser sessions</h1>
+      <p>The isolated debugging browser node starts a supported Chromium browser with a fresh profile, an optional validated proxy, and a loopback-only DevTools Protocol endpoint.</p>
+
+      <h2>Behaviour</h2>
+      <p>Choose <strong>New isolated debugging browser…</strong> from the canvas context menu. The guided node provides a session name, an HTTP(S) start URL, an optional proxy, and a detected browser choice. It accepts no shell command, raw request, arbitrary executable path, or extra flags.</p>
+      <p>Every run creates a new profile, disables sync and extensions, binds CDP to <code>127.0.0.1</code>, and waits for exactly one matching page target. A second page, extension target, restored page, mismatched URL, or non-loopback websocket is an isolation failure.</p>
+
+      <h2>Proxy validation</h2>
+      <ul>
+        <li>Supported schemes are <code>http</code>, <code>https</code>, <code>socks4</code>, and <code>socks5</code>.</li>
+        <li>Hosts are bounded DNS names, IPv4 addresses, or bracketed IPv6 addresses.</li>
+        <li>Ports must be integers from 1 through 65535.</li>
+        <li>Userinfo, paths, fragments, control characters, malformed IPs, and out-of-range ports are refused.</li>
+      </ul>
+
+      <h2>Portable project data</h2>
+      <p>The project stores only the versioned label, normalized HTTP(S) URL, and proxy intent. Profile directories, process ids, local ports, websocket URLs, cookies, local storage, provider sessions, and credentials remain on the local computer. Import performs no launch, network request, proxy connection, or provider mutation.</p>
+
+      <h2>Failure and recovery</h2>
+      <p>When no supported browser is detected, the node remains available for safe configuration and explains why Start is disabled. If startup times out or target isolation fails, nodeterm stops the owned child, removes the fresh profile, and reports the exact failure. Retry creates another fresh profile.</p>
+
+      <h2>Security considerations</h2>
+      <p>CDP is a powerful local control surface, so it is never bound beyond loopback. The target list must contain exactly one page with the exact requested URL and a loopback websocket. The normal browser profile is never reused, and credentials are never read or copied.</p>
+
+      <h2>Suggested articles</h2>
+      <ul>
+        <li><a href="./node-kinds.html">Node kinds</a></li>
+        <li><a href="./canvas-lifecycle.html">Canvas and node lifecycle</a></li>
+        <li><a href="./projects-and-tabs.html">Projects and tabs</a></li>
+      </ul>
+    </article>
+  </body>
+</html>

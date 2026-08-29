@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-08-26, proxy and isolated debugging browser sessions, lane 54
+
+Issue #65 adds the `debug-browser` node kind and its clean-room runtime boundary. The shared
+contract in `src/shared/browser-debug.ts` validates HTTP(S) start URLs, `http`/`https`/`socks4`/
+`socks5` proxy schemes, bounded hosts and ports, fixed launch arguments, loopback CDP endpoints,
+and an exact one-page target list. `src/main/browser-debug-session.ts` owns only detected Chromium
+executables, a fresh per-run profile, its child process, and its loopback endpoint. The renderer
+surface is `src/renderer/nodes/DebugBrowserNode.tsx`, registered in the canvas node map and pane
+catalog.
+
+Portable project data stores only `DebugBrowserSpec` safe intent. `DebugBrowserBinding` is stripped
+from project files and peer mutations and belongs only to the machine-local execution overlay.
+Normal browser profiles, cookies, local storage, process ids, local ports, websocket endpoints,
+provider sessions, and credentials are not reused or copied. Imports do not launch, connect,
+download, or mutate anything external. Unsupported Server Edition and relay surfaces retain the
+safe node data but do not claim to own a local browser process.
+
+Documentation was added at `docs/features/browser/proxy-debug-sessions.md`, indexed by the browser
+category and node-kind article, with a static site article at `site/docs/proxy-debug-sessions.html`.
+The site feature and documentation indexes include the new surface. The offline generated docs
+bundle must be regenerated through `scripts/build-docs-bundle.mjs` by the release orchestrator.
+
+This lane intentionally ran no tests, type checks, lint, builds, packaging, installer execution,
+runtime interaction, security or accessibility checks, or captures. No commit or dew was made.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

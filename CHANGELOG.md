@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an isolated debugging browser node with fresh per-run profiles, guided and validated proxy
+  choices, fixed Chromium launch arguments, exact single-target validation, and loopback-only CDP.
+  Portable project data carries safe intent only; profile paths, processes, endpoints, cookies, and
+  credentials remain machine-local. Tests, builds, packaging, runtime interaction, and captures
+  remain pending for the ultra-speed implementation lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

@@ -2,7 +2,7 @@
 
 **Category:** [Canvas](./README.md)
 
-Everything on a nodeterm canvas is a node. Six kinds exist today, and every one is rendered by
+Everything on a nodeterm canvas is a node. Core and manager kinds exist today, and every one is rendered by
 the same underlying canvas engine — so they all pan, zoom, resize, group, and persist the same
 way, while each contributes its own body content and header actions.
 
@@ -16,6 +16,7 @@ way, while each contributes its own body content and header actions.
 | **Group** | A real container node — other nodes can live *inside* it, and groups can nest inside groups. A group can optionally be bound to a git worktree, so every node created inside it inherits that worktree's directory. See [Source control & worktrees](../source-control/source-control-and-worktrees.md). |
 | **Editor** | A Monaco-based code editor bound to a file path, with save, dirty-state tracking, and a markdown preview toggle for `.md` files. Image files render as an `<img>` preview instead of source text. |
 | **Diff** | A read-only Monaco diff view comparing HEAD↔index (staged) or index↔working tree (unstaged) for a single file. |
+| **Isolated debugging browser** | A disposable Chromium session with a fresh profile, validated proxy choices, fixed launch arguments, and loopback-only CDP target inspection. See [Proxy and isolated debugging browser sessions](../browser/proxy-debug-sessions.md). |
 
 Two other things render *on* the canvas but are not persisted node kinds: **subagent cards**
 (ephemeral cards showing an agent's spawned subagents, connected by an edge to the parent
@@ -32,6 +33,8 @@ rather than an in-session loop).
   node's selected shell profile is snapshotted separately in this machine's `LocalNodeExec`
   overlay; it is not written to the shared project file. See
   [Windows shell profiles](../terminals/windows-shell-profiles.md).
+- Isolated debugging browser intent is portable safe metadata. Its profile directory, child process,
+  local debugging port, websocket endpoint, cookies, storage, and credentials remain machine-local.
 
 ## Failure modes
 

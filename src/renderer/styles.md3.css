@@ -11230,3 +11230,98 @@ button.term-node__title-text:focus-visible {
 .icon-menu__reset-btn {
   align-self: flex-start;
 }
+
+/* Isolated debugging browser node. The service owns the browser process; this panel edits only
+   the portable intent and reports the live loopback binding without exposing profile internals. */
+.debug-browser-node__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  overflow: auto;
+  color: var(--md-on-surface);
+}
+.debug-browser-node__body label {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.4fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+.debug-browser-node__body input,
+.debug-browser-node__body select {
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid var(--md-outline);
+  border-radius: 8px;
+  padding: 6px 9px;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font: inherit;
+}
+.debug-browser-node__check {
+  display: flex !important;
+  gap: 8px !important;
+  align-items: center;
+}
+.debug-browser-node__check input {
+  min-height: 20px;
+  width: 20px;
+  accent-color: var(--md-primary);
+}
+.debug-browser-node__proxy {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr 0.7fr;
+  gap: 8px;
+}
+.debug-browser-node__proxy label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.debug-browser-node__status,
+.debug-browser-node__hint,
+.debug-browser-node__warning,
+.debug-browser-node__error,
+.debug-browser-node__endpoint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.debug-browser-node__hint,
+.debug-browser-node__endpoint {
+  color: var(--md-on-surface-variant);
+}
+.debug-browser-node__warning,
+.debug-browser-node__error {
+  color: var(--md-error);
+}
+.debug-browser-node__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.debug-browser-node__actions button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 18px;
+  padding: 0 14px;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  cursor: pointer;
+}
+.debug-browser-node__actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+@media (max-width: 560px) {
+  .debug-browser-node__proxy {
+    grid-template-columns: 1fr;
+  }
+  .debug-browser-node__body label {
+    grid-template-columns: 1fr;
+  }
+}

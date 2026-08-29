@@ -407,6 +407,7 @@ const REQUIRED_DOC_SLUGS = [
   'toy-locks',
   'exports-and-history',
   'changelog-viewer',
+  'proxy-debug-sessions',
 ]
 for (const slug of REQUIRED_DOC_SLUGS) {
   const rel = `site/docs/${slug}.html`

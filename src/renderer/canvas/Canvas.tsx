@@ -99,6 +99,7 @@ import { DinoNode } from '../nodes/DinoNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
 import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
+import DebugBrowserNode from '../nodes/DebugBrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import { normalizeAddress } from '../nodes/browserUrl'
@@ -566,6 +567,7 @@ import {
   createAgentNode,
   createCanvasControlTerminalNode,
   createBrowserNode,
+  createDebugBrowserNode,
   defaultBrowserTabs,
   createDinoNode,
   createDiffNode,
@@ -1802,6 +1804,7 @@ export function Canvas() {
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
+      'debug-browser': withNodeBoundary(DebugBrowserNode),
       // The service family. One component for all six: they differ in what they manage, not in how
       // they behave as canvas objects, and React Flow hands each its own `type` so the component can
       // tell them apart without six registrations of six near-identical files.
@@ -4658,6 +4661,14 @@ export function Canvas() {
       // browser's new tab). We deliberately don't use window.prompt: Electron doesn't support it
       // (it throws "prompt() is and will not be supported"), and a browser node doesn't need it.
       setNodes((ns) => [...ns, createBrowserNode(ns.length, '', center ?? emptyNodePos())])
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos]
+  )
+
+  const addDebugBrowser = useCallback(
+    (center?: { x: number; y: number }) => {
+      setNodes((ns) => [...ns, createDebugBrowserNode(ns.length, undefined, center ?? emptyNodePos())])
       markDirty()
     },
     [setNodes, markDirty, emptyNodePos]
@@ -8908,6 +8919,11 @@ export function Canvas() {
               onClick: () => addBrowser(at)
             },
             {
+              label: 'New isolated debugging browser…',
+              icon: <IconRemote />,
+              onClick: () => addDebugBrowser(at)
+            },
+            {
               label: 'New sticky note',
               icon: <IconNote />,
               onClick: () => addSticky(at)
@@ -9049,6 +9065,7 @@ export function Canvas() {
       addNativeLoop,
       addDino,
       addBrowser,
+      addDebugBrowser,
       openFileDialog,
       newProjectFile,
       openRemotePicker,

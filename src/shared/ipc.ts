@@ -429,6 +429,11 @@ export const IPC = {
   browserExtensionsAdd: 'browser:extensions-add',
   browserExtensionsRemove: 'browser:extensions-remove',
   browserExtensionsPickDir: 'browser:extensions-pick-dir',
+  debugBrowserListExecutables: 'debug-browser:list-executables',
+  debugBrowserStart: 'debug-browser:start',
+  debugBrowserStatus: 'debug-browser:status',
+  debugBrowserInspect: 'debug-browser:inspect',
+  debugBrowserStop: 'debug-browser:stop',
   remoteHostStart: 'remote:host:start',
   remoteHostStop: 'remote:host:stop',
   // Connection approval gate: main → renderer when a client finishes the handshake (carries the

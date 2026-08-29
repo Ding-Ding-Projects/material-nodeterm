@@ -85,6 +85,7 @@ and then never edited this file.
 | Dim-sum release code names | `scripts/dim-sum-code-name.mjs` | `docs/ci-and-releases.md` | `scripts/dim-sum-code-name.test.mjs` |
 | Design-reference parity app | `design/v2-preview/main.js` | `docs/md3-render-verification.md` | `scripts/capture-shots.mjs` |
 | In-app documentation browser | `src/renderer/components/DocsBrowser.tsx` | `docs/features/help/README.md` | `scripts/check-docs-bundle.mjs` |
+| Proxy and isolated debugging browser sessions | `src/shared/browser-debug.ts`, `src/main/browser-debug-session.ts`, `src/renderer/nodes/DebugBrowserNode.tsx` | `docs/features/browser/proxy-debug-sessions.md` | Verification intentionally pending in the ultra-speed lane; no tests, builds, interaction, or captures run. |
 | External-editor handoff | `src/core/vscode-detect.ts` | `docs/exports.md` | `src/core/vscode-detect.test.ts` |
 | Line count in every release | `scripts/count-lines.mjs` | `docs/ci-and-releases.md` | `scripts/release-notes.test.mjs` |
 | Sanitized instruction mirror | `scripts/check-instruction-mirror.mjs` | `scripts/check-instruction-mirror.mjs` (the script header is the documentation, same precedent as the vocabulary lock row) | `scripts/check-instruction-mirror.test.mjs` |

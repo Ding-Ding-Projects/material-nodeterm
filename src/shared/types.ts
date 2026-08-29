@@ -339,6 +339,7 @@ export type NodeKind =
   | 'video'
   | 'web'
   | 'browser'
+  | 'debug-browser'
   | 'subagent'
   | 'loop'
   | 'scheduler'
@@ -558,6 +559,10 @@ export interface CanvasNodeState {
   browserTabs?: BrowserTab[]
   /** browser-only: which `browserTabs[].id` is currently shown. Absent = the first tab. */
   browserActiveTabId?: string
+  /** debug-browser-only: portable, non-secret intent. Runtime profile and CDP endpoint stay local. */
+  debugBrowserSpec?: import('./browser-debug').DebugBrowserSpec
+  /** debug-browser-only: machine-local binding, stripped from project files and peer traffic. */
+  debugBrowserBinding?: import('./browser-debug').DebugBrowserBinding
   /** diff-only: true = staged diff (HEAD vs index), false = unstaged (index vs working). */
   diffStaged?: boolean
   /** diff-only: when set, the diff shows parent (<oid>^) vs commit (<oid>) for a file from history. */
@@ -1469,6 +1474,18 @@ export interface BrowserApi {
   /** Fires when a browser guest requested a new window; the renderer opens another browser node. */
   onBrowserNewWindow(listener: (e: { url: string; sourceNodeId: string }) => void): () => void
   extensions: BrowserExtensionsApi
+}
+
+/** Desktop-only owner for an isolated Chromium debugging session. */
+export interface DebugBrowserApi {
+  listExecutables(): Promise<import('./browser-debug').DebugBrowserExecutable[]>
+  start(
+    spec: import('./browser-debug').DebugBrowserSpec,
+    executablePath?: string
+  ): Promise<import('./browser-debug').DebugBrowserSessionResult>
+  status(sessionId: string): Promise<import('./browser-debug').DebugBrowserSessionSummary | undefined>
+  inspect(sessionId: string): Promise<import('./browser-debug').DebugBrowserInspectionResult>
+  stop(sessionId: string): Promise<boolean>
 }
 
 /** A user-defined agent (BYO CLI). In no capability list, so it gets only spawn +
@@ -3807,6 +3824,8 @@ export interface NodeTerminalApi {
   fs: FsApi
   media: MediaApi
   browser: BrowserApi
+  /** Desktop-only isolated debugging browser sessions; browser/relay surfaces omit it. */
+  debugBrowser?: DebugBrowserApi
   files: FilesApi
   updates: UpdateApi
   announcements: AnnouncementsApi

@@ -1,5 +1,6 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
+import type { DebugBrowserBinding, DebugBrowserSpec } from '@shared/browser-debug'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
@@ -163,6 +164,9 @@ export interface NodeData {
   browserTabs?: BrowserTab[]
   /** Browser-only: which `browserTabs[].id` is currently shown. Undefined = the first tab. */
   browserActiveTabId?: string
+  /** Debug browser intent is portable; its profile and endpoint are machine-local runtime state. */
+  debugBrowserSpec?: DebugBrowserSpec
+  debugBrowserBinding?: DebugBrowserBinding
   diffStaged?: boolean
   commitOid?: string
   /** dino-only: best score reached in the T-Rex Runner game. */
@@ -907,6 +911,34 @@ export function createBrowserNode(
   }
 }
 
+/** Creates an isolated debugging browser session node. The process starts only after the user
+ * submits its guided configuration, never from a project file or a raw flag box. */
+export function createDebugBrowserNode(
+  index: number,
+  spec?: DebugBrowserSpec,
+  center?: { x: number; y: number }
+): CanvasNode {
+  const safeSpec = spec ?? {
+    version: 1,
+    label: 'Debug browser',
+    startUrl: 'https://example.com'
+  }
+  return {
+    id: nextId('debug-browser'),
+    type: 'debug-browser',
+    position: placeAt(center, index, DEBUG_BROWSER_SIZE.width, DEBUG_BROWSER_SIZE.height),
+    width: DEBUG_BROWSER_SIZE.width,
+    height: DEBUG_BROWSER_SIZE.height,
+    style: { width: DEBUG_BROWSER_SIZE.width, height: DEBUG_BROWSER_SIZE.height },
+    data: {
+      title: safeSpec.label,
+      color: '#8ab4f8',
+      group: null,
+      debugBrowserSpec: safeSpec
+    }
+  }
+}
+
 /** Creates a diff editor node for a changed file (relative path + repo cwd). */
 export function createDiffNode(
   index: number,
@@ -938,6 +970,7 @@ export function createDiffNode(
 /** Creates a new sticky note. */
 const AUTHENTICATOR_SIZE = { width: 340, height: 260 }
 const NSIS_SIZE = { width: 460, height: 520 }
+const DEBUG_BROWSER_SIZE = { width: 520, height: 360 }
 
 /**
  * A view of this machine's own TOTP generators, on the canvas.
@@ -1455,6 +1488,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   video: true,
   web: true,
   browser: true,
+  'debug-browser': true,
   subagent: true,
   loop: true,
   scheduler: true,
@@ -1492,6 +1526,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   video: VIDEO_SIZE,
   web: WEB_SIZE,
   browser: BROWSER_SIZE,
+  'debug-browser': DEBUG_BROWSER_SIZE,
   // Ephemeral kinds are never persisted (they are derived from live hook events), so these are
   // defensive floors rather than values a project.json will ever carry.
   subagent: TERMINAL_SIZE,
@@ -1924,6 +1959,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         browserProfileId: n.browserProfileId,
         browserTabs,
         browserActiveTabId,
+        debugBrowserSpec: n.debugBrowserSpec,
+        debugBrowserBinding: n.debugBrowserBinding,
         diffStaged: n.diffStaged,
         commitOid: n.commitOid,
         highScore: n.highScore,
@@ -1999,6 +2036,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         browserProfileId: n.data.browserProfileId,
         browserTabs: n.data.browserTabs,
         browserActiveTabId: n.data.browserActiveTabId,
+        debugBrowserSpec: n.data.debugBrowserSpec,
+        debugBrowserBinding: n.data.debugBrowserBinding,
         diffStaged: n.data.diffStaged,
         commitOid: n.data.commitOid,
         highScore: n.data.highScore,
