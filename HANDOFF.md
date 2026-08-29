@@ -800,10 +800,15 @@ Already present via convergence or the concurrent session: **#112 #189 #113 #156
 
 Three deliberate exclusions, with reasons — do not "finish" these without revisiting the reasoning:
 
-- **#111 psmux — skipped.** This fork already has its own Windows persistence backend (the session
-  host: ~4,000 lines, protocol v2, ConPTY, process-tree termination; `sessionHost` appears 62 times
-  in `pty-manager.ts`). psmux is a competing implementation of the same job. Its **NSIS packaging
-  commit `daecb26e` is excluded permanently** — Squirrel is the only Windows installer path here.
+- **#75 psmux discovery is implemented, while NSIS packaging remains excluded.** Windows
+  executable discovery is `PATHEXT`-aware and checks `tmux` before `psmux`; the POSIX fixed-path
+  list is skipped on Windows. When `winget` is available, the continuity banner offers the exact
+  package id `marlocarlo.psmux` and polls for installation. When it is unavailable, the banner
+  names that limitation and the standalone Windows session host remains the explicit fallback.
+  Paths, package-manager state, and process state remain machine-local and are excluded from
+  portable project data. The upstream PR's NSIS packaging commit `daecb26e` remains excluded
+  permanently because Squirrel.Windows is the only installer path here. This ultra-speed lane did
+  not run tests, builds, captures, or runtime interaction checks.
 - **#98 — skipped, superseded.** `main` has `send`/`reply`/`status` persistent inter-agent messaging
   with authenticated routes and safe-turn-boundary delivery; #98's `notify` is a weaker fixed-prompt
   predecessor of it.

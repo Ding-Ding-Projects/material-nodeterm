@@ -3,6 +3,8 @@
 // can't attach — which users never discover on their own; the banner makes it visible and offers
 // a one-click install (run in a terminal node, gh-sign-in style).
 
+import { execCandidates } from './exec-path'
+
 export interface TmuxInstallHint {
   command: string
   /** Button caption — tells the user up front when more than tmux is being installed. */
@@ -32,6 +34,9 @@ export function tmuxInstall(
                 ? 'sudo apk add tmux'
                 : null
     return command ? { command, label: 'Install tmux' } : null
+  }
+  if (platform === 'win32' && hasCommand('winget')) {
+    return { command: 'winget install -e --id marlocarlo.psmux', label: 'Install psmux' }
   }
   return null
 }
@@ -98,9 +103,16 @@ export function findFixedTmux(
 export function findCommand(
   name: string,
   env: Record<string, string | undefined>,
-  exists: (path: string) => boolean
+  exists: (path: string) => boolean,
+  platform: NodeJS.Platform | string = process.platform
 ): boolean {
-  const dirs = [...(env.PATH ? env.PATH.split(':') : []), ...COMMON_BIN_DIRS]
-  return dirs.some((d) => d && exists(`${d}/${name}`))
+  const win = platform === 'win32'
+  const dirs = [
+    ...(env.PATH ? env.PATH.split(win ? ';' : ':') : []),
+    ...(win ? [] : COMMON_BIN_DIRS)
+  ]
+  const names = execCandidates(name, platform, env.PATHEXT)
+  const separator = win ? '\\' : '/'
+  return dirs.some((d) => d && names.some((candidate) => exists(`${d}${separator}${candidate}`)))
 }
 

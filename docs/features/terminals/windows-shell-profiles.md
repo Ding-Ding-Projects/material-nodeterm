@@ -163,6 +163,29 @@ half-promoted manifest is worse than none, because it reads as evidence.
 The mechanism exists; the evidence does not. What is left is running the harness on a Windows
 machine against a packaged build of the commit under test.
 
+## Windows multiplexer discovery
+
+The desktop core resolves the persistent multiplexer without trusting a renderer-supplied path or
+spawning a shell on the UI thread. It checks the normal Windows `PATH` using the host's `PATHEXT`
+rules, then prefers `tmux` and finally `psmux`. A bare name is never treated as an executable on
+Windows, because a directory with that name must not be mistaken for a runnable program. The POSIX
+fixed locations are skipped on Windows because they cannot identify a Windows binary.
+
+When `psmux` is missing and the host exposes the verified Windows Package Manager executable, the
+non-blocking continuity banner offers the exact command `winget install -e --id marlocarlo.psmux`
+in a terminal node. The command uses the package identity rather than an arbitrary search term, and
+the banner remains visible while installation is running. Discovery repeats after installation so
+new terminals use the detected backend without restarting the app. Existing plain-shell nodes are
+not silently migrated; restart that node deliberately if continuity is needed.
+
+If the package manager is unavailable, the banner says so and keeps `psmux` unavailable. It does
+not invent a download URL, silently use another shell, or claim continuity. The Windows session
+host remains the supported fallback, so terminals stay usable with an explicit limitation.
+
+Executable paths, package-manager state, and process state remain machine-local. They never enter
+the portable project projection, exports, peer mutations, or shared node metadata. Importing a
+project therefore performs no installation, process launch, or network action.
+
 ## Suggested articles
 
 - [Session continuity](./session-continuity.md) — persistent session behaviour across detach,

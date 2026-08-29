@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Implement Windows psmux discovery from upstream PR #111 without importing its NSIS packaging.
+  Executable lookup now honors `PATHEXT`, prefers `tmux` then `psmux`, and never treats a bare
+  directory as a runnable command. When `winget` is available, the continuity banner offers the
+  verified `marlocarlo.psmux` install command and reports unavailable package-manager states
+  honestly. No tests, builds, captures, or runtime interaction checks were run in this ultra-speed
+  lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

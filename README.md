@@ -250,8 +250,10 @@ info**, then **Run anyway**. This is expected of every unsigned installer from a
 is not a sign of a corrupted download, and it is not something this project will ever silently
 work around by acquiring a certificate.
 
-**Session continuity works, through a different mechanism.** There is no Windows build of tmux
-to bundle, so Windows terminals are backed by the **Windows session host** instead — a
+**Session continuity works, through a different mechanism.** Windows has no bundled tmux, so the
+desktop first discovers a machine-local `tmux.exe` or `psmux.exe` using `PATH` plus `PATHEXT` and
+prefers either over the **Windows session host**. If neither is present, the session host provides
+the fallback — a
 standalone Node process, built on the same `node-pty` this app already depends on plus a
 headless `xterm.js` for server-side screen state, that owns the real PTYs and outlives the
 Electron app. It is selected automatically whenever no real tmux is found on `PATH` (which is
@@ -270,10 +272,11 @@ Two honest caveats, in the spirit of tmux's own trade-offs:
   its own `--resume`/equivalent flag, so you land back roughly where you left off even though
   the underlying process itself did not survive.
 
-If you want tmux-grade durability instead, install a real tmux somewhere on your Windows
-`PATH` (MSYS2's `pacman -S tmux`, or Cygwin's tmux package) — nodeterm prefers a system tmux
-over its own session host every time one is found. Full detail, architecture, and the protocol
-table: [`docs/windows-session-host.md`](./docs/windows-session-host.md) and
+If `psmux` is absent but Windows Package Manager is available, the continuity banner offers the
+verified package command `winget install -e --id marlocarlo.psmux` in a terminal node and polls
+for the new executable. If Windows Package Manager is unavailable, the banner says so and leaves
+the session-host fallback in place. No arbitrary download URL, shell path, or package name is
+invented. Full detail, architecture, and the protocol table: [`docs/windows-session-host.md`](./docs/windows-session-host.md) and
 [`docs/windows.md`](./docs/windows.md).
 
 ## Install / build

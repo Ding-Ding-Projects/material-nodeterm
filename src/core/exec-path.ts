@@ -67,6 +67,33 @@ export function shellPathNow(): string | null | undefined {
   return cachedShellPath
 }
 
+const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD'
+
+/** Return the command filenames CreateProcess would consider for a bare name. */
+export function execCandidates(
+  bin: string,
+  plat: NodeJS.Platform | string = os.platform(),
+  pathext: string | undefined = process.env.PATHEXT
+): string[] {
+  if (plat !== 'win32') return [bin]
+  if (path.extname(bin)) return [bin]
+  return (pathext || DEFAULT_PATHEXT)
+    .split(';')
+    .map((ext) => ext.trim())
+    .filter((ext) => ext.startsWith('.') && ext.length > 1)
+    .map((ext) => `${bin}${ext}`)
+}
+
+/** A single access check shared by command and executable discovery. */
+export function isExecutable(candidate: string): boolean {
+  try {
+    fs.accessSync(candidate, fs.constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * The bare-name candidates to try for `bin` in one PATH directory. On win32 a command is almost
  * never spelled without its extension (`tmux`, not `tmux.exe`) — CMD/PowerShell resolve that via
@@ -75,10 +102,7 @@ export function shellPathNow(): string | null | undefined {
  * and `bin` is tried as-is, unchanged from before this existed.
  */
 function candidateNames(bin: string): string[] {
-  if (os.platform() !== 'win32') return [bin]
-  if (/\.[^./\\]+$/.test(bin)) return [bin] // already has an extension — don't double up
-  const pathext = (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)
-  return [bin, ...pathext.map((ext) => bin + ext.toLowerCase())]
+  return execCandidates(bin)
 }
 
 /** Walk a PATH string for an executable — sync but SUBPROCESS-FREE (one accessSync per entry),
@@ -89,12 +113,7 @@ export function findInPathString(bin: string, pathStr: string | null | undefined
     if (!dir) continue
     for (const name of names) {
       const candidate = path.join(dir, name)
-      try {
-        fs.accessSync(candidate, fs.constants.X_OK)
-        return candidate
-      } catch {
-        // not here — keep looking
-      }
+      if (isExecutable(candidate)) return candidate
     }
   }
   return null
@@ -108,12 +127,7 @@ export function findExecutableSync(bin: string, fallbacks: string[] = []): strin
   const hit = findInPathString(bin, cachedShellPath ?? process.env.PATH)
   if (hit) return hit
   for (const c of fallbacks) {
-    try {
-      fs.accessSync(c, fs.constants.X_OK)
-      return c
-    } catch {
-      // keep trying
-    }
+    if (isExecutable(c)) return c
   }
   return null
 }

@@ -74,6 +74,10 @@ later commit, since this file will not be kept in lockstep with every merge).
       honestly (1 failure, this exact item) rather than faking a pass. `npm run shots` covers the
       picker from the unpackaged build over plain CDP, which is filed under separate ids and
       deliberately does not satisfy the packaged-evidence requirement.
+- [ ] **#75 psmux discovery** — Windows discovery now checks `PATH` with `PATHEXT`, prefers
+      `tmux` then `psmux`, offers the verified `winget` package command when available, and keeps
+      the session-host fallback honest when it is not. Build, runtime, and capture evidence remain
+      intentionally unrun in the ultra-speed lane.
 - [ ] **Terminal blur (device-pixel fit)** — the PHASE half of the fix (viewport-transform
       fractional offset) is on `main`; the pure module (`terminal/device-pixel-fit.ts`) exists and
       is unit-tested, but is **not wired to either consuming site** (the `Canvas.tsx` viewport

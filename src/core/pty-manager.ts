@@ -54,7 +54,14 @@ import { effectiveSize, type PtySize } from './pty-size'
 import { machOArch, archMismatch } from './macho-arch'
 import { writeScrollback, readScrollback, deleteScrollback } from './scrollback-store'
 import { claudeConfigDirFor } from './claude-config-dir'
-import { findExecutableSync, findInPathString, opensshFallbacks, resolveShellPath, shellPathNow } from './exec-path'
+import {
+  findExecutableSync,
+  findInPathString,
+  isExecutable,
+  opensshFallbacks,
+  resolveShellPath,
+  shellPathNow
+} from './exec-path'
 import { AUTH_ENV_STRIP, accountTmuxEnvArgs, remoteAccountConfigDirAbs } from './claude-accounts-core'
 import { NODE_ID_MAX, isSafeNodeId } from './remote-safety'
 import { presenceHub } from './presence/hub'
@@ -234,32 +241,38 @@ bind -T copy-mode-vi TripleClick1Pane send-keys -X select-line \\; send-keys -X 
  * process into a tmux pane); its recovery is the node's own Refresh/respawn, which re-creates it
  * through the now-resolved tmux.
  */
-function findTmux(): string | null {
-  // Windows has none of `tmuxCandidatePaths`' targets (Homebrew, Nix, the distro `/usr/bin`
-  // family — all POSIX filesystem layouts). Walking the list would just be `existsSync` calls
-  // against paths that can never resolve on this platform — skip straight to the PATH probe, the
-  // one route that can find a real tmux a Windows user installed themselves (WSL's own tmux is a
-  // different filesystem entirely and is never on the Windows PATH; MSYS2/Cygwin tmux, if the
-  // user put it there, is).
-  if (os.platform() === 'win32') {
-    return findInPathString('tmux', shellPathNow() ?? process.env.PATH)
+const TMUX_BIN_NAMES = ['tmux', 'psmux'] as const
+
+export function wellKnownTmux(plat: NodeJS.Platform | string = process.platform): readonly string[] {
+  return plat === 'win32'
+    ? []
+    : ['/opt/homebrew/bin/tmux', '/usr/local/bin/tmux', '/usr/bin/tmux', '/bin/tmux']
+}
+
+export function findTmux(
+  pathStr: string | null | undefined = shellPathNow() ?? process.env.PATH,
+  wellKnown: readonly string[] = wellKnownTmux()
+): string | null {
+  for (const candidate of wellKnown) {
+    try {
+      if (fs.existsSync(candidate)) return candidate
+    } catch {
+      // Keep looking after an unreadable candidate.
+    }
   }
-  // BOTH lookups inside the guard: `os.homedir()` throws the same SystemError as `userInfo()` when
-  // there is no passwd entry and no $HOME (some containers), and a thrown probe here would take
-  // out tmux discovery entirely — degrading a machine that HAS tmux to the plain-shell fallback,
-  // which is the failure this whole function is being hardened against. Unknown home/user simply
-  // drops the candidates derived from them.
-  let home: string | null = null
-  let user: string | null = null
-  try {
-    home = os.homedir()
-    user = os.userInfo().username
-  } catch {
-    // no home / no passwd entry — the fixed system paths below are still checked
+  if (process.platform !== 'win32') {
+    try {
+      const fixed = findFixedTmux((candidate) => fs.existsSync(candidate), os.homedir(), os.userInfo().username)
+      if (fixed) return fixed
+    } catch {
+      // Keep the system candidates and PATH route available when home discovery is unavailable.
+    }
   }
-  const fixed = findFixedTmux((p) => fs.existsSync(p), home, user)
-  if (fixed) return fixed
-  return findInPathString('tmux', shellPathNow() ?? process.env.PATH)
+  for (const name of TMUX_BIN_NAMES) {
+    const hit = findInPathString(name, pathStr)
+    if (hit) return hit
+  }
+  return null
 }
 
 /** Resolve an absolute ssh path (GUI apps don't inherit the shell PATH). */
@@ -1504,7 +1517,9 @@ export class PtyManager {
     // successful probe here is what makes new sessions tmux-backed without a restart.
     if (!this.tmuxPath) this.ensureTmux()
     const available = !!this.tmuxPath
-    const hint = available ? null : tmuxInstall(process.platform, (cmd) => findCommand(cmd, process.env, fs.existsSync))
+    const hint = available
+      ? null
+      : tmuxInstall(process.platform, (cmd) => findCommand(cmd, process.env, isExecutable))
     return {
       available,
       installCommand: hint?.command ?? null,
