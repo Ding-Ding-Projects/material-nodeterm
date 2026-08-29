@@ -100,6 +100,16 @@ function sniffTextContent(buf: Buffer, filename: string): SniffResult {
     return { kind: 'json', confidence: 'medium', note: 'Starts with { or [' }
   }
 
+  // JSON Lines is intentionally checked before generic text and CSV heuristics.  Every non-empty
+  // line must be a complete JSON value, which keeps a renamed .ndjson file detectable without
+  // trusting its extension and avoids misclassifying quoted commas as a spreadsheet.
+  const jsonLines = text.split(/\r\n|\n|\r/).map((line) => line.trim()).filter(Boolean)
+  if (jsonLines.length >= 2 && jsonLines.every((line) => {
+    try { JSON.parse(line); return true } catch { return false }
+  })) {
+    return { kind: 'jsonl', confidence: 'high', note: 'Every sampled non-empty line parsed as JSON' }
+  }
+
   // An XML declaration is unambiguous even when the filename has a different extension.
   if (text.startsWith('<?xml')) {
     return { kind: 'xml', confidence: 'high', note: 'Starts with an XML declaration' }

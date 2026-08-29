@@ -904,6 +904,63 @@ export interface ConverterDetectionResult {
   compatibleAdapterIds: string[]
 }
 
+/** Multi-output local pipeline catalog and durable queue contracts. */
+export interface AdvancedPipelineDescriptor {
+  id: string
+  category: 'images' | 'audio' | 'video' | 'archives' | 'documents' | 'ocr' | 'data'
+  label: string
+  inputKinds: string[]
+  outputKinds: string[]
+  bundled: boolean
+  available: boolean
+  dependency?: string
+  unavailableReason?: string
+  lossy: boolean
+  disclosure: string[]
+  limits: Record<string, number>
+}
+
+export interface AdvancedPipelineOutput {
+  path: string
+  bytes: number
+  sha256: string
+  metadata?: Record<string, unknown>
+}
+
+export interface AdvancedPipelineQueueItem {
+  id: string
+  pipelineId: string
+  inputPath: string
+  outputDirectory: string
+  options?: Record<string, unknown>
+  status: 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled'
+  progress?: { stage: string; completedBytes: number; totalBytes: number; message: string }
+  result?: { id: string; outputs: AdvancedPipelineOutput[]; warnings: string[] }
+  error?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface AdvancedPipelineQueueState {
+  schemaVersion: 1
+  items: AdvancedPipelineQueueItem[]
+  concurrency: number
+  running: boolean
+}
+
+export interface AdvancedConverterApi {
+  catalog(): Promise<AdvancedPipelineDescriptor[]>
+  state(): Promise<AdvancedPipelineQueueState>
+  add(request: { pipelineId: string; inputPath: string; outputDirectory: string; options?: Record<string, unknown> }): Promise<AdvancedPipelineQueueItem>
+  start(): Promise<void>
+  pause(): Promise<void>
+  cancel(id: string): Promise<void>
+  retry(id: string): Promise<void>
+  setConcurrency(value: number): Promise<number>
+  onItem(listener: (item: AdvancedPipelineQueueItem) => void): () => void
+  onSummary(listener: (summary: { running: boolean; active: number; queued: number; total: number }) => void): () => void
+}
+
 export const CONVERTER_DEFAULT_CONCURRENCY = 2
 export const CONVERTER_MAX_CONCURRENCY = 6
 /** Bytes sampled from the head of a file for signature/content sniffing — bounded, never the whole
@@ -950,4 +1007,5 @@ export interface ConverterApi {
   onSummary(
     listener: (summary: Pick<ConverterQueueState, 'running' | 'scanning' | 'concurrency' | 'total'>) => void
   ): () => void
+  advanced?: AdvancedConverterApi
 }

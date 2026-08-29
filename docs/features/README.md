@@ -21,6 +21,7 @@ the deep architecture reference these articles are distilled from.
 | [Appearance](./appearance/README.md) | Design tokens, themes, and the measured state of the Material Design 3 migration. |
 | [Remote & SSH](./remote/README.md) | Remote projects, the self-hosted browser edition, and isolated debugging browser sessions. |
 | [Speech](./speech/README.md) | On-device dictation into any terminal. |
+| [Converter pipelines](./converter/README.md) | Bounded offline file, image, ZIP, PDF, OCR, and structured-data conversion. |
 | [Packaging](./packaging/README.md) | How builds are produced, distributed, and kept up to date. |
 | [Dependency installation](./dependencies/README.md) | The manifest and machine-local lifecycle that installs prerequisites for node features. |
 | [Torrents](./torrents/README.md) | Explicit local WebTorrent tasks with safe destinations, progress, recovery, and bounded seeding. |

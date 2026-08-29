@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Converter pipelines — nodeterm</title>
+    <meta name="description" content="Bounded offline file, image, ZIP, PDF, OCR, and structured-data pipelines." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="./index.html">← Documentation</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Converter pipelines</p>
+      <h1>Bounded, offline conversion</h1>
+      <p>This documentation page describes the installed converter. It is not the converter runtime: use the desktop or Server Edition surface for real files.</p>
+      <h2>Available now</h2>
+      <ul>
+        <li>Images: bounded PNG, JPEG, WebP, GIF, BMP, ICO, SVG, and HEIC re-encoding through the bundled sharp codec.</li>
+        <li>ZIP: safe creation and extraction with relative names, duplicate rejection, symlink refusal, entry limits, expanded-byte limits, and atomic output.</li>
+        <li>PDF: bounded signature, page, title, author, and selectable-text reports. Scanned pixels require OCR.</li>
+        <li>Structured data: JSON Lines and NDJSON transforms, alongside JSON, YAML, TOML, XML, CSV, and TSV.</li>
+      </ul>
+      <h2>Disabled capabilities stay visible</h2>
+      <p>OCR, audio/video transcoding, PDF split, merge, rotation, and rasterization, TAR, and 7-Zip remain listed with their exact missing verified dependency. The app never searches PATH, sends files to a network service, accepts arbitrary shell text, or claims that an unverified tool is bundled.</p>
+      <h2>Progress and recovery</h2>
+      <p>Advanced jobs persist locally with a schema version, bounded concurrency, stage-labelled byte progress, pause, cancellation, retry, and crash recovery. Every output is validated, hashed, written atomically, and shown with its real path and byte count. Lossy operations disclose pixel, metadata, animation, scan, or structure loss before conversion.</p>
+      <h2>Security boundary</h2>
+      <p>Native tools are selected from a fixed allowlist, checked beneath the app's private converter-tools directory, optionally verified by SHA-256, launched with an argv array and no shell, and given a scrubbed environment plus time and output limits. Credentials and private file contents never enter queue records or exports.</p>
+      <h2>Suggested articles</h2>
+      <ul>
+        <li><a href="./exports-and-history.html">Exports, notifications, and local history</a></li>
+        <li><a href="./packaging-updates.html">Packaging and automatic updates</a></li>
+        <li><a href="./changelog-viewer.html">Changelog viewer</a></li>
+      </ul>
+    </article>
+  </body>
+</html>

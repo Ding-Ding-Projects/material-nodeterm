@@ -20,6 +20,7 @@ import { useActiveSessionApi } from '../../session/session'
 import { mapLocalVocabularyText } from '../../lib/personalVocabulary/hostMessage'
 import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { AdapterCatalog } from './AdapterCatalog'
+import { AdvancedPipelinePanel } from './AdvancedPipelinePanel'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
 import { Checkbox, Progress } from '@renderer/ui/md3'
@@ -618,6 +619,7 @@ function FileConverterPanelForApi({
               </ul>
             )}
           </section>
+          <AdvancedPipelinePanel api={api} />
 
           <section>
             <h3>{vocab('2. Choose a target format')}</h3>
