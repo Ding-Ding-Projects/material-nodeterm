@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-08-26, ProjectSwitcher New project reachability audit (#85 / upstream #375)
+
+The ProjectSwitcher reachability invariant is already present in the current tree, so no
+behavioral rewrite was needed. `ProjectSwitcher.tsx` renders the project rows inside
+`.md3-switcher-menu__list` and renders **New project** as the following sibling button. The list
+scrolls independently, which keeps the control reachable after many projects. The native button
+is pointer- and keyboard-operable, and the command palette's `new-project` command provides a
+second direct keyboard route.
+
+The two routes are intentionally different and documented as such: the switcher button opens the
+guided welcome flow, while the palette command calls the existing empty-project action directly.
+The menu width now uses `min(300px, calc(100vw - 12px))` so the anchored surface and its add
+control fit narrow windows as well as ordinary desktop widths. The project and tab article records
+the overflow, keyboard, pointer, narrow-layout, Material Design 3, and accessibility behavior.
+
+This lane deliberately ran no tests, type checks, builds, packaging, runtime interaction, or
+captures, and made no commit or dew. The remaining evidence is therefore explicitly pending and
+must not be described as built-artifact verification.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

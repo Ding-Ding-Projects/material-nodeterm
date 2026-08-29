@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Audit ProjectSwitcher New project reachability against upstream issue #375 and issue #85. The
+  add control already sits outside the scrolling project list, remains keyboard- and pointer-
+  reachable, and is also available through the command palette. Contract the anchored menu to
+  narrow viewports without changing its guided welcome-flow behavior. Runtime and built-artifact
+  verification remain pending for this documentation-only audit lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

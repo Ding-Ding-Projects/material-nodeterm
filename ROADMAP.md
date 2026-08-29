@@ -57,6 +57,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **#85 / upstream #375 — ProjectSwitcher New project reachability.** Source audit confirms
+      the add control is outside the scrolling project list, the native button supplies a keyboard
+      path, the command palette exposes `new-project`, and the menu now contracts to narrow
+      viewports. Runtime interaction and built-artifact evidence remain pending; this audit lane
+      intentionally ran no tests, builds, or captures.
+
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification
