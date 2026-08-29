@@ -175,7 +175,12 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
-- [ ] Add Calendar, Timer, Alarm Clock, and planner occurrence services.
+- [ ] Add Calendar nodes for local calendars and ICS, with guided CalDAV, Google Calendar, and
+      Microsoft 365 provider bindings, recurrence/timezone views, offline cache, and create/edit/
+      delete flows. Provider adapters still report an honest unavailable state until trusted OAuth
+      vault wiring is supplied. Focused calendar source Chuts pass; general Chuts, builds,
+      packaging, runtime interaction, and captures remain pending.
+- [ ] Add Timer, Alarm Clock, and planner occurrence services.
 
 ### Multiverse and AWS
 

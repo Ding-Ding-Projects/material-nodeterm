@@ -598,6 +598,19 @@ export function buildStubApi(): Omit<
       restoreBackup: U('minecraft.restoreBackup'),
       deleteBackup: U('minecraft.deleteBackup'),
       onEvent: noopUnsub
+    },
+    calendar: {
+      status: U('calendar.status'),
+      accounts: U('calendar.accounts'),
+      calendars: U('calendar.calendars'),
+      events: U('calendar.events'),
+      importIcs: U('calendar.importIcs'),
+      refresh: U('calendar.refresh'),
+      beginOAuth: U('calendar.beginOAuth'),
+      create: U('calendar.create'),
+      update: U('calendar.update'),
+      remove: U('calendar.remove'),
+      restore: U('calendar.restore')
     }
   } satisfies Omit<
     NodeTerminalApi,

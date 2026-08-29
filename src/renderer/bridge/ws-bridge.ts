@@ -19,6 +19,7 @@ import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
 import type { NodeDependenciesApi } from '../../shared/node-dependencies'
+import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -939,6 +940,24 @@ export function buildNodeDependenciesApi(client: RpcClient): Pick<NodeTerminalAp
   return { nodeDependencies }
 }
 
+/** Calendar nodes use the host-owned core service. Relay remains explicitly unavailable. */
+export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'calendar'> {
+  const calendar: CalendarApi = {
+    status: (id, config) => client.request(IPC.calendarStatus, id, config) as ReturnType<CalendarApi['status']>,
+    accounts: () => client.request(IPC.calendarAccounts) as ReturnType<CalendarApi['accounts']>,
+    calendars: (accountId, provider) => client.request(IPC.calendarCalendars, accountId, provider) as ReturnType<CalendarApi['calendars']>,
+    events: (id, config) => client.request(IPC.calendarEvents, id, config) as ReturnType<CalendarApi['events']>,
+    importIcs: (id, text, name) => client.request(IPC.calendarImportIcs, id, text, name) as ReturnType<CalendarApi['importIcs']>,
+    refresh: (id, config) => client.request(IPC.calendarRefresh, id, config) as ReturnType<CalendarApi['refresh']>,
+    beginOAuth: (provider: Exclude<CalendarProvider, 'local' | 'ics'>) => client.request(IPC.calendarBeginOAuth, provider) as ReturnType<CalendarApi['beginOAuth']>,
+    create: (input) => client.request(IPC.calendarCreate, input) as ReturnType<CalendarApi['create']>,
+    update: (input) => client.request(IPC.calendarUpdate, input) as ReturnType<CalendarApi['update']>,
+    remove: (input) => client.request(IPC.calendarRemove, input) as ReturnType<CalendarApi['remove']>,
+    restore: (input) => client.request(IPC.calendarRestore, input) as ReturnType<CalendarApi['restore']>
+  }
+  return { calendar }
+}
+
 /** Local Minecraft server create-and-manage (docs/minecraft-server-manager.md) — same core engine
  *  as desktop; the server process is the one downloading, spawning and owning `java`, exactly as
  *  main does. */
@@ -1395,6 +1414,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSpeechApi(client),
     ...buildConverterApi(client),
     ...buildNodeDependenciesApi(client),
+    ...buildCalendarApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
     ...buildUsageApi(client),

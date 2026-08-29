@@ -1105,6 +1105,7 @@ describe('duplicateNode across every node kind', () => {
     freepbx: 'freepbx',
     // A GUI for authoring an NSIS installer script for another project (never this app's own
     // installer, which stays Squirrel.Windows).
+    calendar: 'calendar',
     nsis: 'nsis'
   }
   const ALL_KINDS = Object.keys(EXPECTED_PREFIX) as NodeKind[]

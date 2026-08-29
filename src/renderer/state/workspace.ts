@@ -1,5 +1,6 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
+import type { CalendarNodeConfig } from '@shared/calendar'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
@@ -177,6 +178,8 @@ export interface NodeData {
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
    *  from the shared document and from inbound peers; see shared/node-exec.ts. */
   nsisLocalPaths?: NsisLocalPaths
+  /** calendar-only, portable selection intent; local cache and credentials are never here. */
+  calendarConfig?: CalendarNodeConfig
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
   /**
@@ -937,6 +940,7 @@ export function createDiffNode(
 
 /** Creates a new sticky note. */
 const AUTHENTICATOR_SIZE = { width: 340, height: 260 }
+const CALENDAR_SIZE = { width: 620, height: 520 }
 const NSIS_SIZE = { width: 460, height: 520 }
 
 /**
@@ -958,6 +962,24 @@ export function createAuthenticatorNode(index: number, center?: { x: number; y: 
       title: 'Authenticator',
       color: NODE_COLORS[4] ?? NODE_COLORS[0],
       group: null
+    }
+  }
+}
+
+/** Creates a calendar node with a safe local source as the guided starting point. */
+export function createCalendarNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('calendar'),
+    type: 'calendar',
+    position: placeAt(center, index, CALENDAR_SIZE.width, CALENDAR_SIZE.height),
+    width: CALENDAR_SIZE.width,
+    height: CALENDAR_SIZE.height,
+    style: { width: CALENDAR_SIZE.width, height: CALENDAR_SIZE.height },
+    data: {
+      title: 'Calendar',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      calendarConfig: { provider: 'local', accountId: null, calendarId: null, timezone: 'local', view: 'agenda', showWeekends: true, cacheEnabled: true }
     }
   }
 }
@@ -1448,6 +1470,7 @@ export function groupSelectedNodes(
 const NODE_KIND_TABLE: Record<NodeKind, true> = {
   terminal: true,
   authenticator: true,
+  calendar: true,
   sticky: true,
   group: true,
   editor: true,
@@ -1485,6 +1508,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
 const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   terminal: TERMINAL_SIZE,
   authenticator: AUTHENTICATOR_SIZE,
+  calendar: CALENDAR_SIZE,
   sticky: STICKY_SIZE,
   group: GROUP_SIZE,
   editor: EDITOR_SIZE,
@@ -1918,6 +1942,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         serviceConnection: n.serviceConnection,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
+        calendarConfig: n.calendarConfig,
         filePath: n.filePath,
         fileMissing: n.fileMissing,
         url: n.url,
@@ -1993,6 +2018,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         serviceConnection: n.data.serviceConnection,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
+        calendarConfig: n.data.calendarConfig,
         filePath: n.data.filePath,
         fileMissing: n.data.fileMissing,
         url: n.data.url,

@@ -92,6 +92,7 @@ import { StickyNode } from '../nodes/StickyNode'
 import { GroupNode, setWorktreeActionHandler, setWslActionHandler } from '../nodes/GroupNode'
 import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
+import CalendarNode from '../nodes/CalendarNode'
 import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
@@ -158,6 +159,7 @@ import {
   IconMarkdown,
   IconMic,
   IconReload,
+  IconCalendar,
   IconPower,
   IconNote,
   IconConvert,
@@ -575,6 +577,7 @@ import {
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createAuthenticatorNode,
+  createCalendarNode,
   createNsisNode,
   createStickyNode,
   createTerminalNode,
@@ -1793,6 +1796,7 @@ export function Canvas() {
       group: withNodeBoundary(GroupNode),
       annotation: withNodeBoundary(AnnotationNode),
       authenticator: withNodeBoundary(AuthenticatorNode),
+      calendar: withNodeBoundary(CalendarNode),
       editor: withNodeBoundary(LazyEditorNode),
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
@@ -4593,6 +4597,17 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createAuthenticatorNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addCalendar = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createCalendarNode(ns.length, center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -8752,6 +8767,11 @@ export function Canvas() {
           icon: <IconLock />,
           onClick: () => addAuthenticator(at, groupId)
         },
+        {
+          label: 'New calendar',
+          icon: <IconCalendar />,
+          onClick: () => addCalendar(at, groupId)
+        },
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
           ? []
@@ -8925,6 +8945,11 @@ export function Canvas() {
               label: 'New authenticator',
               icon: <IconLock />,
               onClick: () => addAuthenticator(at)
+            },
+            {
+              label: 'New calendar',
+              icon: <IconCalendar />,
+              onClick: () => addCalendar(at)
             },
             {
               label: 'New NSIS installer…',
@@ -13024,6 +13049,12 @@ export function Canvas() {
             label: 'New authenticator',
             icon: <IconLock />,
             run: () => addAuthenticator()
+          },
+          {
+            id: 'new-calendar',
+            label: 'New calendar',
+            icon: <IconCalendar />,
+            run: () => addCalendar()
           },
           {
             id: 'new-nsis',

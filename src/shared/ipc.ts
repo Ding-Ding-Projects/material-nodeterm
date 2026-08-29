@@ -607,6 +607,19 @@ export const IPC = {
   // Shell → renderer: one multiplexed status/console stream, like ollama:chat-stream above.
   // Payload: MinecraftEvent. A listener filters to the instance id it owns.
   minecraftEvent: 'minecraft:event',
+  // Calendar nodes. Secrets never travel through these metadata/event channels; the core owns
+  // OAuth callbacks and seals provider tokens in the OS vault.
+  calendarStatus: 'calendar:status',
+  calendarAccounts: 'calendar:accounts',
+  calendarCalendars: 'calendar:calendars',
+  calendarEvents: 'calendar:events',
+  calendarImportIcs: 'calendar:import-ics',
+  calendarRefresh: 'calendar:refresh',
+  calendarBeginOAuth: 'calendar:begin-oauth',
+  calendarCreate: 'calendar:create',
+  calendarUpdate: 'calendar:update',
+  calendarRemove: 'calendar:remove',
+  calendarRestore: 'calendar:restore',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).
