@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Browser Portal foundation.** Added a dedicated `browser-portal` canvas node with strict HTTP(S)
+  URL validation, popup-disabled lifecycle ownership, guided presets, and per-node persistent
+  browser partitions. Profile metadata stays in local browser storage and safe URL, preset, layout,
+  and title intent remains portable. This ultra-speed lane did not run tests, type checks, builds,
+  packaging, runtime interaction checks, accessibility checks, security checks, or UI captures.
+
+## Unreleased
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

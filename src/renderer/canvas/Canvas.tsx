@@ -99,6 +99,7 @@ import { DinoNode } from '../nodes/DinoNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
 import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
+import BrowserPortalNode from '../nodes/BrowserPortalNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import { normalizeAddress } from '../nodes/browserUrl'
@@ -566,6 +567,7 @@ import {
   createAgentNode,
   createCanvasControlTerminalNode,
   createBrowserNode,
+  createBrowserPortalNode,
   defaultBrowserTabs,
   createDinoNode,
   createDiffNode,
@@ -1802,6 +1804,7 @@ export function Canvas() {
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
+      'browser-portal': withNodeBoundary(BrowserPortalNode),
       // The service family. One component for all six: they differ in what they manage, not in how
       // they behave as canvas objects, and React Flow hands each its own `type` so the component can
       // tell them apart without six registrations of six near-identical files.
@@ -4658,6 +4661,14 @@ export function Canvas() {
       // browser's new tab). We deliberately don't use window.prompt: Electron doesn't support it
       // (it throws "prompt() is and will not be supported"), and a browser node doesn't need it.
       setNodes((ns) => [...ns, createBrowserNode(ns.length, '', center ?? emptyNodePos())])
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos]
+  )
+
+  const addBrowserPortal = useCallback(
+    (center?: { x: number; y: number }) => {
+      setNodes((ns) => [...ns, createBrowserPortalNode(ns.length, center ?? emptyNodePos())])
       markDirty()
     },
     [setNodes, markDirty, emptyNodePos]
@@ -8908,6 +8919,11 @@ export function Canvas() {
               onClick: () => addBrowser(at)
             },
             {
+              label: 'New Browser Portal',
+              icon: <IconRemote />,
+              onClick: () => addBrowserPortal(at)
+            },
+            {
               label: 'New sticky note',
               icon: <IconNote />,
               onClick: () => addSticky(at)
@@ -9049,6 +9065,7 @@ export function Canvas() {
       addNativeLoop,
       addDino,
       addBrowser,
+      addBrowserPortal,
       openFileDialog,
       newProjectFile,
       openRemotePicker,
@@ -13047,6 +13064,7 @@ export function Canvas() {
       { id: 'open-converter', label: 'File converter', icon: <IconConvert />, run: () => setConverterOpen(true) },
       { id: 'open-ollama', label: 'Ollama manager', icon: <IconOllama />, run: () => setOllamaOpen(true) },
       { id: 'open-browser', label: 'New browser', icon: <IconRemote />, run: () => addBrowser() },
+      { id: 'open-browser-portal', label: 'New Browser Portal', icon: <IconRemote />, run: () => addBrowserPortal() },
       ...useSshServers.getState().servers.map(
         (srv): Command => ({
           id: `new-remote-${srv.id}`,
@@ -13380,6 +13398,7 @@ export function Canvas() {
     addDino,
     addWebView,
     addBrowser,
+    addBrowserPortal,
     openFileDialog,
     openWorktreeDialog,
     isSshProject,

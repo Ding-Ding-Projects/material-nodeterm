@@ -56,6 +56,7 @@ const DINO_SIZE = { width: 600, height: 200 }
 const VIDEO_SIZE = { width: 640, height: 420 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
+const BROWSER_PORTAL_SIZE = { width: 820, height: 600 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
@@ -159,6 +160,9 @@ export interface NodeData {
   /** Browser-only: which of the project's browserProfiles this node's webview session uses.
    *  Undefined = the app's default (unpartitioned) session — see @shared/browser-profiles. */
   browserProfileId?: string
+  /** Browser Portal safe intent only. Local profile metadata stays in browser storage. */
+  browserPortalPresetId?: string
+  browserPortalUrl?: string
   /** Browser-only: the node's open tabs (git-shared project content — see `CanvasNodeState`). */
   browserTabs?: BrowserTab[]
   /** Browser-only: which `browserTabs[].id` is currently shown. Undefined = the first tab. */
@@ -907,6 +911,27 @@ export function createBrowserNode(
   }
 }
 
+/** Creates a Browser Portal node with an isolated, node-owned local session. */
+export function createBrowserPortalNode(
+  index: number,
+  center?: { x: number; y: number }
+): CanvasNode {
+  return {
+    id: nextId('browser-portal'),
+    type: 'browser-portal',
+    position: placeAt(center, index, BROWSER_PORTAL_SIZE.width, BROWSER_PORTAL_SIZE.height),
+    width: BROWSER_PORTAL_SIZE.width,
+    height: BROWSER_PORTAL_SIZE.height,
+    style: { width: BROWSER_PORTAL_SIZE.width, height: BROWSER_PORTAL_SIZE.height },
+    data: {
+      title: 'Browser Portal',
+      color: '#64d2ff',
+      group: null,
+      browserPortalPresetId: 'blank'
+    }
+  }
+}
+
 /** Creates a diff editor node for a changed file (relative path + repo cwd). */
 export function createDiffNode(
   index: number,
@@ -1455,6 +1480,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   video: true,
   web: true,
   browser: true,
+  'browser-portal': true,
   subagent: true,
   loop: true,
   scheduler: true,
@@ -1492,6 +1518,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   video: VIDEO_SIZE,
   web: WEB_SIZE,
   browser: BROWSER_SIZE,
+  'browser-portal': BROWSER_PORTAL_SIZE,
   // Ephemeral kinds are never persisted (they are derived from live hook events), so these are
   // defensive floors rather than values a project.json will ever carry.
   subagent: TERMINAL_SIZE,
@@ -1922,6 +1949,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         fileMissing: n.fileMissing,
         url: n.url,
         browserProfileId: n.browserProfileId,
+        browserPortalPresetId: n.browserPortalPresetId,
+        browserPortalUrl: n.browserPortalUrl,
         browserTabs,
         browserActiveTabId,
         diffStaged: n.diffStaged,
@@ -1997,6 +2026,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         fileMissing: n.data.fileMissing,
         url: n.data.url,
         browserProfileId: n.data.browserProfileId,
+        browserPortalPresetId: n.data.browserPortalPresetId,
+        browserPortalUrl: n.data.browserPortalUrl,
         browserTabs: n.data.browserTabs,
         browserActiveTabId: n.data.browserActiveTabId,
         diffStaged: n.data.diffStaged,

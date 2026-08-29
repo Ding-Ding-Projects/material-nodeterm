@@ -10,6 +10,7 @@ import {
   createVideoNode,
   createWebNode,
   createBrowserNode,
+  createBrowserPortalNode,
   createDiffNode,
   createStickyNode,
   createDinoNode,
@@ -173,6 +174,10 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createWebNode(0, { url: d.url, filePath: d.filePath })
     case 'browser':
       return createBrowserNode(0, d.url ?? '', undefined, undefined, d.browserProfileId)
+    case 'browser-portal': {
+      const node = createBrowserPortalNode(0)
+      return { ...node, data: { ...node.data, browserPortalPresetId: d.browserPortalPresetId, browserPortalUrl: d.browserPortalUrl, url: d.browserPortalUrl ?? d.url } }
+    }
     case 'dino':
       return createDinoNode(0, undefined, d.highScore ?? 0)
     default:

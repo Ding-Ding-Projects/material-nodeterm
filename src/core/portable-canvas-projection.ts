@@ -10,6 +10,7 @@
 import type { BridgeLink, CanvasNodeState, Project, Viewport } from '../shared/types'
 import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEMA_VERSION } from './portable-project-v3'
 import { sanitizeProjectIcon } from '../shared/project-icon'
+import { BROWSER_PORTAL_PRESETS } from '../shared/browser-portal'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -37,6 +38,9 @@ export interface PortableCanvasNodeV3 {
   text?: string
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
+  /** Browser Portal safe intent only. Local profile metadata and session state are omitted. */
+  browserPortalPresetId?: string
+  browserPortalUrl?: string
   serviceLabel?: string
 }
 
@@ -86,7 +90,7 @@ const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'browserPortalPresetId', 'browserPortalUrl', 'serviceLabel'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
@@ -169,6 +173,16 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.browserTabs !== undefined) {
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
     out.browserTabs = node.browserTabs.map((tab) => { if (!record(tab)) throw new PortableProjectV3Error('manifest', 'Portable browser tab is invalid.'); exactKeys(tab, ALLOWED_TAB, 'browser tab'); const url = safeUrl(tab.url, 'browser tab URL'); return { id: text(tab.id, 'browser tab id'), ...(url ? { url } : {}), title: content(tab.title, 'browser tab title') } })
+  }
+  if (node.browserPortalPresetId !== undefined) {
+    if (node.kind === 'browser-portal' && !BROWSER_PORTAL_PRESETS.some((preset) => preset.id === node.browserPortalPresetId)) {
+      throw new PortableProjectV3Error('manifest', 'Portable browser portal preset is unknown.')
+    }
+    out.browserPortalPresetId = text(node.browserPortalPresetId, 'browser portal preset id')
+  }
+  if (node.browserPortalUrl !== undefined) {
+    const url = safeUrl(node.browserPortalUrl, 'browser portal URL')
+    if (url) out.browserPortalUrl = url
   }
   return out
 }

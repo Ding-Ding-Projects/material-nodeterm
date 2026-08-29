@@ -310,6 +310,9 @@ export function safeSessionProgram(shell: string | undefined): string | undefine
  * host carries no command or local profile selection of any kind.
  */
 function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
+  // A Browser Portal's local profile is derived from its node id and lives in browser storage.
+  // Never let a hand-edited ordinary browser profile id turn a portal into a shared-session node.
+  const portalProfileLeak = n.kind === 'browser-portal' && n.browserProfileId !== undefined
   if (
     n.shell === undefined &&
     n.terminalProfileId === undefined &&
@@ -317,7 +320,8 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
     n.serviceConnection === undefined &&
     n.nsisLocalPaths === undefined &&
     n.ssh?.extraArgs === undefined &&
-    n.ssh?.execTrusted === undefined
+    n.ssh?.execTrusted === undefined &&
+    !portalProfileLeak
   )
     return n
   const out: CanvasNodeState = { ...n }
@@ -326,6 +330,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   delete out.pendingLaunch
   delete out.serviceConnection
   delete out.nsisLocalPaths
+  if (out.kind === 'browser-portal') delete out.browserProfileId
   if (out.ssh) {
     // `execTrusted` goes with the value it vouches for. It is a MACHINE-LOCAL provenance marker:
     // if it could ride a document or a wire frame, a hostile one would simply set it to true.

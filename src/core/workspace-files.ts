@@ -20,6 +20,7 @@ import type {
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import { BROWSER_PORTAL_PRESETS, validateBrowserPortalUrl } from '../shared/browser-portal'
 
 export const PROJECT_DIR = '.nodeterm'
 export const PROJECT_FILE = 'project.json'
@@ -206,7 +207,26 @@ export function projectToFile(
   // The project file is a SHARED document (git, or the remote host). Exec-enabling node fields
   // (`shell`, `ssh.extraArgs`) never leave this machine in it — they ride the machine-local index
   // entry instead (`localNodeExec` / `IndexEntryV3.localExec`). See @shared/node-exec.
-  const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes)
+  const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes).map((node) => {
+    if (node.kind !== 'browser-portal') return node
+    // Portal fields are project intent, but the project file is still hand-editable and can be
+    // reached through a peer mutation. Re-validate at this serialization boundary so a portal
+    // cannot save a credential-bearing or non-HTTP URL that the renderer would later reject.
+    const url = validateBrowserPortalUrl(node.browserPortalUrl ?? node.url ?? '')
+    const preset = BROWSER_PORTAL_PRESETS.some((item) => item.id === node.browserPortalPresetId)
+      ? node.browserPortalPresetId
+      : 'blank'
+    const out: CanvasNodeState = { ...node, browserPortalPresetId: preset }
+    delete out.browserProfileId
+    if (url) {
+      out.browserPortalUrl = url
+      out.url = url
+    } else {
+      delete out.browserPortalUrl
+      delete out.url
+    }
+    return out
+  })
   const icon = sanitizeProjectIcon(p.icon)
   return {
     version: 1,

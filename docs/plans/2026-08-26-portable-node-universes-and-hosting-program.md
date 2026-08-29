@@ -1,6 +1,6 @@
 # Portable Node Universes and Hosting Program
 
-Status: planned, not implemented
+Status: implementation lanes in progress; Browser Portal lane implemented, verification pending
 
 Source baseline: `27ecfa62e5b3180070abaa241f8bac6b1e079861`
 
@@ -334,7 +334,8 @@ bounded resources. Existing unmanaged routes are preserved.
 
 ### Wave H, clean-room WinForge-inspired features
 
-52. Browser Portal with isolated profiles and safe lifecycle ownership.
+52. Browser Portal with isolated profiles and safe lifecycle ownership. **Implemented in this lane;
+    tests, builds, packaging, runtime interaction, and captures remain pending.**
 53. Kiosk and PWA sessions.
 54. Proxy and isolated debugging browser sessions.
 55. Read-only Windows diagnostics for drives, storage, services, startup, scheduled tasks, updates,

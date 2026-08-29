@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { searchOrUrl } from './browserUrl'
+import { normalizeAddress, searchOrUrl } from './browserUrl'
 import { BrowserStartPage } from './BrowserStartPage'
 import { useBrowserHistory } from '../state/browserHistory'
 import { useDiscardWhenHidden, webviewAudible } from './useDiscardWhenHidden'
 import { DiscardedPlate } from './DiscardedPlate'
 import { BrowserExtensionsPanel } from './BrowserExtensionsPanel'
+import { validateBrowserPortalUrl, type BrowserPortalLifecycle } from '@shared/browser-portal'
 
 // Minimal typing for the Electron <webview> element methods/events we use.
 type WebviewEl = HTMLElement & {
@@ -41,6 +42,12 @@ interface BrowserSurfaceProps {
    * a live guest across sessions — see `CanvasNodeState.browserProfileId`.
    */
   partition?: string
+  /** Portal surfaces accept only absolute HTTP(S) URLs and never fall back to search. */
+  strictHttpUrl?: boolean
+  /** Ordinary browser nodes support popups; isolated portals deliberately do not. */
+  allowPopups?: boolean
+  /** Lifecycle signal used by portal chrome and status reporting. */
+  onLifecycleChange?: (state: BrowserPortalLifecycle) => void
 }
 
 /**
@@ -56,7 +63,10 @@ export function BrowserSurface({
   url,
   onUrlChange,
   onTitleChange,
-  partition
+  partition,
+  strictHttpUrl = false,
+  allowPopups = true,
+  onLifecycleChange
 }: BrowserSurfaceProps) {
   const ref = useRef<WebviewEl | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -68,6 +78,7 @@ export function BrowserSurface({
   const [canBack, setCanBack] = useState(false)
   const [canFwd, setCanFwd] = useState(false)
   const [failed, setFailed] = useState('')
+  const failedRef = useRef(false)
   const [showExtensions, setShowExtensions] = useState(false)
   // Memory saver (see `useDiscardWhenHidden`): the page is released while hidden and rebuilt on
   // reveal. `loadingRef` mirrors the `loading` state because the hook reads it at fire time, from
@@ -90,12 +101,15 @@ export function BrowserSurface({
     const onStart = (): void => {
       loadingRef.current = true
       setLoading(true)
+      failedRef.current = false
+      onLifecycleChange?.('loading')
     }
     const onStop = (): void => {
       loadingRef.current = false
       setLoading(false)
       setCanBack(wv.canGoBack())
       setCanFwd(wv.canGoForward())
+      onLifecycleChange?.(failedRef.current ? 'error' : 'ready')
     }
     const onNav = (e: Event): void => {
       const u = (e as unknown as { url: string }).url
@@ -114,6 +128,7 @@ export function BrowserSurface({
       setAddress(u)
       locationRef.current = u
       setFailed('')
+      failedRef.current = false
       if (echo) return
       // A genuine navigation re-opens the title gate below: the first title of the NEW page always
       // records, however it compares to the old page's.
@@ -121,6 +136,15 @@ export function BrowserSurface({
       onUrlChange(u)
       lastUrlRef.current = u
       useBrowserHistory.getState().record(u, u)
+    }
+    const onWillNavigate = (e: Event): void => {
+      if (!strictHttpUrl) return
+      const candidate = (e as unknown as { url?: string }).url ?? ''
+      if (validateBrowserPortalUrl(candidate)) return
+      e.preventDefault()
+      setFailed('Navigation was blocked because Browser Portal accepts only HTTP(S) URLs.')
+      failedRef.current = true
+      onLifecycleChange?.('error')
     }
     const onNavInPage = (e: Event): void => {
       const u = (e as unknown as { url: string }).url
@@ -143,11 +167,14 @@ export function BrowserSurface({
         // A restore that never landed has no echo to swallow — disarm, or the next navigation pays.
         restoringNavRef.current = null
         setFailed(ev.errorDescription || 'Failed to load')
+        failedRef.current = true
+        onLifecycleChange?.('error')
       }
     }
     wv.addEventListener('did-start-loading', onStart)
     wv.addEventListener('did-stop-loading', onStop)
     wv.addEventListener('did-navigate', onNav)
+    wv.addEventListener('will-navigate', onWillNavigate)
     wv.addEventListener('did-navigate-in-page', onNavInPage)
     wv.addEventListener('page-title-updated', onTitle)
     wv.addEventListener('did-fail-load', onFail)
@@ -155,6 +182,7 @@ export function BrowserSurface({
       wv.removeEventListener('did-start-loading', onStart)
       wv.removeEventListener('did-stop-loading', onStop)
       wv.removeEventListener('did-navigate', onNav)
+      wv.removeEventListener('will-navigate', onWillNavigate)
       wv.removeEventListener('did-navigate-in-page', onNavInPage)
       wv.removeEventListener('page-title-updated', onTitle)
       wv.removeEventListener('did-fail-load', onFail)
@@ -162,7 +190,7 @@ export function BrowserSurface({
     // `discarded` is a dep because a discard UNMOUNTS the <webview> element (dropping `src` alone
     // would leave the guest process alive): the restored element is a different node, so the
     // listeners have to be re-attached to it.
-  }, [onUrlChange, onTitleChange, discarded])
+  }, [onUrlChange, onTitleChange, discarded, onLifecycleChange, strictHttpUrl])
 
   // Registers the guest so main can route its new-window requests. `discarded` is a dep for the
   // same reason as above — and it is what makes a discard UNREGISTER the dead wcId through this
@@ -194,6 +222,7 @@ export function BrowserSurface({
     onDiscard: () => {
       setDiscarded(true)
       setSrc('')
+      onLifecycleChange?.('suspended')
       // A failure banner belongs to the page we just released; the restore re-navigates and will
       // raise its own if the load fails again.
       setFailed('')
@@ -207,6 +236,7 @@ export function BrowserSurface({
       restoringNavRef.current = back
       setSrc(back)
       setAddress(back)
+      onLifecycleChange?.('loading')
     }
   })
 
@@ -228,9 +258,10 @@ export function BrowserSurface({
   }, [url])
 
   const go = (): void => {
-    const safe = searchOrUrl(address)
+    const safe = strictHttpUrl ? normalizeAddress(address) : searchOrUrl(address)
     if (!safe) {
-      setFailed('Enter a URL or search term')
+      setFailed(strictHttpUrl ? 'Enter a valid HTTP(S) URL' : 'Enter a URL or search term')
+      onLifecycleChange?.('error')
       return
     }
     setAddress(safe)
@@ -291,12 +322,12 @@ export function BrowserSurface({
           <webview
             ref={ref as unknown as React.Ref<HTMLElement>}
             src={src || undefined}
-            allowpopups={true}
+            allowpopups={allowPopups}
             {...(partition ? { partition } : {})}
             style={{ width: '100%', height: '100%' }}
           />
         )}
-        {!src && !discarded && (
+        {!src && !discarded && !strictHttpUrl && (
           <BrowserStartPage
             onNavigate={(u) => {
               // A navigation with an initiator: whatever it navigates to is not a restore echo.
