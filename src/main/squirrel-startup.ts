@@ -2,6 +2,7 @@ import { win32 as path } from 'node:path'
 
 export const SQUIRREL_STARTUP_QUIT_DEADLINE_MS = 1_000
 export const SQUIRREL_FIRST_RUN_UPDATE_DELAY_MS = 10_000
+const SQUIRREL_EXECUTABLE_NAME = 'nodeterm.exe'
 
 export type SquirrelStartupPlan =
   | { kind: 'quit-now'; reason: 'obsolete' }
@@ -44,14 +45,21 @@ export function planSquirrelStartup(
 ): SquirrelStartupPlan | null {
   if (platform !== 'win32') return null
 
-  if (argv.includes('--squirrel-obsolete')) {
+  // Squirrel puts its lifecycle flag in argv[1]. Looking through every argument lets an ordinary
+  // launch carrying user data that happens to contain a Squirrel-looking string suppress the app.
+  const lifecycleFlag = argv[1]
+  if (!path.isAbsolute(execPath) || path.basename(execPath).toLowerCase() !== SQUIRREL_EXECUTABLE_NAME) {
+    return null
+  }
+
+  if (lifecycleFlag === '--squirrel-obsolete') {
     return { kind: 'quit-now', reason: 'obsolete' }
   }
 
   let reason: 'install' | 'updated' | 'uninstall' | null = null
-  if (argv.includes('--squirrel-uninstall')) reason = 'uninstall'
-  else if (argv.includes('--squirrel-updated')) reason = 'updated'
-  else if (argv.includes('--squirrel-install')) reason = 'install'
+  if (lifecycleFlag === '--squirrel-uninstall') reason = 'uninstall'
+  else if (lifecycleFlag === '--squirrel-updated') reason = 'updated'
+  else if (lifecycleFlag === '--squirrel-install') reason = 'install'
   if (reason === null) return null
 
   const executableName = path.basename(execPath)
@@ -72,7 +80,7 @@ export function initialAutomaticUpdateDelayMs(
   argv: readonly string[],
   platform: NodeJS.Platform
 ): number {
-  return platform === 'win32' && argv.includes('--squirrel-firstrun')
+  return platform === 'win32' && argv[1] === '--squirrel-firstrun'
     ? SQUIRREL_FIRST_RUN_UPDATE_DELAY_MS
     : 0
 }
