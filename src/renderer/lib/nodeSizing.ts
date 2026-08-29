@@ -45,6 +45,7 @@ export const NODE_MIN_SIZES: Record<NodeKind, { width: number; height: number }>
   unigetui: { width: 360, height: 240 }
   , 'homeassistant-sensor': { width: 460, height: 360 }
   , alarm: { width: 360, height: 260 }
+  , trigger: { width: 360, height: 260 }
   , awsidentity: { width: 460, height: 360 }
   , dockerhost: { width: 520, height: 420 }
   , freepbx: { width: 520, height: 360 }

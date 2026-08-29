@@ -31,6 +31,7 @@ import { loadedAgentBrowserPartition } from '../shared/browser-partition'
 import { validatePortableDoorConstruction } from '../shared/door-construction'
 import { validateCalendarConfig } from '../shared/calendar'
 import { normalizeDebugBrowserProfiles } from '../shared/browser-debug-sessions'
+import { sanitizeTriggerSpec } from '../shared/trigger'
 
 /**
  * Drop a browser node's persisted `partition` unless it is exactly the jar THIS project (its
@@ -54,6 +55,20 @@ function sanitizeCalendarConfigs(nodes: CanvasNodeState[]): CanvasNodeState[] {
   return nodes.map((n) => n.kind === 'calendar' && n.calendarConfig
     ? { ...n, calendarConfig: validateCalendarConfig(n.calendarConfig) }
     : n)
+}
+
+/** Sanitize trigger definitions at every shared project boundary. A trigger definition is
+ * content only, never local execution consent. Invalid or misplaced definitions become inert. */
+export function sanitizeNodeTriggers(nodes: CanvasNodeState[]): CanvasNodeState[] {
+  return nodes.map((node) => {
+    if (node.trigger === undefined) return node
+    if (node.kind === 'trigger') {
+      const safe = sanitizeTriggerSpec(node.trigger)
+      if (safe) return { ...node, trigger: safe }
+    }
+    const { trigger: _dropped, ...rest } = node
+    return rest
+  })
 }
 
 export const PROJECT_DIR = '.nodeterm'
@@ -311,15 +326,15 @@ export function projectToFile(
   // The project file is a SHARED document (git, or the remote host). Exec-enabling node fields
   // (`shell`, `ssh.extraArgs`) never leave this machine in it — they ride the machine-local index
   // entry instead (`localNodeExec` / `IndexEntryV3.localExec`). See @shared/node-exec.
-  const nodes = sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes))
+  const nodes = sanitizeNodeTriggers(sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes)))
   const multiverseCanvases = sanitizeMultiverseCanvases(p.multiverseCanvases)?.map((canvas) => ({
     ...canvas,
-    nodes: sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(canvas.nodes, p.cwd) : canvas.nodes))
+    nodes: sanitizeNodeTriggers(sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(canvas.nodes, p.cwd) : canvas.nodes)))
   }))
   const childCanvases = p.childCanvases?.map((canvas) => ({
     ...canvas,
     ...(canvas.viewport ? { viewport: { ...canvas.viewport } } : {}),
-    nodes: sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(canvas.nodes, p.cwd) : canvas.nodes))
+    nodes: sanitizeNodeTriggers(sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(canvas.nodes, p.cwd) : canvas.nodes)))
   }))
   const icon = sanitizeProjectIcon(p.icon)
   const links = p.links ?? migrateLinks(p)
@@ -548,7 +563,9 @@ export function fileToProject(
     // would mint — a foreign/cloned/unsafe one drops to un-owned default session. See
     // loadedAgentBrowserPartition; without it a cloned project.json forges another project's jar.
     nodes: sanitizeBrowserPartitions(
-      sanitizeCalendarConfigs(applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec)),
+      sanitizeNodeTriggers(
+        sanitizeCalendarConfigs(applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec))
+      ),
       base.id
     ),
     ...(savedLayouts ? { savedLayouts } : {}),
@@ -557,7 +574,9 @@ export function fileToProject(
       childCanvases: childCanvases.map((canvas) => ({
         ...canvas,
         nodes: sanitizeBrowserPartitions(
-          sanitizeCalendarConfigs(applyLocalNodeExec(base.cwd ? resolveNodes(canvas.nodes, base.cwd) : canvas.nodes, base.localExec)),
+          sanitizeNodeTriggers(
+            sanitizeCalendarConfigs(applyLocalNodeExec(base.cwd ? resolveNodes(canvas.nodes, base.cwd) : canvas.nodes, base.localExec))
+          ),
           base.id
         )
       }))
@@ -737,9 +756,9 @@ export function splitWorkspace(
 export function serializeProjectFile(f: ProjectFileV1): string {
   return JSON.stringify({
     ...f,
-    nodes: sanitizeCalendarConfigs(stripSharedNodeExec(f.nodes)),
+    nodes: sanitizeNodeTriggers(sanitizeCalendarConfigs(stripSharedNodeExec(f.nodes))),
     ...(f.multiverseCanvases
-      ? { multiverseCanvases: f.multiverseCanvases.map((canvas) => ({ ...canvas, nodes: sanitizeCalendarConfigs(stripSharedNodeExec(canvas.nodes)) })) }
+      ? { multiverseCanvases: f.multiverseCanvases.map((canvas) => ({ ...canvas, nodes: sanitizeNodeTriggers(sanitizeCalendarConfigs(stripSharedNodeExec(canvas.nodes))) })) }
       : {})
   }, null, 2)
 }
