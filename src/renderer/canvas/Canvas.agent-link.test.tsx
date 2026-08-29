@@ -41,15 +41,30 @@ describe('Canvas agent-link integration seams', () => {
         create: vi.fn(async () => ({ fresh: true, screen: '' })),
         write: vi.fn(async () => undefined),
         resize: vi.fn(async () => undefined),
+        setFlow: vi.fn(async () => undefined),
         kill: vi.fn(async () => undefined),
+        destroy: vi.fn(async () => undefined),
+        recycle: vi.fn(async () => undefined),
+        generateName: vi.fn(async () => ({ ok: false, error: 'not available' })),
+        generateGroupName: vi.fn(async () => ({ ok: false, error: 'not available' })),
         sendText: vi.fn(async () => undefined),
         capture: vi.fn(async () => ''),
+        readScrollback: vi.fn(async () => ''),
+        tmuxStatus: vi.fn(async () => ({
+          available: false,
+          installCommand: null,
+          installLabel: null,
+          platform: 'win32'
+        })),
+        paneCommand: vi.fn(async () => null),
+        correctTeamLeadPaneWidth: vi.fn(async () => false),
+        terminateForeground: vi.fn(async () => false),
+        readSessionName: vi.fn(async () => null),
         onData: noopUnsub,
         onExit: noopUnsub,
         onClosed: noopUnsub,
         onResync: noopUnsub,
         onSize: noopUnsub,
-        recycle: vi.fn(async () => ({ ok: true })),
         supported: true,
         recycleConfirmed: true
       },
@@ -57,8 +72,15 @@ describe('Canvas agent-link integration seams', () => {
         load: vi.fn(async () => ({ projects: [project], activeProjectId: project.id })),
         save: vi.fn(async () => undefined),
         onChanged: noopUnsub,
+        onExternalChange: noopUnsub,
+        onMigrated: noopUnsub,
+        onCorruptRecovered: noopUnsub,
         userDataDir: vi.fn(async () => 'C:/agent-links-data'),
         commit: vi.fn(async () => undefined)
+      },
+      ssh: {
+        ...stub.ssh,
+        list: vi.fn(async () => [])
       },
       git: {
         status: vi.fn(async () => null),
@@ -76,7 +98,19 @@ describe('Canvas agent-link integration seams', () => {
         onChanged: noopUnsub
       },
       kidsMode: { enabled: false, onChanged: noopUnsub },
-      scheduledSettings: { list: vi.fn(async () => []), onChanged: noopUnsub },
+      scheduledSettings: {
+        load: vi.fn(async () => ({
+          ok: true as const,
+          file: { version: 1, timezone: 'UTC', rules: [] },
+          error: null
+        })),
+        save: vi.fn(async () => ({ ok: true as const })),
+        setHomeAssistantToken: vi.fn(async () => undefined),
+        tokenStatus: vi.fn(async () => ({})),
+        refreshRule: vi.fn(async () => undefined),
+        activeState: vi.fn(async () => ({ computedAtMs: 0, active: null, sources: {} })),
+        onActiveChange: noopUnsub
+      },
       presence: {
         connect: vi.fn(async () => undefined),
         hello: vi.fn(async () => undefined),
@@ -91,11 +125,16 @@ describe('Canvas agent-link integration seams', () => {
         setLinks: contextLinkSetLinks,
         info: vi.fn(async () => ({ shimPath: 'C:/agent-links-data/context.sh' }))
       },
+      context: {
+        onUpdate: noopUnsub,
+        ensure: vi.fn()
+      },
       canvas: {
         mutate: vi.fn(async () => undefined),
         onMutation: noopUnsub
       },
       onAgentStatus: noopUnsub,
+      agentStatusSnapshot: vi.fn(async () => []),
       onSubagentActivity: noopUnsub,
       onUnreadClear: noopUnsub,
       answerPermission: vi.fn(async () => undefined),
@@ -157,6 +196,19 @@ describe('Canvas agent-link integration seams', () => {
       disconnect(): void {}
       unobserve(): void {}
     })
+    vi.stubGlobal('DOMMatrixReadOnly', class {
+      m22 = 1
+    })
+    vi.stubGlobal('matchMedia', () => ({
+      matches: false,
+      media: '',
+      onchange: null,
+      addListener(): void {},
+      removeListener(): void {},
+      addEventListener(): void {},
+      removeEventListener(): void {},
+      dispatchEvent(): boolean { return false }
+    }))
     const project = createProject(0, 'Agent links', 'C:/agent-links')
     project.id = 'project-agent-links'
     project.nodes = [

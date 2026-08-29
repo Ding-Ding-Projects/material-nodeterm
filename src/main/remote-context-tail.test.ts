@@ -6,12 +6,12 @@ const ref: RemoteFileRef = { conn: { host: 'h', user: 'u' }, controlPath: '/s', 
 const line = (used: number, model: string): string =>
   JSON.stringify({ type: 'assistant', message: { model, usage: { input_tokens: used } } })
 
+const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 30))
+
 function fakeWin(): { win: never; send: ReturnType<typeof vi.fn> } {
   const send = vi.fn()
   return { win: { isDestroyed: () => false, webContents: { send } } as never, send }
 }
-
-const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 30))
 
 describe('createRemoteContextTail', () => {
   it('reads the remote transcript with its absolute size and pushes ContextWindowUsage on first usage', async () => {
@@ -21,7 +21,10 @@ describe('createRemoteContextTail', () => {
         data: Buffer.from(line(120, 'claude-opus-4-8')),
         size: Buffer.byteLength(line(120, 'claude-opus-4-8'))
       })),
-      readFrom: vi.fn(async (_r: RemoteFileRef, o: number) => ({ text: '', newOffset: o }))
+      readFromCapped: vi.fn(async (_r: RemoteFileRef, o: number, _cap: number) => ({
+        data: Buffer.alloc(0),
+        newOffset: o
+      }))
     }
     const tail = createRemoteContextTail(win, remoteFile as never)
     tail.track('sess1', ref)
@@ -39,20 +42,24 @@ describe('createRemoteContextTail', () => {
     tail.untrack('sess1')
   })
 
-  it('uses readFrom with the advancing offset after the first tail read', async () => {
+  it('uses the capped read with the advancing offset after the first tail read', async () => {
     const { win } = fakeWin()
-    const readFrom = vi.fn(async (_r: RemoteFileRef, o: number) => ({ text: '', newOffset: o + 0 }))
+    const readFromCapped = vi.fn(async (_r: RemoteFileRef, o: number, _cap: number) => ({
+      data: Buffer.alloc(0),
+      newOffset: o
+    }))
     const remoteFile = {
       readTailWithSize: vi.fn(async () => ({
         data: Buffer.from(line(50, 'claude-haiku')),
         size: Buffer.byteLength(line(50, 'claude-haiku'))
       })),
-      readFrom
+      readFromCapped
     }
     const tail = createRemoteContextTail(win, remoteFile as never)
     tail.track('sess2', ref)
-    await tick()
+    await new Promise((r) => setTimeout(r, 1100))
     expect(remoteFile.readTailWithSize).toHaveBeenCalledTimes(1)
+    expect(remoteFile.readFromCapped).toHaveBeenCalledWith(ref, expect.any(Number), 1024 * 1024)
     // pathFor exposes the tracked path
     expect(tail.pathFor('sess2')).toBe('/abs/x.jsonl')
     tail.untrack('sess2')
@@ -71,10 +78,13 @@ describe('createRemoteContextTail', () => {
         data: Buffer.from(line(10, 'claude-opus-4-8') + '\n'),
         size: Buffer.byteLength(line(10, 'claude-opus-4-8') + '\n')
       })),
-      readFrom: vi.fn(async (_r: RemoteFileRef, o: number) => {
-        if (served) return { text: '', newOffset: o }
+      readFromCapped: vi.fn(async (_r: RemoteFileRef, o: number, _cap: number) => {
+        if (served) return { data: Buffer.alloc(0), newOffset: o }
         served = true
-        return { text: notif + '\n', newOffset: o + Buffer.byteLength(notif + '\n') }
+        return {
+          data: Buffer.from(notif + '\n'),
+          newOffset: o + Buffer.byteLength(notif + '\n')
+        }
       })
     }
     const onTaskNotification = vi.fn()
@@ -87,6 +97,25 @@ describe('createRemoteContextTail', () => {
     tail.untrack('sess4')
   }, 5000)
 
+  it('keeps adapter read rejections out of the fire-and-forget polling loop', async () => {
+    const { win, send } = fakeWin()
+    const remoteFile = {
+      readTailWithSize: vi.fn(async () => ({
+        data: Buffer.from(line(12, 'claude-opus-4-8') + '\n'),
+        size: Buffer.byteLength(line(12, 'claude-opus-4-8') + '\n')
+      })),
+      readFromCapped: vi.fn(async () => {
+        throw new Error('adapter unavailable')
+      })
+    }
+    const tail = createRemoteContextTail(win, remoteFile as never)
+    tail.track('sess-rejected', ref)
+    await new Promise((r) => setTimeout(r, 1100))
+    expect(send.mock.calls.map((call) => call[1].usedTokens)).toContain(12)
+    expect(remoteFile.readFromCapped).toHaveBeenCalled()
+    tail.untrack('sess-rejected')
+  })
+
   it('only pushes again when the usage changes', async () => {
     const { win, send } = fakeWin()
     // Realistic JSONL: records are newline-terminated (the tail carries a torn trailing
@@ -97,10 +126,10 @@ describe('createRemoteContextTail', () => {
         data: Buffer.from(line(100, 'claude-opus-4-8') + '\n'),
         size: Buffer.byteLength(line(100, 'claude-opus-4-8') + '\n')
       })),
-      readFrom: vi.fn(async (_r: RemoteFileRef, o: number) => {
+      readFromCapped: vi.fn(async (_r: RemoteFileRef, o: number, _cap: number) => {
         const text = nextFrom
         nextFrom = ''
-        return { text, newOffset: o + Buffer.byteLength(text) }
+        return { data: Buffer.from(text), newOffset: o + Buffer.byteLength(text) }
       })
     }
     const tail = createRemoteContextTail(win, remoteFile as never)
