@@ -19,6 +19,7 @@ export type SettingsSectionId =
   | 'agents'
   | 'usage'
   | 'accounts'
+  | 'provider-accounts'
   | 'custom-agents'
   | 'model-gateway'
   | 'notifications'
@@ -79,6 +80,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     sections: [
       { id: 'agents', title: 'Agents' },
       { id: 'accounts', title: 'Accounts' },
+      { id: 'provider-accounts', title: 'Provider accounts' },
       { id: 'custom-agents', title: 'Custom agents' },
       { id: 'model-gateway', title: 'Model gateway' },
       { id: 'usage', title: 'Usage' },

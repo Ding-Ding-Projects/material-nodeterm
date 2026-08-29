@@ -87,6 +87,13 @@ const PATHS: Record<StaticSettingsSectionId, React.JSX.Element> = {
       <path d="M3.4 13c0-2.5 2.1-4 4.6-4s4.6 1.5 4.6 4" />
     </>
   ),
+  'provider-accounts': (
+    <>
+      <circle cx="5" cy="5" r="2.2" />
+      <circle cx="11" cy="11" r="2.2" />
+      <path d="m6.6 6.6 2.8 2.8M9.5 4.8h3M11 3.3v3" />
+    </>
+  ),
   'custom-agents': (
     <>
       <rect x="2.5" y="2.5" width="11" height="11" rx="2.5" />

@@ -251,6 +251,21 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG
     // machine (`...local` would run java on the VIEWER, not the host it joined).
     minecraft: stub.minecraft,
+    providerAccounts: {
+      snapshot: () => relayUnsupported('providerAccounts.snapshot'),
+      createProfile: () => relayUnsupported('providerAccounts.createProfile'),
+      updateProfile: () => relayUnsupported('providerAccounts.updateProfile'),
+      removeProfile: () => relayUnsupported('providerAccounts.removeProfile'),
+      setCredential: () => relayUnsupported('providerAccounts.setCredential'),
+      clearCredential: () => relayUnsupported('providerAccounts.clearCredential'),
+      selectProfile: () => relayUnsupported('providerAccounts.selectProfile'),
+      bind: () => relayUnsupported('providerAccounts.bind'),
+      unbind: () => relayUnsupported('providerAccounts.unbind'),
+      startOAuth: () => relayUnsupported('providerAccounts.startOAuth'),
+      completeOAuth: () => relayUnsupported('providerAccounts.completeOAuth'),
+      cancelOAuth: () => relayUnsupported('providerAccounts.cancelOAuth'),
+      onChanged: () => () => undefined
+    }
     torrent: stub.torrent,
     calendar: stub.calendar,
     // Home Assistant bindings, access tokens, sockets, and entity caches are machine-local. A

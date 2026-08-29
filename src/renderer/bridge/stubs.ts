@@ -182,6 +182,7 @@ export function buildStubApi(): Omit<
   | 'toylock'
   | 'authenticator'
   | 'passwordManager'
+  | 'providerAccounts'
   | 'universeDoorEntry'
 > {
   const api = {
@@ -1019,6 +1020,7 @@ export function buildStubApi(): Omit<
     | 'toylock'
     | 'authenticator'
     | 'passwordManager'
+    | 'providerAccounts'
     | 'universeDoorEntry'
     | 'fs'
     | 'git'
