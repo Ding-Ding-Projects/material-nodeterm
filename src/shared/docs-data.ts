@@ -8,6 +8,18 @@ import type { DocArticle } from './docs'
 
 export const DOC_ARTICLES: DocArticle[] = [
   {
+    path: "docs/features/aws/README.md",
+    title: "AWS",
+    section: "AWS",
+    body: "# AWS\n\nThe AWS feature family is introduced through the AWS Shop, a deterministic catalogue surface for AWS Universe canvases.\n\n- [AWS Shop and catalog](./aws-shop.md)\n"
+  },
+  {
+    path: "docs/features/aws/aws-shop.md",
+    title: "AWS Shop and catalog",
+    section: "AWS",
+    body: "# AWS Shop and catalog\n\nAn AWS Universe child canvas owns one deterministic `aws-shop` node. It is non-deletable, cannot be duplicated or grouped, and peers cannot insert or remove it. The Shop opens a local searchable Material Design 3 catalog of typed `aws-service` blueprints.\n\nAWS Universe canvases accept AWS nodes only. Portable import repairs missing, duplicate, moved, or malformed Shops in memory and records each repair. Import performs no network request, deployment, provider mutation, process launch, credential lookup, or filesystem write. Credentials, account bindings, role sessions, SSO caches, CLI paths, endpoints, and provider state remain outside the portable projection.\n\nEach catalog row declares availability or the exact missing See Fut and next action. This lane does not call AWS.\n\n## Verification boundary\n\nThis lane intentionally did not run tests, type checking, linting, security checks, builds, packaging, runtime interaction checks, or UI captures.\n\n## Suggested articles\n\n- [Portable canvas projection](../projects/portable-canvas-projection.md)\n- [Portable project schema 3](../projects/portable-schema3.md)\n"
+  },
+  {
     path: "docs/SERVER.md",
     title: "nodeterm Server Edition (Phase 2)",
     section: "Reference",

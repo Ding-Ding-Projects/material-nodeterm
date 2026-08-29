@@ -352,6 +352,14 @@ export type NodeKind =
   // persists a title and a colour and nothing else, because an entry id names a credential in
   // this machine's OS vault while project.json is git-shared. See AuthenticatorNode.tsx.
   | 'authenticator'
+  // A persistent, non-deletable catalogue entry owned by an AWS Universe child canvas. The
+  // shop is a canvas object so peers and portable imports can validate it at the same boundary as
+  // every other node, but its identity and scope are derived from the universe and are never
+  // user-editable.
+  | 'aws-shop'
+  // A typed AWS operation blueprint created by the AWS Shop. Runtime credentials and bindings
+  // are deliberately absent from this shared node shape; they belong to the machine-local store.
+  | 'aws-service'
   // The SERVICE family: one node per external thing this canvas can manage. They are ordinary
   // nodes — dragged, resized, coloured, grouped, persisted and deleted exactly like a terminal —
   // because a managed service is a thing you arrange on a canvas beside the terminals working on
@@ -439,6 +447,14 @@ export interface CanvasNodeState {
   titleAuto?: boolean
   color: string
   group: string | null
+  /** AWS Universe identity for `aws-shop` and `aws-service` nodes. Portable intent only. */
+  awsUniverseId?: string
+  /** True only for canonical system-owned nodes such as an AWS Shop. */
+  nonDeletable?: boolean
+  /** Immutable user/automation creation event id. Hydration never mints one. */
+  creationEventId?: string
+  /** AWS catalog entry id for an `aws-service` blueprint. */
+  awsCatalogEntryId?: string
   /** Labels for organizing/filtering terminals. */
   tags?: string[]
   /** When true the node body is hidden (header-only). */

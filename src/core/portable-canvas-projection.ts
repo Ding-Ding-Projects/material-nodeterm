@@ -10,6 +10,7 @@
 import type { BridgeLink, CanvasNodeState, Project, Viewport } from '../shared/types'
 import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEMA_VERSION } from './portable-project-v3'
 import { sanitizeProjectIcon } from '../shared/project-icon'
+import { AWS_SHOP_NODE_KIND, AWS_UNIVERSE_SCOPE, awsShopNodeId, createAwsShopNode, isAwsNodeKind, isAwsShopNode } from '../shared/aws-shop'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -38,6 +39,10 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  awsUniverseId?: string
+  nonDeletable?: boolean
+  creationEventId?: string
+  awsCatalogEntryId?: string
 }
 
 export interface PortableRelationshipV3 {
@@ -86,7 +91,7 @@ const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'awsUniverseId', 'nonDeletable', 'creationEventId', 'awsCatalogEntryId'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
@@ -166,6 +171,13 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.awsUniverseId !== undefined) out.awsUniverseId = text(node.awsUniverseId, 'AWS Universe id')
+  if (node.nonDeletable !== undefined) {
+    if (typeof node.nonDeletable !== 'boolean') throw new PortableProjectV3Error('manifest', 'Portable node nonDeletable state is invalid.')
+    out.nonDeletable = node.nonDeletable
+  }
+  if (node.creationEventId !== undefined) out.creationEventId = text(node.creationEventId, 'creation event id')
+  if (node.awsCatalogEntryId !== undefined) out.awsCatalogEntryId = text(node.awsCatalogEntryId, 'AWS catalog entry id')
   if (node.browserTabs !== undefined) {
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
     out.browserTabs = node.browserTabs.map((tab) => { if (!record(tab)) throw new PortableProjectV3Error('manifest', 'Portable browser tab is invalid.'); exactKeys(tab, ALLOWED_TAB, 'browser tab'); const url = safeUrl(tab.url, 'browser tab URL'); return { id: text(tab.id, 'browser tab id'), ...(url ? { url } : {}), title: content(tab.title, 'browser tab title') } })
@@ -192,10 +204,28 @@ function relationships(project: Project): PortableRelationshipV3[] {
 
 /** Project only the portable presentation and safe intent fields. Forbidden live fields are never read. */
 export function projectToPortableCanvasV3(project: Project, input: PortableCanvasProjectionInput = {}): PortableCanvasProjectionV3 {
-  const nodes = project.nodes.map(projectNode).sort((a, b) => a.id.localeCompare(b.id))
+  const suppliedChildren = input.canvases ?? []
+  const projectedNodes = project.nodes.map(projectNode)
+  const generatedShops = suppliedChildren
+    .filter((canvas) => canvas.scope === 'multiverse' || canvas.scope === AWS_UNIVERSE_SCOPE)
+    .map((canvas) => createAwsShopNode(canvas.id))
+    .filter((shop) => !projectedNodes.some((node) => node.id === shop.id))
+    .map(projectNode)
+  const nodes = [...projectedNodes, ...generatedShops].sort((a, b) => a.id.localeCompare(b.id))
   if (nodes.length > PORTABLE_CANVAS_LIMITS.maxNodes) throw new PortableProjectV3Error('entry-limit', 'Portable node count exceeds its bound.')
-  const root: PortableCanvasV3 = { id: 'root', scope: 'root', title: text(project.name, 'project name'), order: 0, viewport: project.viewport, nodeIds: nodes.map((node) => node.id) }
-  const children = (input.canvases ?? []).map((canvas) => ({ id: text(canvas.id, 'canvas id'), scope: canvas.scope, ...(canvas.parentCanvasId ? { parentCanvasId: text(canvas.parentCanvasId, 'parent canvas id') } : {}), title: text(canvas.title, 'canvas title'), order: finite(canvas.order, 'canvas order'), ...(canvas.viewport ? { viewport: { x: finite(canvas.viewport.x, 'viewport x'), y: finite(canvas.viewport.y, 'viewport y'), zoom: finite(canvas.viewport.zoom, 'viewport zoom') } } : {}), nodeIds: [...(canvas.nodeIds ?? [])].map((id) => text(id, 'canvas node id')).sort() }))
+  const childNodeIds = new Set(suppliedChildren.flatMap((canvas) => canvas.nodeIds ?? []))
+  for (const canvas of suppliedChildren) {
+    if (canvas.scope === 'multiverse' || canvas.scope === AWS_UNIVERSE_SCOPE) childNodeIds.add(awsShopNodeId(canvas.id))
+  }
+  const root: PortableCanvasV3 = { id: 'root', scope: 'root', title: text(project.name, 'project name'), order: 0, viewport: project.viewport, nodeIds: nodes.map((node) => node.id).filter((id) => !childNodeIds.has(id)) }
+  const children = suppliedChildren.map((canvas) => {
+    const nodeIds = [...(canvas.nodeIds ?? [])].map((id) => text(id, 'canvas node id'))
+    if (canvas.scope === 'multiverse' || canvas.scope === AWS_UNIVERSE_SCOPE) {
+      const shopId = awsShopNodeId(canvas.id)
+      if (!nodeIds.includes(shopId)) nodeIds.push(shopId)
+    }
+    return { id: text(canvas.id, 'canvas id'), scope: canvas.scope, ...(canvas.parentCanvasId ? { parentCanvasId: text(canvas.parentCanvasId, 'parent canvas id') } : {}), title: text(canvas.title, 'canvas title'), order: finite(canvas.order, 'canvas order'), ...(canvas.viewport ? { viewport: { x: finite(canvas.viewport.x, 'viewport x'), y: finite(canvas.viewport.y, 'viewport y'), zoom: finite(canvas.viewport.zoom, 'viewport zoom') } } : {}), nodeIds: nodeIds.sort() }
+  })
   if (children.length + 1 > PORTABLE_CANVAS_LIMITS.maxCanvases) throw new PortableProjectV3Error('entry-limit', 'Portable canvas count exceeds its bound.')
   const canvases = [root, ...children].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
   const icon = project.icon && sanitizeProjectIcon(project.icon)
@@ -266,6 +296,7 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
   const roots = value.canvases.filter((canvas) => canvas.scope === 'root')
   if (roots.length !== 1 || roots[0].id !== value.rootCanvasId || roots[0].parentCanvasId !== undefined) throw new PortableProjectV3Error('manifest', 'Portable projection must contain exactly one parentless root canvas.')
   const canvasById = new Map(value.canvases.map((canvas) => [canvas.id, canvas]))
+  const nodeById = new Map(normalizedNodes.map((node) => [node.id, node]))
   for (const canvas of value.canvases) {
     if (canvas.scope !== 'root' && canvas.parentCanvasId === undefined) throw new PortableProjectV3Error('manifest', 'Child canvases require a parent canvas.')
     if (canvas.parentCanvasId !== undefined && (!canvasById.has(canvas.parentCanvasId) || canvas.parentCanvasId === canvas.id)) throw new PortableProjectV3Error('manifest', 'Portable canvas parent is missing or self-referential.')
@@ -278,6 +309,26 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
       const item = canvasById.get(current)
       current = item?.parentCanvasId
       if (current !== undefined && ++depth > PORTABLE_CANVAS_LIMITS.maxDepth) throw new PortableProjectV3Error('manifest', 'Portable canvas hierarchy exceeds its depth bound.')
+    }
+
+    const canvasNodes = canvas.nodeIds.map((id) => nodeById.get(id)).filter((node): node is PortableCanvasNodeV3 => !!node)
+    const shops = canvasNodes.filter((node) => node.kind === AWS_SHOP_NODE_KIND)
+    if (canvas.scope === 'root') {
+      if (shops.length > 0) throw new PortableProjectV3Error('manifest', 'The root canvas cannot contain an AWS Shop.')
+    } else {
+      if (shops.length !== 1 || !isAwsShopNode(shops[0], canvas.id)) {
+        throw new PortableProjectV3Error('manifest', `Universe canvas ${canvas.id} must contain exactly one deterministic AWS Shop.`)
+      }
+      const shop = shops[0]
+      if (shop.group !== null || shop.parentId !== undefined || shop.nonDeletable !== true) {
+        throw new PortableProjectV3Error('manifest', `AWS Shop ${shop.id} must remain ungrouped, top-level, and non-deletable.`)
+      }
+      if (canvas.scope === AWS_UNIVERSE_SCOPE) {
+        for (const node of canvasNodes) {
+          if (!isAwsNodeKind(node.kind)) throw new PortableProjectV3Error('manifest', `AWS Universe canvas ${canvas.id} contains a non-AWS node.`)
+          if (node.kind === 'aws-service' && node.awsUniverseId !== canvas.id) throw new PortableProjectV3Error('manifest', `AWS node ${node.id} is bound to the wrong universe.`)
+        }
+      }
     }
   }
   const membership = new Map<string, number>()

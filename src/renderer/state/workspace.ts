@@ -21,6 +21,9 @@ import {
 } from './permissionMode'
 import { codexSharedIdentity } from './codexIdentity'
 import { sshHostKey } from '@shared/ssh'
+import { AWS_SERVICE_NODE_KIND, AWS_SHOP_NODE_KIND, canCreateInUniverse, createAwsShopNode } from '@shared/aws-shop'
+import type { AwsCatalogEntry } from '@shared/aws-catalog'
+import { canCreateAwsCatalogEntry } from '@shared/aws-catalog'
 import { useSettings } from './settings'
 import type { SessionSource } from '../session/session'
 import { supportsWindowsTerminalProfiles } from './terminal-profiles'
@@ -172,6 +175,11 @@ export interface NodeData {
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  /** AWS Shop/service identity and portable catalog metadata. */
+  awsUniverseId?: string
+  nonDeletable?: boolean
+  creationEventId?: string
+  awsCatalogEntryId?: string
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
   nsisSpec?: NsisSpec
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
@@ -1029,6 +1037,60 @@ export function createServiceNode(
   }
 }
 
+/** Create a typed AWS blueprint node only after the AWS Shop scope check has passed. */
+export function createAwsServiceNode(
+  entry: AwsCatalogEntry,
+  universeId: string,
+  index: number,
+  center?: { x: number; y: number }
+): CanvasNode {
+  const catalogPermission = canCreateAwsCatalogEntry(entry.id)
+  if (!catalogPermission.ok) throw new Error(catalogPermission.reason)
+  const trustedEntry = catalogPermission.entry
+  const permission = canCreateInUniverse('aws-universe', entry.nodeKind)
+  if (!permission.ok) throw new Error(permission.reason)
+  const size = { width: 620, height: 460 }
+  return {
+    id: nextId('aws-service'),
+    type: AWS_SERVICE_NODE_KIND,
+    position: placeAt(center, index, size.width, size.height),
+    width: size.width,
+    height: size.height,
+    style: { width: size.width, height: size.height },
+    data: {
+      title: trustedEntry.label,
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      awsUniverseId: universeId,
+      awsCatalogEntryId: trustedEntry.id,
+      creationEventId: uuid(),
+      nonDeletable: false
+    }
+  }
+}
+
+/** React Flow shape for the deterministic Shop owned by an AWS Universe child canvas. */
+export function createAwsShopCanvasNode(universeId: string, index: number, center?: { x: number; y: number }): CanvasNode {
+  const state = createAwsShopNode(universeId, center ?? placeAt(undefined, index, 560, 420))
+  return {
+    id: state.id,
+    type: AWS_SHOP_NODE_KIND,
+    position: state.position,
+    width: state.size.width,
+    height: state.size.height,
+    style: { width: state.size.width, height: state.size.height },
+    data: {
+      title: state.title,
+      color: state.color,
+      group: null,
+      collapsed: false,
+      awsUniverseId: universeId,
+      nonDeletable: true,
+      creationEventId: state.id
+    }
+  }
+}
+
 /**
  * Creates an NSIS installer-builder node — a GUI for authoring a Windows NSIS installer script for
  * ANOTHER project. Not this app's own installer, which stays Squirrel.Windows (see CLAUDE.md's
@@ -1466,7 +1528,9 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
-  nsis: true
+  nsis: true,
+  'aws-shop': true,
+  'aws-service': true
 }
 
 /**
@@ -1505,7 +1569,9 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
-  nsis: NSIS_SIZE
+  nsis: NSIS_SIZE,
+  'aws-shop': { width: 560, height: 420 },
+  'aws-service': { width: 620, height: 460 }
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1916,6 +1982,10 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         text: n.text,
         serviceLabel: n.serviceLabel,
         serviceConnection: n.serviceConnection,
+        awsUniverseId: n.awsUniverseId,
+        nonDeletable: n.nonDeletable,
+        creationEventId: n.creationEventId,
+        awsCatalogEntryId: n.awsCatalogEntryId,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
         filePath: n.filePath,
@@ -1991,6 +2061,10 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
         serviceConnection: n.data.serviceConnection,
+        awsUniverseId: n.data.awsUniverseId,
+        nonDeletable: n.data.nonDeletable,
+        creationEventId: n.data.creationEventId,
+        awsCatalogEntryId: n.data.awsCatalogEntryId,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
         filePath: n.data.filePath,

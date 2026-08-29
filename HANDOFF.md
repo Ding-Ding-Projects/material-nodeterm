@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-08-26, AWS Shop and catalog enforcement, issue #40
+
+Added the AWS Universe Shop and catalog enforcement lane. `src/shared/aws-shop.ts` defines the
+deterministic Shop identity, canonical node shape, AWS-only scope predicate, in-memory repair
+records, and creation checks. `src/shared/aws-catalog.ts` provides typed categories, safe defaults,
+availability states, explicit missing dependency reasons, and bounded plain-text or regex search.
+`src/core/aws-universe.ts` exposes the import repair boundary with an explicit no-side-effects
+result, and `src/core/project-archive.ts` re-exports it. Portable schema 3 projection now carries
+safe AWS identity/catalog fields, creates a missing child Shop, rejects invalid Shop ownership,
+and refuses non-AWS nodes in AWS Universe canvases.
+
+The peer mutation path refuses Shop upserts and protected removals. Renderer state carries AWS
+identity and catalog fields through hydration and persistence, blocks Shop deletion, duplication,
+grouping, and movement, registers `AwsShopNode` and `AwsServiceNode`, and exposes a searchable
+`AwsShopPanel` with an anchored regex builder and visible unavailable-entry reasons. Documentation
+was added under `docs/features/aws/` and included in the offline bundle.
+
+No AWS operation was performed. This lane intentionally did not run tests, type checking, linting,
+security checks, builds, packaging, runtime interaction checks, or captures. No commit or push was
+made in this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

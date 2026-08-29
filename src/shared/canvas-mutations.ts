@@ -4,6 +4,8 @@
 
 import { acceptNewInboundNode, carryLocalNodeExec, sanitizeInboundNode } from './node-exec'
 import { REF_MAX_LEN } from './presence'
+import { canCreateInUniverse, isAwsShopNode, isNonDeletableCanvasNode } from './aws-shop'
+import { canCreateAwsCatalogEntry } from './aws-catalog'
 import type { BridgeLink, CanvasEdgeKind, CanvasMutation, CanvasNodeState } from './types'
 
 /**
@@ -84,6 +86,9 @@ export function isCanvasMutation(value: unknown): value is CanvasMutation {
   if (m.op !== 'upsert') return false
   const node = m.node as { id?: unknown; position?: { x?: unknown; y?: unknown } } | undefined
   if (!node || typeof node !== 'object') return false
+  // The Shop is created from the universe canvas, never by peer traffic. Rejecting it at the
+  // shared wire predicate keeps the reflector and every receiver from learning a mutable copy.
+  if ((node as { kind?: unknown }).kind === 'aws-shop') return false
   if (!isRefId(node.id)) return false
   const pos = node.position
   if (!pos || typeof pos !== 'object') return false
@@ -195,14 +200,31 @@ export function createMutationGuard(): (m: CanvasMutation) => boolean {
 export function applyCanvasMutation(
   states: CanvasNodeState[],
   m: CanvasMutation,
-  options?: { defaultTerminalProfileId?: string }
+  options?: { defaultTerminalProfileId?: string; universeScope?: import('./aws-shop').UniverseCanvasScope; universeId?: string }
 ): CanvasNodeState[] {
   // An edge mutation addresses neither of these nodes. Returned UNCHANGED (by reference, so a
   // caller's `next === prev` short-circuit still fires) rather than trusted to be pre-filtered:
   // every caller here is applying something that came off the wire, and a silent no-op is the only
   // safe reading of "this list is not what that mutation is about".
   if (isEdgeMutation(m)) return states
-  if (m.op === 'remove') return states.filter((n) => n.id !== m.id)
+  if (m.op === 'remove') {
+    // A peer can never remove a system-owned Shop. The local universe repair path is the only
+    // authority allowed to replace one, and ordinary undo/delete must observe the same rule.
+    if (states.some((node) => node.id === m.id && isNonDeletableCanvasNode(node))) return states
+    return states.filter((n) => n.id !== m.id)
+  }
+  if (options?.universeScope && !canCreateInUniverse(options.universeScope, m.node.kind).ok) return states
+  if (m.node.kind === 'aws-shop') {
+    // Shops are generated from the universe id and cannot be inserted or moved by peer traffic.
+    // A valid existing Shop remains exactly as the local owner created it.
+    if (!isAwsShopNode(m.node, options?.universeId)) return states
+    if (states.some((node) => isAwsShopNode(node, m.node.awsUniverseId))) return states
+    return states
+  }
+  if (options?.universeScope === 'aws-universe' && m.node.kind === 'aws-service') {
+    if (options.universeId && m.node.awsUniverseId !== options.universeId) return states
+    if (typeof m.node.awsCatalogEntryId !== 'string' || !canCreateAwsCatalogEntry(m.node.awsCatalogEntryId).ok) return states
+  }
   const idx = states.findIndex((n) => n.id === m.node.id)
   if (idx === -1)
     return [...states, acceptNewInboundNode(m.node, options?.defaultTerminalProfileId)]
@@ -324,7 +346,7 @@ export function diffToMutations(
   }
   // removes: nodes present in prev but gone from next (in prev-array order).
   for (const node of a.nodes) {
-    if (!nextIds.has(node.id)) removes.push({ op: 'remove', id: node.id })
+    if (!nextIds.has(node.id) && !isNonDeletableCanvasNode(node)) removes.push({ op: 'remove', id: node.id })
   }
 
   const edgeUpserts: CanvasMutation[] = []

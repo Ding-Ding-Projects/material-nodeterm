@@ -18,6 +18,7 @@ import { applyEdgeMutation } from '@shared/canvas-mutations'
 import { collisionSeed, derivedProjectId } from '@shared/project-id'
 import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
 import { markWorkspaceDirty } from './workspaceDirty'
+import { isNonDeletableCanvasNode } from '@shared/aws-shop'
 
 interface ProjectsState {
   projects: Project[]
@@ -505,7 +506,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   removeNode(projectId, nodeId) {
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) =>
-        nodes.filter((n) => n.id !== nodeId)
+        nodes.filter((n) => n.id !== nodeId || isNonDeletableCanvasNode(n))
       )
     }))
   },
@@ -514,7 +515,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) => {
         const src = nodes.find((n) => n.id === nodeId)
-        if (!src) return nodes
+        if (!src || isNonDeletableCanvasNode(src)) return nodes
         const copy = {
           ...src,
           id: `${src.kind}-${Math.random().toString(36).slice(2, 10)}`,
@@ -538,7 +539,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) => {
         const node = nodes.find((n) => n.id === nodeId)
-        if (!node) return nodes
+        if (!node || isNonDeletableCanvasNode(node)) return nodes
         if ((node.parentId ?? null) === groupId) return nodes
         // A frame may be moved into another frame, but never into itself or its own subtree.
         if (groupId === nodeId || (groupId && stateIsDescendant(nodes, groupId, nodeId))) {
@@ -557,7 +558,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
         if (draggedId === beforeId) return nodes
         const dragged = nodes.find((n) => n.id === draggedId)
         const before = nodes.find((n) => n.id === beforeId)
-        if (!dragged || !before || dragged.kind === 'group') return nodes
+        if (!dragged || !before || dragged.kind === 'group' || isNonDeletableCanvasNode(dragged)) return nodes
         const targetParent = before.parentId ?? null
         const moved =
           (dragged.parentId ?? null) === targetParent

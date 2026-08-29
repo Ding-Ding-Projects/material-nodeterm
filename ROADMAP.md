@@ -160,6 +160,17 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Multiverse and AWS
 
+### Issue #40, AWS Shop and catalog enforcement
+
+- [x] Define a deterministic, non-deletable AWS Shop identity and prevent duplicate, move, group,
+      delete, and peer insertion paths from mutating it.
+- [x] Keep AWS Universe creation scoped to typed AWS catalog entries with explicit unavailable
+      reasons and next actions.
+- [x] Repair malformed imported child canvases in memory, including missing or duplicate Shops and
+      non-AWS nodes in an AWS Universe, without provider or filesystem side effects.
+- [x] Add the searchable Material Design 3 AWS catalog panel and offline documentation article.
+- [ ] Run the parent lane's tests, build, package, runtime interaction, and capture Chuts.
+
 - [ ] Add door-only Multiverse canvases to depth 8.
 - [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
 - [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.

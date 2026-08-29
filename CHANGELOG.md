@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add AWS Shop enforcement at the shared, core import, renderer, and peer boundaries. AWS Universe
+  canvases now repair to one deterministic non-deletable Shop, accept typed AWS catalog blueprints
+  only, and show explicit dependency availability reasons. Verification and release integration
+  remain pending for the parent lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

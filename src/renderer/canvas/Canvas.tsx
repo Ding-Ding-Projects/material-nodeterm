@@ -100,6 +100,9 @@ import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents }
 import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
+import { AwsShopNode } from '../nodes/AwsShopNode'
+import { AwsServiceNode } from '../nodes/AwsServiceNode'
+import { isNonDeletableCanvasNode } from '@shared/aws-shop'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
@@ -191,7 +194,8 @@ import {
   KanbanView,
   FileConverterPanel,
   OllamaManagerPanel,
-  PasswordManagerPanel
+  PasswordManagerPanel,
+  AwsShopPanel
 } from '../components/lazyPanels'
 import { WelcomeScreen, canDismissWelcomeScreen } from '../components/WelcomeScreen'
 import { CloneRepoDialog } from '../components/CloneRepoDialog'
@@ -580,6 +584,7 @@ import {
   createTerminalNode,
   nodeSshFor,
   createServiceNode,
+  createAwsServiceNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
   createWebNode,
@@ -1262,6 +1267,7 @@ export function Canvas() {
   // toggle-a-flag pattern as every other drawer/panel on this canvas.
   const [converterOpen, setConverterOpen] = useState(false)
   const [ollamaOpen, setOllamaOpen] = useState(false)
+  const [awsShopUniverseId, setAwsShopUniverseId] = useState<string | null>(null)
   // Password manager (shared/password-manager.ts) — same drawer pattern, but per-project rather
   // than per-machine, and it can jump straight to "add a credential" when opened from the canvas
   // pane menu's "New credential…" row (see onPaneContextMenu below).
@@ -1277,6 +1283,7 @@ export function Canvas() {
     setScOpen(false)
     setConverterOpen(false)
     setOllamaOpen(false)
+    setAwsShopUniverseId(null)
     setPwmOpen(false)
     setSettingsOpen(false)
     setNotifCenterOpen(false)
@@ -1284,6 +1291,16 @@ export function Canvas() {
     setDocsOpen(false)
     setStatusOpen(false)
   }, [])
+  useEffect(() => {
+    const open = (event: Event) => {
+      const detail = (event as CustomEvent<{ universeId?: unknown }>).detail
+      if (typeof detail?.universeId !== 'string' || detail.universeId.length === 0) return
+      closeAllDrawers()
+      setAwsShopUniverseId(detail.universeId)
+    }
+    window.addEventListener('nodeterm:open-aws-shop', open)
+    return () => window.removeEventListener('nodeterm:open-aws-shop', open)
+  }, [closeAllDrawers])
   // Reveal-in-Explorer target (relative to the active project cwd). The nonce makes each reveal
   // distinct so revealing the same file twice still re-fires the Explorer effect.
   const [reveal, setReveal] = useState<{ path: string; nonce: number } | null>(null)
@@ -1811,7 +1828,9 @@ export function Canvas() {
       proxmox: withNodeBoundary(ServiceNode),
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
-      freepbx: withNodeBoundary(ServiceNode)
+      freepbx: withNodeBoundary(ServiceNode),
+      'aws-shop': withNodeBoundary(AwsShopNode),
+      'aws-service': withNodeBoundary(AwsServiceNode)
     }),
     []
   )
@@ -3324,6 +3343,11 @@ export function Canvas() {
       // the wire — every client derives them from agent:status), so the two cannot drift.
       const ephIds = new Set(Object.keys(useAgentNodes.getState().byId))
       const isEph = (id: string) => isEphemeralNodeId(id, ephIds)
+      const permanentIds = new Set(
+        nodesRef.current
+          .filter((node) => isNonDeletableCanvasNode({ kind: node.type, nonDeletable: node.data.nonDeletable }))
+          .map((node) => node.id)
+      )
       const managed = changes.filter((c) => {
         if ('id' in c && isEph(c.id)) {
           const store = useAgentNodes.getState()
@@ -3342,6 +3366,9 @@ export function Canvas() {
           else if (c.type === 'dimensions' && c.dimensions && c.resizing) store.setSize(c.id, c.dimensions)
           return false
         }
+        // Permanent system nodes remain selectable, but peers and drag/resize/delete changes
+        // cannot move or remove them. The Shop's local repair path owns its geometry and identity.
+        if ('id' in c && permanentIds.has(c.id) && c.type !== 'select') return false
         return true
       })
       onNodesChange(managed)
@@ -5284,8 +5311,13 @@ export function Canvas() {
       const requested = new Set(ids)
       const projectId = captured?.projectId ?? useProjects.getState().activeProjectId ?? ''
       const projectScope = captured?.scope ?? projectSessionScope(projectId)
-      const targets =
+      const rawTargets =
         captured?.targets ?? nodesRef.current.filter((node) => requested.has(node.id))
+      const protectedTargets = rawTargets.filter((node) => isNonDeletableCanvasNode({ kind: node.type, nonDeletable: node.data.nonDeletable }))
+      const targets = rawTargets.filter((node) => !protectedTargets.includes(node))
+      if (protectedTargets.length > 0) {
+        setNotice({ kind: 'info', text: 'The AWS Shop is permanent and cannot be deleted, duplicated, moved, grouped, or removed by undo.' })
+      }
       // Reopen history (Cmd+Shift+T): snapshot BEFORE anything is torn down, against the full
       // live tree (nodesRef.current) so a snapshotted child's parent chain is still walkable.
       // `opts?.record === false` is the one deliberate exception — a login node force-deleted
@@ -5490,6 +5522,11 @@ export function Canvas() {
       const disclosedTargets = readCurrentTarget()
       if (!disclosedTargets || disclosedTargets.length !== requested.size) {
         options.onStale?.()
+        return false
+      }
+      if (disclosedTargets.some((target) => target.type === 'aws-shop')) {
+        options.onRejected?.()
+        setNotice({ kind: 'info', text: 'The AWS Shop is permanent and cannot be deleted.' })
         return false
       }
       const titles = options.titles ?? disclosedTargets.map((target) => target.title || target.id)
@@ -5744,8 +5781,12 @@ export function Canvas() {
 
   const groupSelection = useCallback(
     (ids: string[]) => {
+      const allowed = ids.filter((id) => {
+        const node = nodesRef.current.find((item) => item.id === id)
+        return !node || !isNonDeletableCanvasNode({ kind: node.type, nonDeletable: node.data.nonDeletable })
+      })
       const groupCount = nodesRef.current.filter((n) => n.type === 'group').length
-      setNodes((ns) => groupSelectedNodes(ns as CanvasNode[], ids, groupCount))
+      setNodes((ns) => groupSelectedNodes(ns as CanvasNode[], allowed, groupCount))
       markDirty()
     },
     [setNodes, markDirty]
@@ -5755,7 +5796,11 @@ export function Canvas() {
   // always makes a new one). Only subtree roots move — see addSelectionToGroup.
   const addToExistingGroup = useCallback(
     (ids: string[], groupId: string) => {
-      setNodes((nodes) => addSelectionToGroup(nodes as CanvasNode[], ids, groupId))
+      const allowed = ids.filter((id) => {
+        const node = nodesRef.current.find((item) => item.id === id)
+        return !node || !isNonDeletableCanvasNode({ kind: node.type, nonDeletable: node.data.nonDeletable })
+      })
+      setNodes((nodes) => addSelectionToGroup(nodes as CanvasNode[], allowed, groupId))
       markDirty()
     },
     [setNodes, markDirty]
@@ -5767,7 +5812,10 @@ export function Canvas() {
     (ids: string[]) => {
       setNodes((ns) => {
         let next = ns as CanvasNode[]
-        for (const nid of ids) next = reparentNode(next, nid, null)
+        for (const nid of ids) {
+          const node = next.find((item) => item.id === nid)
+          if (!node || !isNonDeletableCanvasNode({ kind: node.type, nonDeletable: node.data.nonDeletable })) next = reparentNode(next, nid, null)
+        }
         return next
       })
       markDirty()
@@ -6647,7 +6695,7 @@ export function Canvas() {
     (ids: string[], at?: { x: number; y: number }) => {
       const set = new Set(ids)
       setNodes((ns) => {
-        const sources = ns.filter((n) => set.has(n.id))
+        const sources = ns.filter((n) => set.has(n.id) && !isNonDeletableCanvasNode({ kind: n.type, nonDeletable: n.data.nonDeletable }))
         if (!sources.length) return ns
         const all = ns as FocusableNode[]
         const abs = sources.map((n) => absolutePosition(n as FocusableNode, all))
@@ -11730,6 +11778,8 @@ export function Canvas() {
   // Sidebar drag-to-group: reparent a session into a canvas group (groupId) or out (null).
   const moveSessionToGroup = useCallback(
     (projectId: string, nodeId: string, groupId: string | null) => {
+      const selectedNode = nodesRef.current.find((node) => node.id === nodeId)
+      if (selectedNode && isNonDeletableCanvasNode({ kind: selectedNode.type, nonDeletable: selectedNode.data.nonDeletable })) return
       if (projectId === activeProjectId) {
         setNodes((ns) => reparentNode(ns, nodeId, groupId))
         markDirty()
@@ -14515,8 +14565,18 @@ export function Canvas() {
         />
       )}
 
-      {converterOpen && <FileConverterPanel onClose={() => setConverterOpen(false)} />}
-      {ollamaOpen && <OllamaManagerPanel onClose={() => setOllamaOpen(false)} />}
+  {converterOpen && <FileConverterPanel onClose={() => setConverterOpen(false)} />}
+  {ollamaOpen && <OllamaManagerPanel onClose={() => setOllamaOpen(false)} />}
+  {awsShopUniverseId && (
+    <AwsShopPanel
+      universeId={awsShopUniverseId}
+      onClose={() => setAwsShopUniverseId(null)}
+      onCreate={(entry) => {
+        setNodes((current) => [...current, createAwsServiceNode(entry, awsShopUniverseId, current.length, emptyNodePos())])
+        markDirty()
+      }}
+    />
+  )}
       {pwmOpen && (
         <PasswordManagerPanel
           onClose={() => setPwmOpen(false)}
