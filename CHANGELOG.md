@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add named local provider profiles with metadata-only status, expiry, permissions, profile
+  selection, single-use OAuth callback handles, sealed credential references, and machine-local
+  project/node bindings kept separate from portable provider blueprints. Verification and release
+  evidence remain pending for this lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

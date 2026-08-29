@@ -62,6 +62,16 @@ import {
   type PasswordManagerApi
 } from '../../shared/types'
 import type {
+  OAuthCompleteInput,
+  OAuthStartInput,
+  ProviderAccountsApi,
+  ProviderAccountsSnapshot,
+  ProviderBindingInput,
+  ProviderCredentialInput,
+  ProviderProfileInput,
+  ProviderProfile
+} from '../../shared/provider-accounts'
+import type {
   ToyLockBeginTotpInput,
   ToyLockBeginTotpResult,
   ToyLockConfirmTotpInput,
@@ -1177,6 +1187,29 @@ export function buildPasswordManagerApi(client: RpcClient): Pick<NodeTerminalApi
   return { passwordManager }
 }
 
+/** Provider profiles and local bindings over the same core RPC seam as Electron preload. */
+export function buildProviderAccountsApi(client: RpcClient): Pick<NodeTerminalApi, 'providerAccounts'> {
+  const providerAccounts: ProviderAccountsApi = {
+    snapshot: () => client.request(IPC.providerAccountsSnapshot) as Promise<ProviderAccountsSnapshot>,
+    createProfile: (input: ProviderProfileInput) => client.request(IPC.providerAccountsCreateProfile, input) as Promise<ProviderProfile>,
+    updateProfile: (id: string, input: Partial<ProviderProfileInput>) =>
+      client.request(IPC.providerAccountsUpdateProfile, id, input) as Promise<ProviderProfile | null>,
+    removeProfile: (id: string) => client.request(IPC.providerAccountsRemoveProfile, id) as Promise<boolean>,
+    setCredential: (input: ProviderCredentialInput) =>
+      client.request(IPC.providerAccountsSetCredential, input) as Promise<ProviderProfile | null>,
+    clearCredential: (id: string) => client.request(IPC.providerAccountsClearCredential, id) as Promise<boolean>,
+    selectProfile: (id: string | null) =>
+      client.request(IPC.providerAccountsSelectProfile, id) as Promise<ProviderAccountsSnapshot>,
+    bind: (input: ProviderBindingInput) => client.request(IPC.providerAccountsBind, input) as Promise<import('../../shared/provider-accounts').ProviderBinding>,
+    unbind: (id: string) => client.request(IPC.providerAccountsUnbind, id) as Promise<boolean>,
+    startOAuth: (input: OAuthStartInput) => client.request(IPC.providerAccountsOAuthStart, input) as ReturnType<ProviderAccountsApi['startOAuth']>,
+    completeOAuth: (input: OAuthCompleteInput) => client.request(IPC.providerAccountsOAuthComplete, input) as Promise<ProviderProfile | null>,
+    cancelOAuth: (id: string) => client.request(IPC.providerAccountsOAuthCancel, id) as Promise<boolean>,
+    onChanged: (listener) => client.subscribe(IPC.providerAccountsChanged, listener as Listener)
+  }
+  return { providerAccounts }
+}
+
 /**
  * Build the `claude` namespace over an RpcClient. `cliCaps` is a REAL handler on the server
  * (`registerClaudeCliIpc` runs in the server shell too), so the browser resolves the very same
@@ -1383,6 +1416,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildToylockApi(client),
     ...buildAuthenticatorApi(client),
     ...buildPasswordManagerApi(client),
+    ...buildProviderAccountsApi(client),
     ...buildGitHubApi(client),
     codex: buildCodexApi(client),
     // `claude` is assembled from two builders: `cliCaps` from the relay-shared one, and the

@@ -143,10 +143,14 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Import schema 3 archives atomically without external side effects.
 - [ ] Preserve root, Multiverse, AWS Universe, portal, Shop, node, relationship, and appearance data.
 - [ ] Bundle project-owned media and provide Include, Omit, and Locate Later decisions.
-- [ ] Separate portable blueprints from machine-local bindings and credential references.
+- [ ] Separate portable blueprints from machine-local bindings and credential references. Core
+  contracts, project-file/index split, and guided settings wiring landed in the lane; verification
+  and artifact evidence remain outstanding.
 - [ ] Ship the unified Node Catalog and one creation coordinator.
 - [ ] Add one non-deletable Shop node to every Multiverse and AWS Universe child canvas.
-- [ ] Add shared account, credential-vault, OAuth callback, and provider-binding services.
+- [ ] Add shared account, credential-vault, OAuth callback, and provider-binding services. Core,
+  preload, Server Edition, and guided settings surfaces are implemented; verification and release
+  evidence remain outstanding.
 - [ ] Add guided Docker host management for local and SSH contexts.
 
 ### Media, torrents, virtual machines, and planning

@@ -34,6 +34,7 @@
 //    it after approval already fired leaves `ready()` pending forever and the api never comes up.
 
 import type { NodeTerminalApi } from '../../shared/types'
+import type { ProviderAccountsApi } from '../../shared/provider-accounts'
 import { E_UNSUPPORTED } from '../../shared/rpc'
 import { type FrameTransport, RelayFrameTransport } from './frame-transport'
 import {
@@ -209,7 +210,25 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // server is ONE machine's filesystem/java/process table, and there is no remote-routed core
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG
     // machine (`...local` would run java on the VIEWER, not the host it joined).
-    minecraft: stub.minecraft
+    minecraft: stub.minecraft,
+    // Provider profiles and vault references belong to the host process that owns the active
+    // project. A relay viewer must not inherit this desktop's local credential surface through
+    // the broad local API spread above.
+    providerAccounts: {
+      snapshot: () => relayUnsupported('providerAccounts.snapshot'),
+      createProfile: () => relayUnsupported('providerAccounts.createProfile'),
+      updateProfile: () => relayUnsupported('providerAccounts.updateProfile'),
+      removeProfile: () => relayUnsupported('providerAccounts.removeProfile'),
+      setCredential: () => relayUnsupported('providerAccounts.setCredential'),
+      clearCredential: () => relayUnsupported('providerAccounts.clearCredential'),
+      selectProfile: () => relayUnsupported('providerAccounts.selectProfile'),
+      bind: () => relayUnsupported('providerAccounts.bind'),
+      unbind: () => relayUnsupported('providerAccounts.unbind'),
+      startOAuth: () => relayUnsupported('providerAccounts.startOAuth'),
+      completeOAuth: () => relayUnsupported('providerAccounts.completeOAuth'),
+      cancelOAuth: () => relayUnsupported('providerAccounts.cancelOAuth'),
+      onChanged: () => () => undefined
+    } satisfies ProviderAccountsApi
   } satisfies NodeTerminalApi
 
   return {

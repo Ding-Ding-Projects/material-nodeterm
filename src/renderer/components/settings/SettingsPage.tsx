@@ -20,6 +20,7 @@ import { ShortcutsSection } from './sections/ShortcutsSection'
 import { AgentsSection } from './sections/AgentsSection'
 import { UsageSection } from './sections/UsageSection'
 import { AccountsSection } from './sections/AccountsSection'
+import { ProviderAccountsSection } from './sections/ProviderAccountsSection'
 import { CustomAgentsSection } from './sections/CustomAgentsSection'
 import { NotificationsSection } from './sections/NotificationsSection'
 import { NarratorSection } from './sections/NarratorSection'
@@ -190,6 +191,11 @@ export function SettingsPage({
             <AgentsSection isActive={active === 'agents'} />
             <UsageSection isActive={active === 'usage'} />
             <AccountsSection isActive={active === 'accounts'} />
+            <ProviderAccountsSection
+              isActive={active === 'provider-accounts'}
+              projectId={activeProjectId}
+              blueprints={activeProject?.providerBlueprints}
+            />
             <CustomAgentsSection isActive={active === 'custom-agents'} />
             <NotificationsSection isActive={active === 'notifications'} />
             <NarratorSection isActive={active === 'narrator'} />

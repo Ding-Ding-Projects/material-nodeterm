@@ -20,6 +20,7 @@ import type {
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import { sanitizeProviderBlueprint, validateProviderBlueprint, type ProviderBinding, type ProviderBlueprint } from '../shared/provider-accounts'
 
 export const PROJECT_DIR = '.nodeterm'
 export const PROJECT_FILE = 'project.json'
@@ -93,6 +94,8 @@ export interface ProjectFileV1 {
   /** Named browser profiles — see `BrowserProfile` in `../shared/types` and
    *  `shared/browser-profiles.ts`. Names only; the cookie jar is machine-local. */
   browserProfiles?: BrowserProfile[]
+  /** Portable provider intent only. Credential values and local bindings are excluded. */
+  providerBlueprints?: ProviderBlueprint[]
 }
 
 /** One workspace.json v3 entry. Exactly one of: `cwd` (local ref), `ssh` (remote ref),
@@ -139,6 +142,8 @@ export interface IndexEntryV3 {
    *  shell / advanced ssh args still survive a restart. Inline (`project`) entries need none: they
    *  live in this same machine-local file already. */
   localExec?: LocalNodeExecMap
+  /** MACHINE-LOCAL provider links; never serialized into project.json. */
+  providerBindings?: ProviderBinding[]
   /**
    * The one-time exec migration has completed for this entry: its shared project file was readable
    * and therefore could be loaded through the strip boundary and rewritten without machine-local
@@ -227,7 +232,10 @@ export function projectToFile(
     ...projectCapabilityFields(p),
     ...(p.dinoHighScore ? { dinoHighScore: p.dinoHighScore } : {}),
     ...(p.kanban ? { kanban: p.kanban } : {}),
-    ...(p.browserProfiles && p.browserProfiles.length > 0 ? { browserProfiles: p.browserProfiles } : {})
+    ...(p.browserProfiles && p.browserProfiles.length > 0 ? { browserProfiles: p.browserProfiles } : {}),
+    ...(p.providerBlueprints?.length
+      ? { providerBlueprints: p.providerBlueprints.filter(validateProviderBlueprint).map(sanitizeProviderBlueprint) }
+      : {})
   }
 }
 
@@ -257,6 +265,14 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
       typeof (p as BrowserProfile).name === 'string' &&
       typeof (p as BrowserProfile).color === 'string'
   )
+  return cleaned.length > 0 ? cleaned : undefined
+}
+
+/** Portable provider intent is hostile shared input too. Invalid rows are dropped individually;
+ *  credentials, vault references, and local bindings are never read from the project file. */
+export function validProviderBlueprints(v: unknown): ProviderBlueprint[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const cleaned = v.filter((item): item is ProviderBlueprint => validateProviderBlueprint(item)).map(sanitizeProviderBlueprint)
   return cleaned.length > 0 ? cleaned : undefined
 }
 
@@ -290,10 +306,12 @@ export function fileToProject(
      *  WITHOUT them — an adopted/cloned folder, a probe — gets the safe defaults, never the file's
      *  own `shell`/`ssh.extraArgs`. */
     localExec?: LocalNodeExecMap
+    providerBindings?: ProviderBinding[]
   }
 ): Project {
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
   const browserProfiles = validBrowserProfiles(f.browserProfiles)
+  const providerBlueprints = validProviderBlueprints(f.providerBlueprints)
   const icon = sanitizeProjectIcon(f.icon)
   return {
     id: base.id,
@@ -318,6 +336,8 @@ export function fileToProject(
     ...(f.dinoHighScore ? { dinoHighScore: f.dinoHighScore } : {}),
     ...(validKanban(f.kanban) ? { kanban: f.kanban } : {}),
     ...(browserProfiles ? { browserProfiles } : {}),
+    ...(providerBlueprints ? { providerBlueprints } : {}),
+    ...(base.providerBindings?.length ? { providerBindings: base.providerBindings } : {}),
     ...(base.cwd ? { cwd: base.cwd } : {}),
     ...(base.ssh ? { ssh: base.ssh } : {}),
     ...(base.closed ? { closed: true } : {}),
@@ -414,7 +434,8 @@ export function splitWorkspace(
       // (projectToFile does not emit it — pinned by project-capability-consent.test.ts).
       ...(p.capabilityAck ? { capabilityAck: p.capabilityAck } : {}),
       ...(p.breadcrumbs?.length ? { breadcrumbs: p.breadcrumbs } : {}),
-      ...(p.settingsOverrides ? { settingsOverrides: p.settingsOverrides } : {})
+      ...(p.settingsOverrides ? { settingsOverrides: p.settingsOverrides } : {}),
+      ...(p.providerBindings?.length ? { providerBindings: p.providerBindings } : {})
     }
     if (p.unavailable) {
       // Placeholder (folder missing / server unreachable at load): its nodes:[] is not real
@@ -470,5 +491,10 @@ export function splitWorkspace(
  * file could be adopted and then mirrored back with its execution fields intact.
  */
 export function serializeProjectFile(f: ProjectFileV1): string {
-  return JSON.stringify({ ...f, nodes: stripSharedNodeExec(f.nodes) }, null, 2)
+  const providerBlueprints = validProviderBlueprints(f.providerBlueprints)
+  return JSON.stringify({
+    ...f,
+    nodes: stripSharedNodeExec(f.nodes),
+    ...(providerBlueprints ? { providerBlueprints } : { providerBlueprints: undefined })
+  }, null, 2)
 }

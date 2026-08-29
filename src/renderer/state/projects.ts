@@ -11,6 +11,7 @@ import type {
   Viewport,
   Workspace
 } from '@shared/types'
+import type { ProviderBlueprint } from '@shared/provider-accounts'
 import type { ProjectIcon } from '@shared/project-icon'
 import type { ProjectCapability } from '@shared/project-capabilities'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
@@ -94,6 +95,7 @@ interface ProjectsState {
   /** Replaces the project's browser-profile list (create/rename/remove all funnel through this).
    *  See `BrowserProfile` in @shared/types and `shared/browser-profiles.ts`. */
   setProjectBrowserProfiles(id: string, browserProfiles: BrowserProfile[]): void
+  setProjectProviderBlueprints(id: string, providerBlueprints: ProviderBlueprint[]): void
   /** Writes the serialized canvas (nodes + viewport + bridge links + control ropes) back into a project. */
   commitCanvas(
     id: string,
@@ -439,6 +441,13 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, browserProfiles } : p))
     }))
+  },
+
+  setProjectProviderBlueprints(id, providerBlueprints) {
+    set((s) => ({
+      projects: s.projects.map((p) => (p.id === id ? { ...p, providerBlueprints } : p))
+    }))
+    markWorkspaceDirty()
   },
 
   commitCanvas(id, nodes, viewport, bridges, ropes) {

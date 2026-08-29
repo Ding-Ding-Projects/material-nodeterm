@@ -66,6 +66,8 @@ import type {
   VaultStatus,
   VaultUnlockResult
 } from './password-manager'
+import type { ProviderAccountsApi } from './provider-accounts'
+import type { ProviderBinding, ProviderBlueprint } from './provider-accounts'
 
 /** Profile-switch replacement intent. The trusted core validates and re-resolves it before teardown. */
 export interface PtyRecycleTarget {
@@ -858,6 +860,12 @@ export interface Project {
    * behavior.
    */
   browserProfiles?: BrowserProfile[]
+  /** Portable provider intent only. Credentials and host-local bindings never ride the project
+   *  file; they are resolved from the local provider-account registry. */
+  providerBlueprints?: ProviderBlueprint[]
+  /** Runtime machine-local links restored from the workspace index, never serialized to project
+   *  content. */
+  providerBindings?: ProviderBinding[]
   /** Bridge links between Claude nodes (optional; absent in pre-bridge files). */
   bridges?: BridgeLink[]
   /**
@@ -3844,6 +3852,9 @@ export interface NodeTerminalApi {
   toylock: ToylockApi
   authenticator: AuthenticatorApi
   passwordManager: PasswordManagerApi
+  /** Shared named provider profiles, OAuth lifecycle, sealed credential references, and local
+   *  project/node bindings. Portable blueprint data remains in project.json. */
+  providerAccounts: ProviderAccountsApi
   /** "Escape to widget" — one node's session in its own always-on-top-configurable window. */
   canvasWidget: CanvasWidgetApi
   /** Fires when the user presses Cmd/Ctrl+M (toggle markdown view). Returns unsubscribe. */

@@ -658,5 +658,20 @@ export const IPC = {
   passwordManagerCredentialCode: 'password-manager:credential-code',
   /** Every credential in one manager as non-secret metadata. Closes the gap that left a
    *  credential from an earlier session visible only as a number. */
-  passwordManagerListCredentials: 'password-manager:list-credentials'
+  passwordManagerListCredentials: 'password-manager:list-credentials',
+  // Shared provider profiles and machine-local bindings. Values cross this boundary only on
+  // write; snapshot/profile rows contain opaque OS-vault references, never raw credentials.
+  providerAccountsSnapshot: 'provider-accounts:snapshot',
+  providerAccountsCreateProfile: 'provider-accounts:create-profile',
+  providerAccountsUpdateProfile: 'provider-accounts:update-profile',
+  providerAccountsRemoveProfile: 'provider-accounts:remove-profile',
+  providerAccountsSetCredential: 'provider-accounts:set-credential',
+  providerAccountsClearCredential: 'provider-accounts:clear-credential',
+  providerAccountsSelectProfile: 'provider-accounts:select-profile',
+  providerAccountsBind: 'provider-accounts:bind',
+  providerAccountsUnbind: 'provider-accounts:unbind',
+  providerAccountsOAuthStart: 'provider-accounts:oauth-start',
+  providerAccountsOAuthComplete: 'provider-accounts:oauth-complete',
+  providerAccountsOAuthCancel: 'provider-accounts:oauth-cancel',
+  providerAccountsChanged: 'provider-accounts:changed'
 } as const

@@ -26,6 +26,15 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type {
+  OAuthCompleteInput,
+  OAuthStartInput,
+  ProviderAccountsApi,
+  ProviderBindingInput,
+  ProviderCredentialInput,
+  ProviderProfileInput,
+  ProviderAccountsSnapshot
+} from '../shared/provider-accounts'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -71,6 +80,7 @@ const subscribeOllamaChatStream = subscribe<
 >(IPC.ollamaChatStream)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
+const subscribeProviderAccountsChanged = subscribe<[ProviderAccountsSnapshot]>(IPC.providerAccountsChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
 const subscribeRelayHostOpen = subscribe<[{ id: string; email?: string }]>(IPC.relayHostOpen)
@@ -618,6 +628,23 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.passwordManagerCredentialCode, projectId, managerId, credentialId),
     listCredentials: (projectId, managerId) =>
       ipcRenderer.invoke(IPC.passwordManagerListCredentials, projectId, managerId)
+  },
+  providerAccounts: {
+    snapshot: () => ipcRenderer.invoke(IPC.providerAccountsSnapshot),
+    createProfile: (input: ProviderProfileInput) => ipcRenderer.invoke(IPC.providerAccountsCreateProfile, input),
+    updateProfile: (id: string, input: Partial<ProviderProfileInput>) =>
+      ipcRenderer.invoke(IPC.providerAccountsUpdateProfile, id, input),
+    removeProfile: (id: string) => ipcRenderer.invoke(IPC.providerAccountsRemoveProfile, id),
+    setCredential: (input: ProviderCredentialInput) => ipcRenderer.invoke(IPC.providerAccountsSetCredential, input),
+    clearCredential: (id: string) => ipcRenderer.invoke(IPC.providerAccountsClearCredential, id),
+    selectProfile: (id: string | null) => ipcRenderer.invoke(IPC.providerAccountsSelectProfile, id),
+    bind: (input: ProviderBindingInput) => ipcRenderer.invoke(IPC.providerAccountsBind, input),
+    unbind: (id: string) => ipcRenderer.invoke(IPC.providerAccountsUnbind, id),
+    startOAuth: (input: OAuthStartInput) => ipcRenderer.invoke(IPC.providerAccountsOAuthStart, input),
+    completeOAuth: (input: OAuthCompleteInput) => ipcRenderer.invoke(IPC.providerAccountsOAuthComplete, input),
+    cancelOAuth: (id: string) => ipcRenderer.invoke(IPC.providerAccountsOAuthCancel, id),
+    onChanged: (listener: Parameters<ProviderAccountsApi['onChanged']>[0]) =>
+      subscribeProviderAccountsChanged((payload) => listener(payload))
   },
   context: {
     onUpdate: (listener) => {

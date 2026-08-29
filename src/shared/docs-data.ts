@@ -8,6 +8,12 @@ import type { DocArticle } from './docs'
 
 export const DOC_ARTICLES: DocArticle[] = [
   {
+    path: "docs/features/projects/provider-accounts.md",
+    title: "Provider accounts, vault references, OAuth callbacks, and local bindings",
+    section: "Projects",
+    body: "# Provider accounts, vault references, OAuth callbacks, and local bindings\n\nProvider accounts are named local profiles for services used by canvas nodes and portable project blueprints. The settings surface offers known providers plus an explicitly configured custom provider, account labels, permissions, expiry, selection, and recovery when sign-in is needed again.\n\n## Portable versus local data\n\nPortable `providerBlueprints` contain safe intent only: opaque ids, provider and display labels, scopes, authentication kind, and validated endpoints. They never contain credentials, vault bytes, absolute paths, process state, host identity, or caches. Machine-local `providerBindings` point from a project or node to a blueprint and an opaque credential-reference id. A new computer can configure, rebind, adopt, or leave a blueprint unbound.\n\n## Credentials and OAuth\n\nCredential fields are write-only. The core seals values through the host vault hook and returns only an opaque reference, permission metadata, timestamps, and expiry. OAuth creates a provider-bound, single-use callback handle that expires after ten minutes. Completion consumes it before storing the callback value, and cancellation removes it. Expired, rejected, revoked, and needs-auth states remain visible with a next action.\n\n## Boundaries and verification\n\n`src/core/provider-accounts-service.ts` is registered by both desktop and Server Edition shells through shared IPC. The renderer has guided pickers, an adjacent regex builder, status and expiry text, selection, binding, clear, remove, and OAuth cancellation controls. This lane intentionally did not run tests, type checks, lint, builds, packaging, runtime interaction, or captures; later verification must provide that evidence.\n\nSuggested articles: [Portable canvas projection](./portable-canvas-projection.md), [Portable project schema 3](./portable-schema3.md), [Password manager](./password-manager.md)."
+  },
+  {
     path: "docs/SERVER.md",
     title: "nodeterm Server Edition (Phase 2)",
     section: "Reference",

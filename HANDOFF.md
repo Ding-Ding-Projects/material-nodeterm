@@ -1,5 +1,21 @@
 # Handoff
 
+## 2026-08-26, provider accounts and local bindings lane
+
+Implemented the shared provider-account contract across `src/shared/provider-accounts.ts`,
+`src/core/provider-accounts-service.ts`, shared IPC, Electron preload, Server Edition RPC, and the
+guided `Provider accounts` settings section. Profiles expose provider, label, status, expiry,
+permissions, selection, and opaque OS-vault credential references only. Credential values are sealed
+on write and never returned. OAuth handles are provider/profile-bound, single-use, and ten-minute
+expiring. Portable `providerBlueprints` are sanitized into project content, while
+`providerBindings` remain machine-local workspace-index state and are restored only on this host.
+Added `docs/features/projects/provider-accounts.md`, category indexing, offline bundle content,
+roadmap notes, and this handoff/changelog record.
+
+This lane intentionally did not run tests, type checks, lint, security checks, builds, packaging,
+installer execution, runtime interaction, or UI captures, and did not create commits or dew a jer.
+Those checks and the default-jer integration remain pending in the owning release lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through
