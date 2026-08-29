@@ -17,6 +17,14 @@ a separate window, so the diff sits right next to the terminal you're working in
 worktrees (see below). Selecting a worktree in the canvas automatically preselects it as the
 panel's scope.
 
+**Nested repositories.** A project folder may be a container rather than a repository itself.
+When the panel opens, the core performs a bounded local scan and adds discovered repositories to
+the same scope picker. Each row shows the repository name and its project-relative path, and the
+picker has plain-text search by default plus its own anchored regex builder. Selecting a nested
+repository routes status, history, diffs, staging, commits, branches, and remote actions to that
+repository's own checkout. If the scan is incomplete or unavailable, the panel says so instead of
+claiming that no repositories exist.
+
 **Worktrees.** A git worktree — a second working copy of the same repository, checked out to a
 different branch — binds to a canvas **group** node. Every terminal or agent node created
 inside that group inherits the worktree's directory as its working directory automatically, so
@@ -39,6 +47,11 @@ politely undone the way a local merge can.
 
 - **Settings → Agents** — which local agent CLI (if any) generates commit messages and how, and
   the extra prompt appended to that generation.
+- **Nested repository scan** — discovery searches at most four directory levels and 512 folders.
+  Dependency, build, cache, VCS metadata, virtual-environment, and coverage directories are
+  ignored. Symlinks are never followed. A root `.gitignore` or nested `.gitignore` may add simple
+  directory-name exclusions. Refreshing the panel repeats the scan; no discovered path is stored
+  in the portable project file.
 - **Unbind** only drops the canvas binding and never deletes the checkout. Disk removal is a
   separate confirmed action. A checkout of a pre-existing branch keeps that branch; a branch which
   nodeterm created locally is deleted only if Git proves it reachable and its exact full ref still
@@ -63,6 +76,14 @@ politely undone the way a local merge can.
   Keep editors and shells idle after reviewing the final inventory; any change observed before the
   invocation refuses and requires a fresh confirmation.
 
+- **Nested discovery on an SSH project**: the local client cannot enumerate a third machine's
+  filesystem safely, so discovery is explicitly unavailable for that project. Existing SSH source
+  control remains available at its configured remote checkout, and the panel does not fall back to
+  similarly named folders on the client.
+- **The scan reaches a bound**: the panel lists all repositories found before the depth or folder
+  limit and labels the result incomplete. Increasing the limit is a code-level change, not a hidden
+  user setting, because unbounded traversal can enter dependency trees and stall the panel.
+
 ## Security considerations
 
 - nodeterm shells out to your own `git`/`gh` binaries with your own credentials and your own
@@ -77,6 +98,10 @@ politely undone the way a local merge can.
 - Directory creation and branch creation are separate machine-local provenance facts. Editing a
   shared project file cannot manufacture branch-deletion authority.
 - Nothing this feature does leaves your machine unless you explicitly choose to push.
+- Nested discovery returns both a portable project-relative identifier and a machine-local runtime
+  path. Only the relative identifier is suitable for project metadata or exports. The absolute path
+  is used transiently to route operations and is never persisted, synchronized, logged, or placed
+  in portable archives.
 
 ## Verification
 
@@ -86,6 +111,11 @@ politely undone the way a local merge can.
   `pwd` — it should print the worktree's path, not the main checkout's.
 - Delete a bound worktree's directory outside the app, then reopen nodeterm and confirm the
   group is marked stale rather than silently accepting new nodes into the dead path.
+- Create one folder containing two independent repositories, set the folder as one project, and
+  confirm both appear in the searchable repository picker. Select each in turn and confirm its
+  branch and changed-file counts come from that repository. Add an ignored directory and a symlink
+  containing a repository, then confirm neither is traversed. Confirm an incomplete scan reports
+  its bound rather than presenting a false empty state.
 
 ## Suggested articles
 

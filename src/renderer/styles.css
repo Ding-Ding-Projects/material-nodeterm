@@ -6580,6 +6580,17 @@ body,
   color: var(--text-strong);
 }
 
+.scm-warning {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--md-outline, #777);
+  border-radius: 8px;
+  background: var(--md-surface-container-high, rgba(255, 255, 255, 0.08));
+  color: var(--md-on-surface, inherit);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 /* Publish to GitHub picker (VS Code-style: name + private/public choice) */
 .pubdlg-overlay {
   position: fixed;

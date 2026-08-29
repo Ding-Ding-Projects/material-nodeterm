@@ -614,6 +614,25 @@ const FEATURES = [
     docs: ['docs/features/source-control/source-control-and-worktrees.md'],
   },
   {
+    id: 'nested-repository-discovery',
+    label: 'Nested repository discovery for monorepo folders',
+    files: [
+      'src/core/git-repository-discovery.ts',
+      'src/core/git-service.ts',
+      'src/renderer/components/SourceControlPanel.tsx',
+      'src/shared/types.ts',
+      'src/shared/ipc.ts',
+    ],
+    contentChecks: [
+      ['src/core/git-repository-discovery.ts', 'NESTED_REPOSITORY_MAX_DEPTH'],
+      ['src/renderer/components/SourceControlPanel.tsx', 'FilterableMenuHeader'],
+    ],
+    docs: [
+      'docs/features/source-control/nested-repositories.md',
+      'docs/features/source-control/source-control-and-worktrees.md',
+    ],
+  },
+  {
     id: 'kanban-board',
     label: 'Kanban board',
     files: ['src/renderer/components/kanban/KanbanView.tsx'],

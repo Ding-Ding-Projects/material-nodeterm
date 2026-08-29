@@ -52,6 +52,7 @@ const RELAY_REQUEST_METHODS = new Set<string>([
 
   // Source control for the joined project. These are shell-equivalent by design.
   IPC.gitStatus,
+  IPC.gitDiscoverRepositories,
   IPC.gitInit,
   IPC.gitClone,
   IPC.gitCloneAbort,

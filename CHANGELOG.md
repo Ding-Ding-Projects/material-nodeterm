@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add bounded nested Git repository discovery for project folders that contain multiple independent
+  repositories. Source Control now offers searchable repository-relative scopes, routes every Git
+  operation to the selected checkout, skips ignored and symlinked directories, and reports partial
+  or unavailable scans honestly. Tests, builds, and runtime captures were intentionally not run in
+  this ultra-speed lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

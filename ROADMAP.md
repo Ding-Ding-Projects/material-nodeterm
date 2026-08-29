@@ -118,7 +118,9 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
 - [ ] **#292** — Auto-handle OAuth localhost callbacks for remote sessions (MCP auth on SSH /
       Server Edition).
 - [ ] **#291** — Node type icons alongside color coding.
-- [ ] **#290** — Source control for monorepos with multiple nested git repos.
+- [ ] **#290** — Source control for monorepos with multiple nested git repos. Implemented in
+  lane 68 with bounded discovery, searchable repository scopes, and explicit incomplete/SSH states;
+  local tests, builds, and built-artifact interaction evidence remain pending.
 - [ ] **#289** — Custom sounds for agent alerts.
 - [ ] **#286** — Named terminal profiles (start directory).
 - [ ] **#284** — Per-terminal independent "repo context".

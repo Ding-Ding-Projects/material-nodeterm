@@ -35,6 +35,7 @@ import {
   parseCloneProgress,
   stripAnsiCodes
 } from '../shared/clone-url'
+import { discoverNestedRepositories } from './git-repository-discovery'
 
 const run = promisify(execFile)
 
@@ -290,6 +291,7 @@ export class GitService {
 
   registerIpc(): void {
     platform().handle(IPC.gitStatus, (cwd: string) => this.status(cwd))
+    platform().handle(IPC.gitDiscoverRepositories, (cwd: string) => this.discoverRepositories(cwd))
     platform().handle(IPC.gitInit, (cwd: string) => this.init(cwd))
     platform().handle(IPC.gitClone, (parentDir: string, url: string) => this.clone(parentDir, url))
     platform().handle(IPC.gitCloneAbort, () => this.cloneAbort())
@@ -362,6 +364,30 @@ export class GitService {
 
   repoRoot(cwd: string) {
     return worktreeOps.repoRoot(git, cwd)
+  }
+
+  async discoverRepositories(cwd: string) {
+    if (!cwd) {
+      return discoverNestedRepositories(cwd, git)
+    }
+    // The local filesystem belongs to the desktop process, while an SSH project routes its Git
+    // commands to another host. Scanning this machine would produce a plausible but wrong list,
+    // so keep the result explicit and let the picker explain that remote discovery is unavailable.
+    if (isRemoteRepo(cwd)) {
+      return {
+        ok: false,
+        complete: false,
+        root: cwd,
+        rootIsRepository: false,
+        repositories: [],
+        scannedDirectories: 0,
+        skippedIgnoredDirectories: 0,
+        skippedSymlinks: 0,
+        truncated: false,
+        message: 'Nested repository discovery is not available for SSH projects.'
+      }
+    }
+    return discoverNestedRepositories(cwd, git)
   }
   worktreeList(repoPath: string): Promise<WorktreeListResult> {
     // A repo on an SSH host cannot be stat'd from here (see `isRemoteRepo`): answer "the read

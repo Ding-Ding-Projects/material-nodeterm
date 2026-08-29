@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { FsApi, GitFileChange, GitResult, GitStatus } from '@shared/types'
+import type { FsApi, GitFileChange, GitRepositoryDiscovery, GitResult, GitStatus } from '@shared/types'
 import { gitignoreAdd } from '@shared/gitignore'
 import { sshFs } from '../terminal/ssh-fs'
 import type { GitHistoryItem, GitHistoryResult } from '@shared/git-history'
@@ -25,6 +25,9 @@ import { hintLabel } from '@shared/platform-utils'
 import { MaterialSymbol } from './MaterialSymbol'
 import { gitStatusBadgeClass } from '../lib/gitStatusBadge'
 import { TextArea } from '@renderer/ui/md3'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { useMenuFilter } from './menu/useMenuFilter'
+import { FilterableMenuHeader } from './menu/FilterableMenu'
 
 export interface SourceControlPanelProps {
   onClose: () => void
@@ -73,18 +76,35 @@ export function SourceControlPanel({
   // exact remoteCwd (the remote-git registry matches by exact string — must not be transformed).
   // Local projects are byte-identical (the SSH branch fires only when `project.ssh` is set).
   const isSsh = !!project?.ssh
+  const { api } = useSession()
+  const git = api.git
   // The panel is mounted per open (`scOpen` in Canvas), so seeding the active scope from the
   // caller's default here applies the smart default on EVERY open, not just the first.
   const [scopeId, setScopeId] = useState<string>(() => defaultScope?.id ?? 'main')
   const [scopeMenu, setScopeMenu] = useState<{ top: number; left: number } | null>(null)
+  const [nestedDiscovery, setNestedDiscovery] = useState<GitRepositoryDiscovery | null>(null)
+  const autoSelectedNestedProjectRef = useRef<string | null>(null)
+  const nestedScopes = useMemo<ScmScope[]>(
+    () =>
+      (nestedDiscovery?.repositories ?? []).map((repo) => ({
+        id: `nested:${repo.relativePath}`,
+        label: `${repo.name} · ${repo.relativePath}`,
+        cwd: repo.path,
+        source: 'nested',
+        relativePath: repo.relativePath,
+        machineLocal: true
+      })),
+    [nestedDiscovery]
+  )
+  const allScopes = useMemo(() => [...scopes, ...nestedScopes], [scopes, nestedScopes])
   // A scope whose group was deleted/unbound while the panel is open falls back to the main
   // checkout rather than pointing at a checkout that no longer exists (same pure helper — and the
   // same fallback — the caller uses to pick the default).
-  const scope = defaultScmScope(scopes, scopeId)
+  const scope = defaultScmScope(allScopes, scopeId)
   // SSH projects have no worktrees (v1), so the remote cwd is still the whole story there — and
   // with nothing to pick between, the scope chip stays a plain repo label (no menu, no
   // "New worktree…", which does not apply to an SSH project at all).
-  const canPickScope = !isSsh && scopes.length > 0
+  const canPickScope = !isSsh && allScopes.length > 1
   const cwd = project?.ssh?.remoteCwd ?? scope?.cwd
   // For an SSH project the master may still be connecting when the panel mounts; its controlPath
   // appears once `setConn` runs (after `setActiveRemote` arms remote routing). Observing it lets the
@@ -135,10 +155,66 @@ export function SourceControlPanel({
     action: 'merge' | 'rebase' | 'delete'
   } | null>(null)
 
-  // This panel's core api (a stable context read — the local session's api IS window.nodeTerminal,
-  // so `git` keeps its identity and every hook dep array it sits in behaves exactly as before).
-  const { api } = useSession()
-  const git = api.git
+  // This panel's core api is the current session API. Nested discovery is local to that core and
+  // never written into the portable project projection.
+  useEffect(() => {
+    let cancelled = false
+    setNestedDiscovery(null)
+    if (!project?.cwd || project.ssh) return () => {
+      cancelled = true
+    }
+    void git.discoverRepositories(project.cwd).then((result) => {
+      if (!cancelled) setNestedDiscovery(result)
+    }).catch((error) => {
+      if (!cancelled) {
+        setNestedDiscovery({
+          ok: false,
+          complete: false,
+          root: project.cwd!,
+          rootIsRepository: false,
+          repositories: [],
+          scannedDirectories: 0,
+          skippedIgnoredDirectories: 0,
+          skippedSymlinks: 0,
+          truncated: false,
+          message: error instanceof Error ? error.message : String(error)
+        })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [project?.cwd, project?.ssh, git])
+
+  // A project folder that is only a container should open on its first discovered repository, but
+  // never override an actual project checkout or a user-selected worktree/repository.
+  useEffect(() => {
+    const projectKey = project?.cwd ?? null
+    if (
+      projectKey &&
+      autoSelectedNestedProjectRef.current !== projectKey &&
+      scopeId === 'main' &&
+      nestedDiscovery?.ok &&
+      !nestedDiscovery.rootIsRepository &&
+      nestedScopes[0]
+    ) {
+      autoSelectedNestedProjectRef.current = projectKey
+      setScopeId(nestedScopes[0].id)
+    }
+  }, [nestedDiscovery, nestedScopes, project?.cwd, scopeId])
+
+  const scopeSearch = useRegexSearchField()
+  const filteredScopeItems = allScopes
+    .filter((candidate) => scopeSearch.test(`${candidate.label} ${candidate.relativePath ?? ''}`))
+    .map((candidate) => ({ id: candidate.id, label: candidate.label }))
+  const scopeMenuFilter = useMenuFilter(filteredScopeItems, scopeSearch, {
+    onActivate: (item) => {
+      setScopeMenu(null)
+      setScopeId(item.id)
+      scopeSearch.reset()
+    },
+    onEmptyEscape: () => setScopeMenu(null)
+  })
   // The fs the ACTIVE CHECKOUT lives on: an SSH project's repo is on the host, so its .gitignore
   // must be read/written over the project's ControlMaster fs — the local fs would edit (or invent)
   // a same-named file on this machine. Same routing the Explorer uses.
@@ -449,10 +525,36 @@ export function SourceControlPanel({
 
         {cwd && status && !status.hasRepo && (
           <div className="drawer__body">
-            <p className="set-note">No git repository in this folder.</p>
-            <button className="sc-btn" disabled={busy} onClick={() => act(() => git.init(cwd))}>
-              Initialize repository
-            </button>
+            {nestedDiscovery === null ? (
+              <p className="set-note">Scanning this project folder for nested repositories…</p>
+            ) : nestedScopes.length > 0 ? (
+              <>
+                <p className="set-note">
+                  This project folder contains {nestedScopes.length} nested repositories. Choose one
+                  to open its Source Control status.
+                </p>
+                <button
+                  className="sc-btn"
+                  onClick={() => {
+                    scopeSearch.reset()
+                    setScopeMenu({ top: 120, left: 80 })
+                  }}
+                >
+                  Choose repository
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="set-note">
+                  {nestedDiscovery.ok
+                    ? 'No git repository was found in this folder or its bounded search area.'
+                    : nestedDiscovery.message || 'Nested repository discovery could not be completed.'}
+                </p>
+                <button className="sc-btn" disabled={busy} onClick={() => act(() => git.init(cwd))}>
+                  Initialize repository
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -523,6 +625,11 @@ export function SourceControlPanel({
                   >
                     <MaterialSymbol name="close" size={16} />
                   </button>
+                </div>
+              )}
+              {nestedDiscovery && !nestedDiscovery.complete && (
+                <div className="scm-warning" role="status">
+                  Nested repository discovery is incomplete. {nestedDiscovery.message || 'Some folders were not inspected.'}
                 </div>
               )}
               {/* No proactive GitHub sign-in nag. Push/pull on an existing remote use git's
@@ -622,28 +729,45 @@ export function SourceControlPanel({
                 className="tab-menu"
                 style={{ top: scopeMenu.top, left: scopeMenu.left, zIndex: 80 }}
               >
-                {scopes.map((s) => (
-                  <button
-                    key={s.id}
-                    title={s.cwd}
-                    onClick={() => {
-                      setScopeMenu(null)
-                      setScopeId(s.id)
-                    }}
-                  >
-                    {s.id === scope?.id ? '● ' : '   '}
-                    {s.label}
-                  </button>
-                ))}
-                <div className="ctx-sep" />
-                <button
-                  onClick={() => {
-                    setScopeMenu(null)
-                    onNewWorktree()
-                  }}
-                >
-                  New worktree…
-                </button>
+                <FilterableMenuHeader
+                  filter={scopeMenuFilter}
+                  placeholder="Filter repositories"
+                  regexLabel="Regex — repository picker"
+                  zIndex={82}
+                />
+                {scopeMenuFilter.filtered.map((item) => {
+                  const s = allScopes.find((candidate) => candidate.id === item.id)
+                  if (!s) return null
+                  return (
+                    <button
+                      key={s.id}
+                      title={s.cwd}
+                      onClick={() => {
+                        setScopeMenu(null)
+                        setScopeId(s.id)
+                        scopeSearch.reset()
+                      }}
+                    >
+                      {s.id === scope?.id ? '● ' : '   '}
+                      {s.label}
+                    </button>
+                  )
+                })}
+                {scopeMenuFilter.filtered.length === 0 && <div className="ctx-empty">No repositories match</div>}
+                {!isSsh && scopes.length > 0 && (
+                  <>
+                    <div className="ctx-sep" />
+                    <button
+                      onClick={() => {
+                        setScopeMenu(null)
+                        scopeSearch.reset()
+                        onNewWorktree()
+                      }}
+                    >
+                      New worktree…
+                    </button>
+                  </>
+                )}
               </div>
             </>,
             document.body

@@ -2661,6 +2661,27 @@ export interface GitStatus {
   changes: GitFileChange[]
 }
 
+/** One discovered repository. `path` is runtime-only machine data; `relativePath` is portable. */
+export interface GitRepositoryDiscoveryEntry {
+  relativePath: string
+  path: string
+  name: string
+}
+
+/** Bounded nested-repository scan result. An incomplete result must never be read as "none". */
+export interface GitRepositoryDiscovery {
+  ok: boolean
+  complete: boolean
+  root: string
+  rootIsRepository: boolean
+  repositories: GitRepositoryDiscoveryEntry[]
+  scannedDirectories: number
+  skippedIgnoredDirectories: number
+  skippedSymlinks: number
+  truncated: boolean
+  message?: string
+}
+
 /** Core-owned provenance for one exact physical worktree generation. */
 export interface GitWorktreeOwnership {
   /** Opaque machine-local ownership record id. Canvas JSON cannot mint or replace it. */
@@ -2729,6 +2750,8 @@ export interface GitResult {
 
 export interface GitApi {
   status(cwd: string): Promise<GitStatus>
+  /** Discover nested repositories below cwd without following links or traversing unbounded trees. */
+  discoverRepositories(cwd: string): Promise<GitRepositoryDiscovery>
   init(cwd: string): Promise<GitResult>
   /** Clone a repo into parentDir; returns the cloned folder path in message on success. */
   clone(parentDir: string, url: string): Promise<GitResult>

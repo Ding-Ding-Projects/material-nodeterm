@@ -1,5 +1,32 @@
 # Handoff
 
+## 2026-08-26, lane 68 nested repository discovery
+
+Implemented issue #79, reimplementing upstream issue #290. Source Control now discovers independent
+nested Git repositories below a project folder through a bounded local scanner, adds them to its
+repository scope picker, and routes status, history, diffs, staging, commits, branches, and remote
+actions through the selected checkout. Discovery visits at most four directory levels and 512
+folders, respects built-in and simple `.gitignore` directory exclusions, never follows symlinks,
+and verifies each `.git` marker with `git rev-parse --show-toplevel`. The result distinguishes a
+complete scan from a partial, bounded, unreadable, or SSH-unavailable scan.
+
+The portable scope identity is a forward-slash project-relative path. Absolute checkout paths remain
+machine-local runtime data and are not written to project metadata, exports, synchronization payloads,
+logs, history, or generated records. The repository picker has its own plain-text search and anchored
+full regex builder, with keyboard navigation and an honest no-match state.
+
+Changed files: `src/core/git-repository-discovery.ts`, `src/core/git-service.ts`,
+`src/shared/types.ts`, `src/shared/ipc.ts`, `src/shared/scm-scope.ts`, `src/preload/index.ts`,
+`src/renderer/bridge/ws-bridge.ts`, `src/main/relay-rpc-policy.ts`, `src/main/remote/host-service.ts`,
+`src/renderer/components/SourceControlPanel.tsx`, `scripts/check-app-contract.mjs`,
+`docs/features/source-control/README.md`, `docs/features/source-control/source-control-and-worktrees.md`,
+`docs/features/source-control/nested-repositories.md`, `CHANGELOG.md`, and `ROADMAP.md`.
+
+This ultra-speed lane intentionally ran no tests, type checks, lint, security checks, builds,
+packaging, installer execution, runtime interaction, or UI captures. The offline documentation
+bundle still needs regeneration from the new article before a build can be considered current.
+No commit or dew was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

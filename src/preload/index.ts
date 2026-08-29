@@ -350,6 +350,7 @@ const api: NodeTerminalApi = {
   },
   git: {
     status: (cwd) => ipcRenderer.invoke(IPC.gitStatus, cwd),
+    discoverRepositories: (cwd) => ipcRenderer.invoke(IPC.gitDiscoverRepositories, cwd),
     init: (cwd) => ipcRenderer.invoke(IPC.gitInit, cwd),
     clone: (parentDir, url) => ipcRenderer.invoke(IPC.gitClone, parentDir, url),
     cloneAbort: () => ipcRenderer.invoke(IPC.gitCloneAbort),

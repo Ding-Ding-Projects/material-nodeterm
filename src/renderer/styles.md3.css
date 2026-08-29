@@ -8282,6 +8282,17 @@ button.term-node__title-text:focus-visible {
   border-radius: var(--md-shape-medium);
   padding: 10px 12px;
 }
+
+.md3-source-control .scm-warning {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  font-size: 12px;
+  line-height: 1.4;
+}
 .md3-source-control .scm-error__msg {
   color: var(--md-on-error-container);
   font-family: var(--font-mono);
