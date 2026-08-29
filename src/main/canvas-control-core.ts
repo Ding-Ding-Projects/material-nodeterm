@@ -6,6 +6,7 @@ import { CODEX_THREAD_IDENTITY_RESOLVER_SH } from '../core/codex-thread-identity
 import { explicitCodexResumeSession } from '../shared/agents/config'
 import { parseBrowserArgs } from '../core/browser-verb'
 import { CODEX_SANDBOX_HINT_SH } from '../core/agents/hook-sandbox-hint-sh'
+import { HOOK_ENDPOINT_FALLBACK_SH, STALE_ENDPOINT_HINT } from '../core/agents/hook-endpoint-failover-sh'
 import { codexSandboxGuidanceLines } from '../core/context-link-core'
 import { NODE_TOKEN_READ_SH } from '../core/agents/node-token-sh'
 import { AGENT_CONFIG, AGENT_HOOK_TARGETS, BUILTIN_AGENT_IDS } from '@shared/agents/config'
@@ -595,26 +596,32 @@ while [ "$nt_i" -lt "$nt_count" ]; do
   esac
 done
 
+${HOOK_ENDPOINT_FALLBACK_SH}
+
 nt_out=$(mktemp 2>/dev/null || echo "/tmp/nodeterm-control.$$")
-nt_post() {
+nt_control_post() {
+nt_code=""
 if [ -n "$NODETERM_HOOK_SOCK" ]; then
-  nt_hook_headers |
+  nt_had_transport=1
+  nt_code=$(nt_hook_headers |
     curl -sS -o "$nt_out" -w '%{http_code}' -X POST --config - \\
     --unix-socket "$NODETERM_HOOK_SOCK" "http://localhost/control/$nt_verb" \\
     -H "Accept: text/plain" \\
-    --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null
+    --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null)
 elif [ -n "$NODETERM_HOOK_PORT" ]; then
-  nt_hook_headers |
+  nt_had_transport=1
+  nt_code=$(nt_hook_headers |
     curl -sS -o "$nt_out" -w '%{http_code}' -X POST --config - \\
     "http://127.0.0.1:\${NODETERM_HOOK_PORT}/control/$nt_verb" \\
     -H "Accept: text/plain" \\
-    --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null
+    --data-urlencode "nodeId=\${NODETERM_NODE_ID}" "$@" 2>/dev/null)
 else
   return 1
 fi
 }
 
-nt_code=$(nt_post "$@")
+nt_had_transport=""
+nt_control_post "$@"
 # A long-lived tmux agent may race an app restart. Re-source the same authenticated endpoint and
 # retry exactly once; never scan for or guess another project's control endpoint.
 if [ -z "$nt_code" ] || [ "$nt_code" = "000" ]; then
@@ -624,14 +631,29 @@ if [ -n "$NODETERM_HOOK_ENDPOINT" ] && [ -r "$NODETERM_HOOK_ENDPOINT" ]; then
   NODETERM_HOOK_PORT=""
   NODETERM_HOOK_TOKEN=""
   . "$NODETERM_HOOK_ENDPOINT" 2>/dev/null || :
-  nt_code=$(nt_post "$@")
+  nt_control_post "$@"
 fi
 fi
 
-if [ -z "$NODETERM_HOOK_SOCK$NODETERM_HOOK_PORT" ]; then
-  rm -f "$nt_out"
-  echo "nodeterm control endpoint unavailable." >&2
-  exit 1
+# An HTTP response, including a refusal, is authoritative. Only an empty or 000 transport result
+# may walk the bounded endpoint candidates, and a sandboxed denial skips doomed retries.
+nt_reached() { [ -n "$nt_code" ] && [ "$nt_code" != "000" ]; }
+if ! nt_reached && [ -z "$CODEX_SANDBOX_NETWORK_DISABLED" ]; then
+  nt_list=$(nt_candidates "$NODETERM_HOOK_ENDPOINT")
+  if [ -n "$nt_list" ]; then
+    nt_n=0
+    while IFS= read -r nt_ep; do
+      [ -n "$nt_ep" ] || continue
+      nt_n=$((nt_n + 1))
+      [ "$nt_n" -le "$nt_fallback_max" ] || break
+      nt_adopt "$nt_ep" || continue
+      nt_read_node_token "$nt_ep"
+      nt_control_post "$@"
+      nt_reached && break
+    done <<NT_CANDIDATES
+$nt_list
+NT_CANDIDATES
+  fi
 fi
 
 if [ "$nt_code" = "200" ]; then
@@ -644,7 +666,14 @@ rm -f "$nt_out"
 # Empty / 000 = the TRANSPORT failed, not the server. Under a codex sandbox that is the sandbox's
 # own connect() denial (issue #367), and the generic sentence would misdirect the agent.
 if [ -z "$nt_code" ] || [ "$nt_code" = "000" ]; then
-  nt_codex_sandbox_hint || echo "${CONTROL_UNREACHABLE_MSG}" >&2
+  if [ -z "$nt_had_transport" ]; then
+    echo "nodeterm control endpoint unavailable." >&2
+  else
+    nt_codex_sandbox_hint || echo "${CONTROL_UNREACHABLE_MSG}" >&2
+    if [ -z "$CODEX_SANDBOX_NETWORK_DISABLED" ]; then
+      echo "${STALE_ENDPOINT_HINT}" >&2
+    fi
+  fi
 fi
 exit 1
 `
