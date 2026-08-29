@@ -36,6 +36,7 @@ import {
   remotePaneCommandArgs,
   remotePaneOwnerCombinedArgs,
   remotePaneCursorArgs,
+  childArgs,
   remotePaneProcessArgs,
   remoteTerminateForegroundArgs
 } from './remote-ssh/control-master'

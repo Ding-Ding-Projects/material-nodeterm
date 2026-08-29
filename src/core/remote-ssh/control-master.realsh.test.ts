@@ -207,7 +207,7 @@ describe.skipIf(process.platform === 'win32')('REAL sh: the four vectors that su
  *  - a host with NO tmux prints a readable explanation and degrades to a plain login shell,
  *    instead of dying with the shell's one-line error.
  */
-describe('REAL sh: remote tmux PATH resolution + graceful degrade (issue #449)', () => {
+describe.skipIf(process.platform === 'win32')('REAL sh: remote tmux PATH resolution + graceful degrade (issue #449)', () => {
   const runRaw = (cmd: string, env: Record<string, string>): string => {
     try {
       return execFileSync('/bin/sh', ['-c', cmd], { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
