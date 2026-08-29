@@ -46,6 +46,8 @@ const REQUIRED_FEATURES = [
   'App-logo customization + safe conversion',
   'Universal file converter',
   'Local Ollama suite manager',
+  'VeraCrypt mount management',
+  'Agent continuation recovery',
   'Tabbed navigation',
   'Toy locks on every element',
   'Unlock ladder',

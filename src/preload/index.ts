@@ -1316,7 +1316,6 @@ const api: NodeTerminalApi = {
     refresh: (input) => ipcRenderer.invoke(IPC.repositoryGraphRefresh, input),
     cancel: (operationId) => ipcRenderer.invoke(IPC.repositoryGraphCancel, operationId),
     export: (input) => ipcRenderer.invoke(IPC.repositoryGraphExport, input),
-    openSource: (projectId, location) => ipcRenderer.invoke(IPC.repositoryGraphOpenSource, projectId, location),
     onProgress: (listener) => subscribe<[import('@shared/repository-graph').RepositoryGraphProgress]>(IPC.repositoryGraphProgress)(listener)
   },
   unigetui: {

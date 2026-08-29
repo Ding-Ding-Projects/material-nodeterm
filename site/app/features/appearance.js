@@ -82,14 +82,17 @@ function exportLook(store, h) {
   h.download('nodeterm-look.json', JSON.stringify(blob, null, 2))
 }
 function importLook(store, h) {
-  const txt = window.prompt('Paste a look file here (the JSON you saved earlier).')
-  if (!txt) return
-  try {
-    const v = JSON.parse(txt)
-    h.save({ theme: v.theme === 'night' ? 'night' : 'day', accent: typeof v.accent === 'string' ? v.accent : store.state.accent, bigText: !!v.bigText }, 'Imported a look')
-    h.applyTheme()
-    h.toast('🎨', 'Look loaded', 'Your saved colours are back.')
-  } catch (_err) {
-    h.toast('❌', 'That file did not parse', 'Nothing was changed — your old look is still here.')
-  }
+  h.askInput(
+    { title: 'Load a saved look', message: 'Paste a look file here (the JSON you saved earlier).', multiline: true },
+    (txt) => {
+      try {
+        const v = JSON.parse(txt)
+        h.save({ theme: v.theme === 'night' ? 'night' : 'day', accent: typeof v.accent === 'string' ? v.accent : store.state.accent, bigText: !!v.bigText }, 'Imported a look')
+        h.applyTheme()
+        h.toast('🎨', 'Look loaded', 'Your saved colours are back.')
+      } catch (_err) {
+        h.toast('❌', 'That file did not parse', 'Nothing was changed — your old look is still here.')
+      }
+    },
+  )
 }

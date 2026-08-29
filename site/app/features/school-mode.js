@@ -13,21 +13,31 @@ export function registerSchoolMode(store, deps, registerAction, registerBinding)
     const state = s.state
     if (state.school) {
       if (state.schoolPin) {
-        const pin = window.prompt('Type the PIN to turn ' + SHIPPED_NAME + ' off.')
-        if (!pin) return
-        const ok = await verifyPin(pin, state.schoolPin)
-        if (!ok) {
-          h.toast('❌', 'Wrong PIN', SHIPPED_NAME + ' stays on.')
-          return
-        }
+        h.askInput(
+          { title: 'Turn school mode off', message: 'Type the PIN to turn ' + SHIPPED_NAME + ' off.', type: 'password' },
+          async (pin) => {
+            const ok = await verifyPin(pin, state.schoolPin)
+            if (!ok) {
+              h.toast('❌', 'Wrong PIN', SHIPPED_NAME + ' stays on.')
+              return
+            }
+            h.save({ school: false }, SHIPPED_NAME + ' off')
+            h.toast('🎒', SHIPPED_NAME + ' off', 'Your own settings came straight back.')
+          },
+        )
+        return
       }
       h.save({ school: false }, SHIPPED_NAME + ' off')
       h.toast('🎒', SHIPPED_NAME + ' off', 'Your own settings came straight back.')
     } else {
-      const pin = window.prompt('Pick a PIN so it cannot be switched off again in a hurry. Leave it blank for no PIN.')
-      const hash = await setPin(pin)
-      h.save({ school: true, schoolPin: hash }, SHIPPED_NAME + ' on')
-      h.toast('🎒', SHIPPED_NAME + ' on', 'Plain English, no jokes, no surprise dim sum.')
+      h.askInput(
+        { title: 'Turn school mode on', message: 'Pick a PIN so it cannot be switched off again in a hurry. Leave it blank for no PIN.', type: 'password', allowEmpty: true },
+        async (pin) => {
+          const hash = await setPin(pin)
+          h.save({ school: true, schoolPin: hash }, SHIPPED_NAME + ' on')
+          h.toast('🎒', SHIPPED_NAME + ' on', 'Plain English, no jokes, no surprise dim sum.')
+        },
+      )
     }
   })
 

@@ -77,6 +77,12 @@ const PRODUCERS = [
   ['dino-node', 'src/renderer/nodes/DinoNode.tsx', 'useVocabularyMapper()'],
   ['subagent-node', 'src/renderer/nodes/SubagentNode.tsx', 'useVocabularyMapper()'],
   ['trigger-node', 'src/renderer/nodes/TriggerNode.tsx', 'useVocabularyMapper()'],
+  ['veracrypt-node', 'src/renderer/nodes/VeraCryptNode.tsx', 'useVocabularyMapper()'],
+  ['repository-graph-node', 'src/renderer/nodes/RepositoryGraphNode.tsx', 'useVocabularyMapper()'],
+  ['unigetui-node', 'src/renderer/nodes/UniGetUiUniverseNode.tsx', 'useVocabularyMapper()'],
+  ['unigetui-panel', 'src/renderer/components/unigetui/UniGetUiUniversePanel.tsx', 'useVocabularyMapper()'],
+  ['agent-continuation-review', 'src/renderer/components/AgentContinuationReview.tsx', 'useVocabularyMapper()'],
+  ['export-menu', 'src/renderer/components/ExportMenu.tsx', 'useVocabularyMapper()'],
   ['chat-panel', 'src/renderer/nodes/ChatPanel.tsx', 'useVocabularyMapper()'],
   ['node-fact-preserving-mapper', 'src/renderer/nodes/nodeVocabulary.ts', 'export function mapAroundExactFacts'],
   ['password-manager', 'src/renderer/components/passwordManager/PasswordManagerPanel.tsx', 'const vocab = useVocabularyMapper()'],
@@ -120,6 +126,10 @@ const PRODUCERS = [
   ['kids-mode-settings', 'src/renderer/components/settings/sections/KidsModeSection.tsx', 'useVocabularyMapper()'],
   ['usage-settings', 'src/renderer/components/settings/sections/UsageSection.tsx', 'useVocabularyMapper()'],
   ['toy-lock-wizard', 'src/renderer/components/toylocks/LockWizard.tsx', 'useVocabularyMapper()'],
+  ['unlock-ladder', 'src/renderer/components/toylocks/UnlockLadder.tsx', 'useVocabularyMapper()'],
+  ['unlock-prompt', 'src/renderer/components/toylocks/UnlockPrompt.tsx', 'useVocabularyMapper()'],
+  ['unlock-recovery-notice', 'src/renderer/components/toylocks/RecoveryNotice.tsx', 'useVocabularyMapper()'],
+  ['unlock-password-field', 'src/renderer/components/toylocks/PasswordField.tsx', 'useVocabularyMapper()'],
   ['shared-prose-primitives', 'src/renderer/ui/md3/Button.tsx', 'useVocabularyMapper()'],
   ['ui-input', 'src/renderer/ui/Input.tsx', 'useVocabularyMapper()'],
   ['ui-button-wrapper-delegation', 'src/renderer/ui/Button.tsx', '<Md3Button'],
@@ -190,6 +200,16 @@ const PRODUCTION_SURFACES = [
   ['dino-node', 'src/renderer/nodes/DinoNode.tsx', 'mapped-callsite'],
   ['subagent-node', 'src/renderer/nodes/SubagentNode.tsx', 'mapped-callsite'],
   ['trigger-node', 'src/renderer/nodes/TriggerNode.tsx', 'mapped-callsite'],
+  ['veracrypt-node', 'src/renderer/nodes/VeraCryptNode.tsx', 'mapped-callsite'],
+  ['repository-graph-node', 'src/renderer/nodes/RepositoryGraphNode.tsx', 'mapped-callsite'],
+  ['unigetui-node', 'src/renderer/nodes/UniGetUiUniverseNode.tsx', 'mapped-callsite'],
+  ['unigetui-panel', 'src/renderer/components/unigetui/UniGetUiUniversePanel.tsx', 'mapped-callsite'],
+  ['agent-continuation-review', 'src/renderer/components/AgentContinuationReview.tsx', 'mapped-callsite'],
+  ['export-menu', 'src/renderer/components/ExportMenu.tsx', 'mapped-callsite'],
+  ['unlock-ladder', 'src/renderer/components/toylocks/UnlockLadder.tsx', 'mapped-callsite'],
+  ['unlock-prompt', 'src/renderer/components/toylocks/UnlockPrompt.tsx', 'mapped-callsite'],
+  ['unlock-recovery-notice', 'src/renderer/components/toylocks/RecoveryNotice.tsx', 'mapped-callsite'],
+  ['unlock-password-field', 'src/renderer/components/toylocks/PasswordField.tsx', 'mapped-callsite'],
   ['chat-panel', 'src/renderer/nodes/ChatPanel.tsx', 'mapped-callsite'],
   ['browser-surface', 'src/renderer/nodes/BrowserSurface.tsx', 'mapped-callsite'],
   ['browser-start-page', 'src/renderer/nodes/BrowserStartPage.tsx', 'mapped-callsite'],
@@ -233,8 +253,8 @@ const PRODUCTION_SURFACES = [
 
 // Independent hand-written manifests. The mutable rows above are implementation evidence; these
 // lists are the required universe, so deleting a row cannot delete its own requirement too.
-const CANONICAL_PRODUCER_IDS = `settings-fields settings-sections personal-vocabulary-upload settings-page-vocabulary-boundary settings-page-registration settings-sidebar-vocabulary-boundary settings-sidebar-registration settings-section-registry settings-search-corpus settings-inline-copy settings-reset settings-font-picker settings-theme-picker settings-section-inline-copy settings-copy-facts settings-resolution-ownership settings-search-policy command-palette context-menus confirm-dialog input-dialog notifications tooltip conflict-banner canvas-prose fab-menu kanban-view kanban-column kanban-session-card kanban-card-modal source-control worktree-dialog onboarding dim-sum-surprise publish-dialog find-bar remote-picker browser-profile-picker wsl-create-dialog terminal-node sticky-node group-node editor-node diff-node browser-node browser-surface browser-start-page browser-extensions-panel discarded-plate video-node web-node loop-node native-loop-node nsis-node service-node authenticator-node annotation-node dino-node subagent-node trigger-node chat-panel node-fact-preserving-mapper password-manager converter-adapter-catalog converter-panel ollama-manager explorer-panel project-switcher regex-builder anchored-regex-builder changelog-panel release-card local-history-panel docs-browser docs-article-view appearance-editor color-field color-picker bulk-preview-segments bulk-preview-single-title-map project-storage-segments project-other-unread-fact converter-detection-note-fact converter-adapter-id-corpus ollama-staleness-segments ollama-completeness-segments ollama-completeness-reason-fact ollama-queue-phase-fact ollama-fit-evidence-fact appearance-weight-segments appearance-font-preview-fact docs-section-copy history-restore-segments converter-upload-limit minecraft-backups minecraft-players minecraft-properties authenticator-settings speech-settings school-mode-settings kids-mode-settings usage-settings toy-lock-wizard shared-prose-primitives ui-input ui-button-wrapper-delegation ui-md3-button ui-chip ui-menu ui-status-chip ui-switch ui-select ui-number-field ui-text-area ui-text-field ui-fab ui-icon-button ui-segmented-button ui-dialog ui-list-row ui-tabs ui-slider ui-checkbox ui-radio shared-input-controls filterable-menu editable-node-title destructive-confirm-gate personal-vocabulary-surface-mapper personal-vocabulary-application typed-copy-fact-boundary personal-vocabulary-host-message widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs notification-body-classification site-vocabulary-json site-vocabulary-cache native-notification-canvas native-notification-onboarding native-notification-settings personal-vocabulary-template native-notification-browser native-notification-main`.split(/\s+/)
-const CANONICAL_SURFACE_IDS = `app-shell welcome top-app-bar status-surface sessions-sidebar session-row terminal-node sticky-node group-node editor-node diff-node browser-node web-node video-node loop-node service-node native-loop-node nsis-node authenticator-node annotation-node dino-node subagent-node trigger-node chat-panel browser-surface browser-start-page browser-extensions-panel discarded-plate wsl-dialog regex-builder anchored-regex-builder notification-center notification-toasts changelog-panel release-card local-history docs-browser docs-article appearance-editor color-field color-menu color-picker branch-select bulk-action-bar explorer-panel project-switcher ollama-manager converter-panel pty-pressure update-card resume-card announcement-banner session-memory remote-access-dialog ssh-project-dialog phone-pair-popover dictation-overlay widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs`.split(/\s+/)
+const CANONICAL_PRODUCER_IDS = `settings-fields settings-sections personal-vocabulary-upload settings-page-vocabulary-boundary settings-page-registration settings-sidebar-vocabulary-boundary settings-sidebar-registration settings-section-registry settings-search-corpus settings-inline-copy settings-reset settings-font-picker settings-theme-picker settings-section-inline-copy settings-copy-facts settings-resolution-ownership settings-search-policy command-palette context-menus confirm-dialog input-dialog notifications tooltip conflict-banner canvas-prose fab-menu kanban-view kanban-column kanban-session-card kanban-card-modal source-control worktree-dialog onboarding dim-sum-surprise publish-dialog find-bar remote-picker browser-profile-picker wsl-create-dialog terminal-node sticky-node group-node editor-node diff-node browser-node browser-surface browser-start-page browser-extensions-panel discarded-plate video-node web-node loop-node native-loop-node nsis-node service-node authenticator-node annotation-node dino-node subagent-node trigger-node veracrypt-node repository-graph-node unigetui-node unigetui-panel agent-continuation-review export-menu chat-panel node-fact-preserving-mapper password-manager converter-adapter-catalog converter-panel ollama-manager explorer-panel project-switcher regex-builder anchored-regex-builder changelog-panel release-card local-history-panel docs-browser docs-article-view appearance-editor color-field color-picker bulk-preview-segments bulk-preview-single-title-map project-storage-segments project-other-unread-fact converter-detection-note-fact converter-adapter-id-corpus ollama-staleness-segments ollama-completeness-segments ollama-completeness-reason-fact ollama-queue-phase-fact ollama-fit-evidence-fact appearance-weight-segments appearance-font-preview-fact docs-section-copy history-restore-segments converter-upload-limit minecraft-backups minecraft-players minecraft-properties authenticator-settings speech-settings school-mode-settings kids-mode-settings usage-settings toy-lock-wizard unlock-ladder unlock-prompt unlock-recovery-notice unlock-password-field shared-prose-primitives ui-input ui-button-wrapper-delegation ui-md3-button ui-chip ui-menu ui-status-chip ui-switch ui-select ui-number-field ui-text-area ui-text-field ui-fab ui-icon-button ui-segmented-button ui-dialog ui-list-row ui-tabs ui-slider ui-checkbox ui-radio shared-input-controls filterable-menu editable-node-title destructive-confirm-gate personal-vocabulary-surface-mapper personal-vocabulary-application typed-copy-fact-boundary personal-vocabulary-host-message widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs notification-body-classification site-vocabulary-json site-vocabulary-cache native-notification-canvas native-notification-onboarding native-notification-settings personal-vocabulary-template native-notification-browser native-notification-main`.split(/\s+/)
+const CANONICAL_SURFACE_IDS = `app-shell welcome top-app-bar status-surface sessions-sidebar session-row terminal-node sticky-node group-node editor-node diff-node browser-node web-node video-node loop-node service-node native-loop-node nsis-node authenticator-node annotation-node dino-node subagent-node trigger-node veracrypt-node repository-graph-node unigetui-node unigetui-panel agent-continuation-review export-menu unlock-ladder unlock-prompt unlock-recovery-notice unlock-password-field chat-panel browser-surface browser-start-page browser-extensions-panel discarded-plate wsl-dialog regex-builder anchored-regex-builder notification-center notification-toasts changelog-panel release-card local-history docs-browser docs-article appearance-editor color-field color-menu color-picker branch-select bulk-action-bar explorer-panel project-switcher ollama-manager converter-panel pty-pressure update-card resume-card announcement-banner session-memory remote-access-dialog ssh-project-dialog phone-pair-popover dictation-overlay widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs`.split(/\s+/)
 // Every Settings section is listed explicitly. The shared FieldRow/SettingsSection funnels cover
 // their ordinary rows, while SettingsText marks standalone inline prose and the shared primitives
 // cover labels/options. Keeping this list hand-written means deleting a section cannot make its
@@ -303,6 +323,16 @@ const MIXED_STRING_BOUNDARY_MANIFEST = [
   ['ssh-mixed-facts', 'src/renderer/components/settings/sections/SshSection.tsx', '<FieldRow'],
   ['shortcuts-mixed-facts', 'src/renderer/components/settings/sections/ShortcutsSection.tsx', '<FieldRow'],
   ['support-mixed-facts', 'src/renderer/components/settings/sections/SupportTicketsSection.tsx', 'SettingsText']
+]
+// These four evidence boundaries are intentionally listed independently of the producer rows.
+// A localization catalogue, documentation audit, interaction proof, or capture manifest can be
+// deleted while every mapper call remains intact, so a producer-only sweep would report green for
+// a surface whose evidence had vanished.
+const EVIDENCE_BOUNDARY_MANIFEST = [
+  ['localization-evidence', 'src/shared/i18n/catalog.ts'],
+  ['documentation-evidence', DOC],
+  ['interaction-evidence', 'scripts/check-app-contract.mjs'],
+  ['capture-evidence', 'docs/assets/shots/capture-manifest.json'],
 ]
 const expectedSettingsSectionCount = 36
 if (dropSectionIndex >= 0 && scriptArgs[dropSectionIndex + 1]) {
@@ -470,6 +500,7 @@ for (const [id, file, marker] of MIXED_STRING_BOUNDARY_MANIFEST) {
   check(id + ': exact mixed-copy boundary', hasMarker(read(file), marker))
 }
 for (const [id, file] of FOCUSED_TEST_INVENTORY) check(id + ': focused test exists', read(file) !== null)
+for (const [id, file] of EVIDENCE_BOUNDARY_MANIFEST) check(id + ': evidence boundary exists', read(file) !== null)
 check('settings section boundary manifest is complete', SETTINGS_SECTION_BOUNDARY_MANIFEST.length === expectedSettingsSectionCount)
 check('settings section boundary manifest has unique ids', new Set(SETTINGS_SECTION_BOUNDARY_MANIFEST.map(([id]) => id)).size === SETTINGS_SECTION_BOUNDARY_MANIFEST.length)
 const pendingProductionSurfaces = PRODUCTION_SURFACES.filter(([, , reason]) => reason === 'unmapped-callsite-pending')
@@ -538,7 +569,7 @@ try {
 // predicate in memory. This catches a broken checker that accidentally passes its own miniature
 // assertion while the real inventory path would still accept a missing producer.
 function copyCompleteFixture(fixtureRoot) {
-  for (const [, file] of [...PRODUCERS, ...PRODUCTION_SURFACES, ...SETTINGS_SECTION_BOUNDARY_MANIFEST, ...MIXED_STRING_BOUNDARY_MANIFEST, ...FOCUSED_TEST_INVENTORY, ['audit-doc', DOC, '']]) {
+  for (const [, file] of [...PRODUCERS, ...PRODUCTION_SURFACES, ...SETTINGS_SECTION_BOUNDARY_MANIFEST, ...MIXED_STRING_BOUNDARY_MANIFEST, ...FOCUSED_TEST_INVENTORY, ...EVIDENCE_BOUNDARY_MANIFEST, ['audit-doc', DOC, '']]) {
     const source = join(ROOT, file)
     const target = join(fixtureRoot, file)
     mkdirSync(dirname(target), { recursive: true })
@@ -610,6 +641,32 @@ if (!fixtureRun) {
     const lines = readFileSync(path, 'utf8').split(/\r?\n/)
     writeFileSync(path, lines.filter((line) => !line.includes('| ' + quote + 'tooltip' + quote + ' |')).join('\n'), 'utf8')
   })
+  for (const [id, file, marker] of PRODUCERS.filter(([producerId]) => [
+    'veracrypt-node', 'repository-graph-node', 'unigetui-node', 'unigetui-panel',
+    'agent-continuation-review', 'export-menu', 'unlock-ladder', 'unlock-prompt',
+    'unlock-recovery-notice', 'unlock-password-field',
+  ].includes(producerId))) {
+    runFreshFixtureMutation('full checker rejects a removed ' + id + ' marker', (root) => {
+      const path = join(root, file)
+      writeFileSync(path, readFileSync(path, 'utf8').split(marker).join(''), 'utf8')
+    })
+  }
+  for (const [id, file, marker] of MIXED_STRING_BOUNDARY_MANIFEST) {
+    runFreshFixtureMutation('full checker rejects a removed ' + id + ' boundary', (root) => {
+      const path = join(root, file)
+      writeFileSync(path, readFileSync(path, 'utf8').split(marker).join(''), 'utf8')
+    })
+  }
+  for (const [id, file] of FOCUSED_TEST_INVENTORY) {
+    runFreshFixtureMutation('full checker rejects removed ' + id, (root) => {
+      rmSync(join(root, file), { force: true })
+    })
+  }
+  for (const [id, file] of EVIDENCE_BOUNDARY_MANIFEST) {
+    runFreshFixtureMutation('full checker rejects removed ' + id, (root) => {
+      rmSync(join(root, file), { force: true })
+    })
+  }
 }
 
 console.log('check-personal-vocabulary-coverage.mjs: ' + checked + ' assertions checked.')

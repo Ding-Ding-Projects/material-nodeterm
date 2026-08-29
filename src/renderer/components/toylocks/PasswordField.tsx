@@ -13,6 +13,7 @@
 // The reveal is deliberately OFF by default and resets whenever the field is remounted: a revealed
 // password is on screen for anyone behind the user, and for any capture the app itself takes.
 import { useEffect, useId, useRef, useState } from 'react'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export function PasswordField({
   label,
@@ -40,6 +41,7 @@ export function PasswordField({
   disabled?: boolean
   inputRef?: React.RefObject<HTMLInputElement>
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [revealed, setRevealed] = useState(false)
   const [capsLock, setCapsLock] = useState(false)
   const ownRef = useRef<HTMLInputElement>(null) as React.RefObject<HTMLInputElement>
@@ -105,7 +107,7 @@ export function PasswordField({
       </div>
       {capsLock && (
         <div className="toylock-field__warn" role="status">
-          Caps Lock is on.
+          {vocab('Caps Lock is on.')}
         </div>
       )}
       {hint && <div className="toylock-field__hint">{hint}</div>}

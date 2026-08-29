@@ -54,6 +54,9 @@ The concrete source remediations in this pass are:
 | `node-loop` | Loop scheduler node | `src/renderer/nodes/LoopNode.tsx` | `export function LoopNode` | `loop-node` | Source reviewed; runtime proof pending |
 | `node-native-loop` | Native scheduled-loop node | `src/renderer/nodes/NativeLoopNode.tsx` | `export function NativeLoopNode` | `native-loop-node` | Source reviewed; runtime proof pending |
 | `node-trigger` | Scheduled trigger node | `src/renderer/nodes/TriggerNode.tsx` | `export function TriggerNode` | `trigger-node` | Source reviewed; runtime proof pending |
+| `node-veracrypt` | VeraCrypt mount node | `src/renderer/nodes/VeraCryptNode.tsx` | `export default function VeraCryptNode` | `veracrypt-node` | Source reviewed; runtime proof pending |
+| `node-repository-graph` | Repository graph node | `src/renderer/nodes/RepositoryGraphNode.tsx` | `export default function RepositoryGraphNode` | `repository-graph-node` | Source reviewed; runtime proof pending |
+| `node-unigetui-universe` | UniGetUI universe node | `src/renderer/nodes/UniGetUiUniverseNode.tsx` | `export function UniGetUiUniverseNode` | `unigetui-universe-node` | Source reviewed; runtime proof pending |
 | `node-service` | Service node | `src/renderer/nodes/ServiceNode.tsx` | `export function ServiceNode` | `service-node` | Source reviewed; runtime proof pending |
 | `node-nsis` | NSIS installer node | `src/renderer/nodes/NsisInstallerNode.tsx` | `export default function NsisInstallerNode` | `nsis-node__body` | Source reviewed; runtime proof pending |
 | `node-authenticator` | Authenticator node | `src/renderer/nodes/AuthenticatorNode.tsx` | `export default function AuthenticatorNode` | `authenticator-node__body` | Source reviewed; runtime proof pending |
@@ -92,6 +95,7 @@ The concrete source remediations in this pass are:
 | `destination-minecraft` | Minecraft server manager | `src/renderer/components/minecraft/MinecraftServerPanel.tsx` | `export function MinecraftServerPanel` | `mc-body` | Source reviewed; runtime proof pending |
 | `destination-ollama` | Ollama suite manager | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `export function OllamaManagerPanel` | `md3-ollama` | Source reviewed; runtime proof pending |
 | `destination-converter` | File converter | `src/renderer/components/converter/FileConverterPanel.tsx` | `export function FileConverterPanel` | `md3-converter` | Source reviewed; runtime proof pending |
+| `destination-unigetui` | UniGetUI universe panel | `src/renderer/components/unigetui/UniGetUiUniversePanel.tsx` | `export function UniGetUiUniversePanel` | `unigetui-universe` | Source reviewed; runtime proof pending |
 | `settings-page` | Settings screen | `src/renderer/components/settings/SettingsPage.tsx` | `export function SettingsPage` | `md3-settings-shell` | Source reviewed; runtime proof pending |
 | `settings-sidebar` | Settings sidebar and navigation | `src/renderer/components/settings/SettingsSidebar.tsx` | `export function SettingsSidebar` | `md3-settings-sidebar` | Source reviewed; runtime proof pending |
 | `settings-section` | Settings section shell | `src/renderer/components/settings/SettingsSection.tsx` | `export function SettingsSection` | `md3-settings-card` | Source reviewed; runtime proof pending |
@@ -176,6 +180,7 @@ The concrete source remediations in this pass are:
 | `overlay-two-key-export` | Two-key export gate | `src/renderer/components/authenticator/TwoKeyExportGate.tsx` | `export function TwoKeyExportGate` | `toylock-export-gate` | Source reviewed; runtime proof pending |
 | `overlay-tooltip` | Keyboard and pointer tooltip | `src/renderer/components/Tooltip.tsx` | `export function Tooltip` | `tooltip` | Source reviewed; runtime proof pending |
 | `overlay-export-menu` | Export menu | `src/renderer/components/ExportMenu.tsx` | `export function ExportMenu` | `md3-export-menu` | Source reviewed; runtime proof pending |
+| `overlay-agent-continuation` | Agent continuation review | `src/renderer/components/AgentContinuationReview.tsx` | `export function AgentContinuationReview` | `agent-continuation-review` | Source reviewed; runtime proof pending |
 | `overlay-dialog-picker` | Directory picker dialog | `src/renderer/bridge/dialog-picker.tsx` | `export function openDirectoryPicker` | `dir-picker` | Source reviewed; runtime proof pending |
 | `overlay-wsl-create-clipping` | WSL creator clipping state from supplied evidence | `src/renderer/wsl/WslCreateDialog.tsx` | `wsl-create-dialog` | `confirm` | Nonconforming and overlapping: p79 owns the fix; record only |
 | `status-capability-notice` | Capability notice and unsupported state | `src/renderer/components/CapabilityNotice.tsx` | `export function CapabilityNotice` | `confirm` | Source reviewed; runtime proof pending |
@@ -350,6 +355,16 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `loop-node` | Hook-derived loop card | `src/renderer/nodes/LoopNode.tsx` | `useVocabularyMapper()` |
 | `native-loop-node` | User-created scheduler node | `src/renderer/nodes/NativeLoopNode.tsx` | `useVocabularyMapper()` |
 | `trigger-node` | Scheduled trigger node | `src/renderer/nodes/TriggerNode.tsx` | `useVocabularyMapper()` |
+| `veracrypt-node` | VeraCrypt mount node | `src/renderer/nodes/VeraCryptNode.tsx` | `useVocabularyMapper()` |
+| `repository-graph-node` | Repository graph node | `src/renderer/nodes/RepositoryGraphNode.tsx` | `useVocabularyMapper()` |
+| `unigetui-node` | UniGetUI universe node | `src/renderer/nodes/UniGetUiUniverseNode.tsx` | `useVocabularyMapper()` |
+| `unigetui-panel` | UniGetUI universe panel | `src/renderer/components/unigetui/UniGetUiUniversePanel.tsx` | `useVocabularyMapper()` |
+| `agent-continuation-review` | Agent continuation review | `src/renderer/components/AgentContinuationReview.tsx` | `useVocabularyMapper()` |
+| `export-menu` | Export menu | `src/renderer/components/ExportMenu.tsx` | `useVocabularyMapper()` |
+| `unlock-ladder` | Unlock ladder | `src/renderer/components/toylocks/UnlockLadder.tsx` | `useVocabularyMapper()` |
+| `unlock-prompt` | Unlock prompt | `src/renderer/components/toylocks/UnlockPrompt.tsx` | `useVocabularyMapper()` |
+| `unlock-recovery-notice` | Unlock recovery notice | `src/renderer/components/toylocks/RecoveryNotice.tsx` | `useVocabularyMapper()` |
+| `unlock-password-field` | Unlock password field | `src/renderer/components/toylocks/PasswordField.tsx` | `useVocabularyMapper()` |
 | `nsis-node` | Installer builder node | `src/renderer/nodes/NsisInstallerNode.tsx` | `useVocabularyMapper()` |
 | `service-node` | Service manager node chrome and guidance | `src/renderer/nodes/ServiceNode.tsx` | `useVocabularyMapper()` |
 | `authenticator-node` | Authenticator node chrome and states | `src/renderer/nodes/AuthenticatorNode.tsx` | `useVocabularyMapper()` |
@@ -442,6 +457,16 @@ descendants produced by a component.
 | service-node | src/renderer/nodes/ServiceNode.tsx | mapped-callsite |
 | native-loop-node | src/renderer/nodes/NativeLoopNode.tsx | mapped-callsite |
 | trigger-node | src/renderer/nodes/TriggerNode.tsx | mapped-callsite |
+| veracrypt-node | src/renderer/nodes/VeraCryptNode.tsx | mapped-callsite |
+| repository-graph-node | src/renderer/nodes/RepositoryGraphNode.tsx | mapped-callsite |
+| unigetui-node | src/renderer/nodes/UniGetUiUniverseNode.tsx | mapped-callsite |
+| unigetui-panel | src/renderer/components/unigetui/UniGetUiUniversePanel.tsx | mapped-callsite |
+| agent-continuation-review | src/renderer/components/AgentContinuationReview.tsx | mapped-callsite |
+| export-menu | src/renderer/components/ExportMenu.tsx | mapped-callsite |
+| unlock-ladder | src/renderer/components/toylocks/UnlockLadder.tsx | mapped-callsite |
+| unlock-prompt | src/renderer/components/toylocks/UnlockPrompt.tsx | mapped-callsite |
+| unlock-recovery-notice | src/renderer/components/toylocks/RecoveryNotice.tsx | mapped-callsite |
+| unlock-password-field | src/renderer/components/toylocks/PasswordField.tsx | mapped-callsite |
 | nsis-node | src/renderer/nodes/NsisInstallerNode.tsx | mapped-callsite |
 | authenticator-node | src/renderer/nodes/AuthenticatorNode.tsx | mapped-callsite |
 | annotation-node | src/renderer/nodes/AnnotationNode.tsx | mapped-callsite |
@@ -513,7 +538,7 @@ tests exercise size rejection, read failure, picker reset, valid binding, and th
 
 ## Verification
 
-- node scripts/check-material-audit.mjs is the source-level inventory check. It validates the exact 212 rows, implementation markers, exact style owners, shared barrel exports, legacy remediation, site-preservation wording, and in-memory deletion mutations for rows, source markers, styles, localized strings, documentation rows, and mapper calls.
+- node scripts/check-material-audit.mjs is the source-level inventory check. It validates the exact 218 rows, implementation markers, exact style owners, shared barrel exports, legacy remediation, site-preservation wording, and in-memory deletion mutations for rows, source markers, styles, localized strings, documentation rows, and mapper calls.
 - No broad test suite, build, runtime launch, or screenshot was run in this lane. Those are intentionally unverified here.
 
 ## Remaining conflicts

@@ -10,6 +10,7 @@ import { useState } from 'react'
 import type { BuiltExport, ExportFormat, ExportKind } from '@shared/export'
 import { FORMAT_INFO, formatsForKind } from '@shared/export'
 import { Select } from '@renderer/ui/Select'
+import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
 
 export interface ExportMenuProps {
   kind: ExportKind
@@ -23,6 +24,7 @@ export interface ExportMenuProps {
 type SaveState = { status: 'idle' } | { status: 'saved'; path?: string } | { status: 'error'; message: string }
 
 export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element {
+  const vocab = useVocabularyMapper()
   const [open, setOpen] = useState(false)
   const [format, setFormat] = useState<ExportFormat>(formatsForKind(kind)[0]?.id ?? 'json')
   const [saveState, setSaveState] = useState<SaveState>({ status: 'idle' })
@@ -73,12 +75,12 @@ export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        Export…
+        {vocab('Export…')}
       </button>
       {open && (
         <div className="export-menu__panel" role="group" aria-label={`Export ${label}`}>
           <label className="export-menu__format-label">
-            Format
+            {vocab('Format')}
             <Select
               className="export-menu__format"
               value={format}
@@ -98,7 +100,7 @@ export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element
 
           {preview && preview.lossy.length > 0 && (
             <div className="export-menu__lossy" role="note">
-              <div className="export-menu__lossy-title">This format cannot carry everything faithfully:</div>
+              <div className="export-menu__lossy-title">{vocab('This format cannot carry everything faithfully:')}</div>
               <ul>
                 {preview.lossy.map((n, i) => (
                   <li key={i}>
@@ -118,7 +120,7 @@ export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element
 
           <div className="export-menu__buttons">
             <button type="button" className="export-menu__save" disabled={saving} onClick={() => void save()}>
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? vocab('Saving…') : vocab('Save')}
             </button>
             {saveState.status === 'saved' && saveState.path && (
               <button
@@ -127,14 +129,14 @@ export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element
                 disabled={opening}
                 onClick={() => void openInVsCode(saveState.path!)}
               >
-                {opening ? 'Opening…' : 'Open in Visual Studio Code'}
+                {opening ? vocab('Opening…') : vocab('Open in Visual Studio Code')}
               </button>
             )}
           </div>
 
           {saveState.status === 'saved' && (
             <div className="export-menu__result" role="status">
-              {saveState.path ? `Saved to ${saveState.path}` : 'Download started.'}
+              {saveState.path ? `${vocab('Saved to')} ${saveState.path}` : vocab('Download started.')}
             </div>
           )}
           {saveState.status === 'error' && (

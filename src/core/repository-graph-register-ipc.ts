@@ -1,6 +1,6 @@
 import { IPC } from '../shared/ipc'
 import type { CorePlatform } from './platform'
-import type { RepositoryGraphApi, RepositoryGraphExportInput, RepositoryGraphRefreshInput, RepositoryGraphSourceLocation } from '../shared/repository-graph'
+import type { RepositoryGraphApi, RepositoryGraphExportInput, RepositoryGraphRefreshInput } from '../shared/repository-graph'
 import { RepositoryGraphService, type RepositoryGraphTarget } from './repository-graph-service'
 
 export interface RepositoryGraphRegisterOptions {
@@ -14,6 +14,5 @@ export function registerRepositoryGraphIpc(platform: CorePlatform, options: Repo
   platform.handle(IPC.repositoryGraphRefresh, (input: RepositoryGraphRefreshInput) => service.refresh(input))
   platform.handle(IPC.repositoryGraphCancel, (operationId: string) => service.cancel(operationId))
   platform.handle(IPC.repositoryGraphExport, (input: RepositoryGraphExportInput) => service.export(input))
-  platform.handle(IPC.repositoryGraphOpenSource, (projectId: string, location: RepositoryGraphSourceLocation) => service.openSource(projectId, location))
   return { service }
 }

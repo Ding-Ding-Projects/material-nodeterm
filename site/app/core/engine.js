@@ -437,6 +437,27 @@ export function buildPaletteTargets(store, deps) {
 // ---------------------------------------------------------------------
 // Confirm gate (type-the-word)
 // ---------------------------------------------------------------------
+// Owned text entry surface for feature flows that need a user decision. Native prompt() is
+// deliberately not used: it blocks the page, has no app styling, and cannot expose the same
+// keyboard/focus/accessibility contract as the rest of the site.
+export function askInput(store, { title, message, initial = '', type = 'text', multiline = false, allowEmpty = false }, run) {
+  store.setState({ inputDialog: { title: String(title || ''), message: String(message || ''), type, multiline: !!multiline, allowEmpty: !!allowEmpty, run }, inputDialogValue: String(initial || '') }, { persist: false })
+}
+export function inputCancel(store) {
+  store.setState({ inputDialog: null, inputDialogValue: '' }, { persist: false })
+}
+export function inputRun(store) {
+  const dialog = store.state.inputDialog
+  if (!dialog) return
+  const value = String(store.state.inputDialogValue || '')
+  if (!dialog.allowEmpty && !value.trim()) {
+    toast(store, '✋', 'A value is needed', 'Enter something before continuing.')
+    return
+  }
+  store.setState({ inputDialog: null, inputDialogValue: '' }, { persist: false })
+  if (typeof dialog.run === 'function') dialog.run(value)
+}
+
 export function askConfirm(store, title, body, word, run) {
   store.setState({ confirm: { title, body, word: String(word || 'yes').slice(0, 24), run }, confirmTyped: '' }, { persist: false })
 }

@@ -207,6 +207,69 @@ function requireSettingsSection(sectionId, label) {
 // ---------------------------------------------------------------------
 const FEATURES = [
   {
+    id: 'veracrypt-mount-management',
+    label: 'VeraCrypt mount management',
+    files: [
+      'src/core/veracrypt/service.ts',
+      'src/core/veracrypt/register-ipc.ts',
+      'src/renderer/nodes/VeraCryptNode.tsx',
+      'src/shared/veracrypt.ts',
+    ],
+    contentChecks: [
+      ['src/core/veracrypt/service.ts', 'export class VeraCryptManager implements VeraCryptApi'],
+      ['src/core/veracrypt/register-ipc.ts', 'export function registerVeraCryptIpc('],
+      ['src/renderer/nodes/VeraCryptNode.tsx', 'export default function VeraCryptNode('],
+    ],
+    docs: ['docs/features/integrations/veracrypt.md'],
+  },
+  {
+    id: 'unigetui-global-universe',
+    label: 'UniGetUI Global Universe',
+    files: [
+      'src/core/unigetui/client.ts',
+      'src/core/unigetui/register-ipc.ts',
+      'src/core/unigetui/store.ts',
+      'src/renderer/components/unigetui/UniGetUiUniversePanel.tsx',
+    ],
+    contentChecks: [
+      ['src/core/unigetui/client.ts', 'export class UniGetUiClient implements UniGetUiApi'],
+      ['src/core/unigetui/register-ipc.ts', 'export function registerUniGetUiIpc('],
+      ['src/renderer/components/unigetui/UniGetUiUniversePanel.tsx', 'export function UniGetUiUniversePanel('],
+    ],
+    docs: ['docs/features/integrations/unigetui-global-universe.md'],
+  },
+  {
+    id: 'repository-graph-universe',
+    label: 'Repository graph universe',
+    files: [
+      'src/core/repository-graph-service.ts',
+      'src/core/repository-graph-register-ipc.ts',
+      'src/renderer/nodes/RepositoryGraphNode.tsx',
+      'src/shared/repository-graph.ts',
+    ],
+    contentChecks: [
+      ['src/core/repository-graph-service.ts', 'export class RepositoryGraphService implements RepositoryGraphApi'],
+      ['src/core/repository-graph-register-ipc.ts', 'export function registerRepositoryGraphIpc('],
+      ['src/renderer/nodes/RepositoryGraphNode.tsx', 'export default function RepositoryGraphNode('],
+    ],
+    docs: ['docs/features/projects/repository-graph-universe.md'],
+  },
+  {
+    id: 'trigger-scheduling',
+    label: 'Trigger scheduling',
+    files: [
+      'src/core/trigger-scheduler.ts',
+      'src/core/trigger-ipc.ts',
+      'src/renderer/nodes/TriggerNode.tsx',
+    ],
+    contentChecks: [
+      ['src/core/trigger-scheduler.ts', 'export class TriggerScheduler'],
+      ['src/core/trigger-ipc.ts', 'export function registerTriggerIpc('],
+      ['src/renderer/nodes/TriggerNode.tsx', 'export function TriggerNode('],
+    ],
+    docs: ['docs/features/automation/triggers.md'],
+  },
+  {
     id: 'browser-extensions',
     label: 'Browser extensions (unpacked) + WebAuthn',
     files: [
@@ -1778,9 +1841,17 @@ const FORBIDDEN_FONT_ICON_HOSTS = [
 // opposed to a plain string mentioning a host in passing.
 const EXTERNAL_LINK_RE = /<link\b[^>]*\bhref\s*=\s*['"]https?:\/\//i
 const EXTERNAL_IMPORT_RE = /@import\s+(?:url\()?['"]?https?:\/\//i
+// Comments may document a rejected CDN URL or a migration note. They are not runtime requests,
+// so remove them before scanning while retaining strings and markup that the renderer can execute.
+// The first implementation scanned raw text and made a harmless explanatory comment a false
+// failure. Keeping this small comment-aware preflight prevents that noisy result from teaching a
+// future maintainer to disable the whole check.
+function withoutRendererComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\r\n]*/gm, '$1')
+}
 const cdnHits = []
 for (const file of RENDERER_FILES) {
-  const text = readText(file) || ''
+  const text = withoutRendererComments(readText(file) || '')
   for (const host of FORBIDDEN_FONT_ICON_HOSTS) {
     if (text.includes(host)) cdnHits.push(`${file}: references ${host}`)
   }

@@ -1213,7 +1213,6 @@ export function buildRepositoryGraphApi(client: RpcClient): Pick<NodeTerminalApi
     refresh: (input) => client.request(IPC.repositoryGraphRefresh, input) as ReturnType<RepositoryGraphApi['refresh']>,
     cancel: (operationId) => client.request(IPC.repositoryGraphCancel, operationId) as ReturnType<RepositoryGraphApi['cancel']>,
     export: (input) => client.request(IPC.repositoryGraphExport, input) as ReturnType<RepositoryGraphApi['export']>,
-    openSource: (projectId, location) => client.request(IPC.repositoryGraphOpenSource, projectId, location) as ReturnType<RepositoryGraphApi['openSource']>,
     onProgress: (listener) => client.subscribe(IPC.repositoryGraphProgress, listener as Listener)
   }
   return { repositoryGraph }
