@@ -20,6 +20,7 @@ export type SettingsSectionId =
   | 'claude-skills'
   | 'usage'
   | 'accounts'
+  | 'provider-accounts'
   | 'custom-agents'
   | 'model-gateway'
   | 'notifications'
@@ -81,6 +82,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'agents', title: 'Agents' },
       { id: 'claude-skills', title: 'Claude skills' },
       { id: 'accounts', title: 'Accounts' },
+      { id: 'provider-accounts', title: 'Provider accounts' },
       { id: 'custom-agents', title: 'Custom agents' },
       { id: 'model-gateway', title: 'Model gateway' },
       { id: 'usage', title: 'Usage' },

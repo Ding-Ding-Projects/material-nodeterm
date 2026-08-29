@@ -290,6 +290,7 @@ import { startSessionMemoryService, sshScopePredicate } from '../core/session-me
 import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
 import { startToyLockService } from '../core/toylocks/toylock-service'
 import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
+import { registerProviderAccountsHandlers } from '../core/provider-accounts-service'
 import { startUniverseDoorEntryService } from '../core/universe-door-entry-service'
 import { createMemoryPressureMonitor } from '../core/memory-pressure'
 import { createPtyPressureMonitor } from '../core/pty-pressure'
@@ -3767,6 +3768,7 @@ app.whenReady().then(async () => {
   // a node (see pty-manager.sendText). Wired here because the service starts after the manager.
   ptyManager.setTextWriteGate((persistKey) => toyLockService.mayWriteToNode(persistKey))
   startAuthenticatorService()
+  registerProviderAccountsHandlers(corePlatform)
   startUniverseDoorEntryService()
 
   const ackSweeper = createAckSweeper({

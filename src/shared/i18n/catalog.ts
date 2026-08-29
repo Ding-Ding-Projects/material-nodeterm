@@ -83,6 +83,7 @@ export const CATALOG: Catalog = {
   },
   'settings.section.updates': { en: flat('Updates'), yue: flat('更新') },
   'settings.section.accounts': { en: flat('Accounts'), yue: flat('帳戶') },
+  'settings.section.provider-accounts': { en: flat('Provider accounts'), yue: flat('服務帳戶') },
   'settings.section.language': { en: flat('Language'), yue: flat('語言') },
   'settings.section.privacy': { en: flat('Privacy'), yue: flat('私隱') },
 

@@ -96,6 +96,7 @@ import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../co
 import { registerWindowsDiagnosticsIpc } from '../core/windows-diagnostics'
 import { startToyLockService } from '../core/toylocks/toylock-service'
 import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
+import { registerProviderAccountsHandlers } from '../core/provider-accounts-service'
 import { startUniverseDoorEntryService } from '../core/universe-door-entry-service'
 import { createMemoryPressureMonitor } from '../core/memory-pressure'
 import { createPtyPressureMonitor } from '../core/pty-pressure'
@@ -805,6 +806,7 @@ export async function startServer(
   // both raw shells change together (CLAUDE.md, agent-support section).
   ptyManager.setTextWriteGate((persistKey) => toyLockService.mayWriteToNode(persistKey))
   startAuthenticatorService()
+  registerProviderAccountsHandlers(platform)
   startUniverseDoorEntryService()
 
   // Headless notification host: every core service above (incl. the loopback hook server, which

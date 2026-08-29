@@ -20,6 +20,7 @@ import { parseProjectSectionId, projectSectionId } from './project-settings-targ
 import { SettingsSidebar } from './SettingsSidebar'
 import { useSettingsTarget } from './useSettingsTarget'
 import { AccountsSection } from './sections/AccountsSection'
+import { ProviderAccountsSection } from './sections/ProviderAccountsSection'
 import { AdhdModesSection } from './sections/AdhdModesSection'
 import { AgentsSection } from './sections/AgentsSection'
 import { ClaudeSkillsSection } from './sections/ClaudeSkillsSection'
@@ -301,6 +302,11 @@ export function SettingsPage({
             <ClaudeSkillsSection isActive={active === 'claude-skills'} />
             <UsageSection isActive={active === 'usage'} />
             <AccountsSection isActive={active === 'accounts'} />
+            <ProviderAccountsSection
+              isActive={active === 'provider-accounts'}
+              projectId={activeProjectId}
+              blueprints={activeProject?.providerBlueprints}
+            />
             <CustomAgentsSection isActive={active === 'custom-agents'} />
             <ModelGatewaySection isActive={active === 'model-gateway'} />
             <NotificationsSection isActive={active === 'notifications'} />

@@ -36,6 +36,15 @@ import type { GitLabHostingAction } from '../shared/gitlab-hosting'
 import type { NextcloudAioAction, NextcloudAioJobProgress } from '../shared/nextcloud-aio'
 import type { NextcloudManagedAction, NextcloudManagedBinding, NextcloudManagedProgress } from '../shared/nextcloud-managed'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type {
+  OAuthCompleteInput,
+  OAuthStartInput,
+  ProviderAccountsApi,
+  ProviderBindingInput,
+  ProviderCredentialInput,
+  ProviderProfileInput,
+  ProviderAccountsSnapshot
+} from '../shared/provider-accounts'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
 import type { WindowsDiagnosticsApi } from '../shared/windows-diagnostics'
@@ -114,6 +123,7 @@ const subscribeHomeAssistantEvent = subscribe<[HomeAssistantClientEvent]>(IPC.ho
 const subscribeCloudflareProgress = subscribe<[CloudflareExecutionProgress & { nodeId: string }]>(IPC.cloudflareProgress)
 const subscribeAwsResourceProgress = subscribe<[AwsManagerProgress]>(IPC.awsResourceProgress)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
+const subscribeProviderAccountsChanged = subscribe<[ProviderAccountsSnapshot]>(IPC.providerAccountsChanged)
 const subscribeVeraCryptOperation = subscribe<[VeraCryptOperation]>(IPC.veracryptOperation)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -882,6 +892,23 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.passwordManagerCredentialCode, projectId, managerId, credentialId),
     listCredentials: (projectId, managerId) =>
       ipcRenderer.invoke(IPC.passwordManagerListCredentials, projectId, managerId)
+  },
+  providerAccounts: {
+    snapshot: () => ipcRenderer.invoke(IPC.providerAccountsSnapshot),
+    createProfile: (input: ProviderProfileInput) => ipcRenderer.invoke(IPC.providerAccountsCreateProfile, input),
+    updateProfile: (id: string, input: Partial<ProviderProfileInput>) =>
+      ipcRenderer.invoke(IPC.providerAccountsUpdateProfile, id, input),
+    removeProfile: (id: string) => ipcRenderer.invoke(IPC.providerAccountsRemoveProfile, id),
+    setCredential: (input: ProviderCredentialInput) => ipcRenderer.invoke(IPC.providerAccountsSetCredential, input),
+    clearCredential: (id: string) => ipcRenderer.invoke(IPC.providerAccountsClearCredential, id),
+    selectProfile: (id: string | null) => ipcRenderer.invoke(IPC.providerAccountsSelectProfile, id),
+    bind: (input: ProviderBindingInput) => ipcRenderer.invoke(IPC.providerAccountsBind, input),
+    unbind: (id: string) => ipcRenderer.invoke(IPC.providerAccountsUnbind, id),
+    startOAuth: (input: OAuthStartInput) => ipcRenderer.invoke(IPC.providerAccountsOAuthStart, input),
+    completeOAuth: (input: OAuthCompleteInput) => ipcRenderer.invoke(IPC.providerAccountsOAuthComplete, input),
+    cancelOAuth: (id: string) => ipcRenderer.invoke(IPC.providerAccountsOAuthCancel, id),
+    onChanged: (listener: Parameters<ProviderAccountsApi['onChanged']>[0]) =>
+      subscribeProviderAccountsChanged((payload) => listener(payload))
   },
   universeDoorEntry: {
     configure: (input) => ipcRenderer.invoke(IPC.universeDoorEntryConfigure, input),

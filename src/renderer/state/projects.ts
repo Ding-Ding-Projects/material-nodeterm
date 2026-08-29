@@ -15,6 +15,7 @@ import type {
   Workspace
 } from '@shared/types'
 import type { ProjectIcon } from '@shared/project-icon'
+import type { ProviderBlueprint } from '@shared/provider-accounts'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
 import { applyEdgeMutation } from '@shared/canvas-mutations'
 import { collisionSeed, derivedProjectId } from '@shared/project-id'
@@ -147,6 +148,7 @@ interface ProjectsState {
   /** Replaces the project's browser-profile list (create/rename/remove all funnel through this).
    *  See `BrowserProfile` in @shared/types and `shared/browser-profiles.ts`. */
   setProjectBrowserProfiles(id: string, browserProfiles: BrowserProfile[]): void
+  setProjectProviderBlueprints(id: string, providerBlueprints: ProviderBlueprint[]): void
   /** Replaces the named portable arrangements for a project. */
   setProjectSavedLayouts(id: string, savedLayouts: SavedCanvasLayout[]): void
   /** Writes the serialized canvas (nodes + viewport + unified links) back into a project. */
@@ -779,6 +781,13 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, browserProfiles } : p))
     }))
+  },
+
+  setProjectProviderBlueprints(id, providerBlueprints) {
+    set((s) => ({
+      projects: s.projects.map((p) => (p.id === id ? { ...p, providerBlueprints } : p))
+    }))
+    markWorkspaceDirty()
   },
 
   setProjectSavedLayouts(id, savedLayouts) {

@@ -11,6 +11,7 @@ import {
 import {
   PROJECT_DIR, PROJECT_FILE, fileToProject, migrateLinks, projectToFile, resolveNodes, sameProjectContent,
   serializeProjectFile, splitWorkspace, validKanban,
+  validProviderBlueprints,
   type IndexEntryV3, type ProjectFileV1, type WorkspaceIndexV3
 } from './workspace-files'
 import {
@@ -345,6 +346,9 @@ export class WorkspaceStore {
         const project = {
           ...base,
           nodes: normalizeLocalPendingLaunch(base.nodes),
+          ...(validProviderBlueprints(base.providerBlueprints)
+            ? { providerBlueprints: validProviderBlueprints(base.providerBlueprints) }
+            : { providerBlueprints: undefined }),
           ...(links ? { links } : {})
         }
         e.project = project
@@ -371,6 +375,7 @@ export class WorkspaceStore {
               capabilityAck: e.capabilityAck,
               breadcrumbs: e.breadcrumbs,
               settingsOverrides: e.settingsOverrides,
+              providerBindings: e.providerBindings,
               localExec: this.execOverlay(e)
             })
           })
@@ -397,6 +402,7 @@ export class WorkspaceStore {
               capabilityAck: e.capabilityAck,
               breadcrumbs: e.breadcrumbs,
               settingsOverrides: e.settingsOverrides,
+              providerBindings: e.providerBindings,
               localExec: this.execOverlay(e)
             })
           })
@@ -1220,7 +1226,8 @@ export class WorkspaceStore {
       defaultAccountId: e.defaultAccountId,
        capabilityAck: e.capabilityAck,
        breadcrumbs: e.breadcrumbs,
-      localExec: e.localExec
+      localExec: e.localExec,
+      providerBindings: e.providerBindings
     })
   }
 
@@ -1698,7 +1705,8 @@ export class WorkspaceStore {
           defaultAccountId: e.defaultAccountId,
           capabilityAck: e.capabilityAck,
           breadcrumbs: e.breadcrumbs,
-          localExec: e.localExec
+          localExec: e.localExec,
+          providerBindings: e.providerBindings
         })
       )
     } catch { /* the file is written and cached; the next load/poll surfaces the node */ }
@@ -1754,7 +1762,8 @@ export class WorkspaceStore {
             defaultAccountId: e.defaultAccountId,
             breadcrumbs: e.breadcrumbs,
             capabilityAck: e.capabilityAck,
-            localExec: e.localExec
+            localExec: e.localExec,
+            providerBindings: e.providerBindings
           })
         )
       } catch { /* the file is written and cached; the next load/poll drops the node */ }
@@ -1818,7 +1827,8 @@ export class WorkspaceStore {
     return fileToProject(e.cache, {
       id: e.id, ssh: e.ssh, closed: e.closed,
       viewport: e.viewport, defaultAccountId: e.defaultAccountId, breadcrumbs: e.breadcrumbs,
-      capabilityAck: e.capabilityAck, localExec: e.localExec
+      capabilityAck: e.capabilityAck, localExec: e.localExec,
+      providerBindings: e.providerBindings
     })
   }
 
@@ -1927,7 +1937,8 @@ export class WorkspaceStore {
       return fileToProject(adopted, {
         id: e.id, ssh: e.ssh, closed: e.closed,
         viewport: e.viewport, defaultAccountId: e.defaultAccountId,
-        capabilityAck: e.capabilityAck, breadcrumbs: e.breadcrumbs, localExec: e.localExec
+        capabilityAck: e.capabilityAck, breadcrumbs: e.breadcrumbs, localExec: e.localExec,
+        providerBindings: e.providerBindings
       })
     }
     // Our cache stood. Before it clobbers the server, merge in any remote-only session nodes (the
@@ -1942,7 +1953,8 @@ export class WorkspaceStore {
         merged = fileToProject(e.cache, {
           id: e.id, ssh: e.ssh, closed: e.closed,
           viewport: e.viewport, defaultAccountId: e.defaultAccountId,
-          capabilityAck: e.capabilityAck, breadcrumbs: e.breadcrumbs, localExec: e.localExec
+          capabilityAck: e.capabilityAck, breadcrumbs: e.breadcrumbs, localExec: e.localExec,
+          providerBindings: e.providerBindings
         })
       }
     }
