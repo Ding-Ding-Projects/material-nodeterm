@@ -1,5 +1,34 @@
 # Handoff
 
+## 2026-08-26, current-architecture split of upstream PR #422
+
+Implemented the useful behavior requested by issue #86 without merging the upstream pull request
+or copying its scratch plans. The typed `Endpoint` and `Link` model now covers context, lineage,
+and dependency relationships, and project-file reads migrate legacy bridge and rope arrays while
+new writes use the unified field. Canvas mutation ordering, publication, active rendering, and
+background-project state handle link upserts and removals.
+
+Added foreign `xproject` projections with non-owning `requireExisting` session attachment,
+project-aware travel handlers, persisted `projectRef` group references, reversible group/node drill
+transforms, a breadcrumb strip, and the project-reference menu path. Added bounded recursive
+submodule parsing plus Git service APIs for branch-parent dependency configuration. Added the
+custom-agent base-harness resolver, environment expansion and launch assembly, gateway discovery
+and credential boundary, model selection and restart wiring, and the one-shot Restart on
+subscription setting. Existing Claude and Codex account behavior remains on its current transfer
+and recycle paths.
+
+Changed files include `src/shared/types.ts`, `src/shared/agents/`, `src/shared/canvas-*`,
+`src/shared/worktree.ts`, `src/core/workspace-files.ts`, `src/core/pty-manager.ts`,
+`src/core/git-service.ts`, `src/core/agent-env-ipc.ts`, `src/main/`, `src/preload/index.ts`,
+`src/server/index.ts`, `src/renderer/canvas/Canvas.tsx`, `src/renderer/state/`, the new link and
+projection components, and the project feature article.
+
+The lane intentionally did not run tests, type checking, linting, builds, packaging, UI
+interaction, or captures. Verification, archive integration, release work, TUI and mobile
+surfaces, and external issue or discussion updates remain for a later lane. The implementation
+also keeps the portable boundary explicit: project references are safe intent, while executable
+paths, credentials, account state, sessions, and SSH connection state remain machine-local.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

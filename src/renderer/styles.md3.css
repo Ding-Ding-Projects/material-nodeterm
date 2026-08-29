@@ -949,6 +949,8 @@
 .term-node__header--filled .term-node__refresh,
 .term-node__header--filled .term-node__mic,
 .term-node__header--filled .term-node__chat,
+.term-node__header--filled .term-node__maximize,
+.term-node__header--filled .term-node__link,
 .term-node__header--filled .term-node__find-btn {
   color: inherit;
 }
@@ -964,6 +966,8 @@
 .term-node__header--filled .term-node__refresh:hover,
 .term-node__header--filled .term-node__mic:hover,
 .term-node__header--filled .term-node__chat:hover,
+.term-node__header--filled .term-node__maximize:hover,
+.term-node__header--filled .term-node__link:hover,
 .term-node__header--filled .term-node__find-btn:hover:not(:disabled) {
   background: color-mix(in srgb, currentColor 22%, transparent);
   color: inherit;
@@ -989,6 +993,8 @@
 .term-node__refresh,
 .term-node__mic,
 .term-node__chat,
+.term-node__maximize,
+.term-node__link,
 .term-node__close,
 .term-node__find-btn {
   border-radius: var(--md-shape-full);
@@ -1029,6 +1035,8 @@
 }
 
 .term-node__chat,
+.term-node__maximize,
+.term-node__link,
 .term-node__mic,
 .term-node__refresh,
 .term-node__search {
@@ -1055,6 +1063,8 @@
 .term-node__refresh:hover,
 .term-node__mic:hover,
 .term-node__chat:hover,
+.term-node__maximize:hover,
+.term-node__link:hover,
 .term-node__find-btn:hover:not(:disabled) {
   background: var(--md-surface-container-highest);
   color: var(--md-on-surface);
@@ -1594,6 +1604,33 @@ button.term-node__title-text:focus-visible {
   display: flex;
   overflow: hidden;
   z-index: 5;
+}
+
+/* Typed-link inspector flyout. It paints its own bounded surface beside the node, matching the
+   board-log flyout while keeping the two panels independently dismissible. */
+.term-node__links {
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  box-shadow: none;
+  animation: kanban-slide-in 0.14s ease-out;
+  position: absolute;
+  left: 100%;
+  top: 0;
+  bottom: 0;
+  margin-left: 10px;
+  width: 320px;
+  display: flex;
+  overflow: hidden;
+  z-index: 5;
+}
+
+.term-node__maximize,
+.term-node__link {
+  padding: 2px 5px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* ---------------------------------------------------------------------------------------------

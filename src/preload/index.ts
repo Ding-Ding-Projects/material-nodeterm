@@ -121,6 +121,8 @@ const api: NodeTerminalApi = {
     // — not before.
     tmuxStatus: () => ipcRenderer.invoke(IPC.ptyTmuxStatus),
     paneCommand: (persistKey) => ipcRenderer.invoke(IPC.ptyPaneCommand, persistKey),
+    terminateForeground: (persistKey, expectedAgentId) =>
+      ipcRenderer.invoke(IPC.ptyTerminateForeground, persistKey, expectedAgentId),
     correctTeamLeadPaneWidth: (persistKey) =>
       ipcRenderer.invoke(IPC.ptyCorrectTeamPaneWidth, persistKey),
     readSessionName: (sessionId, accountId, agentId) =>
@@ -391,6 +393,7 @@ const api: NodeTerminalApi = {
     checkoutCommit: (cwd, oid) => ipcRenderer.invoke(IPC.gitCheckoutCommit, cwd, oid),
     repoRoot: (cwd) => ipcRenderer.invoke(IPC.gitRepoRoot, cwd),
     worktreeList: (repoPath) => ipcRenderer.invoke(IPC.gitWorktreeList, repoPath),
+    submoduleList: (repoPath) => ipcRenderer.invoke(IPC.gitSubmoduleList, repoPath),
     worktreeAdd: (repoPath, wtPath, branch, baseRef, isNew) =>
       ipcRenderer.invoke(IPC.gitWorktreeAdd, repoPath, wtPath, branch, baseRef, isNew),
     worktreeMerge: (repoPath, branch, baseRef, push) =>
@@ -399,6 +402,13 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.gitWorktreeRemovalProof, repoPath, wtPath),
     worktreeRemove: (repoPath, wtPath, request) =>
       ipcRenderer.invoke(IPC.gitWorktreeRemove, repoPath, wtPath, request),
+    setBranchParent: (repoPath, child, parent) =>
+      ipcRenderer.invoke(IPC.gitSetBranchParent, repoPath, child, parent),
+    unsetBranchParent: (repoPath, child) =>
+      ipcRenderer.invoke(IPC.gitUnsetBranchParent, repoPath, child),
+    syncBranch: (cwd, child) => ipcRenderer.invoke(IPC.gitSyncBranch, cwd, child),
+    proposeBranch: (cwd, child) => ipcRenderer.invoke(IPC.gitProposeBranch, cwd, child),
+    shipBranch: (cwd, child, parent) => ipcRenderer.invoke(IPC.gitShipBranch, cwd, child, parent),
     setActiveRemote: (projectId) => ipcRenderer.invoke(IPC.gitSetActiveRemote, projectId)
   },
   clipboard: {
@@ -803,6 +813,13 @@ const api: NodeTerminalApi = {
   contextLink: {
     setLinks: (map) => ipcRenderer.invoke(IPC.contextLinkSetLinks, map),
     info: () => ipcRenderer.invoke(IPC.contextLinkInfo)
+  },
+  agent: {
+    envSnapshot: () => ipcRenderer.invoke(IPC.agentEnvSnapshot),
+    discoverModels: (settings) => ipcRenderer.invoke(IPC.agentDiscoverModels, settings),
+    gatewayCredentialStatus: () => ipcRenderer.invoke(IPC.agentGatewayCredentialStatus),
+    saveGatewayCredential: (key) => ipcRenderer.invoke(IPC.agentSaveGatewayCredential, key),
+    clearGatewayCredential: () => ipcRenderer.invoke(IPC.agentClearGatewayCredential)
   },
   boardLog: {
     append: (projectId, entry) => ipcRenderer.invoke(IPC.boardLogAppend, projectId, entry),

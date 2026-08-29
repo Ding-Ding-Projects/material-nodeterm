@@ -15,7 +15,13 @@ import type {
 } from '../shared/types'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
 import * as worktreeOps from '../shared/worktree-ops'
-import type { WorktreeListResult } from '../shared/worktree'
+import {
+  branchParentConfigKey,
+  isValidGitRef,
+  parseSubmoduleStatus,
+  type WorktreeListResult,
+  type SubmoduleListResult
+} from '../shared/worktree'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import { resolveGitRemote, runRemoteGit } from './remote-ssh/remote-git'
 import { platform } from './platform'
@@ -88,6 +94,7 @@ async function hashUntrackedFiles(cwd: string, nulPaths: string): Promise<string
 
 function findBin(names: string[]): string | null {
   for (const c of names) {
+    if (!c) continue
     try {
       if (fs.existsSync(c)) return c
     } catch {
@@ -97,16 +104,29 @@ function findBin(names: string[]): string | null {
   return null
 }
 
-const GH_PATH = findBin(['/opt/homebrew/bin/gh', '/usr/local/bin/gh', '/usr/bin/gh'])
+const GH_PATH = findBin([
+  '/opt/homebrew/bin/gh',
+  '/usr/local/bin/gh',
+  '/usr/bin/gh',
+  process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'GitHub CLI', 'gh.exe') : '',
+  process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'GitHub CLI', 'gh.exe') : ''
+])
 
-// GUI apps on macOS don't inherit the shell PATH, so a git credential helper installed by
-// Homebrew (e.g. `gh auth git-credential`, or osxkeychain shims) wouldn't be found by our
-// `git` subprocess — making push/pull fail even when the user is authed. Prepend the common
-// bin dirs. GIT_TERMINAL_PROMPT=0 makes auth failures error out fast instead of hanging on a
-// username prompt (there's no TTY here).
+// GUI apps may not inherit the shell PATH, so common package-manager and user-scoped executable
+// directories are added before running git or gh. Keep the platform separator intact: a Unix
+// colon in a Windows PATH turns the drive letter into a broken search entry.
+const extraBinDirs = process.platform === 'win32'
+  ? [
+      process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'GitHub CLI') : '',
+      process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'GitHub CLI') : '',
+      process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'Git', 'cmd') : '',
+      process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Git', 'cmd') : ''
+    ]
+  : ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin']
+const pathSeparator = process.platform === 'win32' ? ';' : ':'
 const GIT_ENV: NodeJS.ProcessEnv = {
   ...process.env,
-  PATH: `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin${process.env.PATH ? `:${process.env.PATH}` : ''}`,
+  PATH: [...extraBinDirs.filter(Boolean), process.env.PATH ?? ''].filter(Boolean).join(pathSeparator),
   GIT_TERMINAL_PROMPT: '0'
 }
 
@@ -346,6 +366,7 @@ export class GitService {
     )
     platform().handle(IPC.gitRepoRoot, (cwd: string) => this.repoRoot(cwd))
     platform().handle(IPC.gitWorktreeList, (repoPath: string) => this.worktreeList(repoPath))
+    platform().handle(IPC.gitSubmoduleList, (repoPath: string) => this.submoduleList(repoPath))
     platform().handle(IPC.gitWorktreeAdd, (repoPath: string, wtPath: string, branch: string, baseRef: string, isNew: boolean) =>
       this.worktreeAdd(repoPath, wtPath, branch, baseRef, isNew)
     )
@@ -357,6 +378,17 @@ export class GitService {
     )
     platform().handle(IPC.gitWorktreeRemove, (repoPath: string, wtPath: string, request: GitWorktreeRemovalRequest) =>
       this.worktreeRemove(repoPath, wtPath, request)
+    )
+    platform().handle(IPC.gitSetBranchParent, (repoPath: string, child: string, parent: string) =>
+      this.setBranchParent(repoPath, child, parent)
+    )
+    platform().handle(IPC.gitUnsetBranchParent, (repoPath: string, child: string) =>
+      this.unsetBranchParent(repoPath, child)
+    )
+    platform().handle(IPC.gitSyncBranch, (cwd: string, child: string) => this.syncBranch(cwd, child))
+    platform().handle(IPC.gitProposeBranch, (cwd: string, child: string) => this.proposeBranch(cwd, child))
+    platform().handle(IPC.gitShipBranch, (cwd: string, child: string, parent: string) =>
+      this.shipBranch(cwd, child, parent)
     )
   }
 
@@ -377,6 +409,134 @@ export class GitService {
     // that came from a FAILED `git worktree list` is not "there are no worktrees", and the store on
     // the other side of this IPC would otherwise mark every bound group missing on one bad read.
     return worktreeOps.listWorktrees(git, repoPath, strictPathPresent)
+  }
+
+  async submoduleList(repoPath: string): Promise<SubmoduleListResult> {
+    if (!repoPath || isRemoteRepo(repoPath)) return { ok: false, entries: [] }
+    const result = await git(repoPath, ['submodule', 'status', '--recursive'])
+    if (!result.ok) return { ok: false, entries: [] }
+    try {
+      const root = path.resolve(repoPath)
+      const entries = await Promise.all(
+        parseSubmoduleStatus(result.out).map(async (entry) => {
+          const candidate = path.resolve(root, entry.path)
+          const relative = path.relative(root, candidate)
+          const inside = relative !== '' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+          const present = inside && await strictPathPresent(candidate)
+          return { ...entry, prunable: entry.prunable || !present }
+        })
+      )
+      return { ok: true, entries }
+    } catch {
+      return { ok: false, entries: [] }
+    }
+  }
+
+  async setBranchParent(repoPath: string, child: string, parent: string): Promise<GitResult> {
+    const key = branchParentConfigKey(child)
+    const normalizedParent = parent.trim()
+    if (!repoPath || !key || !isValidGitRef(normalizedParent) || child.trim() === normalizedParent) {
+      return { ok: false, message: 'Invalid branch dependency.' }
+    }
+    const result = await git(repoPath, ['config', key, normalizedParent])
+    return result.ok ? { ok: true, message: `Branch dependency recorded for ${child.trim()}.` } : fail(result)
+  }
+
+  async unsetBranchParent(repoPath: string, child: string): Promise<GitResult> {
+    const key = branchParentConfigKey(child)
+    if (!repoPath || !key) return { ok: false, message: 'Invalid branch name.' }
+    const result = await git(repoPath, ['config', '--unset', key])
+    if (result.ok) return { ok: true, message: `Branch dependency cleared for ${child.trim()}.` }
+    if (/not found|exit code 5|cannot find/i.test(result.err)) return { ok: true, message: '' }
+    return fail(result)
+  }
+
+  /** Rebase a child branch onto the parent recorded by its typed dependency link. */
+  async syncBranch(cwd: string, child: string): Promise<GitResult> {
+    const normalizedChild = child.trim()
+    const key = branchParentConfigKey(normalizedChild)
+    if (!key) return { ok: false, message: 'Invalid branch name.' }
+    const parentResult = await git(cwd, ['config', '--get', key])
+    const parent = parentResult.out.trim()
+    if (!parentResult.ok || !parent || !isValidGitRef(parent)) {
+      return { ok: false, message: `No valid parent is configured for ${normalizedChild}.` }
+    }
+    const current = await git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD'])
+    if (!current.ok || current.out.trim() !== normalizedChild) {
+      return { ok: false, message: `Check out ${normalizedChild} in its own terminal before syncing.` }
+    }
+    const result = await git(cwd, ['rebase', parent])
+    if (result.ok) return { ok: true, message: result.out || `Rebased ${normalizedChild} onto ${parent}.` }
+    if (/conflict|could not apply|merge/i.test(result.err)) {
+      return {
+        ok: false,
+        message: `Rebase stopped on a conflict. Resolve it in this terminal, then run \`git rebase --continue\` or \`git rebase --abort\`. Parent: ${parent}.`
+      }
+    }
+    return fail(result)
+  }
+
+  /** Open a pull request from the child branch into its configured parent. */
+  async proposeBranch(cwd: string, child: string): Promise<GitResult> {
+    const normalizedChild = child.trim()
+    const key = branchParentConfigKey(normalizedChild)
+    if (!key) return { ok: false, message: 'Invalid branch name.' }
+    if (!GH_PATH) return { ok: false, message: 'GitHub CLI (gh) not found.' }
+    const parentResult = await git(cwd, ['config', '--get', key])
+    const parent = parentResult.out.trim()
+    if (!parentResult.ok || !parent || !isValidGitRef(parent)) {
+      return { ok: false, message: `No valid parent is configured for ${normalizedChild}.` }
+    }
+    const env: NodeJS.ProcessEnv = { ...GIT_ENV }
+    if (!(await ghAuthed())) {
+      const token = await githubTokenFromGitCredentials(cwd)
+      if (!token) return { ok: false, message: 'Sign in to GitHub to propose this branch.', needsAuth: true }
+      env.GH_TOKEN = token
+    }
+    try {
+      await run(
+        GH_PATH,
+        [
+          'pr',
+          'create',
+          '--base',
+          parent,
+          '--head',
+          normalizedChild,
+          '--title',
+          normalizedChild,
+          '--body',
+          `Stacked on ${parent}.`
+        ],
+        { cwd, env, maxBuffer: 10 * 1024 * 1024 }
+      )
+      return { ok: true, message: `Opened a pull request from ${normalizedChild} into ${parent}.` }
+    } catch (error) {
+      const detail = error as { stderr?: string; message?: string }
+      const message = (detail.stderr || detail.message || 'The pull request could not be opened.').trim()
+      if (/already exists/i.test(message)) return { ok: false, message: 'A pull request already exists for this branch.' }
+      if (/\b(401|403)\b|unauthor|forbidden|auth|token|scope|HTTP 4/i.test(message)) {
+        return { ok: false, message, needsAuth: true }
+      }
+      return { ok: false, message }
+    }
+  }
+
+  /** Fast-forward a checked-out parent branch to the child branch without creating a merge commit. */
+  async shipBranch(cwd: string, child: string, parent: string): Promise<GitResult> {
+    const normalizedChild = child.trim()
+    const normalizedParent = parent.trim()
+    if (!isValidGitRef(normalizedChild) || !isValidGitRef(normalizedParent) || normalizedChild === normalizedParent) {
+      return { ok: false, message: 'Invalid branch dependency.' }
+    }
+    const current = await git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD'])
+    if (!current.ok || current.out.trim() !== normalizedParent) {
+      return { ok: false, message: `Check out ${normalizedParent} in its own terminal before shipping.` }
+    }
+    const result = await git(cwd, ['merge', '--ff-only', normalizedChild])
+    return result.ok
+      ? { ok: true, message: result.out || `Fast-forwarded ${normalizedParent} to ${normalizedChild}.` }
+      : fail(result)
   }
   worktreeAdd(
     repoPath: string,

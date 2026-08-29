@@ -89,7 +89,10 @@ import {
   WEBGL_GESTURE_SETTLE_MS
 } from '../terminal/webgl-budget'
 import { StickyNode } from '../nodes/StickyNode'
-import { GroupNode, setWorktreeActionHandler, setWslActionHandler } from '../nodes/GroupNode'
+import { GroupNode, setDrillHandler, setWorktreeActionHandler, setWslActionHandler } from '../nodes/GroupNode'
+import { XProjectNode, type XProjectSpawn } from '../nodes/XProjectNode'
+import { setFocusNodeHandler } from '../nodes/focus-handler'
+import { setTravelNodeHandler } from '../nodes/travel-handler'
 import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
 import { useAnnotationDrawTool } from './useAnnotationDrawTool'
@@ -246,6 +249,9 @@ import {
   type AccountRemovalTeardownDetail
 } from '../lib/accountRemoval'
 import { NotificationCenter } from '../components/NotificationCenter'
+import { DrillBreadcrumb } from '../components/DrillBreadcrumb'
+import { LinkInspectorPanel } from '../components/links/LinkInspectorPanel'
+import { setLinkCommitHandler } from '../components/links/link-commit'
 import { HistoryScreen } from '../components/HistoryScreen'
 import { DocsBrowser } from '../components/DocsBrowser'
 import { StatusSurface } from '../components/StatusSurface'
@@ -328,8 +334,10 @@ import {
   agentHibernateFns,
   agentRestartFn,
   guardConcurrentRestart,
+  modelSwitchEligibility,
   planBulkRestart,
   restartEligibility,
+  restartSessionId,
   settleRestart,
   summarizeBulkRestart,
   type BulkRestartPlan,
@@ -436,7 +444,10 @@ import {
   canControlCanvas,
   canRename,
   canContextLink,
+  canSwitchModel,
+  vanillaEnvStripPattern,
   createdAgentId,
+  createdAgentHarnessId,
   explicitCodexResumeSession,
   resumeCommand,
   AGENT_CONFIG,
@@ -462,7 +473,17 @@ import {
   reconnectRelayTab,
   type RelayTab,
 } from '../session/relay-tab'
-import { buildBackgroundLinkMaps, buildContextLinkNote, buildLinkMap, buildNotePushMessage, classifyLink, hiddenLinkIds, linkIdsCoveredByRopes, pairKey, planBridges, type LinkEndpoint } from '../lib/noteLink'
+import { buildBackgroundLinkMaps, buildContextLinkNote, buildLinkMap, buildNotePushMessage, classifyLink, hiddenLinkIds, linkIdsCoveredByRopes, nodeEndpoints, pairKey, planBridges, type LinkEndpoint } from '../lib/noteLink'
+import { buildProjectContextLinkMap } from '@shared/context-link-map'
+import {
+  applyDependencyLink,
+  branchEndpointKey,
+  depHostEdges,
+  isBranchDependencyLink,
+  mergeVisibleNodeLinks,
+  newLinkId,
+  offCanvasLinkColor
+} from '../lib/link-authoring'
 import {
   dependencyEdges,
   launchesToFire,
@@ -477,6 +498,7 @@ import { oneLine } from '@shared/one-line'
 import { isDestructiveVerb } from '@shared/control-verbs'
 import { parseLenses, verifyLensPrompt, verifySynthesisPrompt } from '../lib/verifyPanel'
 import { useSettings } from '../state/settings'
+import { useModelGateway } from '../state/modelGateway'
 import {
   terminalProfileDisplayError,
   useTerminalProfiles
@@ -500,6 +522,7 @@ import type { SshServer, SshConnection } from '@shared/ssh'
 import { sshAttachmentId, sshHostKey } from '@shared/ssh'
 import type {
   BridgeLink,
+  Link,
   CanvasNodeState,
   GitResult,
   GitWorktreeRemovalProof,
@@ -537,7 +560,13 @@ import {
   type CanvasPublisher
 } from '@shared/canvas-publish'
 import { createCanvasOrder, createReconnectWatch, type CanvasOrder } from '@shared/canvas-order'
-import { createMutationGuard, isEdgeMutation, type CanvasScene } from '@shared/canvas-mutations'
+import {
+  applyLinkMutation as applyTypedLinkMutation,
+  createMutationGuard,
+  isEdgeMutation,
+  isLinkMutation,
+  type CanvasScene
+} from '@shared/canvas-mutations'
 import {
   chordHeld,
   formatShortcut,
@@ -599,6 +628,11 @@ import {
   sshAccountsHint,
   ungroupNodes,
   placeNodeInRect,
+  drillGroupChildren,
+  remergeDrilledNodes,
+  drillSingleNode,
+  mergeSingleNode,
+  type DrillContext,
   type CanvasNode,
   type TerminalNodeCreationOptions
 } from '../state/workspace'
@@ -815,6 +849,57 @@ const NO_EPHEMERAL: { ephemeralNodes: CanvasNode[]; ephemeralEdges: Edge[] } = {
   ephemeralEdges: []
 }
 
+/** Build one render-only node for each unique foreign endpoint linked to this canvas. */
+function foreignProjectionNodes(
+  activeProject: Project | undefined,
+  localNodes: CanvasNode[],
+  projects: readonly Project[]
+): CanvasNode[] {
+  if (!activeProject) return []
+  const links = activeProject.links ?? []
+  const localIds = new Set(localNodes.map((node) => node.id))
+  const seen = new Set<string>()
+  const projected: CanvasNode[] = []
+  for (const link of links) {
+    if (link.kind !== 'context' && link.kind !== 'lineage') continue
+    const foreign = link.source.ref === 'xnode' ? link.source : link.target.ref === 'xnode' ? link.target : null
+    const local = link.source.ref === 'node' ? link.source : link.target.ref === 'node' ? link.target : null
+    if (!foreign || !local || !localIds.has(local.nodeId)) continue
+    const key = `${foreign.projectId}:${foreign.nodeId}`
+    if (seen.has(key)) continue
+    const targetProject = projects.find((project) => project.id === foreign.projectId)
+    const targetNode = targetProject?.nodes.find((node) => node.id === foreign.nodeId)
+    if (!targetProject || !targetNode) continue
+    const host = localNodes.find((node) => node.id === local.nodeId)
+    if (!host) continue
+    seen.add(key)
+    const hostWidth = host.measured?.width ?? host.width ?? 640
+    projected.push({
+      id: `xproj-${foreign.projectId}-${foreign.nodeId}`,
+      type: 'xproject',
+      position: { x: host.position.x + hostWidth + 48, y: host.position.y },
+      width: 640,
+      height: 440,
+      draggable: true,
+      selectable: false,
+      data: {
+        title: targetNode.title || targetNode.id,
+        color: targetProject.color,
+        group: null,
+        xprojOriginName: targetProject.name,
+        xprojSourceNodeId: local.nodeId,
+        xprojSpawn: {
+          bProjectId: targetProject.id,
+          bNodeId: targetNode.id,
+          bNode: targetNode,
+          bProject: targetProject
+        } satisfies XProjectSpawn
+      }
+    } as unknown as CanvasNode)
+  }
+  return projected
+}
+
 /**
  * An ephemeral card's position: its parent agent's position plus either the offset the user
  * dragged it to or the laid-out default. Both live in the AGENT's coordinate space (the card
@@ -879,6 +964,16 @@ const ropeEdge = (id: string, source: string, target: string, color: string): Ed
 /** A React Flow edge reduced to what is PERSISTED (and what goes on the wire). The decoration —
  *  color, markers, handles — is re-derived on every client from its own nodes, so it never travels. */
 const toBridgeLink = (e: Edge): BridgeLink => ({ id: e.id, source: e.source, target: e.target })
+
+function typedNodeLink(kind: Link['kind'], edge: BridgeLink): Link {
+  return {
+    id: edge.id,
+    kind,
+    source: { ref: 'node', nodeId: edge.source },
+    target: { ref: 'node', nodeId: edge.target },
+    ...(kind === 'lineage' ? { meta: { displayOnly: true } } : {})
+  }
+}
 
 const minimapNodeColor = (n: Node): string =>
   (n.data as { color?: string })?.color ?? '#0a84ff'
@@ -1142,6 +1237,7 @@ export function Canvas() {
     }
   }, [])
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
+  const [linkInspectorNodeId, setLinkInspectorNodeId] = useState<string | null>(null)
   // Screen coordinates of the click that most recently opened a NODE/selection context menu — a
   // ref (not state) because `selectionItems`'s "Delete" onClick reads it later, after the menu
   // has closed, and needs the value from THAT click, not a stale closure over `menu`.
@@ -1358,6 +1454,11 @@ export function Canvas() {
   // longer owns the dialog.
   // Node to center once its project finishes loading (cross-project notification click).
   const pendingFocusRef = useRef<string | null>(null)
+  // Transient canvas drill state. Group/node drills reuse the same project and merge edits back;
+  // project-reference drills switch projects and retain the source project for the back action.
+  const [drill, setDrill] = useState<DrillContext | null>(null)
+  const drillRef = useRef<DrillContext | null>(null)
+  drillRef.current = drill
   // One-shot: the next active-project load keeps the CURRENT camera instead of applying the
   // project's saved viewport. Set by reloadActiveProject (in-place external-change reload).
   const preserveViewportRef = useRef(false)
@@ -1542,6 +1643,7 @@ export function Canvas() {
   const [mergeTarget, setMergeTargetState] = useState<MergeState | null>(null)
   const [mergePush, setMergePush] = useState(false)
   const settings = useSettings((s) => s.settings)
+  const gatewayModels = useModelGateway((s) => s.models)
   // Only the Windows desktop bridge exposes this API. A newly accepted peer/phone terminal gets
   // THIS host's current default snapshotted once; Server Edition keeps its existing behavior.
   const trustedHostDefaultTerminalProfileId = window.nodeTerminal.terminalProfiles
@@ -1656,6 +1758,8 @@ export function Canvas() {
   }, [getViewport, setViewport])
 
   const activeProjectId = useProjects((s) => s.activeProjectId)
+  const activeProject = useProjects((s) => s.projects.find((project) => project.id === s.activeProjectId))
+  const projectList = useProjects((s) => s.projects)
   const activeProjectSettingsOverrides = useProjects(
     (s) => s.projects.find((p) => p.id === s.activeProjectId)?.settingsOverrides
   )
@@ -1797,6 +1901,7 @@ export function Canvas() {
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
       loop: withNodeBoundary(LoopNode),
+      xproject: withNodeBoundary(XProjectNode),
       scheduler: withNodeBoundary(NativeLoopNode),
       dino: withNodeBoundary(DinoNode),
       video: withNodeBoundary(VideoNode),
@@ -2096,8 +2201,15 @@ export function Canvas() {
         null
       )
     : null
+  const projectionNodes = useMemo(
+    () => foreignProjectionNodes(activeProject, nodes, projectList),
+    [activeProject, nodes, projectList]
+  )
   const allNodes = useMemo(() => {
-    const base = ephemeralNodes.length ? [...nodes, ...ephemeralNodes] : nodes
+    const base =
+      ephemeralNodes.length || projectionNodes.length
+        ? [...nodes, ...ephemeralNodes, ...projectionNodes]
+        : nodes
     if (!adhdFocusId) return base
     // `as typeof n` keeps each element's own type: `base` is a union of canvas nodes and the
     // ephemeral subagent/loop nodes, and a bare object literal here widens it until <ReactFlow>
@@ -2114,7 +2226,7 @@ export function Canvas() {
             data: { ...n.data, adhdDimmed: true }
           } as typeof n)
     )
-  }, [nodes, ephemeralNodes, adhdFocusId])
+  }, [nodes, ephemeralNodes, projectionNodes, adhdFocusId])
 
   // Context-link edges, statically styled (no per-message activity in the pull model).
   const accent = settings.accent
@@ -2229,6 +2341,58 @@ export function Canvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- scheduleEdgeSig signs the ref
     [scheduleEdgeSig]
   )
+  const typedDependencyEdges = useMemo(() => {
+    const links = (activeProject?.links ?? []).filter((link) => link.kind === 'dependency')
+    const liveIds = new Set(nodes.map((node) => node.id))
+    const nodeEdges = links
+      .filter(
+        (link) =>
+          link.source.ref === 'node' &&
+          link.target.ref === 'node' &&
+          liveIds.has(link.source.nodeId) &&
+          liveIds.has(link.target.nodeId)
+      )
+        .map((link) => ({
+          id: `link-${link.id}`,
+          source: link.source.nodeId,
+          target: link.target.nodeId,
+          type: 'default' as const,
+        selectable: false,
+        label: 'dependency',
+        labelStyle: { fill: offCanvasLinkColor(link), fontSize: 11, fontWeight: 600 },
+        labelBgStyle: { fill: '#1c1c1e', fillOpacity: 0.85 },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 5,
+        style: { stroke: offCanvasLinkColor(link), strokeWidth: 2, strokeDasharray: '8 5' },
+        markerEnd: { type: MarkerType.ArrowClosed, color: offCanvasLinkColor(link), width: 14, height: 14 }
+      }))
+    const branches = new Map<string, string>()
+    for (const node of nodes) {
+      if (node.type !== 'group' || !node.data.worktree?.branch) continue
+      const branchName = node.data.worktree.branch
+      const repoPath = node.data.worktree.repoPath
+      branches.set(branchEndpointKey(repoPath, branchName), node.id)
+      if (activeProject?.cwd) branches.set(branchEndpointKey(activeProject.cwd, branchName), node.id)
+      if (!branches.has(branchName)) branches.set(branchName, node.id)
+    }
+    const branchEdges = depHostEdges(links, branches).map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: 'link-out',
+      targetHandle: 'link-in',
+      type: 'default' as const,
+      selectable: false,
+      label: edge.label,
+      labelStyle: { fill: '#f59e0b', fontSize: 11, fontWeight: 600 },
+      labelBgStyle: { fill: '#1c1c1e', fillOpacity: 0.85 },
+      labelBgPadding: [6, 3] as [number, number],
+      labelBgBorderRadius: 5,
+      style: { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '8 5' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#f59e0b', width: 14, height: 14 }
+    }))
+    return [...nodeEdges, ...branchEdges]
+  }, [activeProject?.links, activeProject?.cwd, nodes])
   const displayEdges = useMemo(() => {
     const stickyIds = new Set(stickySig ? stickySig.split('|') : [])
     // ONE edge per pair. A node an agent opens gets both a rope (lineage) and a context bridge
@@ -2281,17 +2445,31 @@ export function Canvas() {
           }
         : e
     )
+    const projectionEdges = projectionNodes.map((projection) => ({
+      id: `xlink-${projection.id}`,
+      source: String(projection.data.xprojSourceNodeId ?? ''),
+      target: projection.id,
+      type: 'default' as const,
+      selectable: false,
+      label: 'foreign projection',
+      labelStyle: { fill: '#a855f7', fontSize: 11, fontWeight: 600 },
+      labelBgStyle: { fill: '#1c1c1e', fillOpacity: 0.85 },
+      labelBgPadding: [6, 3] as [number, number],
+      labelBgBorderRadius: 5,
+      style: { stroke: '#a855f7', strokeWidth: 1.5, strokeDasharray: '5 4' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#a855f7', width: 14, height: 14 }
+    }))
     // Waiting edges for armed nodes (`--after`): dep → dependent, dashed and animated while the
     // wait is on. Derived from node data rather than persisted — a pending dependency is a STATE
     // that ends when the launch fires, unlike the context bridge `--after` also draws, which is a
     // durable relation and stays. Built above (depEdges), keyed on the dependency signature so a
     // drag frame does not rebuild it.
     const extra =
-      ephemeralEdges.length || ropes.length || depEdges.length || scheduleEdges.length
-        ? [...scheduleEdges, ...ephemeralEdges, ...ropes, ...depEdges]
+      ephemeralEdges.length || ropes.length || depEdges.length || scheduleEdges.length || projectionEdges.length || typedDependencyEdges.length
+        ? [...scheduleEdges, ...ephemeralEdges, ...ropes, ...depEdges, ...projectionEdges, ...typedDependencyEdges]
         : []
     return extra.length ? [...decorated, ...extra] : decorated
-  }, [linkEdges, ephemeralEdges, controlEdges, accent, stickySig, depEdges, scheduleEdges])
+  }, [linkEdges, ephemeralEdges, controlEdges, accent, stickySig, depEdges, scheduleEdges, projectionNodes, typedDependencyEdges])
 
   // Header pin button (and ⌘⇧L): toggle the persisted pin preference. Clears the transient
   // dismiss so (re)pinning shows the docked panel; unpinning collapses it to hover-peek.
@@ -2404,6 +2582,7 @@ export function Canvas() {
               title: n.data.title ?? n.id,
               color: n.data.color ?? '#888',
               agentId: n.data.agentId,
+              agentBaseId: n.data.agentBaseId,
               cwd: n.data.cwd,
               ssh: n.data.ssh,
               parentId: n.parentId
@@ -2537,17 +2716,37 @@ export function Canvas() {
     // that never refresh (SSH, no cwd), which must not inherit the last project's scope.
     useWorktrees.getState().reset(project.id)
     if (project.cwd && !project.ssh) {
-      void useWorktrees.getState().refresh(project.cwd, boundGroups(flow))
+      void useWorktrees.getState().refresh(project.cwd, boundGroups(flow), project.id)
     }
-    setLinkEdges((project.bridges ?? []).map((b) => ({ id: b.id, source: b.source, target: b.target })))
+    const typedLinks = project.links ?? []
+    const contextEdges = typedLinks
+      .filter((link) => link.kind === 'context')
+      .map(nodeEndpoints)
+      .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+    const lineageEdges = typedLinks
+      .filter((link) => link.kind === 'lineage')
+      .map(nodeEndpoints)
+      .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+    const contextLinks = contextEdges.length ? contextEdges : project.bridges ?? []
+    const lineageLinks = lineageEdges.length ? lineageEdges : project.ropes ?? []
+    const restoredLinks = contextLinks.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target
+    }))
+    const restoredRopes = lineageLinks.map((r) => {
+      const srcState = project.nodes.find((n) => n.id === r.source)
+      const color = agentConfig((srcState?.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
+      return ropeEdge(r.id, r.source, r.target, color)
+    })
+    // Keep the synchronous refs paired with the React Flow state. Edge commands can arrive
+    // between this effect and the next render, so reading only state here would route a new link
+    // against the previously active project's edge set.
+    linkEdgesRef.current = restoredLinks
+    controlEdgesRef.current = restoredRopes
+    setLinkEdges(restoredLinks)
     // Restore control ropes with the source agent's color (falls back to the browser blue).
-    setControlEdges(
-      (project.ropes ?? []).map((r) => {
-        const srcState = project.nodes.find((n) => n.id === r.source)
-        const color = agentConfig((srcState?.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
-        return ropeEdge(r.id, r.source, r.target, color)
-      })
-    )
+    setControlEdges(restoredRopes)
     // Reset history for the newly loaded project.
     committedRef.current = flow
     pastRef.current = []
@@ -2763,20 +2962,24 @@ export function Canvas() {
   const publishableLater = useCallback(
     (
       flow: CanvasNode[],
-      override?: { bridges?: Edge[]; ropes?: Edge[] }
+      override?: { bridges?: Edge[]; ropes?: Edge[]; links?: Link[] }
     ): (() => CanvasScene) => {
       const ephIds = new Set(Object.keys(useAgentNodes.getState().byId))
       const overrideBridges = override?.bridges
       const overrideRopes = override?.ropes
-      return () =>
-        publishableScene(
-          {
-            nodes: flowToNodeStates(flow),
-            bridges: (overrideBridges ?? linkEdgesRef.current).map(toBridgeLink),
-            ropes: (overrideRopes ?? controlEdgesRef.current).map(toBridgeLink)
-          },
-          ephIds
-        )
+      const overrideLinks = override?.links
+      return () => {
+        const bridges = (overrideBridges ?? linkEdgesRef.current).map(toBridgeLink)
+        const ropes = (overrideRopes ?? controlEdgesRef.current).map(toBridgeLink)
+        const flowStates = flowToNodeStates(flow)
+        const currentProject = useProjects.getState().projects.find((p) => p.id === nodesProjectIdRef.current)
+        const existingLinks = currentProject?.links ?? [
+          ...(currentProject?.bridges ?? []).map((edge) => typedNodeLink('context', edge)),
+          ...(currentProject?.ropes ?? []).map((edge) => typedNodeLink('lineage', edge))
+        ]
+        const links = overrideLinks ?? mergeVisibleNodeLinks(existingLinks, new Set(flowStates.map((node) => node.id)), bridges, ropes)
+        publishableScene({ nodes: flowStates, bridges, ropes, links }, ephIds)
+      }
     },
     []
   )
@@ -2789,14 +2992,39 @@ export function Canvas() {
     // ids still agree — but an autosave timer armed under the previous project now skips instead of
     // writing its nodes under the new project's id (field bug 2026-08-10). The tested commit seam
     // carries both edge refs too; a peer edge must reach the same whole-file snapshot as the nodes.
+    const activeId = store.activeProjectId
+    const currentProject = store.getProject(activeId)
+    const currentStates = flowToNodeStates(nodesRef.current)
+    const activeDrill = drillRef.current
+    const persistedNodes =
+      currentProject && activeDrill?.projectId === activeId && activeDrill.kind === 'group'
+        ? remergeDrilledNodes(
+            currentProject.nodes,
+            currentStates,
+            activeDrill.groupId,
+            nodeStatesToFlow(currentProject.nodes)
+          )
+        : currentProject && activeDrill?.projectId === activeId && activeDrill.kind === 'node'
+          ? currentStates.length > 0
+            ? mergeSingleNode(currentProject.nodes, currentStates[0], nodeStatesToFlow(currentProject.nodes))
+            : currentProject.nodes
+          : currentStates
+    const bridges = linkEdgesRef.current.map(toBridgeLink)
+    const ropes = controlEdgesRef.current.map(toBridgeLink)
+    const existingLinks = currentProject?.links ?? [
+      ...(currentProject?.bridges ?? []).map((edge) => typedNodeLink('context', edge)),
+      ...(currentProject?.ropes ?? []).map((edge) => typedNodeLink('lineage', edge))
+    ]
+    const links = mergeVisibleNodeLinks(existingLinks, new Set(currentStates.map((node) => node.id)), bridges, ropes)
     commitActiveCanvas(
       {
         nodesProjectId: nodesProjectIdRef.current,
-        activeProjectId: store.activeProjectId,
-        nodes: flowToNodeStates(nodesRef.current),
+        activeProjectId: activeId,
+        nodes: persistedNodes,
         viewport: viewportRef.current,
-        bridges: linkEdgesRef.current.map(toBridgeLink),
-        ropes: controlEdgesRef.current.map(toBridgeLink)
+        bridges,
+        ropes,
+        links
       },
       store.commitCanvas
     )
@@ -3120,6 +3348,55 @@ export function Canvas() {
     return activeSession.api.canvas.onMutation((projectId, mutation) => {
       hasPeersRef.current = true // proof of a peer, whatever the presence table says
       if (!orderRef.current?.accept(mutation)) return
+      // Typed links have a separate key space from the legacy edge arrays. Apply them to the
+      // serialized project first so an inactive project cannot lose an off-canvas relationship on
+      // its next save. The active canvas also keeps its visible edge projections in sync.
+      if (isLinkMutation(mutation)) {
+        const store = useProjects.getState()
+        if (projectId !== store.activeProjectId) {
+          if (store.applyLinkMutation(projectId, mutation)) markDirty()
+          return
+        }
+        const stored = store.getProject(projectId)
+        if (!stored) return
+        const visibleNodeIds = new Set(nodesRef.current.map((node) => node.id))
+        const storedLinks = stored.links ?? [
+          ...(stored.bridges ?? []).map((edge) => typedNodeLink('context', edge)),
+          ...(stored.ropes ?? []).map((edge) => typedNodeLink('lineage', edge))
+        ]
+        const currentLinks = mergeVisibleNodeLinks(
+          storedLinks,
+          visibleNodeIds,
+          linkEdgesRef.current.map(toBridgeLink),
+          controlEdgesRef.current.map(toBridgeLink)
+        )
+        const nextLinks = applyTypedLinkMutation(currentLinks, mutation)
+        store.setProjectLinks(projectId, nextLinks)
+        const context = nextLinks
+          .filter((link) => link.kind === 'context')
+          .map(nodeEndpoints)
+          .filter((edge): edge is { id: string; source: string; target: string } => edge !== null && visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))
+        const lineage = nextLinks
+          .filter((link) => link.kind === 'lineage')
+          .map(nodeEndpoints)
+          .filter((edge): edge is { id: string; source: string; target: string } => edge !== null && visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))
+        linkEdgesRef.current = context.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }))
+        setLinkEdges(linkEdgesRef.current)
+        controlEdgesRef.current = lineage.map((edge) => {
+          const source = nodesRef.current.find((node) => node.id === edge.source)
+          const color = agentConfig((source?.data.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
+          return ropeEdge(edge.id, edge.source, edge.target, color)
+        })
+        setControlEdges(controlEdgesRef.current)
+        publisherRef.current?.adopt(
+          publishableLater(nodesRef.current, {
+            bridges: linkEdgesRef.current,
+            ropes: controlEdgesRef.current
+          })
+        )
+        markDirty()
+        return
+      }
       // ---- edges (context links + "spawned by" ropes) ----
       // They live outside React Flow's `nodes` array, in their own state, so they take their own
       // apply path — but everything around it is the node path's contract, unchanged: the ordering
@@ -3377,6 +3654,35 @@ export function Canvas() {
     [agentIdOf]
   )
 
+  /** Keep persisted typed links and the visible legacy edge refs synchronized after an edge edit. */
+  const persistVisibleLinkEdges = useCallback((bridges: Edge[], ropes: Edge[]) => {
+    const store = useProjects.getState()
+    const projectId = nodesProjectIdRef.current
+    if (!projectId) return
+    const project = store.getProject(projectId)
+    if (!project) return
+    const bridgeLinks = bridges.map(toBridgeLink)
+    const ropeLinks = ropes.map(toBridgeLink)
+    const existingLinks = project.links ?? [
+      ...(project.bridges ?? []).map((edge) => typedNodeLink('context', edge)),
+      ...(project.ropes ?? []).map((edge) => typedNodeLink('lineage', edge))
+    ]
+    const links = mergeVisibleNodeLinks(
+      existingLinks,
+      new Set(flowToNodeStates(nodesRef.current).map((node) => node.id)),
+      bridgeLinks,
+      ropeLinks
+    )
+    store.commitCanvas(
+      projectId,
+      flowToNodeStates(nodesRef.current),
+      viewportRef.current,
+      bridgeLinks,
+      ropeLinks,
+      links
+    )
+  }, [])
+
   // Draw a link: context (two agent nodes read each other) or note (sticky text becomes
   // the terminal's context).
   const onConnect = useCallback(
@@ -3422,9 +3728,13 @@ export function Canvas() {
           (e.source === target && e.target === source)
       )
       if (exists) return
-      setLinkEdges((es) =>
-        addEdge({ id: `bridge-${source}-${target}`, source, target, type: 'default' }, es)
+      const nextEdges = addEdge(
+        { id: `bridge-${source}-${target}`, source, target, type: 'default' },
+        linkEdgesRef.current
       )
+      linkEdgesRef.current = nextEdges
+      setLinkEdges(nextEdges)
+      persistVisibleLinkEdges(nextEdges, controlEdgesRef.current)
       markDirty()
       const status = useAgentStatus.getState().byId
       const titleOf = (id: string) =>
@@ -3457,7 +3767,7 @@ export function Canvas() {
       )
       if (msg) void api.pty.sendText(target, msg)
     },
-    [linkEndpointOf, agentIdOf, setLinkEdges, setNodes, markDirty, nodes]
+    [linkEndpointOf, agentIdOf, persistVisibleLinkEdges, setLinkEdges, setNodes, markDirty, nodes]
   )
 
   // Double-click a context link to remove it (ephemeral subagent/loop edges are left alone).
@@ -3490,16 +3800,26 @@ export function Canvas() {
         const covered = new Set(
           linkIdsCoveredByRopes([edge.id], controlEdgesRef.current, linkEdgesRef.current)
         )
-        setControlEdges((es) => es.filter((b) => b.id !== edge.id))
-        if (covered.size) setLinkEdges((es) => es.filter((b) => !covered.has(b.id)))
+        const nextRopes = controlEdgesRef.current.filter((b) => b.id !== edge.id)
+        const nextLinks = covered.size
+          ? linkEdgesRef.current.filter((b) => !covered.has(b.id))
+          : linkEdgesRef.current
+        controlEdgesRef.current = nextRopes
+        linkEdgesRef.current = nextLinks
+        setControlEdges(nextRopes)
+        if (covered.size) setLinkEdges(nextLinks)
+        persistVisibleLinkEdges(nextLinks, nextRopes)
         markDirty()
         return
       }
       if (!linkEdgesRef.current.some((b) => b.id === edge.id)) return
-      setLinkEdges((es) => es.filter((b) => b.id !== edge.id))
+      const nextLinks = linkEdgesRef.current.filter((b) => b.id !== edge.id)
+      linkEdgesRef.current = nextLinks
+      setLinkEdges(nextLinks)
+      persistVisibleLinkEdges(nextLinks, controlEdgesRef.current)
       markDirty()
     },
-    [setLinkEdges, setNodes, markDirty]
+    [persistVisibleLinkEdges, setLinkEdges, setNodes, markDirty]
   )
 
   // Route edge changes (selection) to the right store: `ctrl-` ids are control ropes (local
@@ -3509,11 +3829,22 @@ export function Canvas() {
     (changes: EdgeChange[]) => {
       const rope: EdgeChange[] = []
       const link: EdgeChange[] = []
+      const structural = changes.some((change) => change.type !== 'select')
       for (const c of changes) ('id' in c && String(c.id).startsWith('ctrl-') ? rope : link).push(c)
-      if (rope.length) setControlEdges((es) => applyEdgeChanges(rope, es))
-      if (link.length) onLinkEdgesChange(link)
+      if (rope.length) {
+        const nextRopes = applyEdgeChanges(rope, controlEdgesRef.current)
+        controlEdgesRef.current = nextRopes
+        setControlEdges(nextRopes)
+        if (structural) persistVisibleLinkEdges(linkEdgesRef.current, nextRopes)
+      }
+      if (link.length) {
+        const nextLinks = applyEdgeChanges(link, linkEdgesRef.current)
+        linkEdgesRef.current = nextLinks
+        onLinkEdgesChange(link)
+        if (structural) persistVisibleLinkEdges(nextLinks, controlEdgesRef.current)
+      }
     },
-    [onLinkEdgesChange]
+    [onLinkEdgesChange, persistVisibleLinkEdges]
   )
 
   // Prune ropes whose endpoints were deleted (mirrors the context-link pruning below).
@@ -3522,11 +3853,12 @@ export function Canvas() {
     // identity), and most canvases have no ropes at all.
     if (!controlEdgesRef.current.length) return
     const ids = new Set(nodes.map((n) => n.id))
-    setControlEdges((es) => {
-      const valid = es.filter((e) => ids.has(e.source) && ids.has(e.target))
-      return valid.length === es.length ? es : valid
-    })
-  }, [nodes])
+    const valid = controlEdgesRef.current.filter((e) => ids.has(e.source) && ids.has(e.target))
+    if (valid.length === controlEdgesRef.current.length) return
+    controlEdgesRef.current = valid
+    setControlEdges(valid)
+    persistVisibleLinkEdges(linkEdgesRef.current, valid)
+  }, [nodes, persistVisibleLinkEdges, setControlEdges])
 
   // A deleted target cannot remain a hidden scheduler recipient. Prune stale ids from the Loop
   // node itself (the persistence source), not merely from the derived edge list.
@@ -3568,7 +3900,9 @@ export function Canvas() {
     const ids = new Set(nodes.map((n) => n.id))
     const valid = linkEdges.filter((e) => ids.has(e.source) && ids.has(e.target))
     if (valid.length !== linkEdges.length) {
+      linkEdgesRef.current = valid
       setLinkEdges(valid)
+      persistVisibleLinkEdges(valid, controlEdgesRef.current)
       return // re-runs with the pruned set
     }
     const infoOf = (id: string) => {
@@ -3590,10 +3924,28 @@ export function Canvas() {
     // main clears all link files before writing the pushed map, so pushing only the active
     // project's map would sever the links of background projects whose agents keep running.
     const { projects, activeProjectId } = useProjects.getState()
+    const storedActive = projects.find((project) => project.id === activeProjectId)
+    const activeForContext = {
+      id: activeProjectId,
+      nodes: flowToNodeStates(nodes),
+      bridges: [],
+      links: [
+        ...(storedActive?.links ?? []).filter((link) =>
+          link.kind === 'context' &&
+          (link.source.ref === 'xnode' || link.target.ref === 'xnode')
+        )
+      ]
+    }
     const map = {
       ...buildBackgroundLinkMaps(
         projects,
         activeProjectId,
+        (id) => useAgentStatus.getState().byId[id]?.sessionId,
+        (id) => useAgentStatus.getState().byId[id]?.agentId
+      ),
+      ...buildProjectContextLinkMap(
+        activeForContext,
+        [...projects.filter((project) => project.id !== activeProjectId), activeForContext],
         (id) => useAgentStatus.getState().byId[id]?.sessionId,
         (id) => useAgentStatus.getState().byId[id]?.agentId
       ),
@@ -3602,7 +3954,7 @@ export function Canvas() {
     const t = setTimeout(() => void window.nodeTerminal.contextLink.setLinks(map), 150)
     return () => clearTimeout(t)
     // linkSessionSig is read only as an effect trigger — infoOf re-reads sessionIds via getState().
-  }, [linkEdges, nodes, setLinkEdges, agentIdOf, linkSessionSig])
+  }, [linkEdges, nodes, setLinkEdges, agentIdOf, linkSessionSig, persistVisibleLinkEdges, projectList, activeProjectId])
 
   // Reflect Claude nodes with unread output as a macOS Dock badge count (across all projects).
   // Subscribes to the derived count (a primitive), not the byId map, for the same reason as
@@ -3782,7 +4134,7 @@ export function Canvas() {
       const touched = new Set([change?.bind?.groupId, ...unbound].filter(Boolean))
       const bound: BoundGroup[] = boundGroups(nodesRef.current).filter((b) => !touched.has(b.groupId))
       if (change?.bind) bound.push(change.bind)
-      void useWorktrees.getState().refresh(project.cwd, bound)
+      void useWorktrees.getState().refresh(project.cwd, bound, project.id)
     },
     [activeProjectId]
   )
@@ -5707,13 +6059,20 @@ export function Canvas() {
             ...edgeIds,
             ...linkIdsCoveredByRopes(ropeIds, controlEdgesRef.current, linkEdgesRef.current)
           ])
+          let nextLinks = linkEdgesRef.current
+          let nextRopes = controlEdgesRef.current
           if (drop.size) {
-            setLinkEdges((es) => es.filter((b) => !drop.has(b.id)))
+            nextLinks = linkEdgesRef.current.filter((b) => !drop.has(b.id))
+            linkEdgesRef.current = nextLinks
+            setLinkEdges(nextLinks)
           }
           if (ropeIds.length) {
             const dropRopes = new Set(ropeIds)
-            setControlEdges((es) => es.filter((b) => !dropRopes.has(b.id)))
+            nextRopes = controlEdgesRef.current.filter((b) => !dropRopes.has(b.id))
+            controlEdgesRef.current = nextRopes
+            setControlEdges(nextRopes)
           }
+          persistVisibleLinkEdges(nextLinks, nextRopes)
           markDirty()
         }
         return
@@ -5729,7 +6088,7 @@ export function Canvas() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [requestDeleteNodes, setLinkEdges, markDirty])
+    }, [persistVisibleLinkEdges, requestDeleteNodes, setLinkEdges, markDirty])
 
   // Cmd/Ctrl+W (forwarded from main) keeps its immediate ordinary-mode behaviour, but Kids mode
   // routes it through the same two-key gate as every other node/session close surface. With
@@ -6095,6 +6454,28 @@ export function Canvas() {
     [attachWorktree, worktreeDialog]
   )
 
+  // Sidebar adoption creates a fresh group around an already-discovered orphan. It is intentionally
+  // routed through the same `worktreeFromEntry` and `attachWorktree` helpers as the context-menu
+  // picker, so ownership, base-ref selection, and refresh behavior stay identical.
+  const bindWorktreeFromSidebar = useCallback(
+    (entry: WorktreeEntry) => {
+      const projectId = useProjects.getState().activeProjectId
+      const project = projectId ? useProjects.getState().getProject(projectId) : undefined
+      const { repoRoot, entries } = useWorktrees.getState()
+      if (!projectId || !project || project.ssh || !repoRoot) {
+        setNotice({ kind: 'error', text: 'This worktree can only be bound from a local repository.' })
+        return
+      }
+      const binding = worktreeFromEntry(entry, repoRoot, resolveBaseRef(entries))
+      if (!binding) {
+        setNotice({ kind: 'error', text: 'That worktree has a detached HEAD. Check out a branch in it first.' })
+        return
+      }
+      attachWorktree({ groupId: null, at: viewCenter() }, binding)
+    },
+    [attachWorktree, setNotice, viewCenter]
+  )
+
   /** Mint and persist a stable generation id before a legacy binding can be disclosed. */
   const normalizeWorktreeBinding = useCallback((projectId: string, groupId: string): boolean => {
     if (
@@ -6399,7 +6780,7 @@ export function Canvas() {
   // merge / remove teardown actions (Tasks 8 & 9) slot in as new cases. `unbind` forgets the
   // binding without touching disk; `merge` merges to base; `remove` opens the safety dialog.
   const onWorktreeAction = useCallback(
-    (groupId: string, action: 'merge' | 'remove' | 'unbind') => {
+    (groupId: string, action: 'merge' | 'remove' | 'unbind' | 'sync') => {
       // A binding can only predate the SSH gate (hand-edited project file, or a project that became
       // an SSH project), but it can still exist — and merge/remove would run against the LOCAL
       // filesystem for a project whose git and terminals live on the remote host. Refuse them, out
@@ -6446,6 +6827,22 @@ export function Canvas() {
             baseRef: wt.baseRef,
             hasOrigin
           })
+          break
+        }
+        case 'sync': {
+          const wt = nodesRef.current.find((n) => n.id === groupId)?.data.worktree
+          if (!wt) return
+          const hasDependency = (useProjects.getState().getProject(activeProjectId ?? '')?.links ?? []).some(
+            (link) => isBranchDependencyLink(link) && link.source.branch === wt.branch
+          )
+          if (!hasDependency) return
+          void api.git
+            .syncBranch(wt.path, wt.branch)
+            .then((result) => setNotice({ kind: result.ok ? 'info' : 'error', text: result.message }))
+            .catch((error: unknown) => setNotice({
+              kind: 'error',
+              text: `The branch sync could not be completed: ${error instanceof Error ? error.message : String(error)}`
+            }))
           break
         }
         case 'remove':
@@ -6949,12 +7346,18 @@ export function Canvas() {
   // time, so a stale menu cannot force a restart onto a session that just went busy); all that is
   // left here is telling the user how it went. Up to ~6s of exit polling plus the echo-verified
   // resume line, hence the await before the notice.
-  const restartAgentNode = useCallback(async (nodeId: string) => {
+  const restartAgentNode = useCallback(async (
+    nodeId: string,
+    targetAgentId?: AgentId,
+    targetModel?: string,
+    restartShell?: boolean,
+    clearEnv?: boolean
+  ) => {
     const fn = agentRestartFn(nodeId)
     if (!fn) return // node unmounted between opening the menu and clicking
     let outcome: RestartOutcome
     try {
-      outcome = await fn()
+      outcome = await fn(targetAgentId, targetModel, restartShell, clearEnv)
     } catch {
       // The transport under the restart threw (a relay socket still CONNECTING rejects the very
       // first write). Unhandled, this rejection made the action a silent no-op — the user clicked
@@ -6970,8 +7373,23 @@ export function Canvas() {
     // dismissed — the pane is untouched either way (nothing is ever killed).
     setNotice(
       outcome === 'restarted'
-        ? { kind: 'info', text: 'Agent restarted — conversation resumed.' }
-        : outcome === 'exit-timeout'
+        ? {
+            kind: 'info',
+            text: clearEnv
+              ? 'Restarted on subscription — conversation resumed.'
+              : targetModel
+                ? `Switched to ${targetModel} — conversation resumed.`
+                : targetAgentId
+                  ? 'Session reopened with the selected agent — conversation resumed.'
+                  : 'Agent restarted — conversation resumed.'
+          }
+        : outcome === 'model-no-session'
+          ? { kind: 'error', text: 'Model switch skipped: this session has no resumable provider id.' }
+          : outcome === 'model-unavailable'
+            ? { kind: 'error', text: 'Model switch skipped: the target harness or model is unavailable.' }
+            : outcome === 'model-pane-mismatch'
+              ? { kind: 'error', text: 'Model switch skipped: the expected agent does not own this pane.' }
+              : outcome === 'exit-timeout'
           ? {
               kind: 'error',
               // Deliberately does NOT claim the session is still running: what we know is that the
@@ -6997,6 +7415,34 @@ export function Canvas() {
             }
     )
   }, [])
+
+  /** Change one supported agent's model and restart only after the new value is on the node. */
+  const switchAgentModel = useCallback(
+    (nodeId: string, model: string) => {
+      const node = nodesRef.current.find((candidate) => candidate.id === nodeId)
+      const agent = node?.data.agentId as AgentId | undefined
+      if (!node || node.type !== 'terminal' || !agent || !canSwitchModel(agent)) return
+      const state = useAgentStatus.getState().byId[nodeId]
+      const gate = modelSwitchEligibility(agent, restartSessionId(state?.sessionId, node.data.agentSessionId))
+      if (!gate.ok) {
+        setNotice({ kind: 'error', text: 'This agent cannot switch models until it has an idle resumable session.' })
+        return
+      }
+      setTimeout(() => void restartAgentNode(nodeId, undefined, model), 0)
+    },
+    [restartAgentNode]
+  )
+
+  /** Recreate one agent session with gateway/provider variables stripped for its own subscription. */
+  const restartOnSubscription = useCallback(
+    (nodeId: string) => {
+      const node = nodesRef.current.find((candidate) => candidate.id === nodeId)
+      const agent = node?.data.agentId as AgentId | undefined
+      if (!node || node.type !== 'terminal' || !agent || !vanillaEnvStripPattern(agent)) return
+      void restartAgentNode(nodeId, undefined, undefined, undefined, true)
+    },
+    [restartAgentNode]
+  )
 
   const switchCodexAccount = useCallback(
     async (nodeId: string, targetAccountId?: string, targetSsh?: Project['ssh']) => {
@@ -8006,6 +8452,81 @@ export function Canvas() {
     return node.selected && selected.length > 0 ? selected : [node.id]
   }, [])
 
+  const refreshActiveLinkEdges = useCallback(() => {
+    const store = useProjects.getState()
+    const project = store.getProject(store.activeProjectId)
+    if (!project) return
+    const links = project.links ?? []
+    const context = links
+      .filter((link) => link.kind === 'context')
+      .map(nodeEndpoints)
+      .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+    const lineage = links
+      .filter((link) => link.kind === 'lineage')
+      .map(nodeEndpoints)
+      .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+    const contextEdges = (context.length ? context : project.bridges ?? []).map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target
+    }))
+    const ropeEdges = (lineage.length ? lineage : project.ropes ?? []).map((edge) => {
+      const source = project.nodes.find((node) => node.id === edge.source)
+      const color = agentConfig((source?.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
+      return ropeEdge(edge.id, edge.source, edge.target, color)
+    })
+    linkEdgesRef.current = contextEdges
+    controlEdgesRef.current = ropeEdges
+    setLinkEdges(contextEdges)
+    setControlEdges(ropeEdges)
+    markDirty()
+  }, [markDirty, setLinkEdges, setControlEdges])
+
+  /** Route inspector edits through the live canvas refs before autosave or peer publication. */
+  const commitLinksFromInspector = useCallback(
+    (projectId: string, links: Link[]) => {
+      const store = useProjects.getState()
+      store.setProjectLinks(projectId, links)
+      if (projectId !== store.activeProjectId) {
+        markDirty()
+        return
+      }
+      const context = links
+        .filter((link) => link.kind === 'context')
+        .map(nodeEndpoints)
+        .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+      const lineage = links
+        .filter((link) => link.kind === 'lineage')
+        .map(nodeEndpoints)
+        .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+      linkEdgesRef.current = context.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }))
+      controlEdgesRef.current = lineage.map((edge) => {
+        const source = nodesRef.current.find((node) => node.id === edge.source)
+        const color = agentConfig((source?.data.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
+        return ropeEdge(edge.id, edge.source, edge.target, color)
+      })
+      setLinkEdges(linkEdgesRef.current)
+      setControlEdges(controlEdgesRef.current)
+      // This is a local edit, so publish the typed relationship instead of adopting it as if it
+      // came from a peer. The explicit link override is needed because an xnode or branch link has
+      // no visible React Flow edge and therefore does not change either edge-state dependency.
+      publisherRef.current?.publish(
+        publishableLater(nodesRef.current, {
+          bridges: linkEdgesRef.current,
+          ropes: controlEdgesRef.current,
+          links
+        })
+      )
+      markDirty()
+    },
+    [markDirty, publishableLater, setControlEdges, setLinkEdges]
+  )
+
+  useEffect(() => {
+    setLinkCommitHandler(commitLinksFromInspector)
+    return () => setLinkCommitHandler(null)
+  }, [commitLinksFromInspector])
+
   /** `at` is where the menu was opened, in flow coordinates: every entry that SPAWNS a node
    *  (Duplicate / Branch / Transfer) puts it there, instead of somewhere the user never pointed. */
   const selectionItems = useCallback((ids: string[], at?: { x: number; y: number }): MenuItem[] => {
@@ -8016,6 +8537,48 @@ export function Canvas() {
     const hidden = useSettings.getState().settings.hiddenNodeMenuItems
     return tidySeparators<MenuItem>([
       { type: 'label', label: ids.length > 1 ? `${ids.length} nodes` : '1 node' },
+      ...(ids.length === 1
+        ? (() => {
+            const node = nodesRef.current.find((candidate) => candidate.id === ids[0])
+            const agent = node?.data.agentId as AgentId | undefined
+            if (!agent || !canSwitchModel(agent) || gatewayModels.length === 0) return []
+            const currentModel = node?.data.agentModel as string | undefined
+            return [
+              {
+                type: 'submenu',
+                label: currentModel ? `Model: ${currentModel}` : 'Choose model…',
+                icon: <IconSwitch />,
+                children: gatewayModels.map((model) => ({
+                  label: model.name ? `${model.name} (${model.id})` : model.id,
+                  hint: model.provider
+                    ? `${model.provider}${model.contextWindow ? ` · ${model.contextWindow} context` : ''}`
+                    : undefined,
+                  disabled: model.id === currentModel,
+                  onClick: () => switchAgentModel(ids[0], model.id)
+                }))
+              }
+            ] as MenuItem[]
+          })()
+        : []),
+      ...(ids.length === 1
+        ? (() => {
+            const node = nodesRef.current.find((candidate) => candidate.id === ids[0])
+            const agent = node?.data.agentId as AgentId | undefined
+            if (!agent || !vanillaEnvStripPattern(agent)) return []
+            return [
+              {
+                label: 'Restart on subscription',
+                icon: <IconPower />,
+                disabled: activeSession.source === 'relay',
+                hint:
+                  activeSession.source === 'relay'
+                    ? 'The relay host owns this session environment.'
+                    : 'Recreates this idle session with gateway and inherited provider variables removed.',
+                onClick: () => restartOnSubscription(ids[0])
+              }
+            ] as MenuItem[]
+          })()
+        : []),
       ...((): MenuItem[] => {
         // "Group …" wraps objects that share ONE container — existing frames are valid members
         // now that frames nest. A box-selection that caught a frame AND its children is
@@ -8128,6 +8691,15 @@ export function Canvas() {
                 const nodeLabel = nodesRef.current.find((n) => n.id === ids[0])?.data.title || 'Node'
                 if (anchor) openAppearanceEditor(appearanceId('node', ids[0]), nodeLabel, 'node', anchor)
               }
+            }
+        ] as MenuItem[])
+        : []),
+      ...(ids.length === 1
+        ? ([
+            {
+              label: 'Inspect links…',
+              icon: <IconShapes />,
+              onClick: () => setLinkInspectorNodeId(ids[0])
             }
           ] as MenuItem[])
         : []),
@@ -8425,7 +8997,11 @@ export function Canvas() {
         ? (() => {
             const n = nodesRef.current.find((x) => x.id === ids[0])
             const st = useAgentStatus.getState().byId[ids[0]]
-            const gate = restartEligibility(restartAgentIdOf(n), st?.state, st?.sessionId)
+            const gate = restartEligibility(
+              restartAgentIdOf(n),
+              st?.state,
+              restartSessionId(st?.sessionId, n?.data.agentSessionId)
+            )
             // 'not-resumable' is permanent (a plain shell, opencode, a custom CLI with no exit
             // command) — no row at all. The other two are temporary, so the row stays and says
             // what to wait for instead of disappearing and teaching nothing.
@@ -8519,6 +9095,10 @@ export function Canvas() {
     assessProfileRestartForNode,
     requestRestartWithTerminalProfile,
     switchCodexAccount,
+    gatewayModels,
+    switchAgentModel,
+    restartOnSubscription,
+    activeSession.source,
     restartAgentNode,
     profileText
   ])
@@ -8683,6 +9263,20 @@ export function Canvas() {
     [activeProjectId, addAgentNode]
   )
 
+  const setGroupProjectRef = useCallback(
+    (groupId: string, projectId: string | undefined) => {
+      setNodes((current) =>
+        current.map((node) =>
+          node.id === groupId
+            ? { ...node, data: { ...node.data, projectRef: projectId ? { projectId } : undefined } }
+            : node
+        )
+      )
+      markDirty()
+    },
+    [markDirty, setNodes]
+  )
+
   const groupItems = useCallback(
     (groupId: string, at?: { x: number; y: number }): MenuItem[] => {
       // Right-clicking a frame while other objects are selected is the natural way to say "put
@@ -8748,6 +9342,30 @@ export function Canvas() {
           icon: <IconLock />,
           onClick: () => addAuthenticator(at, groupId)
         },
+        ...(() => {
+          const current = nodesRef.current.find((node) => node.id === groupId)
+          const selectedRef = current?.data.projectRef?.projectId
+          const candidates = useProjects
+            .getState()
+            .projects.filter((project) => project.id !== activeProjectId && !project.closed && !project.unavailable)
+          if (!candidates.length && !selectedRef) return []
+          return [
+            {
+              type: 'submenu',
+              label: selectedRef ? 'Change referenced project…' : 'Reference project…',
+              icon: <IconProject />,
+              children: [
+                ...(selectedRef
+                  ? [{ label: 'Clear reference', onClick: () => setGroupProjectRef(groupId, undefined) }]
+                  : []),
+                ...candidates.map((project) => ({
+                  label: project.name,
+                  onClick: () => setGroupProjectRef(groupId, project.id)
+                }))
+              ]
+            }
+          ] as MenuItem[]
+        })(),
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
           ? []
@@ -8807,7 +9425,9 @@ export function Canvas() {
       addAuthenticator,
       addNativeLoop,
       addToExistingGroup,
-      groupSelection
+      groupSelection,
+      activeProjectId,
+      setGroupProjectRef
     ]
   )
 
@@ -9316,6 +9936,129 @@ export function Canvas() {
   )
   focusNodeRef.current = focusNodeById
 
+  const installDrilledFlow = useCallback(
+    (context: DrillContext, flow: CanvasNode[]) => {
+      drillRef.current = context
+      setDrill(context)
+      loadingRef.current = true
+      nodesRef.current = flow
+      nodesProjectIdRef.current = context.projectId
+      setNodes(flow)
+      const ids = new Set(flow.map((node) => node.id))
+      const visibleLinks = linkEdgesRef.current.filter(
+        (edge) => ids.has(edge.source) && ids.has(edge.target)
+      )
+      const visibleRopes = controlEdgesRef.current.filter(
+        (edge) => ids.has(edge.source) && ids.has(edge.target)
+      )
+      linkEdgesRef.current = visibleLinks
+      controlEdgesRef.current = visibleRopes
+      setLinkEdges(visibleLinks)
+      setControlEdges(visibleRopes)
+      setTimeout(() => {
+        loadingRef.current = false
+      }, 0)
+    },
+    [setNodes, setLinkEdges, setControlEdges]
+  )
+
+  const openNodeGroupAsCanvas = useCallback(
+    (groupId: string) => {
+      if (drillRef.current) return
+      const store = useProjects.getState()
+      const sourceProjectId = store.activeProjectId
+      const group = nodesRef.current.find((node) => node.id === groupId)
+      if (!group || group.type !== 'group' || !sourceProjectId) return
+      const projectRef = group.data.projectRef
+      if (projectRef?.projectId) {
+        const target = store.getProject(projectRef.projectId)
+        if (!target || target.unavailable || target.closed) {
+          setNotice({ kind: 'error', text: 'The referenced project is unavailable or closed.' })
+          return
+        }
+        commitActiveToStore()
+        const context: DrillContext = { kind: 'project-ref', projectId: sourceProjectId, targetId: target.id }
+        drillRef.current = context
+        setDrill(context)
+        switchProject(target.id)
+        return
+      }
+      const { flow } = drillGroupChildren(nodesRef.current, groupId)
+      commitActiveToStore()
+      installDrilledFlow({ kind: 'group', projectId: sourceProjectId, groupId }, flow)
+    },
+    [commitActiveToStore, installDrilledFlow, setNotice, switchProject]
+  )
+
+  const exitDrill = useCallback(() => {
+    const current = drillRef.current
+    if (!current) return
+    if (current.kind === 'project-ref') {
+      drillRef.current = null
+      setDrill(null)
+      switchProject(current.projectId)
+      return
+    }
+    commitActiveToStore()
+    const project = useProjects.getState().getProject(current.projectId)
+    if (!project) return
+    const fullFlow = nodeStatesToFlow(project.nodes)
+    drillRef.current = null
+    setDrill(null)
+    loadingRef.current = true
+    nodesRef.current = fullFlow
+    nodesProjectIdRef.current = project.id
+    setNodes(fullFlow)
+    const links = project.links ?? []
+    const contexts = links
+      .filter((link) => link.kind === 'context')
+      .map(nodeEndpoints)
+      .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+    const lineage = links
+      .filter((link) => link.kind === 'lineage')
+      .map(nodeEndpoints)
+      .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+    const contextEdges = (contexts.length ? contexts : project.bridges ?? []).map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target
+    }))
+    const ropeEdges = (lineage.length ? lineage : project.ropes ?? []).map((edge) => {
+      const source = project.nodes.find((node) => node.id === edge.source)
+      const color = agentConfig((source?.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
+      return ropeEdge(edge.id, edge.source, edge.target, color)
+    })
+    linkEdgesRef.current = contextEdges
+    controlEdgesRef.current = ropeEdges
+    setLinkEdges(contextEdges)
+    setControlEdges(ropeEdges)
+    setTimeout(() => {
+      loadingRef.current = false
+    }, 0)
+  }, [commitActiveToStore, setNodes, setLinkEdges, setControlEdges, switchProject])
+
+  useEffect(() => {
+    setDrillHandler(openNodeGroupAsCanvas)
+    return () => setDrillHandler(null)
+  }, [openNodeGroupAsCanvas])
+
+  useEffect(() => {
+    setFocusNodeHandler(focusNodeById)
+    return () => setFocusNodeHandler(null)
+  }, [focusNodeById])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || !drillRef.current) return
+      const active = document.activeElement
+      if (active?.closest('input, textarea, [contenteditable="true"], .xterm')) return
+      event.preventDefault()
+      exitDrill()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [exitDrill])
+
   // Session board cards are derived LIVE from the canvas nodes; the board stores only assignments.
   // Only while the board is OPEN: `nodes` gets a fresh identity on every drag frame, so a closed
   // board was rebuilding a card object per node ~60×/s for a surface that is not mounted. The
@@ -9603,7 +10346,12 @@ export function Canvas() {
       )
       const placed = src.parentId ? parentInto(node, src.parentId) : node
       setNodes((ns) => [...ns, placed])
-      setControlEdges((es) => [...es, ropeEdge(`ctrl-${sourceNodeId}-${placed.id}`, sourceNodeId, placed.id, '#0a84ff')])
+      const nextRopes = [
+        ...controlEdgesRef.current,
+        ropeEdge(`ctrl-${sourceNodeId}-${placed.id}`, sourceNodeId, placed.id, '#0a84ff')
+      ]
+      controlEdgesRef.current = nextRopes
+      setControlEdges(nextRopes)
       // Deliberately NO markDirty: a temporary node is absent from every save, so marking the
       // project dirty would write a file whose only change is one the file cannot contain.
     })
@@ -9621,11 +10369,12 @@ export function Canvas() {
       const target = nodesRef.current.find((node) => node.id === message.recipient.nodeId)
       if (!target || target.type !== 'terminal') return false
       const configuredAgent = createdAgentId(target.data)
+      const harnessAgent = createdAgentHarnessId(target.data)
       const live = useAgentStatus.getState().byId[target.id]
       // A terminal shell accepting bytes is not proof that an agent turn received them. Only
       // created agent nodes whose expected CLI currently owns the pane may advance to delivered.
-      if (!configuredAgent || live?.agentId !== configuredAgent) return false
-      const expectedProcess = agentConfig(configuredAgent)?.expectedProcess
+      if (!configuredAgent || !harnessAgent || (live?.agentId !== configuredAgent && live?.agentId !== harnessAgent)) return false
+      const expectedProcess = agentConfig(harnessAgent)?.expectedProcess
       const paneProcess = (await api.pty.paneCommand(target.id))?.split('/').pop()
       if (!expectedProcess || paneProcess !== expectedProcess) return false
       const state = live.state
@@ -9801,6 +10550,222 @@ export function Canvas() {
       const reply = (r: { ok: boolean; message?: string; result?: unknown; error?: string }) =>
         api.sendAgentControlResult({ requestId, ...r })
 
+      // Targeted opens are applied to the requested project's data owner. The target is resolved
+      // only against projects already open in this client, so an agent cannot turn a path-shaped
+      // flag into an arbitrary local checkout. A cross-project request never falls through to the
+      // caller's canvas: an unknown, closed, unavailable, SSH, or relay target is refused rather
+      // than silently creating a session in the wrong project.
+      if (
+        (verb === 'open-terminal' || verb === 'open-claude' || verb === 'open-agent') &&
+        Object.prototype.hasOwnProperty.call(args, 'project')
+      ) {
+        const store = useProjects.getState()
+        const requestedProject = typeof args.project === 'string' ? args.project.trim() : ''
+        const target = store.projects.find(
+          (project) => project.id === requestedProject || project.cwd === requestedProject
+        )
+        if (!target) {
+          reply({ ok: false, error: 'No open project matches --project. Open the target folder first.' })
+          return
+        }
+        const liveSource = nodesRef.current.find((node) => node.id === sourceNodeId)
+        const owners = store.projects.filter((project) =>
+          project.nodes.some((node) => node.id === sourceNodeId)
+        )
+        const sourceProject = liveSource
+          ? store.getProject(store.activeProjectId)
+          : owners.length === 1
+            ? owners[0]
+            : undefined
+        if (
+          !sourceProject ||
+          (owners.length > 0 && !owners.some((project) => project.id === sourceProject.id)) ||
+          owners.length > 1
+        ) {
+          reply({ ok: false, error: 'The source node does not have one unambiguous owning project.' })
+          return
+        }
+        if (target.id === sourceProject.id) {
+          // The ordinary handler below owns same-project opens, including --group and --after.
+        } else {
+          if (target.closed || target.unavailable) {
+            reply({ ok: false, error: 'The target project is closed or unavailable.' })
+            return
+          }
+          if (target.ssh || target.remote) {
+            reply({ ok: false, error: 'Opening sessions in SSH or relay projects is not supported.' })
+            return
+          }
+          if (args.group || args.after) {
+            reply({
+              ok: false,
+              error: 'Cross-project opens do not accept --group or --after; target the project first.'
+            })
+            return
+          }
+          const sourceData = liveSource?.data ?? sourceProject.nodes.find((node) => node.id === sourceNodeId)
+          if (!sourceData || !sourceIsControlCapable(sourceData.agentId, sourceData.agentBaseId)) {
+            reply({ ok: false, error: 'source node is not a control-capable agent' })
+            return
+          }
+          const targetIsAgent = verb !== 'open-terminal'
+          const targetAgent = targetIsAgent
+            ? ((verb === 'open-agent' ? args.agent : 'claude') as AgentId)
+            : undefined
+          const targetSettings = useSettings.getState().settings
+          const requestedAccount = args.account === 'system' ? undefined : args.account
+          if (args.resume && !targetIsAgent) {
+            reply({ ok: false, error: 'Only open-agent can resume an agent session.' })
+            return
+          }
+          if (args.account && targetAgent !== 'codex') {
+            reply({ ok: false, error: 'open-agent --account is supported only for Codex' })
+            return
+          }
+          const targetCodexAccounts = codexAccountsForCanvas(targetSettings.codexAccounts, target)
+          if (
+            requestedAccount &&
+            !targetCodexAccounts.some((account) => account.id === requestedAccount)
+          ) {
+            reply({ ok: false, error: 'open-agent: unknown or unavailable Codex account' })
+            return
+          }
+          const account =
+            targetAgent === 'codex'
+              ? requestedAccount
+              : targetAgent === 'claude'
+                ? resolveNewNodeAccount(undefined, target, targetSettings.claudeAccounts)
+                : undefined
+          const targetCount = args.resume
+            ? 1
+            : Math.max(1, Math.min(targetAgent === 'claude' ? 5 : 8, parseInt(args.count || '1', 10) || 1))
+          const targetCwd = args.cwd?.trim() || target.cwd
+          const targetPlan = targetAgent
+            ? agentLaunchPlanForProject('canvas-control-open-agent', target, targetAgent)
+            : undefined
+          const targetOptions = terminalCreationOptionsFor(target.id)
+          const targetNodes =
+            target.id === store.activeProjectId ? nodesRef.current : nodeStatesToFlow(target.nodes)
+          const made: CanvasNode[] = []
+          for (let index = 0; index < targetCount; index++) {
+            const node = targetAgent
+              ? createAgentNode(
+                  targetAgent,
+                  targetNodes.length + index,
+                  targetCwd,
+                  { x: 80 + index * 700, y: 80 },
+                  args.prompt,
+                  undefined,
+                  account,
+                  targetPlan,
+                  targetOptions,
+                  target,
+                  args.model
+                )
+              : createTerminalNode(
+                  targetNodes.length + index,
+                  targetCwd,
+                  { x: 80 + index * 700, y: 80 },
+                  args.cmd,
+                  undefined,
+                  targetOptions
+                )
+            if (args.resume) {
+              const resume = resumeCommand(targetAgent!, args.resume, {
+                base: agentLaunchOverride(targetAgent!, target)
+              })
+              if (!resume) {
+                reply({ ok: false, error: 'The selected agent does not support session resume.' })
+                return
+              }
+              node.data = {
+                ...node.data,
+                initialCommand: commandForAgentLaunch(resume, targetPlan!),
+                agentLaunchIntent: {
+                  kind: 'agent',
+                  action: 'resume',
+                  agentId: targetAgent!,
+                  sessionId: args.resume,
+                  ...(node.data.agentModel ? { model: node.data.agentModel as string } : {}),
+                  permissionMode: targetPlan!.mode
+                },
+                agentSessionId: args.resume
+              }
+            }
+            made.push(node)
+          }
+
+          // An inactive target cannot use React Flow's live array. Hold its already-authorized
+          // launch in the machine-local pending-launch overlay, so opening the target later starts
+          // the exact same semantic command without serializing renderer shell syntax into the
+          // shared project file.
+          const targetOffersProfiles = canOfferTerminalProfiles(
+            !!api.terminalProfiles,
+            sessionForProject(target.id).source,
+            false
+          )
+          const prepared = target.id === store.activeProjectId
+            ? made
+            : made.map((node) => {
+                const launch = armedTerminalLaunchIntent(node.data, {
+                  offersTerminalProfiles: targetOffersProfiles,
+                  hasOpaqueExecutor: !!api.pty.executeLaunchIntent
+                })
+                return launch
+                  ? {
+                      ...node,
+                      data: {
+                        ...node.data,
+                        initialCommand: undefined,
+                        agentLaunchIntent: undefined,
+                        pendingLaunch: { after: [], launchId: uuid(), launch }
+                      }
+                    }
+                  : node
+              })
+          if (target.id === store.activeProjectId) {
+            setNodes((current) => [...current, ...prepared])
+          } else {
+            for (const node of prepared) {
+              const state = flowToNodeStates([node])[0]
+              if (!state || !store.addNodeToProject(target.id, state)) {
+                reply({ ok: false, error: 'The target project changed before its session could be added.' })
+                return
+              }
+            }
+          }
+
+          // The source project owns the durable lineage link. The target node is represented by an
+          // xnode endpoint, so the source canvas can render a live projection without copying the
+          // target node or its execution fields into the source project's file.
+          const sourceLinks = sourceProject.links ?? []
+          const lineageLinks = prepared.map((node) => ({
+            id: newLinkId(),
+            kind: 'lineage' as const,
+            source: { ref: 'node' as const, nodeId: sourceNodeId },
+            target: { ref: 'xnode' as const, projectId: target.id, nodeId: node.id },
+            meta: { displayOnly: true }
+          }))
+          const allSourceLinks = [...sourceLinks, ...lineageLinks]
+          store.setProjectLinks(sourceProject.id, allSourceLinks)
+          if (sourceProject.id === store.activeProjectId) {
+            publisherRef.current?.publish(
+              publishableLater(nodesRef.current, { links: allSourceLinks })
+            )
+          }
+          markDirty()
+          if (target.id !== store.activeProjectId) void writeDisk()
+          reply({
+            ok: true,
+            message:
+              `opened ${prepared.length} ${targetAgent ?? 'terminal'} session(s) in ${target.name}` +
+              (target.id === store.activeProjectId ? '' : '; starts when that project is next viewed'),
+            result: { ids: prepared.map((node) => node.id), projectId: target.id, links: lineageLinks.map((link) => link.id) }
+          })
+          return
+        }
+      }
+
       // Which canvas answers? React Flow holds only the ACTIVE project's nodes, but every OTHER
       // project's tmux sessions keep running and are re-adopted on the next app start — so after a
       // restart the agents of every project the app did NOT come up on were answered by a canvas
@@ -9854,7 +10819,7 @@ export function Canvas() {
       // the claude hook env at spawn, so a manual `claude` there holds NODETERM_CANVAS_CONTROL —
       // rejecting it here contradicted the env it was handed and surfaced as a baffling
       // "not a control-capable agent" from a session that plainly runs claude.
-      if (!sourceIsControlCapable(src.data.agentId)) {
+      if (!sourceIsControlCapable(src.data.agentId, src.data.agentBaseId)) {
         reply({ ok: false, error: 'source node is not a control-capable agent' })
         return
       }
@@ -9915,8 +10880,15 @@ export function Canvas() {
       const belowY = srcAbs.y + srcH + 80
       const edgeColor = agentConfig((src.data.agentId as string) ?? 'claude')?.color ?? '#d97757'
       const placeBelow = (i = 0) => ({ x: srcAbs.x + srcW / 2 + i * 460, y: belowY + 210 })
-      const connect = (newId: string) =>
-        setControlEdges((es) => [...es, ropeEdge(`ctrl-${sourceNodeId}-${newId}`, sourceNodeId, newId, edgeColor)])
+      const connect = (newId: string) => {
+        const nextRopes = [
+          ...controlEdgesRef.current,
+          ropeEdge(`ctrl-${sourceNodeId}-${newId}`, sourceNodeId, newId, edgeColor)
+        ]
+        controlEdgesRef.current = nextRopes
+        setControlEdges(nextRopes)
+        persistVisibleLinkEdges(linkEdgesRef.current, nextRopes)
+      }
       // Draw real CONTEXT links (persisted `bridges`), not the display-only ropes `connect`
       // draws — a rope is lineage decoration, a bridge is what get-linked-context reads. This
       // is what lets an orchestrator fan IN: read back what the nodes it opened produced.
@@ -9940,7 +10912,11 @@ export function Canvas() {
         const plan = planBridges(fromId, targetIds, lookup, [...linkEdgesRef.current, ...drawn])
         if (plan.edges.length) {
           drawn.push(...plan.edges)
-          setLinkEdges((es) => [...es, ...plan.edges.map((e) => ({ ...e, type: 'default' }))])
+          const additions = plan.edges.map((e) => ({ ...e, type: 'default' }))
+          const nextLinks = [...linkEdgesRef.current, ...additions]
+          linkEdgesRef.current = nextLinks
+          setLinkEdges(nextLinks)
+          persistVisibleLinkEdges(nextLinks, controlEdgesRef.current)
           markDirty()
         }
         return plan
@@ -10175,9 +11151,17 @@ export function Canvas() {
                 // Canonical teardown destroys the session, drops agentStatus and reparents any
                 // group children. Removing its control ropes is part of the same confirmed action.
                 deleteNodes([nodeId])
-                setControlEdges((edges) =>
-                  edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
+                const nextLinks = linkEdgesRef.current.filter(
+                  (edge) => edge.source !== nodeId && edge.target !== nodeId
                 )
+                const nextRopes = controlEdgesRef.current.filter(
+                  (edge) => edge.source !== nodeId && edge.target !== nodeId
+                )
+                linkEdgesRef.current = nextLinks
+                controlEdgesRef.current = nextRopes
+                setLinkEdges(nextLinks)
+                setControlEdges(nextRopes)
+                persistVisibleLinkEdges(nextLinks, nextRopes)
               },
               reply
             }
@@ -11164,6 +12148,88 @@ export function Canvas() {
               return
             }
             reply({ ok: false, error: `close-worktree: unknown --mode ${mode} (unbind|remove)` })
+            return
+          }
+          case 'link-branches': {
+            const project = ctlProject
+            if (!project || project.ssh) {
+              reply({ ok: false, error: 'link-branches: local repository access is required.' })
+              return
+            }
+            // Store the project cwd as the portable repository identity. Git resolves a nested
+            // project cwd to its repository root for the config operation, while project files can
+            // safely map this same path to `.` on serialization.
+            const repoPath = project.cwd
+            const parent = (args.base ?? '').trim()
+            const child = (args.branch ?? '').trim()
+            if (!repoPath || !parent || !child || parent === child) {
+              reply({ ok: false, error: 'link-branches: provide distinct --base and --branch names.' })
+              return
+            }
+            const link: Link = {
+              id: newLinkId(),
+              kind: 'dependency',
+              source: { ref: 'branch', repoPath, branch: child },
+              target: { ref: 'branch', repoPath, branch: parent }
+            }
+            const existing = (project.links ?? []).some(
+              (candidate) =>
+                isBranchDependencyLink(candidate) &&
+                candidate.source.repoPath === repoPath &&
+                candidate.source.branch === child &&
+                candidate.target.branch === parent
+            )
+            if (existing) {
+              reply({ ok: false, error: 'link-branches: that branch dependency already exists.' })
+              return
+            }
+            const configResult = await applyDependencyLink(api.git, link)
+            if (!configResult.ok) {
+              reply({ ok: false, error: `link-branches: ${configResult.message}` })
+              return
+            }
+            commitLinksFromInspector(project.id, [...(project.links ?? []), link])
+            reply({
+              ok: true,
+              message: `linked child branch ${child} to parent branch ${parent}`,
+              result: { linkId: link.id, child, parent, repoPath }
+            })
+            return
+          }
+          case 'sync-stack': {
+            const project = ctlProject
+            if (!project || project.ssh) {
+              reply({ ok: false, error: 'sync-stack: local repository access is required.' })
+              return
+            }
+            const requested = (args.branch ?? '').trim()
+            const links = (project.links ?? []).filter(isBranchDependencyLink)
+            const targets = requested
+              ? links.filter((link) => link.source.branch === requested)
+              : links
+            if (targets.length === 0) {
+              reply({ ok: false, error: requested ? `sync-stack: no dependency link for ${requested}.` : 'sync-stack: no branch dependencies are configured.' })
+              return
+            }
+            const listed = await api.git.worktreeList(useWorktrees.getState().repoRoot ?? project.cwd ?? '')
+            if (!listed.ok) {
+              reply({ ok: false, error: 'sync-stack: could not read the repository worktrees.' })
+              return
+            }
+            const outcomes: Array<{ child: string; ok: boolean; message: string }> = []
+            for (const link of targets) {
+              const entry = listed.entries.find((candidate) => candidate.branch === link.source.branch && !candidate.prunable)
+              const cwd = entry?.path ?? link.source.repoPath
+              const result = await api.git.syncBranch(cwd, link.source.branch)
+              outcomes.push({ child: link.source.branch, ok: result.ok, message: result.message })
+              if (!result.ok) break
+            }
+            const failed = outcomes.find((outcome) => !outcome.ok)
+            reply({
+              ok: !failed,
+              ...(failed ? { error: `sync-stack: ${failed.child}: ${failed.message}` } : { message: `synced ${outcomes.length} branch ${outcomes.length === 1 ? 'dependency' : 'dependencies'}` }),
+              result: outcomes
+            })
             return
           }
           case 'branch': {
@@ -12801,6 +13867,11 @@ export function Canvas() {
     [focusNodeById, reopenProject]
   )
 
+  useEffect(() => {
+    setTravelNodeHandler(travelToNode)
+    return () => setTravelNodeHandler(null)
+  }, [travelToNode])
+
   // OS-notification click → focus the originating node (see the note beside focusNodeById:
   // travelToNode, not focusNodeById, so a closed project's tab is reopened first).
   useEffect(() => window.nodeTerminal.onFocusNode(travelToNode), [travelToNode])
@@ -13533,6 +14604,7 @@ export function Canvas() {
       </TopAppBar>
 
       <div className="top-banners">
+        {drill && <DrillBreadcrumb drill={drill} onExit={exitDrill} />}
         <MinecraftConnectBanner minecraftNodeIds={minecraftNodeIds} />
         <AnnouncementBanner />
         <TmuxBanner onInstall={runInTerminal} />
@@ -14402,6 +15474,14 @@ export function Canvas() {
         />
       )}
 
+      {linkInspectorNodeId && (
+        <LinkInspectorPanel
+          nodeId={linkInspectorNodeId}
+          onClose={() => setLinkInspectorNodeId(null)}
+          onChanged={refreshActiveLinkEdges}
+        />
+      )}
+
       {settingsOpen && (
         <SettingsPage
           onClose={() => setSettingsOpen(false)}
@@ -14554,6 +15634,7 @@ export function Canvas() {
         onProjectContextMenu={onProjectContextMenu}
         onSwitchProject={switchProject}
         onAddToProject={addToProject}
+        onBindWorktree={bindWorktreeFromSidebar}
         onMouseEnter={openSessionsPeek}
         onMouseLeave={closeSessionsPeekSoon}
       />

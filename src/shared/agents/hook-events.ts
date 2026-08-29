@@ -72,6 +72,18 @@ export const GEMINI_HOOK_EVENTS = [
   'SessionEnd'
 ] as const
 
+/** GitHub Copilot CLI events used for status and session lifecycle reporting. */
+export const COPILOT_HOOK_EVENTS = [
+  'SessionStart',
+  'UserPromptSubmit',
+  'PreToolUse',
+  'PostToolUse',
+  'PostToolUseFailure',
+  'Stop',
+  'Notification',
+  'SessionEnd'
+] as const
+
 /**
  * Grok hook events (→ normalizeGrok). Grok's shipped 1.0.0 docs list fourteen
  * (`~/.grok/docs/user-guide/10-hooks.md:84-101`); nine are subscribed — the ones `normalizeGrok` has

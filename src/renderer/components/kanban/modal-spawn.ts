@@ -9,6 +9,9 @@ export interface ModalSpawnNodeData {
   respawnNonce?: number
   cwd?: string
   agentId?: string
+  agentBaseId?: import('@shared/agents/config').BuiltinAgentId
+  agentModel?: string
+  clearEnv?: boolean
   agentLaunchIntent?: AgentLaunchIntent
   agentSessionId?: string
   accountId?: string
@@ -24,6 +27,9 @@ export function modalSpawnFromNodeData(data: ModalSpawnNodeData): ModalSpawn {
     respawnNonce: data.respawnNonce,
     cwd: data.cwd,
     agentId: data.agentId,
+    agentBaseId: data.agentBaseId,
+    agentModel: data.agentModel,
+    clearEnv: data.clearEnv,
     agentLaunchIntent: data.agentLaunchIntent,
     agentSessionId: data.agentSessionId,
     accountId: data.accountId,

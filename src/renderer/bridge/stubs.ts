@@ -292,6 +292,13 @@ export function buildStubApi(): Omit<
       setLinks: pnoop,
       info: U('contextLink.info')
     },
+    agent: {
+      envSnapshot: () => Promise.resolve({}),
+      discoverModels: U('agent.discoverModels'),
+      gatewayCredentialStatus: () => Promise.resolve({ hasStoredKey: false, storage: 'unavailable' as const }),
+      saveGatewayCredential: U('agent.saveGatewayCredential'),
+      clearGatewayCredential: U('agent.clearGatewayCredential')
+    },
     usage: {
       // Superseded by the real WS-backed namespace in ws-bridge (the core usage service runs in
       // the server shell too), so nothing reaches these in a live browser session. Kept only to

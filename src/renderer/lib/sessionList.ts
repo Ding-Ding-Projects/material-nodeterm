@@ -1,9 +1,11 @@
 import type { AgentNodeStatus } from '../state/agentStatus'
-import type { AgentId } from '@shared/agents/config'
+import type { AgentId, BuiltinAgentId } from '@shared/agents/config'
 import type { NodeKind } from '@shared/types'
 import type { ProjectIcon } from '@shared/project-icon'
 import { hasUsage } from '@shared/agents/config'
-import type { SshConnection } from '@shared/ssh'
+import { sshHostKey, type SshConnection } from '@shared/ssh'
+import { normWorktreePath } from '@shared/worktree-reconcile'
+import type { WorktreeEntry } from '@shared/worktree'
 
 export interface SessionNodeInput {
   id: string
@@ -11,6 +13,7 @@ export interface SessionNodeInput {
   title: string
   color: string
   agentId?: AgentId
+  agentBaseId?: BuiltinAgentId
   cwd?: string
   ssh?: SshConnection
   /** Parent group node id when this node lives inside a canvas group frame. */
@@ -23,6 +26,8 @@ export interface ProjectInput {
   color: string
   icon?: ProjectIcon
   cwd?: string
+  /** SSH identity keeps a remote repository separate from a matching local path. */
+  ssh?: { server: SshConnection; remoteCwd: string }
   nodes: SessionNodeInput[]
 }
 
@@ -169,6 +174,7 @@ export interface SessionRowVM {
   title: string
   color: string
   agentId?: AgentId
+  agentBaseId?: BuiltinAgentId
   isAgent: boolean
   statusKind: StatusKind
   stateLabel: string
@@ -210,6 +216,7 @@ function toRow(n: SessionNodeInput, status: AgentNodeStatus | undefined): Sessio
     title: n.title,
     color: n.color,
     agentId: n.agentId,
+    agentBaseId: n.agentBaseId,
     isAgent: !!n.agentId,
     statusKind,
     stateLabel: STATE_LABEL[statusKind],
@@ -224,7 +231,7 @@ function toRow(n: SessionNodeInput, status: AgentNodeStatus | undefined): Sessio
     cwd: n.cwd,
     sshHost: n.ssh?.host,
     sessionId: status?.sessionId,
-    usesContext: n.agentId ? hasUsage(n.agentId) : false
+    usesContext: n.agentBaseId || n.agentId ? hasUsage(n.agentBaseId ?? n.agentId!) : false
   }
 }
 
@@ -321,4 +328,171 @@ export function buildSessionList(
   // Store order, NOT active-first: the sidebar mirrors the tab bar (both read the projects
   // array), and hoisting the active project to the top made every click reshuffle the list.
   return needle ? groups.filter((g) => g.groups.length > 0 || g.ungrouped.length > 0) : groups
+}
+
+/** A worktree with no bound canvas group, shown as a bindable repository row. */
+export interface AdoptableWorktreeRow {
+  kind: 'adoptable-worktree'
+  entry: WorktreeEntry
+  repoRoot: string
+}
+
+/** A repository-level grouping above the existing project/session tree. */
+export interface RepoGroup {
+  key: string
+  repoRoot: string | null
+  repoName: string
+  collapsedProject: boolean
+  projects: SessionGroup[]
+  adoptable: AdoptableWorktreeRow[]
+}
+
+export interface RepoSessionFacts {
+  repoRootByProject: Record<string, string | null | undefined>
+  orphansByProject: Record<string, WorktreeEntry[]>
+}
+
+function repoMachineKey(project: ProjectInput): string {
+  return project.ssh ? sshHostKey(project.ssh.server) || '' : ''
+}
+
+/**
+ * Wrap the established project/session list in repository groups. The five-argument
+ * `buildSessionList` remains unchanged for existing consumers and tests; this adapter is used only
+ * by the sidebar that has repository-root and orphan worktree facts available.
+ */
+export function buildRepoSessionList(
+  projects: ProjectInput[],
+  liveActiveNodes: SessionNodeInput[] | null,
+  activeProjectId: string,
+  statusById: Record<string, AgentNodeStatus>,
+  filter: string,
+  facts: RepoSessionFacts
+): RepoGroup[] {
+  const sessionGroups = buildSessionList(
+    projects,
+    liveActiveNodes,
+    activeProjectId,
+    statusById,
+    ''
+  )
+  const needle = filter.trim().toLowerCase()
+  const keepRow = (row: SessionRowVM): boolean =>
+    !needle || `${row.title} ${row.session ?? ''}`.toLowerCase().includes(needle)
+  const filterBucket = (bucket: GroupBucket): GroupBucket | null => {
+    const sessions = bucket.sessions.filter(keepRow)
+    const children = bucket.children
+      .map(filterBucket)
+      .filter((child): child is GroupBucket => child !== null)
+    if (needle && !bucket.title.toLowerCase().includes(needle) && sessions.length === 0 && children.length === 0) return null
+    return { ...bucket, sessions, children }
+  }
+  const filteredSessionGroups = needle
+    ? sessionGroups
+        .map((group) => ({
+          ...group,
+          groups: group.groups
+            .map(filterBucket)
+            .filter((bucket): bucket is GroupBucket => bucket !== null),
+          ungrouped: group.ungrouped.filter(keepRow)
+        }))
+        .filter((group) =>
+          group.groups.length > 0 ||
+          group.ungrouped.length > 0 ||
+          group.projectName.toLowerCase().includes(needle) ||
+          (facts.orphansByProject[group.projectId] ?? []).some((worktree) =>
+            `${worktree.branch ?? ''} ${worktree.path}`.toLowerCase().includes(needle)
+          )
+        )
+    : sessionGroups
+  const projectById = new Map(projects.map((project) => [project.id, project]))
+  const order: string[] = []
+  const grouped = new Map<string, { repoRoot: string | null; sessions: SessionGroup[] }>()
+  for (const sessionGroup of filteredSessionGroups) {
+    const project = projectById.get(sessionGroup.projectId)
+    const resolved = facts.repoRootByProject[sessionGroup.projectId]
+    const fallbackProject: ProjectInput = {
+      id: sessionGroup.projectId,
+      name: sessionGroup.projectName,
+      color: sessionGroup.projectColor,
+      nodes: []
+    }
+    const key = resolved
+      ? `repo:${repoMachineKey(project ?? fallbackProject)}:${normWorktreePath(resolved)}`
+      : `repo:__norepo__:${sessionGroup.projectId}`
+    const existing = grouped.get(key)
+    if (existing) existing.sessions.push(sessionGroup)
+    else {
+      order.push(key)
+      grouped.set(key, {
+        repoRoot: resolved ? normWorktreePath(resolved) : null,
+        sessions: [sessionGroup]
+      })
+    }
+  }
+  return order
+    .map((key) => {
+      const entry = grouped.get(key)!
+      const sole = entry.sessions.length === 1 ? entry.sessions[0] : undefined
+      const repoRoot = entry.repoRoot
+      const project = sole ? projectById.get(sole.projectId) : undefined
+      const cwd = project?.cwd ? normWorktreePath(project.cwd) : undefined
+      const collapsedProject = !repoRoot || (!!sole && cwd === repoRoot)
+      const active = entry.sessions.find((session) => session.isActive)
+      const adoptable = active && repoRoot
+        ? (facts.orphansByProject[active.projectId] ?? []).map((worktree) => ({
+            kind: 'adoptable-worktree' as const,
+            entry: worktree,
+            repoRoot
+          }))
+        : []
+      const repoName = repoRoot
+        ? repoRoot.split('/').filter(Boolean).pop() || repoRoot
+        : sole?.projectName || entry.sessions[0]?.projectName || 'Repository'
+      return {
+        key,
+        repoRoot,
+        repoName,
+        collapsedProject,
+        projects: entry.sessions,
+        adoptable: needle
+          ? adoptable.filter((row) => `${row.entry.branch ?? ''} ${row.entry.path}`.toLowerCase().includes(needle))
+          : adoptable
+      }
+    })
+    .filter((repo) => {
+      if (!needle) return true
+      return repo.adoptable.length > 0 || repo.projects.some((project) => project.groups.length > 0 || project.ungrouped.length > 0)
+    })
+}
+
+/** Repository-aware variant of `liveCollapseKeys`, kept separate so old callers keep their type. */
+export function liveRepoCollapseKeys(groups: RepoGroup[]): Set<string> {
+  const keys = new Set<string>()
+  const walk = (projectId: string, bucket: GroupBucket): void => {
+    keys.add(groupCollapseKey(projectId, bucket.id))
+    bucket.children.forEach((child) => walk(projectId, child))
+  }
+  for (const repo of groups) {
+    keys.add(repo.key)
+    for (const project of repo.projects) {
+      keys.add(projectCollapseKey(project.projectId))
+      project.groups.forEach((bucket) => walk(project.projectId, bucket))
+    }
+  }
+  return keys
+}
+
+export function repoSignalCounts(repo: RepoGroup): { attention: number; unread: number; working: number } {
+  return repo.projects.reduce(
+    (total, project) => {
+      const current = projectSignalCounts(project)
+      return {
+        attention: total.attention + current.attention,
+        unread: total.unread + current.unread,
+        working: total.working + current.working
+      }
+    },
+    { attention: 0, unread: 0, working: 0 }
+  )
 }

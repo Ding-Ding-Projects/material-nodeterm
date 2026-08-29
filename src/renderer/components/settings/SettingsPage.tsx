@@ -21,6 +21,7 @@ import { AgentsSection } from './sections/AgentsSection'
 import { UsageSection } from './sections/UsageSection'
 import { AccountsSection } from './sections/AccountsSection'
 import { CustomAgentsSection } from './sections/CustomAgentsSection'
+import { ModelGatewaySection } from './sections/ModelGatewaySection'
 import { NotificationsSection } from './sections/NotificationsSection'
 import { NarratorSection } from './sections/NarratorSection'
 import { CommitSection } from './sections/CommitSection'
@@ -191,6 +192,7 @@ export function SettingsPage({
             <UsageSection isActive={active === 'usage'} />
             <AccountsSection isActive={active === 'accounts'} />
             <CustomAgentsSection isActive={active === 'custom-agents'} />
+            <ModelGatewaySection isActive={active === 'model-gateway'} />
             <NotificationsSection isActive={active === 'notifications'} />
             <NarratorSection isActive={active === 'narrator'} />
             <CommitSection isActive={active === 'commit'} />

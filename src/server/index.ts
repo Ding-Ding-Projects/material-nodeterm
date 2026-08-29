@@ -19,6 +19,7 @@ import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
 import { WorkspaceStore } from '../core/workspace-store'
 import { PtyManager } from '../core/pty-manager'
 import { registerCoreHandlers } from './handlers'
+import { registerAgentEnvIpc } from '../core/agent-env-ipc'
 import { registerGitHubIntegration } from '../core/github/integration'
 import { runGitHubCliCommand } from '../core/github/credentials'
 import { registerServerGitHubControl, ServerGitHubSecretStore } from './github-control'
@@ -178,6 +179,7 @@ export async function startServer(
 
   settingsStore.init()
   settingsStore.registerIpc()
+  registerAgentEnvIpc(() => settingsStore.get().modelGateway)
   await schoolModeStore.init()
   schoolModeStore.registerIpc()
   await kidsModeStore.init()

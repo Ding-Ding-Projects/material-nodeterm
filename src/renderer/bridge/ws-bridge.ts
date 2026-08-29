@@ -384,6 +384,8 @@ export function buildRealApi(
     // shell yet" and gives up on its own deadline.
     paneCommand: (persistKey) =>
       client.request(IPC.ptyPaneCommand, persistKey).catch(() => null) as Promise<string | null>,
+    terminateForeground: (persistKey, expectedAgentId) =>
+      client.request(IPC.ptyTerminateForeground, persistKey, expectedAgentId).catch(() => false) as Promise<boolean>,
     // REAL: PtyManager (core) registers this handler in both the Electron main process and the
     // Server Edition, so the server genuinely serves it — not a stub. Failure reads as "nothing
     // acted" (false), never a rejection: a poller must never treat a dropped connection as a
@@ -657,6 +659,8 @@ export function buildFilesApi(
     repoRoot: (cwd) => client.request(IPC.gitRepoRoot, cwd) as Promise<string | null>,
     worktreeList: (repoPath) =>
       client.request(IPC.gitWorktreeList, repoPath) as ReturnType<GitApi['worktreeList']>,
+    submoduleList: (repoPath) =>
+      client.request(IPC.gitSubmoduleList, repoPath) as ReturnType<GitApi['submoduleList']>,
     worktreeAdd: (repoPath, wtPath, branch, baseRef, isNew) =>
       client.request(
         IPC.gitWorktreeAdd,
@@ -687,6 +691,16 @@ export function buildFilesApi(
         wtPath,
         request
       ) as ReturnType<GitApi['worktreeRemove']>,
+    setBranchParent: (repoPath, child, parent) =>
+      client.request(IPC.gitSetBranchParent, repoPath, child, parent) as ReturnType<GitApi['setBranchParent']>,
+    unsetBranchParent: (repoPath, child) =>
+      client.request(IPC.gitUnsetBranchParent, repoPath, child) as ReturnType<GitApi['unsetBranchParent']>,
+    syncBranch: (cwd, child) =>
+      client.request(IPC.gitSyncBranch, cwd, child) as ReturnType<GitApi['syncBranch']>,
+    proposeBranch: (cwd, child) =>
+      client.request(IPC.gitProposeBranch, cwd, child) as ReturnType<GitApi['proposeBranch']>,
+    shipBranch: (cwd, child, parent) =>
+      client.request(IPC.gitShipBranch, cwd, child, parent) as ReturnType<GitApi['shipBranch']>,
     setActiveRemote: (projectId) =>
       client.request(IPC.gitSetActiveRemote, projectId) as Promise<void>
   }
@@ -781,6 +795,22 @@ export function buildAgentApi(
     // live-update to the paired phone, same as desktop. See agent-status-mirror `ackDone`.
     ackDone: (nodeId) => {
       void client.request(IPC.agentAckDone, nodeId)
+    }
+  }
+}
+
+/** Build custom-agent environment and model-gateway calls over the Server Edition socket. The
+ * server intentionally resolves environment references against its own host, never this browser. */
+export function buildAgentGatewayApi(client: RpcClient): Pick<NodeTerminalApi, 'agent'> {
+  return {
+    agent: {
+      envSnapshot: () => Promise.resolve({}),
+      discoverModels: (settings) => client.request(IPC.agentDiscoverModels, settings) as ReturnType<NodeTerminalApi['agent']['discoverModels']>,
+      // Credential storage is desktop-only. Never send a browser-entered key over this socket to a
+      // server that cannot provide the same protected local storage contract.
+      gatewayCredentialStatus: () => Promise.resolve({ hasStoredKey: false, storage: 'unavailable' as const }),
+      saveGatewayCredential: () => Promise.reject(new Error('gateway-secret-storage-unavailable')),
+      clearGatewayCredential: () => Promise.reject(new Error('gateway-secret-storage-unavailable'))
     }
   }
 }
@@ -1369,6 +1399,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildRealApi(client),
     ...buildServerFilesApi(client),
     ...buildAgentApi(client),
+    ...buildAgentGatewayApi(client),
     ...buildCanvasApi(client),
     ...buildPresenceApi(client),
     ...buildSpeechApi(client),

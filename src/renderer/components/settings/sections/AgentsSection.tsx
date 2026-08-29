@@ -90,6 +90,10 @@ const ROWS = {
     title: 'One-click approvals',
     keywords: ['approve', 'deny', 'approval', 'permission', 'hook', 'phone', 'canvas', 'one click', 'claude']
   },
+  vanillaLaunch: {
+    title: 'Restart on subscription',
+    keywords: ['subscription', 'provider', 'gateway', 'vanilla', 'environment', 'restart']
+  },
   nodeIdentity: {
     title: 'Verified node identity',
     keywords: [
@@ -390,6 +394,19 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
                 </option>
               ))}
             </Select>
+          }
+        />
+      </SearchableRow>
+      <SearchableRow {...ROWS.vanillaLaunch}>
+        <FieldRow
+          label="Restart on subscription"
+          description="When enabled, a fresh agent launch removes gateway and inherited provider variables so the agent uses its own subscription or default provider. Per-node restarts can request the same one-shot behavior. Account-isolation variables remain active."
+          control={
+            <Switch
+              checked={settings.vanillaLaunchDefault}
+              ariaLabel="Restart on subscription"
+              onChange={(on) => update({ vanillaLaunchDefault: on })}
+            />
           }
         />
       </SearchableRow>

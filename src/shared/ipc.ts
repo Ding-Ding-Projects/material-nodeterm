@@ -25,6 +25,7 @@ export const IPC = {
   /** The foreground command of a node's tmux pane (`#{pane_current_command}`) — how the in-place
    *  agent restart sees that the CLI has exited and a shell owns the pane again. */
   ptyPaneCommand: 'pty:pane-command',
+  ptyTerminateForeground: 'pty:terminate-foreground',
   /** Correct a node's tmux "lead" pane width after Claude Code's own agent-team backend has
    *  narrowed it (`settings.agentTeamLeadPaneWidthEnabled` — see
    *  shared/agents/team-pane-layout.ts). Counts the node's panes and, when the setting calls for
@@ -132,6 +133,13 @@ export const IPC = {
   hudDismiss: 'hud:dismiss',
   agentControl: 'agent:control',
   agentControlResult: 'agent:control-result',
+  /** Local custom-agent launch support. Environment snapshots contain only string values and never
+   * cross a relay boundary; credential operations are write-only presence checks. */
+  agentEnvSnapshot: 'agent:env-snapshot',
+  agentDiscoverModels: 'agent:discover-models',
+  agentGatewayCredentialStatus: 'agent:gateway-credential-status',
+  agentSaveGatewayCredential: 'agent:save-gateway-credential',
+  agentClearGatewayCredential: 'agent:clear-gateway-credential',
   /** Canvas sync: a client casts its local node mutations here; the core reflector
    *  (src/core/canvas-sync.ts) stamps each with the total order (`seq`) and sends it back out on the
    *  SAME channel to EVERY attached client — the sender included, whose copy is its ack (see
@@ -413,10 +421,16 @@ export const IPC = {
   gitCheckoutCommit: 'git:checkout-commit',
   gitRepoRoot: 'git:repo-root',
   gitWorktreeList: 'git:worktree-list',
+  gitSubmoduleList: 'git:submodule-list',
   gitWorktreeAdd: 'git:worktree-add',
   gitWorktreeMerge: 'git:worktree-merge',
   gitWorktreeRemovalProof: 'git:worktree-removal-proof',
   gitWorktreeRemove: 'git:worktree-remove',
+  gitSetBranchParent: 'git:set-branch-parent',
+  gitUnsetBranchParent: 'git:unset-branch-parent',
+  gitSyncBranch: 'git:sync-branch',
+  gitProposeBranch: 'git:propose-branch',
+  gitShipBranch: 'git:ship-branch',
   gitSetActiveRemote: 'git:set-active-remote',
   shellOpenExternal: 'shell:open-external',
   commitGenerate: 'commit:generate',

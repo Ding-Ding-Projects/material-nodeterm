@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from '../dialog-stack'
-import { IconChat, IconMic, IconSearch } from '../icons'
+import { IconChat, IconMic, IconSearch, IconLink } from '../icons'
 import { ContextMeter } from '../ContextMeter'
 import { AdhdElapsedChip } from '../AdhdNodeSurfaces'
 import { useAgentStatus } from '../../state/agentStatus'
@@ -14,6 +14,7 @@ import { BoardLogPanel } from './BoardLogPanel'
 import { CardMetaBar } from './CardMetaBar'
 import { ModalTerminal } from './ModalTerminal'
 import { BrowserSurface } from '../../nodes/BrowserSurface'
+import { LinkInspectorPanel } from '../links/LinkInspectorPanel'
 import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 import { TextArea } from '@renderer/ui/md3'
@@ -114,6 +115,7 @@ export function CardModal({
   // choice is remembered (localStorage) — once collapsed, later cards open collapsed too.
   const panelOpen = useCardPanel((s) => s.open)
   const togglePanel = useCardPanel((s) => s.toggle)
+  const [linksOpen, setLinksOpen] = useState(false)
   const isTerminal = session.kind === 'terminal'
   const isBrowser = session.kind === 'browser'
 
@@ -199,7 +201,7 @@ export function CardModal({
           {isTerminal && (
             <>
               {/* Same context-window pill + popover as the node header (null until usage data). */}
-              <ContextMeter sessionId={agentSessionId ?? null} />
+              <ContextMeter sessionId={agentSessionId ?? null} modelOverride={session.spawn.agentModel} />
               {/* ADHD time awareness. The card modal is a second live view of the SAME session, and
                 it is a place work actually happens — so the readout belongs here for the same
                 reason it belongs on the node: a clock the user has to go and look for does nothing
@@ -244,6 +246,14 @@ export function CardModal({
             onClick={togglePanel}
           >
             <IconChat />
+          </button>
+          <button
+            className="kanban-modal__action"
+            title="Links — connect to a node, foreign canvas, or branch"
+            aria-pressed={linksOpen}
+            onClick={() => setLinksOpen((value) => !value)}
+          >
+            <IconLink />
           </button>
           <button className="kanban-modal__action" title="Open on canvas" onClick={onOpenCanvas}>
             ↗
@@ -298,6 +308,7 @@ export function CardModal({
             )}
           </div>
           {panelOpen && <BoardLogPanel card={session} />}
+          {linksOpen && <LinkInspectorPanel nodeId={session.id} onClose={() => setLinksOpen(false)} />}
         </div>
       </div>
     </div>,

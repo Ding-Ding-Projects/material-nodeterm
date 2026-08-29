@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the current-architecture cross-project link substrate: typed node, foreign-node, and branch
+  endpoints; legacy bridge and rope migration; non-owning foreign projections; project-reference
+  group drills; dependency and submodule operations; custom-agent harness fields; model discovery
+  and switching; and subscription-aware agent restart behavior. Verification remains pending under
+  issue #86's explicit no-test, no-build, and no-capture boundary.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

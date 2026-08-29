@@ -19,10 +19,20 @@ function formatTokens(n: number): string {
 }
 
 /**
- * Per-Claude-node context-window meter. A small header pill (mini-bar + "NN%") that toggles
- * a popover with token figures and model. Renders nothing until the session has usage data.
+ * Per-agent context-window meter. A small header pill (mini-bar + "NN%") that toggles a popover
+ * with token figures and model. Renders nothing until the session has usage data.
+ *
+ * `modelOverride` is the node's explicit launch selection. Transcript usage trails a model switch
+ * until the replacement model writes its first turn, so the selected model owns the label while
+ * measured token usage remains authoritative.
  */
-export function ContextMeter({ sessionId }: { sessionId: string | null }): JSX.Element | null {
+export function ContextMeter({
+  sessionId,
+  modelOverride
+}: {
+  sessionId: string | null
+  modelOverride?: string | null
+}): JSX.Element | null {
   const usage = useContextWindow((s) => (sessionId ? s.bySessionId[sessionId] : undefined))
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -39,7 +49,8 @@ export function ContextMeter({ sessionId }: { sessionId: string | null }): JSX.E
   if (!usage) return null
   const pct = Math.round(usage.usedPercent)
   const color = meterColor(usage.usedPercent)
-  const modelLabel = formatModelLabel(usage.model)
+  const displayModel = modelOverride?.trim() || usage.model
+  const modelLabel = formatModelLabel(displayModel)
 
   return (
     <div className="ctx-meter nodrag" ref={ref}>
@@ -56,7 +67,7 @@ export function ContextMeter({ sessionId }: { sessionId: string | null }): JSX.E
             {/* No model read ⇒ say nothing. This used to fall back to the literal 'claude', which
                 was harmless while the meter was claude-only and became a mislabel once codex and
                 gemini joined USAGE_CAPABLE — a codex popover would have claimed to be claude. */}
-            {usage.model ? `${usage.model} · ` : ''}Updated {formatTimeAgo(usage.updatedAt)}
+            {displayModel ? `${displayModel} · ` : ''}Updated {formatTimeAgo(usage.updatedAt)}
           </div>
         </div>
       )}

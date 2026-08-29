@@ -47,7 +47,8 @@ export const AGENT_BINARIES: Record<string, readonly string[]> = {
   codex: ['codex'],
   gemini: ['gemini'],
   opencode: ['opencode'],
-  grok: ['grok']
+  grok: ['grok'],
+  copilot: ['copilot']
 }
 
 /**

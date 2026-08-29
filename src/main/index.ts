@@ -41,6 +41,7 @@ import { writeFilesToClipboard } from './clipboard-files'
 import { NodeTermBrowserUseBackend } from './browser-use-backend'
 import { matchesShortcut } from '../shared/shortcut'
 import { registerFsHandlers } from '../core/fs-handlers'
+import { registerAgentEnvIpc } from '../core/agent-env-ipc'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
@@ -71,8 +72,10 @@ import { vaultPathFor } from '../core/password-manager/vault-store'
 import type { RemoteLogExec } from '../core/board-log'
 import { boardLogRemotePath } from '../core/board-log'
 import { PtyManager } from '../core/pty-manager'
+import { ModelGatewayCredentialService } from './model-gateway-credentials'
 import { WindowsTerminalProfileService } from '../core/windows-terminal-profiles'
 import { WorkspaceStore } from '../core/workspace-store'
+import type { RemoteNodeInput } from '../core/project-node-append'
 import { WorkspaceWatcher } from '../core/workspace-watcher'
 import { SettingsStore } from '../core/settings-store'
 import { SchoolModeStore } from '../core/school-mode'
@@ -861,7 +864,27 @@ app.whenReady().then(async () => {
   })
 
   settingsStore.init()
+  const modelGatewayCredentials = new ModelGatewayCredentialService(app.getPath('userData'), safeStorage)
+  await modelGatewayCredentials.init()
   settingsStore.registerIpc()
+  registerAgentEnvIpc(
+    () => settingsStore.get().modelGateway,
+    modelGatewayCredentials,
+    (baseUrl, models) => ptyManager.setGatewayModels(baseUrl, models)
+  )
+  // The environment snapshot is desktop-window-only. It is deliberately not a CorePlatform
+  // handler, because a relay peer must never receive this process's environment. Keep secret-like
+  // names out of the renderer too: custom-agent previews must not turn an existing API key or
+  // token into visible command text. Custom environment assignments still expand in the trusted
+  // core at spawn time, where values remain process environment data rather than argv.
+  ipcMain.handle(IPC.agentEnvSnapshot, () => {
+    const snapshot: Record<string, string> = {}
+    const secretName = /(key|token|secret|password|passwd|auth|credential|cookie|private|cert)/i
+    for (const [key, value] of Object.entries(process.env)) {
+      if (typeof value === 'string' && value.length <= 16_384 && /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && !secretName.test(key)) snapshot[key] = value
+    }
+    return snapshot
+  })
   // "Escape to widget" — see main/canvas-widget-window.ts's module doc. Uses the same
   // `desktopBuildPaths(__dirname)` call every window creation path uses; cheap and pure, so
   // recomputing it here rather than threading the `createWindow()`-local `buildPaths` through
@@ -1130,7 +1153,7 @@ app.whenReady().then(async () => {
     }
   )
   sshStore.registerIpc()
-  ptyManager.init(() => settingsStore.get())
+  ptyManager.init(() => settingsStore.get(), () => modelGatewayCredentials.readForHost())
   ptyManager.registerIpc()
   workspaceStore.registerIpc()
   gitService.registerIpc()
@@ -3020,7 +3043,7 @@ app.whenReady().then(async () => {
   // the canvas adopts the node live).
   const hostBridge = {
     git: gitService,
-    registerNode: (projectId: string, node: { id: string; title?: string; agentId?: string }) =>
+    registerNode: (projectId: string, node: RemoteNodeInput) =>
       workspaceStore.appendRemoteNode(
         projectId,
         node,

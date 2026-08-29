@@ -24,7 +24,7 @@
 import { stripSharedNodeExec } from './node-exec'
 import { asScene, diffToMutations, type CanvasScene } from './canvas-mutations'
 import { mutationKey } from './canvas-order'
-import type { BridgeLink, CanvasMutation, CanvasNodeState } from './types'
+import type { BridgeLink, CanvasMutation, CanvasNodeState, Link } from './types'
 
 /** ~20 Hz while dragging — the same budget the presence cursor stream uses. */
 export const PUBLISH_INTERVAL_MS = 50
@@ -102,12 +102,13 @@ function rebaseRefused(prev: CanvasScene, next: CanvasScene, refused: Set<string
   return {
     nodes: rebaseList(prev.nodes, next.nodes, refused, 'n:'),
     bridges: rebaseList(prev.bridges, next.bridges, refused, 'e:'),
-    ropes: rebaseList(prev.ropes, next.ropes, refused, 'e:')
+    ropes: rebaseList(prev.ropes, next.ropes, refused, 'e:'),
+    links: rebaseList(prev.links ?? [], next.links ?? [], refused, 'l:')
   }
 }
 
 /** The empty baseline — a scene, so the first diff after mount is against a real shape. */
-const EMPTY_SCENE: CanvasScene = { nodes: [], bridges: [], ropes: [] }
+const EMPTY_SCENE: CanvasScene = { nodes: [], bridges: [], ropes: [], links: [] }
 
 /**
  * @param send        casts one mutation (already stamped with `src`). Returning `false` means the
@@ -247,7 +248,7 @@ export function createCanvasPublisher(
  * This is the one definition of "ephemeral"; Canvas's own change-list filter uses it too.
  */
 export function isEphemeralNodeId(id: string, ephemeralIds: ReadonlySet<string>): boolean {
-  return ephemeralIds.has(id) || id.startsWith('loop-')
+  return ephemeralIds.has(id) || id.startsWith('loop-') || id.startsWith('xproj-')
 }
 
 /**
@@ -269,7 +270,17 @@ export function publishableScene(
   const nodes = publishableStates(scene.nodes, ephemeralIds)
   const live = new Set(nodes.map((n) => n.id))
   const keep = (e: BridgeLink): boolean => live.has(e.source) && live.has(e.target)
-  return { nodes, bridges: scene.bridges.filter(keep), ropes: scene.ropes.filter(keep) }
+  const keepLink = (link: Link): boolean => {
+    const endpointLive = (endpoint: Link['source']): boolean =>
+      endpoint.ref !== 'node' || live.has(endpoint.nodeId)
+    return endpointLive(link.source) && endpointLive(link.target)
+  }
+  return {
+    nodes,
+    bridges: scene.bridges.filter(keep),
+    ropes: scene.ropes.filter(keep),
+    links: (scene.links ?? []).filter(keepLink)
+  }
 }
 
 /** The node states that may go on the wire: everything except the ephemeral cards. */

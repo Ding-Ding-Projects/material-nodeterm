@@ -2,10 +2,10 @@
 
 **Category:** [Agents](./README.md)
 
-nodeterm treats an AI coding agent CLI as just another kind of terminal node — with extra
+nodeterm treats an AI coding agent CLI as just another kind of terminal node, with extra
 behaviour layered on top wherever the specific agent supports it. Claude Code, Codex, Gemini,
-opencode, and Grok are built in; any other CLI can be added as a custom agent with basic
-support (spawn, terminal-title tracking, process status).
+opencode, Grok, and GitHub Copilot are built in; any other CLI can be added as a custom agent with
+basic support (spawn, terminal-title tracking, process status).
 
 ## Behaviour
 
@@ -45,11 +45,24 @@ directory.
 demand by drawing a connection between them on the canvas — a pull, not a push: nothing is
 sent automatically, an agent has to ask for the linked context when it wants it.
 
+**Custom harnesses** can inherit a built-in agent's hook, resume, permission, canvas-control, and
+model-switch behavior. Extra arguments and environment assignments support bounded `${env:NAME}`
+expansion, and the launch preview reports unset references without exposing credentials. A model
+gateway can discover an OpenAI-compatible catalogue and offer a model picker on a node. The node
+stores the selected model name, while the gateway credential remains in protected local storage.
+
+**Restart on subscription** is an opt-in fresh-session path that removes gateway and inherited
+provider variables before recreating an idle resumable node. Account-isolation variables remain in
+place. Relay sessions keep this action disabled because their environment belongs to the host.
+
 ## Configuration
 
 - **Settings → Agents** — default permission mode, agent hibernation (auto-exiting an idle,
   fully offscreen agent's CLI while keeping its shell and history, to save memory on very
-  long-lived canvases), and the custom-agent list (command, label, color).
+  long-lived canvases), Restart on subscription, and the custom-agent list (command, label,
+  color, base harness, extra arguments, and environment assignments).
+- **Settings → Model gateway** — a validated gateway URL, write-only protected credential, and
+  discovered model catalogue for supported agent harnesses.
 - Per-project — an override permission mode, so a project that genuinely needs broader
   permissions doesn't require changing your global default.
 - Per-node — which agent CLI launches, and (for Claude Code) which managed account.
@@ -66,6 +79,13 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - **A hook event never arrives** (the agent crashed, or hooks were never installed for it): the
   node's status simply never updates rather than being guessed. An unknown state is never
   treated as "finished" — that distinction matters for dependent nodes waiting on this one.
+- **A gateway or model catalogue is unavailable**: existing local settings remain unchanged, the
+  model chooser stays empty, and the node does not claim that a remote model was selected.
+- An oversized or malformed gateway response is rejected before model rows are applied. Discovery
+  is bounded to a 512 KiB JSON response and a 10 second request deadline.
+- **A custom harness is removed**: a persisted node keeps its base harness identity for display and
+  recovery, but a missing custom launch definition refuses a cold relaunch instead of executing the
+  custom id as a shell command.
 
 ## Security considerations
 
@@ -77,6 +97,10 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - Canvas control (an agent creating or managing nodes from inside its own session) is
   explicitly opt-in per environment and scoped to the session that requested it; an agent
   cannot control a canvas it wasn't given that capability in.
+- Gateway credentials are write-only, never placed in node data, project files, commands, logs, or
+  exports. Environment references save only the variable name and resolve on the owning host. The
+  desktop preview filters secret-like environment names, and the server edition never accepts a
+  browser-submitted credential for storage.
 
 ## Verification
 
@@ -89,6 +113,9 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - Connect two agent-capable nodes with a context link and confirm one can pull the other's
   transcript on request, and that a plain terminal or an agent outside the capability list is
   not offered the option.
+- Add a custom agent with a base harness, extra arguments, and an environment fallback, then
+  inspect the launch preview and a cold resume. Configure a gateway, discover a model, select it
+  from a node menu, and confirm the node restarts before the new model is reported as active.
 
 ## Suggested articles
 

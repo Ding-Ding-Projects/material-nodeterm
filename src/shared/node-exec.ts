@@ -37,6 +37,8 @@ export interface LocalNodeExec {
   shell?: string
   /** `NodeState.terminalProfileId` — this machine's snapshotted Windows profile choice. */
   terminalProfileId?: string
+  /** One-shot provider reset requested locally for the next agent spawn. */
+  clearEnv?: boolean
   /** `NodeState.ssh.extraArgs` — raw advanced ssh args for this node's connection. */
   sshExtraArgs?: string
   /** A delayed launch authorized on this machine; never accepted from project files or peers. */
@@ -198,6 +200,7 @@ export type LocalNodeExecMap = Record<string, LocalNodeExec>
 const SAFE_PROGRAM = /^[A-Za-z0-9_./+@:=-]+$/
 const SAFE_OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/
 const SAFE_CUSTOM_AGENT_ID = /^custom:[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/
+const SAFE_MODEL = /^(?=.{1,500}$)[^\u0000-\u001f\u007f\r\n]+$/u
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const BUILTIN_AGENT_ID_SET = new Set<string>(BUILTIN_AGENT_IDS)
 const MAX_PENDING_DEPS = 256
@@ -261,6 +264,7 @@ function clonePendingLaunch(value: unknown): PendingLaunch | undefined {
       raw.sessionId !== undefined ||
       (raw.prompt !== undefined &&
         (typeof raw.prompt !== 'string' || raw.prompt.length > MAX_INTENT_TEXT)) ||
+      (raw.model !== undefined && (typeof raw.model !== 'string' || !SAFE_MODEL.test(raw.model))) ||
       (raw.newSessionId !== undefined &&
         (typeof raw.newSessionId !== 'string' || !SAFE_OPAQUE_ID.test(raw.newSessionId)))
     ) {
@@ -271,12 +275,14 @@ function clonePendingLaunch(value: unknown): PendingLaunch | undefined {
     }
     if (raw.prompt !== undefined) launch.prompt = raw.prompt
     if (raw.permissionMode !== undefined) launch.permissionMode = raw.permissionMode
+    if (raw.model !== undefined) launch.model = raw.model
     if (raw.newSessionId !== undefined) launch.newSessionId = raw.newSessionId
     return { after: [...value.after], launchId: value.launchId, launch }
   }
 
   if (
     raw.prompt !== undefined ||
+    (raw.model !== undefined && (typeof raw.model !== 'string' || !SAFE_MODEL.test(raw.model))) ||
     raw.newSessionId !== undefined ||
     typeof raw.sessionId !== 'string' ||
     !SAFE_OPAQUE_ID.test(raw.sessionId)
@@ -287,6 +293,7 @@ function clonePendingLaunch(value: unknown): PendingLaunch | undefined {
     kind: 'agent', action: 'resume', agentId: raw.agentId, sessionId: raw.sessionId
   }
   if (raw.permissionMode !== undefined) launch.permissionMode = raw.permissionMode
+  if (raw.model !== undefined) launch.model = raw.model
   return { after: [...value.after], launchId: value.launchId, launch }
 }
 
@@ -313,6 +320,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   if (
     n.shell === undefined &&
     n.terminalProfileId === undefined &&
+    n.clearEnv === undefined &&
     n.pendingLaunch === undefined &&
     n.serviceConnection === undefined &&
     n.nsisLocalPaths === undefined &&
@@ -323,6 +331,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   const out: CanvasNodeState = { ...n }
   delete out.shell
   delete out.terminalProfileId
+  delete out.clearEnv
   delete out.pendingLaunch
   delete out.serviceConnection
   delete out.nsisLocalPaths
@@ -415,6 +424,7 @@ export function carryLocalNodeExec(
   if (
     prev.shell === undefined &&
     prev.terminalProfileId === undefined &&
+    prev.clearEnv === undefined &&
     extraArgs === undefined &&
     pendingLaunch === undefined &&
     nsisPaths === undefined
@@ -423,6 +433,7 @@ export function carryLocalNodeExec(
   const out: CanvasNodeState = { ...next }
   if (prev.shell !== undefined) out.shell = prev.shell
   if (prev.terminalProfileId !== undefined) out.terminalProfileId = prev.terminalProfileId
+  if (prev.clearEnv === true) out.clearEnv = true
   if (extraArgs !== undefined && out.ssh)
     out.ssh = { ...out.ssh, extraArgs, execTrusted: prev.ssh?.execTrusted }
   if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
@@ -466,6 +477,7 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     if (extraArgs && (n.ssh?.execTrusted || !sshExtraArgsEnableLocalExec(extraArgs)))
       entry.sshExtraArgs = extraArgs
     if (n.kind === 'terminal') entry.pendingLaunch = clonePendingLaunch(n.pendingLaunch)
+    if (n.clearEnv === true) entry.clearEnv = true
     // Validated on the way IN as well as on the way out. This value reaches us from the live node,
     // which a peer mutation can have touched, so harvesting it unchecked would launder a foreign
     // endpoint into the trusted store — the exact laundering `sanitizeInboundNode` exists to stop.
@@ -478,6 +490,7 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
       entry.terminalProfileId !== undefined ||
       entry.sshExtraArgs ||
       entry.pendingLaunch ||
+      entry.clearEnv ||
       entry.serviceConnection ||
       entry.nsisLocalPaths
     )
@@ -502,6 +515,7 @@ export function applyLocalNodeExec(
     const out: CanvasNodeState = stripNodeExec(n)
     if (mine?.shell) out.shell = mine.shell
     if (mine?.terminalProfileId !== undefined) out.terminalProfileId = mine.terminalProfileId
+    if (mine?.clearEnv === true) out.clearEnv = true
     if (out.ssh && mine?.sshExtraArgs) {
       // Ours: it came out of the machine-local index, so the exec site may honor an option like
       // ProxyCommand (a jump host is a legitimate thing to have configured).

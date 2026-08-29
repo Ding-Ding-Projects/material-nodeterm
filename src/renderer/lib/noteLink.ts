@@ -2,7 +2,7 @@
 // agent nodes vs. note link between a sticky and a terminal), build the one-shot push
 // message a note link injects into an agent session, and re-export the link-map builders.
 // Kept free of React/store imports so the connection matrix is unit-testable.
-import type { BridgeLink } from '@shared/types'
+import type { BridgeLink, Link } from '@shared/types'
 import { oneLine } from '@shared/one-line'
 
 export interface LinkEndpoint {
@@ -13,6 +13,43 @@ export interface LinkEndpoint {
 }
 
 export type LinkKind = 'context' | 'note'
+
+/** Project a typed node-to-node link into the React Flow edge shape. Foreign and branch endpoints
+ * have no shared coordinate space and intentionally return null. */
+export function nodeEndpoints(link: Link): { id: string; source: string; target: string } | null {
+  if (link.source.ref !== 'node' || link.target.ref !== 'node') return null
+  return { id: link.id, source: link.source.nodeId, target: link.target.nodeId }
+}
+
+export function contextLink(source: string, target: string, note?: string): Link {
+  return {
+    id: `bridge-${source}-${target}`,
+    kind: 'context',
+    source: { ref: 'node', nodeId: source },
+    target: { ref: 'node', nodeId: target },
+    ...(note !== undefined ? { meta: { note } } : {})
+  }
+}
+
+export function lineageLink(source: string, target: string): Link {
+  return {
+    id: `ctrl-${source}-${target}`,
+    kind: 'lineage',
+    source: { ref: 'node', nodeId: source },
+    target: { ref: 'node', nodeId: target },
+    meta: { displayOnly: true }
+  }
+}
+
+/** Build a visible node-to-node dependency link, used by project/submodule drill-through. */
+export function dependencyLink(source: string, target: string): Link {
+  return {
+    id: `dep-${source}-${target}`,
+    kind: 'dependency',
+    source: { ref: 'node', nodeId: source },
+    target: { ref: 'node', nodeId: target }
+  }
+}
 
 /** Decide what kind of link (if any) a new edge between two nodes forms. */
 export function classifyLink(a: LinkEndpoint, b: LinkEndpoint): LinkKind | null {

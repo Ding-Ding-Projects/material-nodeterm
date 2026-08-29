@@ -362,6 +362,35 @@ export function remotePaneCommandArgs(conn: SshConnection, controlPath: string, 
     `tmux -L ${RMT_TMUX_SOCKET} display-message -p -t ${sessionId} '#{pane_current_command}'`
   )
 }
+
+/** Ask remote tmux for the pane shell PID and current command before a foreground termination. */
+export function remotePaneProcessArgs(
+  conn: SshConnection,
+  controlPath: string,
+  sessionId: string
+): string[] {
+  return childArgs(
+    conn,
+    controlPath,
+    `tmux -L ${RMT_TMUX_SOCKET} display-message -p -t ${sessionId} '#{pane_pid}|#{pane_current_command}'`
+  )
+}
+
+/** Re-read the remote foreground process group and signal it without targeting the pane shell. */
+export function remoteTerminateForegroundArgs(
+  conn: SshConnection,
+  controlPath: string,
+  panePid: number
+): string[] {
+  if (!Number.isSafeInteger(panePid) || panePid <= 0) throw new Error('invalid-pane-pid')
+  return childArgs(
+    conn,
+    controlPath,
+    `tpgid=$(ps -o tpgid= -p ${panePid} | tr -d '[:space:]') && ` +
+      `case "$tpgid" in ''|*[!0-9]*) exit 1;; esac && ` +
+      `[ "$tpgid" -gt 0 ] && [ "$tpgid" -ne ${panePid} ] && kill -TERM -- "-$tpgid"`
+  )
+}
 /**
  * Ask the REMOTE tmux for everything the ownership read needs in one round-trip — the remote
  * counterpart of `PtyManager.paneOwner`'s first call. Same single-quoting rule as
@@ -502,7 +531,8 @@ export function remoteHookEnvArgs(
   endpointPath: string,
   nodeId: string,
   version: string,
-  agentId?: string
+  agentId?: string,
+  capabilityAgentId: string = agentId ?? ''
 ): string[] {
   const env = [
     '-e',
@@ -514,7 +544,7 @@ export function remoteHookEnvArgs(
   ]
   if (agentId) {
     env.push('-e', `NODETERM_AGENT_ID=${agentId}`)
-    if (canControlCanvas(agentId)) env.push('-e', 'NODETERM_CANVAS_CONTROL=1')
+    if (canControlCanvas(capabilityAgentId)) env.push('-e', 'NODETERM_CANVAS_CONTROL=1')
   }
   return env
 }

@@ -20,6 +20,7 @@ function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
   const merged = { ...DEFAULT_SETTINGS, ...saved }
   merged.speech = { ...DEFAULT_SETTINGS.speech, ...saved?.speech }
   merged.dockerHost = { ...DEFAULT_SETTINGS.dockerHost, ...saved?.dockerHost }
+  merged.modelGateway = { ...DEFAULT_SETTINGS.modelGateway, ...saved?.modelGateway }
   // Windows terminal profiles replaced the old implicit meaning of `defaultShell`. Migrate only
   // when the new key is genuinely ABSENT: an explicit profile id — including a hand-edited or
   // currently unavailable one — must survive byte-for-byte so the trusted resolver can fail

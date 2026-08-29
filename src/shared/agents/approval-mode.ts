@@ -16,6 +16,7 @@ import {
   ALL_PERMISSION_MODES,
   PERMISSION_MODE_CAPABLE,
   PERMISSION_MODE_LABELS,
+  capabilityAgentId,
   hasPermissionMode,
   isPermissionMode,
   permissionModeFlag,
@@ -85,8 +86,10 @@ const APPROVAL_DIALECTS: Partial<Record<AgentId, ApprovalDialect>> = {
   codex: { flag: '--ask-for-approval', modes: CODEX_MODES }
 }
 
-const dialectFor = (agentId: AgentId): ApprovalDialect | null =>
-  Object.hasOwn(APPROVAL_DIALECTS, agentId) ? APPROVAL_DIALECTS[agentId] ?? null : null
+const dialectFor = (agentId: AgentId): ApprovalDialect | null => {
+  const effective = capabilityAgentId(agentId)
+  return Object.hasOwn(APPROVAL_DIALECTS, effective) ? APPROVAL_DIALECTS[effective] ?? null : null
+}
 
 /** Can this agent actually start in this mode? `false` means the launch omits the flag and the
  *  agent uses its own default — surfaced in the UI so the user is not misled. */

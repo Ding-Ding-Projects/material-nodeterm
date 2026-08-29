@@ -8,13 +8,16 @@
 // parse must never be invented or overwritten), a duplicate id (a retry must not churn rev), or
 // an unsafe id (it becomes a tmux session name).
 
-import { agentConfig } from '../shared/agents/config'
+import { agentConfig, type BuiltinAgentId } from '../shared/agents/config'
+import { resolveAgentBase } from '../shared/agents/custom-agent'
 
 /** What the phone is allowed to choose; everything else is host-derived. */
 export interface RemoteNodeInput {
   id: string
   title?: string
   agentId?: string
+  /** Builtin harness snapshot for a custom agent; builtins are always derived host-side. */
+  agentBaseId?: string
 }
 
 /** The desktop id shape (`term-<base36 ms>-<token>`). Anything else is refused — the id is
@@ -90,6 +93,14 @@ export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date
   // label as the starting title and the agent's color — titleAuto then lets the agent's own
   // session name take over, same as desktop. A plain terminal keeps the mobile defaults.
   const agent = typeof input.agentId === 'string' ? agentConfig(input.agentId) : undefined
+  const suppliedBase =
+    typeof input.agentBaseId === 'string' && agentConfig(input.agentBaseId)
+      ? (input.agentBaseId as BuiltinAgentId)
+      : undefined
+  const agentBaseId =
+    typeof input.agentId === 'string'
+      ? resolveAgentBase(input.agentId, undefined, suppliedBase)
+      : undefined
   const node: Record<string, unknown> = {
     id: input.id,
     kind: 'terminal',
@@ -108,6 +119,7 @@ export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date
     cwd: typeof sibling?.cwd === 'string' ? sibling.cwd : '.'
   }
   if (typeof input.agentId === 'string') node.agentId = input.agentId
+  if (typeof input.agentId === 'string' && agentBaseId) node.agentBaseId = agentBaseId
   // Desktop remote nodes carry the connection spec PER NODE — a sibling terminal in the same
   // project has the right portable connection values. Machine-local execution fields were
   // stripped above and therefore cannot be copied onto the new node.

@@ -1,5 +1,8 @@
-import { agentConfig, agentLaunchProgram, resumeCommand, type AgentId } from '@shared/agents/config'
+import { agentConfig, agentLaunchProgram, resumeCommand, resumeCommandWith, type AgentId, type BuiltinAgentId } from '@shared/agents/config'
+import { withAgentModel } from '@shared/agents/model-gateway'
 import type { PtyRecycleTarget } from '@shared/types'
+import type { CustomAgent } from '@shared/types'
+import { assembleLaunchCommand, assembleResumeCommand } from '@shared/agents/launch'
 
 export type AgentColdRelaunchDecision =
   | {
@@ -16,6 +19,10 @@ export interface AgentColdRelaunchInput {
   agentId: AgentId
   priorSessionId?: string | null
   customLaunchCmd?: string | null
+  customBaseAgent?: BuiltinAgentId
+  customAgent?: CustomAgent
+  environment?: Record<string, string | undefined>
+  model?: string
   sharedIdentity?: boolean
   /** The user's launch-command override for this builtin agent (Settings → Agents → Launch
    *  commands), or undefined/null when unset. Wins over both the resumed and the fresh-start
@@ -67,7 +74,11 @@ export function agentColdRelaunchDecision({
   priorSessionId,
   customLaunchCmd,
   sharedIdentity = false,
-  launchOverride
+  launchOverride,
+  customBaseAgent,
+  customAgent,
+  environment,
+  model
 }: AgentColdRelaunchInput): AgentColdRelaunchDecision {
   const builtin = agentConfig(agentId)
   if (builtin) {
@@ -75,22 +86,58 @@ export function agentColdRelaunchDecision({
     const resume = priorSessionId
       ? resumeCommand(agentId, priorSessionId, { sharedIdentity, base: override })
       : null
-    if (resume) return { reconstructable: true, command: resume, continuity: 'resume' }
+    if (resume) return { reconstructable: true, command: withAgentModel(resume, agentId, model), continuity: 'resume' }
 
     return {
       reconstructable: true,
-      command: override ?? agentLaunchProgram(agentId, builtin.launchCmd, sharedIdentity),
+      command: withAgentModel(override ?? agentLaunchProgram(agentId, builtin.launchCmd, sharedIdentity), agentId, model),
       continuity: 'fresh'
     }
+  }
+
+  if (customAgent) {
+    const launchEnvironment = environment ?? {}
+    const resumed = priorSessionId
+      ? assembleResumeCommand(
+          {
+            agentId,
+            baseAgentId: customBaseAgent,
+            customAgent,
+            launchCmdOverride: launchOverride,
+            sessionId: priorSessionId,
+            model,
+            sharedIdentity
+          },
+          launchEnvironment
+        )
+      : null
+    if (resumed) return { reconstructable: true, command: resumed.command, continuity: 'resume' }
+    const fresh = assembleLaunchCommand(
+      {
+        agentId,
+        baseAgentId: customBaseAgent,
+        customAgent,
+        launchCmdOverride: launchOverride,
+        model,
+        sharedIdentity
+      },
+      launchEnvironment
+    )
+    return { reconstructable: true, command: fresh.command, continuity: 'fresh' }
   }
 
   if (typeof customLaunchCmd !== 'string' || !customLaunchCmd.trim()) {
     return { reconstructable: false, reason: 'custom-agent-not-configured' }
   }
 
+  const resume = priorSessionId && customBaseAgent
+    ? resumeCommandWith(customLaunchCmd.trim(), customBaseAgent, priorSessionId)
+    : null
+  if (resume) return { reconstructable: true, command: withAgentModel(resume, customBaseAgent, model), continuity: 'resume' }
+
   return {
     reconstructable: true,
-    command: agentLaunchProgram(agentId, customLaunchCmd, sharedIdentity),
+    command: withAgentModel(agentLaunchProgram(customBaseAgent ?? agentId, customLaunchCmd, sharedIdentity), customBaseAgent ?? agentId, model),
     continuity: 'fresh'
   }
 }

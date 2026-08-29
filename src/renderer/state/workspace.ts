@@ -7,11 +7,16 @@ import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agent
 import {
   agentConfig,
   agentLaunchProgram,
+  createdAgentHarnessId,
   explicitCodexResumeSession,
   mintsSessionId,
   resumeCommand,
   withSessionId
 } from '@shared/agents/config'
+import { resolveAgentBase, resolveAgentConfig } from '@shared/agents/custom-agent'
+import { assembleLaunchCommand } from '@shared/agents/launch'
+import { normalizedAgentModel, withAgentModel } from '@shared/agents/model-gateway'
+import { agentEnvSnapshot } from '@renderer/lib/agentEnv'
 import { withPermissionMode } from '@shared/agents/approval-mode'
 import { uuid } from '@renderer/lib/uuid'
 import {
@@ -100,6 +105,8 @@ export interface NodeData {
   group: string | null
   tags?: string[]
   collapsed?: boolean
+  /** Group-only reference to another project. Resolved at render time and persisted as safe intent. */
+  projectRef?: { projectId: string }
   /** Native persisted Loop node fields (type='scheduler'). */
   loopTask?: string
   loopIntervalMs?: number
@@ -179,6 +186,12 @@ export interface NodeData {
   nsisLocalPaths?: NsisLocalPaths
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
+  /** Built-in harness inherited by a custom agent, persisted with the node identity. */
+  agentBaseId?: BuiltinAgentId
+  /** Per-node model selection through the configured gateway. */
+  agentModel?: string
+  /** One-shot provider reset for the next recycled launch. */
+  clearEnv?: boolean
   /**
    * Claude nodes only: the managed Claude account (config-dir isolated) this node runs under.
    * Persisted so cold-restore resume reads the transcript from the right account dir.
@@ -407,8 +420,18 @@ export function createSshTerminalNode(
  * own pane. Custom agents index past the builtin-keyed map to undefined — they already own their
  * launchCmd.
  */
-export function agentLaunchOverride(agentId: AgentId): string | undefined {
-  const raw = useSettings.getState().settings.agentLaunchCommands?.[agentId as BuiltinAgentId]
+export function agentLaunchOverride(
+  agentId: AgentId,
+  project?: Pick<Project, 'settingsOverrides'>
+): string | undefined {
+  // A cross-project open is authored while another project is active. Resolve its override from
+  // the target's machine-local overlay, not the caller's effective settings, so a background
+  // project never launches with the wrong wrapper. The normal path keeps reading the effective
+  // settings value, including the active project's overlay and scheduled presentation.
+  const settings = project
+    ? { ...useSettings.getState().base, ...project.settingsOverrides }
+    : useSettings.getState().settings
+  const raw = settings.agentLaunchCommands?.[agentId as BuiltinAgentId]
   const cmd = typeof raw === 'string' ? raw.trim() : ''
   return cmd || undefined
 }
@@ -437,11 +460,9 @@ function resolveAgent(agentId: AgentId): {
   color: string
   launchCmd: string
 } {
-  const builtin = agentConfig(agentId)
-  if (builtin) return { label: builtin.label, color: builtin.color, launchCmd: builtin.launchCmd }
   const custom = useSettings.getState().settings.customAgents.find((c) => c.id === agentId)
-  if (custom) return { label: custom.label, color: FALLBACK_AGENT_COLOR, launchCmd: custom.launchCmd }
-  return { label: agentId, color: FALLBACK_AGENT_COLOR, launchCmd: agentId }
+  const effective = resolveAgentConfig(agentId, custom)
+  return { label: effective.label, color: effective.color, launchCmd: effective.launchCmd }
 }
 
 /**
@@ -501,9 +522,13 @@ export function createAgentNode(
   ssh?: Project['ssh'],
   accountId?: string,
   launchPlanOrPermission?: ActiveAgentLaunchPlan | AgentPermissionMode,
-  options?: TerminalNodeCreationOptions
+  options?: TerminalNodeCreationOptions,
+  targetProject?: Pick<Project, 'settingsOverrides'>,
+  agentModel?: string
 ): CanvasNode {
   const { label, color, launchCmd } = resolveAgent(agentId)
+  const customAgent = useSettings.getState().settings.customAgents.find((agent) => agent.id === agentId)
+  const harnessId = createdAgentHarnessId({ agentId, agentBaseId: customAgent?.baseAgent }) ?? agentId
   // A SHARED_IDENTITY_CAPABLE agent (codex) launches through its managed launcher when this
   // machine actually has one — otherwise the bare CLI, byte-identical to before. Asked through the
   // capability helper, never `agentId === 'codex'`; `codexSharedIdentity` folds in the SSH answer
@@ -511,11 +536,12 @@ export function createAgentNode(
   // launch to the host's preflight-resolved `codexLauncherPath` once its attachment is available.
   // A user launch-command override wins over BOTH the builtin default and the managed launcher —
   // an explicit "launch it exactly like this" (see agentLaunchOverride / resumeCommand's `base`).
-  const override = agentLaunchOverride(agentId)
+  const override = agentLaunchOverride(agentId, targetProject)
   const baseCmd =
-    agentId === 'claude'
+    override ??
+    (agentId === 'claude'
       ? claudeLaunchCommand()
-      : (override ?? agentLaunchProgram(agentId, launchCmd, codexSharedIdentity(ssh)))
+      : agentLaunchProgram(agentId, launchCmd, codexSharedIdentity(ssh)))
   // A flag-prompt agent (opencode) takes the initial prompt via its flag — a bare positional
   // would be misread (opencode treats it as a project path). Everything else keeps the
   // historical argv append, INCLUDING stdin-after-start agents (gemini has always launched
@@ -526,8 +552,9 @@ export function createAgentNode(
   // one-word prompt runs as a command instead (grok: `grok version` prints the version, `grok --
   // version` asks the model about "version"). Absent for everyone else, so their command line is
   // byte-identical to what it was.
-  const sep = agentConfig(agentId)?.argvPromptSeparator
-  const isFlagPrompt = agentConfig(agentId)?.promptInjectionMode === 'flag-prompt'
+  const effectiveConfig = resolveAgentConfig(agentId, customAgent, customAgent?.baseAgent)
+  const sep = effectiveConfig.argvPromptSeparator
+  const isFlagPrompt = effectiveConfig.promptInjectionMode === 'flag-prompt' || effectiveConfig.promptInjectionMode === 'flag-interactive'
   // The separator only participates when there is actually a prompt to separate (no dangling `--`),
   // and never for a flag-prompt agent, whose prompt is not a positional at all.
   const usesSep = !!promptArg && !!sep && !isFlagPrompt
@@ -550,13 +577,14 @@ export function createAgentNode(
   // command line stays byte-identical to what it has always been, and the node falls back to
   // learning its id from hooks exactly as before.
   const mintedSessionId =
-    mintsSessionId(agentId) && claudeCliCapsNow().sessionIdFlag ? uuid() : undefined
+    mintsSessionId(harnessId) && (harnessId === 'claude' ? claudeCliCapsNow().sessionIdFlag : true) ? uuid() : undefined
   const launchPlan =
     typeof launchPlanOrPermission === 'object' ? launchPlanOrPermission : undefined
   const explicitPermissionMode =
     typeof launchPlanOrPermission === 'string' ? launchPlanOrPermission : undefined
   const permissionMode =
     explicitPermissionMode ?? permissionModeFromLaunchPlan(launchPlan, agentId)
+  const selectedModel = normalizedAgentModel(harnessId, agentModel) ?? undefined
   // No plan passed (e.g. a legacy/test call site) = bare command, exactly as before this setting.
   // Production launch sites pass the branded plan, so a raw hand-edited settings value cannot be
   // threaded around the live version/Kids gates.
@@ -564,7 +592,8 @@ export function createAgentNode(
   // that is BEFORE `--` (end-of-options), and getting it wrong makes a flag part of the prompt.
   const flagged = (cmd: string): string => {
     const withMode = permissionMode ? withPermissionMode(cmd, agentId, permissionMode) : cmd
-    return mintedSessionId ? withSessionId(withMode, agentId, mintedSessionId) : withMode
+    const withId = mintedSessionId ? withSessionId(withMode, agentId, mintedSessionId) : withMode
+    return withAgentModel(withId, harnessId, selectedModel)
   }
   // WHERE the mode flag goes is decided by the agent's prompt convention, and the two conventions
   // are opposites:
@@ -578,13 +607,28 @@ export function createAgentNode(
   //    would silently do nothing, or the launch would die on a usage message. It therefore goes
   //    BEFORE the separator: `grok --permission-mode plan -- 'explain this repo'`, matching grok's
   //    own usage line `grok [OPTIONS] [PROMPT] [COMMAND]`.
-  const initialCommand = usesSep ? `${flagged(baseCmd)} ${sep} ${promptArg}` : flagged(withPrompt)
+  const assembled = customAgent
+    ? assembleLaunchCommand({
+        agentId,
+        baseAgentId: customAgent.baseAgent,
+        customAgent,
+        launchCmdOverride: override,
+        initialPrompt: normalizedPrompt,
+        permissionMode,
+        sessionId: mintedSessionId,
+        model: selectedModel,
+        sessionIdFlagSupported: harnessId === 'claude' ? claudeCliCapsNow().sessionIdFlag : true,
+        sharedIdentity: codexSharedIdentity(ssh)
+      }, agentEnvSnapshot())
+    : null
+  const initialCommand = assembled?.command ?? (usesSep ? `${flagged(baseCmd)} ${sep} ${promptArg}` : flagged(withPrompt))
   const agentLaunchIntent: AgentLaunchIntent = {
     kind: 'agent',
     action: 'start',
     agentId,
     ...(normalizedPrompt ? { prompt: normalizedPrompt } : {}),
     ...(permissionMode ? { permissionMode } : {}),
+    ...(selectedModel ? { model: selectedModel } : {}),
     ...(mintedSessionId ? { newSessionId: mintedSessionId } : {})
   }
   const size = terminalNodeSize()
@@ -604,6 +648,8 @@ export function createAgentNode(
       group: null,
       tags: [],
       agentId,
+      ...(customAgent?.baseAgent ? { agentBaseId: customAgent.baseAgent } : {}),
+      ...(selectedModel ? { agentModel: selectedModel } : {}),
       ...(accountId && agentId === 'claude' ? { accountId } : {}),
       // Persisted alongside the node (unlike initialCommand, which is consumed on first open), so
       // a cold restore months later still knows which conversation this node owns.
@@ -1327,6 +1373,97 @@ function rootPosition(node: CanvasNode, nodes: CanvasNode[]): { x: number; y: nu
   return { x, y }
 }
 
+/** A transient navigation view. The source project remains the persistence owner for group/node
+ * drills, while a project reference changes the active project and remembers where to return. */
+export type DrillContext =
+  | { kind: 'group'; projectId: string; groupId: string }
+  | { kind: 'node'; projectId: string; nodeId: string }
+  | { kind: 'project-ref'; projectId: string; targetId: string }
+
+/** Promote a group's direct children into root coordinates for an in-place drill view. */
+export function drillGroupChildren(
+  nodes: CanvasNode[],
+  groupId: string
+): { flow: CanvasNode[]; childIds: Set<string> } {
+  const childIds = new Set<string>()
+  const flow: CanvasNode[] = []
+  for (const node of nodes) {
+    if (node.parentId !== groupId) continue
+    childIds.add(node.id)
+    flow.push({
+      ...node,
+      parentId: undefined,
+      extent: undefined,
+      position: rootPosition(node, nodes)
+    })
+  }
+  return { flow: groupsFirst(flow), childIds }
+}
+
+/** Merge edits from a drilled group back into the full stored node set without dropping siblings. */
+export function remergeDrilledNodes(
+  fullStored: CanvasNodeState[],
+  drilledStates: CanvasNodeState[],
+  groupId: string,
+  fullNodesForRoot: CanvasNode[]
+): CanvasNodeState[] {
+  const drilledById = new Map(drilledStates.map((state) => [state.id, state]))
+  const group = fullNodesForRoot.find((node) => node.id === groupId)
+  const groupRoot = group ? rootPosition(group, fullNodesForRoot) : { x: 0, y: 0 }
+  const wasDirectChild = new Set(
+    fullStored.filter((state) => state.parentId === groupId).map((state) => state.id)
+  )
+  const renest = (state: CanvasNodeState): CanvasNodeState => ({
+    ...state,
+    parentId: groupId,
+    position: {
+      x: state.position.x - groupRoot.x,
+      y: state.position.y - groupRoot.y
+    }
+  })
+  const merged: CanvasNodeState[] = []
+  for (const state of fullStored) {
+    if (wasDirectChild.has(state.id) && !drilledById.has(state.id)) continue
+    const drilled = drilledById.get(state.id)
+    merged.push(drilled ? renest(drilled) : state)
+  }
+  const known = new Set(fullStored.map((state) => state.id))
+  for (const state of drilledStates) if (!known.has(state.id)) merged.push(renest(state))
+  return merged
+}
+
+/** Promote one node for a focused single-node view. */
+export function drillSingleNode(
+  nodes: CanvasNode[],
+  nodeId: string
+): { flow: CanvasNode[]; found: boolean } {
+  const node = nodes.find((candidate) => candidate.id === nodeId)
+  if (!node) return { flow: [], found: false }
+  return {
+    flow: [{ ...node, parentId: undefined, extent: undefined, position: rootPosition(node, nodes) }],
+    found: true
+  }
+}
+
+/** Merge a focused node back into its original parent-relative position. */
+export function mergeSingleNode(
+  fullStored: CanvasNodeState[],
+  focusedState: CanvasNodeState,
+  fullNodesForRoot: CanvasNode[]
+): CanvasNodeState[] {
+  const original = fullStored.find((state) => state.id === focusedState.id)
+  if (!original) return fullStored
+  let position = focusedState.position
+  if (original.parentId) {
+    const parent = fullNodesForRoot.find((node) => node.id === original.parentId)
+    const root = parent ? rootPosition(parent, fullNodesForRoot) : { x: 0, y: 0 }
+    position = { x: focusedState.position.x - root.x, y: focusedState.position.y - root.y }
+  }
+  return fullStored.map((state) =>
+    state.id === focusedState.id ? { ...focusedState, parentId: original.parentId, position } : state
+  )
+}
+
 function isDescendant(nodes: CanvasNode[], candidateId: string, ancestorId: string): boolean {
   const byId = new Map(nodes.map((node) => [node.id, node]))
   const seen = new Set<string>()
@@ -1874,6 +2011,15 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
     // tag. Backfill agentId so saved workspaces keep working.
     let agentId = n.agentId
     if (!agentId && Array.isArray(n.tags) && n.tags.includes('claude')) agentId = 'claude'
+    // Snapshot a legacy custom node's harness while the definition is still available. The
+    // persisted base wins when present, while the settings lookup keeps old nodes useful after a
+    // reload before the live resolver has been registered by the host.
+    const customAgent = agentId && !agentConfig(agentId)
+      ? useSettings.getState().settings.customAgents.find((candidate) => candidate.id === agentId)
+      : undefined
+    const agentBaseId = agentId
+      ? resolveAgentBase(agentId, customAgent, n.agentBaseId)
+      : undefined
     // Legacy migration: a browser node saved before tabs existed carries only `url`/`title`.
     // Synthesize a single tab from them so the tab strip has something to show — this is a
     // read-side migration only (not written back to disk until the user actually edits a tab).
@@ -1901,6 +2047,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         titleAuto: n.titleAuto ?? true,
         color: n.color,
         group: n.group,
+        projectRef: n.projectRef,
         tags: n.tags,
         collapsed,
         expandedHeight: n.size.height,
@@ -1928,6 +2075,9 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         commitOid: n.commitOid,
         highScore: n.highScore,
         agentId,
+        agentBaseId,
+        agentModel: n.agentModel,
+        clearEnv: n.clearEnv,
         accountId: n.accountId,
         // Migrate the old title-only identity into an explicit true/false on the next save.
         accountLogin: n.accountLogin ?? isAccountLoginNode(n),
@@ -1976,6 +2126,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         titleAuto: n.data.titleAuto,
         color: n.data.color,
         group: n.data.group,
+        projectRef: n.data.projectRef as { projectId: string } | undefined,
         tags: n.data.tags,
         collapsed: n.data.collapsed,
         loopTask: n.data.loopTask,
@@ -2003,6 +2154,9 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         commitOid: n.data.commitOid,
         highScore: n.data.highScore,
         agentId: n.data.agentId,
+        agentBaseId: n.data.agentBaseId,
+        agentModel: n.data.agentModel,
+        clearEnv: n.data.clearEnv,
         accountId: n.data.accountId,
         accountLogin: n.data.accountLogin,
         agentSessionId: n.data.agentSessionId,

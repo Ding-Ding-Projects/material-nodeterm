@@ -57,6 +57,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Cross-project links and agent harnesses**: typed endpoint migration, cross-project foreign
+      projections, project-reference grouping and drill-through, submodule and branch dependency
+      operations, custom-agent harnesses, model switching, subscription restart, and current
+      account reuse are implemented in the current architecture. Focused verification, build, and
+      built-artifact interaction evidence are intentionally pending for issue #86.
+
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification

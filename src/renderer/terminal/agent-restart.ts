@@ -4,7 +4,7 @@
  * model list without losing the conversation. Kept free of DOM/IPC so the node menu, the bulk
  * filter and the restart choreography can all share exactly one set of rules.
  */
-import { canResume, resumeCommand } from '../../shared/agents/config'
+import { canResume, capabilityAgentId, resumeCommand, resumeCommandWith, type AgentId } from '../../shared/agents/config'
 import { isShellCommand } from '@shared/agents/pane'
 import {
   DELIVERY_ATTEMPTS,
@@ -32,11 +32,12 @@ const EXIT_SEQUENCES: Record<string, string> = {
   claude: '/exit',
   codex: '/quit',
   grok: '/quit',
-  gemini: '/quit'
+  gemini: '/quit',
+  copilot: '/exit'
 }
 
 export function exitSequence(agentId: string): string | null {
-  return EXIT_SEQUENCES[agentId] ?? null
+  return EXIT_SEQUENCES[capabilityAgentId(agentId)] ?? null
 }
 
 /** Re-exported, not redefined: it lives in `@shared/agents/pane` so the main process can ask the
@@ -72,7 +73,43 @@ export function restartEligibility(
   return { ok: true }
 }
 
-export type RestartOutcome = 'restarted' | 'exit-timeout' | 'not-eligible'
+/** Model and provider changes use a recycle path, so they only need resumability and an id. */
+export function modelSwitchEligibility(
+  agentId: string | undefined,
+  sessionId: string | undefined
+): { ok: true } | { ok: false; reason: Exclude<IneligibleReason, 'working'> } {
+  if (!agentId || !canResume(agentId)) return { ok: false, reason: 'not-resumable' }
+  if (!sessionId) return { ok: false, reason: 'no-session' }
+  return { ok: true }
+}
+
+/** Restart on subscription shares the model-switch recycle contract and does not type an exit
+ * command into a busy prompt. The caller still decides whether its host can recycle the session. */
+export function clearEnvEligibility(
+  agentId: string | undefined,
+  sessionId: string | undefined
+): { ok: true } | { ok: false; reason: Exclude<IneligibleReason, 'working'> } {
+  if (!agentId || !canResume(agentId) || !exitSequence(agentId)) {
+    return { ok: false, reason: 'not-resumable' }
+  }
+  if (!sessionId) return { ok: false, reason: 'no-session' }
+  return { ok: true }
+}
+
+/** Prefer the live hook id, then the id minted and persisted with a node at creation time. */
+export function restartSessionId(live: unknown, persisted: unknown): string | undefined {
+  if (typeof live === 'string' && live.trim()) return live.trim()
+  if (typeof persisted === 'string' && persisted.trim()) return persisted.trim()
+  return undefined
+}
+
+export type RestartOutcome =
+  | 'restarted'
+  | 'exit-timeout'
+  | 'not-eligible'
+  | 'model-no-session'
+  | 'model-unavailable'
+  | 'model-pane-mismatch'
 
 export const RESTART_EXIT_TIMEOUT_MS = 6000
 export const RESTART_POLL_MS = 250
@@ -83,6 +120,10 @@ export const RESTART_POLL_MS = 250
  *  restart may wait forever — the awaiting node is held un-restartable and, in a bulk run, every
  *  node after it is blocked and the summary the user is waiting for never arrives. */
 export const RESTART_DELIVERY_TIMEOUT_MS = DELIVERY_ATTEMPTS * VERIFY_TIMEOUT_MS + 1000
+
+function resumeGateCommand(agentId: string, sessionId: string): string | null {
+  return resumeCommand(agentId, sessionId) ?? resumeCommandWith('agent', capabilityAgentId(agentId), sessionId)
+}
 
 /**
  * One bounded pane query. Unbounded, a wedged tmux server (or a relay whose IPC never answers)
@@ -154,7 +195,7 @@ export async function performExitPhase(d: {
   isLive?: () => boolean
 }): Promise<ExitPhaseOutcome> {
   const exit = exitSequence(d.agentId)
-  const base = resumeCommand(d.agentId, d.sessionId)
+  const base = resumeGateCommand(d.agentId, d.sessionId)
   // The BARE command is the gate: `resumeCommand` is what validates the session id before it
   // reaches a command line, and a session we could not resume must not be quit.
   if (!exit || !base) return 'not-eligible'
@@ -249,7 +290,7 @@ export async function performResumePhase(d: {
    */
   isLive?: () => boolean
 }): Promise<ResumePhaseOutcome> {
-  const base = resumeCommand(d.agentId, d.sessionId)
+  const base = resumeGateCommand(d.agentId, d.sessionId)
   // The BARE command is the gate even when the caller overrides it: `resumeCommand` is what
   // validates the session id before it reaches a command line.
   if (!base) return 'not-eligible'
@@ -376,15 +417,15 @@ const inFlight = new Set<string>()
  * does not count — so a doubled request is neither counted twice as restarted nor reported as a
  * failure the user could act on. (The alternative, a fifth outcome, would break that frozen line.)
  */
-export function guardConcurrentRestart<T extends string>(
+export function guardConcurrentRestart<T extends string, Args extends unknown[]>(
   nodeId: string,
-  fn: () => Promise<T>
-): () => Promise<T | 'not-eligible'> {
-  return async () => {
+  fn: (...args: Args) => Promise<T>
+): (...args: Args) => Promise<T | 'not-eligible'> {
+  return async (...args: Args) => {
     if (inFlight.has(nodeId)) return 'not-eligible'
     inFlight.add(nodeId)
     try {
-      return await fn()
+      return await fn(...args)
     } finally {
       // Released on rejection too: a transport that threw once must not leave the node
       // permanently un-restartable for the rest of the app's run.
@@ -394,17 +435,24 @@ export function guardConcurrentRestart<T extends string>(
 }
 
 // ── Node registry (same park-surviving pattern as TerminalNode's restartSubs) ────────────
-const restartFns = new Map<string, () => Promise<RestartOutcome>>()
+export type AgentRestartFn = (
+  targetAgentId?: AgentId,
+  targetModel?: string,
+  restartShell?: boolean,
+  clearEnv?: boolean
+) => Promise<RestartOutcome>
+
+const restartFns = new Map<string, AgentRestartFn>()
 
 /** Register a node's restart closure; returns an unregister that is inert if superseded. */
-export function registerAgentRestart(nodeId: string, fn: () => Promise<RestartOutcome>): () => void {
+export function registerAgentRestart(nodeId: string, fn: AgentRestartFn): () => void {
   restartFns.set(nodeId, fn)
   return () => {
     if (restartFns.get(nodeId) === fn) restartFns.delete(nodeId)
   }
 }
 
-export function agentRestartFn(nodeId: string): (() => Promise<RestartOutcome>) | undefined {
+export function agentRestartFn(nodeId: string): AgentRestartFn | undefined {
   return restartFns.get(nodeId)
 }
 

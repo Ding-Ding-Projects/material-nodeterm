@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
+import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import { ungroupNodes, type CanvasNode } from '../state/workspace'
 import { useToyLocks } from '../state/toylocks'
 import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
@@ -9,9 +9,17 @@ import { useWsl } from '../state/wsl'
 import { canManageWslDistro, sanitizeGroupWsl, WSL_NOT_OWNED_HINT } from '@shared/wsl-binding'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { alphaTint } from '../components/color/tint'
+import { isBranchDependencyLink } from '../lib/link-authoring'
 
-export type WorktreeAction = 'merge' | 'remove' | 'unbind'
+export type WorktreeAction = 'merge' | 'remove' | 'unbind' | 'sync'
 export type WslAction = 'sleep' | 'wake' | 'delete' | 'unbind'
+
+/** Canvas-owned drill navigation. Group frames remain ordinary persisted nodes; this handler
+ * changes the current view without placing navigation state in the project file. */
+let drillHandler: ((groupId: string) => void) | null = null
+export function setDrillHandler(next: ((groupId: string) => void) | null): void {
+  drillHandler = next
+}
 
 /**
  * Worktree-action handler bridge. React Flow instantiates custom nodes itself, so we can't
@@ -46,6 +54,21 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const frameRef = useRef<HTMLDivElement | null>(null)
 
   const wt = data.worktree
+  const hasBranchDependency = useProjects((s) => {
+    const project = s.projects.find((candidate) => candidate.id === s.activeProjectId)
+    return !!wt && !!project?.links?.some(
+      (link) => isBranchDependencyLink(link) &&
+        (link.source.repoPath === wt.repoPath || link.source.repoPath === project.cwd) &&
+        link.source.branch === wt.branch
+    )
+  })
+  const projectRef =
+    data.projectRef && typeof data.projectRef.projectId === 'string' ? data.projectRef : undefined
+  const referencedProject = useProjects((s) =>
+    projectRef ? s.projects.find((p) => p.id === projectRef.projectId) : undefined
+  )
+  const referenceUnavailable =
+    !!projectRef && (!referencedProject || referencedProject.unavailable || referencedProject.closed)
   // The store is the ONLY caller of the worktree/status git IPC; it throttles
   // (WORKTREE_STATUS_THROTTLE_MS) and is epoch-guarded, so asking often is free.
   const status = useWorktrees((s) => (wt ? s.statusByPath[wt.path] : undefined))
@@ -170,7 +193,8 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
     'group-node',
     selected ? 'selected' : '',
     bound ? 'group-node--worktree' : '',
-    bound && stale ? 'group-node--worktree-stale' : ''
+    bound && stale ? 'group-node--worktree-stale' : '',
+    referenceUnavailable ? 'group-node--worktree-stale' : ''
   ]
     .filter(Boolean)
     .join(' ')
@@ -180,12 +204,14 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
       ref={frameRef}
       className={frameClass}
       style={{
-        borderColor: bound && stale ? undefined : data.color,
+        borderColor: (bound && stale) || referenceUnavailable ? undefined : data.color,
         // 28/255 and 15/255 are the `1c` / `0f` hex-alpha suffixes this used to append to the
         // colour string — same pixels, but a frame coloured from the picker's RGB/HSL/OKLCH tabs
         // now gets its fill instead of silently losing it. See alphaTint.
         background:
-          bound && stale ? undefined : alphaTint(data.color, bound ? 28 / 255 : 15 / 255),
+          (bound && stale) || referenceUnavailable
+            ? undefined
+            : alphaTint(data.color, bound ? 28 / 255 : 15 / 255),
         // Rounded selection ring (box-shadow follows border-radius, unlike the resizer line).
         boxShadow: selected ? `0 0 0 1.5px ${data.color}` : undefined
       }}
@@ -196,6 +222,20 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
         isVisible={selected}
         color={data.color}
         lineStyle={{ borderColor: 'transparent' }}
+      />
+      <Handle
+        id="link-out"
+        type="source"
+        position={Position.Right}
+        isConnectable={false}
+        style={{ opacity: 0, pointerEvents: 'none' }}
+      />
+      <Handle
+        id="link-in"
+        type="target"
+        position={Position.Left}
+        isConnectable={false}
+        style={{ opacity: 0, pointerEvents: 'none' }}
       />
 
       <div className="group-node__label">
@@ -278,6 +318,15 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
                   </em>
                 )}
               </span>
+            )}
+            {!stale && hasBranchDependency && (
+              <button
+                className="group-node__wt-btn"
+                title="Sync branch dependency"
+                onClick={() => worktreeActionHandler?.(id, 'sync')}
+              >
+                ↻ Sync
+              </button>
             )}
             {!stale && (
               <button
@@ -365,6 +414,30 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
         )}
       </div>
 
+      {projectRef && (
+        <div className="group-node__wt nodrag">
+          {referenceUnavailable ? (
+            <span
+              className="group-node__branch group-node__branch--stale"
+              title="The referenced project is unavailable or closed. Reopen it before drilling in."
+            >
+              ↗ unavailable project
+            </span>
+          ) : (
+            <span
+              className="group-node__branch"
+              title={`Open ${referencedProject?.name ?? 'project'} canvas`}
+            >
+              <span
+                className="group-node__dot"
+                style={{ display: 'inline-block', background: referencedProject?.color ?? data.color }}
+              />{' '}
+              ↗ {referencedProject?.name ?? 'project'}
+            </span>
+          )}
+        </div>
+      )}
+
       {unlockAnchor &&
         (() => {
           // Re-resolved live rather than closed over: the record can be removed or edited from
@@ -384,6 +457,15 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
         })()}
 
       <div className="group-node__actions nodrag">
+        <button
+          className="group-node__drill"
+          type="button"
+          title={projectRef ? 'Open referenced project as canvas' : 'Open group as canvas'}
+          disabled={referenceUnavailable}
+          onClick={() => drillHandler?.(id)}
+        >
+          ⤢
+        </button>
         <button
           className="group-node__ungroup"
           title={frameLocked ? 'Locked — click to unlock' : 'Ungroup'}

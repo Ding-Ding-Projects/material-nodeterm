@@ -9,9 +9,14 @@ not open files, start processes, hydrate sessions, or contact a provider.
 
 The projection contains a stable schema identifier and version, project name, colour and safe icon,
 canvas identifiers and scope, node geometry, kind, title, colour, group, collapse state, tags,
-safe text and browser tab presentation, service labels, bridge and rope relationships, and an
-optional bounded global appearance record. Per-element appearance is postponed until its typed
-schema exists. Child canvases are represented now so later universe and portal
+safe text and browser tab presentation, typed context, lineage, and dependency relationships, and
+an optional bounded global appearance record. Legacy bridge and rope records remain readable for older payloads.
+New typed relationships carry explicit node, `xnode`, or branch endpoints. An `xnode` endpoint names a
+project and node without copying the foreign node. Branch endpoints carry a relative repository reference,
+with `.` representing the project root, and never carry a machine-local absolute path.
+Bounded link metadata preserves the optional purpose and display-only marker; unknown metadata keys
+are refused rather than granted portable authority.
+Per-element appearance is postponed until its typed schema exists. Child canvases are represented now so later universe and portal
 features can add their own records without changing the root contract. A universe scope is either
 `multiverse` or `aws-universe`; the root scope is `root`.
 
@@ -36,6 +41,9 @@ the project, icon, canvas, viewport, node, geometry, browser-tab, relationship, 
 records. Canvas parent cycles, duplicate membership, duplicate relationship identifiers, and
 out-of-range numeric values are rejected. HTTP and HTTPS URLs are normalized and accepted without
 credentials; local-file, executable, credential-bearing, and control-character URLs are refused.
+Typed relationship endpoints are validated independently. Local node endpoints must name a node in
+the payload, while foreign-node and branch endpoints remain explicit references that do not grant
+runtime authority. Unsafe, absolute, or traversal-containing branch repository references are refused.
 Empty user content, such as a sticky note or browser-tab title, remains valid while required
 identifiers and labels stay non-empty. Empty URLs are omitted, and per-element appearance records
 are not accepted in this lane.

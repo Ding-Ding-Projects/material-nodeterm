@@ -185,6 +185,21 @@ export const IconBranch = () => (
   </svg>
 )
 
+/** Focus the canvas on one node, matching the group drill-through affordance. */
+export const IconFocus = () => (
+  <svg {...S}>
+    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+  </svg>
+)
+
+/** Chain link for the off-canvas link inspector. */
+export const IconLink = () => (
+  <svg {...S}>
+    <path d="M9 12a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5L10 6" />
+    <path d="M15 12a3.5 3.5 0 0 0-5 0L7.5 14.5a3.5 3.5 0 0 0 5 5L14 18" />
+  </svg>
+)
+
 export const IconEditor = () => (
   <svg {...S}>
     <path d="M9 8l-4 4 4 4M15 8l4 4-4 4" />

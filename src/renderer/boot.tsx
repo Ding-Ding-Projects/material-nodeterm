@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import { ensureClaudeCliCaps } from './state/permissionMode'
 import { ensureCodexIdentityCaps } from './state/codexIdentity'
+import { initAgentResolver } from './state/agent-resolver'
+import { refreshAgentEnv } from './lib/agentEnv'
 import './fonts.css'
 import './styles.css'
 import './styles.md3.css'
@@ -25,6 +27,10 @@ void ensureClaudeCliCaps()
 // this machine has one installed and armed. Unprobed ⇒ plain `codex`, which is what every Codex
 // node ran before this feature — never a launcher path that might not resolve.
 void ensureCodexIdentityCaps()
+// Register custom-agent harness inheritance before any canvas node asks a capability predicate.
+// The environment snapshot is best effort and never blocks renderer startup.
+initAgentResolver()
+void refreshAgentEnv()
 
 // Note: StrictMode is intentionally not used — its double mount in dev would open
 // two PTY sessions per terminal node.

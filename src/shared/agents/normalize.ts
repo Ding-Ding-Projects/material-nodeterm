@@ -1,4 +1,4 @@
-import type { AgentId } from './config'
+import { capabilityAgentId, type AgentId } from './config'
 
 export type AgentState = 'working' | 'waiting' | 'blocked' | 'done'
 
@@ -399,6 +399,45 @@ export function normalizeGemini(env: RawHookEnvelope): NormalizedAgentEvent | nu
   return null
 }
 
+interface CopilotPayload {
+  hook_event_name?: string
+  session_id?: string
+  prompt?: string
+  notification_type?: string
+  message?: string
+  last_assistant_message?: string
+}
+
+/** Normalize the Copilot CLI's observer hooks into the shared agent status shape. */
+export function normalizeCopilot(env: RawHookEnvelope): NormalizedAgentEvent | null {
+  const payload = env.payload as CopilotPayload
+  const base = { nodeId: env.nodeId, agentId: env.agentId, sessionId: payload.session_id }
+  if (payload.hook_event_name === 'SessionStart') return { ...base, kind: 'session', sessionPhase: 'start' }
+  if (payload.hook_event_name === 'SessionEnd') return { ...base, kind: 'session', sessionPhase: 'end' }
+  if (payload.hook_event_name === 'UserPromptSubmit') {
+    return { ...base, kind: 'state', state: 'working', task: payload.prompt, newTurn: true }
+  }
+  if (
+    payload.hook_event_name === 'PreToolUse' ||
+    payload.hook_event_name === 'PostToolUse' ||
+    payload.hook_event_name === 'PostToolUseFailure'
+  ) {
+    return { ...base, kind: 'state', state: 'working' }
+  }
+  if (payload.hook_event_name === 'Stop') {
+    return { ...base, kind: 'state', state: 'done', lastMessage: payload.last_assistant_message }
+  }
+  if (payload.hook_event_name === 'Notification') {
+    if (payload.notification_type === 'permission_prompt') {
+      return { ...base, kind: 'state', state: 'blocked', lastMessage: payload.message }
+    }
+    if (payload.notification_type === 'elicitation_dialog') {
+      return { ...base, kind: 'state', state: 'waiting', lastMessage: payload.message }
+    }
+  }
+  return null
+}
+
 // opencode plugin payload (see core/agents/hooks/opencode.ts). The managed plugin forwards
 // { event, sessionID?, role? } per hook; field names beyond `event` are read defensively —
 // opencode's event payload shapes are not a contract, so the event NAME carries the mapping.
@@ -656,10 +695,12 @@ export function normalizeGrok(env: RawHookEnvelope): NormalizedAgentEvent | null
 }
 
 export function normalizeFor(agentId: AgentId, env: RawHookEnvelope): NormalizedAgentEvent | null {
-  if (agentId === 'claude') return normalizeClaude(env)
-  if (agentId === 'codex') return normalizeCodex(env)
-  if (agentId === 'gemini') return normalizeGemini(env)
-  if (agentId === 'opencode') return normalizeOpencode(env)
-  if (agentId === 'grok') return normalizeGrok(env)
+  const effective = capabilityAgentId(agentId)
+  if (effective === 'claude') return normalizeClaude(env)
+  if (effective === 'codex') return normalizeCodex(env)
+  if (effective === 'gemini') return normalizeGemini(env)
+  if (effective === 'opencode') return normalizeOpencode(env)
+  if (effective === 'grok') return normalizeGrok(env)
+  if (effective === 'copilot') return normalizeCopilot(env)
   return null
 }

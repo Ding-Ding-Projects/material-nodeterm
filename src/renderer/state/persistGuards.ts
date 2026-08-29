@@ -2,7 +2,7 @@
 // timers; the RULES live here so they are unit-testable without React Flow, and so the reasoning
 // behind them survives the next edit of an 8k-line component.
 
-import type { BridgeLink, CanvasNodeState, Viewport } from '@shared/types'
+import type { BridgeLink, CanvasNodeState, Link, Viewport } from '@shared/types'
 
 /**
  * May the live React Flow canvas be committed into the store under `activeProjectId`?
@@ -32,12 +32,14 @@ export interface ActiveCanvasCommit {
   viewport: Viewport
   bridges: BridgeLink[]
   ropes: BridgeLink[]
+  /** Complete typed links when a drill view only holds a subset of the project's nodes. */
+  links?: Link[]
 }
 
 /**
  * Commit the exact foreground snapshot only while its React Flow epoch still belongs to the active
- * project. Keeping all six values in this tested seam prevents a later Canvas refactor from
- * preserving nodes while silently dropping the two edge lists from the whole-file save.
+ * project. Keeping the edge lists and optional typed relationships in this seam prevents a later
+ * Canvas refactor from preserving nodes while silently dropping off-canvas relationships.
  */
 export function commitActiveCanvas(
   snapshot: ActiveCanvasCommit,
@@ -46,17 +48,23 @@ export function commitActiveCanvas(
     nodes: CanvasNodeState[],
     viewport: Viewport,
     bridges: BridgeLink[],
-    ropes: BridgeLink[]
+    ropes: BridgeLink[],
+    links?: Link[]
   ) => void
 ): boolean {
   if (!canCommitCanvas(snapshot.nodesProjectId, snapshot.activeProjectId)) return false
-  commit(
-    snapshot.activeProjectId,
-    snapshot.nodes,
-    snapshot.viewport,
-    snapshot.bridges,
-    snapshot.ropes
-  )
+  if (snapshot.links === undefined) {
+    commit(snapshot.activeProjectId, snapshot.nodes, snapshot.viewport, snapshot.bridges, snapshot.ropes)
+  } else {
+    commit(
+      snapshot.activeProjectId,
+      snapshot.nodes,
+      snapshot.viewport,
+      snapshot.bridges,
+      snapshot.ropes,
+      snapshot.links
+    )
+  }
   return true
 }
 

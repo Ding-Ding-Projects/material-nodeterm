@@ -118,6 +118,14 @@ backend reattaches to the live session; reboot the machine and cold restore rebu
 replays saved scrollback and resumes a supported agent CLI — it does not preserve the original OS
 process, and says so.
 
+Typed context, lineage, and dependency links can cross project and repository boundaries. Foreign
+links render as visibly marked, non-owning projections that join only an existing session, while
+project-reference groups drill into another project's canvas and return without dropping sibling
+nodes. Custom agent harnesses can inherit a built-in agent's capabilities, environment expansion,
+model discovery, model switching, and subscription-aware restart behavior. See
+[`docs/features/projects/cross-project-links-and-agent-harnesses.md`](./docs/features/projects/cross-project-links-and-agent-harnesses.md)
+for the current behavior, portable boundary, and verification status.
+
 ### Agent support — Claude Code, Codex, Gemini, opencode, Grok, or your own
 
 An **agent** node is a terminal preset that launches an agent CLI as its first command. Status

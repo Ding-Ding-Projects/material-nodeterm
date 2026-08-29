@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 
 import {
   AUTO_PERMISSION_MODE_MIN_VERSION,
+  capabilityAgentId,
   gatePermissionMode,
   resolvePermissionMode,
   type AgentId,
@@ -158,14 +159,22 @@ export function permissionModeForProject(
   agentId: AgentId = 'claude'
 ): AgentPermissionMode {
   const { settings } = useSettings.getState()
-  const mode = resolvePermissionMode(project, settings)
+  // Project-scoped settings are machine-local and may differ from the currently active project
+  // while a targeted cross-project launch is being prepared. Give that overlay the same precedence
+  // as the active settings surface, while retaining the older shared project default as its final
+  // fallback.
+  const projectMode = project?.settingsOverrides?.claudePermissionMode
+  const mode = resolvePermissionMode(
+    projectMode !== undefined ? { ...project, defaultPermissionMode: projectMode } : project,
+    settings
+  )
   // The version gate is CLAUDE-specific BY CONSTRUCTION: it exists because Claude Code < 2.1.71
   // exits 1 on `--permission-mode auto`, and it is fed by a `claude --version` probe (local, or the
   // SSH host's). grok has accepted every mode we emit since 1.0.0, its first release, so applying
   // the gate to it would downgrade a grok session to `default` on a machine whose CLAUDE is old —
   // or absent entirely. An agent that needs its own gate adds it here, beside this one, rather than
   // inheriting claude's.
-  const versionGated = agentId === 'claude' ? gatePermissionMode(mode, autoSupportedFor(project)) : mode
+  const versionGated = capabilityAgentId(agentId) === 'claude' ? gatePermissionMode(mode, autoSupportedFor(project)) : mode
 
   // Kids mode has the LAST word, and only ever narrows. It runs after the version gate rather
   // than before it because the two answer different questions — the version gate asks "can this
@@ -326,7 +335,7 @@ function waitForSshAutoAnswer(projectId: string, ms: number): Promise<void> {
 export async function ensureActivePermissionMode(
   agentId: AgentId = 'claude'
 ): Promise<AgentPermissionMode> {
-  if (agentId !== 'claude') return activePermissionMode(agentId)
+  if (capabilityAgentId(agentId) !== 'claude') return activePermissionMode(agentId)
   await ensureClaudeCliCaps()
   const { settings } = useSettings.getState()
   const { getProject, activeProjectId } = useProjects.getState()
@@ -334,7 +343,7 @@ export async function ensureActivePermissionMode(
   if (project?.ssh && resolvePermissionMode(project, settings) === 'auto') {
     await waitForSshAutoAnswer(project.id, SSH_AUTO_PROBE_WAIT_MS)
   }
-  return activePermissionMode('claude')
+  return activePermissionMode(agentId)
 }
 
 /** The async launch-plan variant for relaunches that must await Claude's capability probe. */
