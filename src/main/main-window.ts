@@ -74,6 +74,21 @@ export function shouldHideOnClose(platform: NodeJS.Platform | string, quitting: 
   return platform === 'darwin' && !quitting
 }
 
+/**
+ * A normal Windows title-bar close must enter the application quit lifecycle directly. Waiting
+ * for `window-all-closed` is insufficient because auxiliary BrowserWindows may intentionally
+ * outlive the main window, leaving the process and single-instance lock behind. An enabled planner
+ * schedule is the one explicit Windows background-host exception, and an in-progress quit must be
+ * allowed to close its windows without recursively starting another quit.
+ */
+export function shouldQuitHostOnWindowClose(
+  platform: NodeJS.Platform | string,
+  quitting: boolean,
+  hasEnabledPlannerSchedules: boolean
+): boolean {
+  return platform === 'win32' && !quitting && !hasEnabledPlannerSchedules
+}
+
 export type CloseAction = 'default' | 'hide' | 'leave-fullscreen-then-hide'
 
 /**
