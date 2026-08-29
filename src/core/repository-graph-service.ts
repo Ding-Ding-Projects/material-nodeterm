@@ -4,7 +4,7 @@ import { access, mkdir, readFile, readdir, stat } from 'node:fs/promises'
 import { constants as fsConstants } from 'node:fs'
 import { basename, extname, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
-import ts from 'typescript'
+import * as ts from 'typescript'
 import { platform, type CorePlatform } from './platform'
 import { writeFileAtomic } from './fs-atomic'
 import {
@@ -21,7 +21,8 @@ import {
   type RepositoryGraphProgress,
   type RepositoryGraphRefreshInput,
   type RepositoryGraphSnapshot,
-  type RepositoryGraphSourceLocation
+  type RepositoryGraphSourceLocation,
+  type RepositoryGraphStatus
 } from '../shared/repository-graph'
 
 const execFileAsync = promisify(execFile)

@@ -1,7 +1,8 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawn, type ChildProcessByStdio } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { lstat, mkdir, readFile, access } from 'node:fs/promises'
 import { join } from 'node:path'
+import type { Readable } from 'node:stream'
 import { IPC } from '../../shared/ipc'
 import {
   favoriteFrom,
@@ -28,11 +29,13 @@ interface ProcessResult {
   stderr: string
 }
 
+type VeraCryptChildProcess = ChildProcessByStdio<null, Readable, Readable>
+
 export interface VeraCryptRuntime {
   platform: NodeJS.Platform
   executableCandidates: readonly string[]
   whereExecutable(): Promise<string[]>
-  run(executable: string, args: readonly string[], timeoutMs: number, onSpawn?: (child: ChildProcessWithoutNullStreams) => void): Promise<ProcessResult>
+  run(executable: string, args: readonly string[], timeoutMs: number, onSpawn?: (child: VeraCryptChildProcess) => void): Promise<ProcessResult>
   pathExists(path: string): Promise<boolean>
   lstat(path: string): Promise<{ isFile(): boolean; isSymbolicLink(): boolean }>
 }
@@ -57,7 +60,7 @@ const DEFAULT_RUNTIME: VeraCryptRuntime = {
       let stdout = ''
       let stderr = ''
       let timer: ReturnType<typeof setTimeout> | undefined
-      let child: ChildProcessWithoutNullStreams
+      let child: VeraCryptChildProcess
       const finish = (exitCode: number): void => {
         if (settled) return
         settled = true
@@ -110,7 +113,7 @@ function operationMessage(kind: VeraCryptOperationKind, state: VeraCryptOperatio
 export class VeraCryptManager implements VeraCryptApi {
   private readonly listeners = new Set<(operation: VeraCryptOperation) => void>()
   private readonly operations = new Map<string, VeraCryptOperation>()
-  private readonly children = new Map<string, ChildProcessWithoutNullStreams>()
+  private readonly children = new Map<string, VeraCryptChildProcess>()
   private readonly managerMounts = new Map<string, string>()
   private executable: string | null = null
   private favoritesLoaded = false
@@ -211,7 +214,12 @@ export class VeraCryptManager implements VeraCryptApi {
   async preflight(options: VeraCryptMountOptions): Promise<VeraCryptMountPreflight> {
     const path = isSafeContainerPath(options?.containerPath) ? options.containerPath : ''
     const driveLetter = normalizeDriveLetter(options?.driveLetter) ?? ''
-    const availableDriveLetters = await this.availableLetters().catch(() => [])
+    let availableDriveLetters: string[]
+    try {
+      availableDriveLetters = await this.availableLetters()
+    } catch {
+      availableDriveLetters = []
+    }
     if (this.runtime.platform !== 'win32') return { ok: false, containerPath: path, driveLetter, availableDriveLetters, reason: 'VeraCrypt mounting is available only in the Windows desktop application.' }
     if (!path) return { ok: false, containerPath: path, driveLetter, availableDriveLetters, reason: 'Choose an existing VeraCrypt container file.' }
     if (!driveLetter) return { ok: false, containerPath: path, driveLetter, availableDriveLetters, reason: 'Choose one drive letter from A through Z.' }
