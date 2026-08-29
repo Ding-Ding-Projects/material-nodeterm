@@ -954,7 +954,6 @@ async function main(): Promise<void> {
             )
           } else {
             const error =
-              req.cmd === 'hello' && req.token === token
               req.cmd === 'hello' && tokenMatches(req.token, token)
                 ? `incompatible session-host protocol: expected ${currentProtocolVersion()}`
                 : 'unauthorized'

@@ -540,8 +540,8 @@ describe('control-mode shadow clients for released sessions', () => {
         // nt-node-1 carries the user's own client the whole time (2 = theirs + ours), so the PLAN
         // must never name it. nt-node-2 is shadow-only when the plan is made and gains a real
         // client before the kill — precisely what the kill-time re-verify exists for.
-        const nodeTwo = listings++ === 0 ? 1 : 2
-        return `nt-node-1|2|${FRESH}|${OLD}\nnt-node-2|${nodeTwo}|${FRESH}|${OLD}`
+        const nodeTwoOutput = listings++ === 0 ? OLD : NOW
+        return `nt-node-1|2|${FRESH}|${OLD}\nnt-node-2|1|${FRESH}|${nodeTwoOutput}`
       },
       readMem: () => ({ availableMb: 100, totalMb: 8000 }), // under the watermark: real pressure
       env: {},

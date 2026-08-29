@@ -3071,7 +3071,6 @@ export class PtyManager {
       settings.tmuxEnabled &&
       options.persistKey
     ) {
-    } else if (this.tmuxPath && settings.tmuxEnabled && options.persistKey) {
       // attach-or-create the persistent session for this node.
       // `-A` = attach-or-create. `-D` = detach OTHER clients on attach. We use `-D` ONLY for the
       // local renderer client (a remount should take sole ownership of its session). A host-served
@@ -3250,8 +3249,6 @@ export class PtyManager {
             settings.tmuxScrollback
           )) as unknown as pty.IPty
     } else {
-      file = localSessionShell
-      args = localSessionArgs
       try {
         proc = pty.spawn(file, args, {
           name: 'xterm-256color',

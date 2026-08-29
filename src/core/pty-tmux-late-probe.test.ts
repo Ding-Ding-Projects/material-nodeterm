@@ -22,12 +22,14 @@ import { fakePlatform } from './platform-fake'
  */
 
 const probe = vi.hoisted(() => ({ shellPath: undefined as string | undefined }))
-vi.mock('./exec-path', () => ({
+vi.mock('./exec-path', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./exec-path')>()),
   resolveShellPath: () => Promise.resolve(probe.shellPath ?? null),
   shellPathNow: () => probe.shellPath,
   findInPathString: (bin: string, pathStr: string | null | undefined) =>
     pathStr === '/opt/weird/bin' ? `/opt/weird/bin/${bin}` : null,
-  findExecutableSync: () => null
+  findExecutableSync: () => null,
+  isExecutable: () => false
 }))
 vi.mock('node-pty', () => ({ spawn: () => ({ onData: () => {}, onExit: () => {}, kill: () => {} }) }))
 
