@@ -448,6 +448,9 @@ export function buildStubApi(): Omit<
       // Overridden by the real WS-backed namespace in ws-bridge; the stub still answers with the
       // fail-open caps (never rejects) because the permission-mode gate reads it on the boot path.
       cliCaps: () => Promise.resolve(UNKNOWN_CLAUDE_CLI_CAPS),
+      skills: {
+        list: U('claude.skills.list')
+      },
       readTranscript: U('claude.readTranscript')
     },
     agent: {

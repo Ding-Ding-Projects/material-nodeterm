@@ -22,6 +22,7 @@ import { useSettingsTarget } from './useSettingsTarget'
 import { AccountsSection } from './sections/AccountsSection'
 import { AdhdModesSection } from './sections/AdhdModesSection'
 import { AgentsSection } from './sections/AgentsSection'
+import { ClaudeSkillsSection } from './sections/ClaudeSkillsSection'
 import { AppearanceEditorSection } from './sections/AppearanceEditorSection'
 import { AppearanceSection } from './sections/AppearanceSection'
 import { AppIdentitySection } from './sections/AppIdentitySection'
@@ -297,6 +298,7 @@ export function SettingsPage({
             <AdhdModesSection isActive={active === 'adhd-modes'} />
             <ShortcutsSection isActive={active === 'shortcuts'} />
             <AgentsSection isActive={active === 'agents'} />
+            <ClaudeSkillsSection isActive={active === 'claude-skills'} />
             <UsageSection isActive={active === 'usage'} />
             <AccountsSection isActive={active === 'accounts'} />
             <CustomAgentsSection isActive={active === 'custom-agents'} />

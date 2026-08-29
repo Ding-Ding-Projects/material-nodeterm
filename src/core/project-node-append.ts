@@ -123,7 +123,10 @@ export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date
     cwd: typeof sibling?.cwd === 'string' ? sibling.cwd : '.'
   }
   if (agentId !== undefined) node.agentId = agentId
-  if (bound) node.accountId = bound
+  // Keep the two builtin account namespaces separate. Legacy phone payloads without an agent id
+  // retain the historical accountId field, while a known Codex node must never be read as Claude.
+  if (bound && (agentId === undefined || agentId === 'claude')) node.accountId = bound
+  if (bound && agentId === 'codex') node.codexAccountId = bound
   // Desktop remote nodes carry the connection spec PER NODE — a sibling terminal in the same
   // project has the right portable connection values. Machine-local execution fields were
   // stripped above and therefore cannot be copied onto the new node.
