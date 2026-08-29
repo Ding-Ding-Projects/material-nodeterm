@@ -6,6 +6,7 @@ import { LabelChips } from './LabelChips'
 import type { KanbanSession } from './KanbanView'
 import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
+import { SessionIconGlyph } from '../SessionIcon'
 
 const PRIO_COLOR: Record<KanbanPriority, string> = {
   low: '#8e8e93',
@@ -158,7 +159,7 @@ export const SessionCard = memo(function SessionCard({
       title="Open card"
     >
       <div className="kanban-card__row">
-        <span className="kanban-card__nodedot" style={{ background: session.color }} />
+        {session.sessionIcon ? <SessionIconGlyph icon={session.sessionIcon} size={20} title={`Session icon for ${session.title}`} /> : <span className="kanban-card__nodedot" style={{ background: session.color }} />}
         <span className="kanban-card__title">{session.title}</span>
         {session.kind === 'terminal' && terminalProfile && (
           <SessionCardTerminalProfile profile={terminalProfile} />

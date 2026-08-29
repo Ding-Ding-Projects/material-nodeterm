@@ -3,6 +3,7 @@ import { IconBellFilled, IconCircleCheck } from './icons'
 import type { SessionRowVM } from '../lib/sessionList'
 import { useContextWindow } from '../state/contextWindow'
 import { useSessionNaming } from '../state/sessionNaming'
+import { SessionIconGlyph } from './SessionIcon'
 
 export interface SessionRowProps {
   row: SessionRowVM
@@ -92,7 +93,7 @@ export function SessionRow({
       )}
       <div className="ss-row__body">
         <div className="ss-row__titleline">
-          <span className="ss-mark" style={{ background: row.color }} />
+          {row.sessionIcon ? <SessionIconGlyph icon={row.sessionIcon} size={18} title={`Session icon for ${row.title}`} /> : <span className="ss-mark" style={{ background: row.color }} />}
           {editing ? (
             <input
               className="ss-title-input"

@@ -29,6 +29,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 // one-frame spinner in that slot reads as a glitch.
 const ChatPanel = lazy(() => import('./ChatPanel').then((m) => ({ default: m.ChatPanel })))
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { SessionIconGlyph } from '../components/SessionIcon'
 import { LocalTransport } from '../terminal/local-transport'
 import { clipboardImages, droppedPaths, pasteHasText, pastedFiles } from '../terminal/file-drop'
 import type { TerminalTransport } from '../terminal/transport'
@@ -4875,6 +4876,7 @@ export function TerminalNode({
               setColorAnchor((a) => (a ? null : { x: r.left, y: r.bottom }))
             }}
           />
+          <SessionIconGlyph icon={data.sessionIcon} size={20} title={`Session icon for ${data.title}`} />
           {colorAnchor && (
             <ColorMenu
               x={colorAnchor.x}

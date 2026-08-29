@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add per-session emoji and bounded local picture identity marks. The picker rejects remote,
+  animated, malformed, and oversized inputs, persists only validated presentation data, and renders
+  the mark in node headers, the sessions sidebar, and Kanban cards. Verification remains pending
+  because this implementation lane intentionally ran no tests, builds, or captures.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

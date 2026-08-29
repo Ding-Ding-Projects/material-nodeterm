@@ -2,6 +2,7 @@ import type { AgentNodeStatus } from '../state/agentStatus'
 import type { AgentId } from '@shared/agents/config'
 import type { NodeKind } from '@shared/types'
 import type { ProjectIcon } from '@shared/project-icon'
+import type { SessionIcon } from '@shared/session-icon'
 import { hasUsage } from '@shared/agents/config'
 import type { SshConnection } from '@shared/ssh'
 
@@ -10,6 +11,7 @@ export interface SessionNodeInput {
   kind: NodeKind
   title: string
   color: string
+  sessionIcon?: SessionIcon
   agentId?: AgentId
   cwd?: string
   ssh?: SshConnection
@@ -209,6 +211,7 @@ function toRow(n: SessionNodeInput, status: AgentNodeStatus | undefined): Sessio
     id: n.id,
     title: n.title,
     color: n.color,
+    sessionIcon: n.sessionIcon,
     agentId: n.agentId,
     isAgent: !!n.agentId,
     statusKind,

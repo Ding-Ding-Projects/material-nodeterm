@@ -10,6 +10,7 @@ import { useSession } from '../session/session'
 import type { CanvasNode } from '../state/workspace'
 import { tooLargeSize, formatBytes } from '@shared/fsLimits'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { SessionIconGlyph } from '../components/SessionIcon'
 
 /**
  * A Monaco diff editor node for a changed file. Staged diff = HEAD vs index;
@@ -146,6 +147,7 @@ export function DiffNode({ id, data, selected }: NodeProps<CanvasNode>) {
         }`}
         style={headerFill.style}
       >
+        <SessionIconGlyph icon={data.sessionIcon} size={20} title={`Session icon for ${data.title}`} />
         <span className="term-node__title-text" title={`${rel} — ${commitOid ? commitOid.slice(0, 7) : staged ? 'staged' : 'working'}`}>
           {rel.split('/').pop()}
           <span className="diff-node__tag">{commitOid ? commitOid.slice(0, 7) : staged ? 'staged' : 'changes'}</span>

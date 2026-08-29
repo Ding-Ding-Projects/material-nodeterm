@@ -63,6 +63,7 @@ import {
   type KanbanTerminalProfilePresentation
 } from './terminal-profile-ui'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
+import type { SessionIcon } from '@shared/session-icon'
 
 /** One session node shown as a board card — derived LIVE from the canvas nodes; the board
  *  itself stores only column assignments. */
@@ -70,6 +71,7 @@ export interface KanbanSession {
   id: string
   title: string
   color: string
+  sessionIcon?: SessionIcon
   kind: 'terminal' | 'sticky' | 'browser'
   agentId?: string
   /** Sticky note body — shown in the expanded detail row. */

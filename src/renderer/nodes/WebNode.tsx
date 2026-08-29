@@ -5,6 +5,7 @@ import { httpUrl } from './webUrl'
 import { useDiscardWhenHidden, webviewAudible, type AudibleWebview } from './useDiscardWhenHidden'
 import { DiscardedPlate } from './DiscardedPlate'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { SessionIconGlyph } from '../components/SessionIcon'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 
 /**
@@ -121,6 +122,7 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
         }`}
         style={headerFill.style}
       >
+        <SessionIconGlyph icon={data.sessionIcon} size={20} title={`Session icon for ${data.title}`} />
         <EditableNodeTitle
           value={(data.title as string) ?? ''}
           onChange={(next) => updateNodeData(id, { title: next })}

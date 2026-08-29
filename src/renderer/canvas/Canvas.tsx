@@ -98,6 +98,7 @@ import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
 import type { ProjectIcon } from '@shared/project-icon'
+import type { SessionIcon } from '@shared/session-icon'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
@@ -125,6 +126,7 @@ import { ProjectSwitcher } from '../components/ProjectSwitcher'
 import { type MenuItem } from '../components/ContextMenu'
 import { devicePixelSnapOffset } from '../terminal/device-pixel-fit'
 import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
+import { SessionIconMenu } from '../components/SessionIconMenu'
 import { seedColor } from '../components/color/seedColor'
 import { appearanceId } from '../lib/appearance/registry'
 import { openAppearanceEditor } from '../state/appearanceEditorHost'
@@ -902,6 +904,7 @@ function toKanbanSession(n: CanvasNode): KanbanSession | null {
       id: n.id,
       title: (n.data.title as string) || 'Browser',
       color: (n.data.color as string) ?? NODE_COLORS[0],
+      sessionIcon: n.data.sessionIcon,
       kind: 'browser',
       url: n.data.url as string | undefined,
       browserProfileId: n.data.browserProfileId as string | undefined,
@@ -915,6 +918,7 @@ function toKanbanSession(n: CanvasNode): KanbanSession | null {
       // A note has no title of its own — its first line is the card label.
       title: text.split('\n')[0].slice(0, 80) || 'Note',
       color: (n.data.color as string) ?? NODE_COLORS[2],
+      sessionIcon: n.data.sessionIcon,
       kind: 'sticky',
       text,
       // Sticky cards never open a live terminal — the modal reads no spawn info.
@@ -926,6 +930,7 @@ function toKanbanSession(n: CanvasNode): KanbanSession | null {
     id: n.id,
     title: (n.data.title as string) ?? '',
     color: (n.data.color as string) ?? NODE_COLORS[0],
+    sessionIcon: n.data.sessionIcon,
     kind: 'terminal',
     agentId: n.data.agentId as string | undefined,
     // What the card modal's co-attach terminal needs to join THIS node's session the same way the
@@ -1142,6 +1147,7 @@ export function Canvas() {
     }
   }, [])
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
+  const [sessionIconTarget, setSessionIconTarget] = useState<{ id: string; icon?: SessionIcon } | null>(null)
   // Screen coordinates of the click that most recently opened a NODE/selection context menu — a
   // ref (not state) because `selectionItems`'s "Delete" onClick reads it later, after the menu
   // has closed, and needs the value from THAT click, not a stale closure over `menu`.
@@ -2403,6 +2409,7 @@ export function Canvas() {
               kind: (n.type ?? 'terminal') as SessionNodeInput['kind'],
               title: n.data.title ?? n.id,
               color: n.data.color ?? '#888',
+              sessionIcon: n.data.sessionIcon,
               agentId: n.data.agentId,
               cwd: n.data.cwd,
               ssh: n.data.ssh,
@@ -8090,6 +8097,16 @@ export function Canvas() {
         // `ids[0]` alone announced one node's colour as the group's, and the first drag then
         // moved every other node away from a value it was never on.
         : ([{ type: 'colors', value: seedColor(ids.map((nid) => nodesRef.current.find((n) => n.id === nid)?.data.color as string | undefined)), onPick: (c) => setNodesColor(ids, c) }] as MenuItem[])),
+      ...(ids.length === 1
+        ? ([{
+            label: 'Choose session icon…',
+            icon: <IconColor />,
+            onClick: () => {
+              const node = nodesRef.current.find((n) => n.id === ids[0])
+              setSessionIconTarget({ id: ids[0], icon: node?.data.sessionIcon })
+            }
+          }] as MenuItem[])
+        : []),
       { type: 'separator' },
       ...(isHidden('duplicate', hidden)
         ? []
@@ -11842,6 +11859,15 @@ export function Canvas() {
         items: [
           ...goToAndRename,
           {
+            label: 'Choose session icon…',
+            icon: <IconColor />,
+            onClick: () => {
+              const project = useProjects.getState().getProject(projectId)
+              const node = project?.nodes.find((n) => n.id === id)
+              setSessionIconTarget({ id, icon: node?.sessionIcon })
+            }
+          },
+          {
             label: 'Duplicate',
             icon: <IconDuplicate />,
             onClick: () => {
@@ -12463,6 +12489,22 @@ export function Canvas() {
     },
     [persist]
   )
+
+  const setSessionIcon = useCallback((id: string, icon: SessionIcon | undefined): void => {
+    if (id === nodesRef.current.find((node) => node.id === id)?.id) {
+      setNodes((nodes) => nodes.map((node) => node.id === id ? { ...node, data: { ...node.data, sessionIcon: icon } } : node))
+      markDirty()
+      return
+    }
+    const store = useProjects.getState()
+    const project = store.projects.find((candidate) => candidate.nodes.some((node) => node.id === id))
+    if (!project) return
+    store.replaceProject({
+      ...project,
+      nodes: project.nodes.map((node) => node.id === id ? { ...node, sessionIcon: icon } : node)
+    })
+    void persist()
+  }, [markDirty, persist, setNodes])
 
   const setProjectFolder = useCallback(
     async (id: string) => {
@@ -14347,6 +14389,16 @@ export function Canvas() {
 
       {menu && (
         <VocabularyContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />
+      )}
+
+      {sessionIconTarget && (
+        <SessionIconMenu
+          open
+          value={sessionIconTarget.icon}
+          title={(nodesRef.current.find((n) => n.id === sessionIconTarget.id)?.data.title as string) || 'Session'}
+          onPick={(icon) => setSessionIcon(sessionIconTarget.id, icon)}
+          onClose={() => setSessionIconTarget(null)}
+        />
       )}
 
       {/* Toy locks (docs/toy-locks.md) — a for-fun, opt-in gate on a canvas node. The target's

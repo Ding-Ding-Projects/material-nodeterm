@@ -5,6 +5,7 @@ import { browserPartitionForNode } from '@shared/browser-profiles'
 import { markWorkspaceDirty } from '../state/workspaceDirty'
 import { defaultBrowserTabs, type CanvasNode } from '../state/workspace'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { SessionIconGlyph } from '../components/SessionIcon'
 import { useProjects } from '../state/projects'
 import { BrowserSurface } from './BrowserSurface'
 import { BrowserProfilePicker } from './BrowserProfilePicker'
@@ -167,6 +168,7 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
         }`}
         style={headerFill.style}
       >
+        <SessionIconGlyph icon={data.sessionIcon} size={20} title={`Session icon for ${data.title}`} />
         <span className="term-node__title-text" title={activeTab?.url || ''}>
           {(data.title as string) || 'Browser'}
         </span>

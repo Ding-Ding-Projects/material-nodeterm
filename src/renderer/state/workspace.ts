@@ -1,5 +1,6 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
+import type { SessionIcon } from '@shared/session-icon'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
@@ -97,6 +98,7 @@ export interface NodeData {
    */
   titleAuto?: boolean
   color: string
+  sessionIcon?: SessionIcon
   group: string | null
   tags?: string[]
   collapsed?: boolean
@@ -1900,6 +1902,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         // tracking the session name; non-agent nodes ignore it.
         titleAuto: n.titleAuto ?? true,
         color: n.color,
+        sessionIcon: n.sessionIcon,
         group: n.group,
         tags: n.tags,
         collapsed,
@@ -1975,6 +1978,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         title: n.data.title,
         titleAuto: n.data.titleAuto,
         color: n.data.color,
+        sessionIcon: n.data.sessionIcon,
         group: n.data.group,
         tags: n.data.tags,
         collapsed: n.data.collapsed,

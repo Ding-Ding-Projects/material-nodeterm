@@ -1,5 +1,19 @@
 # Handoff
 
+## 2026-08-26, per-session icons
+
+Implemented the session identity-mark lane from PR #293 and issue #291 without importing remote
+image behavior. Added `src/shared/session-icon.ts` with strict emoji and local PNG/JPEG/WebP
+validation, byte and dimension bounds, and safe omission of malformed persisted values. Added the
+keyboard-accessible `SessionIconMenu` and `SessionIcon` renderer, wired persistence through canvas
+state and the shared project-file boundary, and rendered marks in node headers, sessions-sidebar
+rows, and Kanban cards. Added the feature article and the terminal documentation index, plus the
+roadmap and changelog entries.
+
+This lane deliberately ran no tests, type checks, lint, builds, packaging, UI interaction, security
+checks, or captures, and made no commit or dew. The remaining evidence work must verify the real
+packaged picker and every supported session surface before the roadmap item can be ticked.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

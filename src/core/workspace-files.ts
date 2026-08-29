@@ -20,6 +20,7 @@ import type {
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import { sanitizeSessionIcon } from '../shared/session-icon'
 
 export const PROJECT_DIR = '.nodeterm'
 export const PROJECT_FILE = 'project.json'
@@ -181,6 +182,17 @@ export function resolveNodes(nodes: CanvasNodeState[], root: string): CanvasNode
   })
 }
 
+/** Strip malformed session marks at the shared-file boundary; never trust image data from JSON. */
+function sanitizeSessionIcons(nodes: CanvasNodeState[]): CanvasNodeState[] {
+  return nodes.map((node) => {
+    const icon = sanitizeSessionIcon(node.sessionIcon)
+    return icon ? { ...node, sessionIcon: icon } : (() => {
+      const { sessionIcon: _discarded, ...withoutIcon } = node
+      return withoutIcon
+    })()
+  })
+}
+
 /**
  * The project as it is written to the SHARED file: content only.
  *
@@ -206,7 +218,7 @@ export function projectToFile(
   // The project file is a SHARED document (git, or the remote host). Exec-enabling node fields
   // (`shell`, `ssh.extraArgs`) never leave this machine in it — they ride the machine-local index
   // entry instead (`localNodeExec` / `IndexEntryV3.localExec`). See @shared/node-exec.
-  const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes)
+  const nodes = sanitizeSessionIcons(stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes))
   const icon = sanitizeProjectIcon(p.icon)
   return {
     version: 1,
@@ -303,7 +315,7 @@ export function fileToProject(
     viewport: base.viewport ?? f.viewport ?? framingViewport(f.nodes),
     // applyLocalNodeExec DROPS whatever the file carried in the exec fields (it is not ours) and
     // re-attaches only what this machine typed. See @shared/node-exec.
-    nodes: applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec),
+    nodes: sanitizeSessionIcons(applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec)),
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),

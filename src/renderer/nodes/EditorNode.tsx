@@ -13,6 +13,7 @@ import { tooLargeSize, formatBytes } from '@shared/fsLimits'
 import { hintLabel } from '@shared/platform-utils'
 import { pdfBlobUrl } from '../lib/pdfBlob'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { SessionIconGlyph } from '../components/SessionIcon'
 
 // Image extensions get a visual preview instead of the Monaco text editor.
 const IMAGE_MIME: Record<string, string> = {
@@ -264,6 +265,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
         }`}
         style={headerFill.style}
       >
+        <SessionIconGlyph icon={data.sessionIcon} size={20} title={`Session icon for ${data.title}`} />
         <span className="term-node__title-text" title={filePath}>
           {fileName}
           {!isImage && !isPdf && dirty ? ' ●' : ''}

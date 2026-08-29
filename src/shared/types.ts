@@ -11,6 +11,7 @@ import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from '
 import type { WhisperModelInfo } from './speech'
 import type { ProjectKanbanGitHub } from './github-issues'
 import type { ProjectIcon } from './project-icon'
+import type { SessionIcon } from './session-icon'
 import type { ShortcutMap } from './shortcuts'
 import { DEFAULT_SHORTCUTS } from './shortcuts'
 import type { FunnyLevel, LanguageMode } from './i18n/types'
@@ -438,6 +439,8 @@ export interface CanvasNodeState {
    */
   titleAuto?: boolean
   color: string
+  /** Optional bounded local identity mark for this session. */
+  sessionIcon?: SessionIcon
   group: string | null
   /** Labels for organizing/filtering terminals. */
   tags?: string[]

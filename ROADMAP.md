@@ -57,6 +57,10 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] Per-session emoji or local picture icons: implementation is present for bounded persistence,
+  picker, canvas header, sidebar, and Kanban card rendering. Verification, packaged interaction,
+  and real captures remain pending in this no-test/no-build lane.
+
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification

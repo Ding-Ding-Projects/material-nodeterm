@@ -3,6 +3,7 @@ import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xy
 import type { CanvasNode } from '../state/workspace'
 import { useProjects } from '../state/projects'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { SessionIconGlyph } from '../components/SessionIcon'
 
 /**
  * A video player node. A local file is served over the `nt-media://` protocol (allowlisted on
@@ -88,6 +89,7 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
         }`}
         style={headerFill.style}
       >
+        <SessionIconGlyph icon={data.sessionIcon} size={20} title={`Session icon for ${data.title}`} />
         <span className="term-node__title-text" title={filePath}>
           {fileName}
         </span>
