@@ -6,10 +6,10 @@ describe('SETTINGS_GROUPS', () => {
   // act that updates this number and the SettingsIcons record together. The icon record is keyed
   // by SettingsSectionId, and a section registered without an icon is a type error nobody sees
   // until the build — which is exactly how several sections shipped iconless.
-  it('lists exactly 41 sections with no duplicates', () => {
+  it('lists exactly 42 sections with no duplicates', () => {
     const ids = allSectionIds()
-    expect(ids).toHaveLength(41)
-    expect(new Set(ids).size).toBe(41)
+    expect(ids).toHaveLength(42)
+    expect(new Set(ids).size).toBe(42)
   })
   it('keeps the registry count aligned with the rendered static sections', () => {
     const ids = allSectionIds()
@@ -22,8 +22,8 @@ describe('SETTINGS_GROUPS', () => {
   it('hides mac-only sections off macOS, keeps them on', () => {
     const off = visibleSettingsGroups(false).flatMap((g) => g.sections.map((s) => s.id))
     expect(off).not.toContain('notch')
-    // 41 total minus the one mac-only section.
-    expect(off).toHaveLength(40)
+    // 42 total minus the one mac-only section.
+    expect(off).toHaveLength(41)
     expect(visibleSettingsGroups(true)).toEqual(SETTINGS_GROUPS)
     // No group is left empty by the filter.
     expect(visibleSettingsGroups(false).every((g) => g.sections.length > 0)).toBe(true)
