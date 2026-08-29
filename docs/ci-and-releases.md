@@ -17,7 +17,7 @@ select a minor or major version by committing it before publication. The candida
 published release until a workflow run creates and verifies the unique non-draft tag, installer,
 release assets, timing, line-count report, and dim-sum photo link.
 
-The candidate preparation records local Chut results separately from release publication. In
+The candidate preparation records local check results separately from release publication. In
 particular, a passing release-version test or workflow checker proves the planner contract only;
 it does not prove a built installer, an installed runtime, or the production upgrade receipt.
 The remaining runtime receipt follows [`windows-support.md`](windows-support.md) and must use the

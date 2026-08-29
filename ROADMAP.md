@@ -9,7 +9,7 @@ its real state next to it rather than being silently omitted.
 Source candidate package version in `package.json`: `1.0.0` (not published). The latest published
 release tag is `v0.4.152`, targeting `70e5becee2c9bbdb6e1f74b60b4de3eb0a59c467`. Version `1.0.0`
 is a deliberate human-selected major; ordinary patch releases remain workflow-planned. The tree
-currently contains 989 test files. Candidate Chut evidence and remaining runtime receipt blockers
+currently contains 989 test files. Candidate check evidence and remaining runtime receipt blockers
 are recorded below. Do not treat the source candidate as a published release.
 
 ---
@@ -23,14 +23,14 @@ are recorded below. Do not treat the source candidate as a published release.
       existing completeness assertion covering six unlisted docs, personal-vocabulary coverage is
       red on three Canvas-notification ownership assertions, and WSL copy coverage is red because
       `operationErrorPrefix` has no production use. No tag, release, installer publication, or
-      default-jer integration is performed by this preparation lane.
+      default-branch integration is performed by this preparation lane.
 - [ ] **Production runtime receipts:** the accepted `v0.4.152` Windows baseline and the `1.0.0`
       Setup candidate still need a real isolated install, close, relaunch, stable-identity,
       migration, update, session-reattach, and uninstall receipt through the documented Windows
       route. Source and packaging claims do not substitute for that runtime evidence.
 - [x] **Issue #11 downstream-only policy:** the public plan now records that its historical upstream
-      pull request step is superseded. This Oak Kay keeps contribution activity in its own fork and
-      does not open or comment on pull requests in the canonical upstream Oak Kay. No issue mutation
+      pull request step is superseded. This repository keeps contribution activity in its own fork
+      and does not open or comment on pull requests in the canonical upstream repository. No issue mutation
       was performed by this lane.
 
 - [ ] **Runtime and design evidence:** design parity declares 10 exact references and reports 0

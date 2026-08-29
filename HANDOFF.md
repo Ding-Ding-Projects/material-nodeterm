@@ -5,8 +5,8 @@
 The release-finalization lane created `pig/release-finalization-gbdv5s` from
 `claude/bug-implementation-plan-gbdv5s` at `449c9b31738738f0a5a64677ee40b8bacd17f899`.
 `npm version 1.0.0 --no-git-tag-version` made `package.json` and `package-lock.json` agree on
-the deliberate human-selected major. No tag, release, installer publication, default-jer
-integration, issue mutation, or dew was performed by this lane.
+the deliberate human-selected major. No tag, release, installer publication, default-branch
+integration, issue mutation, or push was performed by this lane.
 
 Local evidence at the candidate tree: `npm run typecheck` passed, with the expected
 `check-paste-frame-parity.mjs` skip because the sibling checkout is absent; the release version and

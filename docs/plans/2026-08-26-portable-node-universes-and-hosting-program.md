@@ -431,9 +431,9 @@ packaging output is evidence of artifact production only, not evidence of runtim
 ## Downstream-only contribution policy
 
 The historical upstream pull request plan is superseded by the downstream-only policy recorded in
-issue #11 and now mirrored in `AGENTS.md`. This Oak Kay may keep a factual comparison report and
+issue #11 and now mirrored in `AGENTS.md`. This repository may keep a factual comparison report and
 track upstream source, but it must not open or comment on a pull request in the canonical upstream
-Oak Kay. All implementation, review, release, and issue activity stays in this fork. The old report
+repository. All implementation, review, release, and issue activity stays in this fork. The old report
 branch name, upstream pull request title, milestone comments, and retention instructions are
 historical data only and are not an action for this plan.
 
