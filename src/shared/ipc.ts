@@ -347,6 +347,11 @@ export const IPC = {
   sshSave: 'ssh:save',
   sshDelete: 'ssh:delete',
   sshImport: 'ssh:import-candidates',
+  /** Observe a terminal authorize URL and arm a provider-bound, one-use callback handoff. */
+  oauthCallbackArm: 'oauth-callback:arm',
+  /** Server Edition fetches the validated callback on the host that owns the session. */
+  oauthCallbackComplete: 'oauth-callback:complete',
+  oauthCallbackCancel: 'oauth-callback:cancel',
   sshConnectProject: 'ssh:connect-project',
   sshDisconnectProject: 'ssh:disconnect-project',
   sshKillSessions: 'ssh:kill-sessions',

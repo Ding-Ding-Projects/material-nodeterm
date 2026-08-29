@@ -326,6 +326,12 @@ export const DOC_ARTICLES: DocArticle[] = [
     body: "# Remote & SSH\n\nTwo different ways nodeterm reaches a machine that isn't the one in front of you.\n\n- [SSH projects](./ssh-projects.md) — opening a project on a remote host over SSH, with\n  terminals, files, git, and the board all running there while the canvas stays local.\n- [Server Edition](./server-edition.md) — the same renderer, self-hosted and served to any\n  browser over plain HTTP/WebSocket.\n- [Docker host](./docker-host.md) — free encrypted project sharing through a Docker-hosted relay.\n\nSee also [Agents](../agents/README.md) for how agent hooks and permission modes work across an\nSSH connection, and [Packaging](../packaging/README.md) for how the headless notification host\nis installed.\n"
   },
   {
+    path: "docs/features/remote/oauth-callbacks.md",
+    title: "Remote OAuth localhost callbacks",
+    section: "Remote",
+    body: "# Remote OAuth localhost callbacks\n\nThe terminal detector accepts only an authorize URL with a loopback redirect URI and provider state. Desktop SSH projects forward the observed port over the existing ControlMaster. Server Edition opens a guided paste-and-complete panel and fetches the validated callback on the session host. Tickets are memory-only, provider-bound, single-use, and expire after five minutes. Wrong hosts, ports, paths, states, cancelled tickets, expired tickets, and replays are refused. Callback URLs, authorization responses, and response bodies never enter project data, settings, history, logs, or exports.\n\nThis lane intentionally did not run tests, builds, type checks, lint, runtime interaction checks, or captures.\n"
+  },
+  {
     path: "docs/features/remote/approved-relay-peers.md",
     title: "Approved relay peers",
     section: "Remote",

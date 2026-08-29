@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add provider-bound OAuth localhost callback handling for remote sessions. Desktop SSH projects
+  automatically forward the observed callback port over the existing ControlMaster, while Server
+  Edition provides a guided paste-and-complete flow that validates and fetches the callback on the
+  session host. Tickets are memory-only, single-use, provider-state-bound, expire after five
+  minutes, and never log or persist authorization responses. Tests, builds, and runtime verification
+  are intentionally pending for this lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

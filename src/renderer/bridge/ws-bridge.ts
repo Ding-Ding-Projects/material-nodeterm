@@ -352,7 +352,7 @@ export function buildRealApi(
   client: RpcClient
 ): Pick<
   NodeTerminalApi,
-  'pty' | 'workspace' | 'serverDeployment' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'userDataDir'
+  'pty' | 'workspace' | 'serverDeployment' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'userDataDir' | 'oauthCallbacks'
 > {
   const pty: PtyApi = {
     create: (options: PtyCreateOptions) =>
@@ -412,6 +412,13 @@ export function buildRealApi(
       client.subscribe(IPC.ptyRecycled(sessionId), listener as Listener),
     onResync: (sessionId, listener) =>
       client.subscribe(IPC.ptyResync(sessionId), listener as Listener)
+  }
+
+  const oauthCallbacks: NodeTerminalApi['oauthCallbacks'] = {
+    arm: (input) => client.request(IPC.oauthCallbackArm, input) as ReturnType<NodeTerminalApi['oauthCallbacks']['arm']>,
+    complete: (ticket, callbackUrl) =>
+      client.request(IPC.oauthCallbackComplete, ticket, callbackUrl) as ReturnType<NodeTerminalApi['oauthCallbacks']['complete']>,
+    cancel: (ticket) => client.request(IPC.oauthCallbackCancel, ticket) as ReturnType<NodeTerminalApi['oauthCallbacks']['cancel']>
   }
 
   const workspace: WorkspaceApi = {
@@ -529,7 +536,7 @@ export function buildRealApi(
     status: async () => ({ running: false }),
     onProgress: () => () => {}
   }
-  return { pty, workspace, serverDeployment, settings, schoolMode, kidsMode, scheduledSettings, userDataDir }
+  return { pty, workspace, serverDeployment, settings, schoolMode, kidsMode, scheduledSettings, userDataDir, oauthCallbacks }
 }
 
 export function buildGitHubApi(

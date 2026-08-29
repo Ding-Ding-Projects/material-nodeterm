@@ -1,5 +1,31 @@
 # Handoff
 
+## 2026-08-26, remote OAuth localhost callback lane
+
+Implemented the remote OAuth localhost callback path for issue #80 and upstream issue #292 on
+`feat/program-69`. `src/shared/oauth-callback.ts` detects only authorize URLs with a loopback
+`redirect_uri` and provider `state`. `src/core/oauth-callback.ts` keeps provider state, session
+identity, callback port/path, expiry, and one-use tickets in memory only, consuming a ticket before
+Server Edition fetches its validated loopback URL. Wrong host, port, path, state, expired tickets,
+cancelled tickets, and replayed tickets are refused without a request.
+
+Desktop SSH projects use the existing ControlMaster with a temporary `-L <port>:localhost:<port>`
+forward, and cancel it on expiry, disconnect, or explicit cancellation. Server Edition uses the
+same renderer detector, opens the authorize URL, and presents `RemoteOAuthCallbackPanel` for a
+guided callback paste, countdown, cancellation, and recovery message. The API is exposed through
+shared IPC, the Electron preload, and the Server Edition WebSocket bridge, keeping the two shells
+on one contract.
+
+Documentation was added at `docs/features/remote/oauth-callbacks.md`, indexed from the Remote & SSH
+category, and summarized in `docs/SERVER.md`. The roadmap, portable-program lane, and changelog now
+record the implementation and its pending verification honestly. No callback URL, authorization
+response, credential, or response body is persisted or logged.
+
+This lane deliberately did not run tests, type checking, linting, security checks, builds,
+packaging, installer execution, UI interaction, or captures. No commit or dew was made by this
+lane. The owning integration pass must verify both Desktop and Server Edition paths before ticking
+the roadmap item.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

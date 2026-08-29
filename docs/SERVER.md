@@ -27,6 +27,34 @@ unchanged. It boots the same Electron-free core services (`src/core/`) through a
 > **Phase 2 scope: terminals only.** This is a real, usable terminal canvas over the
 > network, but it is deliberately narrow — see [Limitations](#phase-2-limitations).
 
+## Remote OAuth localhost callbacks
+
+When a CLI running in a remote session starts OAuth, its `redirect_uri` may point at a loopback
+listener on the Server Edition host. The browser completing authorization is usually on another
+machine, so opening that URL directly would reach the wrong loopback interface.
+
+The Server Edition detects only authorize URLs observed in the active terminal output when they
+contain a loopback `redirect_uri` and a provider `state`. It creates a short-lived, memory-only
+ticket bound to the session, provider host, callback port, callback path, and state. The browser
+opens the authorize URL, then the panel asks for the complete callback URL from the browser address
+bar. The server validates that URL and fetches it on its own loopback interface. No arbitrary host,
+port, or user-provided request target is accepted.
+
+The callback ticket expires after five minutes, is consumed before the loopback request begins, and
+cannot be replayed. A wrong host, port, path, or state is refused without a request. A failed fetch
+is reported as incomplete, and the user starts a new sign-in flow. Callback URLs, authorization
+responses, and response bodies are never logged, persisted, exported, or placed in project data.
+
+On the Desktop SSH path, the same detector arms a temporary `ssh -O forward -L` mapping on the
+existing ControlMaster and opens the authorize URL in the local browser. The mapping is cancelled
+on expiry, project disconnect, or explicit cancellation, so the user does not need to prepare
+`ssh -L` manually.
+
+The manual recovery remains available for older builds or unsupported session types: run
+`ssh -L <port>:localhost:<port> user@server` before starting OAuth, or copy the failed
+`localhost:<port>/callback?...` URL and request it on the session host. These routes should be used
+only for the exact loopback port printed by the provider flow.
+
 ## Quickstart
 
 ```bash

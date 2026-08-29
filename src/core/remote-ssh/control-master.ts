@@ -490,6 +490,32 @@ export function hookForwardArgs(conn: SshConnection, controlPath: string, remote
 export function hookForwardCancelArgs(conn: SshConnection, controlPath: string, remoteSock: string, hookPort: number): string[] {
   return ['-O', 'cancel', '-R', fwdSpec(remoteSock, hookPort), '-o', `ControlPath=${controlPath}`, ...portArgs(conn), target(conn)]
 }
+
+/**
+ * Forward one observed remote OAuth loopback listener to the same local port. The port is never
+ * accepted from settings or a project file: callers pass only the bounded port extracted from a
+ * terminal authorize URL. Keeping the mapping on the existing master avoids a second login and
+ * makes the browser's localhost redirect reach the CLI that started the flow.
+ */
+export function oauthForwardArgs(conn: SshConnection, controlPath: string, port: number): string[] {
+  return [
+    '-O',
+    'forward',
+    '-L',
+    `${port}:localhost:${port}`,
+    '-o',
+    'ExitOnForwardFailure=yes',
+    '-o',
+    `ControlPath=${controlPath}`,
+    ...portArgs(conn),
+    target(conn)
+  ]
+}
+
+/** Cancel the temporary OAuth localhost forward after completion or its bounded expiry. */
+export function oauthForwardCancelArgs(conn: SshConnection, controlPath: string, port: number): string[] {
+  return ['-O', 'cancel', '-L', `${port}:localhost:${port}`, '-o', `ControlPath=${controlPath}`, ...portArgs(conn), target(conn)]
+}
 /**
  * tmux `-e KEY=VALUE` pairs injecting the remote hook endpoint file + node id + protocol version,
  * plus the agent identity. The identity pair matters: the local path's `hookServer.buildPtyEnv`

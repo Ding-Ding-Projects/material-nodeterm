@@ -13518,3 +13518,115 @@ body.focus-mode .dock:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.remote-oauth-panel-stack {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 10000;
+  display: grid;
+  gap: 12px;
+  width: min(520px, calc(100vw - 32px));
+}
+
+.remote-oauth-panel {
+  padding: 18px;
+  border: 1px solid var(--md-outline, #79747e);
+  border-radius: 20px;
+  background: var(--md-surface-container-high, #2b2930);
+  color: var(--md-on-surface, #e6e0e9);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.34);
+}
+
+.remote-oauth-panel__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.remote-oauth-panel h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.remote-oauth-panel p {
+  margin: 0 0 12px;
+  color: var(--md-on-surface-variant, #cac4d0);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.remote-oauth-panel code {
+  overflow-wrap: anywhere;
+}
+
+.remote-oauth-panel label {
+  display: block;
+  margin: 8px 0 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.remote-oauth-panel input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 11px;
+  border: 1px solid var(--md-outline, #79747e);
+  border-radius: 10px;
+  background: var(--md-surface, #1c1b1f);
+  color: var(--md-on-surface, #e6e0e9);
+  font: inherit;
+}
+
+.remote-oauth-panel input:focus-visible,
+.remote-oauth-panel button:focus-visible {
+  outline: 3px solid var(--md-primary, #d0bcff);
+  outline-offset: 2px;
+}
+
+.remote-oauth-panel__help {
+  min-height: 20px;
+  margin-top: 8px !important;
+}
+
+.remote-oauth-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.remote-oauth-panel button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--md-primary, #d0bcff);
+  border-radius: 999px;
+  background: var(--md-primary, #d0bcff);
+  color: var(--md-on-primary, #381e72);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.remote-oauth-panel__secondary,
+.remote-oauth-panel__close {
+  border-color: var(--md-outline, #79747e) !important;
+  background: transparent !important;
+  color: var(--md-on-surface, #e6e0e9) !important;
+}
+
+.remote-oauth-panel__close {
+  width: 40px;
+  flex: 0 0 auto;
+  padding: 0 !important;
+  margin-left: auto;
+}
+
+@media (max-width: 600px) {
+  .remote-oauth-panel-stack {
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+    width: auto;
+  }
+}

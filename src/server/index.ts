@@ -81,6 +81,7 @@ import { SpeechService } from '../core/speech/speech-service'
 import { registerSpeechIpc } from '../core/speech/register-ipc'
 import { isPremium, getStoredEntitlement } from '../core/license'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
+import { ServerOAuthCallbackService } from './oauth-callback'
 
 // Same env-override + default as src/core/check.ts / license.ts / src/main/telemetry.ts — each
 // shell derives it locally rather than sharing an import (src/server must not import src/main).
@@ -175,6 +176,7 @@ export async function startServer(
   const scheduledSettingsRuntime = new ScheduledSettingsRuntime()
   const ptyManager = new PtyManager()
   const workspaceStore = new WorkspaceStore()
+  const oauthCallbacks = new ServerOAuthCallbackService()
 
   settingsStore.init()
   settingsStore.registerIpc()
@@ -195,6 +197,31 @@ export async function startServer(
   ptyManager.init(() => settingsStore.get())
   ptyManager.registerIpc()
   workspaceStore.registerIpc()
+  // OAuth callbacks for browser sessions are completed on this host. The renderer may only arm
+  // a callback from observed terminal output; the registry binds provider state, session identity,
+  // loopback port and expiry before any fetch is allowed.
+  platform.handle(
+    IPC.oauthCallbackArm,
+    (input: { sessionId?: string; authorizeUrl?: string; projectId?: string }) => {
+      if (!input?.sessionId || !input.authorizeUrl) {
+        return {
+          ok: false as const,
+          code: 'invalid-url' as const,
+          message: 'The OAuth callback request is incomplete. Start sign-in from the session again.'
+        }
+      }
+      return oauthCallbacks.arm({
+        sessionId: input.sessionId,
+        authorizeUrl: input.authorizeUrl,
+        projectId: input.projectId,
+        mode: 'server-completer'
+      })
+    }
+  )
+  platform.handle(IPC.oauthCallbackComplete, (ticket: string, callbackUrl: string) =>
+    oauthCallbacks.complete(String(ticket ?? ''), String(callbackUrl ?? ''))
+  )
+  platform.handle(IPC.oauthCallbackCancel, (ticket: string) => oauthCallbacks.cancel(String(ticket ?? '')))
   // Dictation: same construction as src/main/index.ts, with the server's data dir. onProgress
   // broadcasts to every attached browser tab the same way wireAgentStatus pushes agent-status.
   const whisperModels = new WhisperModelStore({
@@ -650,6 +677,7 @@ export async function startServer(
     return {
       port: 0, // nothing bound
       async close() {
+        oauthCallbacks.dispose()
         // Detach PTY clients — tmux sessions keep running (Phase 1 contract).
         // The headless return happens before the serving branch below, so it must stop the same
         // scheduled-settings poller here. Missing this one line leaves its 30s interval and store
@@ -713,6 +741,7 @@ export async function startServer(
   return {
     port,
     async close() {
+      oauthCallbacks.dispose()
       // Detach PTY clients — tmux sessions keep running (Phase 1 contract; never kill the server).
       await scheduledSettingsRuntime.stop()
       ackSweeper.stop()

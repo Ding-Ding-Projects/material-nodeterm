@@ -115,8 +115,12 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
 - [ ] **#347** — Cleanup/uninstall script or portable install.
 - [ ] **#299** — High-DPI UI text scaling setting.
 - [ ] **#295** — Auto-rotate Claude accounts when usage crosses a threshold (default 90%).
+- [ ] **#80** — Program 69 implementation of remote OAuth localhost callbacks from upstream #292.
+      Implementation is present on `feat/program-69`; tests, builds, and runtime verification
+      remain pending.
 - [ ] **#292** — Auto-handle OAuth localhost callbacks for remote sessions (MCP auth on SSH /
-      Server Edition).
+      Server Edition). Implementation is present in the current lane; tests, builds, and runtime
+      verification remain pending.
 - [ ] **#291** — Node type icons alongside color coding.
 - [ ] **#290** — Source control for monorepos with multiple nested git repos.
 - [ ] **#289** — Custom sounds for agent alerts.
