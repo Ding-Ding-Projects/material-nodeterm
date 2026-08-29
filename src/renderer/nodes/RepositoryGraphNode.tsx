@@ -9,6 +9,8 @@ import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { saveBlobDownload } from '../lib/exportSave'
+import { normalizeRepositoryGraphIntent } from '@shared/repository-graph'
 
 const MODES: readonly RepositoryGraphMode[] = ['code', 'dependencies', 'combined']
 const EXPORTS: readonly RepositoryGraphExportInput['format'][] = ['json', 'jsonl', 'csv', 'tsv', 'markdown', 'html', 'graphml', 'dot']
@@ -17,25 +19,24 @@ function modeLabel(mode: RepositoryGraphMode): string {
   return mode === 'code' ? 'Code' : mode === 'dependencies' ? 'Dependency' : 'Combined'
 }
 
-function download(content: string, filename: string): void {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
-  URL.revokeObjectURL(url)
+function trimLine(from: { x: number; y: number }, to: { x: number; y: number }): { x1: number; y1: number; x2: number; y2: number } {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  if (dx === 0 && dy === 0) return { x1: from.x, y1: from.y, x2: to.x, y2: to.y }
+  const scale = Math.min(72 / Math.max(Math.abs(dx), 0.0001), 20 / Math.max(Math.abs(dy), 0.0001))
+  return { x1: from.x + dx * scale, y1: from.y + dy * scale, x2: to.x - dx * scale, y2: to.y - dy * scale }
 }
 
 export default function RepositoryGraphNode({ id, data, selected }: NodeProps<CanvasNode>): React.JSX.Element {
   const api = useActiveSessionApi()
   const projectId = useProjects((state) => state.activeProjectId)
+  const project = useProjects((state) => state.projects.find((candidate) => candidate.id === state.activeProjectId))
   const { updateNodeData } = useReactFlow<CanvasNode>()
   const vocab = useVocabularyMapper()
   const [snapshot, setSnapshot] = useState<RepositoryGraphSnapshot | null>(null)
   const [progress, setProgress] = useState<RepositoryGraphProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const intent = data.repositoryGraphIntent ?? { version: 1 as const, mode: 'combined' as const, query: '', expandedNodeIds: [], layout: 'hierarchical' as const }
+  const intent = normalizeRepositoryGraphIntent(data.repositoryGraphIntent)
   const [mode, setMode] = useState<RepositoryGraphMode>(intent.mode)
   const search = useRegexSearchField()
   const searchRef = useRef<HTMLInputElement>(null)
@@ -66,12 +67,11 @@ export default function RepositoryGraphNode({ id, data, selected }: NodeProps<Ca
     setSnapshot(next)
   }
 
-  const visibleNodes = useMemo(() => {
+  const filteredNodes = useMemo(() => {
     if (!snapshot) return []
-    const query = search.query.trim()
-    return snapshot.nodes.filter((node) => search.test(`${node.kind} ${node.label} ${node.detail ?? ''} ${node.source?.path ?? ''}`)).slice(0, 400)
-      .filter((node) => !query || search.test(`${node.kind} ${node.label} ${node.detail ?? ''} ${node.source?.path ?? ''}`))
+    return snapshot.nodes.filter((node) => search.test(`${node.kind} ${node.label} ${node.detail ?? ''} ${node.source?.path ?? ''}`))
   }, [search, snapshot])
+  const visibleNodes = filteredNodes.slice(0, 400)
 
   const visualNodes = visibleNodes.slice(0, 80)
   const visualPositions = useMemo(() => new Map(visualNodes.map((node, index) => [node.id, { x: 110 + (index % 4) * 170, y: 36 + Math.floor(index / 4) * 76 }])), [visualNodes])
@@ -79,14 +79,20 @@ export default function RepositoryGraphNode({ id, data, selected }: NodeProps<Ca
 
   const openSource = async (node: NonNullable<RepositoryGraphSnapshot['nodes'][number]>): Promise<void> => {
     if (!projectId || !node.source) return
-    const result = await api.repositoryGraph.openSource(projectId, node.source)
-    if (!result.ok) setError(result.reason)
+    // Canvas owns editor creation and host scoping. Dispatching the existing event keeps this
+    // node from opening a viewer-local file when the active project belongs to another host.
+    const rel = node.source.path.replaceAll('\\', '/')
+    if (!project?.cwd || rel.startsWith('/') || rel.split('/').includes('..')) {
+      setError(vocab('Source path is not a safe project-relative file.'))
+      return
+    }
+    window.dispatchEvent(new CustomEvent('nodeterm:open-file', { detail: { path: `${project.cwd.replace(/[\\/]$/, '')}/${rel}`, ssh: false } }))
   }
 
   const doExport = async (): Promise<void> => {
     if (!projectId) return
     const result = await api.repositoryGraph.export({ projectId, mode, format: exportFormat })
-    download(result.content, result.filename)
+    saveBlobDownload(new Blob([result.content], { type: 'text/plain;charset=utf-8' }), result.filename)
   }
 
   const headerFill = nodeHeaderFillStyle(data.color)
@@ -110,14 +116,17 @@ export default function RepositoryGraphNode({ id, data, selected }: NodeProps<Ca
           <div className="repository-graph-node__search"><input ref={searchRef} aria-label={vocab('Search graph nodes')} value={search.value} onChange={(event) => search.setValue(event.target.value)} placeholder={search.mode === 'regex' ? vocab('Regex pattern') : vocab('Search nodes, paths, symbols')} /><AnchoredRegexBuilder search={search} fieldRef={searchRef} label={vocab('Regex builder for graph nodes')} /></div>
           <select aria-label={vocab('Export graph format')} value={exportFormat} onChange={(event) => setExportFormat(event.target.value as RepositoryGraphExportInput['format'])}>{EXPORTS.map((format) => <option key={format} value={format}>{format.toUpperCase()}</option>)}</select>
           <button type="button" onClick={() => void doExport()} disabled={!snapshot}>{vocab('Export')}</button>
+          {progress?.status === 'running' && <button type="button" onClick={() => void api.repositoryGraph.cancel(progress.operationId)}>{vocab('Cancel')}</button>}
         </div>
         {search.error && <p className="repository-graph-node__error" role="alert">{vocab(search.error)}</p>}
         {progress && progress.status === 'running' && <progress max={progress.total || 1} value={progress.completed} aria-label={`${progress.completed} of ${progress.total} graph items`} />}
         <div className="repository-graph-node__summary"><span>{snapshot?.fingerprint.files ?? 0} files</span><span>{snapshot?.nodes.length ?? 0} nodes</span><span>{snapshot?.edges.length ?? 0} edges</span><span>{snapshot?.status ?? 'idle'}</span></div>
+        {filteredNodes.length > visibleNodes.length && <p className="repository-graph-node__hint">{vocab(`Showing ${visibleNodes.length} of ${filteredNodes.length} matching nodes.`)}</p>}
+        {visibleNodes.length > visualNodes.length && <p className="repository-graph-node__hint">{vocab(`Preview shows ${visualNodes.length} of ${visibleNodes.length} matching nodes.`)}</p>}
         {visualNodes.length > 0 && <div className="repository-graph-node__visual" aria-label={vocab('Interactive graph preview')}>
           <svg viewBox={`0 0 760 ${Math.max(120, Math.ceil(visualNodes.length / 4) * 76 + 30)}`} role="img" aria-label={vocab('Graph relationships')}>
             <defs><marker id={`${id}-arrow`} markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="currentColor" /></marker></defs>
-            {visualEdges.map((edge) => { const from = visualPositions.get(edge.from)!; const to = visualPositions.get(edge.to)!; return <line key={edge.id} x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="currentColor" strokeOpacity=".45" markerEnd={`url(#${id}-arrow)`}><title>{`${edge.kind}: ${edge.from} → ${edge.to}`}</title></line> })}
+            {visualEdges.map((edge) => { const from = visualPositions.get(edge.from)!; const to = visualPositions.get(edge.to)!; const line = trimLine(from, to); return <line key={edge.id} x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2} stroke="currentColor" strokeOpacity=".45" markerEnd={`url(#${id}-arrow)`}><title>{`${edge.kind}: ${edge.from} → ${edge.to}`}</title></line> })}
             {visualNodes.map((node) => { const point = visualPositions.get(node.id)!; return <g key={node.id} role="button" tabIndex={0} aria-label={`${node.label}, ${node.kind}`} transform={`translate(${point.x - 72},${point.y - 20})`} onClick={() => { const expanded = new Set(intent.expandedNodeIds ?? []); expanded.has(node.id) ? expanded.delete(node.id) : expanded.add(node.id); setIntent({ expandedNodeIds: [...expanded].slice(0, 2000) }) }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.dispatchEvent(new MouseEvent('click', { bubbles: true })) } }}><rect width="144" height="40" rx="10" fill="var(--md-sys-color-secondary-container)" stroke="var(--md-sys-color-outline)" /><text x="72" y="17" textAnchor="middle" fontSize="11" fill="var(--md-sys-color-on-secondary-container)">{node.label.length > 20 ? `${node.label.slice(0, 19)}…` : node.label}</text><text x="72" y="31" textAnchor="middle" fontSize="9" fill="var(--md-sys-color-on-secondary-container)">{node.kind}</text></g> })}
           </svg>
         </div>}

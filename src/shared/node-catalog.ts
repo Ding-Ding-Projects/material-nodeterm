@@ -582,7 +582,7 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     description: 'Explore semantic code and dependency relationships for the active project with source provenance.',
     keywords: ['repository', 'graph', 'code', 'dependencies', 'imports', 'exports', 'calls', 'references', 'inheritance', 'lockfile'],
     documentationPath: 'docs/features/projects/repository-graph-universe.md',
-    safeDefaults: { repositoryGraphIntent: { version: 1, mode: 'combined', layout: 'hierarchical' } },
+    safeDefaults: { repositoryGraphIntent: { version: 1, mode: 'combined' } },
     dependencies: ['typescript-compiler'],
     status: 'available',
     availabilityMode: 'configure-later',

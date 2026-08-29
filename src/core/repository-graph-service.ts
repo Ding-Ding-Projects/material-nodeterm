@@ -1,11 +1,10 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { access, mkdir, readFile, readdir, stat } from 'node:fs/promises'
 import { constants as fsConstants } from 'node:fs'
 import { basename, extname, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import * as ts from 'typescript'
-import { platform, type CorePlatform } from './platform'
 import { writeFileAtomic } from './fs-atomic'
 import {
   REPOSITORY_GRAPH_ADAPTERS,
@@ -39,9 +38,11 @@ export interface RepositoryGraphTarget {
 export interface RepositoryGraphServiceOptions {
   userDataDir: string
   projectTargetInfo: (projectId: string) => RepositoryGraphTarget | null
+  /** Test and host-specific bound override. Production uses the shared 120 second limit. */
+  maxDurationMs?: number
 }
 
-type Operation = { cancelled: boolean; operationId: string }
+type Operation = { cancelled: boolean; timedOut: boolean; operationId: string; deadline: number }
 
 function safeProjectId(id: string): string {
   return id.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 160) || 'unknown'
@@ -67,12 +68,12 @@ async function listFiles(root: string, operation: Operation, onProgress: (done: 
   const dirs: string[] = [root]
   let bytes = 0
   while (dirs.length > 0 && found.length < REPOSITORY_GRAPH_LIMITS.maxFiles && bytes < REPOSITORY_GRAPH_LIMITS.maxBytes) {
-    if (operation.cancelled) break
+    if (operation.cancelled || Date.now() >= operation.deadline) { if (!operation.cancelled) operation.timedOut = true; operation.cancelled = true; break }
     const dir = dirs.pop()!
     let entries: import('node:fs').Dirent[]
     try { entries = await readdir(dir, { withFileTypes: true }) } catch { continue }
     for (const entry of entries) {
-      if (operation.cancelled || found.length >= REPOSITORY_GRAPH_LIMITS.maxFiles || bytes >= REPOSITORY_GRAPH_LIMITS.maxBytes) break
+      if (operation.cancelled || Date.now() >= operation.deadline || found.length >= REPOSITORY_GRAPH_LIMITS.maxFiles || bytes >= REPOSITORY_GRAPH_LIMITS.maxBytes) { if (!operation.cancelled) operation.timedOut = true; operation.cancelled = true; break }
       const abs = join(dir, entry.name)
       if (entry.isDirectory()) {
         if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith('.')) dirs.push(abs)
@@ -115,7 +116,7 @@ function addManifestDependencies(content: string, path: string, revision: string
         if (group && typeof group === 'object') names.push(...Object.keys(group as Record<string, unknown>))
       }
     } catch { omissions.push(`${path}: malformed JSON manifest`) }
-  } else if (manager === 'package-lock.json') {
+  } else if (manager === 'package-lock.json' || manager === 'npm-shrinkwrap.json') {
     try {
       const value = JSON.parse(content) as Record<string, unknown>
       const packages = value.packages
@@ -125,7 +126,7 @@ function addManifestDependencies(content: string, path: string, revision: string
           names.push(key.startsWith('node_modules/') ? key.slice('node_modules/'.length) : key)
         }
       }
-    } catch { omissions.push(`${path}: malformed package-lock JSON`) }
+    } catch { omissions.push(`${path}: malformed npm lockfile JSON`) }
   } else {
     omissions.push(`${path}: no bundled semantic adapter for this manifest format`)
     return
@@ -208,6 +209,8 @@ export class RepositoryGraphService implements RepositoryGraphApi {
 
   constructor(private readonly options: RepositoryGraphServiceOptions) {}
 
+  private maxDurationMs(): number { return Math.max(1, this.options.maxDurationMs ?? REPOSITORY_GRAPH_LIMITS.maxDurationMs) }
+
   private cachePath(projectId: string): string { return join(this.options.userDataDir, 'repository-graph', safeProjectId(projectId), 'snapshot.json') }
   private previousPath(projectId: string): string { return join(this.options.userDataDir, 'repository-graph', safeProjectId(projectId), 'previous.json') }
 
@@ -225,19 +228,39 @@ export class RepositoryGraphService implements RepositoryGraphApi {
     return { root, name: info.name }
   }
 
+  private snapshotForMode(snapshot: RepositoryGraphSnapshot, mode: RepositoryGraphMode): RepositoryGraphSnapshot {
+    if (snapshot.mode === mode) return snapshot
+    if (snapshot.mode !== 'combined') return snapshot
+    const dependencyOnly = mode === 'dependencies'
+    const nodes = snapshot.nodes.filter((node) => dependencyOnly
+      ? node.kind === 'package' || (node.kind === 'file' && snapshot.edges.some((edge) => edge.kind === 'depends-on' && edge.from === node.id))
+      : node.kind !== 'package')
+    const ids = new Set(nodes.map((node) => node.id))
+    const edges = snapshot.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to) && (dependencyOnly ? edge.kind === 'depends-on' : edge.kind !== 'depends-on'))
+    return { ...snapshot, mode, nodes, edges }
+  }
+
+  private async readCachedSnapshot(path: string): Promise<RepositoryGraphSnapshot | null> {
+    try { return normalizeSnapshot(JSON.parse(await readFile(path, 'utf8'))) } catch { return null }
+  }
+
   async inspect(projectId: string, mode: RepositoryGraphMode = 'combined'): Promise<RepositoryGraphSnapshot> {
     const cached = this.snapshots.get(projectId)
-    if (cached && (mode === cached.mode || mode === 'combined')) return cached
-    try {
-      const raw = normalizeSnapshot(JSON.parse(await readFile(this.cachePath(projectId), 'utf8')))
-      if (raw) { this.snapshots.set(projectId, raw); return raw }
-    } catch { /* absent cache is an honest idle state */ }
+    if (cached && (mode === cached.mode || cached.mode === 'combined')) return this.snapshotForMode(cached, mode)
+    const raw = await this.readCachedSnapshot(this.cachePath(projectId))
+    if (raw && (raw.mode === mode || raw.mode === 'combined')) { this.snapshots.set(projectId, raw); return this.snapshotForMode(raw, mode) }
+    const previous = await this.readCachedSnapshot(this.previousPath(projectId))
+    if (previous) {
+      const recovered = { ...previous, status: 'stale' as const, omissions: [...previous.omissions, 'The current snapshot was unavailable; the previous verified snapshot was restored for inspection.'] }
+      this.snapshots.set(projectId, recovered)
+      return this.snapshotForMode(recovered, mode)
+    }
     return { version: 1, projectId, mode, status: 'idle', rootLabel: 'Project source', fingerprint: { revision: 'unknown', files: 0, bytes: 0, contentHash: '', generatedAt: 0 }, nodes: [], edges: [], adapters: REPOSITORY_GRAPH_ADAPTERS.map((item) => ({ ...item, patterns: [...item.patterns] })), omissions: ['No verified graph snapshot exists yet. Refresh to index the project source.'], createdAt: 0 }
   }
 
   async refresh(input: RepositoryGraphRefreshInput): Promise<RepositoryGraphSnapshot> {
-    const operationId = `graph-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-    const operation = { operationId, cancelled: false }
+    const operationId = `graph-${randomUUID()}`
+    const operation = { operationId, cancelled: false, timedOut: false, deadline: Date.now() + this.maxDurationMs() }
     this.operations.set(operationId, operation)
     const mode = input.mode ?? 'combined'
     const old = this.snapshots.get(input.projectId) ?? await this.inspect(input.projectId, mode)
@@ -245,6 +268,7 @@ export class RepositoryGraphService implements RepositoryGraphApi {
       const target = await this.target(input.projectId)
       if ('snapshot' in target) throw new Error('Invalid graph target.')
       const files = await listFiles(target.root, operation, (done, total, phase, message) => this.emit(input.projectId, operationId, phase, done, total, 'running', message))
+      if (operation.timedOut) throw new Error(`Repository graph refresh exceeded ${this.maxDurationMs()}ms.`)
       this.emit(input.projectId, operationId, 'parsing', 0, files.length, 'running', 'Parsing semantic source files')
       let revision = 'unknown'
       try { revision = (await execFileAsync('git', ['-C', target.root, 'rev-parse', 'HEAD'], { windowsHide: true, maxBuffer: 1024 * 1024 })).stdout.trim() || 'unknown' } catch { /* non-git folders still receive a content fingerprint */ }
@@ -252,20 +276,33 @@ export class RepositoryGraphService implements RepositoryGraphApi {
       const edges = new Map<string, RepositoryGraphEdge>()
       const omissions: string[] = []
       const codeFiles = files.filter((file) => CODE_EXTENSIONS.has(extname(file.rel).toLowerCase()))
+      const fileFingerprints: Record<string, string> = Object.fromEntries(files.map((file) => [file.rel, createHash('sha256').update(file.bytes).digest('hex')]))
+      const oldFingerprints = old.fileFingerprints ?? {}
+      const unchanged = new Set(files.filter((file) => oldFingerprints[file.rel] && oldFingerprints[file.rel] === fileFingerprints[file.rel]).map((file) => file.rel))
+      const reuseOldSlices = (): void => {
+        if (!old.fileFingerprints) return
+        for (const file of files) {
+          if (!unchanged.has(file.rel)) continue
+          for (const node of old.nodes) if (node.source?.path === file.rel || (node.kind === 'file' && node.label === file.rel)) pushNode(nodes, node)
+          for (const edge of old.edges) if (edge.source?.path === file.rel) pushEdge(edges, edge)
+        }
+      }
+      reuseOldSlices()
       if (mode !== 'dependencies') {
-        const program = ts.createProgram(codeFiles.map((file) => file.abs), { allowJs: true, checkJs: false, noEmit: true, moduleResolution: ts.ModuleResolutionKind.NodeNext, target: ts.ScriptTarget.ESNext, skipLibCheck: true })
+        const changedCodeFiles = codeFiles.filter((file) => !unchanged.has(file.rel))
+        const program = ts.createProgram(changedCodeFiles.map((file) => file.abs), { allowJs: true, checkJs: false, noEmit: true, moduleResolution: ts.ModuleResolutionKind.NodeNext, target: ts.ScriptTarget.ESNext, skipLibCheck: true })
         const checker = program.getTypeChecker()
-        for (let i = 0; i < codeFiles.length; i++) {
-          if (operation.cancelled) break
-          const source = program.getSourceFile(codeFiles[i].abs)
+        for (let i = 0; i < changedCodeFiles.length; i++) {
+          if (operation.cancelled || Date.now() >= operation.deadline) { operation.timedOut = !operation.cancelled; operation.cancelled = true; break }
+          const source = program.getSourceFile(changedCodeFiles[i].abs)
           if (source) parseCode(source, checker, revision, nodes, edges, omissions, target.root)
-          this.emit(input.projectId, operationId, 'parsing', i + 1, codeFiles.length, 'running', `Parsed ${i + 1} of ${codeFiles.length} source files`)
+          this.emit(input.projectId, operationId, 'parsing', i + 1, changedCodeFiles.length, 'running', `Parsed ${i + 1} of ${changedCodeFiles.length} changed source files`)
         }
       }
       if (mode !== 'code') {
         const manifests = files.filter((file) => isManifestName(basename(file.rel)))
         for (let i = 0; i < manifests.length; i++) {
-          if (operation.cancelled) break
+          if (operation.cancelled || Date.now() >= operation.deadline) { operation.timedOut = !operation.cancelled; operation.cancelled = true; break }
           const manifest = REPOSITORY_GRAPH_ADAPTERS.find((item) => item.patterns.some((pattern) => pattern === basename(manifests[i].rel) || (pattern.includes('*') && new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*')}$`, 'u').test(basename(manifests[i].rel)))))
           if (!manifest?.available) omissions.push(`${manifests[i].rel}: ${manifest?.reason ?? 'No bundled semantic adapter is available.'}`)
           else addManifestDependencies(manifests[i].bytes.toString('utf8'), manifests[i].rel, revision, nodes, edges, omissions)
@@ -273,6 +310,12 @@ export class RepositoryGraphService implements RepositoryGraphApi {
         }
       }
       const fingerprint: RepositoryGraphFingerprint = { revision, files: files.length, bytes: files.reduce((sum, file) => sum + file.bytes.byteLength, 0), contentHash: boundedHash(files.map((file) => ({ path: file.rel, bytes: file.bytes }))), generatedAt: Date.now() }
+      if (operation.cancelled && !operation.timedOut) {
+        const cancelled = { ...old, status: 'cancelled' as const, omissions: [...old.omissions, 'Refresh was cancelled; the previous verified snapshot was retained.'] }
+        this.snapshots.set(input.projectId, cancelled)
+        this.emit(input.projectId, operationId, 'finalizing', 1, 1, 'cancelled', cancelled.omissions.at(-1)!)
+        return cancelled
+      }
       let revisionAfter = revision
       try { revisionAfter = (await execFileAsync('git', ['-C', target.root, 'rev-parse', 'HEAD'], { windowsHide: true, maxBuffer: 1024 * 1024 })).stdout.trim() || revision } catch { /* retain the pre-parse revision */ }
       const endFiles = await listFiles(target.root, operation, () => undefined)
@@ -283,8 +326,13 @@ export class RepositoryGraphService implements RepositoryGraphApi {
         this.emit(input.projectId, operationId, 'finalizing', 1, 1, 'stale', retained.omissions.at(-1)!)
         return retained
       }
-      const stale = old.fingerprint.contentHash !== '' && old.fingerprint.contentHash !== fingerprint.contentHash && old.fingerprint.revision !== revision
-      const snapshot: RepositoryGraphSnapshot = { version: 1, projectId: input.projectId, mode, status: operation.cancelled ? 'cancelled' : omissions.length ? 'partial' : stale ? 'stale' : 'ready', rootLabel: target.name, fingerprint, nodes: [...nodes.values()], edges: [...edges.values()], adapters: REPOSITORY_GRAPH_ADAPTERS.map((item) => ({ ...item, patterns: [...item.patterns] })), omissions, createdAt: Date.now(), ...(old.fingerprint.contentHash ? { previousFingerprint: old.fingerprint } : {}) }
+      if (operation.timedOut) {
+        const timedOut = { ...old, status: 'failed' as const, omissions: [...old.omissions, `Repository graph refresh exceeded ${this.maxDurationMs()}ms; the previous verified snapshot was retained.`] }
+        this.snapshots.set(input.projectId, timedOut)
+        this.emit(input.projectId, operationId, 'finalizing', 1, 1, 'failed', timedOut.omissions.at(-1)!)
+        return timedOut
+      }
+      const snapshot: RepositoryGraphSnapshot = { version: 1, projectId: input.projectId, mode, status: operation.cancelled ? 'cancelled' : omissions.length ? 'partial' : 'ready', rootLabel: target.name, fingerprint, fileFingerprints, nodes: [...nodes.values()], edges: [...edges.values()], adapters: REPOSITORY_GRAPH_ADAPTERS.map((item) => ({ ...item, patterns: [...item.patterns] })), omissions, createdAt: Date.now(), ...(old.fingerprint.contentHash ? { previousFingerprint: old.fingerprint } : {}) }
       if (operation.cancelled) return { ...old, status: 'cancelled', omissions: [...old.omissions, 'Refresh was cancelled; the previous verified snapshot was retained.'] }
       this.snapshots.set(input.projectId, snapshot)
       await this.persist(input.projectId, snapshot, old)
@@ -322,28 +370,22 @@ export class RepositoryGraphService implements RepositoryGraphApi {
     else if (input.format === 'jsonl') content = [...nodes.map((node) => JSON.stringify({ type: 'node', ...node })), ...edges.map((edge) => JSON.stringify({ type: 'edge', ...edge }))].join('\n') + '\n'
     else if (input.format === 'csv' || input.format === 'tsv') {
       const delimiter = input.format === 'csv' ? ',' : '\t'
-      const quote = (value: unknown): string => { const text = String(value ?? ''); return input.format === 'csv' ? `"${text.replaceAll('"', '""')}"` : text.replaceAll('\t', ' ') }
+      const quote = (value: unknown): string => {
+        const text = String(value ?? '')
+        // Spreadsheet applications execute cells beginning with these characters as formulas.
+        // Prefixing a single quote keeps the exported label literal without changing its value
+        // when read by a normal CSV/TSV parser.
+        const safe = /^[=+\-@]/u.test(text) ? `'${text}` : text
+        return input.format === 'csv' ? `"${safe.replaceAll('"', '""')}"` : safe.replaceAll('\t', ' ')
+      }
       content = ['kind' + delimiter + 'id' + delimiter + 'label' + delimiter + 'from' + delimiter + 'to' + delimiter + 'relation', ...nodes.map((node) => ['node', node.id, node.label, '', '', node.kind].map(quote).join(delimiter)), ...edges.map((edge) => ['edge', edge.id, '', edge.from, edge.to, edge.kind].map(quote).join(delimiter))].join('\n') + '\n'
     } else if (input.format === 'markdown') content = `# Repository graph\n\nSource revision: ${snapshot.fingerprint.revision}\n\n## Nodes\n\n${nodes.map((node) => `- **${node.kind}** \`${node.id}\` ${node.label}${node.unresolved ? ' (unresolved)' : ''}`).join('\n')}\n\n## Edges\n\n${edges.map((edge) => `- \`${edge.from}\` → \`${edge.to}\`, ${edge.kind}, confidence ${edge.confidence}, source ${edge.source?.path ?? 'unknown'}`).join('\n')}\n`
     else if (input.format === 'html') content = `<!doctype html><meta charset="utf-8"><title>Repository graph</title><h1>Repository graph</h1><p>Source revision: ${snapshot.fingerprint.revision}</p><h2>Nodes</h2><ul>${nodes.map((node) => `<li><b>${escapeHtml(node.kind)}</b> ${escapeHtml(node.label)}</li>`).join('')}</ul><h2>Edges</h2><ul>${edges.map((edge) => `<li>${escapeHtml(edge.from)} → ${escapeHtml(edge.to)} (${escapeHtml(edge.kind)})</li>`).join('')}</ul>`
     else if (input.format === 'graphml') content = `<?xml version="1.0" encoding="UTF-8"?><graphml xmlns="http://graphml.graphdrawing.org/xmlns"><graph id="repository" edgedefault="directed">${nodes.map((node) => `<node id="${escapeXml(node.id)}"><data key="label">${escapeXml(node.label)}</data></node>`).join('')}${edges.map((edge) => `<edge id="${escapeXml(edge.id)}" source="${escapeXml(edge.from)}" target="${escapeXml(edge.to)}"><data key="kind">${escapeXml(edge.kind)}</data></edge>`).join('')}</graph></graphml>`
-    else content = `digraph repository {\n${nodes.map((node) => `  "${escapeDot(node.id)}" [label="${escapeDot(node.label)}"];`).join('\n')}\n${edges.map((edge) => `  "${escapeDot(edge.from)}" -> "${escapeDot(edge.to)}" [label="${escapeDot(edge.kind)}"];`).join('\n')}\n}\n`
+    else if (input.format === 'dot') content = `digraph repository {\n${nodes.map((node) => `  "${escapeDot(node.id)}" [label="${escapeDot(node.label)}"];`).join('\n')}\n${edges.map((edge) => `  "${escapeDot(edge.from)}" -> "${escapeDot(edge.to)}" [label="${escapeDot(edge.kind)}"];`).join('\n')}\n}\n`
+    if (Buffer.byteLength(content, 'utf8') > REPOSITORY_GRAPH_LIMITS.maxBytes) throw new Error(`The ${input.format} export exceeds the ${REPOSITORY_GRAPH_LIMITS.maxBytes}-byte bound.`)
     this.emit(input.projectId, 'export', 'exporting', 1, 1, 'ready', `Exported ${input.format}`)
     return { format: input.format, filename: `repository-graph-${input.projectId}.${input.format === 'markdown' ? 'md' : input.format}`, content, sourceRevision: snapshot.fingerprint.revision, stale: snapshot.status === 'stale', omissions: snapshot.omissions }
-  }
-
-  async openSource(projectId: string, location: RepositoryGraphSourceLocation): Promise<{ ok: true } | { ok: false; reason: string }> {
-    try {
-      const target = await this.target(projectId)
-      if ('snapshot' in target) return target.snapshot.status === 'unsupported' ? { ok: false, reason: 'Source navigation is unsupported for this project.' } : { ok: false, reason: 'Invalid source target.' }
-      const rel = location.path.replaceAll('\\', '/')
-      const abs = resolve(target.root, rel)
-      if (abs !== target.root && !abs.startsWith(`${target.root}${sep}`)) return { ok: false, reason: 'Source path is outside the selected project.' }
-      const info = await stat(abs)
-      if (!info.isFile()) return { ok: false, reason: 'Source file is missing.' }
-      await platform().openExternal(`file://${abs.replaceAll('\\', '/')}${location.line ? `:${location.line}${location.column ? `:${location.column}` : ''}` : ''}`)
-      return { ok: true }
-    } catch (error) { return { ok: false, reason: error instanceof Error ? error.message : String(error) } }
   }
 
   onProgress(listener: (progress: RepositoryGraphProgress) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener) }
