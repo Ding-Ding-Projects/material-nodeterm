@@ -47,7 +47,16 @@ import { LocalHistoryStore } from './local-history'
 import { looksLikeContainer, openContainer, packContainer, type ContainerEntry } from './project-archive-container'
 import { parseLines } from './board-log'
 import { validBoardLogAttachment, BOARD_LOG_ATTACHMENT_LIMITS } from '../shared/board-log-attachments'
-import { renameAtomic } from './fs-atomic'
+import { renameAtomic, tempNameFor } from './fs-atomic'
+import {
+  exportPortableProjectV3,
+  importPortableProjectV3,
+  looksLikePortableProjectV3,
+  type PortableImportResult
+} from './portable-project-import'
+import type { PortableProjectOmission } from './portable-project-v3'
+import { resolvePortableMediaPreparation } from './portable-media-assets'
+import type { PortableMediaExportPlan } from '../shared/portable-media'
 
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
@@ -101,7 +110,13 @@ async function assertNoSymlinkAncestors(target: string): Promise<void> {
   for (const segment of rest) {
     current = path.join(current, segment)
     const stat = await fs.lstat(current).catch(() => null)
-    if (!stat) throw new Error(`Destination component is missing: ${current}`)
+    // The final destination may be the new child the user deliberately selected. Every parent
+    // must already exist so a missing component cannot redirect recursive mkdir through an
+    // unreviewed path.
+    if (!stat) {
+      if (current === resolved) return
+      throw new Error(`Destination component is missing: ${current}`)
+    }
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Destination component is an unsafe link: ${current}`)
   }
 }
@@ -127,7 +142,7 @@ export interface ProjectArchiveExportResult {
 }
 
 export interface ProjectArchiveInspection {
-  archiveVersion: 1 | 2
+  archiveVersion: 1 | 2 | 3
   /** True when the archive carries working files / a repository and import therefore needs an
    *  empty destination folder before it can proceed. */
   needsDestination: boolean
@@ -136,7 +151,7 @@ export interface ProjectArchiveInspection {
 
 export interface ProjectArchiveImportResult {
   project: Project
-  archiveVersion: 1 | 2
+  archiveVersion: 1 | 2 | 3
   contents: ProjectArchiveContents
   restoredTo?: string
   /** The password-manager vault the archive carried for a FOLDER-LESS project, verbatim. The
@@ -159,6 +174,38 @@ export interface ProjectArchiveExportOptions {
    * save file is as sensitive as that password, which the export UI says out loud.
    */
   vault?: Buffer
+  /** One-shot, already prepared media choices. Bytes are included only after the privileged
+   * preparation has validated them; unresolved and omitted media remain explicit manifest data. */
+  portableMedia?: {
+    preparation: import('./portable-media-assets').PortableMediaPreparation
+    decisions: PortableMediaExportPlan['decisions']
+  }
+}
+
+const PORTABLE_ARCHIVE_OMISSIONS: readonly PortableProjectOmission[] = [
+  { path: 'credentials', reason: 'credential', detail: 'Credentials and authenticator material remain on the source machine.' },
+  { path: 'machine-local-settings', reason: 'machine-local', detail: 'Machine-local settings are not portable between installations.' },
+  { path: 'process-state', reason: 'machine-local', detail: 'Live process and session state is never carried in a project file.' },
+  { path: 'working-directory', reason: 'machine-local', detail: 'The source working directory is not reused as an import destination.' }
+]
+
+function portableContents(result: Pick<PortableImportResult, 'manifest'>): ProjectArchiveContents {
+  const excluded = result.manifest.omissions.map((omission) => ({
+    path: omission.path,
+    reason: omission.reason === 'unknown-optional' ? 'unsupported' : omission.reason,
+    detail: omission.detail
+  }))
+  return {
+    repository: 'portable-projection',
+    repositoryNote: 'Schema 3 portable project intent was carried; credentials, machine-local bindings, and process state were omitted.',
+    workingFiles: result.manifest.entries.filter((entry) => entry.path.startsWith('files/')).length,
+    workingBytes: result.manifest.entries
+      .filter((entry) => entry.path.startsWith('files/'))
+      .reduce((sum, entry) => sum + entry.rawBytes, 0),
+    excluded,
+    excludedFiles: excluded.length,
+    excludedBytes: 0
+  }
 }
 
 function isProjectFile(value: unknown): value is ProjectFileV1 {
@@ -362,59 +409,38 @@ export class ProjectArchiveService {
     })
     const historyBundle = await this.history.exportBundle(`project_${project.id}`)
     if (!historyBundle) throw new Error('The project history repository could not be bundled.')
-
-    const capture = await this.captureRepository(project)
-    const entries: ContainerEntry[] = [
-      { path: 'mimetype', data: Buffer.from(MIMETYPE, 'utf-8') },
-      // archive.json is inserted below, once `contents` is final.
-      { path: 'project.json', data: Buffer.from(snapshotText, 'utf-8') },
-      { path: 'history.bundle', data: historyBundle }
+    const media = opts.portableMedia
+      ? await resolvePortableMediaPreparation(opts.portableMedia.preparation, opts.portableMedia.decisions)
+      : undefined
+    const omissions: PortableProjectOmission[] = [
+      ...PORTABLE_ARCHIVE_OMISSIONS,
+      ...(opts.vault
+        ? [{ path: 'vault', reason: 'credential' as const, detail: 'The supplied password-manager vault remains machine-local and is deliberately excluded.' }]
+        : [])
     ]
-    if (opts.vault) entries.push({ path: 'vault.json', data: opts.vault })
-    if (capture.bundle) entries.push({ path: 'repo/repository.bundle', data: capture.bundle })
-    for (const f of capture.files) entries.push({ path: `files/${f.path}`, data: f.data })
-
-    if (entries.length + 1 > MAX_FILE_ENTRIES) {
-      throw new Error(
-        `This project holds ${capture.files.length.toLocaleString()} files — over the ` +
-          `${MAX_FILE_ENTRIES.toLocaleString()}-file limit of a .nodeterm-project save file.`
-      )
-    }
-    const rawPayload = entries.reduce((n, e) => n + e.data.length, 0)
-    if (rawPayload > MAX_RAW_PAYLOAD_BYTES) {
-      throw new Error(
-        `This project is ${formatBytes(rawPayload)} before compression ` +
-          `(repository bundle ${formatBytes(capture.bundle?.length ?? 0)}, ` +
-          `working files ${formatBytes(capture.contents.workingBytes)}) — over the ` +
-          `${formatBytes(MAX_RAW_PAYLOAD_BYTES)} save-file budget. Nothing was written.`
-      )
-    }
-
-    const manifest: ArchiveManifestV2 = {
-      schemaVersion: 2,
-      exportedAt,
-      generator: 'nodeterm',
-      projectName: project.name,
-      contents: capture.contents
-    }
-    entries.splice(1, 0, { path: 'archive.json', data: Buffer.from(JSON.stringify(manifest, null, 2), 'utf-8') })
-
-    const bytes = packContainer(entries)
-    if (bytes.length > MAX_ARCHIVE_BYTES) {
-      throw new Error(
-        `The save file would be ${formatBytes(bytes.length)} ` +
-          `(repository bundle ${formatBytes(capture.bundle?.length ?? 0)}, ` +
-          `working files ${formatBytes(capture.contents.workingBytes)}, ` +
-          `history ${formatBytes(historyBundle.length)}) — over the ` +
-          `${formatBytes(MAX_ARCHIVE_BYTES)} limit. Nothing was written.`
-      )
-    }
-    return { bytes, contents: capture.contents }
+    const exported = await exportPortableProjectV3(project, {
+      historyBundle,
+      omissions,
+      ...(media ? { media } : {})
+    })
+    return { bytes: exported.bytes, contents: portableContents(exported) }
   }
 
   /** Cheap peek: which schema, and does import need a destination folder first? */
   inspect(bytes: Buffer): ProjectArchiveInspection {
     if (!looksLikeContainer(bytes)) return { archiveVersion: 1, needsDestination: false }
+    if (looksLikePortableProjectV3(bytes)) {
+      const entries = openContainer(bytes, READ_LIMITS, (name) => name === 'manifest.json')
+      const manifestBytes = entries.get('manifest.json')
+      if (!manifestBytes) throw new Error('This is not a supported nodeterm project archive (no manifest).')
+      const manifest = JSON.parse(manifestBytes.toString('utf-8')) as { schemaVersion?: unknown; project?: { name?: unknown }; entries?: unknown[] }
+      if (manifest.schemaVersion !== 3) throw new Error('This project file needs a newer version of nodeterm.')
+      return {
+        archiveVersion: 3,
+        needsDestination: false,
+        ...(typeof manifest.project?.name === 'string' ? { projectName: manifest.project.name } : {})
+      }
+    }
     let hasPayload = false
     const picked = openContainer(bytes, READ_LIMITS, (name) => {
       if (name === 'repo/repository.bundle' || name.startsWith('files/')) hasPayload = true
@@ -442,6 +468,17 @@ export class ProjectArchiveService {
           'This archive was saved by an older nodeterm and carries the canvas and its local ' +
             'history only — no repository or working files were inside it.'
         )
+      }
+    }
+    if (looksLikePortableProjectV3(bytes)) {
+      const imported = await importPortableProjectV3(bytes, opts)
+      return {
+        project: imported.project,
+        archiveVersion: 3,
+        contents: portableContents(imported),
+        ...(imported.stagedPath ? { restoredTo: imported.stagedPath } : {}),
+        ...(imported.plannerDefinitions ? { plannerDefinitions: imported.plannerDefinitions } : {}),
+        repairs: imported.repairs
       }
     }
     return this.importV2(bytes, opts.destination)
@@ -499,23 +536,28 @@ export class ProjectArchiveService {
         restoredTo = destination
       }
 
-      const contents: ProjectArchiveContents =
+      const baseContents: ProjectArchiveContents =
         manifest.contents && typeof manifest.contents === 'object'
           ? (manifest.contents as ProjectArchiveContents)
           : emptyContents(repoBundle ? 'git-bundle' : 'no-folder')
+      const contents: ProjectArchiveContents = entries.has('vault.json')
+        ? {
+            ...baseContents,
+            excluded: [...baseContents.excluded, { path: 'vault', reason: 'credential' as const, detail: 'The legacy vault payload remains machine-local and was excluded during import.' }],
+            excludedFiles: baseContents.excludedFiles + 1
+          }
+        : baseContents
       const project = fileToProject(parsedProject, { id, ...(restoredTo ? { cwd: restoredTo } : {}) })
       // A carried vault is handed BACK rather than written here: where it belongs depends on the
       // project this import just minted (a restored folder's own .nodeterm, or the machine-local
       // working copy for a folder-less one), and that decision has exactly one home -
       // password-manager/vault-location.ts. A folder-restoring import already got its vault back
       // with the working files, so the entry is only expected on the folder-less path.
-      const vault = restoredTo ? undefined : entries.get('vault.json')
       return {
         project,
         archiveVersion: 2,
         contents,
-        ...(restoredTo ? { restoredTo } : {}),
-        ...(vault ? { vault } : {})
+        ...(restoredTo ? { restoredTo } : {})
       }
     } catch (error) {
       // importBundle only publishes a fresh domain, and the destination was proven EMPTY before
@@ -829,7 +871,14 @@ export class ProjectArchiveService {
 
   private async assertEmptyDestination(destination: string): Promise<void> {
     await assertNoSymlinkAncestors(destination)
-    const st = await fs.lstat(destination).catch(() => null)
+    let st = await fs.lstat(destination).catch(() => null)
+    if (!st) {
+      const parent = path.dirname(path.resolve(destination))
+      const parentStat = await fs.lstat(parent).catch(() => null)
+      if (!parentStat?.isDirectory() || parentStat.isSymbolicLink()) throw new Error(`The destination parent is not a safe folder: ${parent}`)
+      await fs.mkdir(destination)
+      st = await fs.lstat(destination).catch(() => null)
+    }
     if (!st?.isDirectory() || st.isSymbolicLink()) throw new Error(`The destination is not a safe folder: ${destination}`)
     const children = await fs.readdir(destination)
     if (children.length > 0) {
@@ -860,7 +909,7 @@ export class ProjectArchiveService {
       const parentStat = await fs.lstat(path.dirname(target))
       if (parentStat.isSymbolicLink() || !parentStat.isDirectory()) throw new Error(`Refusing to write through an unsafe destination ancestor: ${entry.rel}`)
       await assertNoSymlinkAncestors(path.dirname(target))
-      const temp = `${target}.${randomUUID()}.tmp`
+      const temp = tempNameFor(target)
       try {
         await fs.writeFile(temp, entry.data, { flag: 'wx' })
         await renameAtomic(temp, target)
