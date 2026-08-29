@@ -251,6 +251,7 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG
     // machine (`...local` would run java on the VIEWER, not the host it joined).
     minecraft: stub.minecraft,
+    dockerHost: stub.dockerHost,
     providerAccounts: {
       snapshot: () => relayUnsupported('providerAccounts.snapshot'),
       createProfile: () => relayUnsupported('providerAccounts.createProfile'),

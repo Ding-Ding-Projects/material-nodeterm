@@ -4916,6 +4916,7 @@ export interface NodeTerminalApi {
   torrent: import('./torrent').TorrentApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  dockerHost: import('./docker-host').DockerHostApi
   /** Desktop-local AWS profile discovery. Credentials and provider sessions never cross IPC. */
   awsIdentity: import('./aws-identity').AwsIdentityApi
   /** Desktop AWS Resource Explorer and Cloud Control managers. */

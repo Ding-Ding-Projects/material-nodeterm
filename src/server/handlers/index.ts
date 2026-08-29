@@ -13,6 +13,7 @@ import { AwsWizardModelService } from '../../core/aws-wizard/service'
 import { registerOllamaIpc } from '../../core/ollama/register-ipc'
 import { registerUniGetUiIpc } from '../../core/unigetui/register-ipc'
 import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
+import { registerDockerHostIpc } from '../../core/docker-host/register-ipc'
 import { registerTorrentIpc } from '../../core/torrent/register-ipc'
 import { registerRepositoryGraphIpc } from '../../core/repository-graph-register-ipc'
 import { registerVirtualMachineIpc } from '../../core/virtual-machine/register-ipc'
@@ -99,6 +100,7 @@ export function registerCoreHandlers(
   } })
   registerUniGetUiIpc(platform)
   const { manager: minecraftServers } = registerMinecraftIpc(platform)
+  registerDockerHostIpc(platform)
   registerTorrentIpc(platform)
   const { manager: virtualMachineManager } = registerVirtualMachineIpc(platform)
   registerCalendarIpc(platform)
