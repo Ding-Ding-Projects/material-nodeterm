@@ -86,6 +86,8 @@ export function WslCreateDialog({
       ? copy(value.authoredTemplate, value.facts, value.params)
       : value.authoredPrefix
         ? copy(value.authoredPrefix)
+        : value.text
+          ? copy('operationErrorPrefix')
         : ''
     const factual = value.text ? mapAroundExactFacts(value.text, value.facts, mapVocabulary) : ''
     return [authored, factual].filter(Boolean).join(' ')
