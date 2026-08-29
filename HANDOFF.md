@@ -1,5 +1,21 @@
 # Handoff
 
+## Issue #34, interactive portal-door construction
+
+The focused `feat/program-23` lane adds `src/shared/portal-door.ts` and
+`src/renderer/nodes/PortalDoorNode.tsx`, registers the `portal-door` node and creation path in the
+canvas, carries its durable portable metadata through the workspace and schema-3 projection, and
+adds its Lang gui surface styles and feature article. The five parts are ordered and completion is
+fail-closed in the reducer and validator. This lane intentionally does not add entry code, recovery
+gameplay, or navigation runtime. No tests, builds, captures, commits, or dews were run in this lane;
+the parent integration lane must verify those records against the final tree.
+
+Review fixes added bounded UTF-8 metadata validation, strict key and stage checks, duplicate/order
+rejection, and ownership validation tying `portalDoor.metadata.doorId` to its owning node id. The
+portal control now has visible focus rings and explanatory unavailable-after labels instead of an
+unexplained disabled label. No unified catalog contract or creation-event ledger exists locally;
+the existing context-menu and Kanban routes remain adapters only, with no new lifecycle scope.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

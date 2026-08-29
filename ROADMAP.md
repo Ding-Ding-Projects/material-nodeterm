@@ -162,6 +162,7 @@ intentionally unchecked because this task publishes the plan only.
 
 - [ ] Add door-only Multiverse canvases to depth 8.
 - [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
+  - [ ] #34 Interactive door construction is implemented in the focused lane, pending parent verification and integration.
 - [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
 - [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.
 - [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,

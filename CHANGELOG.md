@@ -2138,3 +2138,6 @@ git tag --sort=-creatordate
 or on GitHub's [tags](https://github.com/eneskirca/nodeterm/tags) and
 [releases](https://github.com/eneskirca/nodeterm/releases) pages.
 
+# Unreleased
+
+- Add the staged Portal door canvas object with durable frame, hinges, panel, handle, and activation-core metadata.
