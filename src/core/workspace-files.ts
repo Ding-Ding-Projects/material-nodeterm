@@ -32,6 +32,7 @@ import { validatePortableDoorConstruction } from '../shared/door-construction'
 import { validateCalendarConfig } from '../shared/calendar'
 import { normalizeDebugBrowserProfiles } from '../shared/browser-debug-sessions'
 import { sanitizeTriggerSpec } from '../shared/trigger'
+import { sanitizeProviderBlueprint, validateProviderBlueprint, type ProviderBinding, type ProviderBlueprint } from '../shared/provider-accounts'
 
 /**
  * Drop a browser node's persisted `partition` unless it is exactly the jar THIS project (its
@@ -196,6 +197,8 @@ export interface ProjectFileV1 {
   browserProfiles?: BrowserProfile[]
   /** Safe debugging-browser profiles. Local proxy credentials, certificates and runtime state are omitted. */
   debugBrowserProfiles?: DebugBrowserProfile[]
+  /** Portable provider intent only. Credentials and machine-local bindings stay out of this file. */
+  providerBlueprints?: ProviderBlueprint[]
 }
 
 /** One workspace.json v3 entry. Exactly one of: `cwd` (local ref), `ssh` (remote ref),
@@ -271,6 +274,8 @@ export interface IndexEntryV3 {
    * with the flag already set. See `WorkspaceStore.execOverlay`.
    */
   execMigrated?: boolean
+  /** Machine-local links from this project to portable provider blueprints. */
+  providerBindings?: ProviderBinding[]
 }
 
 export interface WorkspaceIndexV3 {
@@ -339,6 +344,7 @@ export function projectToFile(
   const icon = sanitizeProjectIcon(p.icon)
   const links = p.links ?? migrateLinks(p)
   const savedLayouts = validSavedLayouts(p.savedLayouts)
+  const providerBlueprints = validProviderBlueprints(p.providerBlueprints)
   return {
     version: 1,
     rev,
@@ -364,7 +370,8 @@ export function projectToFile(
     ...(p.dinoHighScore ? { dinoHighScore: p.dinoHighScore } : {}),
     ...(p.kanban ? { kanban: p.kanban } : {}),
     ...(p.browserProfiles && p.browserProfiles.length > 0 ? { browserProfiles: p.browserProfiles } : {}),
-    ...(p.debugBrowserProfiles && p.debugBrowserProfiles.length > 0 ? { debugBrowserProfiles: p.debugBrowserProfiles } : {})
+    ...(p.debugBrowserProfiles && p.debugBrowserProfiles.length > 0 ? { debugBrowserProfiles: p.debugBrowserProfiles } : {}),
+    ...(providerBlueprints ? { providerBlueprints } : {})
   }
 }
 
@@ -400,6 +407,22 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
 /** Read only safe debugging-browser intent. Malformed rows are dropped individually. */
 export function validDebugBrowserProfiles(v: unknown): DebugBrowserProfile[] | undefined {
   return normalizeDebugBrowserProfiles(v)
+}
+
+/** Read portable provider intent with bounded, per-row validation. Invalid or duplicate rows are
+ * omitted so one hand-edited blueprint cannot make the whole project unusable. */
+export function validProviderBlueprints(v: unknown): ProviderBlueprint[] | undefined {
+  if (!Array.isArray(v) || v.length > 128) return undefined
+  const ids = new Set<string>()
+  const result: ProviderBlueprint[] = []
+  for (const item of v) {
+    if (!validateProviderBlueprint(item)) continue
+    const blueprint = sanitizeProviderBlueprint(item)
+    if (ids.has(blueprint.id)) continue
+    ids.add(blueprint.id)
+    result.push(blueprint)
+  }
+  return result.length > 0 ? result : undefined
 }
 
 export function validSavedLayouts(v: unknown): SavedCanvasLayout[] | undefined {
@@ -532,6 +555,8 @@ export function fileToProject(
     /** This machine's navigation history for this entry (never from the file). */
     breadcrumbs?: NavStop[]
     settingsOverrides?: Project['settingsOverrides']
+    /** Machine-local provider links from the workspace index. */
+    providerBindings?: ProviderBinding[]
     /** This machine's own exec values for these nodes (from the local index entry). A file read
      *  WITHOUT them — an adopted/cloned folder, a probe — gets the safe defaults, never the file's
      *  own `shell`/`ssh.extraArgs`. */
@@ -541,6 +566,7 @@ export function fileToProject(
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
   const browserProfiles = validBrowserProfiles(f.browserProfiles)
   const debugBrowserProfiles = validDebugBrowserProfiles(f.debugBrowserProfiles)
+  const providerBlueprints = validProviderBlueprints(f.providerBlueprints)
   const multiverseCanvases = sanitizeMultiverseCanvases(f.multiverseCanvases)?.map((canvas) => ({
     ...canvas,
     nodes: sanitizeBrowserPartitions(
@@ -600,6 +626,8 @@ export function fileToProject(
     ...(validKanban(f.kanban) ? { kanban: f.kanban } : {}),
     ...(browserProfiles ? { browserProfiles } : {}),
     ...(debugBrowserProfiles ? { debugBrowserProfiles } : {}),
+    ...(providerBlueprints ? { providerBlueprints } : {}),
+    ...(base.providerBindings ? { providerBindings: base.providerBindings.map((binding) => ({ ...binding })) } : {}),
     ...(base.cwd ? { cwd: base.cwd } : {}),
     ...(base.ssh ? { ssh: base.ssh } : {}),
     ...(base.closed ? { closed: true } : {}),
@@ -700,6 +728,7 @@ export function splitWorkspace(
       ...(p.capabilityAck ? { capabilityAck: p.capabilityAck } : {}),
       ...(p.breadcrumbs?.length ? { breadcrumbs: p.breadcrumbs } : {}),
       ...(p.settingsOverrides ? { settingsOverrides: p.settingsOverrides } : {}),
+      ...(p.providerBindings ? { providerBindings: p.providerBindings.map((binding) => ({ ...binding })) } : {}),
     }
     if (p.unavailable) {
       // Placeholder (folder missing / server unreachable at load): its nodes:[] is not real
@@ -758,11 +787,13 @@ export function splitWorkspace(
  * file could be adopted and then mirrored back with its execution fields intact.
  */
 export function serializeProjectFile(f: ProjectFileV1): string {
+  const providerBlueprints = validProviderBlueprints(f.providerBlueprints)
   return JSON.stringify({
     ...f,
     nodes: sanitizeNodeTriggers(sanitizeCalendarConfigs(stripSharedNodeExec(f.nodes))),
     ...(f.multiverseCanvases
       ? { multiverseCanvases: f.multiverseCanvases.map((canvas) => ({ ...canvas, nodes: sanitizeNodeTriggers(sanitizeCalendarConfigs(stripSharedNodeExec(canvas.nodes))) })) }
-      : {})
+      : {}),
+    ...(providerBlueprints ? { providerBlueprints } : { providerBlueprints: undefined })
   }, null, 2)
 }

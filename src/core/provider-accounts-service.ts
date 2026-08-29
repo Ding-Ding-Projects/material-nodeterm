@@ -136,8 +136,8 @@ export class ProviderAccountsService implements ProviderAccountsApi {
     if (storedSelection === null || profiles.some((entry) => entry.meta.id === storedSelection)) this.selectedProfileId = storedSelection
     this.expireCallbacks()
     return {
-      profiles: profiles.map(publicProfile).sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id)),
-      bindings: bindings.map(publicBinding),
+      profiles: profiles.map((entry) => publicProfile(entry.meta)).sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id)),
+      bindings: bindings.map((entry) => publicBinding(entry.meta)),
       // Portable blueprints are sourced from the active project file. This service only owns
       // local references, so the renderer can safely distinguish an absent project blueprint list.
       blueprints: [],

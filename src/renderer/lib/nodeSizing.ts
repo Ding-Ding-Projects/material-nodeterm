@@ -61,6 +61,7 @@ export const NODE_MIN_SIZES: Record<NodeKind, { width: number; height: number }>
   , torrent: { width: 520, height: 420 }
   , 'linux-vm': { width: 520, height: 420 }
   , 'github-work-item': { width: 520, height: 360 }
+  , converter: { width: 560, height: 380 }
 }
 
 export interface Rect {

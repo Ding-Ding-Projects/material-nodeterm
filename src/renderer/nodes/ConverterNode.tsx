@@ -79,9 +79,10 @@ export default function ConverterNode({ id, data, selected }: NodeProps<CanvasNo
   const apiRef = useRef(api)
   apiRef.current = api
 
-  const run = useCallback((action: () => Promise<unknown>): void => {
+  const run = useCallback((action: (() => Promise<unknown>) | Promise<unknown>): void => {
     setError(null)
-    void action().catch((cause) => setError(errorText(cause)))
+    const pending = typeof action === 'function' ? action() : action
+    void pending.catch((cause) => setError(errorText(cause)))
   }, [])
 
   const addPaths = useCallback(async (paths: string[]): Promise<void> => {

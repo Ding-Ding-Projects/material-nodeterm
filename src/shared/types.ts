@@ -1249,6 +1249,10 @@ export interface Project {
   nodes: CanvasNodeState[]
   /** Named portable arrangements for this project's active canvas. */
   savedLayouts?: SavedCanvasLayout[]
+  /** Portable provider intent, with credentials excluded from the shared project file. */
+  providerBlueprints?: import('./provider-accounts').ProviderBlueprint[]
+  /** Machine-local provider links retained in the workspace index, never the shared project file. */
+  providerBindings?: import('./provider-accounts').ProviderBinding[]
   /** Safe, git-shared child canvases. Credentials, paths and runtime bindings stay on nodes' local overlays. */
   multiverseCanvases?: ProjectMultiverseCanvas[]
   /** Runtime-only selection. The shared project file stores hierarchy, never one person's current view. */
@@ -4875,6 +4879,8 @@ export interface NodeTerminalApi {
   workspace: WorkspaceApi
   /** Shared provider-account, credential-vault, OAuth-callback, and resource-picker services. */
   providerServices: import('./provider-services').ProviderServicesApi
+  /** Named provider profiles and project bindings, with credential values kept in the host vault. */
+  providerAccounts: import('./provider-accounts').ProviderAccountsApi
   /** Host-owned Cloudflare tunnel inventory, route preservation, and reviewed DNS adoption. */
   cloudflareTunnels: import('./cloudflare-tunnels').CloudflareTunnelApi
   /** Server Edition callback completer; absent on the desktop, which uses sshProject forwarding. */

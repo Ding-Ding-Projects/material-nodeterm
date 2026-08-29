@@ -529,8 +529,8 @@ export async function runAdvancedPipeline(request: AdvancedPipelineRequest, onPr
     ? Buffer.alloc(0)
     : await readBounded(request.inputPath, ADVANCED_PIPELINE_LIMITS.maxInputBytes, request.signal, onProgress)
   onProgress?.({ stage: 'inspect', completedBytes: 0, totalBytes: input.length, message: 'Inspecting bounded input' })
-  let outputName: string
-  let output: Buffer
+  let outputName: string | undefined
+  let output: Buffer | undefined
   let metadata: Record<string, unknown> | undefined
   let warnings: string[] = []
   let extracted: AdvancedPipelineOutput[] | undefined
@@ -566,6 +566,9 @@ export async function runAdvancedPipeline(request: AdvancedPipelineRequest, onPr
   if (extracted) {
     onProgress?.({ stage: 'complete', completedBytes: extracted.reduce((sum, item) => sum + item.bytes, 0), totalBytes: extracted.reduce((sum, item) => sum + item.bytes, 0), message: `Extracted ${extracted.length} archive entries` })
     return { id: request.id, outputs: extracted, warnings }
+  }
+  if (outputName === undefined || output === undefined) {
+    throw new Error(`Pipeline ${request.id} did not produce an output`)
   }
   checkCancelled(request.signal)
   onProgress?.({ stage: 'validate', completedBytes: output.length, totalBytes: output.length, message: 'Validating produced output' })

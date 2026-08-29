@@ -156,7 +156,7 @@ export interface DockerHostSnapshot {
 export interface DockerHostApi {
   listHosts(): Promise<DockerHostTarget[]>
   saveHost(input: { id?: string; label: string; transport: DockerHostTransport }): Promise<DockerHostTarget>
-  removeHost(id: string): Promise<void>
+  removeHost(id: string, confirmed?: boolean): Promise<void>
   verify(hostId: string): Promise<DockerHostVerification>
   listContexts(hostId: string): Promise<DockerContextInfo[]>
   inventory(hostId: string): Promise<DockerHostSnapshot>
