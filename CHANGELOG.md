@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add an accessible agent-link picker beside the existing agent-to-agent context-link handles. It
+  searches the live context-capable targets and invokes the same connection path, preserving the
+  upstream capability checks, duplicate suppression, persistence, and per-session read boundary.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

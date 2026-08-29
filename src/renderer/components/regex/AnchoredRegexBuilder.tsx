@@ -1,7 +1,15 @@
-import { useRef, useState, type RefObject } from 'react'
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type RefObject
+} from 'react'
 import { AnchoredPopover } from '../../ui/AnchoredPopover'
 import { RegexBuilder } from './RegexBuilder'
 import type { RegexBuilderBinding } from '../../lib/regex/useRegexSearchField'
+import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 
 interface AnchoredRegexBuilderProps {
   search: RegexBuilderBinding
@@ -15,6 +23,14 @@ interface AnchoredRegexBuilderProps {
    *  its own elevated z-index (a ContextMenu opened at z 80, say): the popover must paint ABOVE
    *  the surface it's anchored inside of, or it renders invisible behind it. */
   zIndex?: number
+  /** Notifies a parent overlay while the builder owns keyboard focus. */
+  onOpenChange?: (open: boolean) => void
+  /** Incremented by an owning modal when Escape must close this portaled builder first. */
+  closeSignal?: number
+  /** Optional owner ref for the portaled popover, avoiding document-wide lookups. */
+  popoverRef?: MutableRefObject<HTMLDivElement | null>
+  /** Optional topmost-dialog predicate supplied by an owning modal. */
+  ownsKeyboard?: () => boolean
 }
 
 /** Preferred popover width — the builder's real content (a 3-column token palette / pattern+
@@ -30,10 +46,47 @@ const BUILDER_POPOVER_WIDTH = 920
  * the field that opens the FULL builder anchored right next to it — never a separate page or a
  * global dialog. One builder instance per field; nothing here is shared across fields.
  */
-export function AnchoredRegexBuilder({ search, fieldRef, label, zIndex }: AnchoredRegexBuilderProps): React.JSX.Element {
+export function AnchoredRegexBuilder({
+  search,
+  fieldRef,
+  label,
+  zIndex,
+  onOpenChange,
+  closeSignal,
+  popoverRef,
+  ownsKeyboard
+}: AnchoredRegexBuilderProps): React.JSX.Element {
+  const profileText = useLocalizedVocabularyText()
   const ownTriggerRef = useRef<HTMLButtonElement>(null)
+  const ownPopoverRef = useRef<HTMLDivElement | null>(null)
+  const popoverId = useId()
   const [open, setOpen] = useState(false)
   const anchor = (fieldRef as RefObject<HTMLElement>) ?? ownTriggerRef
+  const effectivePopoverRef = popoverRef ?? ownPopoverRef
+  const triggerTitle = profileText(
+    search.mode === 'regex' ? 'regex.trigger.activeTitle' : 'regex.trigger.openTitle',
+    search.mode === 'regex' ? 'Regex mode: open the builder' : 'Switch to regex and open the builder'
+  )
+  const triggerLabel = label ?? profileText('regex.trigger.aria', 'Open regex builder')
+
+  useEffect(() => {
+    if (!open) return
+    // The builder is portaled, so focus must cross the portal explicitly. Its first real control
+    // is the pattern field when present, otherwise the first enabled button is the safest entry.
+    requestAnimationFrame(() => {
+      effectivePopoverRef.current
+        ?.querySelector<HTMLElement>(
+          '.md3-regex-builder__pattern-input, input, button'
+        )
+        ?.focus()
+    })
+  }, [effectivePopoverRef, open])
+
+  useEffect(() => {
+    if (closeSignal === undefined || closeSignal === 0) return
+    setOpen(false)
+    onOpenChange?.(false)
+  }, [closeSignal, onOpenChange])
 
   return (
     <>
@@ -41,12 +94,15 @@ export function AnchoredRegexBuilder({ search, fieldRef, label, zIndex }: Anchor
         ref={ownTriggerRef}
         type="button"
         className={`md3-regex-trigger${search.mode === 'regex' ? ' md3-regex-trigger--active' : ''}`}
-        title={search.mode === 'regex' ? 'Regex mode — open the builder' : 'Switch to regex and open the builder'}
-        aria-label={label ?? 'Open regex builder'}
+        title={triggerTitle}
+        aria-label={triggerLabel}
         aria-pressed={search.mode === 'regex'}
+        aria-expanded={open}
+        aria-controls={popoverId}
         onClick={() => {
           if (search.mode !== 'regex') search.setMode('regex')
           setOpen(true)
+          onOpenChange?.(true)
         }}
       >
         .*
@@ -54,10 +110,16 @@ export function AnchoredRegexBuilder({ search, fieldRef, label, zIndex }: Anchor
       <AnchoredPopover
         anchorRef={anchor}
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          if (ownsKeyboard && !ownsKeyboard()) return
+          setOpen(false)
+          onOpenChange?.(false)
+        }}
         width={BUILDER_POPOVER_WIDTH}
         className="md3-regex-popover"
         zIndex={zIndex}
+        contentRef={effectivePopoverRef}
+        id={popoverId}
       >
         <RegexBuilder
           value={{ pattern: search.pattern, flags: search.flags }}
@@ -65,7 +127,11 @@ export function AnchoredRegexBuilder({ search, fieldRef, label, zIndex }: Anchor
             search.setValue(v.pattern)
             search.setFlags(v.flags)
           }}
-          onDone={() => setOpen(false)}
+          onDone={() => {
+            if (ownsKeyboard && !ownsKeyboard()) return
+            setOpen(false)
+            onOpenChange?.(false)
+          }}
         />
       </AnchoredPopover>
     </>

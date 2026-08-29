@@ -233,6 +233,7 @@ import {
   OPEN_EXPLORER_FOR_AGENT_EVENT,
   writeAgentNodeDrag
 } from '../lib/explorerNodeDrag'
+import { requestAgentLinkPicker } from '../lib/agentLink'
 
 /** How long a remote terminal waits for its project's ControlMaster before giving up and showing
  *  the offline overlay. Sized for the SLOW-but-fine case (a cold app load whose connect is still
@@ -4827,8 +4828,8 @@ export function TerminalNode({
           isConnectable={false}
           style={{ opacity: 0, pointerEvents: 'none', top: 0 }}
         />
-        {/* Link handles (all terminal nodes): drag right→left to link. Between two context-capable
-          (Claude) nodes this shares context; from a sticky note it attaches the note as context.
+        {/* Link handles (all terminal nodes): drag right→left to link. Between two
+          context-link-capable agent nodes this shares context; from a sticky note it attaches the note as context.
           Vertically centered on the side edges; raised above the body so they're never buried. */}
         <Handle
           id="link-out"
@@ -4837,8 +4838,25 @@ export function TerminalNode({
           className="bridge-handle bridge-handle--out"
           data-tip={
             contextLinkCapable
-              ? "Link out — drag to another Claude node so they can read each other's context"
-              : 'Link out — drag to a sticky note to attach it as context'
+              ? profileText(
+                  'agentLink.handle.out',
+                  'Link out: drag to another context-capable agent node so they can read each other’s context'
+                )
+              : profileText(
+                  'agentLink.handle.noteOut',
+                  'Link out: drag to a sticky note to attach it as context'
+                )
+          }
+          aria-label={
+            contextLinkCapable
+              ? profileText(
+                  'agentLink.handle.out',
+                  'Link out: drag to another context-capable agent node so they can read each other’s context'
+                )
+              : profileText(
+                  'agentLink.handle.noteOut',
+                  'Link out: drag to a sticky note to attach it as context'
+                )
           }
         />
         <Handle
@@ -4848,8 +4866,25 @@ export function TerminalNode({
           className="bridge-handle bridge-handle--in"
           data-tip={
             contextLinkCapable
-              ? 'Link in — drop a link here to share context with this Claude session'
-              : 'Link in — drop a sticky note link here to attach it as context'
+              ? profileText(
+                  'agentLink.handle.in',
+                  'Link in: drop a link here to share context with this context-capable agent session'
+                )
+              : profileText(
+                  'agentLink.handle.noteIn',
+                  'Link in: drop a sticky note link here to attach it as context'
+                )
+          }
+          aria-label={
+            contextLinkCapable
+              ? profileText(
+                  'agentLink.handle.in',
+                  'Link in: drop a link here to share context with this context-capable agent session'
+                )
+              : profileText(
+                  'agentLink.handle.noteIn',
+                  'Link in: drop a sticky note link here to attach it as context'
+                )
           }
         />
 
@@ -4903,6 +4938,22 @@ export function TerminalNode({
               }}
             >
               <MaterialSymbol name="folder_open" size={16} />
+            </button>
+          )}
+          {contextLinkCapable && (
+            <button
+              className="term-node__link-agent nodrag"
+              type="button"
+              title={profileText('agentLink.headerAction.title', 'Link to another agent')}
+              aria-label={profileText('agentLink.headerAction.aria', 'Link {title} to another agent', {
+                title: String(data.title || 'agent')
+              })}
+              onClick={(event) => {
+                event.stopPropagation()
+                requestAgentLinkPicker(id, event.currentTarget)
+              }}
+            >
+              <MaterialSymbol name="link" size={16} />
             </button>
           )}
           {editingTitle ? (

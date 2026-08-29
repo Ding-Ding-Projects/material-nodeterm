@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+  type RefObject
+} from 'react'
 import { createPortal } from 'react-dom'
 
 interface AnchoredPopoverProps {
@@ -12,6 +20,9 @@ interface AnchoredPopoverProps {
   width?: number
   className?: string
   zIndex?: number
+  /** Optional caller-owned ref for focus management when several portaled popovers coexist. */
+  contentRef?: MutableRefObject<HTMLDivElement | null>
+  id?: string
 }
 
 /**
@@ -28,7 +39,9 @@ export function AnchoredPopover({
   children,
   width = 420,
   className,
-  zIndex = 62
+  zIndex = 62,
+  contentRef,
+  id
 }: AnchoredPopoverProps): React.JSX.Element | null {
   const popRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null)
@@ -99,7 +112,11 @@ export function AnchoredPopover({
           a modal, so it never dims the rest of the screen. */}
       <div className="anchored-pop__backdrop" style={{ zIndex }} onMouseDown={onClose} />
       <div
-        ref={popRef}
+        ref={(element) => {
+          popRef.current = element
+          if (contentRef) contentRef.current = element
+        }}
+        id={id}
         className={`anchored-pop${className ? ` ${className}` : ''}`}
         style={{
           top: pos?.top ?? -9999,

@@ -958,6 +958,111 @@ export const CATALOG: Catalog = {
   },
 
   // ---------------------------------------------------------------------------------------
+  // Agent context-link picker and handle descriptions. Provider labels remain factual; the
+  // surrounding copy follows the live language mode and both per-language funny levels.
+  // ---------------------------------------------------------------------------------------
+  'agentLink.handle.out': {
+    en: flat('Link out: drag to another context-capable agent node so they can read each other’s context'),
+    yue: flat('連出去：拖去另一個支援內容連結嘅代理節點，等佢哋可以互相讀取內容')
+  },
+  'agentLink.handle.in': {
+    en: flat('Link in: drop a link here to share context with this context-capable agent session'),
+    yue: flat('連入嚟：將連結放喺呢度，同呢個支援內容連結嘅代理階段分享內容')
+  },
+  'agentLink.handle.noteOut': {
+    en: flat('Link out: drag to a sticky note to attach it as context'),
+    yue: flat('連出去：拖去便利貼，將佢附加為內容')
+  },
+  'agentLink.handle.noteIn': {
+    en: flat('Link in: drop a sticky note link here to attach it as context'),
+    yue: flat('連入嚟：將便利貼連結放喺呢度，將佢附加為內容')
+  },
+  'agentLink.headerAction.title': {
+    en: flat('Link to another agent'),
+    yue: flat('連結另一個代理')
+  },
+  'agentLink.headerAction.aria': {
+    en: flat('Link {title} to another agent'),
+    yue: flat('將 {title} 連結到另一個代理')
+  },
+  'agentLink.dialog.title': {
+    en: [
+      'Link {source} to another agent',
+      'Pick an agent to link with {source}',
+      'Choose a context partner for {source}',
+      'Choose who {source} can read with',
+      'Pick {source}’s context buddy'
+    ],
+    yue: [
+      '將 {source} 連結到另一個代理',
+      '揀一個代理同 {source} 連結',
+      '為 {source} 揀一個內容夥伴',
+      '揀邊個可以同 {source} 互相讀取',
+      '幫 {source} 揀個內容拍檔'
+    ]
+  },
+  'agentLink.dialog.description': {
+    en: flat('Choose a context-capable agent. No transcript is sent automatically.'),
+    yue: flat('揀一個支援內容連結嘅代理。系統唔會自動傳送對話記錄。')
+  },
+  'agentLink.dialog.filter': {
+    en: flat('Filter link targets'),
+    yue: flat('篩選連結目標')
+  },
+  'agentLink.dialog.filterPlaceholder': {
+    en: flat('Filter agents…'),
+    yue: flat('篩選代理…')
+  },
+  'agentLink.dialog.filterPlaceholderRegex': {
+    en: flat('Filter agents… (regex)'),
+    yue: flat('篩選代理…（正則表達式）')
+  },
+  'agentLink.dialog.regexLabel': {
+    en: flat('Regex — agent link picker'),
+    yue: flat('正則表達式 — 代理連結選擇器')
+  },
+  'agentLink.dialog.targets': {
+    en: flat('Available agent link targets'),
+    yue: flat('可用代理連結目標')
+  },
+  'agentLink.dialog.empty': {
+    en: flat('No other context-capable agents are available.'),
+    yue: flat('目前沒有其他支援內容連結嘅代理。')
+  },
+  'agentLink.dialog.noMatch': {
+    en: flat('No agents match that filter.'),
+    yue: flat('冇代理符合呢個篩選。')
+  },
+  'agentLink.dialog.untitled': {
+    en: flat('Untitled agent'),
+    yue: flat('未命名代理')
+  },
+  'agentLink.dialog.cancel': {
+    en: flat('Cancel'),
+    yue: flat('取消')
+  },
+  'agentLink.result.stale': {
+    en: flat('That agent link is no longer available.'),
+    yue: flat('嗰個代理連結已經唔再可用。')
+  },
+  'agentLink.result.duplicate': {
+    en: flat('Those agents are already linked.'),
+    yue: flat('嗰兩個代理已經連結。')
+  },
+  'regex.trigger.openTitle': {
+    en: flat('Switch to regex and open the builder'),
+    yue: flat('切換到正則表達式並開啟建立器')
+  },
+  'regex.trigger.activeTitle': {
+    en: flat('Regex mode: open the builder'),
+    yue: flat('正則表達式模式：開啟建立器')
+  },
+  'regex.trigger.aria': {
+    en: flat('Open regex builder'),
+    yue: flat('開啟正則表達式建立器')
+  },
+
+  // ---------------------------------------------------------------------------------------
   // Announcement banner (AnnouncementBanner.tsx). The title/body TEXT itself comes from the
   // remote feed and is not localized here — only the surrounding chrome is.
   // ---------------------------------------------------------------------------------------

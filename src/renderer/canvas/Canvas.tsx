@@ -263,6 +263,10 @@ import { requestArchivePassword } from '../components/archiveUnlockDialog'
 import { RemotePicker } from '../components/RemotePicker'
 import { WorktreeDialog } from '../components/WorktreeDialog'
 import { GroupPickerDialog, type GroupPickerOption } from '../components/canvas/GroupPickerDialog'
+import {
+  AgentLinkPickerDialog,
+  type AgentLinkPickerOption
+} from '../components/canvas/AgentLinkPickerDialog'
 import { NotifyConsentDialog } from '../components/NotifyConsentDialog'
 import { SessionsSidebar } from '../components/SessionsSidebar'
 import type { SessionNodeInput } from '../lib/sessionList'
@@ -281,6 +285,10 @@ import { PresenceLayer } from '../components/PresenceLayer'
 import { Facepile } from '../components/Facepile'
 import { PresenceNamePrompt } from '../components/PresenceNamePrompt'
 import { nodeTravel, projectTravel } from '../lib/presenceTravel'
+import {
+  OPEN_AGENT_LINK_PICKER_EVENT,
+  type AgentLinkSelectionResult
+} from '../lib/agentLink'
 import {
   routeControlSource,
   needsLiveCanvas,
@@ -1366,6 +1374,14 @@ export function Canvas() {
   // move-into-group action). `ids` is the selection being moved; `groups` is the eligible-target
   // list computed at click time (only frames addSelectionToGroup would actually change).
   const [groupPicker, setGroupPicker] = useState<{ ids: string[]; groups: GroupPickerOption[] } | null>(null)
+  const [agentLinkPicker, setAgentLinkPicker] = useState<{
+    projectId: string | null
+    sourceId: string
+    sourceTitle: string
+    targets: AgentLinkPickerOption[]
+    anchorEl?: HTMLElement
+    restoreFocusEl: HTMLElement | null
+  } | null>(null)
   // Drives WorktreeDialog. `groupId` null = create the group frame around the new worktree;
   // set = bind an existing group (the group context menu). `at` is the pane cursor, if any.
   const [worktreeDialog, setWorktreeDialog] = useState<{
@@ -3458,6 +3474,118 @@ export function Canvas() {
       if (msg) void api.pty.sendText(target, msg)
     },
     [linkEndpointOf, agentIdOf, setLinkEdges, setNodes, markDirty, nodes]
+  )
+
+  // The pointer gesture starts at an agent's link-out handle. This event is its keyboard and
+  // screen-reader equivalent: the picker chooses a live context-capable endpoint, then calls the
+  // same onConnect path with the same handle ids. Capture the source and target list at open time,
+  // while retaining the originating control for focus restoration after cancel or selection.
+  useEffect(() => {
+    const onOpen = (event: Event): void => {
+      const sourceId = (event as CustomEvent<{ sourceNodeId?: unknown }>).detail?.sourceNodeId
+      const requestedAnchor = (event as CustomEvent<{ anchorEl?: unknown }>).detail?.anchorEl
+      const anchorEl = requestedAnchor instanceof HTMLElement ? requestedAnchor : undefined
+      if (typeof sourceId !== 'string' || !sourceId) return
+      const source = nodesRef.current.find((node) => node.id === sourceId)
+      const sourceAgent = agentIdOf(sourceId)
+      if (!source || source.type !== 'terminal' || !sourceAgent || !canContextLink(sourceAgent)) return
+      const targets = nodesRef.current
+        .filter(
+          (node) =>
+            node.id !== sourceId &&
+            node.type === 'terminal' &&
+            !linkEdgesRef.current.some((edge) => pairKey(edge.source, edge.target) === pairKey(sourceId, node.id))
+        )
+        .flatMap((node) => {
+          const agent = agentIdOf(node.id)
+          if (!agent || !canContextLink(agent)) return []
+          return [
+            {
+              id: node.id,
+              agentId: agent,
+              title: String(
+                node.data.title || profileText('agentLink.dialog.untitled', 'Untitled agent')
+              ),
+              agentLabel: agentConfig(agent)?.label || agent,
+              color: typeof node.data.color === 'string' ? node.data.color : undefined
+            }
+          ]
+        })
+      setAgentLinkPicker({
+        projectId: useProjects.getState().activeProjectId,
+        sourceId,
+        sourceTitle: String(
+          source.data.title || profileText('agentLink.dialog.untitled', 'Untitled agent')
+        ),
+        targets,
+        anchorEl,
+        restoreFocusEl: document.activeElement instanceof HTMLElement ? document.activeElement : null
+      })
+    }
+    window.addEventListener(OPEN_AGENT_LINK_PICKER_EVENT, onOpen)
+    return () => window.removeEventListener(OPEN_AGENT_LINK_PICKER_EVENT, onOpen)
+  }, [agentIdOf, profileText])
+
+  const closeAgentLinkPicker = useCallback(() => {
+    const restore = agentLinkPicker?.restoreFocusEl
+    setAgentLinkPicker(null)
+    if (restore) requestAnimationFrame(() => restore.focus())
+  }, [agentLinkPicker])
+
+  useEffect(() => {
+    if (agentLinkPicker && agentLinkPicker.projectId !== activeProjectId) closeAgentLinkPicker()
+  }, [activeProjectId, agentLinkPicker, closeAgentLinkPicker])
+
+  useEffect(() => {
+    if (
+      agentLinkPicker &&
+      !nodesRef.current.some((node) => node.id === agentLinkPicker.sourceId)
+    ) {
+      closeAgentLinkPicker()
+    }
+  }, [nodes, agentLinkPicker, closeAgentLinkPicker])
+
+  const pickAgentLinkTarget = useCallback(
+    (targetId: string): AgentLinkSelectionResult | undefined => {
+      const picker = agentLinkPicker
+      if (
+        !picker ||
+        picker.projectId !== useProjects.getState().activeProjectId ||
+        !picker.targets.some((target) => target.id === targetId)
+      ) {
+        if (picker && picker.projectId !== useProjects.getState().activeProjectId) closeAgentLinkPicker()
+        return picker ? { kind: 'stale', targetId } : undefined
+      }
+      const sourceEndpoint = linkEndpointOf(picker.sourceId)
+      const targetEndpoint = linkEndpointOf(targetId)
+      if (!sourceEndpoint || !targetEndpoint || classifyLink(sourceEndpoint, targetEndpoint) !== 'context') {
+        setNotice({
+          kind: 'error',
+          text: profileText('agentLink.result.stale', 'That agent link is no longer available.')
+        })
+        return { kind: 'stale', targetId }
+      }
+      if (
+        linkEdgesRef.current.some(
+          (edge) => pairKey(edge.source, edge.target) === pairKey(picker.sourceId, targetId)
+        )
+      ) {
+        setNotice({
+          kind: 'error',
+          text: profileText('agentLink.result.duplicate', 'Those agents are already linked.')
+        })
+        return { kind: 'duplicate', targetId }
+      }
+      onConnect({
+        source: picker.sourceId,
+        target: targetId,
+        sourceHandle: 'link-out',
+        targetHandle: 'link-in'
+      })
+      closeAgentLinkPicker()
+      return { kind: 'success' }
+    },
+    [agentLinkPicker, onConnect, closeAgentLinkPicker, linkEndpointOf, profileText]
   )
 
   // Double-click a context link to remove it (ephemeral subagent/loop edges are left alone).
@@ -14636,6 +14764,18 @@ export function Canvas() {
             setGroupPicker(null)
           }}
           onCancel={() => setGroupPicker(null)}
+        />
+      )}
+
+      {agentLinkPicker &&
+        agentLinkPicker.projectId === activeProjectId &&
+        nodes.some((node) => node.id === agentLinkPicker.sourceId) && (
+        <AgentLinkPickerDialog
+          sourceTitle={agentLinkPicker.sourceTitle}
+          targets={agentLinkPicker.targets}
+          anchorEl={agentLinkPicker.anchorEl}
+          onPick={pickAgentLinkTarget}
+          onCancel={closeAgentLinkPicker}
         />
       )}
 
