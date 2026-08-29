@@ -7,14 +7,15 @@ import { safeServiceEndpoint } from '@shared/node-exec'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
+import { NextcloudAioPanel } from '../components/nextcloud/NextcloudAioPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 
 /**
- * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
- * and FreePBX. They differ in what they will eventually manage, not in how they behave as canvas
- * objects, so six near-identical components would be six copies of one rule waiting to drift.
+ * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant,
+ * FreePBX, and Nextcloud AIO. They differ in what they manage, not in how they behave as canvas
+ * objects, so seven near-identical components would be seven copies of one rule waiting to drift.
  *
- * WHAT THIS DELIBERATELY DOES NOT DO for five of the six kinds, and why the emptiness is the point:
+ * WHAT THIS DELIBERATELY DOES NOT DO for the address-only kinds, and why the emptiness is the point:
  *
  * Docker/Proxmox/GitLab/Home Assistant/FreePBX are not connected to anything yet. CLAUDE.md is
  * explicit that a control which is styled as operable while being inert is a defect rather than a
@@ -32,7 +33,7 @@ import { EditableNodeTitle } from '../components/EditableNodeTitle'
  * (docs/minecraft-server-manager.md). It runs a real local `java -jar server.jar` process on the
  * machine this shell is running on, not a remote connection reached through an address, so it
  * replaces the generic address field entirely rather than growing a fake "Connect" button beside
- * it. When a future lane wires one of the other five kinds, it follows the same pattern: real
+ * it. When a future lane wires one of the other address-only kinds, it follows the same pattern: real
  * controls that do exactly what they say, added beside this honest copy rather than instead of it.
  */
 /**
@@ -47,7 +48,8 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   proxmox: 'https://proxmox.local:8006',
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
-  freepbx: 'https://pbx.local'
+  freepbx: 'https://pbx.local',
+  nextcloudaio: 'ssh://docker@192.168.1.10'
 }
 
 /**
@@ -227,7 +229,17 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
 
-        {!collapsed && kind !== 'minecraft' && (
+        {!collapsed && kind === 'nextcloudaio' && (
+          <NextcloudAioPanel
+            nodeId={id}
+            profile={data.nextcloudAioProfile}
+            connection={data.serviceConnection}
+            onProfileChange={(nextcloudAioProfile) => updateNodeData(id, { nextcloudAioProfile })}
+            onConnectionChange={(serviceConnection) => updateNodeData(id, { serviceConnection })}
+          />
+        )}
+
+        {!collapsed && kind !== 'minecraft' && kind !== 'nextcloudaio' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">Address</span>

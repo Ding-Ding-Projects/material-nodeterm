@@ -1,17 +1,17 @@
 # Service nodes (manager placeholders)
 
-Status: **implemented as canvas objects; not yet connected to anything.** This is the honest
+Status: **implemented as canvas objects; connected profiles are documented separately.** This is the honest
 midpoint between "planned" and "working": the node exists, drags and resizes and persists like
 any other node, and it stores where it would reach a service — but nothing dials that address yet.
 Read this document alongside the "what does not work yet" section below before assuming a control
 does more than it says.
 
-## The six kinds, and why one is called a manager and not a host
+## The service kinds, and why one is called a manager and not a host
 
 Six new node kinds join the canvas's `NodeKind` union
 (`src/shared/types.ts` `SERVICE_NODE_KINDS`): `minecraft`, `dockerhost`, `proxmox`, `gitlab`,
 `homeassistant`, `freepbx`. Each is rendered by the **same** component,
-`src/renderer/nodes/ServiceNode.tsx` — one component with six callers, because the only thing that
+`src/renderer/nodes/ServiceNode.tsx` — one component with seven callers, because the only thing that
 varies between them is a label and a starting size, and this codebase's most repeated lesson is
 that a duplicated rule drifts from its copies.
 
@@ -34,13 +34,19 @@ researched" list by accident of naming — they are the same six products that l
 What changed is that the canvas object for each now exists; the research and the real client work
 for most of them has not started.
 
+The seventh kind, `nextcloudaio`, is a separate guided hosting profile rather than an address-only
+manager placeholder. Read [Nextcloud All-in-One hosting](nextcloud-aio.md) for its pinned official
+image, portable intent, local host binding, explicit Docker socket authority disclosure, and fixed
+no-privileged plan. Its runtime operations remain on the host-runtime seam and are not represented
+as generic service-node address behaviour.
+
 ## Creating one
 
-Right-click empty canvas → **Managers** → **New manager…** opens a submenu listing all six kinds by
+Right-click empty canvas → **Managers** → **New manager…** opens a submenu listing all seven kinds by
 their human-readable label (`SERVICE_NODE_LABELS`, e.g. "Docker host", "Home Assistant"). Picking
 one calls `addService(kind, at)` in `src/renderer/canvas/Canvas.tsx`, which is the one handler for
-every kind — the kind is data, not six copies of the same three lines. The **Managers** group is
-folded into a single submenu row deliberately: six product names spliced directly into the pane
+every kind — the kind is data, not seven copies of the same three lines. The **Managers** group is
+folded into a single submenu row deliberately: seven product names spliced directly into the pane
 menu would have been exactly the clutter the menu's own search filter exists to avoid, and the
 submenu still matches on its children's labels, so typing "prox" into the pane-menu filter reaches
 Proxmox from the top level anyway (see the sectioned/filterable pane-menu behavior in the root

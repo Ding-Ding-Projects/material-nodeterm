@@ -589,6 +589,22 @@ const FEATURES = [
     docs: ['docs/features/integrations/service-nodes.md'],
   },
   {
+    id: 'nextcloud-aio-profile',
+    label: 'Nextcloud All-in-One hosting profile',
+    files: [
+      'src/shared/nextcloud-aio.ts',
+      'src/renderer/components/nextcloud/NextcloudAioPanel.tsx',
+      'src/renderer/nodes/ServiceNode.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/nextcloud-aio.ts', 'export function buildNextcloudAioRunPlan('],
+      ['src/shared/nextcloud-aio.ts', 'privileged: false'],
+      ['src/renderer/components/nextcloud/NextcloudAioPanel.tsx', 'export function NextcloudAioPanel('],
+      ['src/renderer/nodes/ServiceNode.tsx', '<NextcloudAioPanel'],
+    ],
+    docs: ['docs/features/integrations/nextcloud-aio.md'],
+  },
+  {
     id: 'agent-support',
     label: 'Agent support (Claude / Codex / Gemini / opencode / Grok / custom)',
     files: ['src/shared/agents/config.ts'],

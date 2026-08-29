@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add the guided Nextcloud All-in-One hosting profile with an official digest-pinned image,
+  bounded capacity and port settings, private-first binding, explicit Docker socket authority
+  disclosure, and a fixed no-privileged launch plan. Runtime execution and release evidence remain
+  unverified in the ultra-speed lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

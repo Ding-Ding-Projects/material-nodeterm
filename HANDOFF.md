@@ -1,5 +1,31 @@
 # Handoff
 
+## 2026-08-26, Nextcloud AIO hosting profile, issue #52
+
+The `feat/program-41` Gerk Tong Hui contains the Nextcloud AIO lane. `src/shared/nextcloud-aio.ts`
+defines the portable profile schema, official digest-pinned image, bounded capacity and port
+validation, conservative capacity verdicts, setup and readiness URL helpers, and the fixed Docker
+argv plan. The plan mounts the Docker socket read-only while disclosing that Docker API authority
+is still host-level, drops capabilities, sets `no-new-privileges`, uses the ordinary bridge network,
+and never enables privileged mode or accepts arbitrary Compose, commands, entrypoints, images,
+mounts, environment maps, or credentials.
+
+`nextcloudaio` is registered as a service node and rendered by
+`src/renderer/components/nextcloud/NextcloudAioPanel.tsx`. The panel provides guided host binding,
+capacity and port controls, fixed-plan review, initial setup and readiness copy, and separate
+deploy, update, backup, and restore lifecycle controls with explicit unbound and invalid-profile
+reasons. Endpoint and runtime identity remain machine-local; profile intent is preserved by the
+schema 3 projection in `src/core/portable-canvas-projection.ts`.
+
+The categorized article is `docs/features/integrations/nextcloud-aio.md`, and the integration
+index, `ROADMAP.md`, and `CHANGELOG.md` record the lane. The offline docs bundle and the hand-written
+app inventory still need regeneration or a dedicated row in the integration completion pass.
+
+This ultra-speed lane intentionally did not run tests, type checking, linting, security checks,
+builds, packaging, installer execution, runtime interaction checks, or UI captures. No commit or
+dew was made here. A parent lane must review the diff, regenerate the docs bundle, add focused
+verification evidence, integrate the work, and update issue #52 only after those facts are true.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

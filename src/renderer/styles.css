@@ -13168,9 +13168,21 @@ body.focus-mode .dock:hover {
   line-height: 1.45;
 }
 
-.service-node :is(button, input):focus-visible {
+.service-node :is(button, input, select):focus-visible {
   outline: 2px solid var(--md-primary, #0a84ff);
   outline-offset: 2px;
+}
+
+.nextcloud-aio-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .nextcloud-aio-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* The rainbow swatch sits in the preset row, so it matches those buttons rather than inventing its

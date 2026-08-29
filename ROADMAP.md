@@ -173,7 +173,9 @@ intentionally unchecked because this task publishes the plan only.
 ### Hosting and Cloudflare
 
 - [ ] Add GitLab Server CE and EE hosting profiles with backup and restore.
-- [ ] Add Nextcloud AIO and managed no-socket hosting profiles.
+- [ ] Add Nextcloud AIO and managed no-socket hosting profiles. AIO's guided portable profile and
+      fixed no-privileged launch plan are present in `src/shared/nextcloud-aio.ts`; runtime,
+      packaged-app, and capture Chuts remain open.
 - [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.

@@ -7,6 +7,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | feature | status |
 | --- | --- |
 | [Service nodes](service-nodes.md) | implemented as canvas objects (Minecraft, Docker host, Proxmox, GitLab, Home Assistant, FreePBX); none of them dial anything yet |
+| [Nextcloud All-in-One hosting](nextcloud-aio.md) | guided official-image profile with pinned digest, explicit Docker socket authority disclosure, private binding, and no privileged mode |
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |
 

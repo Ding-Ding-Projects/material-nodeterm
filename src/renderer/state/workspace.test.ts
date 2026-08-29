@@ -1103,6 +1103,7 @@ describe('duplicateNode across every node kind', () => {
     gitlab: 'gitlab',
     homeassistant: 'homeassistant',
     freepbx: 'freepbx',
+    nextcloudaio: 'nextcloudaio',
     // A GUI for authoring an NSIS installer script for another project (never this app's own
     // installer, which stays Squirrel.Windows).
     nsis: 'nsis'
