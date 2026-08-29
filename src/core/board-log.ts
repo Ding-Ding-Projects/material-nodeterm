@@ -5,7 +5,6 @@ import { watch, type FSWatcher } from 'fs'
 import { renameAtomicSync } from './fs-atomic'
 import { BOARD_LOG_TEXT_MAX, type BoardLogEntry } from '@shared/types'
 import { BOARD_LOG_ATTACHMENT_LIMITS, validateBoardLogAttachmentUpload, validBoardLogAttachment, type BoardLogAttachment, type BoardLogAttachmentSession, type BoardLogAttachmentUpload } from '@shared/board-log-attachments'
-import { renameAtomicSync } from './fs-atomic'
 
 // Re-exported so callers of this module (and its tests) can reach the cap alongside buildLine.
 export { BOARD_LOG_TEXT_MAX }
