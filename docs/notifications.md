@@ -91,7 +91,7 @@ The mobile companion remains a separate surface with its own notification sound 
 ## API
 
 ```ts
-import { notify } from '../state/notifications'
+import { notify } from '../lib/adhdNotify'
 
 notify({
   kind: 'success',
@@ -117,7 +117,9 @@ it has auto-dismissed from the corner.
 
 A real list, not a decorative log:
 
-- **Search** — a plain-text field over title + body.
+- **Search** — a plain-text field over title + body with an adjacent anchored regex builder for
+  deliberate regex matching. Invalid or unsafe patterns stay visible with an inline explanation
+  and do not hide the list.
 - **Filters** — All / Unread / one per kind, as toggle chips.
 - **Multi-select** — a checkbox per row, individually or via the honestly-scoped
   **"Select all (N)"** button (it always names exactly what it selects: everything currently
@@ -132,6 +134,26 @@ A real list, not a decorative log:
 - **Export** — click for Markdown, Shift-click for JSON. Exports the current selection when one
   exists, otherwise the notifications matching the active search + filter — **never** the whole
   unfiltered history, per the "bulk export honours the active filter" requirement.
+
+## Linked-agent inbox notifications
+
+An authenticated agent session may ask another context-linked agent to check its configured
+coordination inbox with the canvas-control command `notify --node <id>`. This signal is separate
+from ordinary `send` and `reply`: it carries no subject, transcript excerpt, or caller-supplied
+text. The application submits one fixed prompt, and the main-process delivery route retains its
+existing project consent, ownership, flow-budget, and idle-queue checks.
+
+The route is available only when **Settings → Notifications → Allow linked agents to signal inbox
+updates** is enabled. Successful delivery marks the target node unread and adds one actionable
+notification to the centre. Duplicate events for the same source-target pair are coalesced for ten
+seconds. The record stores only stable project and node identifiers plus fixed local copy, so
+**Open agent** can return to the target after reload without serializing callbacks or transcript
+content.
+
+Notification history is stored locally under `nodeterm.notifications.v1`, capped at 300 entries.
+Malformed records are ignored, runtime action callbacks are excluded from persistence and export,
+and clearing the history removes the local records. This remains a local desktop convenience, not
+an authentication factor or a replacement for the target agent's own inbox decision.
 
 ## Accessibility
 

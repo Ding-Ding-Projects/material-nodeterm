@@ -1111,6 +1111,12 @@ const ropeEdge = (id: string, source: string, target: string, color: string): Ed
   markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14 }
 })
 
+/** The only text the linked-agent notification route may submit. Keeping this in the application,
+ * rather than accepting text from a control request, prevents a sender from turning a notification
+ * into prompt injection for the target session. */
+const LINKED_AGENT_INBOX_PROMPT =
+  '[nodeterm] A linked agent updated shared coordination context. Check your configured inbox before continuing.'
+
 /** A React Flow edge reduced to what is PERSISTED (and what goes on the wire). The decoration —
  *  color, markers, handles — is re-derived on every client from its own nodes, so it never travels. */
 const toBridgeLink = (e: Edge): BridgeLink => ({ id: e.id, source: e.source, target: e.target })
@@ -1308,6 +1314,7 @@ export function Canvas() {
   const [controlEdges, setControlEdges] = useState<Edge[]>([])
   const controlEdgesRef = useRef<Edge[]>([])
   controlEdgesRef.current = controlEdges
+  const agentNotifyInFlightRef = useRef(new Set<string>())
   // Foreign projections are derived viewers. Their drag positions are session-local and never
   // enter either project's serialized node list.
   const [xprojPositions, setXprojPositions] = useState<Record<string, { x: number; y: number }>>({})
@@ -13142,6 +13149,10 @@ export function Canvas() {
           reply({ ok: false, error: 'notify does not accept --text' })
           return
         }
+        if (verb === 'notify' && !useSettings.getState().settings.agentInboxNotifications) {
+          reply({ ok: false, error: 'notify: linked-agent inbox notifications are disabled in Settings' })
+          return
+        }
         if (verb !== 'notify' && !args.text) {
           reply({ ok: false, error: `${verb} requires --text` })
           return
@@ -13169,7 +13180,7 @@ export function Canvas() {
               verb,
               sourceNodeId,
               targetNodeId: targetId,
-              body: args.text ?? ''
+              body: verb === 'notify' ? LINKED_AGENT_INBOX_PROMPT : args.text ?? ''
             })
             return 'done' as const
           })()
@@ -13180,6 +13191,20 @@ export function Canvas() {
                 'targetBusy: the target is mid-restart or mid-wake. Retryable — wait, then try once more.'
             })
             return
+          }
+          const deliveryResult = delivered as { ok: boolean; message?: string; result?: unknown; error?: string } | null
+          if (verb === 'notify' && deliveryResult?.ok) {
+            const projectId = useProjects.getState().projects.find((project) =>
+              project.nodes.some((node) => node.id === targetId)
+            )?.id ?? useProjects.getState().activeProjectId ?? ''
+            useAgentStatus.getState().markUnread(targetId)
+            notify({
+              kind: 'info',
+              title: 'Linked agent inbox updated',
+              body: 'A linked agent was asked to check its configured coordination inbox.',
+              target: { nodeId: targetId, ...(projectId ? { projectId } : {}) },
+              dedupeKey: `linked-agent-inbox:${projectId}:${sourceNodeId}:${targetId}`
+            })
           }
           reply(delivered ?? { ok: false, error: 'delivery produced no reply' })
         }
@@ -13204,7 +13229,17 @@ export function Canvas() {
           })
           return
         }
-        await deliverAgentMessage()
+        const notifyKey = `${sourceNodeId}:${targetId}`
+        if (verb === 'notify' && agentNotifyInFlightRef.current.has(notifyKey)) {
+          reply({ ok: false, error: 'notify: an inbox notification is already being delivered' })
+          return
+        }
+        if (verb === 'notify') agentNotifyInFlightRef.current.add(notifyKey)
+        try {
+          await deliverAgentMessage()
+        } finally {
+          if (verb === 'notify') agentNotifyInFlightRef.current.delete(notifyKey)
+        }
         return
       }
 
@@ -17427,6 +17462,22 @@ export function Canvas() {
         secondaryLabel: 'Open in Settings'
       },
       {
+        id: 'setting-agent-inbox-notifications',
+        label: 'Allow linked agents to signal inbox updates',
+        hint: 'authenticated context link fixed prompt rate limited notification',
+        section: 'Settings',
+        icon: <IconGear />,
+        control: {
+          type: 'toggle',
+          checked: s.agentInboxNotifications,
+          ariaLabel: 'Allow linked agents to signal inbox updates',
+          onToggle: (v) => update({ agentInboxNotifications: v })
+        },
+        run: () => update({ agentInboxNotifications: !s.agentInboxNotifications }),
+        onSecondary: () => openSettingsTo('notifications', 'Allow linked agents'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
         id: 'setting-open-markdown-preview',
         label: 'Open Markdown files in preview',
         hint: 'md markdown mdown mkd rendered editor default',
@@ -18943,6 +18994,7 @@ export function Canvas() {
       {notifCenterOpen && (
         <NotificationCenter
           onClose={() => setNotifCenterOpen(false)}
+          onGoToNode={travelToNode}
           onRequestBulkDelete={(ids, anchorEl) => {
             const rect = anchorEl.getBoundingClientRect()
             openDestructiveGate({

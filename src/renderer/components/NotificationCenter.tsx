@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNotifications, type AppNotification, type NotificationKind } from '../state/notifications'
 import { Checkbox } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { saveBlobDownload } from '../lib/exportSave'
+import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 
 type FilterKind = 'all' | 'unread' | NotificationKind
 
@@ -76,6 +78,8 @@ function downloadText(filename: string, text: string, mime: string): void {
 
 export interface NotificationCenterProps {
   onClose: () => void
+  /** Open the stable destination carried by an actionable notification. */
+  onGoToNode?: (nodeId: string) => void
   /** Bulk-delete is destructive (permanently removes history) and goes through the app's
    *  super-confirmation gate, anchored beside the button that requested it. */
   onRequestBulkDelete: (ids: string[], anchorEl: HTMLElement) => void
@@ -87,6 +91,7 @@ export interface NotificationCenterProps {
  */
 export function NotificationCenter({
   onClose,
+  onGoToNode,
   onRequestBulkDelete
 }: NotificationCenterProps): React.JSX.Element {
   const vocab = useVocabularyMapper()
@@ -96,13 +101,30 @@ export function NotificationCenter({
   const restore = useNotifications((s) => s.restore)
   const markAllRead = useNotifications((s) => s.markAllRead)
 
-  const [query, setQuery] = useState('')
+  const search = useRegexSearchField()
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [filter, setFilter] = useState<FilterKind>('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    searchInputRef.current?.focus()
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
   const filtered = useMemo(
-    () => items.filter((n) => matchesFilter(n, filter) && matchesQuery(n, query, vocab)),
-    [items, filter, query, vocab]
+    () => items.filter((n) => {
+      if (!matchesFilter(n, filter)) return false
+      const copy = mapNotificationCopy(n, vocab)
+      return search.test(`${copy.title} ${copy.body ?? ''}`)
+    }),
+    [items, filter, search, vocab]
   )
   const filteredIds = useMemo(() => filtered.map((n) => n.id), [filtered])
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.has(id))
@@ -175,13 +197,19 @@ export function NotificationCenter({
           </button>
         </div>
         <div className="notif-center__search">
-          <input
-            type="search"
-            placeholder="Search notifications…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label={vocab('Search notifications')}
-          />
+          <div className="md3-history-search">
+            <input
+              ref={searchInputRef}
+              type="search"
+              placeholder={search.mode === 'regex' ? 'Search notifications (regex)…' : 'Search notifications…'}
+              value={search.value}
+              onChange={(e) => search.setValue(e.target.value)}
+              aria-label={vocab('Search notifications')}
+              spellCheck={false}
+            />
+            <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label="Regex — notification search" zIndex={93} />
+          </div>
+          {search.error && <div role="alert">{search.error}</div>}
           <div className="notif-center__filters" role="group" aria-label="Filter by kind">
             {FILTERS.map((f) => (
               <button
@@ -232,6 +260,15 @@ export function NotificationCenter({
               className={`notif-center__row${n.read ? '' : ' unread'}${n.deliveredSilently ? ' quieted' : ''}`}
               role="option"
               aria-selected={selected.has(n.id)}
+              tabIndex={0}
+              aria-label={`${copy.title}${n.read ? '' : ', unread'}${n.target ? ', action available' : ''}`}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return
+                if (event.key === ' ' || event.key === 'Enter') {
+                  event.preventDefault()
+                  toggleOne(n.id)
+                }
+              }}
             >
               <Checkbox
                 checked={selected.has(n.id)}
@@ -248,6 +285,18 @@ export function NotificationCenter({
                   {n.deliveredSilently && <span className="notif-center__row-quieted">quieted</span>}
                 </div>
               </div>
+              {n.target && onGoToNode && (
+                <button
+                  className="notif-center__row-dismiss"
+                  onClick={() => {
+                    markAllRead([n.id])
+                    onGoToNode(n.target!.nodeId)
+                    onClose()
+                  }}
+                >
+                  Open agent
+                </button>
+              )}
               {n.dismissedAt == null ? (
                 <button className="notif-center__row-dismiss" onClick={() => dismiss(n.id)}>
                   Dismiss

@@ -45,8 +45,10 @@ independently, so matching ids in the two lists cannot cross-colour nodes. nodet
 or stores your credentials itself; the agent CLI's own login flow does, scoped to that directory.
 
 **Context links** let two agent-capable nodes read each other's conversation transcript on
-demand by drawing a connection between them on the canvas — a pull, not a push: nothing is
-sent automatically, an agent has to ask for the linked context when it wants it.
+demand by drawing a connection between them on the canvas. Reading remains pull-based, while an
+authenticated linked agent may send the fixed `notify --node <id>` inbox-check signal when shared
+coordination context changes. The signal contains no transcript excerpt or caller-supplied text,
+and is rate-limited per source-target pair.
 
 **Restart-safe display status** keeps a lifecycle-bound last-known workflow state for each node.
 The snapshot is display-only: it may restore a useful `RUNNING`, `NEEDS YOU`, or `DONE` label after
@@ -74,6 +76,8 @@ for the explicit-choice, failure-recovery, project-ownership, and relay boundari
 - **Settings → Agents** — default permission mode, agent hibernation (auto-exiting an idle,
   fully offscreen agent's CLI while keeping its shell and history, to save memory on very
   long-lived canvases), and the custom-agent list (command, label, color).
+- **Settings → Notifications** — enable linked-agent inbox signals. The setting is off by default,
+  and arbitrary terminal writes remain separately confirmation-gated.
 - Per-project — an override permission mode, so a project that genuinely needs broader
   permissions doesn't require changing your global default.
 - Per-node: which agent CLI launches, its selected gateway model when supported, which managed
@@ -91,6 +95,9 @@ for the explicit-choice, failure-recovery, project-ownership, and relay boundari
 - **A hook event never arrives** (the agent crashed, or hooks were never installed for it): the
   node's status simply never updates rather than being guessed. An unknown state is never
   treated as "finished" — that distinction matters for dependent nodes waiting on this one.
+- **A linked notification is refused** when the source is not authenticated, the target is not a
+  context-link-capable agent, the persisted bridge edge is absent, or the existing delivery route
+  refuses the request. These are explicit refusals, not silent delivery claims.
 - **An account colour is missing or malformed**: the node falls back to the builtin agent colour;
   it never uses a colour from the other provider's account list. A phone-registered node gets its
   colour from the host's account settings, not from a phone-supplied display value.
@@ -114,6 +121,9 @@ for the explicit-choice, failure-recovery, project-ownership, and relay boundari
 - Canvas control (an agent creating or managing nodes from inside its own session) is
   explicitly opt-in per environment and scoped to the session that requested it; an agent
   cannot control a canvas it wasn't given that capability in.
+- The inbox signal reuses the authenticated main-process delivery path and records only stable
+  notification targets. It never uses display-only ropes, mutable titles, or transcript content as
+  authorization or notification payload.
 
 ## Verification
 
@@ -131,6 +141,9 @@ for the explicit-choice, failure-recovery, project-ownership, and relay boundari
 - Connect two agent-capable nodes with a context link and confirm one can pull the other's
   transcript on request, and that a plain terminal or an agent outside the capability list is
   not offered the option.
+- Enable linked-agent inbox signals, invoke `notify --node <id>` from one linked agent, and confirm
+  the target becomes unread, the notification centre offers **Open agent**, and duplicate signals
+  coalesce. Reload and confirm the actionable record contains no transcript content.
 - Restart with a previously active node and confirm its last-known state is labelled as display
   continuity, while a fresh hook event replaces it and recovered state cannot trigger notification,
   authorization, or hibernation.
