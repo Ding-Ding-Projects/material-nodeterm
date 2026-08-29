@@ -20,6 +20,7 @@ the deep architecture reference these articles are distilled from.
 | [Kanban](./kanban/README.md) | The Trello-style board that mirrors a project's live sessions as cards. |
 | [Appearance](./appearance/README.md) | Design tokens, themes, and the measured state of the Material Design 3 migration. |
 | [Remote & SSH](./remote/README.md) | Opening a project on a remote host, and the self-hosted browser edition. |
+| [Cloudflare tunnels](./remote/cloudflare-tunnels.md) | Control-plane inventory, typed route previews, unmanaged-route preservation, and DNS ownership proof without a connector runtime. |
 | [Speech](./speech/README.md) | On-device dictation into any terminal. |
 | [Packaging](./packaging/README.md) | How builds are produced, distributed, and kept up to date. |
 | [Global and project settings](./global-and-project-settings.md) | Durable app defaults and complete sparse per-project overlays. |

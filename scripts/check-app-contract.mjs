@@ -1121,6 +1121,29 @@ const FEATURES = [
     docs: ['docs/ollama-manager.md'],
   },
   {
+    id: 'cloudflare-tunnel-manager',
+    label: 'Cloudflare tunnel inventory and DNS adoption manager',
+    files: [
+      'src/shared/cloudflare.ts',
+      'src/core/cloudflare/client.ts',
+      'src/core/cloudflare/credential-store.ts',
+      'src/core/cloudflare/service.ts',
+      'src/core/cloudflare/register-ipc.ts',
+      'src/renderer/components/settings/sections/CloudflareSection.tsx'
+    ],
+    contentChecks: [
+      ['src/core/cloudflare/service.ts', 'preserveUnmanagedRoutes'],
+      ['src/core/cloudflare/service.ts', 'previewDnsAdoption'],
+      ['src/core/cloudflare/service.ts', "e.code === 'rate-limited'"],
+      ['src/renderer/components/settings/sections/CloudflareSection.tsx', 'AnchoredRegexBuilder'],
+      ['src/shared/cloudflare.ts', 'tokenPresent: boolean'],
+      ['src/shared/cloudflare.ts', "connectorRuntime: 'not-included'"]
+    ],
+    wired: { file: 'src/renderer/components/settings/SettingsPage.tsx', symbol: 'CloudflareSection' },
+    settingsSection: 'cloudflare',
+    docs: ['docs/features/remote/cloudflare-tunnels.md']
+  },
+  {
     id: 'minecraft-server-manager',
     label: 'Local Minecraft server create-and-manage',
     files: [

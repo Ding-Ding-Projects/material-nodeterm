@@ -13046,6 +13046,7 @@ export function Canvas() {
       { id: 'open-web', label: 'Open web view…', icon: <IconRemote />, run: () => addWebView() },
       { id: 'open-converter', label: 'File converter', icon: <IconConvert />, run: () => setConverterOpen(true) },
       { id: 'open-ollama', label: 'Ollama manager', icon: <IconOllama />, run: () => setOllamaOpen(true) },
+      { id: 'open-cloudflare-tunnels', label: 'Cloudflare tunnel manager', icon: <IconRemote />, run: () => { setSettingsOpen(true); openSettingsTo('cloudflare') } },
       { id: 'open-browser', label: 'New browser', icon: <IconRemote />, run: () => addBrowser() },
       ...useSshServers.getState().servers.map(
         (srv): Command => ({
@@ -13860,6 +13861,7 @@ export function Canvas() {
                 items: [
                   { label: 'File converter', onClick: () => setConverterOpen(true) },
                   { label: 'Ollama manager', onClick: () => setOllamaOpen(true) },
+                  { label: 'Cloudflare tunnel manager', onClick: () => { setSettingsOpen(true); openSettingsTo('cloudflare') } },
                   {
                     label: 'Password manager',
                     icon: <IconLock />,

@@ -9,6 +9,7 @@ import { registerFsHandlers } from '../../core/fs-handlers'
 import { registerConverterIpc } from '../../core/converter/register-ipc'
 import { registerOllamaIpc } from '../../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
+import { registerCloudflareIpc } from '../../core/cloudflare/register-ipc'
 import type { MinecraftServerManager } from '../../core/minecraft/server-manager'
 import { registerVsCodeHandlers } from '../../core/vscode-handlers'
 import { LocalHistoryStore } from '../../core/local-history'
@@ -70,6 +71,7 @@ export function registerCoreHandlers(
   // docs/ollama-manager.md and docs/minecraft-server-manager.md.
   registerConverterIpc(platform)
   registerOllamaIpc(platform)
+  registerCloudflareIpc(platform)
   const { manager: minecraftServers } = registerMinecraftIpc(platform)
   // "Open in Visual Studio Code" + local settings history — same registrars the desktop shell
   // uses (src/main/index.ts), over the generic platform.handle seam, so the browser gets the

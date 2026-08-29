@@ -178,6 +178,12 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
 - [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.
+- [ ] **Issue #59, Cloudflare tunnel control plane** — inventory accounts, zones, tunnels,
+      connections, routes, and DNS records; preserve unmanaged routes; block hostname conflicts;
+      require DNS ownership proof before adoption; store only token presence in the UI and bind
+      selections to this computer. Implemented in the current lane, but intentionally unverified
+      because the ultra-speed boundary forbids tests, builds, and captures. Connector runtime is
+      explicitly deferred to the later tunnel-runtime lane.
 
 ### Clean-room features and upstream parity
 

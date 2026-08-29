@@ -42,6 +42,7 @@ import { LocalHistorySection } from './sections/LocalHistorySection'
 import { ToyLocksSection } from './sections/ToyLocksSection'
 import { AuthenticatorSection } from './sections/AuthenticatorSection'
 import { SupportTicketsSection } from './sections/SupportTicketsSection'
+import { CloudflareSection } from './sections/CloudflareSection'
 import { useSchoolMode } from '../../state/schoolMode'
 import { schoolModeAllowsOptionalFeatures } from '../../lib/schoolModePolicy'
 import { useSettings } from '../../state/settings'
@@ -211,6 +212,7 @@ export function SettingsPage({
             <ToyLocksSection isActive={active === 'toylocks'} />
             <AuthenticatorSection isActive={active === 'authenticator'} />
             <SupportTicketsSection isActive={active === 'support'} />
+            <CloudflareSection isActive={active === 'cloudflare'} />
           </div>
         </main>
       </SettingsSearchContext.Provider>

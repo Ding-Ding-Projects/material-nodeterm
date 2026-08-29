@@ -85,6 +85,7 @@ export const CATALOG: Catalog = {
   'settings.section.accounts': { en: flat('Accounts'), yue: flat('帳戶') },
   'settings.section.language': { en: flat('Language'), yue: flat('語言') },
   'settings.section.privacy': { en: flat('Privacy'), yue: flat('私隱') },
+  'settings.section.cloudflare': { en: flat('Cloudflare tunnels'), yue: flat('Cloudflare 隧道') },
 
   // ---------------------------------------------------------------------------------------
   // Language settings section — this feature's own copy. Playful escalation across levels,

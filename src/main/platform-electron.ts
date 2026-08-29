@@ -28,6 +28,16 @@ const RELAY_LOCAL_ONLY_METHODS = new Set<string>([
   IPC.ptyRecycleConfirmed,
   IPC.ptyExecuteLaunchIntent,
   IPC.workspaceSave,
+  IPC.cloudflareStatus,
+  IPC.cloudflareRefresh,
+  IPC.cloudflareSaveToken,
+  IPC.cloudflareClearToken,
+  IPC.cloudflareBind,
+  IPC.cloudflareUnbind,
+  IPC.cloudflarePreviewConfiguration,
+  IPC.cloudflareApplyConfiguration,
+  IPC.cloudflarePreviewDnsAdoption,
+  IPC.cloudflareAdoptDnsRecord,
   // Host-security control plane (registered on raw ipcMain, never on this CorePlatform table, so
   // dispatch's handler lookup already misses them) — listed here too as defense in depth and as
   // the explicit, reviewable statement that a relay peer must never revoke anyone or enumerate who

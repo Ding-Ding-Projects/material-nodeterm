@@ -3796,6 +3796,8 @@ export interface NodeTerminalApi {
   converter: import('./converter').ConverterApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Cloudflare tunnel control-plane manager. It has no connector runtime. */
+  cloudflare: import('./cloudflare').CloudflareApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
   ssh: SshApi

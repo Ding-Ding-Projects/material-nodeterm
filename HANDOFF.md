@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-08-26, Cloudflare tunnel control-plane manager, issue #59
+
+Implemented the Cloudflare control-plane lane in `src/shared/cloudflare.ts`,
+`src/core/cloudflare/`, `src/preload/index.ts`, `src/renderer/bridge/ws-bridge.ts`,
+`src/renderer/components/settings/sections/CloudflareSection.tsx`, and the Settings navigation.
+The manager inventories accounts, zones, tunnels, connections, routes, and DNS records. It keeps
+token handling presence-only at the renderer boundary, classifies unauthorized, partial-permission,
+rate-limited, unreachable, and ready states, and binds selections to this computer in local
+application data.
+
+Configuration and DNS writes require typed, reviewable previews. Unmanaged tunnel routes are
+preserved, duplicate and conflicting hostnames block configuration changes, and DNS adoption
+requires an existing CNAME pointing at a Cloudflare tunnel hostname plus a zone ownership proof.
+Adoption records the relationship locally without replacing or deleting an unmanaged DNS record.
+No Cloudflare connector process is launched or supervised by this lane.
+
+Added the categorized article `docs/features/remote/cloudflare-tunnels.md`, the remote feature
+index entry, the offline documentation bundle entry, the Pages documentation page,
+`settings.section.cloudflare` localization, the canonical feature-inventory row, and the roadmap
+entry. This lane did not run tests, type checking, linting, security checks, builds, packaging,
+installer execution, runtime interaction, accessibility review, or captures. The generated docs
+bundle was not regenerated because the checkout has no installed `esbuild`; the attempted
+`node scripts/build-docs-bundle.mjs` command stopped with `ERR_MODULE_NOT_FOUND: esbuild` before
+writing output. No commit or dew was made by this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

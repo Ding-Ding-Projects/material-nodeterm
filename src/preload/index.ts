@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { CloudflareApi } from '../shared/cloudflare'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -923,6 +924,18 @@ const api: NodeTerminalApi = {
     chatSend: (id, text) => ipcRenderer.invoke(IPC.ollamaChatSend, id, text),
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
+  },
+  cloudflare: {
+    status: () => ipcRenderer.invoke(IPC.cloudflareStatus) as ReturnType<CloudflareApi['status']>,
+    saveToken: (token: string) => ipcRenderer.invoke(IPC.cloudflareSaveToken, token),
+    clearToken: () => ipcRenderer.invoke(IPC.cloudflareClearToken),
+    bind: (input) => ipcRenderer.invoke(IPC.cloudflareBind, input),
+    unbind: () => ipcRenderer.invoke(IPC.cloudflareUnbind),
+    refresh: () => ipcRenderer.invoke(IPC.cloudflareRefresh),
+    previewConfiguration: (input) => ipcRenderer.invoke(IPC.cloudflarePreviewConfiguration, input),
+    applyConfiguration: (previewId: string) => ipcRenderer.invoke(IPC.cloudflareApplyConfiguration, previewId),
+    previewDnsAdoption: (input) => ipcRenderer.invoke(IPC.cloudflarePreviewDnsAdoption, input),
+    adoptDnsRecord: (previewId: string) => ipcRenderer.invoke(IPC.cloudflareAdoptDnsRecord, previewId)
   },
   minecraft: {
     versions: () => ipcRenderer.invoke(IPC.minecraftVersions),

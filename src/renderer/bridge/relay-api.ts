@@ -205,6 +205,9 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // host the same way `fs`/`git` are routed above.
     converter: stub.converter,
     ollama: stub.ollama,
+    // Cloudflare credentials and account bindings are machine-local control-plane state. A relay
+    // tab must never fall through to the viewer's local credential or API endpoint.
+    cloudflare: stub.cloudflare,
     // Same reasoning as converter/ollama immediately above: creating and running a Minecraft
     // server is ONE machine's filesystem/java/process table, and there is no remote-routed core
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG

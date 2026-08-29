@@ -570,6 +570,18 @@ export function buildStubApi(): Omit<
       chatStop: U('ollama.chatStop'),
       onChatStream: noopUnsub
     },
+    cloudflare: {
+      status: U('cloudflare.status'),
+      saveToken: U('cloudflare.saveToken'),
+      clearToken: U('cloudflare.clearToken'),
+      bind: U('cloudflare.bind'),
+      unbind: U('cloudflare.unbind'),
+      refresh: U('cloudflare.refresh'),
+      previewConfiguration: U('cloudflare.previewConfiguration'),
+      applyConfiguration: U('cloudflare.applyConfiguration'),
+      previewDnsAdoption: U('cloudflare.previewDnsAdoption'),
+      adoptDnsRecord: U('cloudflare.adoptDnsRecord')
+    },
     minecraft: {
       versions: U('minecraft.versions'),
       status: U('minecraft.status'),

@@ -44,6 +44,7 @@ import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
+import { registerCloudflareIpc } from '../core/cloudflare/register-ipc'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
@@ -1468,6 +1469,7 @@ app.whenReady().then(async () => {
   // same functions.
   registerConverterIpc(corePlatform)
   registerOllamaIpc(corePlatform)
+  registerCloudflareIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)

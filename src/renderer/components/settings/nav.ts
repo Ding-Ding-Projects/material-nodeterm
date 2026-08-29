@@ -37,6 +37,7 @@ export type SettingsSectionId =
   | 'toylocks'
   | 'authenticator'
   | 'support'
+  | 'cloudflare'
 
 export interface SettingsSectionRef {
   id: SettingsSectionId
@@ -102,7 +103,8 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'phone', title: 'Phone' },
       { id: 'remote', title: 'Docker host' },
       { id: 'team-access', title: 'Team seats' },
-      { id: 'ssh', title: 'Remote (SSH)' }
+      { id: 'ssh', title: 'Remote (SSH)' },
+      { id: 'cloudflare', title: 'Cloudflare tunnels' }
     ]
   },
   {

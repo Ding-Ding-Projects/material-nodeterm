@@ -223,6 +223,11 @@ Identical on desktop and in the browser.
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See
   [`docs/ollama-manager.md`](./docs/ollama-manager.md).
+- **Cloudflare tunnel manager** — inspect accounts, zones, tunnels, connections, routes, and DNS
+  records with typed configuration previews, unmanaged-route preservation, hostname conflict
+  checks, and DNS ownership proof. Tokens are presence-only in the UI, bindings are machine-local,
+  and this lane does not run a connector runtime. See
+  [`docs/features/remote/cloudflare-tunnels.md`](./docs/features/remote/cloudflare-tunnels.md).
 - **Scheduled settings** — rules that automatically overlay appearance/customization settings
   for a date+time window ("dark theme after 22:00"), with an optional Home Assistant boolean
   source. See [`docs/scheduled-settings.md`](./docs/scheduled-settings.md).

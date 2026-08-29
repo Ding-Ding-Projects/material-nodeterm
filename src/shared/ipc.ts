@@ -658,5 +658,17 @@ export const IPC = {
   passwordManagerCredentialCode: 'password-manager:credential-code',
   /** Every credential in one manager as non-secret metadata. Closes the gap that left a
    *  credential from an earlier session visible only as a number. */
-  passwordManagerListCredentials: 'password-manager:list-credentials'
+  passwordManagerListCredentials: 'password-manager:list-credentials',
+  // Cloudflare control-plane tunnel manager. No channel starts a connector runtime; all writes
+  // require a typed preview and the service preserves unmanaged routes.
+  cloudflareStatus: 'cloudflare:status',
+  cloudflareRefresh: 'cloudflare:refresh',
+  cloudflareSaveToken: 'cloudflare:save-token',
+  cloudflareClearToken: 'cloudflare:clear-token',
+  cloudflareBind: 'cloudflare:bind',
+  cloudflareUnbind: 'cloudflare:unbind',
+  cloudflarePreviewConfiguration: 'cloudflare:preview-configuration',
+  cloudflareApplyConfiguration: 'cloudflare:apply-configuration',
+  cloudflarePreviewDnsAdoption: 'cloudflare:preview-dns-adoption',
+  cloudflareAdoptDnsRecord: 'cloudflare:adopt-dns-record'
 } as const

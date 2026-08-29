@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { CloudflareApi } from '../../shared/cloudflare'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,24 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+/** Cloudflare control-plane manager over the authenticated Server Edition socket. The server
+ * stores its credential locally and never exposes it to this renderer. */
+export function buildCloudflareApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudflare'> {
+  const cloudflare: CloudflareApi = {
+    status: () => client.request(IPC.cloudflareStatus) as ReturnType<CloudflareApi['status']>,
+    saveToken: (token) => client.request(IPC.cloudflareSaveToken, token) as ReturnType<CloudflareApi['saveToken']>,
+    clearToken: () => client.request(IPC.cloudflareClearToken) as ReturnType<CloudflareApi['clearToken']>,
+    bind: (input) => client.request(IPC.cloudflareBind, input) as ReturnType<CloudflareApi['bind']>,
+    unbind: () => client.request(IPC.cloudflareUnbind) as ReturnType<CloudflareApi['unbind']>,
+    refresh: () => client.request(IPC.cloudflareRefresh) as ReturnType<CloudflareApi['refresh']>,
+    previewConfiguration: (input) => client.request(IPC.cloudflarePreviewConfiguration, input) as ReturnType<CloudflareApi['previewConfiguration']>,
+    applyConfiguration: (previewId) => client.request(IPC.cloudflareApplyConfiguration, previewId) as ReturnType<CloudflareApi['applyConfiguration']>,
+    previewDnsAdoption: (input) => client.request(IPC.cloudflarePreviewDnsAdoption, input) as ReturnType<CloudflareApi['previewDnsAdoption']>,
+    adoptDnsRecord: (previewId) => client.request(IPC.cloudflareAdoptDnsRecord, previewId) as ReturnType<CloudflareApi['adoptDnsRecord']>
+  }
+  return { cloudflare }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1394,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildCloudflareApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

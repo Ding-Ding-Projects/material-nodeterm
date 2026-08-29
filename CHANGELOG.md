@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add the Cloudflare tunnel control-plane manager for account, zone, tunnel, connection, route,
+  and DNS inventory. Typed configuration previews preserve unmanaged routes and block hostname
+  conflicts; DNS adoption requires an existing CNAME ownership proof. Tokens are presence-only in
+  the UI and bindings remain machine-local. No connector runtime is included. This ultra-speed
+  lane did not run tests, type checks, lint, security checks, builds, packaging, runtime checks,
+  accessibility review, or captures.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.
