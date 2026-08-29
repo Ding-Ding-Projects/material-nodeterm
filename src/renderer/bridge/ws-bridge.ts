@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { NextcloudApi } from '../../shared/nextcloud'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,24 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+/** Managed no-socket Nextcloud lifecycle. The browser edition runs this on its own host through
+ * the authenticated core RPC, never against the viewer's machine. */
+export function buildNextcloudApi(client: RpcClient): Pick<NodeTerminalApi, 'nextcloud'> {
+  const nextcloud: NextcloudApi = {
+    status: (id) => client.request(IPC.nextcloudStatus, id) as ReturnType<NextcloudApi['status']>,
+    install: (input) => client.request(IPC.nextcloudInstall, input) as ReturnType<NextcloudApi['install']>,
+    update: (id, release) => client.request(IPC.nextcloudUpdate, id, release) as ReturnType<NextcloudApi['update']>,
+    listBackups: (id) => client.request(IPC.nextcloudBackupsList, id) as ReturnType<NextcloudApi['listBackups']>,
+    backup: (id) => client.request(IPC.nextcloudBackup, id) as ReturnType<NextcloudApi['backup']>,
+    restore: (id, backupId) => client.request(IPC.nextcloudRestore, id, backupId) as ReturnType<NextcloudApi['restore']>,
+    rollback: (id) => client.request(IPC.nextcloudRollback, id) as ReturnType<NextcloudApi['rollback']>,
+    requestTunnelHandoff: (id) => client.request(IPC.nextcloudTunnelHandoff, id) as ReturnType<NextcloudApi['requestTunnelHandoff']>,
+    remove: (id, deleteData) => client.request(IPC.nextcloudRemove, id, deleteData) as ReturnType<NextcloudApi['remove']>,
+    onEvent: (listener) => client.subscribe(IPC.nextcloudEvent, listener as Listener)
+  }
+  return { nextcloud }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1394,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildNextcloudApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

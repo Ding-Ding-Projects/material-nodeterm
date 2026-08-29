@@ -1140,6 +1140,26 @@ const FEATURES = [
     docs: ['docs/minecraft-server-manager.md'],
   },
   {
+    id: 'nextcloud-managed-no-socket',
+    label: 'Managed Nextcloud no-socket profile',
+    files: [
+      'src/shared/nextcloud.ts',
+      'src/core/nextcloud/manager.ts',
+      'src/core/nextcloud/register-ipc.ts',
+      'src/renderer/components/nextcloud/NextcloudManagedPanel.tsx',
+      'src/renderer/nodes/ServiceNode.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/nextcloud.ts', 'export const NEXTCLOUD_PROFILE_ID'],
+      ['src/shared/nextcloud.ts', 'dockerSocket: false'],
+      ['src/core/nextcloud/manager.ts', 'export class NextcloudManager'],
+      ['src/core/nextcloud/manager.ts', "'health-cmd'"],
+      ['src/renderer/components/nextcloud/NextcloudManagedPanel.tsx', 'export function NextcloudManagedPanel'],
+    ],
+    wired: { file: 'src/renderer/nodes/ServiceNode.tsx', symbol: 'NextcloudManagedPanel' },
+    docs: ['docs/features/hosting/nextcloud-managed-hosting.md'],
+  },
+  {
     id: 'adhd-modes',
     label: 'ADHD modes',
     docs: ['docs/adhd-modes.md'],

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a guided managed Nextcloud profile with fixed PostgreSQL, Redis, and web services, secret
+  files, private loopback binding, readiness sequencing, update, backup, restore, rollback, and
+  explicit tunnel-handoff eligibility. The profile does not accept arbitrary images, commands,
+  entrypoints, Compose documents, or environment editors. Tests, builds, packaging, runtime
+  interaction, and UI captures were intentionally not run in the ultra-speed implementation lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

@@ -8,6 +8,7 @@ import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
+import { NextcloudManagedPanel } from '../components/nextcloud/NextcloudManagedPanel'
 
 /**
  * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
@@ -47,7 +48,8 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   proxmox: 'https://proxmox.local:8006',
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
-  freepbx: 'https://pbx.local'
+  freepbx: 'https://pbx.local',
+  nextcloud: 'http://127.0.0.1:8180'
 }
 
 /**
@@ -226,8 +228,9 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
         </div>
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
+        {!collapsed && kind === 'nextcloud' && <NextcloudManagedPanel nodeId={id} />}
 
-        {!collapsed && kind !== 'minecraft' && (
+        {!collapsed && kind !== 'minecraft' && kind !== 'nextcloud' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">Address</span>

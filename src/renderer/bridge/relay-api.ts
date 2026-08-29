@@ -209,7 +209,10 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // server is ONE machine's filesystem/java/process table, and there is no remote-routed core
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG
     // machine (`...local` would run java on the VIEWER, not the host it joined).
-    minecraft: stub.minecraft
+    minecraft: stub.minecraft,
+    // Service provisioning is local to the owning shell. A relay guest must not mutate this
+    // viewer's machine or accidentally deploy against a third host.
+    nextcloud: stub.nextcloud
   } satisfies NodeTerminalApi
 
   return {

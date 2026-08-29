@@ -108,7 +108,7 @@ need a live agent session and a reachable host, so the harness skips them loudly
 Right-click to open a **terminal** or an **agent** node. Alongside them live **sticky notes**
 (link one to a terminal to feed it context on demand), **Monaco editors**, **diff views**, web and
 browser views, annotations, and a family of **service managers** — Minecraft, Docker host,
-Proxmox, GitLab, Home Assistant and FreePBX — each an ordinary node you drag, colour, group and
+Proxmox, GitLab, Home Assistant, FreePBX, and managed Nextcloud: each an ordinary node you drag, colour, group and
 persist like any other, because a managed service is something you arrange beside the terminals
 working on it, not a modal you visit.
 
@@ -223,6 +223,10 @@ Identical on desktop and in the browser.
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See
   [`docs/ollama-manager.md`](./docs/ollama-manager.md).
+- **Managed Nextcloud hosting**: a guided no-Docker-socket profile with fixed PostgreSQL, Redis,
+  and web services, secret files, private-first readiness, update, backup, restore, rollback, and
+  explicit later tunnel handoff. See
+  [`docs/features/hosting/nextcloud-managed-hosting.md`](./docs/features/hosting/nextcloud-managed-hosting.md).
 - **Scheduled settings** — rules that automatically overlay appearance/customization settings
   for a date+time window ("dark theme after 22:00"), with an optional Home Assistant boolean
   source. See [`docs/scheduled-settings.md`](./docs/scheduled-settings.md).

@@ -364,15 +364,17 @@ export type NodeKind =
   // What they deliberately do NOT persist is how to reach anything. A node's `data` is written into
   // `.nodeterm/project.json`, which is git-shared and travels to every machine that clones the
   // repository, so a host, a username, a container id or an executable path in there would be one
-  // person's machine leaking into everybody else's checkout. Only `serviceLabel` — a display name
-  // the user chose — is persisted here. The connection record is machine-local and belongs beside
-  // `localExec` on the index entry; see `IndexEntryV3` and `projectToFile`.
+  // person's machine leaking into everybody else's checkout. Only a display label and, for the
+  // managed Nextcloud profile, bounded non-secret service choices are persisted here. Connection
+  // records and runtime bindings are machine-local and belong beside `localExec` on the index
+  // entry; see `IndexEntryV3` and `projectToFile`.
   | 'minecraft'
   | 'dockerhost'
   | 'proxmox'
   | 'gitlab'
   | 'homeassistant'
   | 'freepbx'
+  | 'nextcloud'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -385,7 +387,8 @@ export const SERVICE_NODE_KINDS = [
   'proxmox',
   'gitlab',
   'homeassistant',
-  'freepbx'
+  'freepbx',
+  'nextcloud'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -514,6 +517,8 @@ export interface CanvasNodeState {
    * reasons. It never carries a secret; see `ServiceConnection` in shared/node-exec.ts.
    */
   serviceConnection?: ServiceConnection
+  /** nextcloud-only, git-shared safe managed profile choices. Secrets and host state stay local. */
+  nextcloudProfile?: import('./nextcloud').NextcloudManagedProfile
   /**
    * nsis-only, GIT-SHARED: the installer's description (app name, version, publisher, output
    * filename, install root, shortcut/uninstaller/compression choices). Nothing here names a
@@ -3798,6 +3803,8 @@ export interface NodeTerminalApi {
   ollama: import('./ollama').OllamaApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** Managed no-socket Nextcloud profile with fixed PostgreSQL, Redis, and web services. */
+  nextcloud: import('./nextcloud').NextcloudApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

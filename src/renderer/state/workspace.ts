@@ -31,6 +31,7 @@ import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
 // reflector.
 export { applyCanvasMutation } from '@shared/canvas-mutations'
 import { acceptNewInboundNode, sanitizeInboundNode } from '@shared/node-exec'
+import { DEFAULT_NEXTCLOUD_PROFILE, normalizeNextcloudProfile } from '@shared/nextcloud'
 
 /** Preset color palette — macOS system colors (dark mode). */
 export const NODE_COLORS = [
@@ -172,6 +173,8 @@ export interface NodeData {
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  /** nextcloud-only, git-shared profile selections. Runtime bindings stay machine-local. */
+  nextcloudProfile?: import('@shared/nextcloud').NextcloudManagedProfile
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
   nsisSpec?: NsisSpec
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
@@ -989,7 +992,8 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   proxmox: 'Proxmox',
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
-  freepbx: 'FreePBX'
+  freepbx: 'FreePBX',
+  nextcloud: 'Nextcloud managed hosting'
 }
 
 /**
@@ -1024,7 +1028,8 @@ export function createServiceNode(
       title: SERVICE_NODE_LABELS[kind],
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
-      serviceLabel: ''
+      serviceLabel: '',
+      ...(kind === 'nextcloud' ? { nextcloudProfile: DEFAULT_NEXTCLOUD_PROFILE } : {})
     }
   }
 }
@@ -1466,6 +1471,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
+  nextcloud: true,
   nsis: true
 }
 
@@ -1505,6 +1511,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
+  nextcloud: SERVICE_CONSOLE_SIZE,
   nsis: NSIS_SIZE
 }
 
@@ -1916,6 +1923,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         text: n.text,
         serviceLabel: n.serviceLabel,
         serviceConnection: n.serviceConnection,
+        nextcloudProfile: n.nextcloudProfile ? normalizeNextcloudProfile(n.nextcloudProfile) : undefined,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
         filePath: n.filePath,
@@ -1991,6 +1999,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
         serviceConnection: n.data.serviceConnection,
+        nextcloudProfile: n.data.nextcloudProfile ? normalizeNextcloudProfile(n.data.nextcloudProfile) : undefined,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
         filePath: n.data.filePath,

@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-08-26, issue #53 managed Nextcloud profile
+
+Implemented a guided no-Docker-socket Nextcloud profile on `feat/program-42`. The profile uses
+fixed official Nextcloud, PostgreSQL, and Redis images, three labeled volumes, a private network,
+owner-only secret files, bounded readiness probes, and a loopback-only web bind. Direct lifecycle
+actions cover install, update with a pre-update backup, database and volume backup, restore,
+rollback, explicit tunnel-handoff eligibility after health, and destructive data removal behind the
+existing confirmation flow. No arbitrary image, command, entrypoint, Compose document, or
+environment editor is exposed.
+
+Changed files include `src/shared/nextcloud.ts`, `src/core/nextcloud/manager.ts`,
+`src/core/nextcloud/register-ipc.ts`, shared IPC, preload and browser bridge wiring, service-node
+registration and panel UI, the hosting feature docs and site article, docs bundle metadata, the
+app-contract inventory, `README.md`, `ROADMAP.md`, and this handoff.
+
+The ultra-speed lane intentionally ran no tests, type checks, lint, builds, packaging, installer
+execution, runtime interaction, security checks, accessibility checks, or UI captures. The feature
+is implemented and documented, but release verification remains open. No commit or dew was made.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

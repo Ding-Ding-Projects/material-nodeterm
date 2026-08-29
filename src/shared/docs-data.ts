@@ -8,6 +8,12 @@ import type { DocArticle } from './docs'
 
 export const DOC_ARTICLES: DocArticle[] = [
   {
+    path: "docs/features/hosting/nextcloud-managed-hosting.md",
+    title: "Managed Nextcloud, no Docker socket",
+    section: "Hosted services",
+    body: "# Managed Nextcloud, no Docker socket\n\nThe managed profile provisions a fixed Nextcloud web service, PostgreSQL database, and Redis on a private user-defined network. It uses direct typed Docker arguments and never accepts arbitrary images, commands, Compose text, or environment editors.\n\nInstall creates the network and volumes, writes owner-only secret files, starts PostgreSQL and Redis with bounded readiness probes, starts the web service on loopback, and waits for the web health endpoint. Updates back up first. Backups contain a database dump plus data and config volume archives. Restore and rollback recreate the known profile and rerun readiness. Tunnel handoff is eligible only after all services are healthy, and handoff preparation never creates a tunnel or changes DNS.\n\nThis lane intentionally did not run tests, type checks, lint, builds, packaging, installer execution, runtime interaction, or UI captures. Those remain release evidence work.\n\nSuggested articles: [Server Edition](docs/features/remote/server-edition.md), [Remote and SSH](docs/features/remote/README.md), and [Local history](docs/local-history.md)."
+  },
+  {
     path: "docs/SERVER.md",
     title: "nodeterm Server Edition (Phase 2)",
     section: "Reference",

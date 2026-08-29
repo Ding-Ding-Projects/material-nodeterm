@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Managed Nextcloud, no Docker socket | nodeterm docs</title>
+    <meta name="description" content="A guided private-first Nextcloud profile with PostgreSQL, Redis, secret files, readiness, backups, restore, update, rollback, and later tunnel handoff." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a><span aria-hidden="true">/</span><a href="./index.html">Docs</a></div>
+    <main class="doc-page">
+      <p class="eyebrow">Hosted services</p>
+      <h1>Managed Nextcloud, no Docker socket</h1>
+      <p class="lede">A fixed, guided profile for Nextcloud web, PostgreSQL, and Redis on a private network. It starts locally first and keeps tunnel exposure as an explicit later handoff.</p>
+      <section>
+        <h2>What it manages</h2>
+        <p>The desktop and Server Edition use a typed lifecycle manager. You choose only a supported release and bounded private port. The surface does not accept arbitrary images, commands, entrypoints, Compose text, or environment values.</p>
+        <ul><li>PostgreSQL, Redis, and web services use fixed official image families.</li><li>Three named volumes hold database, data, and configuration state.</li><li>Secret files stay in the local application-data directory and never enter the project file.</li><li>Readiness waits for database, Redis, and the web health endpoint.</li></ul>
+      </section>
+      <section>
+        <h2>Recovery sequence</h2>
+        <p>Updates back up first, replace the web image, and wait for readiness. Backups contain a database dump plus data and config archives. Restore stops the managed services, restores all three resources, and reruns readiness. Rollback recreates the last recorded release. Deleting volumes requires the app's two-key confirmation.</p>
+      </section>
+      <section>
+        <h2>Private first</h2>
+        <p>The listener binds to loopback. Handoff preparation is available only after all readiness checks are healthy, and it only marks the service eligible for the dedicated tunnel workflow. It does not create a tunnel or change DNS.</p>
+      </section>
+      <section>
+        <h2>Implementation and evidence</h2>
+        <p>Implementation files: <code>src/shared/nextcloud.ts</code>, <code>src/core/nextcloud/manager.ts</code>, <code>src/core/nextcloud/register-ipc.ts</code>, and the service-node panel. The ultra-speed implementation boundary intentionally skipped tests, type checks, lint, builds, packaging, installer execution, runtime interaction, and UI captures. The feature is therefore documented as implemented but not yet release-verified.</p>
+      </section>
+      <nav aria-label="Suggested articles"><h2>Suggested articles</h2><ul><li><a href="./server-edition.html">Server Edition</a></li><li><a href="./remote-ssh-projects.html">Remote and SSH projects</a></li><li><a href="./exports-and-history.html">Exports and local history</a></li></ul></nav>
+    </main>
+  </body>
+</html>

@@ -588,6 +588,18 @@ export function buildStubApi(): Omit<
       restoreBackup: U('minecraft.restoreBackup'),
       deleteBackup: U('minecraft.deleteBackup'),
       onEvent: noopUnsub
+    },
+    nextcloud: {
+      status: U('nextcloud.status'),
+      install: U('nextcloud.install'),
+      update: U('nextcloud.update'),
+      listBackups: U('nextcloud.listBackups'),
+      backup: U('nextcloud.backup'),
+      restore: U('nextcloud.restore'),
+      rollback: U('nextcloud.rollback'),
+      requestTunnelHandoff: U('nextcloud.requestTunnelHandoff'),
+      remove: U('nextcloud.remove'),
+      onEvent: noopUnsub
     }
   } satisfies Omit<
     NodeTerminalApi,

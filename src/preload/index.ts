@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { NextcloudEvent } from '../shared/nextcloud'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -70,6 +71,7 @@ const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
+const subscribeNextcloudEvent = subscribe<[NextcloudEvent]>(IPC.nextcloudEvent)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -942,6 +944,18 @@ const api: NodeTerminalApi = {
     restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
+  },
+  nextcloud: {
+    status: (id) => ipcRenderer.invoke(IPC.nextcloudStatus, id),
+    install: (input) => ipcRenderer.invoke(IPC.nextcloudInstall, input),
+    update: (id, release) => ipcRenderer.invoke(IPC.nextcloudUpdate, id, release),
+    listBackups: (id) => ipcRenderer.invoke(IPC.nextcloudBackupsList, id),
+    backup: (id) => ipcRenderer.invoke(IPC.nextcloudBackup, id),
+    restore: (id, backupId) => ipcRenderer.invoke(IPC.nextcloudRestore, id, backupId),
+    rollback: (id) => ipcRenderer.invoke(IPC.nextcloudRollback, id),
+    requestTunnelHandoff: (id) => ipcRenderer.invoke(IPC.nextcloudTunnelHandoff, id),
+    remove: (id, deleteData) => ipcRenderer.invoke(IPC.nextcloudRemove, id, deleteData),
+    onEvent: (listener) => subscribeNextcloudEvent(listener)
   }
 }
 

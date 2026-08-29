@@ -594,6 +594,18 @@ export const IPC = {
   // Shell → renderer: one multiplexed status/console stream, like ollama:chat-stream above.
   // Payload: MinecraftEvent. A listener filters to the instance id it owns.
   minecraftEvent: 'minecraft:event',
+  // Managed no-socket Nextcloud profile. Every operation is a fixed typed lifecycle action;
+  // there is no arbitrary image, Compose document, shell, or environment editor on this surface.
+  nextcloudStatus: 'nextcloud:status',
+  nextcloudInstall: 'nextcloud:install',
+  nextcloudUpdate: 'nextcloud:update',
+  nextcloudBackupsList: 'nextcloud:backups-list',
+  nextcloudBackup: 'nextcloud:backup',
+  nextcloudRestore: 'nextcloud:restore',
+  nextcloudRollback: 'nextcloud:rollback',
+  nextcloudTunnelHandoff: 'nextcloud:tunnel-handoff',
+  nextcloudRemove: 'nextcloud:remove',
+  nextcloudEvent: 'nextcloud:event',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).
