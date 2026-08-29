@@ -2,7 +2,7 @@
 // crash-recoverable persistence (store.ts), paged folder discovery (fs-scan.ts), atomic writes,
 // pre-write validation, and the lossy/overwrite confirmation gate. See docs/file-converter.md.
 
-import { access, mkdir, open, stat, type FileHandle } from 'node:fs/promises'
+import { access, mkdir, stat, type FileHandle } from 'node:fs/promises'
 import { constants as fsConstants, promises as fs } from 'node:fs'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import { freeDiskBytes } from '../disk-space'
@@ -161,7 +161,7 @@ export class ConverterService {
       const sourceType = st.isDirectory() ? 'directory' : 'non-file filesystem entry'
       throw new Error(`Unsupported converter input: expected a regular file, received ${sourceType}.`)
     }
-    const fh = await open(path, 'r')
+    const fh = await fs.open(path, 'r')
     try {
       const buf = Buffer.alloc(Math.min(CONVERTER_SNIFF_BYTES, st.size))
       if (buf.length > 0) await fh.read(buf, 0, buf.length, 0)
@@ -634,7 +634,7 @@ export class ConverterService {
   }
 
   private async boundedRead(path: string, maxBytes: number): Promise<Buffer> {
-    const fh = await open(path, 'r')
+    const fh = await fs.open(path, 'r')
     try {
       const st = await fh.stat()
       if (st.size > maxBytes) throw new Error('Source grew past the adapter size limit since it was queued')

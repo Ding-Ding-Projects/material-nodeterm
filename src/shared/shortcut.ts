@@ -3,24 +3,13 @@
  * Settings → Speech capture field, the Dock mic tooltip, and ShortcutsPanel.
  *
  * Canonical string shape: modifier tokens joined by "+", optionally ending in one non-modifier
- * key token, e.g. `"Ctrl+Shift+D"`, `"Ctrl+F5"`, or (v3) a MODIFIER-ONLY chord with no trailing
- * key, e.g. `"Ctrl+Alt"`. `Ctrl` is still a PLATFORM-ABSTRACTED primary modifier: ctrlKey on
- * Windows/Linux, and metaKey (⌘) for a Server Edition browser tab on a real Mac — the one mac
- * surface left now that the mac desktop build is deleted. That client is also why the `isMac`
- * parameter SURVIVES on the match/format functions below: the same stored string must match ⌘
- * there, and the badges it renders must say so truthfully.
+ * key token, e.g. `"Cmd+Shift+D"`, `"Cmd+F5"`, or (v3) a MODIFIER-ONLY chord with no trailing
+ * key, e.g. `"Cmd+Alt"`. `Cmd` is the PLATFORM-ABSTRACTED primary modifier: ctrlKey on
+ * Windows/Linux, and metaKey (⌘) for a Server Edition browser tab on a real Mac. `Ctrl` is a
+ * separate literal Control modifier on every platform.
  *
- * `Cmd`/`Command` remain accepted PARSE-ONLY aliases for `Ctrl` — never emitted. settings.json
- * is forever: a pre-rewire install has `"Cmd+K"` etc. stored, and dropping the alias would turn
- * every one of that user's shortcuts (and their rebinds) dead on upgrade.
- * key token, e.g. `"Cmd+Shift+D"`, `"Cmd+F5"`, or (v3) a MODIFIER-ONLY chord with no trailing key,
- * e.g. `"Cmd+Alt"`. `Cmd` is a PLATFORM-ABSTRACTED primary modifier — it means "the primary
- * modifier for this platform": metaKey (⌘) on mac, ctrlKey elsewhere. Storing shortcuts in terms
- * of the abstract "Cmd" is what lets one stored string match on every platform via
- * `matchesShortcut(e, s, isMac)`. `Ctrl` is a SEPARATE, LITERAL token meaning ctrlKey on every
- * platform (⌃ on mac) — on non-mac it happens to resolve to the same physical key as `Cmd`, so a
- * `Ctrl+X` string still behaves exactly like `Cmd+X` there.
- *
+ * `Command` remains an accepted parse-only alias for `Cmd`; settings.json is forever, so older
+ * installs using `"Command+K"` continue to work after the canonical spelling change.
  * Modifier matching is EXACT on all four flags: a chord matches only when the event's meta/ctrl/
  * alt/shift state is precisely what the chord resolves to, so an extra modifier held on top never
  * fires a shorter binding.
@@ -116,7 +105,7 @@ export function parseShortcut(s: string): ParsedShortcut {
     if (lower === 'cmd' || lower === 'command') {
       cmd = true
     } else if (lower === 'ctrl' || lower === 'control') {
-      cmd = true
+      ctrl = true
     } else if (lower === 'shift') {
       shift = true
     } else if (lower === 'alt' || lower === 'option') {
@@ -289,11 +278,8 @@ export function chordHeld(e: ShortcutKeyEvent, s: string, isMac: boolean): boole
  * Build a canonical combo string from a captured keydown, for the Settings capture field.
  * Requires the platform's primary modifier (ctrlKey; metaKey on a mac browser client) plus a
  * non-modifier key; returns null while only modifier keys have been pressed so far, or when the
- * primary modifier is missing. Emits the canonical `Ctrl` token — never the legacy `Cmd` alias,
- * which is parse-only compat for pre-rewire settings.json values. (A modifier-only chord is
- * captured separately — see `buildModifierChord` below — because it commits on keyUP once every
- * key is released, by which point the keyup event's own modifier flags are already false and
- * can't be read off it directly.)
+ * primary modifier is missing. It emits canonical `Cmd` for the abstract primary and adds literal
+ * `Ctrl` when a mac user holds both controls.
  * Requires the platform's primary modifier (Cmd on mac / Ctrl elsewhere) plus a non-modifier
  * key; returns null while only modifier keys have been pressed so far, or when the primary
  * modifier is missing. (A modifier-only chord is captured separately — see `buildModifierChord`
@@ -311,7 +297,7 @@ export function captureToShortcut(e: ShortcutKeyEvent, isMac: boolean): string |
   if (!isMac && e.metaKey) return null
   const key = normalizeKey(e.key)
   if (MODIFIER_KEYS.has(key)) return null
-  const parts = ['Ctrl']
+  const parts = ['Cmd']
   if (isMac && e.ctrlKey) parts.push('Ctrl')
   if (e.altKey) parts.push('Alt')
   if (e.shiftKey) parts.push('Shift')
@@ -330,14 +316,14 @@ export interface ChordModifiers {
   shift: boolean
 }
 
-/** `{cmd:true, alt:true, shift:false}` -> `"Ctrl+Alt"` (canonical token, same rule as
- *  `captureToShortcut`); `{cmd:false, ...}` -> `null` (the primary modifier is mandatory). The
+/** `{cmd:true, alt:true, shift:false}` -> `"Cmd+Alt"`; `{cmd:false, ...}` -> `null` (the
+ *  primary modifier is mandatory). A literal `ctrl` is retained when captured beside the primary.
  *  Settings capture field calls this at keyUp, once every key has been released, using the
  *  modifier state it remembered from the last keyDown while only modifier keys had been pressed
  *  (`isModifierEventKey`) — the keyup event itself no longer carries that state. */
 export function buildModifierChord(mods: ChordModifiers): string | null {
   if (!mods.cmd) return null
-  const parts = ['Ctrl']
+  const parts = ['Cmd']
   if (mods.ctrl) parts.push('Ctrl')
   if (mods.alt) parts.push('Alt')
   if (mods.shift) parts.push('Shift')

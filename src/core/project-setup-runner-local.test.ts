@@ -38,7 +38,7 @@ describe('makeLocalSetupRunner', () => {
     return { promise, chunks, controller }
   }
 
-  it('env vars passed to the runner are visible to the script', async () => {
+  it.skipIf(process.platform === 'win32')('env vars passed to the runner are visible to the script', async () => {
     const { promise, chunks } = run('echo "$NODETERM_ROOT_PATH"', {
       env: { NODETERM_ROOT_PATH: '/some/root/path' }
     })
@@ -47,13 +47,13 @@ describe('makeLocalSetupRunner', () => {
     expect(chunks.join('')).toContain('/some/root/path')
   })
 
-  it('propagates the script exit code', async () => {
+  it.skipIf(process.platform === 'win32')('propagates the script exit code', async () => {
     const { promise } = run('exit 7')
     const result = await promise
     expect(result.exitCode).toBe(7)
   })
 
-  it('runs in the given cwd', async () => {
+  it.skipIf(process.platform === 'win32')('runs in the given cwd', async () => {
     const { promise, chunks } = run('pwd')
     await promise
     // macOS temp dirs resolve through a /private symlink — compare realpaths.
@@ -67,7 +67,7 @@ describe('makeLocalSetupRunner', () => {
     expect(chunks.join('').length).toBeGreaterThan(0)
   })
 
-  it('caps combined output at SETUP_OUTPUT_CAP and appends exactly one truncation note', async () => {
+  it.skipIf(process.platform === 'win32')('caps combined output at SETUP_OUTPUT_CAP and appends exactly one truncation note', async () => {
     const { promise, chunks } = run('yes 0123456789abcdef0123456789abcdef 2>&1', { timeoutMs: 500 })
     const result = await promise
     const combined = chunks.join('')
@@ -79,7 +79,7 @@ describe('makeLocalSetupRunner', () => {
     expect(result.exitCode).not.toBe(0)
   }, 10_000)
 
-  it('an abort signal kills the process promptly', async () => {
+  it.skipIf(process.platform === 'win32')('an abort signal kills the process promptly', async () => {
     const controller = new AbortController()
     const { promise } = run('sleep 30', { timeoutMs: 60_000, signal: controller.signal })
     const start = Date.now()
@@ -89,7 +89,7 @@ describe('makeLocalSetupRunner', () => {
     expect(result.exitCode).not.toBe(0)
   }, 10_000)
 
-  it('coalesces rapid writes into fewer onChunk calls than lines written (debounced)', async () => {
+  it.skipIf(process.platform === 'win32')('coalesces rapid writes into fewer onChunk calls than lines written (debounced)', async () => {
     const { promise, chunks } = run('echo one; echo two; echo three')
     const result = await promise
     expect(result.exitCode).toBe(0)

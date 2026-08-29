@@ -7,6 +7,9 @@ describe('Pages playground store persistence', () => {
 
   beforeEach(() => {
     values = new Map()
+    // Seed the current schema so createStore does not spend the first assertion migrating a
+    // legacy visitor. Migration is covered explicitly by the history tests.
+    values.set('nodeterm-playground.v2', JSON.stringify({ funnySchemaVersion: 2 }))
     storage = {
       getItem: vi.fn((key) => values.get(key) ?? null),
       setItem: vi.fn((key, value) => values.set(key, value)),
@@ -22,7 +25,7 @@ describe('Pages playground store persistence', () => {
     store.setState({ theme: 'night' })
 
     expect(storage.setItem).toHaveBeenCalledOnce()
-    expect(JSON.parse(values.get('nodeterm-playground.v1')).theme).toBe('night')
+    expect(JSON.parse(values.get('nodeterm-playground.v2')).theme).toBe('night')
     expect(createStore().state.theme).toBe('night')
   })
 

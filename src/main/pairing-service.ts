@@ -286,30 +286,6 @@ async function readAgentJson(): Promise<Record<string, unknown>> {
   return obj
 }
 
-/**
- * Remove agent.json temps no writer in THIS process owns: the legacy fixed `agent.json.tmp`
- * (written by builds from before per-call names) and any `agent.json.<pid>.<seq>[.<uuid>].tmp`
- * whose pid is not ours. Best effort — a failure here must never break (or skip) the write that
- * follows.
- */
-async function sweepStaleAgentTmp(): Promise<void> {
-  try {
-    const base = path.basename(AGENT_JSON_PATH)
-    for (const entry of await fs.readdir(AGENT_DIR)) {
-      if (!entry.startsWith(base) || !entry.endsWith('.tmp')) continue
-      const middle = entry.slice(base.length, -'.tmp'.length)
-      const owner =
-        /^\.(\d+)\.\d+(?:\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})?$/
-          .exec(middle)?.[1]
-      if (middle === '' || (owner && owner !== String(process.pid))) {
-        await fs.rm(path.join(AGENT_DIR, entry), { force: true }).catch(() => undefined)
-      }
-    }
-  } catch {
-    // A dir we cannot read is not a reason to fail (or skip) the write below.
-  }
-}
-
 /** Detect the machine's display name (macOS ComputerName, else hostname). */
 async function computerName(): Promise<string> {
   if (process.platform === 'darwin') {
@@ -476,7 +452,6 @@ export function createPairingService(
     await fs.mkdir(AGENT_DIR, { recursive: true, mode: 0o700 })
     await fs.chmod(AGENT_DIR, 0o700).catch(() => {})
     await sweepStaleTempFiles(AGENT_JSON_PATH)
-    await sweepStaleAgentTmp()
     const tmp = tempNameFor(AGENT_JSON_PATH)
     try {
       await fs.writeFile(tmp, JSON.stringify(obj, null, 2) + '\n', { mode: 0o600 })

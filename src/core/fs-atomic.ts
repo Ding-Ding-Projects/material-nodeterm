@@ -46,9 +46,9 @@
 //     caller, and retrying only delays a clearer error. `ENOSPC` will not improve by waiting.
 //   - It does not swallow the final failure. The last error is thrown with its original code.
 
-import { promises as fs, renameSync } from 'fs'
-import { randomUUID } from 'crypto'
-import path from 'path'
+import { promises as fs, renameSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import path from 'node:path'
 
 /**
  * Errors that mean "someone else has the destination open right now", rather than "this will

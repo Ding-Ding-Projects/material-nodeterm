@@ -1,10 +1,11 @@
 import { execFile } from 'node:child_process'
-import { access, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { constants as fsConstants, statfsSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
+import { renameAtomic } from '../fs-atomic'
 import {
   isMagnetUri,
   normalizeSeedPolicy,
@@ -177,7 +178,7 @@ export class TorrentService implements TorrentApi {
       const temp = `${this.storeFile}.tmp-${process.pid}-${Date.now()}-${randomUUID()}`
       const body: PersistedStore = { version: STORE_VERSION, tasks: [...this.tasks.values()].map(safeTask) }
       await writeFile(temp, JSON.stringify(body, null, 2), { encoding: 'utf8', mode: 0o600 })
-      await rename(temp, this.storeFile)
+      await renameAtomic(temp, this.storeFile)
     }
     this.writeQueue = this.writeQueue.then(next, next)
     await this.writeQueue
