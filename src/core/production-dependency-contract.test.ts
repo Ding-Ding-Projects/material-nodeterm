@@ -13,6 +13,7 @@ interface RootPackageMetadata {
 interface LockedPackageMetadata {
   name?: string
   version?: string
+  resolved?: string
   integrity?: string
   dependencies?: Record<string, string>
   engines?: Record<string, string>
@@ -103,9 +104,10 @@ describe('production dependency contract', () => {
     })
   })
 
-  it('replaces Monaco\'s vulnerable DOMPurify pin with the direct safe release', () => {
+  it('keeps the Monaco and tracker security overrides exact', () => {
     expect(packageMetadata.overrides).toEqual({
-      'monaco-editor': { dompurify: '$dompurify' }
+      'monaco-editor': { dompurify: '$dompurify' },
+      'bittorrent-tracker': { ip: 'npm:ipaddr.js@2.5.0' }
     })
 
     const dompurifyPackages = Object.entries(packageLock.packages)
@@ -120,5 +122,12 @@ describe('production dependency contract', () => {
       expect(isAtLeast(dependency.version!, '3.4.13')).toBe(true)
     }
     expect(packageLock.packages['node_modules/monaco-editor/node_modules/dompurify']).toBeUndefined()
+
+    expect(packageLock.packages['node_modules/ip']).toBeUndefined()
+    expect(packageLock.packages['node_modules/bittorrent-tracker/node_modules/ip']).toMatchObject({
+      name: 'ipaddr.js',
+      version: '2.5.0',
+      resolved: 'https://registry.npmjs.org/ipaddr.js/-/ipaddr.js-2.5.0.tgz'
+    })
   })
 })
