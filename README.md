@@ -20,8 +20,9 @@ Windows terminals can reconnect through a dedicated session host.
 [Screenshots](#real-application-screenshots) · [Build](#build-from-source) ·
 [Documentation](#documentation) · [Contributing](#contributing) · [License](#license)
 
-**Release baseline documented here:** [v0.4.120](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v0.4.120),
-published 2026-08-26 at 17:32:49 UTC.
+**Latest published release baseline:** [v0.4.152](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v0.4.152),
+published 2026-08-29 at 17:09:00 UTC. The source tree currently prepares a deliberate `1.0.0`
+major candidate; that candidate is not published yet.
 
 </div>
 
@@ -48,15 +49,15 @@ custom domain belongs to the upstream repository, so this fork publishes its doc
 instead — note the trailing `/material-nodeterm/`.
 ## Install
 
-The latest verified release baseline for this document is **v0.4.120**:
+The latest verified release baseline for this document is **v0.4.152**:
 
-[**Download nodeterm Setup 0.4.120 for Windows x64**](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.120/nodeterm-Setup-0.4.120.exe)
+[**Download nodeterm Setup 0.4.152 for Windows x64**](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.152/nodeterm-Setup-0.4.152.exe)
 
 | Release file | Purpose | SHA-256 |
 | --- | --- | --- |
-| [`nodeterm-Setup-0.4.120.exe`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.120/nodeterm-Setup-0.4.120.exe) | Squirrel.Windows installer | `b982df10e225900ad6b8c4ec8d70d6658b36dc3be2c2741946aa07c78acf8bf1` |
-| [`node-terminal-0.4.120-full.nupkg`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.120/node-terminal-0.4.120-full.nupkg) | Full Squirrel package | `1b65192671a44584f04114f2cc901963e2efd8aede63424c5dcf4f2cff6048dd` |
-| [`RELEASES`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.120/RELEASES) | Squirrel update index | `f9e25fed43951d2f20005bcd8195effaf0c1c1f7a8a3c1b85929bf0e82cfdbe4` |
+| [`nodeterm-Setup-0.4.152.exe`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.152/nodeterm-Setup-0.4.152.exe) | Squirrel.Windows installer | `bfb212f39ce8b61f3d229a97dba4f77d2697b12856ea4ddd31f18d974f0aadda` |
+| [`node-terminal-0.4.152-full.nupkg`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.152/node-terminal-0.4.152-full.nupkg) | Full Squirrel package | `082cde5a7629a5c27812d63e54dab2a3380f7f26eb5fbc36a18d7409c8737f63` |
+| [`RELEASES`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.152/RELEASES) | Squirrel update index | `10050585e89c18f392deb36207dafd21ab1f8f7e1ca20d767e4697a6257fae49` |
 
 > [!WARNING]
 > **The installer is unsigned.** Code signing is intentionally not used. Windows SmartScreen

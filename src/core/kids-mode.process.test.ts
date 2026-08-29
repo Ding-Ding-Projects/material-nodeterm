@@ -87,7 +87,7 @@ async function terminate(tracked: TrackedChild): Promise<void> {
 }
 
 beforeAll(async () => {
-  suiteDir = await fs.mkdtemp(path.join(os.tmpdir(), 'nodeterm-kids-process-chut-'))
+  suiteDir = await fs.mkdtemp(path.join(os.tmpdir(), 'nodeterm-kids-process-check-'))
   workerBundle = path.join(suiteDir, 'worker.cjs')
   await build({
     entryPoints: [

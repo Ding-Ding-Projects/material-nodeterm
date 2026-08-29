@@ -14,6 +14,11 @@ only then makes it non-draft and downloadable. Delta packages are intentionally 
 The workflow contains no test or lint step. The active delivery scope is Windows only, and ZIP,
 NSIS-only, MSI-only, MSIX-only, and portable-only parallel routes are not supported.
 
+The current source candidate is package version `1.0.0`, while the latest published baseline is
+`v0.4.152` at commit `70e5becee2c9bbdb6e1f74b60b4de3eb0a59c467`. The candidate is not a published
+release and has no installer or production runtime receipt until the workflow and the isolated
+Windows acceptance route complete.
+
 **A prior revision also built locally**, which it did not for most of this work. At
 `19e8296b9f355e0e11e5ee7ab25856f9d3351cef`, `build.bat /s` completed in about 107 s and
 `build-installer.bat /s` in about 199 s, producing a three-artifact `0.3.0` Squirrel set, unsigned

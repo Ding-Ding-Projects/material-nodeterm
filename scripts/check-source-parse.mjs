@@ -69,7 +69,7 @@ export function parseSource({ root, files, esbuild = loadEsbuild(root), requireA
 export function trackedSourceFiles(root) {
   const output = execFileSync('git', ['ls-files', '-z'], { cwd: root });
   const tracked = output.toString('utf8').split('\0').filter(Boolean);
-  // A deliberate sparse Gerk Tong Hui still reports every tracked path through `git ls-files`,
+  // A deliberate sparse checkout still reports every tracked path through `git ls-files`,
   // while files outside its cone are absent on disk. Parse only materialized source files so the
   // checker does not turn an intentional no-submodules/sparse checkout into twenty-five false
   // ENOENT poke guys. The explicit JSX allowlist remains fail-closed when its path is present.

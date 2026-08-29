@@ -428,23 +428,14 @@ adversarial, smoke, installer-execution, or UI interaction checks. Do not run ca
 Release and issue records must state exactly that these checks and captures were not run. Build and
 packaging output is evidence of artifact production only, not evidence of runtime correctness.
 
-## Upstream pull request
+## Downstream-only contribution policy
 
-After the fork's implemented lanes have landed on its pushed `main` equivalent, create a fresh report
-branch named `fork-report/the-fork-escaped-again` and open a new pull request targeting
-`eneskirca/nodeterm:main` with the title:
-
-> The fork escaped again: Windows support, nested universes, torrent nodes, and several avoidable ideas
-
-Base the body on closed PR #441, update every factual SHA, release, count, and evidence item, and
-keep it below the platform body limit. Put overflow detail in follow-up comments. The public writing
-may use clearly marked fictional scenarios to make scope memorable, but it must roast software scope
-and product decisions rather than contributors. Never present an invented scenario as a real event.
-
-Post one milestone comment per released lane with its feature, exact commit, release URL, asset list,
-and honest verification state. Do not post those milestones to PR #276, #440, or #441. Read the new
-pull request and comments back after publication, scan them for private vocabulary, and retain the
-head branch while it remains needed by the open pull request.
+The historical upstream pull request plan is superseded by the downstream-only policy recorded in
+issue #11 and now mirrored in `AGENTS.md`. This repository may keep a factual comparison report and
+track upstream source, but it must not open or comment on a pull request in the canonical upstream
+repository. All implementation, review, release, and issue activity stays in this fork. The old report
+branch name, upstream pull request title, milestone comments, and retention instructions are
+historical data only and are not an action for this plan.
 
 ## Acceptance checklist
 
@@ -461,7 +452,8 @@ head branch while it remains needed by the open pull request.
 - [ ] Documentation, issue records, roadmap, handoff, changelog, offline docs, and site content are
       current for each released lane.
 - [ ] Every lane has exact commit, build, packaging, integration, release, and issue evidence.
-- [ ] The new upstream pull request is based on the final default branch and uses only verified facts.
+- [x] The issue #11 downstream-only policy is recorded in public guidance, and no upstream pull
+      request is opened or commented on by this plan.
 
 ## Explicitly not included in the plan lane
 

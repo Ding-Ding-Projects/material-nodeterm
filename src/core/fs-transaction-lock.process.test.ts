@@ -144,7 +144,7 @@ function sidecarFor(resource: string): string {
 }
 
 beforeAll(async () => {
-  suiteDir = await fs.mkdtemp(path.join(os.tmpdir(), 'nodeterm-lock-process-chut-'))
+  suiteDir = await fs.mkdtemp(path.join(os.tmpdir(), 'nodeterm-lock-process-check-'))
   workerBundle = path.join(suiteDir, 'worker.cjs')
   await build({
     entryPoints: [
