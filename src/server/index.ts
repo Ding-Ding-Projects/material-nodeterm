@@ -117,6 +117,9 @@ import type { TimerOccurrence } from '../shared/timer'
 import { registerSpeechIpc } from '../core/speech/register-ipc'
 import { isPremium, getStoredEntitlement } from '../core/license'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
+import { TriggerArmStore } from '../core/trigger-arm-store'
+import { TriggerScheduler } from '../core/trigger-scheduler'
+import { registerTriggerIpc, triggerIpcNotify } from '../core/trigger-ipc'
 
 // Same env-override + default as src/core/check.ts / license.ts / src/main/telemetry.ts — each
 // shell derives it locally rather than sharing an import (src/server must not import src/main).
@@ -213,6 +216,25 @@ export async function startServer(
   const alarmPlannerRuntime = new AlarmPlannerRuntime(path.join(config.dataDir, 'alarm-clock-planner.json'))
   const ptyManager = new PtyManager()
   const workspaceStore = new WorkspaceStore()
+  const triggerArms = new TriggerArmStore(config.dataDir)
+  await triggerArms.load()
+  const triggerScheduler = new TriggerScheduler({
+    armStore: triggerArms,
+    historyFile: path.join(config.dataDir, 'triggers', 'history.json'),
+    getProject: (projectId) => workspaceStore.persistedCanvases().find((canvas) => canvas.id === projectId) as import('../shared/types').Project | undefined,
+    deliver: async ({ target, spec }) => {
+      // Server Edition can deliver to ordinary local terminal sessions. Agent ownership and
+      // receipt verification belong to the desktop host, so this surface reports unsupported
+      // instead of pretending a raw write has the stronger agent contract.
+      if (target.agentId) return { outcome: 'target-unsupported' as const, error: 'Agent trigger delivery is supported only by the desktop host.' }
+      return (await ptyManager.sendText(target.id, spec.payload, { enter: true }))
+        ? { outcome: 'delivered' as const }
+        : { outcome: 'failed' as const, error: 'Terminal session is unavailable.' }
+    },
+    notify: (receipt) => triggerIpcNotify(platform, receipt)
+  })
+  await triggerScheduler.loadHistory()
+  registerTriggerIpc(platform, triggerScheduler)
 
   settingsStore.init()
   const gatewayCredentials = new ModelGatewayCredentialService(
@@ -663,6 +685,7 @@ export async function startServer(
   workspaceStore.onPersist = () => {
     contextLink.refresh()
     refreshNodeTokens()
+    for (const canvas of workspaceStore.persistedCanvases()) triggerScheduler.updateProject(canvas.id, canvas.nodes)
   }
   // Nothing has read the workspace index yet — the desktop gets its first load from the renderer,
   // and this shell may never have one. Read it once so links are live before any browser connects.
@@ -671,6 +694,8 @@ export async function startServer(
   await workspaceStore.load({ sideline: false }).catch((e) => {
     console.warn('[nodeterm-server] context-link initial workspace load failed', e)
   })
+  for (const canvas of workspaceStore.persistedCanvases()) triggerScheduler.updateProject(canvas.id, canvas.nodes)
+  triggerScheduler.start()
 
   // Session budget (docs/SERVER.md): reap long-idle DETACHED nt- tmux sessions under memory
   // pressure (10%-of-RAM watermark) or past a count cap, on BOTH the local socket and the
@@ -803,6 +828,7 @@ export async function startServer(
         await scheduledSettingsRuntime.stop()
         await plannerRuntime.stop()
         alarmPlannerRuntime.stop()
+        triggerScheduler.stop()
         ackSweeper.stop()
         pendingSweeper.stop()
         sessionReaper.stop()
@@ -869,6 +895,7 @@ export async function startServer(
       await scheduledSettingsRuntime.stop()
       await plannerRuntime.stop()
       alarmPlannerRuntime.stop()
+      triggerScheduler.stop()
       ackSweeper.stop()
       pendingSweeper.stop()
       sessionReaper.stop()

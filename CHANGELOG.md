@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add Trigger nodes with cron, interval, and one-shot schedules, explicit review before arming or
+  running, machine-local content-bound consent, target validation, bounded payload-free run
+  history, and honest missed, busy, unsupported, and failed outcomes. Desktop delivery uses the
+  existing safe terminal paste path or the full agent-message ownership and receipt path. Server
+  Edition supports ordinary terminal delivery and reports agent delivery as unsupported.
+
+  加入 Trigger 節點，支援 cron、interval 同一次性排程；啟動或者即時執行之前要先覆核，授權只綁定本機
+  同目前內容，目標會喺執行時再核實，記錄有界而且唔會抄入 payload。錯過、忙碌、不支援同失敗都會
+  老實報告。Desktop 用安全 terminal paste 或完整 agent message ownership 同 receipt 流程；Server
+  Edition 支援普通 terminal，agent delivery 會清楚報告不支援。
+
 - Add byte-identical sanitized shared-instruction blocks to `AGENTS.md` and `CLAUDE.md`, preserve
   all project-specific guidance outside the managed markers, and add deterministic synchronization,
   private-vocabulary validation, public-detail scanning, parity checks, sensitive-input refusal,

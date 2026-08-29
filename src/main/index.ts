@@ -155,6 +155,7 @@ import {
   isDeliverRequest,
   messagingEnabledVia,
   onMessagingAgentEvent,
+  runDelivery,
   setDeliveryQueue,
   type AgentMessagingDeps
 } from './agent-messaging'
@@ -408,6 +409,9 @@ import { APP_BAR_HEIGHT } from '../shared/layout'
 import { registerConfirmedRecycleIpc } from './confirmed-recycle-ipc'
 import { registerWindowsTerminalProfileIpc } from './windows-terminal-profiles'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
+import { TriggerArmStore } from '../core/trigger-arm-store'
+import { TriggerScheduler, type TriggerDeliveryResult } from '../core/trigger-scheduler'
+import { registerTriggerIpc, triggerIpcNotify } from '../core/trigger-ipc'
 
 // Fail before Electron initializes any persistent service. mirror-publication loads node:sqlite
 // lazily so an incompatible embedded runtime reaches this clear diagnostic instead of an import
@@ -462,6 +466,7 @@ initPlatform(corePlatform)
 let minecraftServers: ReturnType<typeof registerMinecraftIpc>['manager'] | undefined
 let virtualMachineManager: ReturnType<typeof registerVirtualMachineIpc>['manager'] | undefined
 let timerOccurrences: TimerOccurrenceService | undefined
+let triggerScheduler: TriggerScheduler | undefined
 
 // Only hand the OS a URL with a vetted scheme. Blocks file://, smb://, and custom
 // protocol-handler schemes that could be smuggled in via remote announcement feeds or
@@ -731,6 +736,7 @@ const workspaceWatcher = new WorkspaceWatcher({
 workspaceStore.onPersist = () => {
   workspaceWatcher.sync()
   refreshNodeTokens()
+  for (const canvas of workspaceStore.persistedCanvases()) triggerScheduler?.updateProject(canvas.id, canvas.nodes)
 }
 const gitService = new GitService()
 
@@ -2467,6 +2473,36 @@ app.whenReady().then(async () => {
     const { reply } = await deliverFromControl(raw, messagingDeps)
     return reply
   })
+
+  // Triggers are evaluated in the privileged process. Their shared definition is re-read through
+  // WorkspaceStore, while arming is a machine-local, content-bound consent record. Ordinary
+  // terminals use the plain tmux paste transport; agent targets reuse the complete ownership,
+  // idle, receipt, trace, and flow path above. No scheduled retry is attempted after an uncertain
+  // result, so a user can inspect the bounded receipt and explicitly run it again.
+  const triggerArms = new TriggerArmStore(app.getPath('userData'))
+  await triggerArms.load()
+  triggerScheduler = new TriggerScheduler({
+    armStore: triggerArms,
+    historyFile: join(app.getPath('userData'), 'triggers', 'history.json'),
+    getProject: (projectId) => workspaceStore.persistedCanvases().find((canvas) => canvas.id === projectId) as import('../shared/types').Project | undefined,
+    deliver: async ({ projectId, nodeId, target, spec, traceId: deliveryTraceId, manual }): Promise<TriggerDeliveryResult> => {
+      if (target.agentId) {
+        const outcome = await runDelivery({ verb: 'send', sourceNodeId: nodeId, targetNodeId: target.id, body: spec.payload }, messagingDeps)
+        if (outcome.kind === 'delivered' || outcome.kind === 'deliveredToReplacedTarget') return { outcome: 'delivered' }
+        if (outcome.kind === 'targetGone') return { outcome: 'target-missing', error: 'The target session is not live.' }
+        if (outcome.kind === 'targetBusy' || outcome.kind === 'targetNotIdleUnknown' || outcome.kind === 'targetStatusStale') return { outcome: 'target-busy', error: outcome.kind }
+        if (outcome.kind === 'targetStatusUnverified' || outcome.kind === 'targetNotAgentPane' || outcome.kind === 'targetNotPasteAware') return { outcome: 'target-unreadable', error: outcome.kind }
+        return { outcome: 'failed', error: outcome.kind }
+      }
+      const delivered = await ptyManager.sendText(target.id, spec.payload, { enter: true })
+      return delivered ? { outcome: 'delivered' } : { outcome: 'failed', error: `Terminal delivery failed for ${projectId}:${target.id} (${manual ? 'manual' : 'scheduled'}; ${deliveryTraceId}).` }
+    },
+    notify: (receipt) => triggerIpcNotify(corePlatform, receipt)
+  })
+  await triggerScheduler.loadHistory()
+  registerTriggerIpc(corePlatform, triggerScheduler)
+  for (const canvas of workspaceStore.persistedCanvases()) triggerScheduler.updateProject(canvas.id, canvas.nodes)
+  triggerScheduler.start()
 
   // Password managers (core/password-manager/): v1 is local-only, same starting scope board-log
   // above shipped with — an SSH-ref or cwd-less inline project answers `unsupported` rather than
@@ -4835,6 +4871,7 @@ app.on('before-quit', (e) => {
   const scheduledSettingsStop = scheduledSettingsRuntime.stop()
   const plannerStop = plannerRuntime.stop()
   alarmPlannerRuntime.stop()
+  triggerScheduler?.stop()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log
   // honest. Clearing the ref too keeps a hook edge that lands during the quit flush (the pty
   // teardown window below) from re-holding an assertion nothing will ever release.

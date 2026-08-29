@@ -1,3 +1,7 @@
+import { readFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
+import path from 'node:path'
+import { writeFileAtomic } from './fs-atomic'
 import { canonicalTriggerSpec, sanitizeTriggerSpec, type TriggerSchedule, type TriggerSpec, type TriggerRunOutcome, type TriggerRunReceipt, type TriggerStatus } from '../shared/trigger'
 import type { CanvasNodeState, Project } from '../shared/types'
 import { TriggerArmStore } from './trigger-arm-store'
@@ -22,6 +26,8 @@ export interface TriggerSchedulerOptions {
   }) => Promise<TriggerDeliveryResult>
   notify?: (receipt: TriggerRunReceipt) => void
   maxHistory?: number
+  /** Optional machine-local receipt file. Payloads are never persisted here. */
+  historyFile?: string
 }
 
 interface TriggerSlot {
@@ -35,6 +41,10 @@ interface TriggerSlot {
 
 const MINUTE = 60_000
 const DEFAULT_HISTORY = 200
+const TRIGGER_RUN_OUTCOMES: ReadonlySet<string> = new Set([
+  'delivered', 'target-missing', 'target-unreadable', 'target-busy', 'target-unsupported',
+  'failed', 'skipped-previous-run-active', 'missed', 'cancelled'
+])
 
 function traceId(): string {
   return 'trigger-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
@@ -117,12 +127,38 @@ export class TriggerScheduler {
   private readonly now: () => number
   private readonly timeZone: () => string
   private readonly maxHistory: number
+  private readonly historyFile?: string
+  private historyWrite: Promise<void> = Promise.resolve()
   private timer: ReturnType<typeof setInterval> | undefined
 
   constructor(private readonly options: TriggerSchedulerOptions) {
     this.now = options.now ?? Date.now
     this.timeZone = options.timeZone ?? (() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
     this.maxHistory = Math.max(1, Math.floor(options.maxHistory ?? DEFAULT_HISTORY))
+    this.historyFile = options.historyFile
+  }
+
+  /** Load only bounded, payload-free receipts from the machine-local history file. */
+  async loadHistory(): Promise<void> {
+    if (!this.historyFile) return
+    try {
+      const parsed: unknown = JSON.parse(await readFile(this.historyFile, 'utf8'))
+      if (!Array.isArray(parsed)) return
+      const valid = parsed.filter((item): item is TriggerRunReceipt => {
+        if (!item || typeof item !== 'object') return false
+        const receipt = item as TriggerRunReceipt
+        return typeof receipt.id === 'string' && receipt.id.length <= 160 &&
+          typeof receipt.projectId === 'string' && typeof receipt.nodeId === 'string' &&
+          typeof receipt.target === 'string' && typeof receipt.schedule === 'string' &&
+          typeof receipt.outcome === 'string' && TRIGGER_RUN_OUTCOMES.has(receipt.outcome) &&
+          typeof receipt.at === 'number' && Number.isFinite(receipt.at) &&
+          typeof receipt.traceId === 'string' && receipt.traceId.length <= 160 &&
+          (receipt.error === undefined || (typeof receipt.error === 'string' && receipt.error.length <= 500))
+      })
+      this.history.push(...valid.slice(-this.maxHistory))
+    } catch {
+      // Corrupt or missing local history is an empty history, never a boot failure.
+    }
   }
 
   private key(projectId: string, nodeId: string): string {
@@ -270,6 +306,16 @@ export class TriggerScheduler {
     const slot = this.slots.get(this.key(receipt.projectId, receipt.nodeId))
     if (slot) slot.last = receipt
     this.options.notify?.(receipt)
+    this.persistHistory()
     return receipt
+  }
+
+  private persistHistory(): void {
+    if (!this.historyFile) return
+    const snapshot = JSON.stringify(this.history.slice(-this.maxHistory))
+    this.historyWrite = this.historyWrite.then(async () => {
+      await mkdir(path.dirname(this.historyFile!), { recursive: true })
+      await writeFileAtomic(this.historyFile!, snapshot, { mode: 0o600 })
+    }).catch(() => undefined)
   }
 }
