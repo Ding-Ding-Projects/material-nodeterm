@@ -53,6 +53,7 @@ The concrete source remediations in this pass are:
 | `node-video` | Video node | `src/renderer/nodes/VideoNode.tsx` | `export default function VideoNode` | `term-node` | Source reviewed; runtime proof pending |
 | `node-loop` | Loop scheduler node | `src/renderer/nodes/LoopNode.tsx` | `export function LoopNode` | `loop-node` | Source reviewed; runtime proof pending |
 | `node-native-loop` | Native scheduled-loop node | `src/renderer/nodes/NativeLoopNode.tsx` | `export function NativeLoopNode` | `native-loop-node` | Source reviewed; runtime proof pending |
+| `node-trigger` | Scheduled trigger node | `src/renderer/nodes/TriggerNode.tsx` | `export function TriggerNode` | `trigger-node` | Source reviewed; runtime proof pending |
 | `node-service` | Service node | `src/renderer/nodes/ServiceNode.tsx` | `export function ServiceNode` | `service-node` | Source reviewed; runtime proof pending |
 | `node-nsis` | NSIS installer node | `src/renderer/nodes/NsisInstallerNode.tsx` | `export default function NsisInstallerNode` | `nsis-node__body` | Source reviewed; runtime proof pending |
 | `node-authenticator` | Authenticator node | `src/renderer/nodes/AuthenticatorNode.tsx` | `export default function AuthenticatorNode` | `authenticator-node__body` | Source reviewed; runtime proof pending |
@@ -348,6 +349,7 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `web-node` | Web node loading and chrome | `src/renderer/nodes/WebNode.tsx` | `useVocabularyMapper()` |
 | `loop-node` | Hook-derived loop card | `src/renderer/nodes/LoopNode.tsx` | `useVocabularyMapper()` |
 | `native-loop-node` | User-created scheduler node | `src/renderer/nodes/NativeLoopNode.tsx` | `useVocabularyMapper()` |
+| `trigger-node` | Scheduled trigger node | `src/renderer/nodes/TriggerNode.tsx` | `useVocabularyMapper()` |
 | `nsis-node` | Installer builder node | `src/renderer/nodes/NsisInstallerNode.tsx` | `useVocabularyMapper()` |
 | `service-node` | Service manager node chrome and guidance | `src/renderer/nodes/ServiceNode.tsx` | `useVocabularyMapper()` |
 | `authenticator-node` | Authenticator node chrome and states | `src/renderer/nodes/AuthenticatorNode.tsx` | `useVocabularyMapper()` |
@@ -439,6 +441,7 @@ descendants produced by a component.
 | loop-node | src/renderer/nodes/LoopNode.tsx | mapped-callsite |
 | service-node | src/renderer/nodes/ServiceNode.tsx | mapped-callsite |
 | native-loop-node | src/renderer/nodes/NativeLoopNode.tsx | mapped-callsite |
+| trigger-node | src/renderer/nodes/TriggerNode.tsx | mapped-callsite |
 | nsis-node | src/renderer/nodes/NsisInstallerNode.tsx | mapped-callsite |
 | authenticator-node | src/renderer/nodes/AuthenticatorNode.tsx | mapped-callsite |
 | annotation-node | src/renderer/nodes/AnnotationNode.tsx | mapped-callsite |
@@ -500,9 +503,10 @@ landing-page JSON/cache validators. The site renderer also has an independent pe
 manifest with file-backed removal mutations. Runtime facts such as paths, IDs, model names,
 provider errors, visible commands, brand names, license text, and shortcut text remain outside the
 authored-copy mapper. Canvas notifications classify every direct body as authored or fact, and the
-hand-written Canvas inventory now names 57 checker-retained production calls in source order. Two
-planner notifications are nested inside the project-open success action and remain explicitly
-classified in source. The landing-page file reader keeps rejected reads visible instead of
+hand-written Canvas inventory now names 58 checker-retained production calls in source order,
+including the scheduled-trigger placement path and the two planner notifications nested inside
+the project-open success action. All remain explicitly classified in source. The landing-page file
+reader keeps rejected reads visible instead of
 treating them as successful input.
 The per-string checker parses the arguments of each copy call, while the delegated file-change
 tests exercise size rejection, read failure, picker reset, valid binding, and the resulting render.
