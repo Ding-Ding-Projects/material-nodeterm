@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '../state/workspace'
 import { useSettings } from '../state/settings'
-import { useNotifications } from '../state/notifications'
+import { notify } from '../lib/adhdNotify'
 import { playSfx } from '../lib/sfx'
 import { narrate } from '../lib/narrator'
 import { nextAlarmOccurrence, alarmOccurrenceId, localDateTimeToEpoch, validateAlarm, type AlarmOccurrence, type AlarmRecurrence, type AlarmSchedule } from '@shared/alarm-clock'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 const COMMON_TIMEZONES = ['UTC', 'America/Toronto', 'America/New_York', 'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Asia/Tokyo', 'Asia/Hong_Kong', 'Australia/Sydney']
 const RECURRENCES: { value: AlarmRecurrence; label: string }[] = [
@@ -63,6 +65,7 @@ function compileSearch(pattern: string, flags: string): RegExp | null {
 export default function AlarmClockNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { deleteElements, updateNodeData } = useReactFlow()
   const settings = useSettings((state) => state.settings)
+  const vocab = useVocabularyMapper()
   const [now, setNow] = useState(() => Date.now())
   const [search, setSearch] = useState('')
   const [regexOpen, setRegexOpen] = useState(false)
@@ -108,18 +111,22 @@ export default function AlarmClockNode({ id, data, selected }: NodeProps<CanvasN
 
   const deliver = useCallback((occurrence: AlarmOccurrence, kind: 'due' | 'snooze' | 'missed') => {
     const title = String(data.title || 'Alarm Clock')
-    const body = kind === 'missed' ? `${title} was missed at ${displayTime(occurrence.scheduledAt, timeZone)}.` : `${title} is due now.`
-    useNotifications.getState().push({
+    const body = kind === 'missed'
+      ? mapOwnedSentence(vocab, [fact(title), copy(' was missed at '), fact(displayTime(occurrence.scheduledAt, timeZone)), copy('.')])
+      : mapOwnedSentence(vocab, [fact(title), copy(' is due now.')])
+    notify({
       kind: kind === 'missed' ? 'warning' : 'info',
       title: kind === 'missed' ? 'Missed alarm' : 'Alarm due',
-      body: `${body} This app cannot wake a powered-off computer.`,
+      titleKind: 'authored',
+      body: mapOwnedSentence(vocab, [fact(body), copy(' This app cannot wake a powered-off computer.')]),
+      bodyKind: 'fact',
       autoDismissMs: kind === 'missed' ? null : 12_000,
       actions: kind === 'missed' ? undefined : [
-        { label: `Snooze ${data.alarmSnoozeMinutes ?? 10} min`, onClick: () => {
+        { label: mapOwnedSentence(vocab, [copy('Snooze '), fact(String(data.alarmSnoozeMinutes ?? 10)), copy(' min')]), onClick: () => {
           if (hostAlarm) void hostAlarm.snooze(occurrence.id, Number(data.alarmSnoozeMinutes ?? 10)).then(applyHostSnapshot)
           else patch({ alarmHistory: history.map((item) => item.id === occurrence.id ? { ...item, status: 'snoozed', snoozedUntil: Date.now() + Number(data.alarmSnoozeMinutes ?? 10) * 60_000, resolvedAt: undefined } : item) })
         } },
-        { label: 'Dismiss', onClick: () => {
+        { label: vocab('Dismiss'), onClick: () => {
           if (hostAlarm) void hostAlarm.dismiss(occurrence.id).then(applyHostSnapshot)
           else patch({ alarmHistory: history.map((item) => item.id === occurrence.id ? { ...item, status: 'dismissed', resolvedAt: Date.now(), snoozedUntil: undefined } : item) })
         } }
@@ -129,7 +136,7 @@ export default function AlarmClockNode({ id, data, selected }: NodeProps<CanvasN
     if (data.alarmNarratorEnabled !== false && settings.narratorEnabled) {
       narrate({ category: `alarm:${id}`, language: settings.narratorLanguage, en: body, yue: kind === 'missed' ? '鬧鐘錯過咗，呢部電腦熄機時唔可以叫醒佢。' : '鬧鐘到喇，呢部電腦熄機時唔可以叫醒佢。', rate: settings.narratorRate, pitch: settings.narratorPitch, voiceEn: settings.narratorVoiceEn, voiceYue: settings.narratorVoiceYue, important: kind !== 'due' })
     }
-  }, [applyHostSnapshot, data, history, hostAlarm, id, patch, settings, timeZone])
+  }, [applyHostSnapshot, data, history, hostAlarm, id, patch, settings, timeZone, vocab])
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
@@ -154,10 +161,10 @@ export default function AlarmClockNode({ id, data, selected }: NodeProps<CanvasN
     void hostAlarm.upsert(input).then((snapshot) => {
       if (active) applyHostSnapshot(snapshot)
     }).catch(() => {
-      if (active) useNotifications.getState().push({ kind: 'error', title: 'Alarm planner unavailable', body: 'The host could not persist this alarm. The canvas copy remains unchanged.', autoDismissMs: null })
+      if (active) notify({ kind: 'error', title: 'Alarm planner unavailable', titleKind: 'authored', body: 'The host could not persist this alarm. The canvas copy remains unchanged.', bodyKind: 'authored', autoDismissMs: null })
     })
     return () => { active = false }
-  }, [applyHostSnapshot, data.alarmEnabled, data.alarmNarratorEnabled, data.alarmNextOccurrenceAt, data.alarmSnoozeMinutes, data.alarmSoundEnabled, data.title, hostAlarm, id, scheduleSignature, timeZone])
+  }, [applyHostSnapshot, data.alarmEnabled, data.alarmNarratorEnabled, data.alarmNextOccurrenceAt, data.alarmSnoozeMinutes, data.alarmSoundEnabled, data.title, hostAlarm, id, scheduleSignature, timeZone, vocab])
 
   useEffect(() => {
     if (!hostAlarm) return
@@ -229,28 +236,28 @@ export default function AlarmClockNode({ id, data, selected }: NodeProps<CanvasN
         <span aria-hidden="true" className="alarm-clock-node__glyph">⏰</span>
         <EditableNodeTitle value={String(data.title ?? '')} onChange={(title) => patch({ title })} emptyLabel="Alarm Clock" title="Click to rename" ariaLabel="Alarm Clock node name" rejectEmpty={false} />
         <span className="term-node__spacer" />
-        <button className="term-node__close" title="Close" aria-label="Close Alarm Clock" onClick={() => {
+        <button className="term-node__close" title={vocab('Close')} aria-label={vocab('Close Alarm Clock')} onClick={() => {
           if (hostAlarm) void hostAlarm.remove(id)
           void deleteElements({ nodes: [{ id }] })
         }}>×</button>
       </div>
       <div className="alarm-clock-node__body nodrag nowheel">
-        <label>Schedule
-          <select value={schedule.recurrence} aria-label="Alarm recurrence" onChange={(event) => updateSchedule({ recurrence: event.target.value as AlarmRecurrence })}>
-            {RECURRENCES.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
+        <label>{vocab('Schedule')}
+          <select value={schedule.recurrence} aria-label={vocab('Alarm recurrence')} onChange={(event) => updateSchedule({ recurrence: event.target.value as AlarmRecurrence })}>
+            {RECURRENCES.map((entry) => <option key={entry.value} value={entry.value}>{vocab(entry.label)}</option>)}
           </select>
         </label>
-        {schedule.recurrence !== 'daily' && schedule.recurrence !== 'weekdays' && schedule.recurrence !== 'weekly' && schedule.recurrence !== 'monthly' ? <label>Date <input type="date" value={schedule.date ?? ''} aria-label="Alarm date" onChange={(event) => updateSchedule({ date: event.target.value })} /></label> : null}
-        <label>Time <input type="time" step={1} value={schedule.time} aria-label="Alarm local time" onChange={(event) => updateSchedule({ time: event.target.value })} /></label>
-        <label>Timezone <select value={timeZone} aria-label="Alarm timezone" onChange={(event) => patch({ alarmTimeZone: event.target.value, alarmNextOccurrenceAt: undefined })}>{timezoneChoices(timeZone).map((zone) => <option key={zone} value={zone}>{zone}</option>)}</select></label>
-        {schedule.recurrence === 'weekly' ? <fieldset><legend>Weekdays</legend><div className="alarm-clock-node__days">{WEEKDAYS.map((day, index) => <label key={day}><input type="checkbox" checked={schedule.weekdays?.includes(index) ?? false} onChange={(event) => updateSchedule({ weekdays: event.target.checked ? [...new Set([...(schedule.weekdays ?? []), index])] : (schedule.weekdays ?? []).filter((value) => value !== index) })} />{day}</label>)}</div></fieldset> : null}
-        {schedule.recurrence === 'monthly' ? <label>Day of month <input type="number" min={1} max={31} value={schedule.monthDay ?? 1} aria-label="Alarm day of month" onChange={(event) => updateSchedule({ monthDay: Number(event.target.value) })} /></label> : null}
-        <div className="alarm-clock-node__options"><label>Snooze (minutes) <input type="number" min={1} max={120} value={data.alarmSnoozeMinutes ?? 10} onChange={(event) => patch({ alarmSnoozeMinutes: Math.min(120, Math.max(1, Number(event.target.value) || 10)) })} /></label><label><input type="checkbox" checked={data.alarmSoundEnabled !== false} onChange={(event) => patch({ alarmSoundEnabled: event.target.checked })} /> Sound</label><label><input type="checkbox" checked={data.alarmNarratorEnabled !== false} onChange={(event) => patch({ alarmNarratorEnabled: event.target.checked })} /> Narrator</label></div>
-        {!canStart ? <p className="alarm-clock-node__error" role="alert">Choose a valid time and required recurrence values before starting.</p> : null}
-        <p className="alarm-clock-node__honesty">This alarm can notify while the app is running. It cannot wake a powered-off computer.</p>
-        <div className="alarm-clock-node__status"><strong>{data.alarmEnabled ? 'Running' : 'Paused'}</strong><span>Next: {displayTime(data.alarmNextOccurrenceAt, timeZone)}</span><span>Now: {displayTime(now, timeZone)}</span></div>
-        <div className="alarm-clock-node__actions"><button disabled={!canStart} className={data.alarmEnabled ? 'active' : ''} onClick={toggle}>{data.alarmEnabled ? 'Pause' : 'Start alarm'}</button></div>
-        <div className="alarm-clock-node__history"><div className="alarm-clock-node__history-head"><strong>Occurrence history</strong><span>{history.length}</span></div><div className="alarm-clock-node__search"><input value={search} placeholder="Search history" aria-label="Search alarm history" onChange={(event) => setSearch(event.target.value)} /><button aria-expanded={regexOpen} title="Open regex builder" onClick={() => setRegexOpen((open) => !open)}>.*</button></div>{regexOpen ? <div className="alarm-clock-node__regex" role="dialog" aria-label="Alarm history regex builder"><label>Pattern <input value={regexPattern} onChange={(event) => setRegexPattern(event.target.value)} /></label><label>Flags <input value={regexFlags} onChange={(event) => setRegexFlags(event.target.value)} /></label><span role="status">{regexPattern && !regex ? 'Invalid regular expression.' : 'Plain text is the default.'}</span></div> : null}{visibleHistory.length === 0 ? <p className="alarm-clock-node__empty">No matching alarm occurrences yet.</p> : <ul>{visibleHistory.map((occurrence) => <li key={occurrence.id}><span><b>{occurrence.status}</b> {displayTime(occurrence.scheduledAt, occurrence.timeZone)}</span>{occurrence.status === 'fired' || occurrence.status === 'snoozed' ? <span><button onClick={() => snooze(occurrence)}>Snooze</button><button onClick={() => dismiss(occurrence)}>Dismiss</button></span> : null}</li>)}</ul>}</div>
+        {schedule.recurrence !== 'daily' && schedule.recurrence !== 'weekdays' && schedule.recurrence !== 'weekly' && schedule.recurrence !== 'monthly' ? <label>{vocab('Date')} <input type="date" value={schedule.date ?? ''} aria-label={vocab('Alarm date')} onChange={(event) => updateSchedule({ date: event.target.value })} /></label> : null}
+        <label>{vocab('Time')} <input type="time" step={1} value={schedule.time} aria-label={vocab('Alarm local time')} onChange={(event) => updateSchedule({ time: event.target.value })} /></label>
+        <label>{vocab('Timezone')} <select value={timeZone} aria-label={vocab('Alarm timezone')} onChange={(event) => patch({ alarmTimeZone: event.target.value, alarmNextOccurrenceAt: undefined })}>{timezoneChoices(timeZone).map((zone) => <option key={zone} value={zone}>{zone}</option>)}</select></label>
+        {schedule.recurrence === 'weekly' ? <fieldset><legend>{vocab('Weekdays')}</legend><div className="alarm-clock-node__days">{WEEKDAYS.map((day, index) => <label key={day}><input type="checkbox" checked={schedule.weekdays?.includes(index) ?? false} onChange={(event) => updateSchedule({ weekdays: event.target.checked ? [...new Set([...(schedule.weekdays ?? []), index])] : (schedule.weekdays ?? []).filter((value) => value !== index) })} />{vocab(day)}</label>)}</div></fieldset> : null}
+        {schedule.recurrence === 'monthly' ? <label>{vocab('Day of month')} <input type="number" min={1} max={31} value={schedule.monthDay ?? 1} aria-label={vocab('Alarm day of month')} onChange={(event) => updateSchedule({ monthDay: Number(event.target.value) })} /></label> : null}
+        <div className="alarm-clock-node__options"><label>{vocab('Snooze (minutes)')} <input type="number" min={1} max={120} value={data.alarmSnoozeMinutes ?? 10} aria-label={vocab('Snooze minutes')} onChange={(event) => patch({ alarmSnoozeMinutes: Math.min(120, Math.max(1, Number(event.target.value) || 10)) })} /></label><label><input type="checkbox" checked={data.alarmSoundEnabled !== false} onChange={(event) => patch({ alarmSoundEnabled: event.target.checked })} /> {vocab('Sound')}</label><label><input type="checkbox" checked={data.alarmNarratorEnabled !== false} onChange={(event) => patch({ alarmNarratorEnabled: event.target.checked })} /> {vocab('Narrator')}</label></div>
+        {!canStart ? <p className="alarm-clock-node__error" role="alert">{vocab('Choose a valid time and required recurrence values before starting.')}</p> : null}
+        <p className="alarm-clock-node__honesty">{vocab('This alarm can notify while the app is running. It cannot wake a powered-off computer.')}</p>
+        <div className="alarm-clock-node__status"><strong>{vocab(data.alarmEnabled ? 'Running' : 'Paused')}</strong><span>{mapOwnedSentence(vocab, [copy('Next: '), fact(displayTime(data.alarmNextOccurrenceAt, timeZone))])}</span><span>{mapOwnedSentence(vocab, [copy('Now: '), fact(displayTime(now, timeZone))])}</span></div>
+        <div className="alarm-clock-node__actions"><button disabled={!canStart} className={data.alarmEnabled ? 'active' : ''} onClick={toggle}>{vocab(data.alarmEnabled ? 'Pause' : 'Start alarm')}</button></div>
+        <div className="alarm-clock-node__history"><div className="alarm-clock-node__history-head"><strong>{vocab('Occurrence history')}</strong><span>{fact(String(history.length)).text}</span></div><div className="alarm-clock-node__search"><input value={search} placeholder={vocab('Search history')} aria-label={vocab('Search alarm history')} onChange={(event) => setSearch(event.target.value)} /><button aria-expanded={regexOpen} title={vocab('Open regex builder')} aria-label={vocab('Open regex builder')} onClick={() => setRegexOpen((open) => !open)}>.*</button></div>{regexOpen ? <div className="alarm-clock-node__regex" role="dialog" aria-label={vocab('Alarm history regex builder')}><label>{vocab('Pattern')} <input value={regexPattern} aria-label={vocab('Regex pattern')} onChange={(event) => setRegexPattern(event.target.value)} /></label><label>{vocab('Flags')} <input value={regexFlags} aria-label={vocab('Regex flags')} onChange={(event) => setRegexFlags(event.target.value)} /></label><span role="status">{regexPattern && !regex ? vocab('Invalid regular expression.') : vocab('Plain text is the default.')}</span></div> : null}{visibleHistory.length === 0 ? <p className="alarm-clock-node__empty">{vocab('No matching alarm occurrences yet.')}</p> : <ul>{visibleHistory.map((occurrence) => <li key={occurrence.id}><span><b>{fact(occurrence.status).text}</b> {fact(displayTime(occurrence.scheduledAt, occurrence.timeZone)).text}</span>{occurrence.status === 'fired' || occurrence.status === 'snoozed' ? <span><button onClick={() => snooze(occurrence)}>{vocab('Snooze')}</button><button onClick={() => dismiss(occurrence)}>{vocab('Dismiss')}</button></span> : null}</li>)}</ul>}</div>
       </div>
     </div>
   )

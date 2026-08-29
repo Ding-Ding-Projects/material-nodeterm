@@ -3,9 +3,12 @@ import type { CanvasNode } from '../state/workspace'
 import { clampTimerDuration, formatTimerMs, timerNextState, type TimerMode, type TimerNodeData } from '@shared/timer'
 import { useEffect, useRef, useState } from 'react'
 import { notify } from '../lib/adhdNotify'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 export default function TimerNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { updateNodeData, deleteElements } = useReactFlow()
+  const vocab = useVocabularyMapper()
   const timer = data as TimerNodeData
   const [tick, setTick] = useState(Date.now())
   const last = useRef(Date.now())
@@ -42,10 +45,18 @@ export default function TimerNode({ id, data, selected }: NodeProps<CanvasNode>)
         if (safeNext.completed && current.occurrenceId) void window.nodeTerminal.timer.transition(current.occurrenceId, 'completed')
       }
       setTick(now)
-      if (next.completed && current.timerMode !== 'interval' && current.alarmEnabled) notify({ kind: 'success', title: `${current.title} complete`, body: current.alarmTone === 'silent' ? 'Alarm is silent.' : `Alarm tone: ${current.alarmTone}.` })
+      if (next.completed && current.timerMode !== 'interval' && current.alarmEnabled) notify({
+        kind: 'success',
+        title: mapOwnedSentence(vocab, [fact(String(current.title)), copy(' complete')]),
+        titleKind: 'fact',
+        body: current.alarmTone === 'silent'
+          ? 'Alarm is silent.'
+          : mapOwnedSentence(vocab, [copy('Alarm tone: '), fact(String(current.alarmTone)), copy('.')]),
+        bodyKind: 'fact'
+      })
     }, 250)
     return () => window.clearInterval(handle)
-  }, [id, timer.running, timer.paused, updateNodeData])
+  }, [id, timer.running, timer.paused, updateNodeData, vocab])
 
   const display = timer.timerMode === 'stopwatch' ? timer.elapsedMs : timer.remainingMs
   const setMode = (mode: TimerMode) => updateNodeData(id, { timerMode: mode, running: false, paused: false, remainingMs: timer.durationMs, elapsedMs: 0, occurrenceState: 'scheduled' })
@@ -58,20 +69,20 @@ export default function TimerNode({ id, data, selected }: NodeProps<CanvasNode>)
   }
   const reset = () => updateNodeData(id, { running: false, paused: false, remainingMs: timer.durationMs, elapsedMs: 0, lapsMs: [], sequenceIndex: 0, occurrenceState: 'scheduled' })
   const lap = () => updateNodeData(id, { lapsMs: [...(timer.lapsMs ?? []), timer.elapsedMs] })
-  return <div className={`timer-node${selected ? ' selected' : ''}`}>
+  return <div className={`timer-node${selected ? ' selected' : ''}`} aria-label={mapOwnedSentence(vocab, [copy('Timer node: '), fact(String(timer.title))])}>
     <NodeResizer minWidth={320} minHeight={300} isVisible={selected} color="var(--md-primary)" />
     <Handle type="target" position={Position.Left} />
-    <div className="timer-node__header"><span aria-hidden="true">◷</span><input className="timer-node__title nodrag" aria-label="Timer title" value={timer.title} onChange={(e) => updateNodeData(id, { title: e.target.value })} /><button aria-label="Delete timer" onClick={() => deleteElements({ nodes: [{ id }] })}>×</button></div>
-    <div className="timer-node__modes nodrag" role="tablist" aria-label="Timer mode">
-      {(['countdown', 'stopwatch', 'interval'] as TimerMode[]).map((mode) => <button key={mode} role="tab" aria-selected={timer.timerMode === mode} onClick={() => setMode(mode)}>{mode === 'countdown' ? 'Countdown' : mode === 'stopwatch' ? 'Stopwatch' : 'Work / rest'}</button>)}
+    <div className="timer-node__header"><span aria-hidden="true">◷</span><input className="timer-node__title nodrag" aria-label={vocab('Timer title')} value={timer.title} onChange={(e) => updateNodeData(id, { title: e.target.value })} /><button aria-label={vocab('Delete timer')} title={vocab('Delete timer')} onClick={() => deleteElements({ nodes: [{ id }] })}>×</button></div>
+    <div className="timer-node__modes nodrag" role="tablist" aria-label={vocab('Timer mode')}>
+      {(['countdown', 'stopwatch', 'interval'] as TimerMode[]).map((mode) => <button key={mode} role="tab" aria-selected={timer.timerMode === mode} aria-label={vocab(mode === 'countdown' ? 'Countdown' : mode === 'stopwatch' ? 'Stopwatch' : 'Work / rest')} onClick={() => setMode(mode)}>{vocab(mode === 'countdown' ? 'Countdown' : mode === 'stopwatch' ? 'Stopwatch' : 'Work / rest')}</button>)}
     </div>
-    <output className="timer-node__display" aria-live="polite" aria-label={`${timer.title} ${timer.paused ? 'paused' : timer.running ? 'running' : 'ready'} ${formatTimerMs(display)}`}>{formatTimerMs(display)}</output>
-    {timer.timerMode !== 'stopwatch' && <label className="timer-node__duration nodrag">Duration <input type="number" min={1} value={Math.round(timer.durationMs / 1000)} aria-label="Duration seconds" onChange={(e) => { const durationMs = clampTimerDuration(Number(e.target.value) * 1000); updateNodeData(id, { durationMs, remainingMs: durationMs }) }} /> seconds</label>}
-    <label className="timer-node__repeat nodrag">Repeat <input type="number" min={0} max={999} value={timer.repeatCount} aria-label="Repeat count" onChange={(e) => updateNodeData(id, { repeatCount: Math.max(0, Math.min(999, Number(e.target.value) || 0)) })} /> times</label>
-    {timer.timerMode === 'interval' && <div className="timer-node__sequence nodrag"><strong>Work / rest sequence</strong>{(timer.sequence ?? []).map((step, i) => <div key={step.id}><input aria-label={`Sequence step ${i + 1} label`} maxLength={80} value={step.label} onChange={(e) => updateNodeData(id, { sequence: timer.sequence.map((s, j) => j === i ? { ...s, label: e.target.value } : s) })} /><input type="number" min={1} max={604800} aria-label={`Sequence step ${i + 1} seconds`} value={Math.round(step.durationMs / 1000)} onChange={(e) => updateNodeData(id, { sequence: timer.sequence.map((s, j) => j === i ? { ...s, durationMs: clampTimerDuration(Number(e.target.value) * 1000) } : s) })} /><button aria-label={`Move step ${i + 1} up`} disabled={i === 0} onClick={() => { const sequence = [...timer.sequence]; [sequence[i - 1], sequence[i]] = [sequence[i], sequence[i - 1]]; updateNodeData(id, { sequence }) }}>↑</button><button aria-label={`Move step ${i + 1} down`} disabled={i === timer.sequence.length - 1} onClick={() => { const sequence = [...timer.sequence]; [sequence[i], sequence[i + 1]] = [sequence[i + 1], sequence[i]]; updateNodeData(id, { sequence }) }}>↓</button><button aria-label={`Remove sequence step ${i + 1}`} onClick={() => updateNodeData(id, { sequence: timer.sequence.filter((_, j) => j !== i) })}>×</button></div>)}<button disabled={(timer.sequence ?? []).length >= 32} onClick={() => updateNodeData(id, { sequence: [...(timer.sequence ?? []), { id: `step-${Date.now()}`, label: 'New step', durationMs: 60_000 }] })}>Add step</button></div>}
-    <div className="timer-node__actions nodrag"><button onClick={timer.running ? () => updateNodeData(id, { paused: !timer.paused, occurrenceState: timer.paused ? 'running' : 'paused' }) : start}>{timer.running ? (timer.paused ? 'Resume' : 'Pause') : 'Start'}</button>{timer.timerMode === 'stopwatch' && <button onClick={lap} disabled={!timer.running}>Lap</button>}<button onClick={reset}>Reset</button></div>
-    <label className="timer-node__alarm nodrag"><input type="checkbox" checked={timer.alarmEnabled} onChange={(e) => updateNodeData(id, { alarmEnabled: e.target.checked })} /> Alarm</label>
-    <div className="timer-node__meta">{timer.occurrenceState} · {timer.lapsMs?.length ?? 0} laps · {timer.missedCount ?? 0} missed</div>
+    <output className="timer-node__display" aria-live="polite" aria-label={mapOwnedSentence(vocab, [fact(String(timer.title)), copy(' '), fact(timer.paused ? 'paused' : timer.running ? 'running' : 'ready'), copy(' '), fact(formatTimerMs(display))])}>{formatTimerMs(display)}</output>
+    {timer.timerMode !== 'stopwatch' && <label className="timer-node__duration nodrag">{vocab('Duration')} <input type="number" min={1} value={Math.round(timer.durationMs / 1000)} aria-label={vocab('Duration seconds')} onChange={(e) => { const durationMs = clampTimerDuration(Number(e.target.value) * 1000); updateNodeData(id, { durationMs, remainingMs: durationMs }) }} /> {vocab('seconds')}</label>}
+    <label className="timer-node__repeat nodrag">{vocab('Repeat')} <input type="number" min={0} max={999} value={timer.repeatCount} aria-label={vocab('Repeat count')} onChange={(e) => updateNodeData(id, { repeatCount: Math.max(0, Math.min(999, Number(e.target.value) || 0)) })} /> {vocab('times')}</label>
+    {timer.timerMode === 'interval' && <div className="timer-node__sequence nodrag"><strong>{vocab('Work / rest sequence')}</strong>{(timer.sequence ?? []).map((step, i) => <div key={step.id}><input aria-label={mapOwnedSentence(vocab, [copy('Sequence step '), fact(String(i + 1)), copy(' label')])} maxLength={80} value={step.label} onChange={(e) => updateNodeData(id, { sequence: timer.sequence.map((s, j) => j === i ? { ...s, label: e.target.value } : s) })} /><input type="number" min={1} max={604800} aria-label={mapOwnedSentence(vocab, [copy('Sequence step '), fact(String(i + 1)), copy(' seconds')])} value={Math.round(step.durationMs / 1000)} onChange={(e) => updateNodeData(id, { sequence: timer.sequence.map((s, j) => j === i ? { ...s, durationMs: clampTimerDuration(Number(e.target.value) * 1000) } : s) })} /><button aria-label={mapOwnedSentence(vocab, [copy('Move step '), fact(String(i + 1)), copy(' up')])} title={vocab('Move step up')} disabled={i === 0} onClick={() => { const sequence = [...timer.sequence]; [sequence[i - 1], sequence[i]] = [sequence[i], sequence[i - 1]]; updateNodeData(id, { sequence }) }}>↑</button><button aria-label={mapOwnedSentence(vocab, [copy('Move step '), fact(String(i + 1)), copy(' down')])} title={vocab('Move step down')} disabled={i === timer.sequence.length - 1} onClick={() => { const sequence = [...timer.sequence]; [sequence[i], sequence[i + 1]] = [sequence[i + 1], sequence[i]]; updateNodeData(id, { sequence }) }}>↓</button><button aria-label={mapOwnedSentence(vocab, [copy('Remove sequence step '), fact(String(i + 1))])} title={vocab('Remove sequence step')} onClick={() => updateNodeData(id, { sequence: timer.sequence.filter((_, j) => j !== i) })}>×</button></div>)}<button disabled={(timer.sequence ?? []).length >= 32} onClick={() => updateNodeData(id, { sequence: [...(timer.sequence ?? []), { id: `step-${Date.now()}`, label: 'New step', durationMs: 60_000 }] })}>{vocab('Add step')}</button></div>}
+    <div className="timer-node__actions nodrag"><button onClick={timer.running ? () => updateNodeData(id, { paused: !timer.paused, occurrenceState: timer.paused ? 'running' : 'paused' }) : start}>{vocab(timer.running ? (timer.paused ? 'Resume' : 'Pause') : 'Start')}</button>{timer.timerMode === 'stopwatch' && <button onClick={lap} disabled={!timer.running}>{vocab('Lap')}</button>}<button onClick={reset}>{vocab('Reset')}</button></div>
+    <label className="timer-node__alarm nodrag"><input type="checkbox" checked={timer.alarmEnabled} onChange={(e) => updateNodeData(id, { alarmEnabled: e.target.checked })} /> {vocab('Alarm')}</label>
+    <div className="timer-node__meta">{fact(timer.occurrenceState).text} · {fact(String(timer.lapsMs?.length ?? 0)).text} {vocab('laps')} · {fact(String(timer.missedCount ?? 0)).text} {vocab('missed')}</div>
     {tick < 0 && <span aria-hidden="true" />}
   </div>
 }
