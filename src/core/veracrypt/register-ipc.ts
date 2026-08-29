@@ -3,8 +3,9 @@ import { mountOptionsFrom } from '../../shared/veracrypt'
 import type { CorePlatform } from '../platform'
 import { VeraCryptManager } from './service'
 
-/** Register the host-local VeraCrypt service. The same registrar gives Server Edition an honest
- * unsupported result, while relay peers use their explicit local-only stub and never reach it. */
+/** Register the host-local VeraCrypt service for the desktop shell only. Server Edition deliberately
+ * does not register these handlers because mounting a host container from a browser session would
+ * expose a machine-local destructive capability. Relay peers use their explicit local-only stub. */
 export function registerVeraCryptIpc(platform: CorePlatform): { manager: VeraCryptManager } {
   const manager = new VeraCryptManager(platform)
   platform.handle(IPC.veracryptAvailability, () => manager.availability())

@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, readFile, access } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import type { Readable } from 'node:stream'
 import { IPC } from '../../shared/ipc'
 import {
@@ -21,7 +21,8 @@ import {
   type VeraCryptOperationKind
 } from '../../shared/veracrypt'
 import type { CorePlatform } from '../platform'
-import { renameAtomic, tempNameFor } from '../fs-atomic'
+import { writeFileAtomic } from '../fs-atomic'
+import { withCrossProcessLock } from '../fs-transaction-lock'
 
 interface ProcessResult {
   exitCode: number
@@ -103,6 +104,21 @@ const emptyAvailability = (runtime: VeraCryptRuntime): VeraCryptAvailability => 
   checkedAt: Date.now()
 })
 
+function isTrustedExecutableCandidate(candidate: string, trustedInstallDirs: readonly string[]): boolean {
+  if (typeof candidate !== 'string' || !win32.isAbsolute(candidate)) return false
+  const normalized = win32.normalize(candidate)
+  if (win32.basename(normalized).toLowerCase() !== VERACRYPT_DEFAULTS.executableName.toLowerCase()) return false
+  return trustedInstallDirs.some((root) => {
+    const relative = win32.relative(win32.normalize(root), normalized)
+    return relative === '' || (relative !== '' && !relative.startsWith('..') && !win32.isAbsolute(relative))
+  })
+}
+
+function versionFromOutput(output: string): string | null {
+  const match = output.match(/\bVeraCrypt\s+(?:version\s+)?(\d+(?:\.\d+){1,3})\b/iu) ?? output.match(/\b(\d+\.\d+(?:\.\d+){0,2})\b/u)
+  return match?.[1] ?? null
+}
+
 function operationMessage(kind: VeraCryptOperationKind, state: VeraCryptOperation['state']): string {
   if (state === 'running') return kind === 'mount' ? 'VeraCrypt is waiting for its native credential prompt.' : `VeraCrypt ${kind} is in progress.`
   if (state === 'succeeded') return kind === 'mount' ? 'The container mount was independently verified.' : `VeraCrypt ${kind} completed.`
@@ -116,7 +132,7 @@ export class VeraCryptManager implements VeraCryptApi {
   private readonly children = new Map<string, VeraCryptChildProcess>()
   private readonly managerMounts = new Map<string, string>()
   private executable: string | null = null
-  private favoritesLoaded = false
+  private lastAvailabilityReason: string | null = null
   private favoriteRecords: VeraCryptFavorite[] = []
 
   constructor(private readonly host: CorePlatform, private readonly runtime: VeraCryptRuntime = DEFAULT_RUNTIME) {}
@@ -133,54 +149,65 @@ export class VeraCryptManager implements VeraCryptApi {
 
   async availability(): Promise<VeraCryptAvailability> {
     if (this.runtime.platform !== 'win32') return emptyAvailability(this.runtime)
-    const candidates = [...await this.runtime.whereExecutable(), ...this.runtime.executableCandidates]
+    const trustedInstallDirs = this.runtime.executableCandidates.map((candidate) => win32.dirname(win32.normalize(candidate)))
+    const candidates = [...this.runtime.executableCandidates, ...await this.runtime.whereExecutable()]
     for (const candidate of candidates) {
-      if (!isSafeContainerPath(candidate)) continue
+      if (!isTrustedExecutableCandidate(candidate, trustedInstallDirs)) continue
       try {
         const stats = await this.runtime.lstat(candidate)
         if (!stats.isFile() || stats.isSymbolicLink()) continue
         this.executable = candidate
-        return { platform: 'win32', state: 'available', executablePath: candidate, version: null, reason: null, checkedAt: Date.now() }
+        let version: string | null = null
+        try {
+          const versionResult = await this.runtime.run(candidate, ['/version'], 10_000)
+          version = versionFromOutput(`${versionResult.stdout}\n${versionResult.stderr}`)
+        } catch {
+          // A validated executable remains available when its optional version probe is unavailable.
+        }
+        this.lastAvailabilityReason = null
+        return { platform: 'win32', state: 'available', executablePath: candidate, version, reason: null, checkedAt: Date.now() }
       } catch {
         // Continue through the validated locations. A failed candidate is not proof of absence.
       }
     }
     this.executable = null
-    return emptyAvailability(this.runtime)
+    const unavailable = emptyAvailability(this.runtime)
+    this.lastAvailabilityReason = unavailable.reason
+    return unavailable
   }
 
   private async executablePath(): Promise<string> {
     if (this.executable) return this.executable
     const state = await this.availability()
-    if (state.state !== 'available' || !state.executablePath) throw new Error(state.reason ?? 'VeraCrypt is unavailable.')
+    if (state.state !== 'available' || !state.executablePath) {
+      throw new Error(this.lastAvailabilityReason ?? state.reason ?? 'VeraCrypt is unavailable.')
+    }
     return state.executablePath
   }
 
   private favoriteFile(): string { return join(this.host.userDataDir, 'veracrypt', 'favorites.json') }
 
-  private async loadFavorites(): Promise<VeraCryptFavorite[]> {
-    if (this.favoritesLoaded) return this.favoriteRecords
-    this.favoritesLoaded = true
+  private async readFavorites(): Promise<VeraCryptFavorite[]> {
     try {
       const parsed = JSON.parse(await readFile(this.favoriteFile(), 'utf8')) as unknown
-      this.favoriteRecords = Array.isArray(parsed) ? parsed.map(favoriteFrom).filter((item): item is VeraCryptFavorite => item !== null).slice(0, VERACRYPT_DEFAULTS.maxFavorites) : []
+      return Array.isArray(parsed) ? parsed.map(favoriteFrom).filter((item): item is VeraCryptFavorite => item !== null).slice(0, VERACRYPT_DEFAULTS.maxFavorites) : []
     } catch {
-      this.favoriteRecords = []
+      return []
     }
-    return this.favoriteRecords
   }
 
-  private async saveFavorites(records: VeraCryptFavorite[]): Promise<VeraCryptFavorite[]> {
+  private async loadFavorites(): Promise<VeraCryptFavorite[]> {
+    this.favoriteRecords = await this.readFavorites()
+    return [...this.favoriteRecords]
+  }
+
+  private async saveFavoritesUnlocked(records: VeraCryptFavorite[]): Promise<VeraCryptFavorite[]> {
     this.favoriteRecords = records.slice(0, VERACRYPT_DEFAULTS.maxFavorites)
-    this.favoritesLoaded = true
     const file = this.favoriteFile()
     await mkdir(join(this.host.userDataDir, 'veracrypt'), { recursive: true, mode: 0o700 })
-    const temporary = tempNameFor(file)
     const payload = `${JSON.stringify(this.favoriteRecords, null, 2)}\n`
-    const { writeFile } = await import('node:fs/promises')
-    await writeFile(temporary, payload, { encoding: 'utf8', mode: 0o600 })
-    await renameAtomic(temporary, file)
-    return this.favoriteRecords
+    await writeFileAtomic(file, payload, { mode: 0o600 })
+    return [...this.favoriteRecords]
   }
 
   async favorites(): Promise<VeraCryptFavorite[]> { return [...await this.loadFavorites()] }
@@ -188,15 +215,21 @@ export class VeraCryptManager implements VeraCryptApi {
   async saveFavorite(favorite: VeraCryptFavorite): Promise<VeraCryptFavorite[]> {
     const safe = favoriteFrom(favorite)
     if (!safe) throw new Error('The VeraCrypt favorite is invalid.')
-    const current = await this.loadFavorites()
-    const next = current.filter((item) => item.id !== safe.id && item.containerPath !== safe.containerPath)
-    next.unshift(safe)
-    return this.saveFavorites(next)
+    return withCrossProcessLock(this.favoriteFile(), async (lease) => {
+      await lease.fence()
+      const current = await this.readFavorites()
+      const next = current.filter((item) => item.id !== safe.id && item.containerPath !== safe.containerPath)
+      next.unshift(safe)
+      return this.saveFavoritesUnlocked(next)
+    })
   }
 
   async removeFavorite(id: string): Promise<VeraCryptFavorite[]> {
     if (typeof id !== 'string' || id.length === 0 || id.length > 128) throw new Error('The VeraCrypt favorite id is invalid.')
-    return this.saveFavorites((await this.loadFavorites()).filter((item) => item.id !== id))
+    return withCrossProcessLock(this.favoriteFile(), async (lease) => {
+      await lease.fence()
+      return this.saveFavoritesUnlocked((await this.readFavorites()).filter((item) => item.id !== id))
+    })
   }
 
   private async availableLetters(): Promise<string[]> {
@@ -237,7 +270,7 @@ export class VeraCryptManager implements VeraCryptApi {
   }
 
   private newOperation(kind: VeraCryptOperationKind, driveLetter: string | null): VeraCryptOperation {
-    const id = createHash('sha256').update(`${kind}:${driveLetter ?? ''}:${Date.now()}:${Math.random()}`).digest('hex').slice(0, 24)
+    const id = randomUUID().replaceAll('-', '').slice(0, 24)
     return { id, kind, state: 'queued', progress: null, driveLetter, message: operationMessage(kind, 'queued'), startedAt: Date.now(), finishedAt: null }
   }
 
@@ -249,9 +282,9 @@ export class VeraCryptManager implements VeraCryptApi {
       this.emit(failed)
       return failed
     }
-    const executable = await this.executablePath().catch((error) => String(error instanceof Error ? error.message : error))
-    if (typeof executable !== 'string' || !executable) {
-      const failed = { ...operation, state: 'failed' as const, message: String(executable), finishedAt: Date.now() }
+    const executable = await this.executablePath().catch(() => null)
+    if (!executable) {
+      const failed = { ...operation, state: 'failed' as const, message: this.lastAvailabilityReason ?? 'VeraCrypt was not found in the validated installation locations.', finishedAt: Date.now() }
       this.emit(failed)
       return failed
     }
