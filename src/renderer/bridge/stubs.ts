@@ -24,6 +24,7 @@ import {
   type UpdatePolicy
 } from '../../shared/types'
 import type { HistoryListResult } from '../../shared/local-history'
+import type { CloudflareApi } from '../../shared/cloudflare'
 import { E_UNSUPPORTED } from '../../shared/rpc'
 
 /** Reject with a coded error the RPC layer + renderer recognize (renderer degrades silently). */
@@ -569,6 +570,15 @@ export function buildStubApi(): Omit<
       chatSend: U('ollama.chatSend'),
       chatStop: U('ollama.chatStop'),
       onChatStream: noopUnsub
+    },
+    cloudflare: {
+      secretPresence: (): ReturnType<CloudflareApi['secretPresence']> => Promise.resolve('unknown'),
+      permissions: (_accountId): ReturnType<CloudflareApi['permissions']> => Promise.resolve({ state: 'unknown', permissions: [], checkedAt: null, reason: 'Cloudflare is unavailable in this browser session.' }),
+      list: U('cloudflare.list'),
+      listAll: U('cloudflare.listAll'),
+      graphql: U('cloudflare.graphql'),
+      preview: U('cloudflare.preview'),
+      mutate: U('cloudflare.mutate')
     },
     minecraft: {
       versions: U('minecraft.versions'),

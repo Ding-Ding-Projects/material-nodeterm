@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-08-26, Cloudflare managers implementation lane
+
+Added `src/shared/cloudflare.ts` and `src/core/cloudflare/` for typed Access, Zero Trust, Workers,
+Pages, R2, D1, and Queues managers. The shared contract keeps portable intent separate from local
+credentials and process state. The core client is restricted to the fixed Cloudflare API origin,
+bounded response and page sizes, fixed GraphQL operation ids, cost limits, typed resource decoders,
+permission-aware mutations, redacted errors, secret-presence-only status, partial refresh states,
+and one-shot expiry-bound destructive previews. D1 deliberately has no SQL execution route, and no
+manager accepts arbitrary URLs, shell text, raw GraphQL, or free-form request bodies.
+
+The same handlers are registered for Desktop and Server Edition, and the preload and browser bridge
+expose only the typed API. `docs/features/integrations/cloudflare-managers.md` records behavior,
+portability, failure modes, security, Material Design 3 interaction expectations, and the explicit
+verification boundary. The feature catalog is declared in `src/shared/cloudflare.ts` and the
+integration category index links the article.
+
+This lane deliberately did not run tests, type checking, lint, security review, accessibility
+review, builds, packaging, installer execution, runtime interaction, or captures. No commit or dew
+was made by this lane. The parent release lane must run its own Chuts and review the integration
+before treating the manager as verified.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

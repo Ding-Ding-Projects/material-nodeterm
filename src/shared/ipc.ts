@@ -658,5 +658,14 @@ export const IPC = {
   passwordManagerCredentialCode: 'password-manager:credential-code',
   /** Every credential in one manager as non-secret metadata. Closes the gap that left a
    *  credential from an earlier session visible only as a number. */
-  passwordManagerListCredentials: 'password-manager:list-credentials'
+  passwordManagerListCredentials: 'password-manager:list-credentials',
+  // Cloudflare managers use one typed, bounded RPC surface. No raw URL, SQL, shell, or GraphQL
+  // document crosses this boundary; operation names and mutation unions are validated in core.
+  cloudflareSecretPresence: 'cloudflare:secret-presence',
+  cloudflarePermissions: 'cloudflare:permissions',
+  cloudflareList: 'cloudflare:list',
+  cloudflareListAll: 'cloudflare:list-all',
+  cloudflareGraphql: 'cloudflare:graphql',
+  cloudflarePreview: 'cloudflare:preview',
+  cloudflareMutate: 'cloudflare:mutate'
 } as const

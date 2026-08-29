@@ -924,6 +924,15 @@ const api: NodeTerminalApi = {
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
   },
+  cloudflare: {
+    secretPresence: () => ipcRenderer.invoke(IPC.cloudflareSecretPresence),
+    permissions: (accountId) => ipcRenderer.invoke(IPC.cloudflarePermissions, accountId),
+    list: (manager, accountId, page, perPage) => ipcRenderer.invoke(IPC.cloudflareList, manager, accountId, page, perPage),
+    listAll: (manager, accountId, perPage) => ipcRenderer.invoke(IPC.cloudflareListAll, manager, accountId, perPage),
+    graphql: (operation, accountId) => ipcRenderer.invoke(IPC.cloudflareGraphql, operation, accountId),
+    preview: (mutation) => ipcRenderer.invoke(IPC.cloudflarePreview, mutation),
+    mutate: (mutation, confirmation) => ipcRenderer.invoke(IPC.cloudflareMutate, mutation, confirmation)
+  },
   minecraft: {
     versions: () => ipcRenderer.invoke(IPC.minecraftVersions),
     status: (id) => ipcRenderer.invoke(IPC.minecraftStatus, id),

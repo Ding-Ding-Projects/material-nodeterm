@@ -968,5 +968,44 @@ export const CATALOG: Catalog = {
   'announce.dismiss': {
     en: flat('Dismiss'),
     yue: flat('關閉')
+  },
+
+  // Cloudflare manager chrome. Provider ids, account ids, permission names, counts, timestamps,
+  // and error details remain caller-supplied facts; these entries provide only localizable voice.
+  'cloudflare.manager.title': {
+    en: flat('Cloudflare managers'),
+    yue: flat('Cloudflare 管理器')
+  },
+  'cloudflare.manager.description': {
+    en: [
+      'Manage Access, Zero Trust, Workers, Pages, R2, D1, and Queues through typed controls.',
+      'One guided surface for seven Cloudflare services, with the sharp edges labelled.',
+      'Pick a Cloudflare service and let the manager keep the request shape honest.',
+      'Seven Cloudflare services, one tidy manager, and no mystery request textbox hiding in the cupboard.',
+      'Seven Cloudflare services walk into one manager. The arbitrary-query textbox stays outside.',
+    ],
+    yue: [
+      '用有類型控制管理 Access、Zero Trust、Workers、Pages、R2、D1 同 Queues。',
+      '一個引導介面管理七個 Cloudflare 服務，邊界寫到清清楚楚。',
+      '揀 Cloudflare 服務，管理器會幫你守住請求格式。',
+      '七個 Cloudflare 服務共用一個整齊管理器，唔使喺櫃桶搵神秘輸入框。',
+      '七個 Cloudflare 服務一齊入管理器，任意查詢輸入框就留喺門口啦。',
+    ]
+  },
+  'cloudflare.manager.noCredential': {
+    en: flat('No Cloudflare credential is configured. Add one in the protected credential store.'),
+    yue: flat('未設定 Cloudflare 憑證。請喺受保護憑證庫加入一個。')
+  },
+  'cloudflare.manager.permissionUnknown': {
+    en: flat('Permissions are unknown. Refresh permission metadata before changing anything.'),
+    yue: flat('權限未知。修改之前請先重新整理權限資料。')
+  },
+  'cloudflare.manager.partial': {
+    en: flat('Some pages were read and another page needs a retry. Existing rows are retained.'),
+    yue: flat('部分頁面已讀取，另一頁需要再試。已讀取嘅資料會保留。')
+  },
+  'cloudflare.manager.deletePreview': {
+    en: flat('Review the exact resource and confirm both keys before deleting it.'),
+    yue: flat('刪除之前請核對確實資源，並完成兩個確認鍵。')
   }
 }

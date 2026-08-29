@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1, and Queues manager contracts
+  with bounded pagination, fixed GraphQL operations and cost accounting, permission-aware writes,
+  redacted errors, credential-presence-only state, partial refresh states, and one-shot destructive
+  previews. This implementation lane did not run tests, builds, runtime checks, or captures.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

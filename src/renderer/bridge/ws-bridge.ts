@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { CloudflareApi } from '../../shared/cloudflare'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -922,6 +923,22 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+/** Cloudflare's seven typed managers over the same authenticated Server Edition RPC channel.
+ * The browser receives only bounded records, permission state, previews, and credential presence.
+ * It never receives a token and cannot submit a raw URL, SQL statement, shell command, or query. */
+export function buildCloudflareApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudflare'> {
+  const cloudflare: CloudflareApi = {
+    secretPresence: () => client.request(IPC.cloudflareSecretPresence) as ReturnType<CloudflareApi['secretPresence']>,
+    permissions: (accountId) => client.request(IPC.cloudflarePermissions, accountId) as ReturnType<CloudflareApi['permissions']>,
+    list: (manager, accountId, page, perPage) => client.request(IPC.cloudflareList, manager, accountId, page, perPage) as ReturnType<CloudflareApi['list']>,
+    listAll: (manager, accountId, perPage) => client.request(IPC.cloudflareListAll, manager, accountId, perPage) as ReturnType<CloudflareApi['listAll']>,
+    graphql: (operation, accountId) => client.request(IPC.cloudflareGraphql, operation, accountId) as ReturnType<CloudflareApi['graphql']>,
+    preview: (mutation) => client.request(IPC.cloudflarePreview, mutation) as ReturnType<CloudflareApi['preview']>,
+    mutate: (mutation, confirmation) => client.request(IPC.cloudflareMutate, mutation, confirmation) as ReturnType<CloudflareApi['mutate']>
+  }
+  return { cloudflare }
+}
+
 /** Local Minecraft server create-and-manage (docs/minecraft-server-manager.md) — same core engine
  *  as desktop; the server process is the one downloading, spawning and owning `java`, exactly as
  *  main does. */
@@ -1374,6 +1391,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSpeechApi(client),
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
+    ...buildCloudflareApi(client),
     ...buildMinecraftApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
