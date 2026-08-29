@@ -37,6 +37,7 @@ export type ShortcutAction =
   | 'toggleViewMode' // Ctrl+Shift+B
   | 'toggleSessionsPin' // Ctrl+Shift+L
   | 'toggleFocusMode' // Ctrl+Shift+F — one node fills the window, chrome yields
+  | 'maximizeNode' // Ctrl+Shift+Enter — resize the focused node and restore it
   | 'findInTerminal' // Ctrl+F
   | 'commitStaged' // Ctrl+↵ (inside the Source Control textarea)
   | 'copySelection' // Ctrl+C (markdown-view copy fallback)
@@ -105,6 +106,7 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: 'toggleViewMode', group: 'Canvas', label: 'Toggle view mode', default: 'Ctrl+Shift+B', keywords: ['view', 'mode', 'canvas', 'kanban', 'board'], scope: 'app', allowInTerminal: true },
   { id: 'toggleSessionsPin', group: 'Canvas', label: 'Pin sessions sidebar', default: 'Ctrl+Shift+L', keywords: ['sessions', 'pin', 'sidebar', 'collapse'], scope: 'app', allowInTerminal: true },
   { id: 'toggleFocusMode', group: 'Canvas', label: 'Toggle focus mode', default: 'Ctrl+Shift+F', keywords: ['focus', 'mode', 'fullscreen', 'zen', 'zoom'], scope: 'canvas' },
+  { id: 'maximizeNode', group: 'Canvas', label: 'Maximize / restore node', default: 'Ctrl+Shift+Enter', keywords: ['maximize', 'restore', 'node', 'viewport'], scope: 'canvas', allowInTerminal: true },
   { id: 'toggleMarkdown', group: 'Terminal', label: 'Toggle markdown view', default: 'Ctrl+M', keywords: ['markdown', 'md', 'toggle', 'view'], scope: 'app', allowInTerminal: true, allowWhileTyping: true },
   { id: 'findInTerminal', group: 'Terminal', label: 'Find in terminal', default: 'Ctrl+F', keywords: ['find', 'search', 'terminal'], scope: 'terminal', allowInTerminal: true },
   { id: 'commitStaged', group: 'Source Control', label: 'Commit staged changes', default: 'Ctrl+Enter', keywords: ['commit', 'staged', 'push', 'enter'], scope: 'scm', allowWhileTyping: true },

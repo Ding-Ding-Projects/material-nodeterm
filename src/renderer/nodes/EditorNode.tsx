@@ -13,6 +13,7 @@ import { tooLargeSize, formatBytes } from '@shared/fsLimits'
 import { hintLabel } from '@shared/platform-utils'
 import { pdfBlobUrl } from '../lib/pdfBlob'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { MaximizeButton } from './MaximizeButton'
 
 // Image extensions get a visual preview instead of the Monaco text editor.
 const IMAGE_MIME: Record<string, string> = {
@@ -269,6 +270,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
           {!isImage && !isPdf && dirty ? ' ●' : ''}
         </span>
         <span className="term-node__spacer" />
+        <MaximizeButton id={id} maximized={!!data.premaxRect} />
         {fileMissing ? null : isImage ? (
           imageDims && <span className="editor-node__dims">{imageDims}</span>
         ) : isPdf ? null : (

@@ -443,6 +443,8 @@ export interface CanvasNodeState {
   tags?: string[]
   /** When true the node body is hidden (header-only). */
   collapsed?: boolean
+  /** Root-space rectangle remembered while a node is maximized, so restore survives reload. */
+  premaxRect?: { x: number; y: number; width: number; height: number }
   /** scheduler-only: prompt delivered through the persistent inter-agent mailbox. */
   loopTask?: string
   /** scheduler-only: fixed cadence in milliseconds. */

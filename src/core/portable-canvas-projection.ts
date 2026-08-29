@@ -32,6 +32,7 @@ export interface PortableCanvasNodeV3 {
   color: string
   group: string | null
   collapsed?: boolean
+  premaxRect?: { x: number; y: number; width: number; height: number }
   parentId?: string
   tags?: string[]
   text?: string
@@ -86,9 +87,10 @@ const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'premaxRect', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
+const ALLOWED_PREMAX_RECT = new Set(['x', 'y', 'width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
 const ALLOWED_RELATIONSHIP = new Set(['id', 'kind', 'source', 'target', 'order'])
 const ALLOWED_APPEARANCE = new Set(['theme', 'density', 'seedColor', 'fontFamily', 'fontSize', 'fontWeight', 'motion'])
@@ -161,6 +163,15 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
   if (strict && node.browserTabs !== undefined && !Array.isArray(node.browserTabs)) throw new PortableProjectV3Error('manifest', 'Portable browser tabs must be an array.')
   if (node.collapsed !== undefined) out.collapsed = node.collapsed
+  if (node.premaxRect !== undefined) {
+    if (!record(node.premaxRect)) throw new PortableProjectV3Error('manifest', 'Portable maximize rectangle is invalid.')
+    exactKeys(node.premaxRect, ALLOWED_PREMAX_RECT, 'maximize rectangle')
+    out.premaxRect = {
+      x: finite(node.premaxRect.x, 'maximize x'), y: finite(node.premaxRect.y, 'maximize y'),
+      width: finite(node.premaxRect.width, 'maximize width'), height: finite(node.premaxRect.height, 'maximize height')
+    }
+    if (!(out.premaxRect.width > 0) || !(out.premaxRect.height > 0)) throw new PortableProjectV3Error('manifest', 'Portable maximize rectangle must have positive dimensions.')
+  }
   if (node.parentId !== undefined) out.parentId = text(node.parentId, 'parent id')
   if (node.tags !== undefined) { if (node.tags.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable tag count exceeds its bound.'); out.tags = node.tags.map((tag) => text(tag, 'node tag')).sort() }
   if (node.text !== undefined) out.text = content(node.text, 'node text')

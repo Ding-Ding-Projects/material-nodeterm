@@ -139,6 +139,7 @@ import {
 import { FindBar } from '../components/FindBar'
 import { IconSearch, IconChat, IconMic, IconReload, IconPictureInPicture } from '../components/icons'
 import { NodeLabels } from '../components/kanban/NodeLabels'
+import { MaximizeButton } from './MaximizeButton'
 import { Tooltip } from '../components/Tooltip'
 import { useTerminalSearch } from '../terminal/useTerminalSearch'
 import { useCopyFeedback } from '../terminal/useCopyFeedback'
@@ -5216,6 +5217,7 @@ export function TerminalNode({
               </button>
             </Tooltip>
           )}
+          {!collapsed && <MaximizeButton id={id} maximized={!!data.premaxRect} />}
           <button
             className="term-node__close"
             title="Close (ends the session)"

@@ -599,9 +599,12 @@ import {
   sshAccountsHint,
   ungroupNodes,
   placeNodeInRect,
+  maximizeNodeToRect,
+  restoreMaximizedNode,
   type CanvasNode,
   type TerminalNodeCreationOptions
 } from '../state/workspace'
+import { maximizeTargetRect } from '../lib/nodeMaximize'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -7756,6 +7759,25 @@ export function Canvas() {
     store.focus(target)
   }, [goToNode])
 
+  const toggleMaximizeNode = useCallback(() => {
+    const active = document.activeElement?.closest('.react-flow__node')?.getAttribute('data-id')
+    const selected = nodesRef.current.filter((n) => n.selected)
+    const target = (active ? nodesRef.current.find((n) => n.id === active) : undefined) ??
+      (selected.length === 1 ? selected[0] : undefined)
+    if (!target || target.type === 'group') return
+    if (target.data.premaxRect) {
+      setNodes((ns) => restoreMaximizedNode(ns as CanvasNode[], target.id))
+      markDirty()
+      return
+    }
+    if (target.data.collapsed) return
+    const wrap = flowWrapRef.current?.getBoundingClientRect()
+    const rect = wrap ? maximizeTargetRect(getViewport(), wrap.width, wrap.height) : null
+    if (!rect) return
+    setNodes((ns) => maximizeNodeToRect(ns as CanvasNode[], target.id, rect))
+    markDirty()
+  }, [getViewport, markDirty, setNodes])
+
   const onNodeDoubleClick = useCallback(
     (_e: React.MouseEvent, node: Node) => {
       if (!useSettings.getState().settings.doubleClickFocus) return
@@ -7897,6 +7919,9 @@ export function Canvas() {
       } else if (matchesShortcut(e, shortcuts.toggleFocusMode, isMac)) {
         e.preventDefault()
         toggleFocusMode()
+      } else if (matchesShortcut(e, shortcuts.maximizeNode, isMac)) {
+        e.preventDefault()
+        toggleMaximizeNode()
       } else if (matchesShortcut(e, shortcuts.shortcutsPanel, isMac)) {
         e.preventDefault()
         setShortcutsOpen((v) => !v)
@@ -7983,7 +8008,7 @@ export function Canvas() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [toggleSessionsPin, switchProject, fitAll, zoomTo100, toggleFocusMode, snapNodeToZone, reopenLastClosedCommand])
+  }, [toggleSessionsPin, switchProject, fitAll, zoomTo100, toggleFocusMode, toggleMaximizeNode, snapNodeToZone, reopenLastClosedCommand])
 
   // ⌘/Ctrl+0 on the DESKTOP never reaches the keydown handler above: Electron's default View menu
   // binds the accelerator to `resetZoom`, and a menu accelerator is handled before the page sees

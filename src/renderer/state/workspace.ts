@@ -109,6 +109,8 @@ export interface NodeData {
   loopTargetIds?: string[]
   /** Expanded height to restore when un-collapsing (kept out of the persisted size). */
   expandedHeight?: number
+  /** Root-space rectangle to restore after a maximize toggle. Persisted so reload keeps the action reversible. */
+  premaxRect?: { x: number; y: number; width: number; height: number }
   /** One-shot command run once when the terminal first opens (not persisted). */
   initialCommand?: string
   /**
@@ -1670,6 +1672,45 @@ export function placeNodeInRect(
   return fitAncestorChain(next, node.parentId)
 }
 
+/** Resize one non-group node to a root-space rectangle, remembering its exact prior geometry. */
+export function maximizeNodeToRect(
+  nodes: CanvasNode[],
+  nodeId: string,
+  rect: { x: number; y: number; width: number; height: number }
+): CanvasNode[] {
+  const node = nodes.find((n) => n.id === nodeId)
+  if (!node || node.type === 'group' || node.data.collapsed || node.data.premaxRect) return nodes
+  const root = rootPosition(node, nodes)
+  const premaxRect = { x: root.x, y: root.y, width: nodeW(node), height: nodeH(node) }
+  if (!(premaxRect.width > 0) || !(premaxRect.height > 0)) return nodes
+  const originX = root.x - node.position.x
+  const originY = root.y - node.position.y
+  const next = nodes.map((n) => n.id === nodeId ? {
+    ...n,
+    position: { x: rect.x - originX, y: rect.y - originY }, width: rect.width, height: rect.height,
+    style: { ...n.style, width: rect.width, height: rect.height }, measured: undefined,
+    data: { ...n.data, premaxRect, expandedHeight: rect.height }
+  } : n)
+  return fitAncestorChain(next, node.parentId)
+}
+
+/** Restore the exact root-space geometry captured by maximizeNodeToRect. */
+export function restoreMaximizedNode(nodes: CanvasNode[], nodeId: string): CanvasNode[] {
+  const node = nodes.find((n) => n.id === nodeId)
+  const prev = node?.data.premaxRect
+  if (!node || !prev) return nodes
+  const root = rootPosition(node, nodes)
+  const originX = root.x - node.position.x
+  const originY = root.y - node.position.y
+  const next = nodes.map((n) => n.id === nodeId ? {
+    ...n,
+    position: { x: prev.x - originX, y: prev.y - originY }, width: prev.width, height: prev.height,
+    style: { ...n.style, width: prev.width, height: prev.height }, measured: undefined,
+    data: { ...n.data, premaxRect: undefined, expandedHeight: prev.height }
+  } : n)
+  return fitAncestorChain(next, node.parentId)
+}
+
 /**
  * Removes a group frame, promoting its DIRECT children into the frame's own parent (the top
  * level for an unnested frame) without moving them on canvas. A nested frame's children land in
@@ -1904,6 +1945,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         tags: n.tags,
         collapsed,
         expandedHeight: n.size.height,
+        premaxRect: n.premaxRect,
         loopTask: n.loopTask,
         loopIntervalMs: n.loopIntervalMs,
         loopEnabled: n.loopEnabled,
@@ -1978,6 +2020,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         group: n.data.group,
         tags: n.data.tags,
         collapsed: n.data.collapsed,
+        premaxRect: n.data.premaxRect,
         loopTask: n.data.loopTask,
         loopIntervalMs: n.data.loopIntervalMs,
         loopEnabled: n.data.loopEnabled,

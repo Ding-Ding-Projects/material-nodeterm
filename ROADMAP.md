@@ -57,6 +57,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Node maximize and restore** (plan item 73, upstream issue #439): terminal, editor, and
+      diff headers now resize the focused node to the visible canvas and restore its exact
+      root-space rectangle, with grouped-node reflow and `Ctrl+Shift+Enter`. Tests, packaging,
+      and built-artifact captures were intentionally not run in the implementation lane.
+
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification

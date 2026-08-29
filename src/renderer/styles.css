@@ -1301,6 +1301,27 @@ body,
   flex: 1;
 }
 
+/* Maximize/restore is a real header action, kept keyboard-visible and large enough to hit. */
+.term-node__maximize {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+.term-node__maximize:hover,
+.term-node__maximize:focus-visible {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  outline: 2px solid var(--md-primary);
+  outline-offset: 1px;
+}
+
 /* Claude session name shown beside the editable terminal title. */
 /* Shared account identity across settings, node chrome and menus. Storage implementation
    (system/managed) is intentionally absent; the second pill states where the login lives. */

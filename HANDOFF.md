@@ -1,5 +1,23 @@
 # Handoff
 
+## 2026-08-26, node maximize and restore implementation
+
+Implemented the scoped node maximize and restore lane for upstream issue #439 and plan item 73.
+The new `src/renderer/lib/nodeMaximize.ts` geometry helper computes a bounded visible-canvas
+rectangle without moving the camera. `src/renderer/state/workspace.ts` now records a node's exact
+root-space rectangle in `premaxRect`, transforms grouped nodes through their parent coordinates,
+re-fits ancestor frames, and restores the prior size and position after reload. Persistence is
+wired through `CanvasNodeState` and the workspace serializers.
+
+Terminal, editor, and diff headers expose the accessible maximize/restore control. Canvas keyboard
+handling adds the configurable `Ctrl+Shift+Enter` `maximizeNode` shortcut, targeting the focused
+node or the single selected node and declining ambiguous, collapsed, grouped, or unmeasured cases.
+The feature article is `docs/features/canvas/node-maximize.md`, with the canvas index and
+unreleased changelog updated.
+
+This lane did not run tests, type checking, linting, builds, packaging, UI interaction, or captures,
+and made no commit or dew. Those are explicit follow-up gates before the feature is called verified.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

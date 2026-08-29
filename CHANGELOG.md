@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add node maximize and restore for terminal, editor, and diff nodes. `Ctrl+Shift+Enter` and the
+  header control resize the focused node to the visible canvas and restore its exact prior
+  root-space geometry, including grouped nodes. Verification and capture remain pending in this
+  implementation lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.
