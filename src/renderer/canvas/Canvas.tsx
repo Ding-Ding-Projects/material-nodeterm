@@ -5860,9 +5860,10 @@ export function Canvas() {
       if (!res.ok) {
         setWslError({
           ownership: 'external-factual',
-          text: res.error,
-          facts: ['wsl.exe', v.name, selectedCatalogueLabel],
-          authoredPrefix: 'operationErrorPrefix'
+          text: '',
+          facts: [...res.error.message.facts, selectedCatalogueLabel],
+          params: res.error.message.params,
+          authoredTemplate: res.error.message.id as import('../wsl/wslCopy').WslCopyKey
         })
         return
       }

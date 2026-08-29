@@ -13,7 +13,8 @@ import {
   WSL_COPY,
   type WslCopyKey,
   type WslDialogError,
-  wslCopyKeyForFallback
+  wslCopyKeyForFallback,
+  wslStageCopyKey
 } from './wslCopy'
 
 interface WslCreateDialogProps {
@@ -69,9 +70,9 @@ export function WslCreateDialog({
   // The fallback is both localized through the shared catalog and then passed through the local
   // personal-vocabulary boundary. Keys are derived only from fixed shipped copy, never from a
   // distribution name, user name, path, operation id, or external error.
-  const copy = (key: WslCopyKey, facts: readonly string[] = [], params?: Record<string, string>): string => {
+  const copy = (key: WslCopyKey, facts: readonly string[] = [], params?: Readonly<Record<string, string>>): string => {
     const entry = WSL_COPY[key]
-    return mapAroundExactFacts(ts(entry.id, entry.fallback, params), facts, mapVocabulary)
+    return mapAroundExactFacts(ts(entry.id, entry.fallback, params ? { ...params } : undefined), facts, mapVocabulary)
   }
 
   const copyFromFallback = (fallback: string, facts: readonly string[] = []): string => {
@@ -82,7 +83,7 @@ export function WslCreateDialog({
   const renderError = (value: WslDialogError): string => {
     if (value.ownership === 'authored') return copy(value.copy)
     const authored = value.authoredTemplate
-      ? copy(value.authoredTemplate)
+      ? copy(value.authoredTemplate, value.facts, value.params)
       : value.authoredPrefix
         ? copy(value.authoredPrefix)
         : ''
@@ -333,7 +334,7 @@ export function WslCreateDialog({
                 {
                   step: String(progress?.step ?? 1),
                   steps: String(progress?.steps ?? 4),
-                  stage: progress?.stage ?? 'validating',
+                  stage: copy(wslStageCopyKey(progress?.stage ?? 'validating')),
                   detail: progress?.determinate ? '' : copy('installing', ['wsl.exe'])
                 }
               )}

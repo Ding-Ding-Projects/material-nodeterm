@@ -11,7 +11,9 @@ const stateSource = readFileSync(join(ROOT, 'src/renderer/state/wsl.ts'), 'utf8'
 const formSource = readFileSync(join(ROOT, 'src/renderer/wsl/wslCreateForm.ts'), 'utf8')
 const serviceSource = readFileSync(join(ROOT, 'src/core/wsl/service.ts'), 'utf8')
 const sharedSource = readFileSync(join(ROOT, 'src/shared/wsl.ts'), 'utf8')
+const rpcSource = readFileSync(join(ROOT, 'src/shared/rpc.ts'), 'utf8')
 const canvasSource = readFileSync(join(ROOT, 'src/renderer/canvas/Canvas.tsx'), 'utf8')
+const bridgeSource = readFileSync(join(ROOT, 'src/renderer/bridge/ws-bridge.ts'), 'utf8')
 
 function inventoryFrom(source) {
   const rows = []
@@ -52,6 +54,11 @@ assert(sharedSource.includes('facts: readonly string[]'), 'progress facts are no
 assert(serviceSource.includes('progress.message.params'), 'service does not emit progress parameters')
 assert(serviceSource.includes('progress.message.facts'), 'service does not emit progress facts')
 assert(sharedSource.includes('WslCatalogueError'), 'catalogue error type is missing from the shared contract')
+assert(sharedSource.includes('error: WslCreateError'), 'create result is not typed at the shared boundary')
+assert(bridgeSource.includes('ReturnType<import(\'@shared/wsl\').WslApi[\'catalogue\']>'), 'Server RPC catalogue result is not typed as the shared API')
+assert(bridgeSource.includes('ReturnType<import(\'@shared/wsl\').WslApi[\'create\']>'), 'Server RPC create result is not typed as the shared API')
+assert(bridgeSource.includes('details: m.error.details'), 'Server RPC typed error details are discarded by the client')
+assert(rpcSource.includes('details?: unknown'), 'RPC error details are missing from the wire contract')
 assert(serviceSource.includes('messageId'), 'catalogue production errors lack a typed authored template id')
 assert(stateSource.includes('isWslCatalogueError'), 'renderer catalogue state does not retain typed catalogue errors')
 

@@ -25,7 +25,11 @@ export type {
   WslInstanceSummary,
   WslCatalogueEntry,
   WslActionResult,
+  WslCatalogueError,
+  WslCreateError,
+  WslCreateProgress,
   WslCreateResult,
+  WslCreateError,
   WslApi as WslCoreApi
 } from '@shared/wsl'
 
@@ -33,6 +37,15 @@ import type { WslApi as WslCoreApi } from '@shared/wsl'
 
 export const WSL_UNSUPPORTED_ERROR =
   'WSL instance management is not available in this build yet.'
+
+const WSL_UNSUPPORTED_CREATE_ERROR: WslCreateError = {
+  code: 'create-failed',
+  message: {
+    id: 'failed',
+    params: { error: WSL_UNSUPPORTED_ERROR },
+    facts: [WSL_UNSUPPORTED_ERROR]
+  }
+}
 
 function unsupportedResult(): { ok: false; error: string } {
   return { ok: false, error: WSL_UNSUPPORTED_ERROR }
@@ -43,7 +56,7 @@ export function createUnsupportedWslApi(): WslCoreApi {
   return {
     list: async () => [],
     catalogue: async () => [],
-    create: async () => ({ ok: false, error: WSL_UNSUPPORTED_ERROR }),
+    create: async () => ({ ok: false, error: WSL_UNSUPPORTED_CREATE_ERROR }),
     cancelCreate: async () => false,
     onCreateProgress: () => () => {},
     sleep: async () => unsupportedResult(),

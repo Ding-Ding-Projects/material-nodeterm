@@ -155,10 +155,10 @@ export function startWslService(opts: WslServiceOptions): { dispose(): void } {
     IPC.wslCreate,
     async (input: { operationId: string; catalogueId: string; name: string }): Promise<WslCreateResult> => {
       if (!input || !isWslCreateOperationId(input.operationId)) {
-        return { ok: false, error: 'The WSL operation id was invalid.' }
+        return { ok: false, error: createError('invalid-operation-id', 'failed', { error: 'The WSL operation id was invalid.' }, []) }
       }
       if (createOperations.has(input.operationId)) {
-        return { ok: false, error: 'This WSL operation is already in progress.' }
+        return { ok: false, error: createError('duplicate-operation', 'failed', { error: 'This WSL operation is already in progress.' }, []) }
       }
       const controller = new AbortController()
       createOperations.set(input.operationId, controller)
@@ -177,12 +177,12 @@ export function startWslService(opts: WslServiceOptions): { dispose(): void } {
           const detail = enumeration.error
           const failure = createError('catalogue-unavailable', 'failed', { error: detail }, [detail, 'wsl.exe'])
           emit('failed', 2, failure.message, false, failure)
-          return { ok: false, error: detail }
+          return { ok: false, error: failure }
         }
         if (controller.signal.aborted) {
           const failure = createError('cancelled', 'cancelled', {}, [])
           emit('cancelled', 2, failure.message, false, failure)
-          return { ok: false, error: 'WSL instance creation was cancelled.' }
+          return { ok: false, error: failure }
         }
         const result = await createWslDistribution(opts.runtime, opts.ownership, {
           name: input.name,
@@ -204,7 +204,7 @@ export function startWslService(opts: WslServiceOptions): { dispose(): void } {
         if (result.ok && controller.signal.aborted) {
           const failure = createError('cancelled', 'cancelledLate', { name: input.name }, [input.name])
           emit('cancelled', 4, failure.message, true, failure)
-          return { ok: false, error: 'WSL instance was created before cancellation completed; no canvas frame was bound.' }
+          return { ok: false, error: failure }
         }
         if (result.ok) {
           return { ok: true, name: input.name }
@@ -217,7 +217,7 @@ export function startWslService(opts: WslServiceOptions): { dispose(): void } {
           cancelled ? [] : [result.error, input.name, input.catalogueId, 'wsl.exe']
         )
         emit(cancelled ? 'cancelled' : 'failed', 3, failure.message, false, failure)
-        return { ok: false, error: result.error }
+        return { ok: false, error: failure }
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error)
         const failure = createError(
@@ -227,7 +227,7 @@ export function startWslService(opts: WslServiceOptions): { dispose(): void } {
           controller.signal.aborted ? [] : [detail, input.name, input.catalogueId, 'wsl.exe']
         )
         emit(controller.signal.aborted ? 'cancelled' : 'failed', 3, failure.message, false, failure)
-        return { ok: false, error: detail }
+        return { ok: false, error: failure }
       } finally {
         createOperations.delete(input.operationId)
       }

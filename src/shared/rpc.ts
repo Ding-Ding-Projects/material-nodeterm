@@ -6,9 +6,25 @@
 export type RpcRequest = { t: 'req'; id: number; method: string; args: unknown[]; undef?: number[] }
 export type RpcCast = { t: 'cast'; method: string; args: unknown[]; undef?: number[] }
 export type RpcOk = { t: 'res'; id: number; ok: true; result: unknown }
-export type RpcErr = { t: 'res'; id: number; ok: false; error: { code: string; message: string } }
+export type RpcErr = { t: 'res'; id: number; ok: false; error: { code: string; message: string; details?: unknown } }
 export type RpcEvent = { t: 'ev'; channel: string; args: unknown[]; undef?: number[] }
 export type RpcMessage = RpcRequest | RpcCast | RpcOk | RpcErr | RpcEvent
+
+/** Preserve only structured, non-secret handler facts that are explicitly designed for the wire. */
+export function rpcErrorDetails(error: unknown): unknown {
+  if (typeof error !== 'object' || error === null) return undefined
+  const value = error as Record<string, unknown>
+  if (typeof value.code !== 'string') return undefined
+  if (typeof value.messageId === 'string' && Array.isArray(value.facts)) {
+    return {
+      code: value.code,
+      messageId: value.messageId,
+      facts: value.facts,
+      ...(typeof value.detail === 'string' ? { detail: value.detail } : {})
+    }
+  }
+  return undefined
+}
 
 export const E_UNSUPPORTED = 'E_UNSUPPORTED'
 export const E_UNAUTHORIZED = 'E_UNAUTHORIZED'

@@ -11,6 +11,11 @@ function isWslCatalogueError(value: unknown): value is WslCatalogueError {
     Array.isArray(candidate.facts)
 }
 
+function wslCatalogueErrorPayload(value: unknown): unknown {
+  if (value instanceof Error && 'details' in value) return (value as Error & { details?: unknown }).details
+  return value
+}
+
 function catalogueTemplateFor(error: WslCatalogueError['messageId']): WslCopyKey {
   if (error === 'catalogueNotInstalled') return 'catalogueNotInstalled'
   if (error === 'catalogueCommandFailed') return 'catalogueCommandFailed'
@@ -71,15 +76,16 @@ export const useWsl = create<WslState>((set, get) => ({
       const catalogue = await resolveWslApi().catalogue()
       set({ catalogue, catalogueLoading: false })
     } catch (e) {
-      const detail = isWslCatalogueError(e) ? e.detail ?? '' : e instanceof Error ? e.message : String(e)
+      const payload = wslCatalogueErrorPayload(e)
+      const detail = isWslCatalogueError(payload) ? payload.detail ?? '' : e instanceof Error ? e.message : String(e)
       set({
         catalogueLoading: false,
-        catalogueError: isWslCatalogueError(e)
+        catalogueError: isWslCatalogueError(payload)
           ? {
-          ownership: 'external-factual',
+              ownership: 'external-factual',
               text: detail,
-              facts: e.facts,
-              authoredTemplate: catalogueTemplateFor(e.messageId)
+              facts: payload.facts,
+              authoredTemplate: catalogueTemplateFor(payload.messageId)
             }
           : {
               ownership: 'external-factual',
