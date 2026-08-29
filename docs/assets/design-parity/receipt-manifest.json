@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "status": "pending-runtime",
+  "method": "approved Lowlevel headless route against the design-reference Electron app and the real built desktop application",
+  "receipts": [
+    { "id": "md3-canvas", "status": "pending-runtime", "sourceCommit": null, "capturedAt": null, "referenceCaptured": false, "builtCaptured": false, "comparisonGenerated": false, "visualDiffGenerated": false },
+    { "id": "md3-board", "status": "pending-runtime", "sourceCommit": null, "capturedAt": null, "referenceCaptured": false, "builtCaptured": false, "comparisonGenerated": false, "visualDiffGenerated": false },
+    { "id": "md3-files", "status": "pending-runtime", "sourceCommit": null, "capturedAt": null, "referenceCaptured": false, "builtCaptured": false, "comparisonGenerated": false, "visualDiffGenerated": false },
+    { "id": "md3-settings", "status": "pending-runtime", "sourceCommit": null, "capturedAt": null, "referenceCaptured": false, "builtCaptured": false, "comparisonGenerated": false, "visualDiffGenerated": false },
+    { "id": "md3-overlays", "status": "pending-runtime", "sourceCommit": null, "capturedAt": null, "referenceCaptured": false, "builtCaptured": false, "comparisonGenerated": false, "visualDiffGenerated": false },
+    { "id": "md3-regex-builder", "status": "pending-runtime", "sourceCommit": null, "capturedAt": null, "referenceCaptured": false, "builtCaptured": false, "comparisonGenerated": false, "visualDiffGenerated": false },
+    { "id": "md3-welcome", "status": "pending-runtime", "sourceCommit": null, "capturedAt": null, "referenceCaptured": false, "builtCaptured": false, "comparisonGenerated": false, "visualDiffGenerated": false },
+    { "id": "md3-kids-mode", "status": "pending-runtime", "sourceCommit": null, "capturedAt": null, "referenceCaptured": false, "builtCaptured": false, "comparisonGenerated": false, "visualDiffGenerated": false },
+    { "id": "md3-tools", "status": "pending-runtime", "sourceCommit": null, "capturedAt": null, "referenceCaptured": false, "builtCaptured": false, "comparisonGenerated": false, "visualDiffGenerated": false },
+    { "id": "md3-history", "status": "pending-runtime", "sourceCommit": null, "capturedAt": null, "referenceCaptured": false, "builtCaptured": false, "comparisonGenerated": false, "visualDiffGenerated": false }
+  ]
+}

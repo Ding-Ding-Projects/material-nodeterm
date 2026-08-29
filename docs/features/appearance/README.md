@@ -21,5 +21,8 @@ migration toward Material Design 3.
   surprises, its bounded trigger cabinet, ten funny levels, and School-mode suppression contract.
 - [Build version and updated time](./build-provenance.md) - the stamped package version and
   second-precision local build time shown on the start screen, with an honest unavailable state.
+- [Design-reference parity inventory](./design-reference-parity.md) - the exact ten-screen v2
+  reference inventory, deterministic comparison tuples, Material Design 3 audit links, pending
+  runtime receipts, and the fail-closed executable guard.
 
 See also [Canvas](../canvas/README.md), whose node chrome consumes most of these tokens.
