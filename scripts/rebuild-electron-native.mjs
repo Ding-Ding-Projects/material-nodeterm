@@ -10,7 +10,8 @@ const scriptPath = fileURLToPath(import.meta.url)
 const repoRoot = path.resolve(path.dirname(scriptPath), '..')
 
 export const ELECTRON_NATIVE_MODULES = Object.freeze(['node-pty', 'smart-whisper'])
-export const MAX_REBUILD_ATTEMPTS = 2
+export const MAX_REBUILD_ATTEMPTS = 3
+export const RETRY_BACKOFF_BASE_MS = 1000
 
 const DIAGNOSTIC_TAIL_LIMIT = 256 * 1024
 
@@ -40,6 +41,7 @@ export function createNativeRebuildInvocation({
     args: [
       electronRebuildCli,
       '--force',
+      '--sequential',
       '--only',
       ELECTRON_NATIVE_MODULES.join(','),
       '--version',
@@ -107,6 +109,17 @@ export function isTransientMsbuildRuntimeFailure(output) {
   )
 }
 
+export function retryBackoffMs(failedAttempt) {
+  if (!Number.isInteger(failedAttempt) || failedAttempt < 1) {
+    throw new Error(`Failed rebuild attempt must be a positive integer: ${failedAttempt}`)
+  }
+  return RETRY_BACKOFF_BASE_MS * 2 ** (failedAttempt - 1)
+}
+
+function waitForRetry(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs))
+}
+
 export function runNativeRebuildAttempt({
   buildPath,
   electronVersion,
@@ -117,7 +130,10 @@ export function runNativeRebuildAttempt({
   return new Promise((resolve, reject) => {
     const child = spawnImpl(invocation.command, invocation.args, {
       cwd: buildPath,
-      env: process.env,
+      env: {
+        ...process.env,
+        MSBUILDDISABLENODEREUSE: '1'
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })
@@ -144,7 +160,8 @@ export async function rebuildElectronNativeModules({
   buildPath = repoRoot,
   electronVersion = installedElectronVersion(),
   runAttemptImpl = runNativeRebuildAttempt,
-  probeImpl = runElectronAbiProbe
+  probeImpl = runElectronAbiProbe,
+  waitImpl = waitForRetry
 } = {}) {
   process.stdout.write(
     `[native-rebuild] Rebuilding only ${ELECTRON_NATIVE_MODULES.join(', ')} for Electron ${electronVersion}.\n`
@@ -156,9 +173,11 @@ export async function rebuildElectronNativeModules({
 
     const retryable = isTransientMsbuildRuntimeFailure(result.output)
     if (retryable && attempt < MAX_REBUILD_ATTEMPTS) {
+      const delayMs = retryBackoffMs(attempt)
       process.stderr.write(
-        `[native-rebuild] MSBuild runtime failed transiently on attempt ${attempt}; retrying once.\n`
+        `[native-rebuild] MSBuild runtime failed transiently on attempt ${attempt}/${MAX_REBUILD_ATTEMPTS}; retrying in ${delayMs} ms with a fresh process.\n`
       )
+      await waitImpl(delayMs)
       continue
     }
 

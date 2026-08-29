@@ -41,8 +41,9 @@ uses `@electron/rebuild --only node-pty,smart-whisper`; the similar-looking `--w
 option is an addition list and still walks other detected native packages. The wrapper streams the
 full build log and retains only a bounded diagnostic tail for classification. Root `allowScripts`
 entries disable both packages' own native install lifecycles, so the controlled postinstall is the
-only native compilation for them. The wrapper retries one observed MSBuild runtime/JIT failure once
-and fails ordinary compiler errors immediately. Success is followed
+only native compilation for them. The wrapper runs modules sequentially, disables MSBuild node
+reuse, and allows three total attempts with one-second then two-second backoff only for an observed
+MSBuild runtime/JIT signature. Ordinary compiler errors fail immediately. Success is followed
 by an Electron-as-Node load of both packages, which proves the installed bindings match the runtime
 ABI rather than merely proving that files were written.
 
