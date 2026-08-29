@@ -373,6 +373,8 @@ export type NodeKind =
   | 'gitlab'
   | 'homeassistant'
   | 'freepbx'
+  // AWS Universe portal. Safe intent is shared; the provider session is machine-local.
+  | 'aws-universe'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -494,6 +496,13 @@ export interface CanvasNodeState {
   sshRemoteTmux?: boolean
   /** editor-only: when true (SSH-project editors), reads/writes go to the project's remote fs via `sshFs`. */
   sshFs?: boolean
+  /** AWS Universe portal identity and matching-door metadata. Safe to share in project.json. */
+  awsUniverseId?: string
+  awsUniverseScope?: 'aws-only'
+  awsUniverseRegionIntent?: string
+  awsUniverseServiceIntent?: string[]
+  awsUniverseEntryDoorId?: string
+  awsUniverseReturnDoorId?: string
   // sticky-only
   text?: string
   // dino-only: best score reached in the T-Rex Runner game.

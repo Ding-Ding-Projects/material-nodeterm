@@ -580,6 +580,7 @@ import {
   createTerminalNode,
   nodeSshFor,
   createServiceNode,
+  createAwsUniverseNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
   createWebNode,
@@ -602,6 +603,7 @@ import {
   type CanvasNode,
   type TerminalNodeCreationOptions
 } from '../state/workspace'
+import { AwsUniverseNode } from '../nodes/AwsUniverseNode'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -1811,7 +1813,8 @@ export function Canvas() {
       proxmox: withNodeBoundary(ServiceNode),
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
-      freepbx: withNodeBoundary(ServiceNode)
+      freepbx: withNodeBoundary(ServiceNode),
+      'aws-universe': withNodeBoundary(AwsUniverseNode)
     }),
     []
   )
@@ -4575,6 +4578,14 @@ export function Canvas() {
       markDirty()
     },
     [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addAwsUniverse = useCallback(
+    (center?: { x: number; y: number }) => {
+      setNodes((ns) => [...ns, createAwsUniverseNode(ns.length, center ?? emptyNodePos())])
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos]
   )
 
   const addSticky = useCallback(
@@ -8901,6 +8912,12 @@ export function Canvas() {
               }))
             }
           ]),
+          {
+            label: 'New AWS Universe portal',
+            icon: <IconRemote />,
+            hint: 'unlimited AWS-only portals with matching doors',
+            onClick: () => addAwsUniverse(at)
+          },
           ...paneMenuGroup('Canvas objects', <IconShapes />, [
             {
               label: 'New browser',
@@ -9049,6 +9066,7 @@ export function Canvas() {
       addNativeLoop,
       addDino,
       addBrowser,
+      addAwsUniverse,
       openFileDialog,
       newProjectFile,
       openRemotePicker,
@@ -13027,14 +13045,21 @@ export function Canvas() {
             icon: <IconEditor />,
             run: () => addNsis()
           },
-          {
-            id: 'new-dino',
+      {
+        id: 'new-dino',
             label: 'New dino game',
             icon: <IconDino />,
-            run: () => addDino()
-          },
-          {
-            id: 'open-file',
+        run: () => addDino()
+      },
+      {
+        id: 'new-aws-universe',
+        label: 'New AWS Universe portal',
+        hint: 'unlimited AWS-only canvas with matching entry and return doors',
+        icon: <IconRemote />,
+        run: () => addAwsUniverse()
+      },
+      {
+        id: 'open-file',
             label: 'Open file…',
             icon: <IconEditor />,
             run: () => void openFileDialog()
@@ -13378,6 +13403,7 @@ export function Canvas() {
     addNsis,
     addNativeLoop,
     addDino,
+    addAwsUniverse,
     addWebView,
     addBrowser,
     openFileDialog,
@@ -13959,6 +13985,7 @@ export function Canvas() {
               profileTerminalCreationHandler(addTerminal, profileId)()
             }
             onAddSticky={addSticky}
+            onAddAwsUniverse={addAwsUniverse}
             onAddAuthenticator={() => addAuthenticator()}
             onAddLoop={addNativeLoop}
             onAddDino={addDino}

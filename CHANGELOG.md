@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add unlimited AWS Universe portal instances with AWS-only canvas scope, matching entry and return
+  doors, a scoped catalog interface, and portable metadata that excludes machine-local provider
+  context. This ultra-speed lane intentionally did not run tests, type checks, lint, review,
+  security checks, accessibility checks, installer execution, runtime interaction checks, or UI
+  captures; AWS Shop and service operations remain interfaces for later lanes.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

@@ -10,6 +10,8 @@ A project is one canvas — one page of nodes, with its own working directory an
   inventory, deterministic hashes, omissions, and pure legacy migration boundaries.
 - [Portable canvas projection](./portable-canvas-projection.md): deterministic schema 3 canvas
   payloads for root and future universe scopes, with machine-local state excluded.
+- [AWS Universe portal](./aws-universe-portal.md): unlimited AWS-only portal instances, matching
+  doors, machine-local context, portable metadata, and catalog interfaces.
 
 See also [Canvas](../canvas/README.md) for what lives inside a project, and
 [Source control](../source-control/README.md) for how a project's working directory relates to

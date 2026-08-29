@@ -112,6 +112,12 @@ Proxmox, GitLab, Home Assistant and FreePBX — each an ordinary node you drag, 
 persist like any other, because a managed service is something you arrange beside the terminals
 working on it, not a modal you visit.
 
+AWS Universe portals can be created without a project-wide count limit. Each portal has an
+AWS-only canvas entered and exited through its matching doors, a scoped searchable catalog, and
+portable intent that leaves machine-local AWS context behind. AWS Shop and service actions are
+interfaces for later lanes and do not execute in this release. See
+[`docs/features/projects/aws-universe-portal.md`](./docs/features/projects/aws-universe-portal.md).
+
 **Group** nodes are real containers that nest inside each other and can bind to a git worktree, so
 every node created inside one inherits that worktree's directory. Quit the app and the persistent
 backend reattaches to the live session; reboot the machine and cold restore rebuilds the node,

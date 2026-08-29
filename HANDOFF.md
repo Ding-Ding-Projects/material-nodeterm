@@ -1,5 +1,29 @@
 # Handoff
 
+## 2026-08-26, AWS Universe portal implementation
+
+Implemented the AWS Universe portal slice for issue #39 on `feat/program-28`. A project can now
+create any number of independent `aws-universe` portal nodes. Each node carries safe portable
+metadata, a deterministic matching entry and return door pair, and an AWS-only catalog surface.
+Entry and return are door-only routes; ordinary tab navigation cannot bypass the scope. AWS Shop,
+service, and operation rows are visible as disabled interfaces with explicit later-lane reasons,
+and this slice performs no AWS request, deployment, download, or process launch.
+
+Machine-local AWS context is kept outside the project file and archive. The core import planner
+returns Configure, Rebind, or Leave Unbound without external side effects, so relaunch and import do
+not reconnect a provider or mutate the destination computer. Portable projection now retains the
+portal identity, scope, door ids, and safe intent while excluding local context.
+
+Changed files: `src/core/aws-universe-portal.ts`, `src/core/portable-canvas-projection.ts`,
+`src/core/project-archive.ts`, `src/shared/types.ts`, `src/renderer/state/workspace.ts`,
+`src/renderer/nodes/AwsUniverseNode.tsx`, `src/renderer/canvas/Canvas.tsx`,
+`src/renderer/components/FabMenu.tsx`, `src/renderer/styles.md3.css`, the AWS Universe feature
+article, the projects documentation index, the offline docs bundle, `ROADMAP.md`, and this file.
+
+The ultra-speed lane did not run tests, type checks, lint, review, security checks, accessibility
+checks, installer execution, runtime interaction checks, or UI captures. No commit or dew was made
+by this lane; the 大佬 owns verification, integration, release, and cleanup.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

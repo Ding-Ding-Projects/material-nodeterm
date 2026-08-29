@@ -290,6 +290,12 @@ export const DOC_ARTICLES: DocArticle[] = [
     body: "# Projects\n\nA project is one canvas — one page of nodes, with its own working directory and its own tab.\n\n- [Projects & tabs](./projects-and-tabs.md) — how projects are created, switched, closed,\n  reopened, and persisted to disk; how a project binds to a folder.\n- [Project history and archives](./project-history-and-archives.md) — automatic save revisions and\n  the one-file export/import format that carries the complete local history.\n- [Portable project schema 3](./portable-schema3.md): bounded manifest metadata, safe entry\n  inventory, deterministic hashes, omissions, and pure legacy migration boundaries.\n- [Portable canvas projection](./portable-canvas-projection.md): deterministic schema 3 canvas\n  payloads for root and future universe scopes, with machine-local state excluded.\n\nSee also [Canvas](../canvas/README.md) for what lives inside a project, and\n[Source control](../source-control/README.md) for how a project's working directory relates to\ngit worktrees.\n"
   },
   {
+    path: "docs/features/projects/aws-universe-portal.md",
+    title: "AWS Universe portal",
+    section: "Projects",
+    body: "# AWS Universe portal\n\nAn AWS Universe is an unlimited-instance, AWS-only canvas portal. Each instance carries safe portable metadata plus deterministic matching entry and return doors. Entering requires the matching entry door, returning requires the matching return door, and ordinary tab navigation cannot bypass either route.\n\nThe portal catalog lists AWS Universe, AWS Shop, AWS service, and AWS operation interfaces. Later Shop and service rows remain visible with exact disabled reasons; this lane does not call AWS, deploy resources, download data, or launch processes.\n\nMachine-local context is kept in `nodeterm.aws-universe.local-contexts` and is never copied to `.nodeterm/project.json`, a schema 3 archive, or a peer mutation. Import and relaunch validate metadata and produce a Configure, Rebind, or Leave Unbound plan without external side effects.\n\nThe renderer uses the shared Material Design 3 surface tokens, visible focus, bounded scrolling, and a full regex builder anchored beside catalog search.\n\n## Verification boundary\n\nThe ultra-speed implementation lane did not run tests, type checks, lint, review, security checks, accessibility checks, installer execution, runtime interaction checks, or UI captures.\n"
+  },
+  {
     path: "docs/features/projects/password-manager.md",
     title: "Password managers",
     section: "Projects",

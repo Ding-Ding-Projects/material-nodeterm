@@ -162,7 +162,10 @@ intentionally unchecked because this task publishes the plan only.
 
 - [ ] Add door-only Multiverse canvases to depth 8.
 - [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
-- [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
+- [ ] Add unlimited AWS Universes with AWS-only scope and matching-door portal navigation. Portal
+      interfaces and portable metadata are implemented in `src/core/aws-universe-portal.ts` and
+      `src/renderer/nodes/AwsUniverseNode.tsx`; AWS Shop/service operations and required verification
+      remain outstanding.
 - [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.
 - [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,
       skeleton, input, and output described by the installed CLI models.

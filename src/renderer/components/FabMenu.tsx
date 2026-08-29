@@ -28,6 +28,7 @@ export interface FabMenuProps {
   onOpenFile: () => void
   onAddRemote: () => void
   onConnectRemote: () => void
+  onAddAwsUniverse?: () => void
 }
 
 /**
@@ -51,7 +52,8 @@ export function FabMenu({
   onAddAgent,
   onOpenFile,
   onAddRemote,
-  onConnectRemote
+  onConnectRemote,
+  onAddAwsUniverse
 }: FabMenuProps) {
   const profileText = useLocalizedVocabularyText()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -252,6 +254,12 @@ export function FabMenu({
                   <NoteIcon />
                   <span>Sticky Note</span>
                 </button>
+                {onAddAwsUniverse ? (
+                  <button role="menuitem" onClick={pick(onAddAwsUniverse)}>
+                    <RemoteIcon />
+                    <span>AWS Universe portal</span>
+                  </button>
+                ) : null}
                 <button role="menuitem" onClick={pick(onAddLoop)}>
                   <LoopIcon />
                   <span>Loop</span>

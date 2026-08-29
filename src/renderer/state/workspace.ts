@@ -74,6 +74,7 @@ const ANNOTATION_SIZE = { width: 240, height: 160 }
  */
 const SERVICE_CONSOLE_SIZE = { width: 720, height: 520 }
 const SERVICE_SUMMARY_SIZE = { width: 520, height: 400 }
+const AWS_UNIVERSE_SIZE = { width: 760, height: 560 }
 
 /** Height of a node when collapsed (header only). */
 export const COLLAPSED_HEIGHT = 40
@@ -172,6 +173,13 @@ export interface NodeData {
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  /** AWS Universe portal metadata is portable intent only. Context and credentials stay local. */
+  awsUniverseId?: string
+  awsUniverseScope?: 'aws-only'
+  awsUniverseRegionIntent?: string
+  awsUniverseServiceIntent?: string[]
+  awsUniverseEntryDoorId?: string
+  awsUniverseReturnDoorId?: string
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
   nsisSpec?: NsisSpec
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
@@ -1029,17 +1037,36 @@ export function createServiceNode(
   }
 }
 
-/**
- * Creates an NSIS installer-builder node — a GUI for authoring a Windows NSIS installer script for
- * ANOTHER project. Not this app's own installer, which stays Squirrel.Windows (see CLAUDE.md's
- * Packaging section) — this is a tool the user reaches for, exactly like the authenticator or a
- * service manager is a tool on the canvas rather than a modal.
- *
- * `nsisSpec` seeds with real, useful defaults (a real install root, real shortcut/uninstaller
- * choices) rather than an empty form the user must fully configure before anything renders — the
- * guided-forms rule that a picker should suggest a sane default rather than start blank.
- * `nsisLocalPaths` starts empty: there is no safe default for "which files on THIS machine".
- */
+/** Creates one independent AWS Universe portal. There is intentionally no project-wide count cap. */
+export function createAwsUniverseNode(
+  index: number,
+  center?: { x: number; y: number },
+  universeId?: string
+): CanvasNode {
+  const nodeId = nextId('aws-universe')
+  const id = universeId ?? nodeId
+  const pairId = `${id}:door-pair`
+  return {
+    id: nodeId,
+    type: 'aws-universe',
+    position: placeAt(center, index, AWS_UNIVERSE_SIZE.width, AWS_UNIVERSE_SIZE.height),
+    width: AWS_UNIVERSE_SIZE.width,
+    height: AWS_UNIVERSE_SIZE.height,
+    style: { width: AWS_UNIVERSE_SIZE.width, height: AWS_UNIVERSE_SIZE.height },
+    data: {
+      title: `AWS Universe ${index + 1}`,
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      awsUniverseId: id,
+      awsUniverseScope: 'aws-only',
+      awsUniverseServiceIntent: [],
+      awsUniverseEntryDoorId: `${pairId}:entry`,
+      awsUniverseReturnDoorId: `${pairId}:return`
+    }
+  }
+}
+
+/** Creates a GUI for authoring an NSIS installer script for another project. */
 export function createNsisNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
     id: nextId('nsis'),
@@ -1466,7 +1493,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
-  nsis: true
+  nsis: true,
+  'aws-universe': true
 }
 
 /**
@@ -1505,7 +1533,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
-  nsis: NSIS_SIZE
+  nsis: NSIS_SIZE,
+  'aws-universe': AWS_UNIVERSE_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1915,6 +1944,12 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        awsUniverseId: n.awsUniverseId,
+        awsUniverseScope: n.awsUniverseScope,
+        awsUniverseRegionIntent: n.awsUniverseRegionIntent,
+        awsUniverseServiceIntent: n.awsUniverseServiceIntent,
+        awsUniverseEntryDoorId: n.awsUniverseEntryDoorId,
+        awsUniverseReturnDoorId: n.awsUniverseReturnDoorId,
         serviceConnection: n.serviceConnection,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
@@ -1990,6 +2025,12 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        awsUniverseId: n.data.awsUniverseId,
+        awsUniverseScope: n.data.awsUniverseScope,
+        awsUniverseRegionIntent: n.data.awsUniverseRegionIntent,
+        awsUniverseServiceIntent: n.data.awsUniverseServiceIntent,
+        awsUniverseEntryDoorId: n.data.awsUniverseEntryDoorId,
+        awsUniverseReturnDoorId: n.data.awsUniverseReturnDoorId,
         serviceConnection: n.data.serviceConnection,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
