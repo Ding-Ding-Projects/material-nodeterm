@@ -54,6 +54,15 @@ and do not commit edits made inside the nested repository.
 initialized yet). This is a check, not an auto-sync: refreshing the pin is still the deliberate,
 reviewed step above, never a background pull.
 
+Run `node scripts/check-canonical-upstream.mjs` after reviewing a proposed pin. The check verifies
+the `.gitmodules` path, URL, and `main` branch, the top-level gitlink, the nested checkout's
+`origin`, and the reviewed commit. It also probes `refs/heads/main` without changing either
+repository. A successful result means the local metadata and the reachable canonical ref agree.
+When the probe cannot reach the service, the result is `offline-unverified` and exits non-zero; it
+must not be reported as a verified lineage. `--offline` performs only the local checks and keeps
+the same non-zero, unverified result. The focused red-then-green cases live in
+`scripts/check-canonical-upstream.test.mjs`.
+
 The supported Node runtime is **`^22.22.2 || ^24.15.0 || >=26.0.0`**. This is a minor/patch
 boundary, not
 "Node 22" shorthand: the cross-process agent-status mirror uses `node:sqlite`, which was absent in

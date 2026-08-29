@@ -85,6 +85,13 @@ the exact initialize, sync, remote-update, URL/SHA inspection, staging, and subm
 in `CONTRIBUTING.md`. Commit only the reviewed gitlink change (and `.gitmodules` when its metadata
 changes); never commit local edits made inside the nested repository.
 
+`scripts/check-canonical-upstream.mjs` is the fail-closed lineage check for this boundary. It
+validates the `.gitmodules` path, URL, and `main` branch, the stage-0 top-level gitlink, the nested
+checkout's `origin` URL and `HEAD`, and the reachable `refs/heads/main` commit. A network refusal is
+reported as `offline-unverified` and is never treated as success; `--offline` is an explicit local
+inspection mode with the same unverified result. Its focused test file mutates each boundary and
+proves red, then green, so a substring-only source assertion cannot quietly pass.
+
 **Node runtime floor: `^22.22.2 || ^24.15.0 || >=26.0.0`.** Do not simplify that to a
 major-only check.
 `node:sqlite` arrived in 22.5 but required `--experimental-sqlite` through 22.12; 22.13 made it
