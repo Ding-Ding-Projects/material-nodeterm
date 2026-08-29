@@ -1,11 +1,10 @@
-import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import { describe, expect, it } from 'vitest';
 import { loaderForPath, parseSource, selectTrackedSourceFiles, validateSourcePaths } from './check-source-parse.mjs';
 
-const fixture = 'src/renderer/components/ShellSessionVocabulary.boundaries.test.ts';
+const fixture = 'src/renderer/components/ShellSessionVocabulary.boundaries.test.tsx';
 const root = process.cwd();
 const fixtureText = readFileSync(fixture, 'utf8');
 const parserDouble = {
@@ -18,62 +17,64 @@ const parserDouble = {
   },
 };
 
-test('the exact JSX-bearing .ts fixture uses the allowlisted tsx loader', () => {
-  assert.equal(loaderForPath(fixture), 'tsx');
-  assert.equal(parseSource({ root, files: [fixture], esbuild: parserDouble }).failures.length, 0);
-});
-
-test('the same JSX bytes are red under ts', () => {
-  assert.throws(() => parserDouble.transformSync(fixtureText, { loader: 'ts' }));
-});
-
-test('renamed paths are not allowlisted', () => {
-  const renamed = fixture.replace('ShellSessionVocabulary', 'RenamedShellSessionVocabulary');
-  assert.equal(loaderForPath(renamed), 'ts');
-  assert.throws(() => validateSourcePaths([renamed]), /Allowlisted source path vanished/);
-  assert.throws(() => validateSourcePaths([renamed, 'src/example.js']), /Unknown tracked source extension/);
-});
-
-test('normal TypeScript and TSX paths select their own loaders', () => {
-  assert.equal(loaderForPath('src/core/example.ts'), 'ts');
-  assert.equal(loaderForPath('src/renderer/example.tsx'), 'tsx');
-});
-
-test('selects every tracked TypeScript path, including the repository root', () => {
-  assert.deepEqual(selectTrackedSourceFiles([
-    'vitest.config.ts',
-    'src/core/example.ts',
-    'src/renderer/example.tsx',
-    fixture,
-    'README.md',
-    'scripts/example.js',
-  ]), [
-    'vitest.config.ts',
-    'src/core/example.ts',
-    'src/renderer/example.tsx',
-    fixture,
-  ]);
-});
-
-test('reports deterministic totals and machine-readable failure records', () => {
-  const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'source-parse-'));
-  writeFileSync(path.join(fixtureRoot, 'good.ts'), 'export const good = 1;\n');
-  writeFileSync(path.join(fixtureRoot, 'bad.ts'), 'export const bad = <broken>;\n');
-  const report = parseSource({
-    root: fixtureRoot,
-    files: ['good.ts', 'bad.ts'],
-    esbuild: parserDouble,
-    requireAllowlist: false,
+describe('source parser loader boundaries', () => {
+  it('the exact JSX-bearing .tsx fixture uses the allowlisted tsx loader', () => {
+    expect(loaderForPath(fixture)).toBe('tsx');
+    expect(parseSource({ root, files: [fixture], esbuild: parserDouble }).failures).toHaveLength(0);
   });
-  assert.equal(report.checked, 2);
-  assert.equal(report.failures.length, 1);
-  assert.equal(report.productionFailures, 1);
-  assert.equal(report.testFailures, 0);
-  assert.deepEqual(report.failures[0], {
-    file: 'bad.ts',
-    isTest: false,
-    line: 1,
-    column: 1,
-    text: 'JSX syntax requires the tsx loader',
+
+  it('the same JSX bytes are red under ts', () => {
+    expect(() => parserDouble.transformSync(fixtureText, { loader: 'ts' })).toThrow();
+  });
+
+  it('renamed paths are not allowlisted', () => {
+    const renamed = fixture.replace('ShellSessionVocabulary', 'RenamedShellSessionVocabulary');
+    expect(loaderForPath(renamed)).toBe('tsx');
+    expect(() => validateSourcePaths([renamed])).toThrow(/Allowlisted source path vanished/);
+    expect(() => validateSourcePaths([renamed, 'src/example.js'])).toThrow(/Unknown tracked source extension/);
+  });
+
+  it('normal TypeScript and TSX paths select their own loaders', () => {
+    expect(loaderForPath('src/core/example.ts')).toBe('ts');
+    expect(loaderForPath('src/renderer/example.tsx')).toBe('tsx');
+  });
+
+  it('selects every tracked TypeScript path, including the repository root', () => {
+    expect(selectTrackedSourceFiles([
+      'vitest.config.ts',
+      'src/core/example.ts',
+      'src/renderer/example.tsx',
+      fixture,
+      'README.md',
+      'scripts/example.js',
+    ])).toEqual([
+      'vitest.config.ts',
+      'src/core/example.ts',
+      'src/renderer/example.tsx',
+      fixture,
+    ]);
+  });
+
+  it('reports deterministic totals and machine-readable failure records', () => {
+    const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'source-parse-'));
+    writeFileSync(path.join(fixtureRoot, 'good.ts'), 'export const good = 1;\n');
+    writeFileSync(path.join(fixtureRoot, 'bad.ts'), 'export const bad = <broken>;\n');
+    const report = parseSource({
+      root: fixtureRoot,
+      files: ['good.ts', 'bad.ts'],
+      esbuild: parserDouble,
+      requireAllowlist: false,
+    });
+    expect(report.checked).toBe(2);
+    expect(report.failures).toHaveLength(1);
+    expect(report.productionFailures).toBe(1);
+    expect(report.testFailures).toBe(0);
+    expect(report.failures[0]).toEqual({
+      file: 'bad.ts',
+      isTest: false,
+      line: 1,
+      column: 1,
+      text: 'JSX syntax requires the tsx loader',
+    });
   });
 });

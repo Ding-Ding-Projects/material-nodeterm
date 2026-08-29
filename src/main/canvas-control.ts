@@ -18,6 +18,7 @@ import {
 } from './canvas-control-core'
 import { opencodeConfigDir } from '../core/agents/hooks/opencode'
 import { copilotHomeDir } from '../core/agents/hooks/copilot'
+import { renameAtomicSync } from '../core/fs-atomic'
 
 function dir(): string {
   return path.join(app.getPath('userData'), 'canvas-control')
@@ -83,13 +84,13 @@ function linkManagedSkills(configDir: string, sharedSkillsDir: string): void {
   }
 
   const backup = hadExisting ? nextSkillsBackup(target) : undefined
-  if (backup) fs.renameSync(target, backup)
+  if (backup) renameAtomicSync(target, backup)
   try {
     fs.symlinkSync(sharedSkillsDir, target, process.platform === 'win32' ? 'junction' : 'dir')
   } catch (e) {
     if (backup) {
       try {
-        fs.renameSync(backup, target)
+        renameAtomicSync(backup, target)
       } catch {
         /* preserve the original failure while leaving the backup recoverable */
       }

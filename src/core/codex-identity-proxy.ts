@@ -572,9 +572,9 @@ export function writeCodexThreadIdentity(
   if (!isSafeThreadId(threadId) || !SAFE_NODE_ID.test(nodeId) || !canonicalEndpoint) {
     throw new Error('Invalid NodeTerm Codex thread identity')
   }
-  const root = path.isAbsolute(rootOrAccountId) ? rootOrAccountId : defaultIdentityRoot()
   const effectiveAccountId = path.isAbsolute(rootOrAccountId) ? accountId : rootOrAccountId
   const scope = accountScope(effectiveAccountId) // throws on an id that could escape the mapping directory
+  const root = path.isAbsolute(rootOrAccountId) ? rootOrAccountId : defaultIdentityRoot()
   const signature = identitySignature(threadId, scope, nodeId, canonicalEndpoint)
   const file = identityFile(threadId, scope, root)
   const dir = path.dirname(file)
@@ -628,9 +628,9 @@ export function bindCodexThreadIdentity(
   if (!isSafeThreadId(threadId) || !SAFE_NODE_ID.test(nodeId) || !canonicalEndpoint) {
     throw new Error('Invalid NodeTerm Codex thread identity')
   }
-  const root = path.isAbsolute(rootOrAccountId) ? rootOrAccountId : defaultIdentityRoot()
   const effectiveAccountId = path.isAbsolute(rootOrAccountId) ? accountId : rootOrAccountId
   const scope = accountScope(effectiveAccountId) // reject an escaping account id before any read or write
+  const root = path.isAbsolute(rootOrAccountId) ? rootOrAccountId : defaultIdentityRoot()
   const existing = readCodexThreadIdentity(threadId, root, effectiveAccountId)
   for (const candidate of identityCandidates(threadId, root)) {
     if (candidate.scope !== scope) continue
@@ -761,10 +761,10 @@ nt_preflight() {
   case "\${NODETERM_CODEX_ACCOUNT_ID-}" in
     '') ;;
     [A-Za-z0-9]*) ;;
-    *) nt_fail account-id-unavailable; return ;;
+    *) nt_fail codex-account-invalid; return ;;
   esac
   case "\${NODETERM_CODEX_ACCOUNT_ID-}" in
-    *[!A-Za-z0-9._-]*) nt_fail account-id-unavailable; return ;;
+    *[!A-Za-z0-9._-]*) nt_fail codex-account-invalid; return ;;
   esac
   nt_safe_path "\${NODETERM_HOOK_ENDPOINT-}" || { nt_fail hook-endpoint-unavailable; return; }
   [ -r "$NODETERM_HOOK_ENDPOINT" ] || { nt_fail hook-endpoint-unavailable; return; }
@@ -806,7 +806,10 @@ nt_preflight() {
   # <CODEX_HOME>/packages/standalone/current/codex". Caps normally keeps that second case away from
   # here entirely, but the pane resolves CODEX_HOME from its OWN environment (§8.5) and an install
   # can be removed after boot, so the launcher still has to be able to say which it hit.
-  if ${appServerStartCommand}; then
+  # The shared daemon is not this pane. Keep the pane's node id and endpoint out of its
+  # environment, otherwise every tool shell it later creates inherits the first node's identity
+  # and the per-thread resolver never gets a chance to recover the correct one.
+  if (unset NODETERM_NODE_ID NODETERM_HOOK_ENDPOINT; ${appServerStartCommand}); then
     return 0
   fi
   if [ -x "\${CODEX_HOME:-$HOME/.codex}/packages/standalone/current/codex" ]; then

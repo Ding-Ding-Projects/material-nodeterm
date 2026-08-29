@@ -14,6 +14,13 @@ import { hookServer, parseControlBody } from '../core/agents/hook-server'
 import { nodeAuthToken } from '../core/agents/node-auth-token'
 import { initPlatform, resetPlatformForTests } from '../core/platform'
 import { fakePlatform } from '../core/platform-fake'
+import {
+  environmentForPosixShell,
+  REAL_POSIX_SHELL,
+  pathForPosixShell,
+  pathsForPosixShellEnv,
+  posixShellScriptArgs
+} from '../core/testing/posix-shell'
 
 const run = promisify(execFile)
 
@@ -45,40 +52,43 @@ function callShim(
   args: string[],
   env: Record<string, string> = {}
 ): Promise<{ stdout: string; stderr: string }> {
-  return run('/bin/sh', [shim, ...args], {
-    env: {
-      PATH: process.env.PATH ?? '',
-      NODETERM_CANVAS_CONTROL: '1',
-      NODETERM_NODE_ID: 'node-1',
-      NODETERM_HOOK_PORT: String(hookServer.getPort()),
-      NODETERM_HOOK_TOKEN: hookServer.getToken(),
-      ...env
-    }
+  return runShim(args, {
+    NODETERM_CANVAS_CONTROL: '1',
+    NODETERM_NODE_ID: 'node-1',
+    NODETERM_HOOK_PORT: String(hookServer.getPort()),
+    NODETERM_HOOK_TOKEN: hookServer.getToken(),
+    ...env
   })
 }
 
-// Every case below invokes the real POSIX shim through `run('/bin/sh', [shim, ...])`. That is an
-// absolute POSIX path handed straight to child_process — win32 node resolves it as a literal
-// executable name rather than searching PATH, and there is no "/bin/sh" on Windows (Git for
-// Windows' sh.exe lives at a drive-letter path, not that one) — so every case here would fail
-// with ENOENT before the shim itself was ever exercised. Only `parseControlBody`, at the bottom
-// of this file, is a pure function and still runs on every platform.
-describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
+function runShim(args: string[], env: Record<string, string> = {}, fixtureBin?: string): Promise<{ stdout: string; stderr: string }> {
+  return run(REAL_POSIX_SHELL, posixShellScriptArgs(shim, args, fixtureBin), {
+    env: environmentForPosixShell(pathsForPosixShellEnv({
+      PATH: process.env.PATH ?? '',
+      ...env
+    }, ['HOME', 'NODETERM_HOOK_ENDPOINT', 'NODETERM_HOOK_SOCK', 'NODETERM_NODE_TOKEN_DIR']))
+  })
+}
+
+// Every case below invokes the real POSIX shim through the platform-resolved shell helper. On
+// Windows this is Git for Windows sh.exe with its path and environment boundaries normalized, so
+// the tests exercise the generated script instead of failing at a literal /bin/sh lookup.
+describe('canvas-control shim', () => {
   beforeAll(() => {
     received = []
   })
 
   it('is valid POSIX sh', async () => {
-    await expect(run('/bin/sh', ['-n', shim])).resolves.toBeTruthy()
+    await expect(run(REAL_POSIX_SHELL, ['-n', pathForPosixShell(shim)])).resolves.toBeTruthy()
   })
 
   it('sends verb, node id and --flag pairs, and prints the server message', async () => {
-    const { stdout } = await callShim(['open-claude', '--count', '2', '--cwd', '/srv/app'])
+    const { stdout } = await callShim(['open-claude', '--count', '2', '--cwd', 'srv/app'])
     expect(stdout.trim()).toBe('did open-claude')
     const last = received.at(-1)
     expect(last?.verb).toBe('open-claude')
     expect(last?.nodeId).toBe('node-1')
-    expect(last?.args).toEqual({ count: '2', cwd: '/srv/app' })
+    expect(last?.args).toEqual({ count: '2', cwd: 'srv/app' })
   })
 
   it('defaults to `list` when called with no verb', async () => {
@@ -131,13 +141,15 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
     })
   })
 
-  it('carries inter-agent send, reply and status envelopes unchanged', async () => {
-    await callShim(['send', '--node', 'node-2', '--subject', 'MCP NOTICE', '--text', 'line one\nline two'])
-    expect(received.at(-1)).toMatchObject({
-      verb: 'send', args: { node: 'node-2', subject: 'MCP NOTICE', text: 'line one\nline two' }
+  it('refuses inter-agent messaging without a per-node capability and carries status unchanged', async () => {
+    const before = received.length
+    await expect(
+      callShim(['send', '--node', 'node-2', '--subject', 'MCP NOTICE', '--text', 'line one\nline two'])
+    ).rejects.toMatchObject({ stderr: expect.stringContaining('Agent messaging refused.') })
+    await expect(callShim(['reply', '--message', 'msg-1', '--text', 'ACK'])).rejects.toMatchObject({
+      stderr: expect.stringContaining('Agent messaging refused.')
     })
-    await callShim(['reply', '--message', 'msg-1', '--text', 'ACK'])
-    expect(received.at(-1)).toMatchObject({ verb: 'reply', args: { message: 'msg-1', text: 'ACK' } })
+    expect(received.length).toBe(before)
     await callShim(['status', '--message', 'msg-1'])
     expect(received.at(-1)).toMatchObject({ verb: 'status', args: { message: 'msg-1' } })
   })
@@ -172,8 +184,8 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
   })
 
   it('maps the bare positional to --path / --node per verb', async () => {
-    await callShim(['show-image', '/tmp/a b.png'])
-    expect(received.at(-1)?.args).toEqual({ path: '/tmp/a b.png' })
+    await callShim(['show-image', 'tmp/a b.png'])
+    expect(received.at(-1)?.args).toEqual({ path: 'tmp/a b.png' })
     await callShim(['close', 'node-9'])
     expect(received.at(-1)?.args).toEqual({ node: 'node-9' })
   })
@@ -189,13 +201,13 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
   // and still be dropped by the reader — `arg.<name>` with an empty value is exactly the shape
   // that would be plausible to discard.
   it('a --flag does not swallow the next --flag, all the way through to parsed args', async () => {
-    await callShim(['open-terminal', '--count', '2', '--verbose', '--cwd', '/tmp'])
-    expect(received.at(-1)?.args).toEqual({ count: '2', verbose: '', cwd: '/tmp' })
+    await callShim(['open-terminal', '--count', '2', '--verbose', '--cwd', 'tmp'])
+    expect(received.at(-1)?.args).toEqual({ count: '2', verbose: '', cwd: 'tmp' })
   })
 
   it('--flag=value carries a value that itself starts with -- (unexpressible before)', async () => {
-    await callShim(['open-terminal', '--cmd=--version', '--cwd', '/srv'])
-    expect(received.at(-1)?.args).toEqual({ cmd: '--version', cwd: '/srv' })
+    await callShim(['open-terminal', '--cmd=--version', '--cwd', 'srv'])
+    expect(received.at(-1)?.args).toEqual({ cmd: '--version', cwd: 'srv' })
   })
 
   it('--flag=value splits on the FIRST =, and the rest survives urlencoding', async () => {
@@ -241,7 +253,7 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
   it('refuses outside a canvas-control session instead of calling anything', async () => {
     const before = received.length
     await expect(
-      run('/bin/sh', [shim, 'list'], { env: { PATH: process.env.PATH ?? '' } })
+      runShim(['list'])
     ).rejects.toMatchObject({ stderr: expect.stringContaining('not a nodeterm agent node') })
     expect(received.length).toBe(before)
   })
@@ -255,10 +267,8 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
       endpoint,
       `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\n`
     )
-    fs.writeFileSync(path.join(maps, 'thread-a'), `nodeId=node-from-map\nendpoint=${endpoint}\n`)
-    const { stdout } = await run('/bin/sh', [shim, 'list'], {
-      env: { PATH: process.env.PATH ?? '', HOME: home, CODEX_THREAD_ID: 'thread-a' }
-    })
+    fs.writeFileSync(path.join(maps, 'thread-a'), `nodeId=node-from-map\nendpoint=${pathForPosixShell(endpoint)}\n`)
+    const { stdout } = await runShim(['list'], { HOME: home, CODEX_THREAD_ID: 'thread-a' })
     expect(stdout.trim()).toBe('did list')
     expect(received.at(-1)?.nodeId).toBe('node-from-map')
   })
@@ -269,9 +279,7 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
     fs.mkdirSync(maps, { recursive: true })
     fs.writeFileSync(path.join(maps, 'thread-b'), 'nodeId=../other\nendpoint=relative\n')
     await expect(
-      run('/bin/sh', [shim, 'list'], {
-        env: { PATH: process.env.PATH ?? '', HOME: home, CODEX_THREAD_ID: 'thread-b' }
-      })
+      runShim(['list'], { HOME: home, CODEX_THREAD_ID: 'thread-b' })
     ).rejects.toMatchObject({ stderr: expect.stringContaining('not a nodeterm agent node') })
   })
 
@@ -284,14 +292,7 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
       'nodeId=wrong-node\nendpoint=/isolated/hook.env\n'
     )
     await expect(
-      run('/bin/sh', [shim, 'list'], {
-        env: {
-          PATH: process.env.PATH ?? '',
-          HOME: home,
-          CODEX_THREAD_ID: 'same-thread',
-          NODETERM_CODEX_ACCOUNT_ID: '..'
-        }
-      })
+      runShim(['list'], { HOME: home, CODEX_THREAD_ID: 'same-thread', NODETERM_CODEX_ACCOUNT_ID: '..' })
     ).rejects.toMatchObject({ stderr: expect.stringContaining('not a nodeterm agent node') })
   })
 
@@ -307,19 +308,16 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
     fs.mkdirSync(path.join(maps, 'account-b'), { recursive: true })
     fs.writeFileSync(
       path.join(maps, 'account-a', 'same-thread'),
-      `accountId=account-a\nnodeId=node-account-a\nendpoint=${endpoint}\n`
+      `accountId=account-a\nnodeId=node-account-a\nendpoint=${pathForPosixShell(endpoint)}\n`
     )
     fs.writeFileSync(
       path.join(maps, 'account-b', 'same-thread'),
-      `accountId=account-b\nnodeId=node-account-b\nendpoint=${endpoint}\n`
+      `accountId=account-b\nnodeId=node-account-b\nendpoint=${pathForPosixShell(endpoint)}\n`
     )
-    const { stdout } = await run('/bin/sh', [shim, 'list'], {
-      env: {
-        PATH: process.env.PATH ?? '',
-        HOME: home,
-        CODEX_THREAD_ID: 'same-thread',
-        NODETERM_CODEX_ACCOUNT_ID: 'account-b'
-      }
+    const { stdout } = await runShim(['list'], {
+      HOME: home,
+      CODEX_THREAD_ID: 'same-thread',
+      NODETERM_CODEX_ACCOUNT_ID: 'account-b'
     })
     expect(stdout.trim()).toBe('did list')
     expect(received.at(-1)?.nodeId).toBe('node-account-b')
@@ -332,20 +330,14 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
     fs.mkdirSync(path.join(maps, 'account-a'), { recursive: true })
     fs.writeFileSync(
       path.join(maps, 'account-a', 'managed-thread'),
-      `accountId=account-a\nnodeId=node-account-a\nendpoint=${endpoint}\n`
+      `accountId=account-a\nnodeId=node-account-a\nendpoint=${pathForPosixShell(endpoint)}\n`
     )
     fs.writeFileSync(
       endpoint,
       `NODETERM_HOOK_PORT=${hookServer.getPort()}\nNODETERM_HOOK_TOKEN=${hookServer.getToken()}\n`
     )
 
-    const { stdout } = await run('/bin/sh', [shim, 'list'], {
-      env: {
-        PATH: process.env.PATH ?? '',
-        HOME: home,
-        CODEX_THREAD_ID: 'managed-thread'
-      }
-    })
+    const { stdout } = await runShim(['list'], { HOME: home, CODEX_THREAD_ID: 'managed-thread' })
 
     expect(stdout.trim()).toBe('did list')
     expect(received.at(-1)?.nodeId).toBe('node-account-a')
@@ -362,7 +354,7 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
       fs.mkdirSync(path.join(maps, scope), { recursive: true })
       fs.writeFileSync(
         path.join(maps, scope, 'same-thread'),
-        `accountId=${scope}\nnodeId=${nodeId}\nendpoint=${endpoint}\n`
+        `accountId=${scope}\nnodeId=${nodeId}\nendpoint=${pathForPosixShell(endpoint)}\n`
       )
     }
     fs.writeFileSync(
@@ -371,13 +363,7 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
     )
 
     await expect(
-      run('/bin/sh', [shim, 'list'], {
-        env: {
-          PATH: process.env.PATH ?? '',
-          HOME: home,
-          CODEX_THREAD_ID: 'same-thread'
-        }
-      })
+      runShim(['list'], { HOME: home, CODEX_THREAD_ID: 'same-thread' })
     ).rejects.toMatchObject({
       stderr: expect.stringContaining('not a nodeterm agent node')
     })
@@ -390,11 +376,11 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
     fs.mkdirSync(path.join(maps, 'account-a'), { recursive: true })
     fs.writeFileSync(
       path.join(maps, 'account-a', 'same-thread'),
-      `accountId=account-a\nnodeId=node-account-a\nendpoint=${endpoint}\n`
+      `accountId=account-a\nnodeId=node-account-a\nendpoint=${pathForPosixShell(endpoint)}\n`
     )
     fs.writeFileSync(
       path.join(maps, 'same-thread'),
-      `nodeId=node-legacy-system\nendpoint=${endpoint}\n`
+      `nodeId=node-legacy-system\nendpoint=${pathForPosixShell(endpoint)}\n`
     )
     fs.writeFileSync(
       endpoint,
@@ -402,13 +388,7 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim', () => {
     )
 
     await expect(
-      run('/bin/sh', [shim, 'list'], {
-        env: {
-          PATH: process.env.PATH ?? '',
-          HOME: home,
-          CODEX_THREAD_ID: 'same-thread'
-        }
-      })
+      runShim(['list'], { HOME: home, CODEX_THREAD_ID: 'same-thread' })
     ).rejects.toMatchObject({
       stderr: expect.stringContaining('not a nodeterm agent node')
     })
@@ -728,7 +708,9 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim keeps credent
     fs.writeFileSync(path.join(tokenDir, 'node-1'), 'SECRET-NODE-TOKEN\n', { mode: 0o600 })
     binDir = path.join(dir, 'argv-bin')
     fs.mkdirSync(binDir, { recursive: true })
-    const realCurl = (await run('/bin/sh', ['-c', 'command -v curl'])).stdout.trim()
+    const realCurl = (await run(REAL_POSIX_SHELL, ['-c', 'command -v curl'], {
+      env: environmentForPosixShell()
+    })).stdout.trim()
     fs.writeFileSync(
       path.join(binDir, 'curl'),
       [
@@ -857,9 +839,9 @@ describe('codex-sandbox self-diagnosis (issue #367)', () => {
     expect(err.stderr).not.toContain('Could not reach nodeterm')
   })
 
-  it('on Darwin with a socket advertised, it also prints the config.toml allowlist remedy with the path', async () => {
+  it.skipIf(process.platform === 'win32')('on Darwin with a socket advertised, it also prints the config.toml allowlist remedy with the path', async () => {
     const err = await callShim(['list'], sandboxEnv('Darwin')).catch((e) => e as { stderr: string })
-    expect(err.stderr).toContain(`network.allow_unix_sockets = ["${deadSock}"]`)
+    expect(err.stderr).toContain(`network.allow_unix_sockets = ["${pathForPosixShell(deadSock)}"]`)
     expect(err.stderr).toContain('~/.codex/config.toml')
   })
 
@@ -963,7 +945,7 @@ describe('sticky through the shim (verified-only verb)', () => {
   })
 
   it('carries a markdown body (backticks, #, newlines) verbatim, --create yes riding along', async () => {
-    const md = '# Tickets\n\n- [ENG-1] `fix build` — **urgent**\n- [ENG-2] $PATH & <em>'
+    const md = '# Tickets\n\n- [ENG-1] `fix build` - **urgent**\n- [ENG-2] $PATH & <em>'
     await callVerified(['sticky', '--node', 'sticky-3', '--append', md, '--create', 'yes'])
     expect(received.at(-1)).toMatchObject({
       verb: 'sticky',

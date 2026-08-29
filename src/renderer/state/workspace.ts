@@ -9,6 +9,7 @@ import type { HomeAssistantControlConfig } from '@shared/home-assistant-control'
 import { DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG, validateHomeAssistantControlConfig } from '@shared/home-assistant-control'
 import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
+import type { TriggerSpec } from '@shared/trigger'
 import type { ServiceConnection } from '@shared/node-exec'
 import { OPEN_WEBUI_DEFAULT_INTENT, type OpenWebUiIntent, type OpenWebUiLocalBinding } from '@shared/open-webui-hosting'
 import { DEFAULT_GITLAB_HOSTING_CONFIG, type GitLabHostingConfig } from '@shared/gitlab-hosting'
@@ -112,6 +113,7 @@ const LINUX_VM_SIZE = { width: 760, height: 560 }
 const WINDOWS_DIAGNOSTICS_SIZE = { width: 760, height: 560 }
 const TIMER_SIZE = { width: 380, height: 360 }
 const ALARM_SIZE = { width: 380, height: 360 }
+const TRIGGER_SIZE = { width: 380, height: 320 }
 const OPEN_WEBUI_SIZE = { width: 680, height: 560 }
 const VERACRYPT_SIZE = { width: 700, height: 560 }
 const UNIGETUI_SIZE = { width: 520, height: 360 }
@@ -180,6 +182,8 @@ export interface NodeData {
   alarmNarratorEnabled?: boolean
   alarmNextOccurrenceAt?: number
   alarmHistory?: AlarmOccurrence[]
+  /** Trigger schedule and delivery definition. Arm state never enters renderer persistence. */
+  trigger?: import('@shared/trigger').TriggerSpec
   /** Agent nodes only: when true, this node's subagent/loop fan-out cards are hidden. */
   hideFanout?: boolean
   /** Expanded height to restore when un-collapsing (kept out of the persisted size). */
@@ -293,6 +297,8 @@ export interface NodeData {
   /** Safe ownership metadata for a special-universe Shop node. */
   universeCanvasId?: string
   universeScope?: 'multiverse' | 'aws-universe'
+  /** Marker for the machine-owned UniGetUI Global Universe portal. */
+  unigetuiGlobal?: boolean
   /** The Shop is permanently owned by its universe canvas. */
   nonDeletable?: boolean
   /** Last catalog choice is safe user intent only, not an execution or provider binding. */
@@ -1971,6 +1977,29 @@ export function createAlarmClockNode(index: number, center?: { x: number; y: num
   }
 }
 
+/** Creates a disarmed, content-bound trigger. Arm consent never enters this shared node data. */
+export function createTriggerNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const trigger: TriggerSpec = {
+    schedule: { kind: 'interval', everyMinutes: 60 },
+    payload: '',
+    target: ''
+  }
+  return {
+    id: nextId('trigger'),
+    type: 'trigger',
+    position: placeAt(center, index, TRIGGER_SIZE.width, TRIGGER_SIZE.height),
+    width: TRIGGER_SIZE.width,
+    height: TRIGGER_SIZE.height,
+    style: { width: TRIGGER_SIZE.width, height: TRIGGER_SIZE.height },
+    data: {
+      title: 'Trigger',
+      color: '#ffb340',
+      group: null,
+      trigger
+    }
+  }
+}
+
 /** Creates a new dino (T-Rex Runner) game node, seeded with the project's record. */
 export function createDinoNode(
   index: number,
@@ -2582,6 +2611,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   'homeassistant-control': true,
   timer: true,
   alarm: true,
+  trigger: true,
   sticky: true,
   group: true,
   editor: true,
@@ -2647,6 +2677,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   'homeassistant-control': HOME_ASSISTANT_CONTROL_SIZE,
   timer: TIMER_SIZE,
   alarm: ALARM_SIZE,
+  trigger: TRIGGER_SIZE,
   sticky: STICKY_SIZE,
   group: GROUP_SIZE,
   editor: EDITOR_SIZE,
@@ -3101,6 +3132,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         alarmNarratorEnabled: n.alarmNarratorEnabled,
         alarmNextOccurrenceAt: n.alarmNextOccurrenceAt,
         alarmHistory: n.alarmHistory,
+        trigger: n.trigger,
         premaxRect: n.premaxRect,
         shell: n.shell,
         terminalProfileId: n.ssh ? undefined : n.terminalProfileId,
@@ -3266,6 +3298,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         alarmNarratorEnabled: n.data.alarmNarratorEnabled,
         alarmNextOccurrenceAt: n.data.alarmNextOccurrenceAt,
         alarmHistory: n.data.alarmHistory,
+        trigger: n.data.trigger,
         hideFanout: n.data.hideFanout,
         parentId: n.parentId,
         shell: n.data.shell,

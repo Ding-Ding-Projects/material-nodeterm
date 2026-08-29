@@ -76,6 +76,7 @@ function storedZip(entries: Array<{ name: string; value: Buffer }>): Buffer {
 describeWindows('fresh-machine Windows batch entry points', () => {
   let root = ''
   let toolchain = ''
+  let visualStudio = ''
   let log = ''
 
   beforeEach(() => {
@@ -83,11 +84,29 @@ describeWindows('fresh-machine Windows batch entry points', () => {
     // path crosses cmd and PowerShell, and treating any of it as source must not split a command.
     root = mkdtempSync(join(tmpdir(), "nodeterm build BAT ! & (O'Brien) "))
     toolchain = join(root, 'portable-node')
+    visualStudio = join(root, 'Visual Studio fixture')
     log = join(root, 'events.log')
     mkdirSync(toolchain, { recursive: true })
     mkdirSync(join(root, 'scripts'), { recursive: true })
     mkdirSync(join(root, 'temporary files'), { recursive: true })
     mkdirSync(join(root, 'unrelated caller'), { recursive: true })
+    const vsToolset = join(visualStudio, 'VC', 'Tools', 'MSVC', '14.44.35207')
+    mkdirSync(join(vsToolset, 'lib', 'spectre', 'x64'), { recursive: true })
+    writeFileSync(join(vsToolset, 'lib', 'spectre', 'x64', 'vcruntime.lib'), 'x64 fixture')
+    mkdirSync(join(vsToolset, 'lib', 'spectre', 'x86'), { recursive: true })
+    writeFileSync(join(vsToolset, 'lib', 'spectre', 'x86', 'vcruntime.lib'), 'x86 fixture')
+    const vsDevCmd = join(visualStudio, 'Common7', 'Tools', 'VsDevCmd.bat')
+    mkdirSync(dirname(vsDevCmd), { recursive: true })
+    writeFileSync(
+      vsDevCmd,
+      [
+        '@echo off',
+        'set "VCINSTALLDIR=%~dp0..\\..\\VC"',
+        'set "VCToolsInstallDir=%~dp0..\\..\\VC\\Tools\\MSVC\\14.44.35207\\"',
+        'exit /b 0',
+        ''
+      ].join('\r\n')
+    )
     symlinkSync(join(REPO_ROOT, 'node_modules'), join(root, 'node_modules'), 'junction')
 
     for (const file of ['build.bat', 'build-installer.bat', 'download-dependencies.bat']) {
@@ -96,7 +115,17 @@ describeWindows('fresh-machine Windows batch entry points', () => {
     for (const file of ['check-node-version.cjs', 'release-assets.mjs']) {
       copyFileSync(join(REPO_ROOT, 'scripts', file), join(root, 'scripts', file))
     }
-    writeFileSync(join(root, 'dependencies.manifest.json'), '{}\n')
+    writeFileSync(join(root, 'dependencies.manifest.json'), `${JSON.stringify({
+      node: {
+        version: FIXTURE_NODE_VERSION,
+        portable: {
+          'win-x64': {
+            url: `https://nodejs.org/dist/v${FIXTURE_NODE_VERSION}/node-v${FIXTURE_NODE_VERSION}-win-x64.zip`,
+            sha256: '0'.repeat(64)
+          }
+        }
+      }
+    }, null, 2)}\n`)
     writeFileSync(join(root, 'package.json'), JSON.stringify({
       name: 'node-terminal',
       version: '0.4.0',
@@ -171,9 +200,13 @@ describeWindows('fresh-machine Windows batch entry points', () => {
     writeFileSync(
       join(root, 'scripts', 'ensure-windows-build-toolchain.mjs'),
       [
-        "import { appendFileSync } from 'node:fs'",
-        "appendFileSync(process.env.BAT_TEST_LOG, `toolchain ${process.argv.slice(2).join(' ')}\\n`)",
+        "import { appendFileSync, writeFileSync } from 'node:fs'",
+        // Keep the event ledger stable while the real scripts add their randomized result-file
+        // handoff argument; the result file itself is still written and consumed below.
+        "appendFileSync(process.env.BAT_TEST_LOG, `toolchain${process.argv.includes('--silent') ? ' --silent' : ''}\\n`)",
         "if (process.env.BAT_TEST_TOOLCHAIN_FAIL === '1') process.exit(19)",
+        "const resultIndex = process.argv.indexOf('--result-file')",
+        "if (resultIndex >= 0 && process.argv[resultIndex + 1]) writeFileSync(process.argv[resultIndex + 1], `${process.env.BAT_TEST_VS_INSTALLATION}\\r\\n`)",
         ''
       ].join('\n')
     )
@@ -273,6 +306,7 @@ describeWindows('fresh-machine Windows batch entry points', () => {
           LOCALAPPDATA: join(root, 'local-app-data'),
           TEMP: join(root, 'temporary files'),
           BAT_TEST_LOG: log,
+          BAT_TEST_VS_INSTALLATION: visualStudio,
           BAT_TEST_SETUP_SOURCE: process.env.ComSpec ?? join(systemRoot, 'System32', 'cmd.exe'),
           BAT_TEST_NUPKG_SOURCE: join(root, 'temporary files', 'package-fixture.nupkg'),
           BAT_TEST_INSTALLER: join(
@@ -596,7 +630,6 @@ describeWindows('fresh-machine Windows batch entry points', () => {
       BAT_TEST_FORBIDDEN_POWERSHELL_LITERAL: root,
       BAT_TEST_FORBIDDEN_URL: url
     })
-
     expect(result.error).toBeUndefined()
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
     expect(events()).toEqual([
@@ -982,7 +1015,7 @@ describeWindows('fresh-machine Windows batch entry points', () => {
     writeFileSync(join(fixture.fakeSystemTools, 'node.cmd'), '@echo off\r\nexit /b -1\r\n')
     const result = run('download-dependencies.bat', portableEnvironment(fixture))
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
-    expect(result.stdout).toContain('missing, broken, or outside the supported range')
+    expect(result.stdout).toContain('missing, broken, outside the supported runtime range')
     expect(events()).toContain('portable-expand')
   }, 30_000)
 
@@ -1080,7 +1113,7 @@ describeWindows('fresh-machine Windows batch entry points', () => {
     })
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
-    expect(result.stdout).toContain('outside the supported range')
+    expect(result.stdout).toContain('outside the supported runtime range')
     expect(events()).toContain('portable-expand')
     expect(events().at(-1)).toBe('npm run build')
   }, 30_000)

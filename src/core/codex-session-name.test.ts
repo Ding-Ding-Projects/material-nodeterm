@@ -187,7 +187,7 @@ describe.skipIf(process.platform === 'win32')('readCodexSessionNameAt', () => {
   })
 })
 
-describe('readCodexThreadAt', () => {
+describe.skipIf(process.platform === 'win32')('readCodexThreadAt', () => {
   it('shares the read-only thread request and exposes runtime status', async () => {
     expect(await readCodexThreadAt(sock, 'thread-known')).toMatchObject({
       id: 'thread-known',
@@ -417,7 +417,7 @@ describe('relayedCodexSessionName (the on-disk relay fallback)', () => {
   })
 })
 
-describe('readCodexSessionName relay fallback wiring', () => {
+describe.skipIf(process.platform === 'win32')('readCodexSessionName relay fallback wiring', () => {
   it('falls back to the relayed name when the app-server reports none, and a real name wins', async () => {
     const savedHome = process.env.HOME
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-name-wire-'))
@@ -459,7 +459,7 @@ describe('rememberCodexSessionName', () => {
   })
 })
 
-describe('readCodexThreadRollout / readCodexAccountAt', () => {
+describe.skipIf(process.platform === 'win32')('readCodexThreadRollout / readCodexAccountAt', () => {
   let d = ''
   let s = ''
   let srv: http.Server

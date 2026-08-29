@@ -28,7 +28,7 @@ Lifecycle, by trigger:
 | Event | What happens to the session |
 | --- | --- |
 | Switch away from a project | The node's terminal view detaches or parks; the persistent session and process keep running. |
-| Close or crash the app | Desktop clients detach; tmux or the standalone Windows session host keeps the session running. |
+| Close or crash the app | Desktop clients detach; tmux or the standalone Windows session host keeps the session running. A normal Windows title-bar close enters the same bounded application shutdown path as Quit, so auxiliary windows and application-owned child processes do not keep the old instance alive. |
 | Reopen the node / relaunch the app | A client reattaches to the same named session. tmux redraws itself; the session host supplies a reconstructed screen. |
 | Pan the node off-screen for a while | The terminal view may be torn down to free memory; the persistent backend is untouched and rebuilds the view on return. |
 | Click the node's **×** | The persistent session itself is killed, ending its live process. |

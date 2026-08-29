@@ -18,13 +18,13 @@ describe('recordingKeydown', () => {
   it('a keyed chord commits immediately', () => {
     expect(recordingKeydown({ mods: null }, e({ metaKey: true, key: 'd' }), KEYED)).toEqual({
       kind: 'commit',
-      combo: 'Ctrl+D'
+      combo: 'Cmd+D'
     })
   })
   it('mac Ctrl rides along in a keyed capture (the PR1 gap, closed)', () => {
     expect(
       recordingKeydown({ mods: null }, e({ metaKey: true, ctrlKey: true, key: 'd' }), KEYED)
-    ).toEqual({ kind: 'commit', combo: 'Ctrl+Ctrl+D' })
+    ).toEqual({ kind: 'commit', combo: 'Cmd+Ctrl+D' })
   })
   it('Escape cancels', () => {
     expect(recordingKeydown({ mods: null }, e({ key: 'Escape' }), KEYED)).toEqual({ kind: 'cancel' })
@@ -70,7 +70,7 @@ describe('recordingKeydown', () => {
 describe('recordingKeyup', () => {
   it('full release commits the remembered hold chord', () => {
     const armed = { mods: { cmd: true, ctrl: false, alt: true, shift: false } }
-    expect(recordingKeyup(armed, e({}), HOLD)).toEqual({ kind: 'commit', combo: 'Ctrl+Alt' })
+    expect(recordingKeyup(armed, e({}), HOLD)).toEqual({ kind: 'commit', combo: 'Cmd+Alt' })
   })
   it('partial release keeps waiting; no remembered mods ignores', () => {
     const armed = { mods: { cmd: true, ctrl: false, alt: true, shift: false } }
@@ -83,6 +83,6 @@ describe('recordingKeyup', () => {
   it('a keyup with only Ctrl still held is ignored (the anyModDown gap, closed)', () => {
     const armed = { mods: { cmd: true, ctrl: true, alt: false, shift: false } }
     expect(recordingKeyup(armed, e({ ctrlKey: true }), HOLD)).toEqual({ kind: 'ignored' })
-    expect(recordingKeyup(armed, e({}), HOLD)).toEqual({ kind: 'commit', combo: 'Ctrl+Ctrl' })
+    expect(recordingKeyup(armed, e({}), HOLD)).toEqual({ kind: 'commit', combo: 'Cmd+Ctrl' })
   })
 })

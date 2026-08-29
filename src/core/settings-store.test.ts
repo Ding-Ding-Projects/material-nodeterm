@@ -60,6 +60,31 @@ describe('SettingsStore nested-default merge', () => {
     expect(store.get().ptyShadowClients).toBe(false)
   })
 
+  it('migrates an old settings file to default-on Markdown preview exactly once', () => {
+    writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ fontSize: 15 }), 'utf-8')
+    const store = new SettingsStore()
+    store.init()
+    expect(store.get().openMarkdownPreview).toBe(true)
+    expect(store.get().openMarkdownPreviewMigrated).toBe(true)
+  })
+
+  it('migrates an unstamped materialized false, while preserving a stamped opt-out', () => {
+    writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ openMarkdownPreview: false }), 'utf-8')
+    const migrated = new SettingsStore()
+    migrated.init()
+    expect(migrated.get().openMarkdownPreview).toBe(true)
+    expect(migrated.get().openMarkdownPreviewMigrated).toBe(true)
+
+    writeFileSync(
+      path.join(dir, 'settings.json'),
+      JSON.stringify({ openMarkdownPreview: false, openMarkdownPreviewMigrated: true }),
+      'utf-8'
+    )
+    const optedOut = new SettingsStore()
+    optedOut.init()
+    expect(optedOut.get().openMarkdownPreview).toBe(false)
+  })
+
   it('leaves an already-modern speech object alone', () => {
     writeFileSync(
       path.join(dir, 'settings.json'),

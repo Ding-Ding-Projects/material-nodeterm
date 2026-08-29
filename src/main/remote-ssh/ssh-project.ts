@@ -6,7 +6,15 @@ import { spawn, execFile, execFileSync } from 'child_process'
 import { app, ipcMain } from 'electron'
 import { IPC } from '../../shared/ipc'
 import { getMainWindow, sendToMain } from '../main-window'
-import { parseLsDirs, posixQuote, quoteRemotePath, remoteTmuxConf, sshHostKey, type SshConnection } from '../../shared/ssh'
+import {
+  parseLsDirs,
+  posixQuote,
+  quoteRemotePath,
+  remoteTmuxConf,
+  remoteTmuxPathPrologue,
+  sshHostKey,
+  type SshConnection
+} from '../../shared/ssh'
 import type { DownloadResult, SshPassphraseRequest, SshProjectStatusEvent } from '../../shared/types'
 import { candidateName, safeDownloadBasename } from '../../core/download-name'
 import { findExecutableSync, opensshFallbacks, shellPathNow } from '../../core/exec-path'
@@ -745,7 +753,7 @@ export class SshProjectManager {
             )
             if (w.code === 0) {
               // source-file is best-effort (pushes options into a warm server); ignore its result.
-              await this.r.run(childArgs(conn, controlPath, `tmux -L ${RMT_TMUX_SOCKET} source-file ${posixQuote(confPath)}`))
+              await this.r.run(childArgs(conn, controlPath, `${remoteTmuxPathPrologue()}tmux -L ${RMT_TMUX_SOCKET} source-file ${posixQuote(confPath)}`))
               tmuxConfPath = confPath
             }
           } catch {
@@ -1907,9 +1915,14 @@ export class SshProjectManager {
     projectId: string,
     accountId: string | undefined,
     threadId: string,
-    sessionsRelativePath: string,
-    localRolloutPath: string
+    firstPath: string,
+    secondPath: string
   ): Promise<{ imported: boolean }> {
+    // Older callers passed the local source first while the initial importer contract passed the
+    // remote relative path first. Accept both shapes, then validate the remote path before any
+    // SSH or upload operation. A path is never trusted merely because it occupies one position.
+    const sessionsRelativePath = firstPath.startsWith('sessions/') ? firstPath : secondPath
+    const localRolloutPath = firstPath.startsWith('sessions/') ? secondPath : firstPath
     if (accountId) assertCodexAccountId(accountId)
     if (!ACCOUNT_ID_RE.test(threadId)) throw new Error('Invalid Codex thread id')
     // The relative path is renderer/main-supplied but ends up as a remote absolute path, so it is

@@ -5,6 +5,7 @@ import {
   sendToMain,
   mainWindowClientIds,
   shouldHideOnClose,
+  shouldQuitHostOnWindowClose,
   closeAction,
   createCrashReloadPolicy,
   type MainWindowLike
@@ -157,6 +158,25 @@ describe('shouldHideOnClose', () => {
   it('never intercepts close on other platforms', () => {
     expect(shouldHideOnClose('win32', false)).toBe(false)
     expect(shouldHideOnClose('linux', false)).toBe(false)
+  })
+})
+
+describe('shouldQuitHostOnWindowClose', () => {
+  it('quits the Windows host instead of waiting for every auxiliary window to close', () => {
+    expect(shouldQuitHostOnWindowClose('win32', false, false)).toBe(true)
+  })
+
+  it('does not recurse once an application quit is already in progress', () => {
+    expect(shouldQuitHostOnWindowClose('win32', true, false)).toBe(false)
+  })
+
+  it('keeps the Windows host alive when an enabled planner schedule owns background mode', () => {
+    expect(shouldQuitHostOnWindowClose('win32', false, true)).toBe(false)
+  })
+
+  it('does not change macOS hide-on-close or the existing Linux close path', () => {
+    expect(shouldQuitHostOnWindowClose('darwin', false, false)).toBe(false)
+    expect(shouldQuitHostOnWindowClose('linux', false, false)).toBe(false)
   })
 })
 

@@ -20,7 +20,11 @@ import type { GitHubCliAccountsApi, GitHubControlApi, GitHubIssuesApi } from '..
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { RepositoryGraphApi } from '../../shared/repository-graph'
-import type { UniGetUiApi } from '../../shared/unigetui'
+import {
+  parseUniGetUiPackageList,
+  parseUniGetUiSetting,
+  type UniGetUiApi
+} from '../../shared/unigetui'
 import type { MinecraftApi } from '../../shared/minecraft'
 import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import type { AwsWizardModelsApi } from '../../shared/aws-wizard'
@@ -365,6 +369,15 @@ export class RpcClient {
   }
 }
 
+function requestParsed<T>(
+  client: RpcClient,
+  method: string,
+  parse: (value: unknown) => T,
+  ...args: unknown[]
+): Promise<T> {
+  return client.request(method, ...args).then(parse)
+}
+
 const AI_NAMING_UNAVAILABLE = {
   ok: false as const,
   message: 'AI naming is not available in the server edition yet'
@@ -379,7 +392,7 @@ export function buildRealApi(
   client: RpcClient
 ): Pick<
   NodeTerminalApi,
-  'pty' | 'workspace' | 'timer' | 'serverDeployment' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'planner' | 'userDataDir'
+  'pty' | 'workspace' | 'timer' | 'trigger' | 'serverDeployment' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'planner' | 'userDataDir'
   | 'projectSettings'
   | 'projectSetup'
   | 'worktree'
@@ -528,6 +541,14 @@ export function buildRealApi(
     schedule: (timerId, scheduledAt) => client.request(IPC.timerOccurrenceSchedule, timerId, scheduledAt) as Promise<import('../../shared/timer').TimerOccurrence | null>,
     transition: (id, state) => client.request(IPC.timerOccurrenceTransition, id, state) as Promise<import('../../shared/timer').TimerOccurrence | null>,
     lap: (id, elapsedMs) => client.request(IPC.timerOccurrenceLap, id, elapsedMs) as Promise<number[] | null>
+  }
+  const trigger: NonNullable<NodeTerminalApi['trigger']> = {
+    status: (projectId, nodeId) => client.request(IPC.triggerStatus, projectId, nodeId) as ReturnType<NonNullable<NodeTerminalApi['trigger']>['status']>,
+    arm: (projectId, nodeId, spec) => client.request(IPC.triggerArm, projectId, nodeId, spec) as ReturnType<NonNullable<NodeTerminalApi['trigger']>['arm']>,
+    disarm: (projectId, nodeId) => client.request(IPC.triggerDisarm, projectId, nodeId) as ReturnType<NonNullable<NodeTerminalApi['trigger']>['disarm']>,
+    runNow: (projectId, nodeId) => client.request(IPC.triggerRunNow, projectId, nodeId) as ReturnType<NonNullable<NodeTerminalApi['trigger']>['runNow']>,
+    history: (projectId, nodeId) => client.request(IPC.triggerHistory, projectId, nodeId) as ReturnType<NonNullable<NodeTerminalApi['trigger']>['history']>,
+    onChanged: (listener) => client.subscribe(IPC.triggerChanged, listener as Listener)
   }
   // REAL: WorkspaceStore (core) registers the project-settings:* channels too — same
   // registerIpc() call as workspace above — so the server serves this on both shells.
@@ -682,7 +703,7 @@ export function buildRealApi(
     onProgress: () => () => {}
   }
   return {
-    pty, workspace, timer, serverDeployment, settings, schoolMode, kidsMode,
+    pty, workspace, timer, trigger, serverDeployment, settings, schoolMode, kidsMode,
     scheduledSettings, planner, projectSettings, projectSetup, worktree, agent, userDataDir
   }
 }
@@ -1220,7 +1241,7 @@ export function buildUniGetUiApi(client: RpcClient): Pick<NodeTerminalApi, 'unig
     sourceAdd: (manager, name, url) => client.request(IPC.unigetuiSourceAdd, manager, name, url),
     sourceRemove: (manager, name, url) => client.request(IPC.unigetuiSourceRemove, manager, name, url),
     settings: () => client.request(IPC.unigetuiSettings) as ReturnType<UniGetUiApi['settings']>,
-    settingGet: (key) => client.request(IPC.unigetuiSettingGet, key),
+    settingGet: (key) => requestParsed(client, IPC.unigetuiSettingGet, parseUniGetUiSetting, key),
     settingSet: (key, input) => client.request(IPC.unigetuiSettingSet, key, input),
     settingClear: (key) => client.request(IPC.unigetuiSettingClear, key),
     settingsReset: () => client.request(IPC.unigetuiSettingsReset),
@@ -1245,18 +1266,18 @@ export function buildUniGetUiApi(client: RpcClient): Pick<NodeTerminalApi, 'unig
     bundleAdd: (input) => client.request(IPC.unigetuiBundleAdd, input),
     bundleRemove: (input) => client.request(IPC.unigetuiBundleRemove, input),
     bundleInstall: (input) => client.request(IPC.unigetuiBundleInstall, input),
-    packageSearch: (query, manager, maxResults) => client.request(IPC.unigetuiPackageSearch, query, manager, maxResults),
+    packageSearch: (query, manager, maxResults) => requestParsed(client, IPC.unigetuiPackageSearch, parseUniGetUiPackageList, query, manager, maxResults),
     packageDetails: (id, manager, source) => client.request(IPC.unigetuiPackageDetails, id, manager, source),
     packageVersions: (id, manager, source) => client.request(IPC.unigetuiPackageVersions, id, manager, source),
-    packageInstalled: (manager) => client.request(IPC.unigetuiPackageInstalled, manager),
-    packageUpdates: (manager) => client.request(IPC.unigetuiPackageUpdates, manager),
+    packageInstalled: (manager) => requestParsed(client, IPC.unigetuiPackageInstalled, parseUniGetUiPackageList, manager),
+    packageUpdates: (manager) => requestParsed(client, IPC.unigetuiPackageUpdates, parseUniGetUiPackageList, manager),
     packageInstall: (id, options) => client.request(IPC.unigetuiPackageInstall, id, options),
     packageDownload: (id, options) => client.request(IPC.unigetuiPackageDownload, id, options),
     packageUpdate: (id, options) => client.request(IPC.unigetuiPackageUpdate, id, options),
     packageUninstall: (id, manager, options) => client.request(IPC.unigetuiPackageUninstall, id, manager, options),
     packageRepair: (id, manager, options) => client.request(IPC.unigetuiPackageRepair, id, manager, options),
     packageReinstall: (id, options) => client.request(IPC.unigetuiPackageReinstall, id, options),
-    ignoredUpdates: () => client.request(IPC.unigetuiIgnoredUpdates),
+    ignoredUpdates: () => requestParsed(client, IPC.unigetuiIgnoredUpdates, parseUniGetUiPackageList),
     ignoredUpdateAdd: (id, options) => client.request(IPC.unigetuiIgnoredUpdateAdd, id, options),
     ignoredUpdateRemove: (id, options) => client.request(IPC.unigetuiIgnoredUpdateRemove, id, options),
     packageUpdateAll: (options) => client.request(IPC.unigetuiPackageUpdateAll, options),

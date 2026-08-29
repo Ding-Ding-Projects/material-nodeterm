@@ -50,6 +50,22 @@ describe('planSquirrelStartup', () => {
     expect(planSquirrelStartup(['nodeterm.exe', '--squirrel-install-extra'], 'win32', EXECUTABLE)).toBeNull()
   })
 
+  it('ignores Squirrel-looking values after argv[1]', () => {
+    expect(
+      planSquirrelStartup(['nodeterm.exe', '--ordinary', '--squirrel-install'], 'win32', EXECUTABLE)
+    ).toBeNull()
+  })
+
+  it('does not route an Electron executable through the installed-app lifecycle', () => {
+    expect(
+      planSquirrelStartup(
+        ['electron.exe', '--squirrel-install'],
+        'win32',
+        String.raw`C:\Program Files\Electron\electron.exe`
+      )
+    ).toBeNull()
+  })
+
   it('never handles Squirrel-looking flags on non-Windows platforms', () => {
     expect(planSquirrelStartup(['nodeterm', '--squirrel-install'], 'darwin', '/Applications/nodeterm')).toBeNull()
     expect(planSquirrelStartup(['nodeterm', '--squirrel-uninstall'], 'linux', '/opt/nodeterm')).toBeNull()
@@ -182,6 +198,7 @@ describe('initialAutomaticUpdateDelayMs', () => {
 
   it('requires the exact first-run flag', () => {
     expect(initialAutomaticUpdateDelayMs(['nodeterm.exe', '--squirrel-firstrun-extra'], 'win32')).toBe(0)
+    expect(initialAutomaticUpdateDelayMs(['nodeterm.exe', '--ordinary', '--squirrel-firstrun'], 'win32')).toBe(0)
   })
 })
 

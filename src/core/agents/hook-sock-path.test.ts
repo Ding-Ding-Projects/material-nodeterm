@@ -6,7 +6,7 @@ describe('hookSockPath — the SUN_LEN discipline', () => {
   const home = '/home/u'
 
   it('binds under the data dir with a deliberately short name when it fits', () => {
-    expect(hookSockPath('/data/nodeterm', home)).toBe('/data/nodeterm/sock/hook.sock')
+    expect(hookSockPath('/data/nodeterm', home)).toBe(path.join('/data/nodeterm', 'sock', 'hook.sock'))
   })
 
   it('falls back to a digest-keyed homedir path when the data dir would blow sun_path', () => {

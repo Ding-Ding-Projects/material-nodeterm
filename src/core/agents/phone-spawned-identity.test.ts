@@ -139,7 +139,11 @@ describe('a phone-spawned session presents its per-node token', { timeout: REAL_
         stdio: ['pipe', 'ignore', 'ignore']
       })
       child.stdin.end('{"hook_event_name":"Stop","session_id":"s1"}')
-      child.on('close', (code) => resolve(code ?? -1))
+      // Git for Windows' shell can leave a background curl holding an inherited stdio handle after
+      // the shell itself exits. `close` waits for every handle and turns a successful hook into a
+      // 20-second test timeout; `exit` reports the shell's real lifecycle, while nextPost below
+      // independently waits for the HTTP request.
+      child.on('exit', (code) => resolve(code ?? -1))
     })
   }
 

@@ -13,8 +13,9 @@
 // the authority is the persisted project file instead. `links[]` in `.nodeterm/project.json` is
 // the same link set the renderer would have pushed, so we derive the map from every persisted
 // canvas and get a link map that is correct with zero tabs open.
-import type { ContextLinkMap } from '../shared/types'
+import type { BridgeLink, ContextLinkMap, Link } from '../shared/types'
 import { buildBackgroundLinkMaps } from '../shared/context-link-map'
+import { migrateLinks } from '../core/workspace-files'
 import { initContextLink, setContextLinks } from '../core/context-link'
 import { transcriptPathOf } from '../core/context-link-core'
 import { sessionNameSweepEntries } from '../core/agent-status-mirror'
@@ -35,7 +36,13 @@ export const CONTEXT_LINK_SWEEP_MS = 15_000
 export interface ServerContextLinkDeps {
   ptyManager: PtyManager
   /** Every persisted canvas (`workspaceStore.persistedCanvases`). */
-  canvases: () => Array<Parameters<typeof buildBackgroundLinkMaps>[0][number]>
+  canvases: () => Array<{
+    id: string
+    nodes: import('../shared/types').CanvasNodeState[]
+    links?: Link[]
+    bridges?: BridgeLink[]
+    ropes?: BridgeLink[]
+  }>
   /** nodeId → its live agent/session, as the hooks last reported it. */
   agentSessions?: () => Array<{ nodeId: string; agentId?: string; sessionId?: string }>
   /** nodeId → hook-fed transcript path; part of the change signature, not of the map. */
@@ -60,7 +67,11 @@ export function deriveLinkMap(deps: {
 }): ContextLinkMap {
   const live = new Map((deps.agentSessions?.() ?? []).map((e) => [e.nodeId, e]))
   return buildBackgroundLinkMaps(
-    deps.canvases(),
+    deps.canvases().map((canvas) => ({
+      id: canvas.id,
+      nodes: canvas.nodes,
+      links: canvas.links ?? migrateLinks(canvas)
+    })),
     null,
     (id) => live.get(id)?.sessionId,
     (id) => live.get(id)?.agentId

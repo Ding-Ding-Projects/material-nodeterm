@@ -616,6 +616,17 @@ const VALUE_FIELDS: {
         onChange={(e) => onChange(Number(e.target.value))}
       />
     )
+  },
+  {
+    key: 'openMarkdownPreview',
+    label: 'Open Markdown in preview',
+    render: (v, onChange) => (
+      <Switch
+        checked={(v as boolean) ?? DEFAULT_SETTINGS.openMarkdownPreview}
+        onChange={onChange}
+        ariaLabel="Open Markdown in preview"
+      />
+    )
   }
 ]
 
@@ -661,14 +672,8 @@ function EffectsEditor({
     for (const target of registered) known.set(target.id, target)
     return [...known.values()]
   }, [appearanceEntries])
-  const query = search.mode === 'regex' ? search.regex : null
   const visible = (label: string): boolean => {
-    if (!search.value.trim()) return true
-    if (query) {
-      query.lastIndex = 0
-      return query.test(label)
-    }
-    return label.toLocaleLowerCase().includes(search.value.toLocaleLowerCase())
+    return search.test(label)
   }
   const changePlacement = (patch: Partial<NonNullable<ScheduleRuleEffects['placement']>>): void => {
     const next = { ...(placement ?? { projectId: '', canvasId: ROOT_CANVAS_ID, layoutId: '' }), ...patch }

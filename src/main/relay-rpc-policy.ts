@@ -130,7 +130,9 @@ const RELAY_CAST_METHODS = new Set<string>([
   IPC.presenceFocus,
   IPC.presenceChat,
   IPC.presenceDino,
-  IPC.presenceProject
+  IPC.presenceProject,
+  IPC.projectSetupSubscribe,
+  IPC.projectSetupUnsubscribe
 ])
 
 /** Events consumed by the core-bound namespaces assembled in relay-api.ts. Machine-global core

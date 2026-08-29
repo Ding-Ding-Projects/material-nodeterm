@@ -13,8 +13,12 @@ describe('tmuxInstall', () => {
     expect(tmuxInstall('linux', () => false)).toBeNull()
   })
 
-  it('win32 (no native tmux): never suggests a command', () => {
-    expect(tmuxInstall('win32', () => true)).toBeNull()
+  it('win32: suggests the supported psmux install when WinGet is available', () => {
+    expect(tmuxInstall('win32', (command) => command === 'winget')).toEqual({
+      command: 'winget install -e --id marlocarlo.psmux',
+      label: 'Install psmux'
+    })
+    expect(tmuxInstall('win32', () => false)).toBeNull()
   })
 })
 
@@ -22,14 +26,14 @@ describe('findCommand', () => {
   it('scans PATH entries and the common GUI-blind dirs (apps do not inherit the shell PATH)', () => {
     const seen: string[] = []
     const exists = (p: string) => (seen.push(p), p === '/opt/homebrew/bin/brew')
-    expect(findCommand('brew', { PATH: '/usr/bin:/bin' }, exists)).toBe(true)
+    expect(findCommand('brew', { PATH: '/usr/bin:/bin' }, exists, 'darwin')).toBe(true)
     expect(seen).toContain('/usr/bin/brew') // PATH first
     expect(seen).toContain('/opt/homebrew/bin/brew') // then the common dirs
-    expect(findCommand('brew', { PATH: '/usr/bin' }, () => false)).toBe(false)
+    expect(findCommand('brew', { PATH: '/usr/bin' }, () => false, 'darwin')).toBe(false)
   })
 
   it('tolerates a missing PATH', () => {
-    expect(findCommand('brew', {}, (p) => p === '/usr/local/bin/brew')).toBe(true)
+    expect(findCommand('brew', {}, (p) => p === '/usr/local/bin/brew', 'darwin')).toBe(true)
   })
 })
 

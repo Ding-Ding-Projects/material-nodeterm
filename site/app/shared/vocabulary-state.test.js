@@ -1,4 +1,4 @@
-import test from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { isFreshVocabularyCache, validateVocabularyCacheJson, validateVocabularyJson, VOCAB_CACHE_MAX_AGE_MS } from './vocabulary-state.js'
 import { shapeCopy, shapeTitle } from './i18n.js'

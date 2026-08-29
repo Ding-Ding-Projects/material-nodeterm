@@ -78,7 +78,12 @@ describe('/codex-thread/bind refuses a path-unsafe thread id', () => {
     // (`sock/` is the hook server's own unix-socket listener dir, issue #367 — always present,
     // never a record.)
     expect(existsSync(codexThreadIdentityRoot())).toBe(false)
-    expect(readdirSync(dir).sort()).toEqual(['hook-endpoint.env', 'sock'])
+    // The Unix listener is intentionally unavailable on Windows, so the TCP-only fixture has no
+    // sock/ directory there. The identity route itself is transport-independent and remains
+    // covered by the same HTTP assertions on both platforms.
+    expect(readdirSync(dir).sort()).toEqual(
+      process.platform === 'win32' ? ['hook-endpoint.env'] : ['hook-endpoint.env', 'sock']
+    )
   })
 
   it('still binds a thread id the app-server would actually mint', async () => {

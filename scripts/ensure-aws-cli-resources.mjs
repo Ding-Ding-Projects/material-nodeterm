@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { renameAtomic } from './lib/rename-atomic.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(await readFile(path.join(root, 'dependencies.manifest.json'), 'utf8'))
@@ -43,5 +44,5 @@ if (actual !== entry.sha256.toLowerCase()) {
   throw new Error(`AWS CLI v2 SHA-256 mismatch: expected ${entry.sha256}, actual ${actual}.`)
 }
 await rm(target, { force: true })
-await rename(stage, target)
+await renameAtomic(stage, target)
 console.log(`AWS CLI v2 ${entry.version} verified and staged for packaging (${bytes.byteLength} bytes).`)

@@ -886,57 +886,12 @@ export class SessionHostClient {
               `session-host protocol changed while '${state.name}' was detached; warm replay is unsafe`
             )
           }
-          const expectedGeneration = state.generation ?? this.sessionGenerations.get(state.name)
-          const response =
-            protocolVersion === 1
-              ? await this.requestOnSocket<AttachResult>(socket, {
-                  cmd: 'attach',
-                  name: state.name,
-                  spawn: legacyWarmOnlySentinel(this.deps.userDataDir),
-                  scrollback: 1,
-                  paused
-                })
-              : await this.requestOnSocket<AttachResult>(socket, {
-                  cmd: 'attachExisting',
-                  name: state.name,
-                  expectedGeneration,
-                  cols: size.cols,
-                  rows: size.rows,
-                  paused
-                })
-          const result = requireAttachResult(response, state.name, protocolVersion)
-          if (result.fresh) {
-            throw new Error(
-              protocolVersion === 1
-                ? `legacy session-host lost '${state.name}' before warm replay; no requested shell was spawned`
-                : `session-host protocol violation: attachExisting '${state.name}' reported a fresh session`
-            )
-          }
-          if (
-            protocolVersion === 2 &&
-            expectedGeneration &&
-            result.generation !== expectedGeneration
-          ) {
-            throw new Error(
-              `session-host generation changed while '${state.name}' was detached; warm replay is unsafe`
-            )
-          }
-          if (this.sessions.get(state.name) !== state || !this.hasAttachedEntry(state)) {
-            await this.requestOnSocket(socket, { cmd: 'detach', name: state.name })
-            continue
-          }
-          state.protocolVersion = protocolVersion
-          state.generation = result.generation ?? expectedGeneration
-          if (state.generation) this.sessionGenerations.set(state.name, state.generation)
-          this.applyAttachment(state, socket, paused, size)
-          if (result.screen && state.appliedSocket === socket) {
-            this.deliverData(state, RECONNECT_REPAINT_PREFIX + result.screen)
-          }
           // Validation and repaint delivery run SYNCHRONOUSLY inside the response frame's parse
           // pass (requestOnSocket's onSuccess), not in the awaited continuation below. On a unix
           // socket the host's next raw 'data' frame can share one read chunk with this response;
           // deferring the repaint to the microtask behind `await` would let that live frame reach
           // deliverData first and reverse the repaint-then-live order subscribers depend on.
+          const expectedGeneration = state.generation ?? this.sessionGenerations.get(state.name)
           let staleAttachment = false
           const applyReplay = (response: AttachResult, replaySocket: net.Socket): void => {
             const result = requireAttachResult(response, state.name, protocolVersion)

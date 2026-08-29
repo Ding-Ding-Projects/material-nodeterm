@@ -102,7 +102,9 @@ if [ -z "\${NODETERM_NODE_ID-}" ] && [ -n "\${CODEX_THREAD_ID-}" ]; then
         # The Node writer and its bounded legacy migration both persist this one POSIX spelling.
         # The generated resolver has no second interpretation path and consumes only that form.
         case "$nt_codex_endpoint" in /*) ;; *) nt_codex_endpoint="" ;; esac
-        case "$nt_codex_endpoint" in *[!A-Za-z0-9._/ -]*) nt_codex_endpoint="" ;; esac
+        # Keep the hyphen escaped and the whitespace explicit. Git for Windows sh rejects the
+        # tempting bracket form as an invalid range before it can run any command.
+        case "$nt_codex_endpoint" in *[!A-Za-z0-9._/[:space:]\-]*) nt_codex_endpoint="" ;; esac
         case "/$nt_codex_endpoint/" in */../*|*/./*) nt_codex_endpoint="" ;; esac
         if [ -n "$nt_codex_node" ] && [ -n "$nt_codex_endpoint" ]; then
           NODETERM_NODE_ID="$nt_codex_node"
@@ -119,7 +121,12 @@ fi`
 
 /** Build the resolver for the app-owned identity root supplied by `CorePlatform`. */
 export function codexThreadIdentityResolverSh(identityRoot: string): string {
-  const root = posixQuote(identityRoot)
+  // A generated resolver runs under Git for Windows' POSIX shell, while CorePlatform supplies a
+  // native drive path. Keep the path readable by both shell builtins and the native tools it calls.
+  const shellRoot = process.platform === 'win32'
+    ? identityRoot.replaceAll('\\', '/').replace(/^([A-Za-z]):(?=\/|$)/, (_, drive: string) => `/${drive.toLowerCase()}`)
+    : identityRoot
+  const root = posixQuote(shellRoot)
   return buildResolver(
     `nt_codex_root=${root}`,
     `${root}/"$CODEX_THREAD_ID"`,

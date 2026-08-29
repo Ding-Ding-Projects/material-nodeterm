@@ -85,6 +85,13 @@ the exact initialize, sync, remote-update, URL/SHA inspection, staging, and subm
 in `CONTRIBUTING.md`. Commit only the reviewed gitlink change (and `.gitmodules` when its metadata
 changes); never commit local edits made inside the nested repository.
 
+`scripts/check-canonical-upstream.mjs` is the fail-closed lineage check for this boundary. It
+validates the `.gitmodules` path, URL, and `main` branch, the stage-0 top-level gitlink, the nested
+checkout's `origin` URL and `HEAD`, and the reachable `refs/heads/main` commit. A network refusal is
+reported as `offline-unverified` and is never treated as success; `--offline` is an explicit local
+inspection mode with the same unverified result. Its focused test file mutates each boundary and
+proves red, then green, so a substring-only source assertion cannot quietly pass.
+
 **Node runtime floor: `^22.22.2 || ^24.15.0 || >=26.0.0`.** Do not simplify that to a
 major-only check.
 `node:sqlite` arrived in 22.5 but required `--experimental-sqlite` through 22.12; 22.13 made it
@@ -448,6 +455,18 @@ interferes; status bar off, **mouse on**, 50k history, `set-clipboard on` + `ter
 ",*:clipboard"`, and the copy-mode mouse bindings). Because the tmux _server_ outlives the app,
 sessions survive when no client is attached. `src/shared/ssh.ts`'s `remoteTmuxConf` is the same
 config for an SSH project's remote tmux.
+
+**Every REMOTE tmux invocation starts with `remoteTmuxPathPrologue()`** (`shared/ssh.ts` — PATH
+**append**: `/opt/homebrew/bin`, `/usr/local/bin`, `/opt/local/bin`, `$HOME/.local/bin`): an ssh
+exec channel gets a non-login shell, and on a macOS host Homebrew's `shellenv` lives in
+`~/.zprofile`, so a host whose own terminal runs tmux fine answered
+`zsh:1: command not found: tmux` to every command of ours (issue #449 — the same class as the
+remote claude probe's login-shell + PATH fix). Append, never prepend: a PATH that already resolves
+tmux keeps exactly that binary, so nothing re-pairs a long-lived tmux server with a different
+client build. When tmux is genuinely absent the interactive spawn (`tmuxOrExplain`,
+`control-master.ts`) prints what is missing, how to install it and what a tmux-less remote loses,
+then degrades to a plain login shell — mirroring the local plain-shell fallback; the raw
+`command not found` line must never be the user-facing error again.
 
 **tmux owns the mouse — scrolling, selection, and the alternate screen are all its job.** This is
 the native behavior, and it is deliberate:
@@ -1338,6 +1357,24 @@ untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the
     layout by construction on all three surfaces) and then the well-known data dirs; it is monotone
     — advertised dir first, keyed by node-id filename in every candidate, and a foreign instance's
     dir yields a foreign `kid` = `legacy` = exactly what presenting nothing already gave.
+  - **Every generated sh client walks the SAME endpoint failover** (`nt_candidates`/`nt_adopt`,
+    `core/agents/hook-endpoint-failover-sh.ts`) — issue #445, the endpoint-level twin of #384: a
+    session is pinned for life to the endpoint PATH it got at tmux creation, so an app
+    quit/restart (or a retired project id) leaves it POSTing at a dead port while a live endpoint
+    file sits right next to it. The managed hook script had the bounded candidate walk (locals
+    before tunnels, `nt_fallback_max` 3, token re-read from the ADOPTED endpoint's dir); the two
+    shims did not, so hook events healed themselves while every canvas-control verb died with
+    "control endpoint unreachable" — in the field, a reviewer launch silently dropped. Now shared,
+    one definition. Two server-side halves in `hook-server.ts`: a FAILED `listen()` un-wedges the
+    singleton (it used to leave `this.server` set, making every retry a silent no-op at port 0)
+    and both `stop()` and the failed-start path delete `hook-endpoint.env` — publication reflects
+    listener liveness; a crash skips that, which is exactly what the client walk exists for. An
+    HTTP answer of any code is authoritative: only a dead transport (curl 000/'') fails over, so a
+    403/400 is never re-sent to another instance. The walk is skipped under
+    `CODEX_SANDBOX_NETWORK_DISABLED` (#367 — the sandbox denies every connect, the hint is the
+    right diagnosis) and the final error now distinguishes "no endpoint anywhere" from "an
+    advertised endpoint that is not listening" (`STALE_ENDPOINT_HINT`). Desktop quit calls
+    `hookServer.stop()` on the second before-quit pass, after the flush window.
 
   Enforcement is dated (`NODE_IDENTITY_STRICT_AFTER`, 2026-10-13, read through `isStrictInstant` so a
   clock years ahead cannot enter strict mode early) with a `settings.hookIdentityStrict` escape hatch

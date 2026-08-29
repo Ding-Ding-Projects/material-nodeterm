@@ -1,5 +1,25 @@
 # Handoff
 
+## 2026-08-29, trigger scheduling lane
+
+The trigger lane adds a real host-owned scheduler for cron, interval, and one-shot definitions.
+Trigger definitions remain sanitized shared project data, while arm consent and bounded payload-free
+run history stay machine-local. Desktop ordinary terminals use the safe paste transport, and agent
+targets reuse the ownership, idle, receipt, trace, and flow delivery path. Server Edition exposes
+the same trigger API, delivers ordinary local terminals, and reports agent delivery as unsupported
+because that host does not have the desktop ownership pipeline.
+
+Changed files include `src/core/trigger-scheduler.ts`, `src/core/trigger-scheduler.test.ts`,
+`src/main/index.ts`, `src/server/index.ts`, `src/renderer/nodes/TriggerNode.tsx`,
+`src/renderer/canvas/Canvas.tsx`, `src/renderer/state/workspace.ts`,
+`src/renderer/bridge/ws-bridge.ts`, `src/renderer/styles.md3.css`, and
+`src/shared/node-catalog.ts`.
+
+Focused Chuts: 33 trigger, project-file, catalog, and workspace tests green. Full typecheck remains
+red on pre-existing repository-graph, VeraCrypt, UniGetUI, and workspace type errors; no new error
+mentions the trigger lane. Built-artifact interaction and captures were not run in this isolated
+lane. The branch is intentionally not dewed or merged here.
+
 ## 2026-08-28, sanitized shared-instruction mirrors
 
 - Added one generated, byte-identical sanitized shared-instruction block to `AGENTS.md` and

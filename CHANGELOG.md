@@ -2,6 +2,59 @@
 
 ## Unreleased
 
+- Complete the Windows shutdown lifecycle by signaling and awaiting the exact detached Codex relay
+  child that the current application instance spawned. The bounded stop uses the retained child
+  handle rather than a pid scan or process-name match, so it cannot terminate an older relay or an
+  unrelated process. Persistent terminal backends and signed thread identity records remain intact
+  for the next launch.
+
+  補齊 Windows shutdown 最後一格：只會 signal 同等候目前 application instance 自己 spawn 嘅
+  detached Codex relay child。收尾有時限，而且用保留住嘅 child handle，唔會靠 pid scan 或
+  process name 撈魚，舊 relay 同無關 process 唔會俾人亂掂。Persistent terminal backend 同 signed
+  thread identity record 會保留，下一次開啟可以正常接返。
+
+- Fix the normal Windows title-bar close path so it enters the bounded application shutdown
+  lifecycle immediately instead of waiting for every auxiliary window to disappear. The shutdown
+  now closes the HUD, detaches persistent terminal clients, releases application-owned services and
+  child processes, and gives up the single-instance lock. An enabled planner schedule remains the
+  deliberate background-host exception, and explicit Quit still stops it normally.
+
+  修正 Windows 標題列關閉路徑：而家會即刻進入有上限嘅完整 application shutdown，唔再傻等所有
+  auxiliary window 自己消失。HUD、persistent terminal client、application-owned service、child
+  process 同 single-instance lock 都會正常收尾。只有已啟用 planner schedule 會照舊留喺背景，明確
+  Quit 仍然會正常停止佢。
+
+- Keep packaged Windows startup alive when WebTorrent's optional native uTP listener is refused.
+  The packaged runtime now starts with uTP disabled while retaining TCP and DHT, and the torrent
+  service contains asynchronous client errors instead of allowing an uncaught `error` event to
+  terminate the desktop process. Recoverable uTP errors fall back to TCP; fatal client errors mark
+  the runtime and active tasks failed without taking down the application.
+
+  修正 packaged Windows 啟動時，WebTorrent optional native uTP listener 被拒絕就連 desktop process
+  一齊收工嘅問題。Packaged runtime 保留 TCP 同 DHT，但關閉 uTP；torrent service 亦會接住
+  asynchronous client error，唔再畀 uncaught `error` event 終止程式。uTP 問題會退回 TCP，真正
+  fatal client error 就老實標記 runtime 同 active tasks 失敗，唔會拖全個 application 落水。
+
+- Open `md`, `markdown`, `mdown`, and `mkd` files in the rendered editor preview by default, with a
+  one-shot migration that preserves a user's later opt-out. The Behavior setting is searchable,
+  available to the command palette and scheduled-settings editor, and the preview bar no longer
+  repeats its label. Add a one-shot Explorer pin hint after the exact file-open-and-close flow.
+
+  `md`、`markdown`、`mdown` 同 `mkd` 檔案而家預設用 rendered preview 開，舊設定會一次過遷移，
+  之後用戶揀 off 就會保留。Behavior 設定有搜尋、command palette 同 scheduled-settings 路徑，
+  preview bar 唔再重複標籤。由 Explorer 開檔再關閉時，亦會顯示一次 pin 提示。
+
+- Add Trigger nodes with cron, interval, and one-shot schedules, explicit review before arming or
+  running, machine-local content-bound consent, target validation, bounded payload-free run
+  history, and honest missed, busy, unsupported, and failed outcomes. Desktop delivery uses the
+  existing safe terminal paste path or the full agent-message ownership and receipt path. Server
+  Edition supports ordinary terminal delivery and reports agent delivery as unsupported.
+
+  加入 Trigger 節點，支援 cron、interval 同一次性排程；啟動或者即時執行之前要先覆核，授權只綁定本機
+  同目前內容，目標會喺執行時再核實，記錄有界而且唔會抄入 payload。錯過、忙碌、不支援同失敗都會
+  老實報告。Desktop 用安全 terminal paste 或完整 agent message ownership 同 receipt 流程；Server
+  Edition 支援普通 terminal，agent delivery 會清楚報告不支援。
+
 - Add byte-identical sanitized shared-instruction blocks to `AGENTS.md` and `CLAUDE.md`, preserve
   all project-specific guidance outside the managed markers, and add deterministic synchronization,
   private-vocabulary validation, public-detail scanning, parity checks, sensitive-input refusal,

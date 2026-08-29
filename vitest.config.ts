@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config'
 import { resolve } from 'path'
 import { cpus } from 'node:os'
+import { existsSync } from 'node:fs'
 
 
 /**
@@ -96,7 +97,12 @@ export default defineConfig({
     // Node 26 ships a global `localStorage` getter that yields undefined without
     // --localstorage-file, and it occupies the slot before jsdom populates globals — so jsdom
     // suites got window === globalThis with localStorage undefined. Restores it per realm.
-    setupFiles: ['./test/setup/jsdom-storage.ts']
+    // Sparse no-submodules Gerk Tong Huis intentionally omit the broad test tree. Do not make
+    // Vitest collection fail before it can run the checked-in src/scripts Chuts simply because
+    // the optional jsdom storage shim is outside that cone.
+    setupFiles: existsSync(resolve(__dirname, 'test/setup/jsdom-storage.ts'))
+      ? ['./test/setup/jsdom-storage.ts']
+      : []
   },
   plugins: [stripShebang],
   resolve: {

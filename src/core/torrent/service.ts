@@ -1,10 +1,11 @@
 import { execFile } from 'node:child_process'
-import { access, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { constants as fsConstants, statfsSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
+import { renameAtomic } from '../fs-atomic'
 import {
   isMagnetUri,
   normalizeSeedPolicy,
@@ -57,6 +58,9 @@ interface TorrentLike {
 interface WebTorrentClientLike {
   add: (source: string, opts?: { path?: string }, cb?: (torrent: TorrentLike) => void) => TorrentLike
   destroy?: (cb?: (error?: Error) => void) => void
+  destroyed?: boolean
+  utp?: boolean
+  on?: (event: string, listener: (...args: any[]) => void) => void
 }
 
 type WebTorrentCtor = new (opts?: Record<string, unknown>) => WebTorrentClientLike
@@ -71,6 +75,19 @@ export interface TorrentServiceOptions {
   resourcesPath?: string
   isPackaged?: boolean
   onTask?: (task: TorrentTaskState) => void
+  platform?: NodeJS.Platform
+  runtimeResolver?: () => Promise<{ ctor: WebTorrentCtor; origin: 'bundled' | 'auto-installed' }>
+}
+
+export function webTorrentClientOptions(options: Pick<TorrentServiceOptions, 'isPackaged' | 'platform'>): Record<string, unknown> {
+  const platform = options.platform ?? process.platform
+  return {
+    dht: true,
+    // utp-native can throw from its asynchronous bind after WebTorrent's constructor has returned.
+    // TCP remains a complete peer transport, so packaged Windows builds avoid letting an optional
+    // native listener decide whether the whole desktop process survives startup reconciliation.
+    utp: !(options.isPackaged === true && platform === 'win32')
+  }
 }
 
 function clampStatus(status: unknown): TorrentTaskStatus {
@@ -177,7 +194,7 @@ export class TorrentService implements TorrentApi {
       const temp = `${this.storeFile}.tmp-${process.pid}-${Date.now()}-${randomUUID()}`
       const body: PersistedStore = { version: STORE_VERSION, tasks: [...this.tasks.values()].map(safeTask) }
       await writeFile(temp, JSON.stringify(body, null, 2), { encoding: 'utf8', mode: 0o600 })
-      await rename(temp, this.storeFile)
+      await renameAtomic(temp, this.storeFile)
     }
     this.writeQueue = this.writeQueue.then(next, next)
     await this.writeQueue
@@ -228,13 +245,38 @@ export class TorrentService implements TorrentApi {
     await this.initPromise
     if (this.runtimeInfo) return this.runtimeInfo
     try {
-      const { ctor, origin } = await this.resolveRuntime()
-      this.client = new ctor({ dht: true })
+      const { ctor, origin } = this.options.runtimeResolver
+        ? await this.options.runtimeResolver()
+        : await this.resolveRuntime()
+      const clientOptions = webTorrentClientOptions(this.options)
+      const client = new ctor(clientOptions)
+      const utpRequested = clientOptions.utp !== false
+      client.on?.('error', (error: Error) => this.handleClientError(client, origin, utpRequested, error))
+      this.client = client
       this.runtimeInfo = { available: true, origin, detail: null }
       return this.runtimeInfo
     } catch (error) {
       this.runtimeInfo = { available: false, origin: 'unavailable', detail: error instanceof Error ? error.message : String(error) }
       return this.runtimeInfo
+    }
+  }
+
+  private handleClientError(client: WebTorrentClientLike, origin: 'bundled' | 'auto-installed', utpRequested: boolean, error: Error): void {
+    const detail = error instanceof Error ? error.message : String(error)
+    if (utpRequested && client.destroyed !== true && client.utp === false) {
+      // WebTorrent disables uTP before emitting its recoverable bind error. Keep the working TCP
+      // client and expose the degradation without allowing an unhandled EventEmitter error to end
+      // the application process.
+      this.runtimeInfo = { available: true, origin, detail: `uTP unavailable; using TCP: ${detail}`.slice(0, 2000) }
+      return
+    }
+
+    if (this.client === client) this.client = null
+    this.runtimeInfo = { available: false, origin: 'unavailable', detail: detail.slice(0, 2000) }
+    for (const task of this.tasks.values()) {
+      if (task.status === 'metadata' || task.status === 'downloading' || task.status === 'queued') {
+        this.emit({ ...task, status: 'failed', error: `Torrent runtime failed: ${detail}`.slice(0, 2000) })
+      }
     }
   }
 

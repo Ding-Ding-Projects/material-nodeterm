@@ -211,7 +211,7 @@ describe('ProjectSetupService — consent gate', () => {
       scripts: { setup: 'npm ci', archive: 'rm -rf node_modules' },
       previouslyApproved: false
     })
-    expect(req.locationLabel).toContain('/proj/app')
+    expect(req.locationLabel).toContain(path.resolve('/proj/app'))
     expect(calls).toHaveLength(0)
 
     svc.submitConsent(req.requestId, 'approve')
@@ -595,7 +595,7 @@ describe('registerProjectSetupHandlers', () => {
     const { runs } = stub({ worktreeList: okWorktrees([wt]) })
     const call = plat.handlers[IPC.projectSetupRun]
     expect(await call('p1', 'setup', wt)).toMatchObject({ status: 'started' })
-    expect(runs[0][0]).toEqual({ projectId: 'p1', projectName: 'App', rootPath: '/proj/app', worktreePath: wt })
+    expect(runs[0][0]).toEqual({ projectId: 'p1', projectName: 'App', rootPath: '/proj/app', worktreePath: path.resolve(wt) })
   })
 
   it('end to end: an unknown projectId never reaches the local runner', async () => {
@@ -789,7 +789,7 @@ describe('ProjectSetupService — ensureFamilyTrusted', () => {
       // env is inside the hash (PATH/LD_PRELOAD hijack), so it is inside the question.
       env: { API_KEY: 'sk-1', PATH: '/evil/bin' }
     })
-    expect(req.locationLabel).toContain('/proj/app')
+    expect(req.locationLabel).toContain(path.resolve('/proj/app'))
 
     svc.submitConsent(req.requestId, 'approve')
     expect(await pending).toBe(true)

@@ -18,7 +18,14 @@ function fakeContents(
   let attached = false
   let destroyed = false
   let listener: Parameters<BrowserDebuggerLike['on']>[1] | undefined
-  const sendCommand = vi.fn(async () => ({}))
+  const sendCommand = vi.fn(async (method: string) =>
+    method === 'Page.getLayoutMetrics'
+      ? {
+          cssLayoutViewport: { clientWidth: 1000, clientHeight: 800 },
+          cssVisualViewport: { clientWidth: 1000, clientHeight: 800 }
+        }
+      : {}
+  )
   const debuggerApi: BrowserDebuggerLike = {
     isAttached: () => attached,
     attach: () => {
@@ -158,14 +165,14 @@ describe('NodeTerm Browser Plugin backend', () => {
       session_id: 'session',
       turn_id: 'turn',
       target: { tabId: 44 },
-      method: 'Runtime.evaluate',
-      commandParams: { expression: 'document.title' }
+      method: 'Runtime.enable',
+      commandParams: {}
     })
 
     expect(contents.debugger.isAttached()).toBe(true)
     expect(contents.sendCommand).toHaveBeenCalledWith(
-      'Runtime.evaluate',
-      { expression: 'document.title' },
+      'Runtime.enable',
+      {},
       undefined
     )
   })
@@ -177,6 +184,16 @@ describe('NodeTerm Browser Plugin backend', () => {
       vi.fn()
     )
     router.register({ contents, nodeId: 'browser', ownerNodeId: 'agent' })
+
+    // Input.dispatchMouseEvent is bounded by the last measured page viewport. Populate that
+    // measurement through the same owned CDP route before translating the synthetic gesture.
+    await router.dispatch('executeCdp', {
+      session_id: 'session',
+      turn_id: 'metrics-turn',
+      target: { tabId: 45 },
+      method: 'Page.getLayoutMetrics',
+      commandParams: {}
+    })
 
     await router.dispatch('executeCdp', {
       session_id: 'session',

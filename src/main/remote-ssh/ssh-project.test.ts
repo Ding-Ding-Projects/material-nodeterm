@@ -877,7 +877,6 @@ describe('SshProjectManager', () => {
         await fs.mkdir(vanished)
         await fs.symlink(vanished, dangling, 'junction')
         await fs.rm(vanished, { recursive: true, maxRetries: 10, retryDelay: 50 })
-        await fs.rm(vanished, { recursive: true })
       } else {
         await fs.symlink('vanished', dangling)
       }
@@ -2830,7 +2829,8 @@ describe('master watchdog', () => {
       expect(commands).toContain(
         `${remoteCodexHome('/home/u', 'account-b')}/sessions/2026/rollout-thread-123.jsonl`
       )
-      expect(commands).toContain('mv ')
+      expect(commands).toContain(' ln ')
+      expect(commands).not.toMatch(/\bmv\b/)
       expect(catalog).toHaveBeenCalledWith(controlPathFor('p1'), ['account-b'])
     })
 

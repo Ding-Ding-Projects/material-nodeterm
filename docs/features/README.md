@@ -32,6 +32,7 @@ the deep architecture reference these articles are distilled from.
 | [Hosted service nodes](./hosting/README.md) | Guided local-first Docker service managers with portable intent and machine-local bindings. |
 | [AWS managers](./aws/README.md) | Resource Explorer and Cloud Control manager nodes with local bindings, operation previews, bounded results, and cancellation. |
 | [Browser](./browser/README.md) | Browser Portal profiles, tabs, lifecycle ownership, and embedded-browser boundaries. |
+| [Automation](./automation/README.md) | Content-bound triggers with explicit local consent and bounded run history. |
 
 ## How these articles are organized
 

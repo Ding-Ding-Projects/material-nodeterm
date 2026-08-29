@@ -23,7 +23,7 @@ const ARM64_CONFIG = {
   libraryArchitectures: ['x86', 'x64', 'arm64']
 }
 const VSWHERE_ARGS = ['-products', '*', '-format', 'json', '-utf8']
-const VSWHERE_REQUIRE_ARGS = [...VSWHERE_ARGS, '-requires', CONFIG.workloadId]
+const VSWHERE_REQUIRE_ARGS = [...VSWHERE_ARGS, '-requires', CONFIG.workloadId, ...CONFIG.componentIds]
 
 const describeWindows = process.platform === 'win32' ? describe : describe.skip
 
@@ -137,7 +137,6 @@ describeWindows('Windows C++ build-toolchain bootstrap', () => {
       run,
       report: output.report
     })
-
     expect(result).toEqual({ code: 0, changed: true })
     expect(invocations).toEqual([{ program: setup, args: expectedArgs }])
     expect(expectedArgs).not.toContain('--wait')

@@ -628,8 +628,10 @@ describe('RemoteHooks.installCanvasControl', () => {
     // ~/.claude/skills — the same gap installIntoAccountDir exists for on the hook side.
     const { rh, calls } = harness()
     await rh.installCanvasSkillIntoAccountDir(conn, '/s.sock', '/home/u', 'acc-1')
-    const target = '/home/u/.nodeterm/claude-accounts/acc-1/skills/manage-nodeterm-canvas/SKILL.md'
-    expect(calls.some((c) => isWriteTo(c.args, target))).toBe(true)
+    const target = '/home/u/.nodeterm/claude-accounts/acc-1/skills'
+    // Managed accounts inherit the complete live skills directory through one recoverable link;
+    // the installer does not duplicate one generated file into the account tree.
+    expect(calls.some((c) => c.args.join(' ').includes(`ln -s '/home/u/.claude/skills' '${target}'`))).toBe(true)
     // the shim is (re)written too — installCanvasControl may have failed open earlier.
     expect(calls.some((c) => isWriteTo(c.args, '/home/u/.nodeterm/nodeterm.sh'))).toBe(true)
   })
@@ -685,8 +687,8 @@ describe('RemoteHooks.installContextLink', () => {
   it('installs the skill into a remote managed-account config dir', async () => {
     const { rh, calls } = harness()
     await rh.installContextLinkSkillIntoAccountDir(conn, '/s.sock', '/home/u', 'acc-1')
-    const target = '/home/u/.nodeterm/claude-accounts/acc-1/skills/get-linked-context/SKILL.md'
-    expect(calls.some((c) => isWriteTo(c.args, target))).toBe(true)
+    const target = '/home/u/.nodeterm/claude-accounts/acc-1/skills'
+    expect(calls.some((c) => c.args.join(' ').includes(`ln -s '/home/u/.claude/skills' '${target}'`))).toBe(true)
     expect(calls.some((c) => isWriteTo(c.args, '/home/u/.nodeterm/context.sh'))).toBe(true)
   })
 

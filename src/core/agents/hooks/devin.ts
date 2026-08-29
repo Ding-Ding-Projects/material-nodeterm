@@ -7,7 +7,7 @@ import os from 'os'
 import path from 'path'
 import { DEVIN_HOOK_EVENTS } from '@shared/agents/hook-events'
 import { buildManagedHookCommand, installManagedHookScript } from './install-helper'
-import { renameAtomicSync } from '../../fs-atomic'
+import { renameAtomicSync, tempNameFor } from '../../fs-atomic'
 
 const SCRIPT_FILE_NAME = 'devin.sh'
 const MANAGED_MARKER = `agent-hooks/${SCRIPT_FILE_NAME}`
@@ -90,7 +90,7 @@ export function buildDevinHookConfig(
 function writeConfig(file: string, config: DevinHookConfig): void {
   const dir = path.dirname(file)
   fs.mkdirSync(dir, { recursive: true })
-  const temp = `${file}.${process.pid}.${Date.now()}.tmp`
+  const temp = tempNameFor(file)
   try {
     fs.writeFileSync(temp, `${JSON.stringify(config, null, 2)}\n`, 'utf8')
     renameAtomicSync(temp, file)

@@ -420,6 +420,8 @@ export type NodeKind =
   // Alarm Clock nodes persist wall-clock intent and occurrence history. Runtime timers and
   // notification handles stay machine-local; a shared project never claims powered-off wake.
   | 'alarm'
+  /** Persisted schedule definition whose execution still requires machine-local consent. */
+  | 'trigger'
   // The SERVICE family: one node per external thing this canvas can manage. They are ordinary
   // nodes — dragged, resized, coloured, grouped, persisted and deleted exactly like a terminal —
   // because a managed service is a thing you arrange on a canvas beside the terminals working on
@@ -621,6 +623,8 @@ export interface CanvasNodeState {
   alarmNarratorEnabled?: boolean
   alarmNextOccurrenceAt?: number
   alarmHistory?: AlarmOccurrence[]
+  /** trigger-only: shared schedule and payload definition. Machine-local arm consent is separate. */
+  trigger?: import('./trigger').TriggerSpec
   /** Agent nodes only: when true, this node's subagent/loop fan-out cards are hidden. */
   hideFanout?: boolean
   /** Parent group node id, if this node belongs to a group frame. */
@@ -2511,6 +2515,11 @@ export interface Settings {
    */
   rainbowSpeed: number
   doubleClickFocus: boolean
+  /** Open Markdown files in rendered preview instead of the editor. The node Preview/Edit
+   *  toggle and markdown shortcut still work either way. Existing files are migrated once. */
+  openMarkdownPreview: boolean
+  /** One-shot marker for the default-on Markdown preview migration. */
+  openMarkdownPreviewMigrated: boolean
   /**
    * Let a MIDDLE CLICK inside a terminal paste (Linux in practice — macOS and Windows have no
    * PRIMARY selection and no tmux middle-click habit, so the guard changes nothing visible there).
@@ -2958,6 +2967,8 @@ export const DEFAULT_SETTINGS: Settings = {
   panHoverDelay: 600,
   rainbowSpeed: 3,
   doubleClickFocus: true,
+  openMarkdownPreview: true,
+  openMarkdownPreviewMigrated: true,
   terminalMiddleClickPaste: false,
   wheelZoom: true,
   wheelZoomSpeed: 1,
@@ -4822,6 +4833,15 @@ export interface TimerApi {
   transition(id: string, state: import('./timer').TimerOccurrenceState): Promise<import('./timer').TimerOccurrence | null>
   lap(id: string, elapsedMs: number): Promise<number[] | null>
 }
+
+export interface TriggerApi {
+  status(projectId: string, nodeId: string): Promise<import('./trigger').TriggerStatus>
+  arm(projectId: string, nodeId: string, spec: import('./trigger').TriggerSpec): Promise<boolean>
+  disarm(projectId: string, nodeId: string): Promise<void>
+  runNow(projectId: string, nodeId: string): Promise<import('./trigger').TriggerRunReceipt>
+  history(projectId: string, nodeId?: string): Promise<import('./trigger').TriggerRunReceipt[]>
+  onChanged(listener: (receipt: import('./trigger').TriggerRunReceipt) => void): () => void
+}
 /** Keyboard-shortcut plumbing the RENDERER cannot do for itself. */
 export interface ShortcutsApi {
   /** Tell the shell that a shortcut recorder is armed (`true`) or released (`false`), so the
@@ -4858,6 +4878,8 @@ export interface NodeTerminalApi {
   /** Typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers. */
   cloudflareZeroTrust: import('./cloudflare-zero-trust').CloudflareApi
   timer: TimerApi
+  /** Trigger controls are available on shells that register the scheduler. */
+  trigger?: TriggerApi
   serverDeployment: ServerDeploymentApi
   projectSettings: ProjectSettingsApi
   projectSetup: ProjectSetupApi

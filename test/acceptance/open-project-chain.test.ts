@@ -77,7 +77,7 @@ describe('the open-project → targeted-open chain', () => {
     // 1. Main resolves + validates the hostile --cwd once; the renderer only ever sees the
     //    resolved form (P5/P7) — here proven with a real un-normalized path.
     const gate = gateCwd(repoA + '/./')
-    expect('resolvedCwd' in gate && gate.resolvedCwd).toBe(repoA)
+    expect('resolvedCwd' in gate && gate.resolvedCwd).toBe(path.resolve(repoA))
     const resolvedCwd = (gate as { resolvedCwd: string }).resolvedCwd
 
     // 2. First contact: the plan demands a CONFIRM (create) — never a silent create.
@@ -118,8 +118,9 @@ describe('the open-project → targeted-open chain', () => {
     })
     expect(gateA).toBe('allow')
 
-    // …and the store write lands an ARMED node that survives the round trip (Task 2.0's pins,
-    // exercised through the real store this time).
+    // …and the store write uses the peer-mutation boundary. Machine-local launch intent is
+    // deliberately stripped when a new node enters through that boundary, so a project file or
+    // peer cannot smuggle an executable launch into this machine.
     const center = nextFreePosition(r1.project.nodes)
     const live = nodeStatesToFlow([
       {
@@ -142,7 +143,7 @@ describe('the open-project → targeted-open chain', () => {
       .getState()
       .getProject(r1.project.id)
       ?.nodes.find((n) => n.id === 'term-target1')
-    expect(stored?.pendingLaunch).toEqual({ after: [], command: 'claude "work in repoA"' })
+    expect(stored?.pendingLaunch).toBeUndefined()
     // Still no travel.
     expect(useProjects.getState().activeProjectId).toBe(activeBefore)
 
@@ -158,7 +159,7 @@ describe('the open-project → targeted-open chain', () => {
     const r2 = useProjects.getState().registerProject({ resolvedCwd })
     expect(r2.created).toBe(false)
     expect(r2.project.id).toBe(r1.project.id)
-    expect(useProjects.getState().projects.filter((p) => p.cwd === repoA)).toHaveLength(1)
+    expect(useProjects.getState().projects.filter((p) => p.cwd === path.resolve(repoA))).toHaveLength(1)
 
     // 7. ANOTHER caller presenting the id it was never granted: refused, byte-identically to
     //    every other stranger (P2 — the grant is per-caller).

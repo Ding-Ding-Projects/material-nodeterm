@@ -157,6 +157,15 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
       ipcMain.on(ch, (e, ...args) => fn(e.sender.id, ...args))
     },
     async dispatch(clientId, req, source) {
+      if (RELAY_LOCAL_ONLY_METHODS.has(req.method)) {
+        return {
+          t: 'res', id: req.id, ok: false,
+          error: {
+            code: 'E_FORBIDDEN',
+            message: 'machine-local desktop operation is not available to relay peers'
+          }
+        }
+      }
       // Host-control admission, from the ONE shared list (src/shared/host-control.ts) rather than a
       // prefix test written out here — the second shell copying a stale copy of that test is the
       // failure mode this closes.
@@ -195,15 +204,13 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
               }
             }
           }
-          if (!source) {
-            return {
-              t: 'res', id: req.id, ok: false,
-              error: { code: 'E_FORBIDDEN', message: 'relay terminal source is unavailable' }
-            }
-          }
           let decision: RelayPtyCreateDecision
           try {
-            decision = await authorize(args[0], source)
+            // A missing source is still passed to the authority as data. This lets the authority
+            // return its own precise refusal (for example, an unknown terminal identity), while
+            // a permissive decision remains refused below because relay launch needs a verified
+            // source context.
+            decision = await authorize(args[0], source as RelayPtyCreateSource)
           } catch {
             return {
               t: 'res', id: req.id, ok: false,
@@ -217,6 +224,12 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
             return {
               t: 'res', id: req.id, ok: false,
               error: { code: 'E_FORBIDDEN', message: decision.message }
+            }
+          }
+          if (!source) {
+            return {
+              t: 'res', id: req.id, ok: false,
+              error: { code: 'E_FORBIDDEN', message: 'relay terminal source is unavailable' }
             }
           }
           // `pty:create` has one argument. Reconstruct the array as well as the object so a hostile

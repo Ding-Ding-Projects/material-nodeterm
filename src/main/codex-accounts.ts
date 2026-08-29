@@ -294,9 +294,19 @@ export function initCodexAccounts(getSshManager?: () => SshProjectManager | unde
     }
   )
 
-  ipcMain.handle(IPC.codexAccountsSystemIdentity, (_event, ctx?: { projectId?: string }) => {
-    const remote = remoteFor(ctx)
-    return remote ? remote.mgr.remoteCodexAccountIdentity(remote.projectId) : accountIdentity()
+  ipcMain.handle(IPC.codexAccountsSystemIdentity, async (_event, ctx?: { projectId?: string }) => {
+    try {
+      const remote = remoteFor(ctx)
+      return remote ? await remote.mgr.remoteCodexAccountIdentity(remote.projectId) : accountIdentity()
+    } catch (error) {
+      // A remote identity read has no local substitute. When this shell has no connected SSH
+      // manager yet, return the honest unavailable value instead of borrowing this machine's
+      // identity; malformed context still propagates as a caller error.
+      if (error instanceof Error && error.message === 'SSH Codex account manager is unavailable') {
+        return null
+      }
+      throw error
+    }
   })
 
   ipcMain.handle(
@@ -349,6 +359,61 @@ export function initCodexAccounts(getSshManager?: () => SshProjectManager | unde
         sessionsRelativePath
       )
       return { threadId }
+    }
+  )
+
+  ipcMain.handle(
+    IPC.codexAccountsSwitchThread,
+    async (
+      event,
+      threadId: string,
+      cwd: string,
+      sourceAccountId: string | undefined,
+      targetAccountId: string | undefined
+    ) => {
+      if (!SAFE_THREAD_ID.test(threadId) || !path.isAbsolute(cwd)) {
+        throw new Error('Invalid Codex account switch request')
+      }
+      if (sourceAccountId) assertCodexAccountId(sourceAccountId)
+      if (targetAccountId) assertCodexAccountId(targetAccountId)
+      // Switching to the same login changes nothing. Do this before reading the app-server so the
+      // renderer can safely use the operation as an idempotent account-picker action.
+      if (sourceAccountId === targetAccountId) return { threadId }
+      if (
+        (sourceAccountId && removingCodexAccounts.has(sourceAccountId)) ||
+        (targetAccountId && removingCodexAccounts.has(targetAccountId))
+      ) {
+        throw new Error('Codex account removal is in progress')
+      }
+
+      // The source app-server is already the authority for this live conversation. Reading its
+      // rollout first keeps planning read-only; daemon startup here would turn a failed switch
+      // into an unrelated process mutation and would make the owner reservation lie about what
+      // it has actually validated.
+      const source = await readCodexThreadAt(localCodexSocket(sourceAccountId), threadId, 5000)
+      if (!source?.path) throw new Error('Source Codex conversation is unavailable')
+      const sourceHome = await fs.realpath(
+        codexHomeForAccount(platform().userDataDir, sourceAccountId)
+      )
+      const targetHome = await fs.realpath(
+        codexHomeForAccount(platform().userDataDir, targetAccountId)
+      )
+      const exposure = planCodexRolloutExposure(sourceHome, targetHome, source.path, threadId)
+      const rollbackToken = randomUUID()
+      const owner = event.sender as WebContents
+      const ownerDestroyed = (): void => releasePendingSwitch(rollbackToken)
+      const timer = setTimeout(() => releasePendingSwitch(rollbackToken), SWITCH_RESERVATION_TTL_MS)
+      pendingSwitchExposures.set(rollbackToken, {
+        exposure,
+        sourceAccountId,
+        targetAccountId,
+        committed: false,
+        owner,
+        ownerDestroyed,
+        timer
+      })
+      owner.once('destroyed', ownerDestroyed)
+      return { threadId, rollbackToken }
     }
   )
 

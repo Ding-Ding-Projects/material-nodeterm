@@ -690,16 +690,20 @@ async function serveStatic(
     if (!isIndex) return raw
     const html = raw.toString('utf8')
     const marker = "default-src 'self'; connect-src 'self' https://raw.githubusercontent.com;"
-    if (!html.includes(marker)) {
+    const legacyMarker = "default-src 'self'; style-src 'self'"
+    if (!html.includes(marker) && !html.includes(legacyMarker)) {
       // A silent no-op here would leave the desktop CSP intact and the browser
       // would block the ws:/wss: WebSocket with no visible error — make sure an
       // operator sees this in the server logs.
       console.warn(
-        "[nodeterm-server] index.html CSP did not contain the expected public-catalog connect-src marker; the ws: connect-src rewrite did not apply. Rebuild the renderer or update the rewrite."
+        "[nodeterm-server] index.html CSP did not contain the expected public-catalog connect-src marker; the WebSocket ws: connect-src rewrite did not apply. Rebuild the renderer or update the rewrite."
       )
       return raw
     }
-    return Buffer.from(html.replace(marker, "default-src 'self'; connect-src 'self' ws: wss: https://raw.githubusercontent.com;"))
+    const replacement = "default-src 'self'; connect-src 'self' ws: wss: https://raw.githubusercontent.com;"
+    return Buffer.from(html.includes(marker)
+      ? html.replace(marker, replacement)
+      : html.replace(legacyMarker, `${replacement} style-src 'self'`))
   }
 
   const enc =

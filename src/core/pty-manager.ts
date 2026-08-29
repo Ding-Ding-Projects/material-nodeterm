@@ -32,11 +32,9 @@ import {
   remoteTmuxPtyArgs,
   type RemoteSessionEnv,
   remotePasteDelivery,
-  remoteFramedDelivery,
   remoteCapturePaneArgs,
   remotePaneCommandArgs,
-  remotePaneOwnerArgs,
-  remoteForegroundArgvArgs,
+  remotePaneOwnerCombinedArgs,
   remotePaneCursorArgs,
   childArgs,
   remotePaneProcessArgs,
@@ -49,7 +47,7 @@ import {
   forgetPaneOwner,
   shouldRecordOwnership
 } from './agents/pane-ownership'
-import { PANE_OWNER_FMT, foregroundArgvArgs, paneOwnerFrom, parsePaneOwner } from './agents/pane-owner'
+import { PANE_OWNER_FMT, foregroundArgvArgs, paneOwnerFrom, parseCombinedPaneOwner, parsePaneOwner } from './agents/pane-owner'
 import { binariesFor, isAgentPane, type PaneOwner } from '../shared/agents/pane-owner-predicate'
 import { readSpawnResources, spawnResourceNote } from './spawn-resources'
 import { primePtyCeiling, ptyDevicesExhausted, readPtyDevices, spawnFailureHint, type PtyDevices } from './pty-devices'
@@ -60,7 +58,6 @@ import {
   sessionName,
   isSessionName,
   localPasteDelivery,
-  localFramedDelivery,
   runPasteDelivery
 } from './tmux-naming'
 import { encodeSendKeysHex } from './tmux-control'
@@ -895,14 +892,6 @@ export class PtyManager {
   private confPath = ''
   private getSettings: () => Settings = () => DEFAULT_SETTINGS
 
-  /**
-   * Is this account id one of the managed CODEX accounts? Asked instead of guessing from the id's
-   * shape: `codexAccounts` and `claudeAccounts` share an id alphabet, so only the list can tell
-   * them apart (issue #345). Reads LIVE settings, so an account added after init is seen.
-   */
-  private isCodexAccount(accountId: string): boolean {
-    return this.getSettings().codexAccounts.some((a) => a.id === accountId)
-  }
   /** Literal model-gateway key loaded by the shell's secret service during startup. */
   private getModelGatewaySecret: () => string | null = () => null
   /**
@@ -2908,8 +2897,8 @@ export class PtyManager {
     const programArgs = options.shellArgs ?? []
     // One resolver for BOTH direct node-pty and the persistent session-host backend, so the two
     // paths cannot drift on "which shell" (see resolveLocalSessionShell).
-    const localSessionShell = resolveLocalSessionShell(program, settings.defaultShell)
-    const localSessionArgs = program ? programArgs : []
+    const localSessionShell = resolvedProfile?.shell ?? resolveLocalSessionShell(program, settings.defaultShell)
+    const localSessionArgs = resolvedProfile?.shellArgs ?? (program ? programArgs : [])
 
     // SSH project node: run `ssh -t '<remote tmux attach-or-create>'` as the PTY program. The
     // REMOTE tmux provides persistence (over the project's ControlMaster); the local PTY just
@@ -3074,7 +3063,6 @@ export class PtyManager {
       settings.tmuxEnabled &&
       options.persistKey
     ) {
-    } else if (this.tmuxPath && settings.tmuxEnabled && options.persistKey) {
       // attach-or-create the persistent session for this node.
       // `-A` = attach-or-create. `-D` = detach OTHER clients on attach. We use `-D` ONLY for the
       // local renderer client (a remount should take sole ownership of its session). A host-served
@@ -3086,6 +3074,18 @@ export class PtyManager {
       // on the client's inherited env would leak the first session's values into later ones).
       file = this.tmuxPath
       useLocalTmux = true
+      if (warmWindowsBackend !== 'tmux') {
+        // Gateway and custom-agent values stay in this tmux client's environment; only the
+        // variable names are appended to the shared server's update-environment list. Keeping
+        // values out of `-e` arguments avoids exposing credentials on the long-lived client argv.
+        // The account-scope names also retrofit servers started by an older app, whose config was
+        // read before the current account and custom-agent names existed.
+        this.ensureUpdateEnvKeys([
+          ...ACCOUNT_SCOPE_UPDATE_ENV,
+          ...Object.keys(customEnvMerged),
+          ...Object.keys(projectEnv ?? {})
+        ])
+      }
       if (warmWindowsBackend === 'tmux') {
         // Attach-only is the critical distinction from `new-session -A`: if the proven warm
         // generation disappears in this window, tmux rejects instead of cold-spawning a shell
@@ -3146,55 +3146,6 @@ export class PtyManager {
           args.push(...programArgs)
         }
       }
-      // Gateway env deliberately has NO `-e` pairs: the values are in this tmux CLIENT's process
-      // environment (merged above) and the conf's `update-environment` list copies them into the
-      // session at create/attach — measured on tmux 3.4, including the removal case (a plain
-      // terminal's client lacks the vars, so tmux strips them from its session even on a server
-      // another node's env seeded). `-e KEY=VALUE` parked the API key on the long-lived attached
-      // client's argv — world-readable in /proc/<pid>/cmdline on a multi-user host, the exact
-      // PR #195 leak class. Custom-agent env keys OUTSIDE the baked gateway list still need the
-      // option appended at runtime on a shared server (the conf assignment cannot know them):
-      // The project's keys need the same treatment for the same reason: their VALUES are in this
-      // tmux client's process env (merged above) and must reach the session without ever appearing
-      // on the long-lived client's argv.
-      // The account-scope names lead the list for the LONG-LIVED server case (#419): the conf is
-      // read once at server start, so a server started by a pre-fix app keeps its old
-      // update-environment array forever — these appends are what retrofit it before this
-      // session is created. A fresh server already has them from the conf (the append dedupes).
-      this.ensureUpdateEnvKeys([
-        ...ACCOUNT_SCOPE_UPDATE_ENV,
-        ...Object.keys(customEnvMerged),
-        ...Object.keys(projectEnv ?? {})
-      ])
-      const hookEnvArgs = Object.entries(hookEnv).flatMap(([k, v]) => ['-e', `${k}=${v}`])
-      const pathEnvArgs = env.PATH ? ['-e', `PATH=${env.PATH}`] : []
-      const langEnvArgs = env.LANG ? ['-e', `LANG=${env.LANG}`] : []
-      const colortermEnvArgs = ['-e', 'COLORTERM=truecolor']
-      const accountEnvArgs = accountDir ? accountTmuxEnvArgs(accountDir) : []
-      const attachFlags = tmuxAttachFlags(!!sinks)
-      args = [
-        '-L',
-        TMUX_SOCKET,
-        '-f',
-        this.confPath,
-        'new-session',
-        ...attachFlags,
-        ...hookEnvArgs,
-        ...pathEnvArgs,
-        ...langEnvArgs,
-        ...colortermEnvArgs,
-        ...accountEnvArgs,
-        '-c',
-        cwd,
-        '-s',
-        sessionName(options.persistKey)
-      ]
-      // Honor a custom session program at creation (ignored on reattach).
-      const shell = program || settings.defaultShell
-      if (shell) {
-        args.push(shell)
-        args.push(...programArgs)
-      }
     } else if (
       !options.sshRemote &&
       options.persistKey &&
@@ -3253,8 +3204,10 @@ export class PtyManager {
             settings.tmuxScrollback
           )) as unknown as pty.IPty
     } else {
-      file = localSessionShell
-      args = localSessionArgs
+      if (!useLocalTmux && !options.sshRemote) {
+        file = localSessionShell
+        args = localSessionArgs
+      }
       try {
         proc = pty.spawn(file, args, {
           name: 'xterm-256color',
@@ -4347,14 +4300,16 @@ export class PtyManager {
    * command. Deliberately has NO deadline of its own: the caller bounds it (`probeWithin`), the
    * same way the restart poll bounds `paneCommand`.
    *
-   * Two round-trips, not one: tmux does not know the foreground process group (`#{pane_pid}` is the
-   * shell it forked, which is usually NOT in it), so the tty has to come back before `ps` can be
-   * asked about it. On the SSH leg both ride the same ControlMaster — and both are `ssh` children
-   * that outlive the caller's 2s deadline (they are reaped at `PROC_TIMEOUT_MS`), so a caller that
-   * retries `unknown` on a short timer stacks them. See `agents/pane-probe.ts` for why that needs a
-   * circuit breaker rather than a shorter timeout.
+   * LOCALLY two round-trips, not one: tmux does not know the foreground process group
+   * (`#{pane_pid}` is the shell it forked, which is usually NOT in it), so the tty has to come
+   * back before `ps` can be asked about it — and two local execFiles cost nothing. The SSH leg is
+   * ONE round-trip (`remotePaneOwnerCombinedArgs`, issue #460): there each exec is an `ssh` child
+   * that outlives the caller's 2s deadline (reaped at `PROC_TIMEOUT_MS`) and becomes a full LOGIN
+   * whenever the master cannot serve a channel, so a caller that retries `unknown` on a short
+   * timer stacks them. See `agents/pane-probe.ts` for why that needs a circuit breaker rather
+   * than a shorter timeout.
    *
-   * `remotePaneOwnerArgs` splices the session id unquoted (`-t ${sessionId}`), exactly as every
+   * `remotePaneOwnerCombinedArgs` splices the session id unquoted (`-t ${sessionId}`), exactly as every
    * sibling builder does. That is safe only because `sessionName()` sanitises to `[A-Za-z0-9_-]`
    * before it ever gets here — the guarantee lives THERE, not in this call.
    */
@@ -4364,15 +4319,18 @@ export class PtyManager {
     const sshRemote = live?.sshRemote
     try {
       if (sshRemote) {
+        // ONE round-trip, not two (issue #460): under a saturated or dead ControlMaster every
+        // exec silently falls back to a FULL ssh login, and two sequential fallback logins do not
+        // fit the caller's 2s probe budget — a live agent pane then read as `unknown`,
+        // persistently. The combined script carries both halves; the parser applies the same
+        // grammars the two-trip read used. See `remotePaneOwnerCombinedArgs` for the measurement.
         const ssh = findSsh()
         if (!ssh) return null
-        const first = await runAsync(ssh, remotePaneOwnerArgs(sshRemote.conn, sshRemote.controlPath, target))
-        const identity = parsePaneOwner(first.stdout)
-        if (!identity) return null
-        const psArgs = remoteForegroundArgvArgs(sshRemote.conn, sshRemote.controlPath, identity.tty)
-        if (!psArgs) return null
-        const second = await runAsync(ssh, psArgs)
-        return paneOwnerFrom(identity, second.stdout)
+        const out = await runAsync(
+          ssh,
+          remotePaneOwnerCombinedArgs(sshRemote.conn, sshRemote.controlPath, target)
+        )
+        return parseCombinedPaneOwner(out.stdout)
       }
       // The session host has no tty/tmux identity surface. Do not query an unrelated POSIX tmux
       // merely because one is installed beside this native Windows generation.
@@ -4411,35 +4369,44 @@ export class PtyManager {
    */
 
   /**
-   * Deliver one ALREADY-FRAMED payload — the agent-messaging envelope, composed by
-   * `bracketedInjection` in `deliverAgentMessage` — into a node's pane, local or SSH.
+   * Deliver the agent-messaging envelope — PLAIN text from `deliverAgentMessage` — into a node's
+   * pane, local or SSH, through the SAME plans as `sendText` with the Enter always on: tmux frames
+   * the paste from the pane's real bracketed-paste state (`paste-buffer -p`) and the submit is a
+   * separate `send-keys Enter` in the same tmux command list.
    *
-   * A two-line dispatcher over `localFramedDelivery` / `remoteFramedDelivery`, exactly as
-   * `sendText` is over its plans and for the same reason: the composition (the no-sanitize rule,
-   * the well-formed-frame assertion, the per-call buffer, the failure sweep) lives in the plan
-   * builders, where `agent-message.realtty.test.ts` drives the local one against a real tmux and
-   * a real bash. NOT `sendText`: that path sanitizes structurally, which would strip the ESC
-   * bytes that ARE this payload's frame.
+   * This replaced `sendFramedPayload`, which pushed a JS-composed `ESC[200~…ESC[201~\r` payload
+   * through `paste-buffer` with no `-p`: tmux ≥ 3.7 passes paste-buffer content through vis(3),
+   * which rendered that frame as literal `^[[200~` text in the composer and swallowed the submit
+   * (issue #453 — see the tombstones in tmux-naming.ts and paste-injection.ts). The plans
+   * sanitize the payload structurally (`sanitizePasteText` inside `localPasteDelivery` /
+   * `remotePasteDelivery`), which is now correct for this caller too: the envelope carries no ESC
+   * byte on purpose, and one smuggled in by a body must never reach a paste buffer.
+   *
+   * NOT `sendText` itself, because of the empty-payload contract: `sendText('', {enter:true})`
+   * means "submit whatever is composed", and a lone Enter into an agent's composer is exactly the
+   * accidental submit a messaging delivery must never perform — an empty envelope refuses here.
+   * (`buildEnvelope` can never return '', so this is a guard against a future caller, not a path.)
    */
-  async sendFramedPayload(persistKey: string, payload: string): Promise<boolean> {
+  async sendEnvelope(persistKey: string, envelope: string): Promise<boolean> {
+    if (envelope.length === 0) return false
     const target = sessionName(persistKey)
     const sshRemote = this.sessionByPersistKey(persistKey)?.sshRemote
     try {
       if (sshRemote) {
         const ssh = findSsh()
         if (!ssh) return false
-        const plan = remoteFramedDelivery(sshRemote.conn, sshRemote.controlPath, target, payload)
+        const plan = remotePasteDelivery(sshRemote.conn, sshRemote.controlPath, target, envelope, true)
         if (!plan) return false
         return await runPasteDelivery(plan, (args, input) => runWithStdin(ssh, args, input))
       }
       if (!this.tmuxPath) return false
       const tmuxPath = this.tmuxPath
-      const plan = localFramedDelivery(TMUX_SOCKET, target, payload)
+      const plan = localPasteDelivery(TMUX_SOCKET, target, envelope, true)
       if (!plan) return false
       return await runPasteDelivery(plan, (args, input) => runWithStdin(tmuxPath, args, input))
     } catch {
-      // A builder throwing (unsafe target, an unframed payload) lands here; `runPasteDelivery`
-      // itself answers false rather than throwing, so the buffer sweep is never skipped.
+      // A builder throwing (an unsafe target) lands here; `runPasteDelivery` itself answers false
+      // rather than throwing, so the buffer sweep is never skipped.
       return false
     }
   }
@@ -4588,9 +4555,6 @@ export class PtyManager {
       }
       trustedTarget = { profileId: target.profileId, cwd: target.cwd || os.homedir() }
       await this.resolveTrustedWindowsProfile(trustedTarget.profileId, trustedTarget.cwd)
-      // Profile-switch replacement targets land with the windows-terminal-profiles phase; until
-      // then a target can only be refused (the same copy the fork uses without a resolver).
-      throw new Error('Windows terminal profiles are unavailable on this host.')
     }
     const liveId = this.byPersistKey.get(persistKey)
     const live = this.liveSessionForPersistKey(persistKey)

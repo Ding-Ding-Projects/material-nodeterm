@@ -155,6 +155,7 @@ import {
   isDeliverRequest,
   messagingEnabledVia,
   onMessagingAgentEvent,
+  runDelivery,
   setDeliveryQueue,
   type AgentMessagingDeps
 } from './agent-messaging'
@@ -220,7 +221,14 @@ import {
   isValidPendingId,
   syntheticAnsweredEvent
 } from '../core/agents/pending-approvals'
-import { setMainWindow, getMainWindow, sendToMain, closeAction, createCrashReloadPolicy } from './main-window'
+import {
+  setMainWindow,
+  getMainWindow,
+  sendToMain,
+  closeAction,
+  shouldQuitHostOnWindowClose,
+  createCrashReloadPolicy
+} from './main-window'
 import {
   MENU_ITEM_ID_CLOSE,
   MENU_ITEM_ID_KANBAN,
@@ -408,6 +416,12 @@ import { APP_BAR_HEIGHT } from '../shared/layout'
 import { registerConfirmedRecycleIpc } from './confirmed-recycle-ipc'
 import { registerWindowsTerminalProfileIpc } from './windows-terminal-profiles'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
+import { createStartupHealthTracker } from './startup-health'
+import { settleShutdownWithin } from './bounded-shutdown'
+import { stopOwnedCodexRelayProcess } from './codex-relay-lifecycle'
+import { TriggerArmStore } from '../core/trigger-arm-store'
+import { TriggerScheduler, type TriggerDeliveryResult } from '../core/trigger-scheduler'
+import { registerTriggerIpc, triggerIpcNotify } from '../core/trigger-ipc'
 
 // Fail before Electron initializes any persistent service. mirror-publication loads node:sqlite
 // lazily so an incompatible embedded runtime reaches this clear diagnostic instead of an import
@@ -462,6 +476,7 @@ initPlatform(corePlatform)
 let minecraftServers: ReturnType<typeof registerMinecraftIpc>['manager'] | undefined
 let virtualMachineManager: ReturnType<typeof registerVirtualMachineIpc>['manager'] | undefined
 let timerOccurrences: TimerOccurrenceService | undefined
+let triggerScheduler: TriggerScheduler | undefined
 
 // Only hand the OS a URL with a vetted scheme. Blocks file://, smb://, and custom
 // protocol-handler schemes that could be smuggled in via remote announcement feeds or
@@ -604,15 +619,18 @@ const windowsTerminalProfiles = new WindowsTerminalProfileService({
 })
 const ptyManager = new PtyManager({ terminalProfiles: windowsTerminalProfiles })
 let agentContinuationService: AgentContinuationService | undefined
-// One tiny detached relay is shared by every Codex node/account. Keeping it outside Electron
-// preserves live TUI connections across app restarts while the authenticated app-server remains
-// shared per account.
+// One tiny detached relay is shared by every Codex node/account. Keeping it outside the renderer
+// preserves live TUI connections through window and renderer restarts while the authenticated
+// app-server remains shared per account. A graceful application quit still signals this exact
+// retained child and awaits its bounded exit; persisted thread identity and terminal backends own
+// the later relaunch handoff, not an untracked process left behind.
 const codexRelayScript = app.isPackaged
   ? join(process.resourcesPath, 'codex-relay.js')
   : join(__dirname, 'codex-relay.js')
 hookServer.setCodexRelayRuntime(process.execPath, codexRelayScript)
-// Start/ensure the one persistent relay before the renderer can create a Codex node. The daemon's
-// exclusive lock makes concurrent app starts harmless; detached + unref keeps it alive on Cmd+Q.
+// Start/ensure the one relay before the renderer can create a Codex node. The daemon's exclusive
+// lock makes concurrent app starts harmless; detached + unref keeps renderer/window teardown from
+// killing it early, while the before-quit flush below owns its final bounded application shutdown.
 const codexRelayProcess = spawn(process.execPath, [codexRelayScript, 'serve'], {
   detached: true,
   stdio: 'ignore',
@@ -731,6 +749,7 @@ const workspaceWatcher = new WorkspaceWatcher({
 workspaceStore.onPersist = () => {
   workspaceWatcher.sync()
   refreshNodeTokens()
+  for (const canvas of workspaceStore.persistedCanvases()) triggerScheduler?.updateProject(canvas.id, canvas.nodes)
 }
 const gitService = new GitService()
 
@@ -1240,6 +1259,8 @@ function createWindow(): BrowserWindow {
 
   // Register as the live main window (send-time resolution via getMainWindow/sendToMain).
   setMainWindow(win)
+  const startupHealth = createStartupHealthTracker()
+  startupHealth.record('window-created')
 
   // Team presence: this window is one peer. With nobody else connected the renderer draws nothing
   // (≤1 peer = zero cost); it matters when a phone joins over the relay, or when this desktop
@@ -1281,7 +1302,45 @@ function createWindow(): BrowserWindow {
   // past the budget the user decides. The tmux sessions all live in this process, so a reload
   // costs nothing but the canvas re-hydrating from the workspace store.
   const crashReload = createCrashReloadPolicy()
+  win.webContents.on('did-start-loading', () => {
+    startupHealth.record('load-started')
+  })
+  win.webContents.on('did-finish-load', () => {
+    startupHealth.record('load-finished')
+  })
+  win.webContents.on('did-fail-load', (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
+    if (!isMainFrame || quitting || win.isDestroyed()) return
+    startupHealth.record('load-failed')
+    // A failed file load otherwise leaves the user with the same blank frame as a dead renderer.
+    // Reuse the bounded crash budget so a missing packaged resource cannot create a reload loop.
+    const action = crashReload('launch-failed', Date.now())
+    if (action === 'reload') {
+      win.webContents.reload()
+    } else if (action === 'give-up') {
+      void dialog
+        .showMessageBox(win, {
+          type: 'error',
+          message: 'The window could not load',
+          detail: 'The interface did not finish loading. Your terminal sessions are still running.',
+          buttons: ['Reload', 'Not Now'],
+          defaultId: 0,
+          cancelId: 1
+        })
+        .then(({ response }) => {
+          if (response === 0 && !win.isDestroyed()) win.webContents.reload()
+        })
+    }
+  })
+  win.webContents.on('unresponsive', () => {
+    startupHealth.record('unresponsive')
+    console.warn('[startup] renderer became unresponsive.')
+  })
+  win.webContents.on('responsive', () => {
+    startupHealth.record('responsive')
+  })
   win.webContents.on('render-process-gone', (_event, details) => {
+    startupHealth.record('renderer-gone')
+    console.warn('[startup] renderer process ended.')
     ptyManager.dropClient(presenceId)
     // A dead renderer sends no disarm and no focus-lost report. The reloaded page mounts no
     // recorder and no terminal, so without this the user would come back to an app where ⌘W does
@@ -1307,10 +1366,16 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  win.on('ready-to-show', () => win.show())
+  win.on('ready-to-show', () => {
+    startupHealth.record('window-shown')
+    win.show()
+  })
   // The main window is a regular app window; establishing its Dock presence explicitly means the
   // later focusable:false Notch HUD panel can never leave the app looking like an accessory.
-  win.on('show', () => assertRegularDockPresence())
+  win.on('show', () => {
+    startupHealth.record('window-shown')
+    assertRegularDockPresence()
+  })
 
   // macOS: closing the window hides it instead of destroying it. The app deliberately
   // outlives its window (tmux sessions, hook server, updater); destroying the window
@@ -1340,10 +1405,11 @@ function createWindow(): BrowserWindow {
       }
       return
     }
+    const hasEnabledPlannerSchedules = plannerRuntime.hasEnabledSchedules()
     // A title-bar close is a UI close, not an explicit host shutdown. When the planner owns an
-    // enabled schedule, let this window be destroyed and let window-all-closed keep the process
-    // alive. Menu Quit and app shutdown still reach before-quit and stop the planner normally.
-    if (!quitting && plannerRuntime.hasEnabledSchedules()) return
+    // enabled schedule, let this window be destroyed while the host remains available. Menu Quit
+    // and app shutdown still reach before-quit and stop the planner normally.
+    if (!quitting && hasEnabledPlannerSchedules) return
     // action === 'default': the window is really closing. On Windows/Linux the native title-bar
     // × reaches this directly (no app.quit() first), so the confirm gate must sit here too, not
     // only in before-quit — otherwise the window (and with it the only place to show a dialog)
@@ -1353,6 +1419,16 @@ function createWindow(): BrowserWindow {
       void confirmQuit(win).then((ok) => {
         if (ok) app.quit()
       })
+      return
+    }
+    // On Windows an auxiliary BrowserWindow can remain after the main window is destroyed, so
+    // `window-all-closed` is not a reliable quit trigger. Enter the normal bounded before-quit
+    // lifecycle now, which closes auxiliary windows, detaches persistent sessions, releases
+    // application-owned processes, and gives up the single-instance lock. The planner exception
+    // above remains the deliberate background-host route.
+    if (shouldQuitHostOnWindowClose(process.platform, quitting, hasEnabledPlannerSchedules)) {
+      e.preventDefault()
+      app.quit()
     }
   })
 
@@ -1949,6 +2025,7 @@ app.whenReady().then(async () => {
         browserGuests,
         webContentsId,
         nodeId,
+        undefined,
         surface,
         (id) => webContents.fromId(id) ?? null,
         // Loud, because the symptom otherwise is "popups from this node stopped opening" with
@@ -2433,7 +2510,7 @@ app.whenReady().then(async () => {
   // src/main/agent-messaging.ts for the whole map.
   const messagingDeps: AgentMessagingDeps = {
     paneOwner: (id) => ptyManager.paneOwner(id),
-    sendFramedPayload: (id, payload) => ptyManager.sendFramedPayload(id, payload),
+    sendEnvelope: (id, envelope) => ptyManager.sendEnvelope(id, envelope),
     hasLiveSession: (id) => ptyManager.hasLiveSession(id),
     projects: () => workspaceStore.persistedCanvases(),
     isRemoteNode: (id) => !!ptyManager.sshRemoteForNode(id),
@@ -2467,6 +2544,36 @@ app.whenReady().then(async () => {
     const { reply } = await deliverFromControl(raw, messagingDeps)
     return reply
   })
+
+  // Triggers are evaluated in the privileged process. Their shared definition is re-read through
+  // WorkspaceStore, while arming is a machine-local, content-bound consent record. Ordinary
+  // terminals use the plain tmux paste transport; agent targets reuse the complete ownership,
+  // idle, receipt, trace, and flow path above. No scheduled retry is attempted after an uncertain
+  // result, so a user can inspect the bounded receipt and explicitly run it again.
+  const triggerArms = new TriggerArmStore(app.getPath('userData'))
+  await triggerArms.load()
+  triggerScheduler = new TriggerScheduler({
+    armStore: triggerArms,
+    historyFile: join(app.getPath('userData'), 'triggers', 'history.json'),
+    getProject: (projectId) => workspaceStore.persistedCanvases().find((canvas) => canvas.id === projectId) as import('../shared/types').Project | undefined,
+    deliver: async ({ projectId, nodeId, target, spec, traceId: deliveryTraceId, manual }): Promise<TriggerDeliveryResult> => {
+      if (target.agentId) {
+        const outcome = await runDelivery({ verb: 'send', sourceNodeId: nodeId, targetNodeId: target.id, body: spec.payload }, messagingDeps)
+        if (outcome.kind === 'delivered' || outcome.kind === 'deliveredToReplacedTarget') return { outcome: 'delivered' }
+        if (outcome.kind === 'targetGone') return { outcome: 'target-missing', error: 'The target session is not live.' }
+        if (outcome.kind === 'targetBusy' || outcome.kind === 'targetNotIdleUnknown' || outcome.kind === 'targetStatusStale') return { outcome: 'target-busy', error: outcome.kind }
+        if (outcome.kind === 'targetStatusUnverified' || outcome.kind === 'targetNotAgentPane' || outcome.kind === 'targetNotPasteAware') return { outcome: 'target-unreadable', error: outcome.kind }
+        return { outcome: 'failed', error: outcome.kind }
+      }
+      const delivered = await ptyManager.sendText(target.id, spec.payload, { enter: true })
+      return delivered ? { outcome: 'delivered' } : { outcome: 'failed', error: `Terminal delivery failed for ${projectId}:${target.id} (${manual ? 'manual' : 'scheduled'}; ${deliveryTraceId}).` }
+    },
+    notify: (receipt) => triggerIpcNotify(corePlatform, receipt)
+  })
+  await triggerScheduler.loadHistory()
+  registerTriggerIpc(corePlatform, triggerScheduler)
+  for (const canvas of workspaceStore.persistedCanvases()) triggerScheduler.updateProject(canvas.id, canvas.nodes)
+  triggerScheduler.start()
 
   // Password managers (core/password-manager/): v1 is local-only, same starting scope board-log
   // above shipped with — an SSH-ref or cwd-less inline project answers `unsupported` rather than
@@ -4834,7 +4941,9 @@ app.on('before-quit', (e) => {
   destroyNotchHud()
   const scheduledSettingsStop = scheduledSettingsRuntime.stop()
   const plannerStop = plannerRuntime.stop()
+  const codexRelayStop = stopOwnedCodexRelayProcess(codexRelayProcess)
   alarmPlannerRuntime.stop()
+  triggerScheduler?.stop()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log
   // honest. Clearing the ref too keeps a hook edge that lands during the quit flush (the pty
   // teardown window below) from re-holding an assertion nothing will ever release.
@@ -4858,6 +4967,12 @@ app.on('before-quit', (e) => {
     // does not), and a lingering file is one more thing the next start() has to clear.
     askpassServer.stop()
     void browserUseBackend.stop()
+    // Hook server last among the closers, and on THIS pass so the flush window above could still
+    // receive hook POSTs: stopping unlinks its socket AND its endpoint file (issue #445), so a
+    // graceful quit never leaves an advertisement pointing at a dead port for the tmux sessions
+    // that outlive the app. The next launch rewrites both; a crash skips this, which is what the
+    // generated clients' endpoint failover exists for.
+    hookServer.stop()
     // A SIGTERM quit (dev runners, `kill`, logout) arrives through Chromium's shutdown
     // detector, and this pass's re-issued app.quit() cannot resume the OS-initiated
     // termination the first pass preventDefault'ed: both passes run, but will-quit never
@@ -4876,14 +4991,17 @@ app.on('before-quit', (e) => {
     remoteWorkspaceIO.flush(),
     ptyManager.killAll(),
     scheduledSettingsStop,
-    plannerStop
+    plannerStop,
+    codexRelayStop
   ])
   void Promise.race([flush, new Promise((r) => setTimeout(r, 1500))])
     // Then let whisper go. A dictation still transcribing when Electron tears down the main
-    // process's node env aborts the WHOLE app from inside the native addon (SIGABRT in
-    // Napi::ThreadSafeFunction::CallJS) — see SpeechService.shutdown. It needs its own budget
-    // because the 1500ms cap above is shorter than a transcription, and it costs nothing at
-    // all when dictation is idle, which is nearly always.
-    .then(() => speechService.shutdown())
+    // process's node env aborts the native addon (SIGABRT in Napi::ThreadSafeFunction::CallJS),
+    // so shutdown gets a bounded second pass. A native addon that never settles must not keep the
+    // whole application process alive after the user has already chosen Quit.
+    .then(() => settleShutdownWithin(speechService.shutdown()))
+    .then((result) => {
+      if (result !== 'completed') console.warn('[shutdown] speech service did not stop cleanly.')
+    })
     .finally(() => app.quit())
 })

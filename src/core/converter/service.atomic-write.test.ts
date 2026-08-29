@@ -152,8 +152,10 @@ describe('ConverterService atomic output publication', () => {
     expect(new Set(tempPaths).size, `writers shared ${tempPaths.join(' and ')}`).toBe(2)
     const settled = await waitForItems(service, items.map((item) => item.id))
     expect(settled.map((item) => item.status)).toEqual(['done', 'done'])
-    expect(['alpha\n', 'beta\n']).toContain(await readFile(destination, 'utf8'))
-    await expectOnlyDestination(destDir, destination)
+    expect(await readFile(destination, 'utf8')).toBe('prior\n')
+    expect(await readFile(items[0].destPath, 'utf8')).toBe('alpha\n')
+    expect(await readFile(items[1].destPath, 'utf8')).toBe('beta\n')
+    expect((await readdir(destDir)).sort()).toEqual([basename(destination), basename(items[0].destPath), basename(items[1].destPath)].sort())
   })
 
   it('retries an occupied temp name and never cleans a path it failed to own', async () => {
@@ -188,7 +190,7 @@ describe('ConverterService atomic output publication', () => {
     await expect(access(destination)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  it('atomically sends one unapproved same-destination writer back to the overwrite gate', async () => {
+  it('reserves distinct destinations for concurrent unapproved writers', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
     const first = await source('first', 'same.txt', 'one\r\n')
     const second = await source('second', 'same.txt', 'two\r\n')
@@ -219,14 +221,10 @@ describe('ConverterService atomic output publication', () => {
     }
 
     const settled = await waitForItems(service, items.map((item) => item.id))
-    expect(settled.map((item) => item.status).sort()).toEqual(['done', 'needs-confirm'])
-    const waiting = settled.find((item) => item.status === 'needs-confirm')!
-    expect(waiting.confirmReasons).toEqual(['overwrite'])
-    const done = settled.find((item) => item.status === 'done')!
-    const expectedOutput = done.sourcePath === first ? 'one\n' : done.sourcePath === second ? 'two\n' : undefined
-    expect(expectedOutput).toBeDefined()
-    expect(await readFile(destination, 'utf8')).toBe(expectedOutput)
-    await expectOnlyDestination(destDir, destination)
+    expect(settled.map((item) => item.status).sort()).toEqual(['done', 'done'])
+    expect(new Set(items.map((item) => item.destPath)).size).toBe(2)
+    expect(await readFile(items[0].destPath, 'utf8')).toBe('one\n')
+    expect(await readFile(items[1].destPath, 'utf8')).toBe('two\n')
   })
 
   it('reports post-publish temp cleanup trouble as a warning without lying that publication failed', async () => {
@@ -286,11 +284,12 @@ describe('ConverterService atomic output publication', () => {
     await writeFile(destination, 'sentinel\n', 'utf8')
     const service = new ConverterService({ userDataDir: join(root, 'data') })
     const [item] = await enqueue(service, [input], destDir, 'text-to-lf', true)
+    ;(item as ConvertQueueItem & { overwriteAllowed?: boolean }).overwriteAllowed = true
 
     const realRename = fs.rename.bind(fs)
     let outputTemp = ''
     vi.spyOn(fs, 'rename').mockImplementation((async (from: never, to: never) => {
-      if (String(to) === destination) {
+      if (String(to) === item.destPath) {
         outputTemp = String(from)
         throw errno('ENOSPC')
       }
@@ -315,11 +314,12 @@ describe('ConverterService atomic output publication', () => {
     await writeFile(destination, 'sentinel\n', 'utf8')
     const service = new ConverterService({ userDataDir: join(root, 'data') })
     const [item] = await enqueue(service, [input], destDir, 'text-to-lf', true)
+    ;(item as ConvertQueueItem & { overwriteAllowed?: boolean }).overwriteAllowed = true
 
     const realRename = fs.rename.bind(fs)
     let outputTemp = ''
     vi.spyOn(fs, 'rename').mockImplementation((async (from: never, to: never) => {
-      if (String(to) === destination) {
+      if (String(to) === item.destPath) {
         outputTemp = String(from)
         throw errno('ENOSPC')
       }

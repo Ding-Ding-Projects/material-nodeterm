@@ -144,6 +144,7 @@ import { GitHubWorkItemAttachmentDialog } from '../nodes/GitHubWorkItemAttachmen
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import TimerNode from '../nodes/TimerNode'
 import AlarmClockNode from '../nodes/AlarmClockNode'
+import TriggerNode from '../nodes/TriggerNode'
 import {
   loopMessageId,
   loopRunDue,
@@ -510,6 +511,12 @@ import {
   writeExplorerPinned,
   type ExplorerShowAction
 } from '../lib/explorerPin'
+import {
+  EXPLORER_PIN_HINT_TEXT,
+  readSeenExplorerPinHint,
+  shouldShowExplorerPinHint,
+  writeSeenExplorerPinHint
+} from '../lib/explorerPinHint'
 import { useProjects } from '../state/projects'
 import { useGitHubIssues } from '../state/githubIssues'
 import { useAgentStatus } from '../state/agentStatus'
@@ -739,6 +746,7 @@ import {
   createNativeLoopNode,
   createTimerNode,
   createAlarmClockNode,
+  createTriggerNode,
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createAuthenticatorNode,
@@ -1513,8 +1521,26 @@ export function Canvas() {
     open: false
   }))
   const explorerOpen = explorerIsOpen(explorer)
+  const explorerStateRef = useRef(explorer)
+  explorerStateRef.current = explorer
+  const explorerOpenedFileRef = useRef(false)
   const showExplorer = useCallback((action: ExplorerShowAction) => {
-    setExplorer((s) => ({ ...s, ...nextExplorerShow(s, action) }))
+    const current = explorerStateRef.current
+    const next = { ...current, ...nextExplorerShow(current, action) }
+    const wasOpen = explorerIsOpen(current)
+    const isOpenAfter = explorerIsOpen(next)
+    if (!wasOpen && isOpenAfter) explorerOpenedFileRef.current = false
+    if (shouldShowExplorerPinHint({
+      wasOpen,
+      isOpenAfter,
+      pinned: current.pinned,
+      openedFile: explorerOpenedFileRef.current,
+      seen: readSeenExplorerPinHint()
+    })) {
+      writeSeenExplorerPinHint()
+      setNotice({ kind: 'info', text: EXPLORER_PIN_HINT_TEXT })
+    }
+    setExplorer(next)
   }, [])
   const toggleExplorerPin = useCallback(() => {
     setExplorer((s) => {
@@ -2065,12 +2091,17 @@ export function Canvas() {
     const restored = nodesRef.current.map((node) => {
       const geometry = prior.nodeGeometry.get(node.id)
       if (!geometry) return node
+      const collapsed = geometry.collapsed ?? node.data.collapsed ?? false
+      const height = collapsed ? COLLAPSED_HEIGHT : geometry.size.height
       return {
         ...node,
         position: { ...geometry.position },
-        size: { ...geometry.size },
+        width: geometry.size.width,
+        height,
+        measured: undefined,
+        style: { ...node.style, width: geometry.size.width, height },
         ...(geometry.parentId ? { parentId: geometry.parentId } : { parentId: undefined }),
-        ...(geometry.collapsed === undefined ? {} : { collapsed: geometry.collapsed })
+        data: { ...node.data, collapsed, expandedHeight: geometry.size.height }
       }
     })
     setNodes(restored)
@@ -2096,9 +2127,14 @@ export function Canvas() {
     const nodeGeometry = new Map(
       nodesRef.current.map((node) => [node.id, {
         position: { ...node.position },
-        size: { width: node.size.width, height: node.size.height },
+        size: {
+          width: node.measured?.width ?? node.width ?? 0,
+          height: node.data.collapsed
+            ? (node.data.expandedHeight ?? node.measured?.height ?? node.height ?? 0)
+            : (node.measured?.height ?? node.height ?? 0)
+        },
         ...(node.parentId ? { parentId: node.parentId } : {}),
-        ...(node.collapsed !== undefined ? { collapsed: node.collapsed } : {})
+        ...(node.data.collapsed !== undefined ? { collapsed: node.data.collapsed } : {})
       }])
     )
     scheduledPlacementRef.current = { key, target, nodeGeometry, viewport: { ...viewportRef.current } }
@@ -2315,6 +2351,7 @@ export function Canvas() {
       scheduler: withNodeBoundary(NativeLoopNode),
       timer: withNodeBoundary(TimerNode),
       alarm: withNodeBoundary(AlarmClockNode),
+      trigger: withNodeBoundary(TriggerNode),
       dino: withNodeBoundary(DinoNode),
       'recovery-game': withNodeBoundary(RecoveryGameNode),
       photo: withNodeBoundary(PhotoNode),
@@ -5892,6 +5929,18 @@ export function Canvas() {
     [setNodes, markDirty, emptyNodePos]
   )
 
+  const addTrigger = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createTriggerNode(ns.length, center ?? emptyNodePos())
+        const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
+        return appended.nodes
+      })
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
   /** Add a directory-listing node rooted at the active project or bound group folder. */
   const addFiles = useCallback(
     (center?: { x: number; y: number }, groupId?: string) => {
@@ -6008,6 +6057,7 @@ export function Canvas() {
             if (catalogEntry.id === 'recovery-game') return createRecoveryGameNode(index, center)
             if (catalogEntry.id === 'loop') return createNativeLoopNode(index, center)
             if (catalogEntry.id === 'alarm') return createAlarmClockNode(index, center)
+            if (catalogEntry.id === 'trigger') return createTriggerNode(index, center)
             if (catalogEntry.id === 'nsis') return createNsisNode(index, center)
             if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
             if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
@@ -9654,9 +9704,12 @@ export function Canvas() {
     if (!name) return
     const now = Date.now()
     const current = useProjects.getState().getProject(projectId)?.savedLayouts ?? []
+    const project = useProjects.getState().getProject(projectId)
+    if (!project) return
     const layout = captureSavedLayout(flowToNodeStates(nodesRef.current), viewportRef.current, {
       id: crypto.randomUUID(),
       name,
+      canvasId: projectCanvasView(project).id,
       createdAt: now,
       updatedAt: now
     })
@@ -10622,6 +10675,7 @@ export function Canvas() {
       'node.newAgent.opencode': () => { addAgentNode('opencode'); return true },
       'node.newAgent.grok': () => { addAgentNode('grok'); return true },
       'node.newAgent.copilot': () => { addAgentNode('copilot'); return true },
+      'node.newAgent.devin': () => { addAgentNode('devin'); return true },
       'node.newSticky': () => { addSticky(); return true },
       'node.newBrowser': () => { addBrowser(); return true },
       // Opening the URL prompt IS claiming the chord — a cancelled prompt creates nothing, but the
@@ -11779,6 +11833,11 @@ export function Canvas() {
           onClick: () => addAlarmClock(at, groupId)
         },
         {
+          label: 'New Trigger',
+          icon: <span aria-hidden="true">⚡</span>,
+          onClick: () => addTrigger(at, groupId)
+        },
+        {
           label: 'New authenticator',
           icon: <IconLock />,
           onClick: () => addAuthenticator(at, groupId)
@@ -11854,6 +11913,7 @@ export function Canvas() {
       addNativeLoop,
       addTimer,
       addAlarmClock,
+      addTrigger,
       addToExistingGroup,
       groupSelection
     ]
@@ -12030,6 +12090,11 @@ export function Canvas() {
               onClick: () => addNativeLoop(at)
             },
             {
+              label: 'New Trigger',
+              icon: <span aria-hidden="true">⚡</span>,
+              onClick: () => addTrigger(at)
+            },
+            {
               label: 'New authenticator',
               icon: <IconLock />,
               onClick: () => addAuthenticator(at)
@@ -12186,6 +12251,7 @@ export function Canvas() {
       addNativeLoop,
       addTimer,
       addAlarmClock,
+      addTrigger,
       addDino,
       addBrowser,
       openFileDialog,
@@ -17033,6 +17099,13 @@ export function Canvas() {
             run: () => addAlarmClock()
           },
           {
+            id: 'new-trigger',
+            label: 'New Trigger',
+            hint: 'cron interval once local consent payload target history',
+            icon: <span aria-hidden="true">⚡</span>,
+            run: () => addTrigger()
+          },
+          {
             id: 'new-authenticator',
             label: 'New authenticator',
             icon: <IconLock />,
@@ -17305,6 +17378,22 @@ export function Canvas() {
         secondaryLabel: 'Open in Settings'
       },
       {
+        id: 'setting-open-markdown-preview',
+        label: 'Open Markdown files in preview',
+        hint: 'md markdown mdown mkd rendered editor default',
+        section: 'Settings',
+        icon: <IconEditor />,
+        control: {
+          type: 'toggle',
+          checked: s.openMarkdownPreview,
+          ariaLabel: 'Open Markdown files in preview',
+          onToggle: (v) => update({ openMarkdownPreview: v })
+        },
+        run: () => update({ openMarkdownPreview: !s.openMarkdownPreview }),
+        onSecondary: () => openSettingsTo('behavior', 'Open Markdown in preview'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
         id: 'setting-snap-to-grid',
         label: 'Snap nodes to the grid while dragging',
         section: 'Settings',
@@ -17471,7 +17560,8 @@ export function Canvas() {
     addTorrent,
     addNativeLoop,
     addTimer,
-    addAlarmClock,
+      addAlarmClock,
+      addTrigger,
     addDino,
     addWebView,
     addBrowser,
@@ -18878,7 +18968,10 @@ export function Canvas() {
       {explorerOpen && (
         <ExplorerPanel
           onClose={() => showExplorer('close')}
-          onOpenFile={(path, isSsh) => openFile(path, undefined, isSsh)}
+          onOpenFile={(path, isSsh) => {
+            explorerOpenedFileRef.current = true
+            openFile(path, undefined, isSsh)
+          }}
           onAgentNodeDrop={openAgentAtExplorerFolder}
           onOpenTerminalAtFolder={(folder) => openTerminalAtExplorerFolder(folder)}
           keyboardAgentNodeId={explorerAgentNodeId}

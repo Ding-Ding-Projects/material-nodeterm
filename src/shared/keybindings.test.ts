@@ -59,18 +59,21 @@ describe('registry invariants', () => {
   it('pins the WHOLE table — every row PR 2 will dispatch on, in source order', () => {
     // Source order is contractual (first match wins in the resolver), so the array order is
     // asserted too. A dropped flag — allowInTerminal above all — reds this test.
-    const table = COMMAND_DEFINITIONS.map((d) => ({
-      id: d.id,
-      title: d.title,
-      group: d.group,
-      scope: d.scope,
-      darwin: d.defaultBindings.darwin,
-      other: d.defaultBindings.other,
-      allowWhileTyping: d.allowWhileTyping,
-      allowInTerminal: d.allowInTerminal,
-      allowBareKey: d.allowBareKey,
-      allowHoldChord: d.allowHoldChord
-    }))
+    const table = COMMAND_DEFINITIONS.map((d) => {
+      const row: Record<string, unknown> = {
+        id: d.id,
+        title: d.title,
+        group: d.group,
+        scope: d.scope,
+        darwin: d.defaultBindings.darwin,
+        other: d.defaultBindings.other
+      }
+      if (d.allowWhileTyping !== undefined) row.allowWhileTyping = d.allowWhileTyping
+      if (d.allowInTerminal !== undefined) row.allowInTerminal = d.allowInTerminal
+      if (d.allowBareKey !== undefined) row.allowBareKey = d.allowBareKey
+      if (d.allowHoldChord !== undefined) row.allowHoldChord = d.allowHoldChord
+      return row
+    })
     expect(table).toEqual([
       { id: 'app.commandPalette', title: 'Command palette', group: 'General', scope: 'app',
         darwin: ['Cmd+K'], other: ['Cmd+K'], allowInTerminal: true },
@@ -122,6 +125,8 @@ describe('registry invariants', () => {
       { id: 'node.newAgent.grok', title: 'New Grok node', group: 'Nodes', scope: 'canvas',
         darwin: [], other: [] },
       { id: 'node.newAgent.copilot', title: 'New GitHub Copilot node', group: 'Nodes',
+        scope: 'canvas', darwin: [], other: [] },
+      { id: 'node.newAgent.devin', title: 'New Devin node', group: 'Nodes',
         scope: 'canvas', darwin: [], other: [] },
       { id: 'node.newSticky', title: 'New sticky note', group: 'Nodes', scope: 'canvas',
         darwin: [], other: [] },
@@ -203,7 +208,7 @@ describe('registry invariants', () => {
       'node.newDino',
       'node.newFile'
     ]
-    expect(added).toHaveLength(11)
+    expect(added).toHaveLength(12)
     for (const id of added) {
       const d = COMMANDS_BY_ID.get(id as CommandId)
       expect(d, id).toBeDefined()

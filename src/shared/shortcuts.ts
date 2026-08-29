@@ -80,35 +80,33 @@ export interface ShortcutDef {
   allowInTerminal?: boolean
 }
 
-// Defaults are stored in the canonical `Ctrl+…` notation (see shared/shortcut.ts): `Ctrl` still
-// means the platform primary modifier at match time (⌘ for a Server Edition browser tab on a real
-// Mac), so these are the same chords as the pre-rewire `Cmd+…` strings — only the canonical
-// spelling changed. Pre-rewire settings.json values keep working through the parse-only alias.
+// Defaults are stored in the canonical `Cmd+…` notation (see shared/shortcut.ts). Pre-rewire
+// settings.json values using `Command+…` remain parseable as aliases.
 export const SHORTCUT_DEFS: ShortcutDef[] = [
-  { id: 'commandPalette', group: 'General', label: 'Command palette', default: 'Ctrl+K', keywords: ['command', 'palette', 'quick', 'open'], scope: 'app', allowInTerminal: true },
-  { id: 'settings', group: 'General', label: 'Settings', default: 'Ctrl+,', keywords: ['settings', 'preferences', 'open'], scope: 'app', allowInTerminal: true },
-  { id: 'shortcutsPanel', group: 'General', label: 'Shortcuts panel', default: 'Ctrl+/', keywords: ['shortcuts', 'panel', 'help', 'reference'], scope: 'app', allowInTerminal: true },
-  { id: 'undo', group: 'General', label: 'Undo', default: 'Ctrl+Z', keywords: ['undo', 'revert'], scope: 'canvas' },
-  { id: 'redo', group: 'General', label: 'Redo', default: 'Ctrl+Shift+Z', keywords: ['redo', 'forward', 'y'], scope: 'canvas' },
+  { id: 'commandPalette', group: 'General', label: 'Command palette', default: 'Cmd+K', keywords: ['command', 'palette', 'quick', 'open'], scope: 'app', allowInTerminal: true },
+  { id: 'settings', group: 'General', label: 'Settings', default: 'Cmd+,', keywords: ['settings', 'preferences', 'open'], scope: 'app', allowInTerminal: true },
+  { id: 'shortcutsPanel', group: 'General', label: 'Shortcuts panel', default: 'Cmd+/', keywords: ['shortcuts', 'panel', 'help', 'reference'], scope: 'app', allowInTerminal: true },
+  { id: 'undo', group: 'General', label: 'Undo', default: 'Cmd+Z', keywords: ['undo', 'revert'], scope: 'canvas' },
+  { id: 'redo', group: 'General', label: 'Redo', default: 'Cmd+Shift+Z', keywords: ['redo', 'forward', 'y'], scope: 'canvas' },
   // Camera history (breadcrumb trail), not node-array history. `[`/`]` are the literal keys
   // `e.key` reports on every layout tested — a canonical word-form spelling does not exist for
   // brackets (shortcut.ts's KEY_ALIASES only covers Comma/Slash/Period), so the combo string
-  // spells the character itself, exactly like the existing Ctrl+, and Ctrl+/ defaults above.
-  { id: 'goBack', group: 'Canvas', label: 'Go back', default: 'Ctrl+[', keywords: ['back', 'breadcrumb', 'navigate', 'history'], scope: 'canvas' },
-  { id: 'goForward', group: 'Canvas', label: 'Go forward', default: 'Ctrl+]', keywords: ['forward', 'breadcrumb', 'navigate', 'history'], scope: 'canvas' },
-  { id: 'newTerminal', group: 'Canvas', label: 'New terminal', default: 'Ctrl+T', keywords: ['terminal', 'new', 'create', 'node'], scope: 'canvas' },
-  { id: 'newAgent', group: 'Canvas', label: 'New agent', default: 'Ctrl+Shift+C', keywords: ['agent', 'claude', 'codex', 'gemini', 'new', 'add'], scope: 'canvas' },
-  { id: 'closeNode', group: 'Canvas', label: 'Close selected node', default: 'Ctrl+W', keywords: ['close', 'node', 'window'], scope: 'app', allowInTerminal: true, allowWhileTyping: true },
-  { id: 'reopenLastClosed', group: 'General', label: 'Reopen last closed', default: 'Ctrl+Shift+T', keywords: ['reopen', 'undo', 'closed', 'restore', 'tab'], scope: 'app', allowInTerminal: true },
-  { id: 'toggleExplorer', group: 'Canvas', label: 'Toggle explorer', default: 'Ctrl+Shift+E', keywords: ['explorer', 'files', 'sidebar'], scope: 'app', allowInTerminal: true },
-  { id: 'toggleSourceControl', group: 'Source Control', label: 'Open Source Control', default: 'Ctrl+Shift+G', keywords: ['source', 'control', 'git', 'scm'], scope: 'app', allowInTerminal: true },
-  { id: 'toggleViewMode', group: 'Canvas', label: 'Toggle view mode', default: 'Ctrl+Shift+B', keywords: ['view', 'mode', 'canvas', 'kanban', 'board'], scope: 'app', allowInTerminal: true },
-  { id: 'toggleSessionsPin', group: 'Canvas', label: 'Pin sessions sidebar', default: 'Ctrl+Shift+L', keywords: ['sessions', 'pin', 'sidebar', 'collapse'], scope: 'app', allowInTerminal: true },
-  { id: 'toggleFocusMode', group: 'Canvas', label: 'Toggle focus mode', default: 'Ctrl+Shift+F', keywords: ['focus', 'mode', 'fullscreen', 'zen', 'zoom'], scope: 'canvas' },
-  { id: 'toggleMarkdown', group: 'Terminal', label: 'Toggle markdown view', default: 'Ctrl+M', keywords: ['markdown', 'md', 'toggle', 'view'], scope: 'app', allowInTerminal: true, allowWhileTyping: true },
-  { id: 'findInTerminal', group: 'Terminal', label: 'Find in terminal', default: 'Ctrl+F', keywords: ['find', 'search', 'terminal'], scope: 'terminal', allowInTerminal: true },
-  { id: 'commitStaged', group: 'Source Control', label: 'Commit staged changes', default: 'Ctrl+Enter', keywords: ['commit', 'staged', 'push', 'enter'], scope: 'scm', allowWhileTyping: true },
-  { id: 'copySelection', group: 'Terminal', label: 'Copy selection (markdown view)', default: 'Ctrl+C', keywords: ['copy', 'selection', 'markdown', 'clipboard'], scope: 'canvas' },
+  // spells the character itself, exactly like the existing Cmd+, and Cmd+/ defaults above.
+  { id: 'goBack', group: 'Canvas', label: 'Go back', default: 'Cmd+[', keywords: ['back', 'breadcrumb', 'navigate', 'history'], scope: 'canvas' },
+  { id: 'goForward', group: 'Canvas', label: 'Go forward', default: 'Cmd+]', keywords: ['forward', 'breadcrumb', 'navigate', 'history'], scope: 'canvas' },
+  { id: 'newTerminal', group: 'Canvas', label: 'New terminal', default: 'Cmd+T', keywords: ['terminal', 'new', 'create', 'node'], scope: 'canvas' },
+  { id: 'newAgent', group: 'Canvas', label: 'New agent', default: 'Cmd+Shift+C', keywords: ['agent', 'claude', 'codex', 'gemini', 'new', 'add'], scope: 'canvas' },
+  { id: 'closeNode', group: 'Canvas', label: 'Close selected node', default: 'Cmd+W', keywords: ['close', 'node', 'window'], scope: 'app', allowInTerminal: true, allowWhileTyping: true },
+  { id: 'reopenLastClosed', group: 'General', label: 'Reopen last closed', default: 'Cmd+Shift+T', keywords: ['reopen', 'undo', 'closed', 'restore', 'tab'], scope: 'app', allowInTerminal: true },
+  { id: 'toggleExplorer', group: 'Canvas', label: 'Toggle explorer', default: 'Cmd+Shift+E', keywords: ['explorer', 'files', 'sidebar'], scope: 'app', allowInTerminal: true },
+  { id: 'toggleSourceControl', group: 'Source Control', label: 'Open Source Control', default: 'Cmd+Shift+G', keywords: ['source', 'control', 'git', 'scm'], scope: 'app', allowInTerminal: true },
+  { id: 'toggleViewMode', group: 'Canvas', label: 'Toggle view mode', default: 'Cmd+Shift+B', keywords: ['view', 'mode', 'canvas', 'kanban', 'board'], scope: 'app', allowInTerminal: true },
+  { id: 'toggleSessionsPin', group: 'Canvas', label: 'Pin sessions sidebar', default: 'Cmd+Shift+L', keywords: ['sessions', 'pin', 'sidebar', 'collapse'], scope: 'app', allowInTerminal: true },
+  { id: 'toggleFocusMode', group: 'Canvas', label: 'Toggle focus mode', default: 'Cmd+Shift+F', keywords: ['focus', 'mode', 'fullscreen', 'zen', 'zoom'], scope: 'canvas' },
+  { id: 'toggleMarkdown', group: 'Terminal', label: 'Toggle markdown view', default: 'Cmd+M', keywords: ['markdown', 'md', 'toggle', 'view'], scope: 'app', allowInTerminal: true, allowWhileTyping: true },
+  { id: 'findInTerminal', group: 'Terminal', label: 'Find in terminal', default: 'Cmd+F', keywords: ['find', 'search', 'terminal'], scope: 'terminal', allowInTerminal: true },
+  { id: 'commitStaged', group: 'Source Control', label: 'Commit staged changes', default: 'Cmd+Enter', keywords: ['commit', 'staged', 'push', 'enter'], scope: 'scm', allowWhileTyping: true },
+  { id: 'copySelection', group: 'Terminal', label: 'Copy selection (markdown view)', default: 'Cmd+C', keywords: ['copy', 'selection', 'markdown', 'clipboard'], scope: 'canvas' },
 ]
 
 /** The shipped map — seeds `DEFAULT_SETTINGS.shortcuts` and the section's Reset buttons. */

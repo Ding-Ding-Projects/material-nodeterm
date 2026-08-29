@@ -355,6 +355,10 @@ export function wireAgentStatus(
       nodeSubagents.delete(nodeId)
     }
   }
+  // The server has no desktop PtyManager subscription, so its own cast path is the lifecycle
+  // acknowledgement for a destroyed or recycled node. Keep the optional confirmed-end callback
+  // as the stronger desktop-equivalent path when a manager provides it.
+  platform.on(IPC.ptyDestroy, (nodeId: string) => releaseNodeTails(nodeId))
   opts.onSessionEnded?.(releaseNodeTails)
 
   return { contextTail, geminiContextTail }
