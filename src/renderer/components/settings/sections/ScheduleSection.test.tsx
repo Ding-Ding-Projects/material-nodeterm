@@ -3,9 +3,11 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '@shared/types'
-import { newScheduleRule } from '@shared/scheduled-settings'
+import { newScheduleRule, type ScheduleRule } from '@shared/scheduled-settings'
 import { useSettings } from '../../../state/settings'
 import { useScheduledSettings } from '../../../state/scheduledSettings'
+import { usePersonalVocabulary } from '../../../state/personalVocabulary'
+import { useSchoolMode } from '../../../state/schoolMode'
 import { ScheduleSection } from './ScheduleSection'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -62,7 +64,7 @@ describe('ScheduleSection Home Assistant credential actions', () => {
 
   const setStored = (stored: boolean): void => {
     useScheduledSettings.setState({
-      file: { version: 1, timezone: 'UTC', rules: [RULE] },
+      file: { version: 2, timezone: 'UTC', rules: [RULE] },
       hydrated: true,
       loadError: null,
       saveError: null,
@@ -83,7 +85,7 @@ describe('ScheduleSection Home Assistant credential actions', () => {
       scheduledSettings: {
         load: vi.fn(async () => ({
           ok: true,
-          file: { version: 1, timezone: 'UTC', rules: [RULE] },
+          file: { version: 2, timezone: 'UTC', rules: [RULE] },
           error: null
         })),
         activeState: vi.fn(async () => ({ computedAtMs: 1, active: null, sources: {} })),
@@ -98,6 +100,7 @@ describe('ScheduleSection Home Assistant credential actions', () => {
       base: DEFAULT_SETTINGS,
       hydrated: true
     })
+    useSchoolMode.setState({ enabled: false, hydrated: true })
     setStored(true)
   })
 
@@ -180,7 +183,7 @@ describe('ScheduleSection Home Assistant credential actions', () => {
 
   it('publishes a pending owning rule before its immediate token mutation', async () => {
     setStored(false)
-    const next = { version: 1 as const, timezone: 'UTC', rules: [RULE] }
+    const next = { version: 2 as const, timezone: 'UTC', rules: [RULE] }
     useScheduledSettings.getState().update(next)
 
     await expect(
@@ -222,5 +225,64 @@ describe('ScheduleSection Home Assistant credential actions', () => {
       'The schedule was saved, but related credentials could not be fully cleared.'
     )
     expect(host.textContent).not.toContain('Could not save:')
+  })
+
+  it('omits scheduled language and funny-level controls until School mode is proven off', async () => {
+    const scheduled: ScheduleRule = {
+      ...RULE,
+      source: { kind: 'local' as const },
+      values: { funnyLevelEn: 5, funnyLevelYue: 5 }
+    }
+    useScheduledSettings.setState((state) => ({
+      ...state,
+      file: { version: 2 as const, timezone: 'UTC', rules: [scheduled] }
+    }))
+    useSchoolMode.setState({ enabled: true, hydrated: true })
+    await mount()
+    expect(host.textContent).not.toContain('English funny level')
+    expect(host.textContent).not.toContain('Cantonese funny level')
+    expect(host.textContent).not.toContain('Language mode')
+
+    act(() => useSchoolMode.setState({ enabled: false, hydrated: false }))
+    expect(host.textContent).not.toContain('English funny level')
+    expect(host.textContent).not.toContain('Cantonese funny level')
+
+    act(() => useSchoolMode.setState({ enabled: false, hydrated: true }))
+    expect(host.textContent).toContain('English funny level')
+    expect(host.textContent).toContain('Cantonese funny level')
+  })
+
+  it('maps helper-owned copy in visible and accessible fields while preserving rule facts', async () => {
+    usePersonalVocabulary.setState({
+      entries: {
+        Schedule: 'Agenda',
+        'Rule name': 'Name this rule',
+        Remove: 'Take away',
+        'English funny level': 'English tone',
+        'Cantonese funny level': 'Cantonese tone'
+      },
+      status: 'loaded',
+      entryCount: 5,
+      loadedAt: Date.now(),
+      lastError: null
+    })
+    const scheduled: ScheduleRule = {
+      ...RULE,
+      source: { kind: 'local' as const },
+      values: { funnyLevelEn: 5, funnyLevelYue: 5 }
+    }
+    useScheduledSettings.setState((state) => ({
+      ...state,
+      file: { ...state.file, rules: [scheduled] }
+    }))
+    await mount()
+
+    expect(host.querySelector('h2')?.textContent).toBe('Agenda')
+    expect(host.querySelector('input[aria-label="Name this rule"]')).toBeTruthy()
+    expect(host.textContent).toContain('English tone')
+    expect(host.textContent).toContain('Cantonese tone')
+    const remove = [...host.querySelectorAll('button')].find((candidate) => candidate.getAttribute('aria-label')?.includes('Take away'))
+    expect(remove?.getAttribute('aria-label')).toBe('Take away Evening lights')
+    expect(host.querySelector('input[aria-label="Name this rule"]')?.getAttribute('value')).toBe('Evening lights')
   })
 })
