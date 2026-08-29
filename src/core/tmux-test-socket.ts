@@ -32,7 +32,10 @@ export const MKDTEMP_SUFFIX_LEN = 6
 
 /** Where tmux binds for `-L <socket>` under `TMUX_TMPDIR=<dir>`. */
 export function tmuxSocketPath(dir: string, uid: number, socket: string): string {
-  return path.join(dir, `tmux-${uid}`, socket)
+  // This helper describes tmux's POSIX socket layout, even when a Windows test runner is
+  // exercising the pure path arithmetic. Using the host separator here turns the same fixture
+  // into backslash paths and makes the socket contract appear platform-dependent.
+  return path.posix.join(dir, `tmux-${uid}`, socket)
 }
 
 /**

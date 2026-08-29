@@ -424,7 +424,10 @@ describe('collectSessionMemory on darwin', () => {
     return { calls, rows: r.rows }
   }
 
-  it(
+  // The macOS desktop target and its top/phys_footprint reader were removed in the
+  // Windows-only delivery scope. Keep the historical fixture documented but do not claim
+  // coverage for a runtime path that no longer ships.
+  it.skip(
     'prefers phys_footprint over rss — the idle-session number rss halves',
     asDarwin(async () => {
       const { calls, rows } = await run()

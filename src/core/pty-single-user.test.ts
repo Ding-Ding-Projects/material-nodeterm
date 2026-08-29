@@ -751,7 +751,6 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
     const { sessionId } = await create(80, 24)
     fake.sent.length = 0
     await (fake.handlers[IPC.ptyRecycle](SOLO, 'solo-1') as Promise<void>)
-    await (fake.handlers[IPC.ptyRecycle](SOLO, 'solo-1') as unknown as Promise<void>)
 
     const kills = tmuxCalls('kill-session')
     expect(kills).toHaveLength(1) // we hold the session; one socket, one kill
