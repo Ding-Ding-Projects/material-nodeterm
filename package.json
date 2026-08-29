@@ -268,6 +268,9 @@
   "overrides": {
     "monaco-editor": {
       "dompurify": "$dompurify"
+    },
+    "bittorrent-tracker": {
+      "ip": "npm:ipaddr.js@2.5.0"
     }
   },
   "devDependencies": {
