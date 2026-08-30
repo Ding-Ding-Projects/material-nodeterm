@@ -42,6 +42,19 @@ describe('dim sum code name', () => {
     expect(got?.id).toBe('hk-dish-0002')
   })
 
+  it('skips a dish when a prior release records its catalog name without the id', async () => {
+    const dishes = [dish(1), dish(2)]
+    const got = await resolveCodeName({
+      fetchImpl: fakeFetch(dishes),
+      releaseBodies: ['**Dish 1 · 點心1**']
+    })
+    expect(got?.id).toBe('hk-dish-0002')
+  })
+
+  it('treats a failed prior-release history read as unavailable, not as a first release', async () => {
+    expect(await resolveCodeName({ releaseBodies: null, fetchImpl: fakeFetch([dish(1)]) })).toBeNull()
+  })
+
   // Fail-open is the whole safety of this feature: a release must never be blocked, delayed or
   // renamed because a picture could not be fetched.
   it('returns null rather than blocking when the catalog cannot be read', async () => {
@@ -59,6 +72,41 @@ describe('dim sum code name', () => {
     expect(await resolveCodeName({ fetchImpl: counting, maxProbes: 4 })).toBeNull()
     // 4 candidates x 3 volumes is the ceiling — nowhere near 500.
     expect(probes).toBeLessThanOrEqual(12)
+  })
+
+  it('warns and stops at the bounded photo-probe budget', async () => {
+    const warnings = []
+    const dishes = [dish(1, false), dish(2, true)]
+    const got = await resolveCodeName({
+      fetchImpl: fakeFetch(dishes),
+      maxProbes: 1,
+      onPoolExhausted: (details) => warnings.push(details)
+    })
+    expect(got).toBeNull()
+    expect(warnings).toEqual([{ unusedCount: 2, probes: 1, maxProbes: 1 }])
+  })
+
+  it('warns when every catalog dish has already been used', async () => {
+    const warnings = []
+    const got = await resolveCodeName({
+      fetchImpl: fakeFetch([dish(1)]),
+      releaseBodies: ['hk-dish-0001'],
+      onPoolExhausted: (details) => warnings.push(details)
+    })
+    expect(got).toBeNull()
+    expect(warnings).toEqual([{ unusedCount: 0, probes: 0, maxProbes: 8 }])
+  })
+
+  it('uses HEAD probes and does not paginate catalog release assets', async () => {
+    const calls = []
+    const dishes = [dish(1, true)]
+    const fetchImpl = async (url, init = {}) => {
+      calls.push({ url: String(url), method: init.method ?? 'GET' })
+      return fakeFetch(dishes)(url)
+    }
+    const got = await resolveCodeName({ fetchImpl, volumes: ['catalog-v1', 'catalog-v1-part-002'] })
+    expect(got?.id).toBe('hk-dish-0001')
+    expect(calls.filter((call) => !call.url.includes('index.json')).map((call) => call.method)).toEqual(['HEAD'])
   })
 
   it('treats an unreachable volume as no evidence about the next one', async () => {

@@ -68,11 +68,41 @@ export async function readCatalog({ fetchImpl = fetch, timeoutMs = DEFAULT_TIMEO
   }
 }
 
-/** The dish ids a previous release already used, read out of release bodies. */
-export function usedDishIds(releaseBodies) {
+/** Normalize release prose before matching catalog ids or names. */
+function normalizeReleaseText(value) {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/\s+/gu, ' ')
+    .trim()
+}
+
+function containsReleaseToken(text, value) {
+  const needle = normalizeReleaseText(value)
+  if (!needle) return false
+  const start = text.indexOf(needle)
+  if (start < 0) return false
+  const before = text[start - 1]
+  const after = text[start + needle.length]
+  const isWord = (char) => !!char && /[\p{L}\p{N}]/u.test(char)
+  return !isWord(before) && !isWord(after)
+}
+
+/** The catalog ids a previous release already used, read out of release bodies. */
+export function usedDishIds(releaseBodies, catalog = []) {
   const used = new Set()
   for (const body of releaseBodies ?? []) {
     for (const m of String(body ?? '').matchAll(/hk-dish-\d+/gi)) used.add(m[0].toLowerCase())
+  }
+  const priorText = (releaseBodies ?? []).map((body) => normalizeReleaseText(body)).join(' ')
+  for (const dish of catalog) {
+    if (
+      used.has(dish.id.toLowerCase()) ||
+      containsReleaseToken(priorText, dish.nameEn) ||
+      containsReleaseToken(priorText, dish.nameZh)
+    ) {
+      used.add(dish.id.toLowerCase())
+    }
   }
   return used
 }
@@ -89,29 +119,46 @@ export async function resolveCodeName({
   fetchImpl = fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxProbes = 8,
-  volumes = CATALOG_VOLUMES
+  volumes = CATALOG_VOLUMES,
+  onPoolExhausted = () => {}
 } = {}) {
+  // A failed prior-release read must not look like a first release. Omitting the code name is
+  // safer than publishing a duplicate when the history boundary cannot be inspected.
+  if (releaseBodies == null) return null
   const catalog = await readCatalog({ fetchImpl, timeoutMs })
   if (catalog.length === 0) return null
-  const used = usedDishIds(releaseBodies)
+  const used = usedDishIds(releaseBodies, catalog)
+  const warnPoolExhausted = (details) => {
+    try {
+      onPoolExhausted(details)
+    } catch {
+      // Warning output is advisory and must never turn optional code-name resolution into a gate.
+    }
+  }
 
   let probes = 0
+  let unusedCount = 0
   for (const dish of catalog) {
     if (used.has(dish.id.toLowerCase())) continue
-    if (probes >= maxProbes) return null
+    unusedCount++
+    if (probes >= maxProbes) {
+      warnPoolExhausted({ unusedCount, probes, maxProbes })
+      return null
+    }
     probes++
     const assetName = dish.assetPath.split('/').pop()
     if (!assetName) continue
     for (const volume of volumes) {
       const url = `https://github.com/${CATALOG_REPO}/releases/download/${volume}/${assetName}`
       try {
-        const res = await fetchWithTimeout(url, { method: 'GET' }, timeoutMs, fetchImpl)
+        const res = await fetchWithTimeout(url, { method: 'HEAD' }, timeoutMs, fetchImpl)
         if (res.ok) return { ...dish, assetName, assetUrl: url, volume }
       } catch {
         // An unreachable volume is not evidence about the next one.
       }
     }
   }
+  warnPoolExhausted({ unusedCount, probes, maxProbes })
   return null
 }
 
