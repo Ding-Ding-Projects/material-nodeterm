@@ -20,6 +20,8 @@ import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from '
 import type { WhisperModelInfo } from './speech'
 import type { ProjectKanbanGitHub } from './github-issues'
 import type { ProjectIcon } from './project-icon'
+import type { ProviderBinding, ProviderBlueprint } from './provider-accounts'
+import type { ProviderAccountsApi } from './provider-accounts'
 import type { ShortcutMap } from './shortcuts'
 import { DEFAULT_SHORTCUTS } from './shortcuts'
 import { DEFAULT_FUNNY_LEVEL, type FunnyLevel, type LanguageMode } from './i18n/types'
@@ -1299,6 +1301,10 @@ export interface Project {
    * behavior.
    */
   browserProfiles?: BrowserProfile[]
+  /** Portable provider intent only. Credentials and machine-local bindings stay outside project content. */
+  providerBlueprints?: ProviderBlueprint[]
+  /** Runtime machine-local provider links restored from the workspace index. */
+  providerBindings?: ProviderBinding[]
   /** Unified typed links whose source belongs to this project. */
   links?: Link[]
   /** Portable debugging-browser profiles. Local credentials, certificates and runtime state are omitted. */
@@ -4992,6 +4998,7 @@ export interface NodeTerminalApi {
   toylock: ToylockApi
   authenticator: AuthenticatorApi
   passwordManager: PasswordManagerApi
+  providerAccounts: ProviderAccountsApi
   /** Host-owned portal-door entry vault. This is deliberately separate from toy locks. */
   universeDoorEntry: UniverseDoorEntryApi
   /** "Escape to widget" — one node's session in its own always-on-top-configurable window. */

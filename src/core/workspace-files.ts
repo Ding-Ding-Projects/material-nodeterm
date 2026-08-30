@@ -27,6 +27,7 @@ import { sanitizeMultiverseCanvases } from '../shared/multiverse-canvases'
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import { sanitizeProviderBlueprint, validateProviderBlueprint, type ProviderBinding, type ProviderBlueprint } from '../shared/provider-accounts'
 import { loadedAgentBrowserPartition } from '../shared/browser-partition'
 import { validatePortableDoorConstruction } from '../shared/door-construction'
 import { validateCalendarConfig } from '../shared/calendar'
@@ -196,6 +197,8 @@ export interface ProjectFileV1 {
   browserProfiles?: BrowserProfile[]
   /** Safe debugging-browser profiles. Local proxy credentials, certificates and runtime state are omitted. */
   debugBrowserProfiles?: DebugBrowserProfile[]
+  /** Portable provider intent only. Credential values and local bindings are excluded. */
+  providerBlueprints?: ProviderBlueprint[]
 }
 
 /** One workspace.json v3 entry. Exactly one of: `cwd` (local ref), `ssh` (remote ref),
@@ -242,6 +245,8 @@ export interface IndexEntryV3 {
    *  shell / advanced ssh args still survive a restart. Inline (`project`) entries need none: they
    *  live in this same machine-local file already. */
   localExec?: LocalNodeExecMap
+  /** MACHINE-LOCAL provider links, never serialized into project.json. */
+  providerBindings?: ProviderBinding[]
   /**
    * The one-time exec migration has completed for this entry: its shared project file was readable
    * and therefore could be loaded through the strip boundary and rewritten without machine-local
@@ -339,6 +344,7 @@ export function projectToFile(
   const icon = sanitizeProjectIcon(p.icon)
   const links = p.links ?? migrateLinks(p)
   const savedLayouts = validSavedLayouts(p.savedLayouts)
+  const providerBlueprints = validProviderBlueprints(p.providerBlueprints)
   return {
     version: 1,
     rev,
@@ -364,7 +370,8 @@ export function projectToFile(
     ...(p.dinoHighScore ? { dinoHighScore: p.dinoHighScore } : {}),
     ...(p.kanban ? { kanban: p.kanban } : {}),
     ...(p.browserProfiles && p.browserProfiles.length > 0 ? { browserProfiles: p.browserProfiles } : {}),
-    ...(p.debugBrowserProfiles && p.debugBrowserProfiles.length > 0 ? { debugBrowserProfiles: p.debugBrowserProfiles } : {})
+    ...(p.debugBrowserProfiles && p.debugBrowserProfiles.length > 0 ? { debugBrowserProfiles: p.debugBrowserProfiles } : {}),
+    ...(providerBlueprints ? { providerBlueprints } : {})
   }
 }
 
@@ -394,6 +401,13 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
       typeof (p as BrowserProfile).name === 'string' &&
       typeof (p as BrowserProfile).color === 'string'
   )
+  return cleaned.length > 0 ? cleaned : undefined
+}
+
+/** Portable provider intent is hostile shared input too. Invalid rows are dropped individually. */
+export function validProviderBlueprints(v: unknown): ProviderBlueprint[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const cleaned = v.filter((item): item is ProviderBlueprint => validateProviderBlueprint(item)).map(sanitizeProviderBlueprint)
   return cleaned.length > 0 ? cleaned : undefined
 }
 
@@ -536,6 +550,7 @@ export function fileToProject(
      *  WITHOUT them — an adopted/cloned folder, a probe — gets the safe defaults, never the file's
      *  own `shell`/`ssh.extraArgs`. */
     localExec?: LocalNodeExecMap
+    providerBindings?: ProviderBinding[]
   }
 ): Project {
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
@@ -552,6 +567,7 @@ export function fileToProject(
   const icon = sanitizeProjectIcon(f.icon)
   const links = migrateLinks(f)
   const savedLayouts = validSavedLayouts(f.savedLayouts)
+  const providerBlueprints = validProviderBlueprints(f.providerBlueprints)
   return {
     id: base.id,
     name: f.name,
@@ -600,6 +616,8 @@ export function fileToProject(
     ...(validKanban(f.kanban) ? { kanban: f.kanban } : {}),
     ...(browserProfiles ? { browserProfiles } : {}),
     ...(debugBrowserProfiles ? { debugBrowserProfiles } : {}),
+    ...(providerBlueprints ? { providerBlueprints } : {}),
+    ...(base.providerBindings?.length ? { providerBindings: base.providerBindings } : {}),
     ...(base.cwd ? { cwd: base.cwd } : {}),
     ...(base.ssh ? { ssh: base.ssh } : {}),
     ...(base.closed ? { closed: true } : {}),
@@ -700,6 +718,7 @@ export function splitWorkspace(
       ...(p.capabilityAck ? { capabilityAck: p.capabilityAck } : {}),
       ...(p.breadcrumbs?.length ? { breadcrumbs: p.breadcrumbs } : {}),
       ...(p.settingsOverrides ? { settingsOverrides: p.settingsOverrides } : {}),
+      ...(p.providerBindings?.length ? { providerBindings: p.providerBindings } : {}),
     }
     if (p.unavailable) {
       // Placeholder (folder missing / server unreachable at load): its nodes:[] is not real

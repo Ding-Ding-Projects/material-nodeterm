@@ -389,7 +389,7 @@ export class DockerHostManager {
 
   private async lifecycle(hostId: string, action: 'start' | 'stop' | 'restart' | 'pause' | 'unpause', id: string, timeoutSeconds?: number): Promise<void> {
     const resource = safeResource(id, 'container')
-    const args = [action]
+    const args: string[] = [action]
     if (timeoutSeconds !== undefined) {
       if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 0 || timeoutSeconds > 600) throw new Error('The timeout must be a whole number from 0 to 600 seconds.')
       args.push('--time', String(timeoutSeconds))

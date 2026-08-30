@@ -51,6 +51,7 @@ export type ConverterKind =
   | 'xml'
   | 'csv'
   | 'tsv'
+  | 'jsonl'
   | 'text'
   | 'markdown'
   | 'gzip'
@@ -88,6 +89,7 @@ export const CONVERTER_KIND_LABELS: Record<ConverterKind, string> = {
   xml: 'XML',
   csv: 'CSV',
   tsv: 'TSV',
+  jsonl: 'JSON Lines (NDJSON)',
   text: 'Plain text',
   markdown: 'Markdown',
   gzip: 'Gzip',

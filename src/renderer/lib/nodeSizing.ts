@@ -26,6 +26,7 @@ export const NODE_MIN_SIZES: Record<NodeKind, { width: number; height: number }>
   scheduler: { width: 320, height: 220 },
   calendar: { width: 420, height: 320 },
   authenticator: { width: 420, height: 360 },
+  converter: { width: 420, height: 360 },
   annotation: { width: 180, height: 120 },
   shop: { width: 360, height: 260 },
   nsis: { width: 520, height: 420 },

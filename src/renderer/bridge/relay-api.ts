@@ -266,7 +266,7 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
       completeOAuth: () => relayUnsupported('providerAccounts.completeOAuth'),
       cancelOAuth: () => relayUnsupported('providerAccounts.cancelOAuth'),
       onChanged: () => () => undefined
-    }
+    },
     torrent: stub.torrent,
     calendar: stub.calendar,
     // Home Assistant bindings, access tokens, sockets, and entity caches are machine-local. A

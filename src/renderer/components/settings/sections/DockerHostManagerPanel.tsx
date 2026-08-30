@@ -85,7 +85,7 @@ export function DockerHostManagerPanel(): React.JSX.Element {
       setImages(snapshot.images)
       setVolumes(snapshot.volumes)
       setNetworks(snapshot.networks)
-      setStatus(snapshot.verification.reachable ? `Connected to ${snapshot.host.label}.` : snapshot.verification.error ?? 'Docker host is unavailable.')
+      setStatus(snapshot.verification?.reachable ? `Connected to ${snapshot.host.label}.` : snapshot.verification?.error ?? 'Docker host is unavailable.')
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error))
     } finally { setBusy(false) }

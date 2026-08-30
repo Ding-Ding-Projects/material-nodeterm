@@ -79,9 +79,10 @@ export default function ConverterNode({ id, data, selected }: NodeProps<CanvasNo
   const apiRef = useRef(api)
   apiRef.current = api
 
-  const run = useCallback((action: () => Promise<unknown>): void => {
+  const run = useCallback((action: (() => Promise<unknown>) | Promise<unknown>): void => {
     setError(null)
-    void action().catch((cause) => setError(errorText(cause)))
+    const pending = typeof action === 'function' ? action() : action
+    void pending.catch((cause) => setError(errorText(cause)))
   }, [])
 
   const addPaths = useCallback(async (paths: string[]): Promise<void> => {
@@ -250,7 +251,7 @@ export default function ConverterNode({ id, data, selected }: NodeProps<CanvasNo
   }, [api, destination, lossyAcknowledged, pending, selectedAdapter])
 
   const openInEditor = useCallback((path: string): void => {
-    run(api.vscode.open(path).then((result) => {
+    run(() => api.vscode.open(path).then((result) => {
       if (!result.ok) throw new Error(result.error)
       notify('Opened the converted file in VS Code.')
     }))
@@ -306,7 +307,7 @@ export default function ConverterNode({ id, data, selected }: NodeProps<CanvasNo
           </>
         ) : (
           <section>
-            <div className="cv-queue-controls"><button className="sc-btn" type="button" disabled={!queue.length} onClick={() => run(summary.running ? api.converter.pause() : api.converter.start())}>{summary.running ? 'Pause' : 'Start'}</button><label className="cv-concurrency">Parallel <input type="number" min={1} max={6} value={summary.concurrency} onChange={(event) => run(api.converter.setConcurrency(Number(event.target.value)))} /></label><button className="cv-item__link" type="button" onClick={() => run(api.converter.cancelAll())}>Cancel all</button><button className="cv-item__link" type="button" onClick={() => run(api.converter.clearFinished())}>Clear finished</button>{summary.scanning && <span className="cv-scanning">Scanning folder…</span>}</div>
+            <div className="cv-queue-controls"><button className="sc-btn" type="button" disabled={!queue.length} onClick={() => run(() => summary.running ? api.converter.pause() : api.converter.start())}>{summary.running ? 'Pause' : 'Start'}</button><label className="cv-concurrency">Parallel <input type="number" min={1} max={6} value={summary.concurrency} onChange={(event) => run(() => api.converter.setConcurrency(Number(event.target.value)))} /></label><button className="cv-item__link" type="button" onClick={() => run(() => api.converter.cancelAll())}>Cancel all</button><button className="cv-item__link" type="button" onClick={() => run(() => api.converter.clearFinished())}>Clear finished</button>{summary.scanning && <span className="cv-scanning">Scanning folder…</span>}</div>
             <p className="cv-summary-counts">{counts.queued} queued · {counts.running} running · {counts.attention} need attention · {counts.done} done · {counts.failed} failed · {counts.cancelled} cancelled</p>
             {vscodeAvailable === false && <p className="cv-empty-note">VS Code was not found on this machine. Install it or choose Reveal to use the platform file manager.</p>}
             {queue.length === 0 ? <p className="cv-empty-note">Nothing in the queue yet.</p> : <ul className="cv-items">{queue.map((item) => { const pct = item.totalBytes ? Math.round((item.progressBytes / item.totalBytes) * 100) : 0; return <li className={`cv-item cv-item--${item.status}`} key={item.id}><div className="cv-item__row"><MaterialSymbol name={statusIcon(item.status)} size={16} /><span className="cv-item__name" title={item.sourcePath}>{item.sourceName}</span><span className="cv-item__arrow">→</span><span className="cv-item__dest" title={item.destPath}>{item.destPath.split(/[\\/]/).pop()}</span><span className="cv-item__size">{formatBytes(item.sourceBytes)}</span><span className="cv-item__status">{item.status.replace('-', ' ')}</span></div>{item.status === 'running' && <div className="cv-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><div className="cv-progress__bar" style={{ width: `${pct}%` }} /></div>}{item.error && <p className="cv-item__error">{item.error}</p>}{item.status === 'needs-confirm' && <div className="cv-confirm"><span>Review the required confirmation before running.</span><button className="sc-btn" type="button" onClick={() => run(api.converter.resolvePending([item.id], { overwrite: true, lossyAcknowledged: true }))}>Confirm and continue</button></div>}<div className="cv-item__actions">{['queued', 'running', 'paused'].includes(item.status) && <button className="cv-item__link" type="button" onClick={() => run(api.converter.cancelItem(item.id))}>Cancel</button>}{['failed', 'cancelled'].includes(item.status) && <button className="cv-item__link" type="button" onClick={() => run(api.converter.retryItem(item.id))}>Retry</button>}{item.status === 'done' && <><button className="cv-item__link" type="button" disabled={vscodeAvailable !== true} title={vscodeAvailable === false ? 'VS Code was not found on this machine.' : 'Open in VS Code'} onClick={() => openInEditor(item.destPath)}>Open in VS Code</button><button className="cv-item__link" type="button" onClick={() => api.shell.reveal(item.destPath)}>Reveal</button></>}{['done', 'failed', 'cancelled'].includes(item.status) && <button className="cv-item__link" type="button" onClick={() => run(api.converter.removeItem(item.id))}>Remove</button>}</div></li> })}</ul>}
