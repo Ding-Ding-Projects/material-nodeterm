@@ -12,9 +12,16 @@ import {
   type SessionHostRequest,
 } from "../session-host/protocol";
 
-const launcherMocks = vi.hoisted(() => ({
-  resolveSessionHostScript: vi.fn(),
-  spawnSessionHost: vi.fn(),
+type SessionHostLauncherModule = typeof import("./session-host-launcher");
+
+const launcherMocks: {
+  resolveSessionHostScript: ReturnType<typeof vi.fn<SessionHostLauncherModule["resolveSessionHostScript"]>>;
+  prepareSessionHostRuntime: ReturnType<typeof vi.fn<SessionHostLauncherModule["prepareSessionHostRuntime"]>>;
+  spawnSessionHost: ReturnType<typeof vi.fn<SessionHostLauncherModule["spawnSessionHost"]>>;
+} = vi.hoisted(() => ({
+  resolveSessionHostScript: vi.fn<SessionHostLauncherModule["resolveSessionHostScript"]>(),
+  prepareSessionHostRuntime: vi.fn<SessionHostLauncherModule["prepareSessionHostRuntime"]>(),
+  spawnSessionHost: vi.fn<SessionHostLauncherModule["spawnSessionHost"]>(),
 }));
 
 const identityMocks = vi.hoisted(() => ({
@@ -188,6 +195,13 @@ function successSocket(
 beforeEach(() => {
   launcherMocks.resolveSessionHostScript.mockReset();
   launcherMocks.resolveSessionHostScript.mockReturnValue(null);
+  launcherMocks.prepareSessionHostRuntime.mockReset();
+  launcherMocks.prepareSessionHostRuntime.mockImplementation(
+    async ({ scriptPath, executablePath = process.execPath }) => ({
+      executablePath,
+      scriptPath,
+    }),
+  );
   launcherMocks.spawnSessionHost.mockReset();
   identityMocks.readExistingSessionHostIdentity.mockReset();
 });
