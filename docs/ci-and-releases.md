@@ -238,9 +238,13 @@ printed as **missing**, not guessed at. It always includes:
 4. **The unsigned-installer warning** described above.
 5. **The asset list** (installer filename + size), when the packaging step located any.
 6. **A dim-sum code name with an honest public catalog-photo link.** The note generator reads the
-   workflow's already-paginated prior-release bodies before selecting a dish, so a successfully
-   published code name is not reused. The photo remains hosted by the catalog release and is not
-   described as attached to this consumer release.
+   workflow's already-paginated prior-release bodies once before selecting a dish. It excludes a
+   catalog record when either its id or either part of its bilingual name already appears in those
+   bodies, then probes only a bounded number of published catalog photos. If the history snapshot
+   cannot be read, the optional name is omitted rather than risking a duplicate. If the catalog
+   has no unused published photo within the probe budget, the workflow emits a warning and continues
+   without a code name. The photo remains hosted by the catalog release and is not described as
+   attached to this consumer release.
 
 ### `scripts/count-lines.mjs`
 

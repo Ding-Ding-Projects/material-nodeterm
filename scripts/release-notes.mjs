@@ -184,11 +184,16 @@ async function priorReleaseBodiesFromEnvironment() {
   if (file) {
     try {
       return await readPriorReleaseBodies(file)
-    } catch {
-      return []
+    } catch (error) {
+      // A broken history read is not a first release. Keep the optional name out rather than
+      // publishing a duplicate, while allowing the build and release to continue.
+      console.error(`::warning::Prior release inventory was unavailable; omitting the optional release code name (${error instanceof Error ? error.message : String(error)}).`)
+      return null
     }
   }
-  return (process.env.RELEASE_PRIOR_BODIES ?? '').split('\u0000').filter(Boolean)
+  return process.env.RELEASE_PRIOR_BODIES == null
+    ? []
+    : process.env.RELEASE_PRIOR_BODIES.split('\u0000').filter(Boolean)
 }
 
 function renderChecksSection() {
@@ -259,12 +264,16 @@ async function main() {
   parts.push('')
   // Resolved before the rest so a slow catalog cannot land halfway down a finished document, and
   // AWAITED rather than raced: renderCodeNameSection('') simply omits the section, so an
-  // unreachable catalog costs a heading, never a release. RELEASE_PRIOR_BODIES is newline-joined
-  // bodies of earlier releases, so a dish is used once per project; unset just means "nothing used
-  // yet", which is the correct answer for a project publishing its first code name.
+  // unreachable catalog costs a heading, never a release. The prior-release snapshot is read once
+  // and matched by both catalog id and bilingual name, so a dish is used once per project. An unset
+  // snapshot means "nothing used yet", which is the correct answer for a project publishing its
+  // first code name; a broken snapshot is different and omits the optional name safely.
   const codeNameSection = renderCodeNameSection(
     await resolveCodeName({
-      releaseBodies: await priorReleaseBodiesFromEnvironment()
+      releaseBodies: await priorReleaseBodiesFromEnvironment(),
+      onPoolExhausted: ({ unusedCount, probes, maxProbes }) => {
+        console.error(`::warning::Release code-name pool exhausted; continuing without a code name (unused candidates: ${unusedCount}, photo probes: ${probes}/${maxProbes}).`)
+      }
     }).catch(() => null)
   )
   if (codeNameSection) {

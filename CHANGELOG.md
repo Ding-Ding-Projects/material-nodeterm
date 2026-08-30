@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Repair release code-name selection so prior release bodies are read once, previously used
+  catalog ids and bilingual names are excluded, and the next unused dish with a published photo
+  is selected within a bounded probe budget. A missing history snapshot omits the optional name
+  instead of risking a duplicate, while a genuinely exhausted catalog pool emits a workflow
+  warning and lets the release continue.
+
+  Release code-name selection 而家只會讀一次舊 release bodies，之前用過嘅 catalog id 同雙語菜名都會
+  排除，再喺有界 photo probe 入面揀下一款已發佈相片嘅未用菜名。讀唔到 history snapshot 就唔出 optional
+  菜名，避免撞名；catalog 真係用盡就出 workflow warning，release 照樣繼續。
+
 - Stage the detached Windows session host in a versioned runtime under local application data,
   outside Squirrel's replaceable `app-*` directories. Existing host state and named-pipe ownership
   are still checked first, so a live host is attached rather than replaced. New hosts copy the
