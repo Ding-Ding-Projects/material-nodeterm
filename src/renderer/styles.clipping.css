@@ -220,6 +220,62 @@
 /* Settings and editor forms need a real narrow layout. Stacking the row keeps the control and
  * its explanation visible instead of forcing a horizontal scroll through the settings surface. */
 @media (max-width: 720px) {
+  /* The notification strip is shrink-to-fit on wide screens. At a phone width its fixed
+   * action buttons can consume the whole intrinsic width, leaving the message flex item one
+   * pixel wide and wrapping every character vertically. Give the strip a real viewport width so
+   * the message gets a usable column, while keeping the actions reachable. */
+  .top-banners {
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    overflow: visible;
+  }
+  .announce-banner {
+    width: 100%;
+    max-width: none;
+    align-items: flex-start;
+  }
+  .announce-banner__content {
+    flex: 1 1 160px;
+  }
+
+  /* The app and project strips contain fixed-width controls. Let the complete strip scroll
+   * horizontally rather than letting the root hide the latter controls or wrap labels into
+   * unreadable vertical columns. */
+  .md3-app-bar,
+  .tabbar {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+  .md3-app-bar > *,
+  .tabbar > * {
+    flex-shrink: 0;
+  }
+
+  /* The sessions card is anchored beside the rail on desktop. On a narrow viewport that anchor
+   * leaves too little content width, so keep the card inside the viewport with a bounded width. */
+  .sessions-sidebar {
+    left: 8px;
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+  }
+
+  /* Toasts sit above the canvas, but the rail remains a real navigation target. Reserve the rail
+   * column at narrow widths so a persistent toast cannot cover it or the bottom dock. */
+  .toast-stack {
+    left: calc(var(--nav-rail-w) + 8px);
+    right: 8px;
+    /* The dock is bottom:22px with a 54px shell. Leave 8px between its top edge and the toast
+     * stack so a persistent notification never sits on top of a dock action at compact widths. */
+    bottom: 84px;
+    width: auto;
+    max-width: none;
+    max-height: min(45vh, calc(100vh - 100px));
+  }
+  .toast {
+    min-width: 0;
+  }
+
   .md3-settings-shell {
     flex-direction: column;
     overflow-y: auto;
