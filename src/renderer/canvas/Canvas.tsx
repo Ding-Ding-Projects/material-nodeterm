@@ -812,7 +812,6 @@ import { codexAccountSelectable } from './codex-account-switch'
 import { resolveNewCodexNodeAccount, planCodexAccountSwitch } from './codex-account-ops'
 import type { CodexAccount } from '@shared/codex-account'
 import { Dock } from '../components/Dock'
-import { TabBar } from '../components/TabBar'
 import type { SavedCanvasLayout } from '@shared/types'
 import type { SchedulePlacementTarget } from '@shared/scheduled-settings'
 import { setFocusNodeHandler } from '../nodes/focus-handler'
@@ -17934,20 +17933,6 @@ export function Canvas() {
           </button>
         </div>
       </TopAppBar>
-      <TabBar
-        onSwitch={switchProject}
-        onReconnect={reconnectRelay}
-        onReorder={reorderProject}
-        onOpenWelcome={() => setWelcomeOpen(true)}
-        onRename={renameProject}
-        onSetFolder={setProjectFolder}
-        onCloseProject={closeProject}
-        onRemoteAccess={() => setRemoteDialogOpen(true)}
-        onSetDefaultAccount={setProjectDefaultAccount}
-        onSetDefaultPermissionMode={setProjectDefaultPermissionMode}
-        onOpenProjectSettings={openProjectSettings}
-      />
-
       <div className="top-banners">
         {nodeFocusSession && (
           <div className="announce-banner announce-banner--info" role="status">
