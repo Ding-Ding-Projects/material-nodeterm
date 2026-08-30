@@ -10,6 +10,7 @@ import fs from 'fs'
 import path from 'path'
 import { spawn } from 'child_process'
 import { createHash, randomUUID } from 'crypto'
+import { renameAtomic } from './fs-atomic'
 
 const RUNTIME_MARKER = 'session-host-runtime.json'
 const RUNTIME_EXECUTABLE = process.platform === 'win32' ? 'session-host-runtime.exe' : 'session-host-runtime'
@@ -122,7 +123,7 @@ export async function prepareSessionHostRuntime(options: {
     await fs.promises.writeFile(path.join(stage, RUNTIME_MARKER), `${JSON.stringify(marker)}\n`, {
       flag: 'wx',
     })
-    await fs.promises.rename(stage, runtimeDir)
+    await renameAtomic(stage, runtimeDir)
   } catch (error) {
     await fs.promises.rm(stage, { recursive: true, force: true })
     const wonRace = await preparedRuntime(runtimeDir)
