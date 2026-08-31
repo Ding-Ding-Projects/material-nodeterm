@@ -408,3 +408,140 @@
     transition: none;
   }
 }
+
+/* Responsive top-bar branches and session context containment. The context status is a complete
+ * bilingual value, so it gets its own row instead of competing with the title and cwd. */
+.md3-app-bar__wide,
+.md3-app-bar__compact,
+.md3-app-bar__compact-project,
+.md3-app-bar__compact-primary,
+.ss-row__body,
+.ss-row__titleline,
+.ss-row__contextline,
+.ss-meta {
+  min-width: 0;
+}
+.md3-app-bar__wide,
+.md3-app-bar__compact {
+  flex-shrink: 1;
+}
+.ss-row__titleline {
+  flex-wrap: nowrap;
+}
+.ss-row__contextline {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  max-width: 100%;
+  overflow: visible;
+}
+.ss-row__contextline .ctx-meter {
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+.ss-row__contextline .ctx-pill {
+  max-width: 100%;
+  min-height: 44px;
+  white-space: nowrap;
+}
+.ss-meta {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+/* The profile chooser may have many real machine profiles, but it never consumes the catalog's
+ * flexible height. Only the result list expands and scrolls with the dialog. */
+.mdx-dialog.node-catalog-dialog {
+  min-height: 0;
+  overflow: hidden;
+}
+.node-catalog-dialog__intro,
+.node-catalog-dialog__search,
+.node-catalog-dialog__categories,
+.node-catalog-dialog__profiles,
+.node-catalog-dialog__hint {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.node-catalog-dialog__profiles {
+  max-height: 132px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.node-catalog-dialog__list {
+  min-height: 0;
+  max-height: none;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.node-catalog-dialog__row {
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.group-node__wsl .group-node__wt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+}
+.group-node__wsl .group-node__wt-btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 719px) {
+  .md3-app-bar {
+    gap: 8px;
+    padding-inline: 8px;
+  }
+  .md3-app-bar__brand-name,
+  .md3-compact-more__text {
+    display: none;
+  }
+  .md3-app-bar__brand {
+    gap: 0;
+  }
+  .md3-app-bar__compact {
+    gap: 4px;
+  }
+  .md3-app-bar__compact-project {
+    flex: 1 1 0;
+  }
+  .md3-app-bar__compact-project > * {
+    max-width: 100%;
+  }
+  .md3-app-bar__compact-primary .md3-switcher {
+    max-width: 96px;
+    flex: 0 1 auto;
+  }
+  .md3-app-bar__compact-primary .md3-switcher__trigger {
+    padding-inline: 8px;
+  }
+  .md3-app-bar__compact-primary .md3-switcher__name,
+  .md3-app-bar__compact-primary .md3-switcher__more-badge,
+  .md3-app-bar__compact-primary .md3-remote-chip {
+    display: none;
+  }
+  .md3-app-bar__compact-action--presence {
+    max-width: 58px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+}
+
+@media (min-width: 720px) and (max-width: 1279px) {
+  .md3-app-bar__compact {
+    gap: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md3-compact-more__list button,
+  .md3-compact-more,
+  .ss-row__contextline .ctx-pill {
+    transition: none !important;
+  }
+}

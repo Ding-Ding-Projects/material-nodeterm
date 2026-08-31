@@ -3149,26 +3149,30 @@ export interface KidsModeSnapshot extends KidsModeRecord {
   generation: number
 }
 
+/** Whether the shared Kids-mode PIN can be used for an authorization decision. */
+export type KidsCredentialState = 'present' | 'absent' | 'unavailable'
+
+export type KidsCredentialResetResult =
+  | { ok: true; record: KidsModeSnapshot }
+  | { ok: false; error: string }
+
 export interface KidsModeApi {
   load(): Promise<KidsModeSnapshot>
-  /** Turn it ON. `pin` is required only the first time, and establishes the grown-up PIN.
-   *  Entering needs no proof — only leaving does. */
+  /** Turn it ON. A new PIN is chosen on first enrollment; an existing PIN must be verified. */
   enable(pin?: string): Promise<KidsModeSnapshot>
   /** Turn it OFF. Requires the grown-up PIN. */
   disable(pin: string): Promise<{ ok: true; record: KidsModeSnapshot } | { ok: false; error: string }>
   rename(name: string): Promise<KidsModeSnapshot>
   changePin(currentPin: string, nextPin: string): Promise<boolean>
-  hasCredential(): Promise<boolean>
+  /** Read the PIN state without returning or characterizing credential material. */
+  credentialState(): Promise<KidsCredentialState>
+  /** Remove only the Kids PIN and turn Kids mode off after explicit local confirmation. */
+  resetCredential(): Promise<KidsCredentialResetResult>
   /**
-   * Verify the grown-up PIN WITHOUT changing state — the entry point for the grown-up screen,
-   * which must be reachable without leaving Kids mode. Optional on the interface: the desktop
-   * preload implements it for real (backed by the same core `KidsModeStore.verifyPin`, registered
-   * on both shells over IPC), but the Server Edition's browser bridge (`renderer/bridge/
-   * ws-bridge.ts`) predates this member and does not yet expose it — a follow-up, not a design
-   * gap. Callers must fail CLOSED (never assume success) when this is `undefined`, exactly as an
-   * unreadable credential fails closed; see `bridge/stubs.ts`'s `verifyKidsModePin`.
+   * Verify the grown-up PIN WITHOUT changing state, for the grown-up screen. This is required on
+   * every bridge so the Server Edition cannot silently omit the check.
    */
-  verifyPin?(pin: string): Promise<boolean>
+  verifyPin(pin: string): Promise<boolean>
   onChanged(cb: (r: KidsModeSnapshot) => void): () => void
 }
 

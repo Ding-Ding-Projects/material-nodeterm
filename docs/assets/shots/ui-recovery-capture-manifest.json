@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "capturedAt": "2026-08-31T03:49:13.742Z",
+  "method": "Built out/ desktop application launched on a named off-screen Windows desktop through the cheap Lowlevel route, then inspected and captured through an exact single-target loopback CDP connection.",
+  "packageVersion": "1.0.0",
+  "privacy": {
+    "visibleDesktopTouched": false,
+    "liveTerminalOutputCaptured": false,
+    "credentialsCaptured": false,
+    "privatePathsCaptured": false,
+    "verdict": "passed"
+  },
+  "builtOutputs": [
+    {
+      "path": "out/main/index.js",
+      "sha256": "efd882d9bfa5b85d92d158756395f91d015c41a964b00a71fd2c29fe20a9e8c8"
+    },
+    {
+      "path": "out/preload/index.js",
+      "sha256": "a736fad6ac7c0e15e19eb32803e5bd6887db721d49c43718158209f65435b778"
+    },
+    {
+      "path": "out/renderer/index.html",
+      "sha256": "d85d3395b098ad463e279dcfe26450dc14bf7ec419e5d0c4d423fb93be2c251b"
+    },
+    {
+      "path": "out/session-host/host.cjs",
+      "sha256": "f16b561c214516a2650a93e41b80945acf52428e463075e4e05c1113f78fa91d"
+    }
+  ],
+  "captures": [
+    {
+      "id": "kids-unavailable-recovery",
+      "path": "docs/assets/shots/app-kids-unavailable-recovery.png",
+      "sourceCommit": "c9540e2166dccc6ceb10b8e1c4d4cd25f9749d23",
+      "width": 1416,
+      "height": 908,
+      "bytes": 22902,
+      "sha256": "61c235e74bf25280737aee8a49a18e3318b63bf0056f3b0d93c6f4fe89068163",
+      "state": "Kids parent gate with unavailable shared credential and targeted recovery action"
+    },
+    {
+      "id": "kids-targeted-reset",
+      "path": "docs/assets/shots/app-kids-targeted-reset.png",
+      "sourceCommit": "c9540e2166dccc6ceb10b8e1c4d4cd25f9749d23",
+      "width": 1416,
+      "height": 908,
+      "bytes": 39909,
+      "sha256": "d7bd0ad5850d8a394fb1eb336487a8e47341ae0de7322d60c743177cc872777a",
+      "state": "Targeted Kids PIN reset confirmation with two keys and a disabled full-range slider"
+    },
+    {
+      "id": "projectless-add-disabled",
+      "path": "docs/assets/shots/app-projectless-add-disabled.png",
+      "sourceCommit": "6a1c476a8ae30a58801b7c25d3e33730c7f92c32",
+      "width": 1013,
+      "height": 735,
+      "bytes": 117864,
+      "sha256": "21776473e32b26f39e21969d12202c98c9fdc82f980e89b2e1c20f8cceb4bb54",
+      "state": "Projectless compact canvas with Add node disabled until a project exists"
+    },
+    {
+      "id": "compact-more",
+      "path": "docs/assets/shots/app-compact-more.png",
+      "sourceCommit": "6a1c476a8ae30a58801b7c25d3e33730c7f92c32",
+      "width": 1013,
+      "height": 735,
+      "bytes": 85393,
+      "sha256": "1a9953debb7443e6b751d789df594deff8580738a72b66a1151ae0be8fbe8824",
+      "state": "Compact top bar with the searchable More action surface in an active project"
+    },
+    {
+      "id": "node-catalog-73",
+      "path": "docs/assets/shots/app-node-catalog-73.png",
+      "sourceCommit": "6a1c476a8ae30a58801b7c25d3e33730c7f92c32",
+      "width": 1013,
+      "height": 735,
+      "bytes": 99335,
+      "sha256": "1608d16fa43eb43f12ba6e6c6a2c7aa19bf7516d200ef171975eed8b84b2f37b",
+      "state": "Node Catalog with 73 non-shrinking rows and an internally scrolling result list"
+    },
+    {
+      "id": "terminal-created",
+      "path": "docs/assets/shots/app-terminal-created.png",
+      "sourceCommit": "6a1c476a8ae30a58801b7c25d3e33730c7f92c32",
+      "width": 1013,
+      "height": 735,
+      "bytes": 82468,
+      "sha256": "20a418c63db79931012e5e7fb1ccb9990680e919b33170172f3cf115fb8b0c4e",
+      "state": "One real 640 by 440 terminal node with one xterm screen and one Sessions row"
+    },
+    {
+      "id": "aws-from-compact-more",
+      "path": "docs/assets/shots/app-aws-from-compact-more.png",
+      "sourceCommit": "6a1c476a8ae30a58801b7c25d3e33730c7f92c32",
+      "width": 1013,
+      "height": 735,
+      "bytes": 95747,
+      "sha256": "feb9b1314049699a8615f76325a8ddb29132deae2903e89771cae0103207245b",
+      "state": "AWS Universe picker opened from compact More with focus moved to its search field"
+    }
+  ]
+}

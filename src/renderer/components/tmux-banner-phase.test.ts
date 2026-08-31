@@ -8,7 +8,7 @@ vi.mock('../session/localSession', () => ({
   localSession: { api: { pty: { tmuxStatus: async () => ({ available: false }) } } }
 }))
 
-import { INSTALL_CAP_MS, pollOutcome } from './TmuxBanner'
+import { INSTALL_CAP_MS, bannerCopy, pollOutcome } from './TmuxBanner'
 
 describe('pollOutcome', () => {
   it('stays installing while unavailable and under the cap', () => {
@@ -21,5 +21,20 @@ describe('pollOutcome', () => {
   })
   it('fails once the cap elapses without tmux', () => {
     expect(pollOutcome(false, INSTALL_CAP_MS)).toBe('failed')
+  })
+})
+
+describe('bannerCopy', () => {
+  it('makes an installer placement failure immediately actionable', () => {
+    expect(bannerCopy('placement-failed', 'win32', true, 'No free canvas position was found.')).toEqual({
+      title: 'Installer terminal unavailable',
+      body: 'No free canvas position was found.'
+    })
+  })
+
+  it('keeps the normal Windows installer copy tied to psmux', () => {
+    const copy = bannerCopy('missing', 'win32', true)
+    expect(copy.title).toBe('psmux not found')
+    expect(copy.body).toContain('psmux')
   })
 })

@@ -28,7 +28,8 @@ import { platform } from './platform'
 import {
   readAtomicFileSnapshot,
   withCrossProcessLock,
-  writeAtomicFileCompared
+  writeAtomicFileCompared,
+  type CrossProcessLease
 } from './fs-transaction-lock'
 
 const SCRYPT_KEYLEN = 32
@@ -83,8 +84,17 @@ export interface StoredCredential {
 /** Write bytes atomically: unique tmp at 0600, rename into place. A reader never observes a
  *  partial file, and a crash mid-write never corrupts the previous good copy. The rename retries
  *  briefly on Windows if the destination is momentarily held open (see fs-atomic.ts). */
-export async function persistFile(file: string, data: string): Promise<void> {
+export async function persistFile(
+  file: string,
+  data: string,
+  lease?: CrossProcessLease
+): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true })
+  if (lease) {
+    const current = await readAtomicFileSnapshot(file)
+    await writeAtomicFileCompared(file, data, current.revision, lease, { mode: 0o600 })
+    return
+  }
   await withCrossProcessLock(file, async (lease) => {
     const current = await readAtomicFileSnapshot(file)
     await writeAtomicFileCompared(file, data, current.revision, lease, { mode: 0o600 })
@@ -121,7 +131,11 @@ export async function hasCredential(file: string): Promise<boolean> {
 }
 
 /** Establish or replace the credential. The caller is responsible for bounds-checking the PIN. */
-export async function setCredential(file: string, pin: string): Promise<void> {
+export async function setCredential(
+  file: string,
+  pin: string,
+  lease?: CrossProcessLease
+): Promise<void> {
   const salt = randomBytes(16)
   const hashB64 = deriveHash(pin, salt).toString('base64')
   const sealed = canSeal()
@@ -129,7 +143,7 @@ export async function setCredential(file: string, pin: string): Promise<void> {
     ? platform().sealSecret!(Buffer.from(hashB64, 'utf8')).toString('base64')
     : hashB64
   const body: StoredCredential = { version: 1, salt: salt.toString('base64'), hash, sealed }
-  await persistFile(file, JSON.stringify(body))
+  await persistFile(file, JSON.stringify(body), lease)
 }
 
 /**

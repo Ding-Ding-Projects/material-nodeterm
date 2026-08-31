@@ -63,9 +63,11 @@ kids mode had quietly formed an opinion about a mode no one had considered.
 
 ## The lock
 
-Entering needs no proof; **leaving needs the grown-up PIN**. The PIN is never stored — only a scrypt
-hash over a per-credential random salt, sealed at rest through the OS credential vault where one
-exists and written as raw 0600 bytes where it does not (the Server Edition has no keychain).
+First enrollment chooses and confirms the grown-up PIN. Once a PIN exists, turning Kids mode on
+again also requires that PIN, and leaving requires it as before. A machine with no PIN can still
+turn the mode off without inventing a key that does not exist. The PIN is never stored — only a
+scrypt hash over a per-credential random salt, sealed at rest through the OS credential vault where
+one exists and written as raw 0600 bytes where it does not (the Server Edition has no keychain).
 
 That mechanism is `src/core/shared-mode-credential.ts`, shared with School mode. It was **extracted
 rather than copied**: a second hand-maintained copy would drift, and a drift here means one mode's
@@ -87,8 +89,17 @@ invalidates every token so an event queued before shutdown is inert when it even
 
 Record mutations do not write a document derived from process-local cache. Rename, enable and
 disable each enter the shared SQLite transaction, strictly read the current canonical record,
-change only their field, and compare-publish the observed revision. This is why a process that
-cached OFF cannot erase another process's newer ON merely by renaming the mode.
+change only their field, and compare-publish the observed revision. Credential-changing operations
+use one consistent operation-wide order: acquire the credential transaction first, then the record
+transaction. Enable and reset keep both locks through their complete read, publish, and removal
+sequence, so one process cannot verify a credential that another process removes before its record
+write. This is why a process that cached OFF cannot erase another process's newer ON merely by
+renaming the mode.
+
+The renderer assigns every credential read and local credential mutation a monotonically increasing
+read epoch. A late IPC response from an older epoch is ignored, while the newest verified state is
+kept. The epoch is independent from the record generation because the two files can change at
+different times.
 
 An unsealable credential (a keychain reset, a machine migration) reads as **"cannot verify"** and
 leaves the mode **locked**, rather than throwing or falling open. The documented recovery is
@@ -236,20 +247,31 @@ by another app sharing `~/.nodeterm/shared/`, or an older nodeterm build, and co
 pad with only digit keys can never type a letter, so this is what keeps every PIN this app itself
 creates enterable on the pad that later has to check it.
 
-`window.nodeTerminal.kidsMode.verifyPin(pin)` is new IPC (`src/core/kids-mode.ts`,
-`IPC.kidsModeVerifyPin`) — a read-only check with the SAME "no credential → true" honesty
-`disable()` already has (a mode with no PIN ever set cannot lock anyone out of the screen that
-administers it), never mutating the record, so the grown-up screen is reachable without leaving
-Kids mode at all (unlike Settings' "Turn off", which always disables). It is **optional** on the
-shared `KidsModeApi` type: the desktop preload implements it for real, but `src/renderer/bridge/
-ws-bridge.ts` (the Server Edition's browser bridge) predates it and was not touched by this lane —
-touching it was outside this lane's file ownership, and a one-line RPC addition there is a safe,
-low-risk follow-up for whichever pass next owns that file. Until then, `verifyKidsModePin()` in
-`bridge/stubs.ts` fails CLOSED (never open) when the method is absent, so the grown-up screen is
-simply unreachable on the Server Edition rather than silently insecure. `KidsShell`/`KidsGate`/
-`EnableKidsModeDialog` all reach the core store's `enable()`/`disable()` unchanged, so entering,
-turning it on and turning it fully off already work on every surface `window.nodeTerminal.kidsMode`
-does; only the read-only PEEK is desktop-only for now.
+`window.nodeTerminal.kidsMode.verifyPin(pin)` is a required IPC (`src/core/kids-mode.ts`,
+`IPC.kidsModeVerifyPin`) and is read-only. It never changes the record, so the grown-up screen is
+reachable without leaving Kids mode. The Server Edition's `ws-bridge.ts` forwards the same channel,
+so both shells perform the same check rather than silently treating a missing method as success.
+
+Credential presence is no longer represented by an ambiguous boolean. `credentialState()` returns
+`present`, `absent`, or `unavailable`; only `ENOENT` means absent. Malformed, unreadable, and
+unsealable credential bytes are unavailable and keep the mode locked. Turning Kids mode on with a
+present credential requires entering and verifying that PIN. First enrollment remains a choose and
+confirm flow.
+
+Even when the current renderer classification is `absent`, the grown-up gate calls the authoritative
+`verifyPin('')` channel before entering the controls. A refusal refreshes credential state and keeps
+the gate closed, rather than treating a stale local absence as permission.
+
+The enable dialog is a real modal surface with labelled dialog semantics, initial focus on its first
+available control, a focus loop owned only while it is topmost in the shared dialog stack, and focus
+restoration to the opener after cancel or completion. The forgotten-PIN action is anchored beside
+its own control and passes that control through as the restoration target for the two-key gate.
+
+The grown-up prompt and Settings both offer **I never set this PIN**. After the existing two-key
+plus full-slider confirmation, `resetCredential()` turns Kids mode off and removes only
+`kids-mode.credential.json`; School mode, toy locks, projects, sessions, and unrelated settings are
+untouched. The operation never returns or records PIN material. If the shared record cannot be read,
+the reset refuses rather than overwriting recoverable bytes.
 
 ### The rail's entry point
 
@@ -258,15 +280,16 @@ rail's `child_care` destination (owned by a different lane, and not yet built in
 calls instead of toggling a local view. It is not a view a child could navigate back out of: it
 calls the real `enable()` action, and once the shared record's `enabled` flips to `true`, App.tsx's
 own fail-closed routing swaps the canvas out on its own. If no grown-up PIN exists anywhere on this
-machine yet, it opens `EnableKidsModeDialogHost` (mounted once, always, at the App root) instead of
-enabling immediately, so a first-time user is never asked to remember a PIN they never chose.
+machine yet, it opens `EnableKidsModeDialogHost` (mounted once, always, at the App root) for choose
+plus confirm. If a PIN already exists, the same dialog verifies it before enabling, so a stale
+renderer cannot turn the mode on without proof.
 
 ### Surfaces (screens specifically, updates the table above)
 
 | Surface | Screens |
 | --- | --- |
 | Desktop | full — Home/Gate/Grown-up/activity canvas, all real |
-| Server Edition | Home/activity canvas work (same renderer, real `TerminalNode`/`StickyNode`, real IPC via the ws-bridge's existing `kidsMode` object); the grown-up gate cannot verify a PIN yet (`verifyPin` not wired into `ws-bridge.ts` — see above), so it is reachable in principle but always fails closed until that follow-up lands |
+| Server Edition | Home/activity canvas work (same renderer, real `TerminalNode`/`StickyNode`, real IPC via the ws-bridge's existing `kidsMode` object); the grown-up gate verifies through the required `verifyPin` channel and fails closed when credential state is unavailable |
 | Pages site | not applicable — no agents, no shell, unchanged from the rest of this document |
 | Mobile companion | not applicable — a Kids canvas node is a real terminal/agent node like any other, so it is reachable over the existing transport once created on desktop/server, but there is no Kids-specific mobile screen (follow-up in `nodeterm-ios`, same as every other mobile note in this document) |
 
@@ -336,9 +359,8 @@ spawning the terminal those screens are counting.
   below; those paths are now covered by behaviour tests and mutation probes. That review is not a
   substitute for observing whether the disclosure and confirmations are understood on real
   hardware, so this product-level validation remains outstanding.
-- **`verifyPin` is desktop-only.** The Server Edition's `ws-bridge.ts` `kidsMode` object was not
-  extended in the pass that added the screens (see "The screens" above) — it is a small, low-risk
-  follow-up, not a design gap.
+- **`verifyPin` is shared by both shells.** The desktop preload and Server Edition `ws-bridge.ts`
+  forward the same read-only channel, and both fail closed when credential state is unavailable.
 - **Story time and Sounds are placeholders**, and **kid-canvas nodes do not persist across a full
   app restart** the way project nodes do. Both are explained, with the reasoning, in "The screens"
   above rather than left as a silent gap.
@@ -434,7 +456,7 @@ What was observed, through the real IPC and the real UI:
 | --- | --- |
 | `window.nodeTerminal.kidsMode` present, `load()` answers | the bridge is real, not a stub |
 | starts OFF | the default is the safe one |
-| `enable('4321')` turns it on | first-run PIN establishes the credential |
+| `enable('4321')` turns it on | first-run PIN establishes the credential; later enables verify it |
 | a wrong PIN is refused and it STAYS ON | the failure that matters most |
 | the correct PIN turns it off | |
 | the settings UI flipped ON with no reload | the renderer store hydrated **and** is subscribed to the shared record |
@@ -464,6 +486,7 @@ npx vitest run src/core/kids-mode.test.ts src/shared/kids-mode-policy.test.ts \
   src/renderer/lib/accountRemoval.test.ts src/renderer/lib/destructiveAuthorization.test.ts \
   src/renderer/lib/authenticatorRemoval.test.ts src/renderer/lib/worktreeRemoval.test.ts \
   src/renderer/state/kidsMode.test.ts \
+  src/renderer/bridge/ws-bridge.kids-mode.test.ts \
   src/renderer/components/settings/sections/AccountsSection.test.tsx \
   src/renderer/components/settings/sections/AuthenticatorSection.test.tsx
 node scripts/check-app-contract.mjs

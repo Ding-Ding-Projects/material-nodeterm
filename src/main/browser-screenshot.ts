@@ -44,8 +44,8 @@ export async function resolveScreenshotPath(
   deps: ScreenshotPathDeps
 ): Promise<ResolvedScreenshotPath> {
   if (!projectCwd) return { ok: false, message: SCREENSHOT_NO_PROJECT_DIR }
-  // Tests and the server-side path seam may supply POSIX-style roots while running on Deen No.
-  // Real Deen No project paths are drive or UNC rooted, so selecting the POSIX helper only for a
+  // Tests and the server-side path seam may supply POSIX-style roots while running on Windows.
+  // Real Windows project paths are drive or UNC rooted, so selecting the POSIX helper only for a
   // slash-rooted non-drive value preserves the caller's path dialect without weakening the jail.
   const pathApi = process.platform === 'win32' && projectCwd.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(projectCwd)
     ? path.posix

@@ -4,6 +4,14 @@ A group frame on the canvas can be **bound to a WSL distribution**. Every termin
 that frame opens in that distribution, which makes "one agent per Linux environment" the same
 gesture as "one frame per environment" — the same shape the worktree binding already uses.
 
+Creating a new instance is one canvas transaction: after `wsl.exe` confirms the instance, the
+renderer publishes the bound group first and one selected terminal child in the same state update.
+The child uses bounded in-frame geometry, the active project's cwd, and the exact distribution
+profile id. A saved WSL frame from an older version with no child is not auto-spawned during load.
+Instead, its header exposes **Open terminal**, which performs the same live revalidation and creates
+one child only after the user asks. If the distribution or its profile cannot be revalidated, the
+action stays closed and reports the unavailable reason rather than falling back to another shell.
+
 ## The one rule that matters
 
 **nodeterm never sleeps, wakes, or deletes a distribution it did not create.**
@@ -91,6 +99,14 @@ rejected at the core boundary rather than entering the cancellation map.
 Timeouts remain bounded by the WSL command deadline, and failures stay in the dialog with an
 actionable retry path. The progress surface respects reduced motion and exposes status and
 progressbar roles for keyboard and assistive-technology users.
+
+After creation, the renderer refreshes the real machine inventory and requires the returned name
+to be both enumerated and recorded as app-owned before it publishes any canvas binding. The frame
+and first terminal then commit as one transaction with stable creation-event ids. If either
+placement is refused, the canvas returns to its original state while the already-created instance
+remains untouched. The dialog explains that split outcome and offers **Bind created instance**,
+which revalidates the same instance and retries only the frame-and-terminal transaction. That
+recovery action never invokes `wsl.exe --install` a second time.
 
 Every dialog label, action, validation message, status, accessibility name, and progress heading
 resolves through the shared `wsl.create.*` catalogue ids. The catalogue stores templates with

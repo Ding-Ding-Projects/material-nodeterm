@@ -6,13 +6,40 @@ issues. A ticked item is implemented **and** verified — where it claims someth
 means captured from the real built artifact, not asserted from source. Anything unticked names
 its real state next to it rather than being silently omitted.
 
-Source candidate package version in `package.json`: `1.0.0` (not published). The latest published
-release tag is `v0.4.152`, targeting `70e5becee2c9bbdb6e1f74b60b4de3eb0a59c467`. Version `1.0.0`
-is a deliberate human-selected major; ordinary patch releases remain workflow-planned. The tree
-currently contains 989 test files. Candidate check evidence and remaining runtime receipt blockers
+Source candidate package version in `package.json`: `1.0.0`. The latest published release tag is
+`v1.0.5`, targeting `e7ca458eaba7d3f08931a8c2271bad74997184dc`. Version `1.0.0` is the
+deliberate human-selected source major; ordinary stable patch releases remain workflow-planned and
+have reached `1.0.5`. The tree currently contains 1,047 test files. Candidate check evidence and remaining runtime receipt blockers
 are recorded below. Do not treat the source candidate as a published release.
 
 ---
+
+## v1.0.6 terminal, compact-layout, and Kids recovery candidate (2026-08-30)
+
+- [x] **Reachable terminal flows:** new WSL frames include one selected in-frame terminal, saved
+      empty WSL frames expose a live-revalidated **Open terminal** action, and psmux installation
+      waits for an acknowledged node-placement receipt before showing progress or a Show action.
+      The real built desktop created one 640×440 terminal node, one xterm screen, and one Sessions
+      row at 1,013 CSS pixels. The implementation completes in `c9540e2166dccc6ceb10b8e1c4d4cd25f9749d23`.
+- [x] **Kids credential recovery:** credential presence is explicit, unavailable state stays
+      closed, cached absence is rechecked through the host, cross-process mutations use one lock
+      order, renderer reads use a monotonic epoch, and **I never set this PIN** opens the existing
+      two-key full-slider confirmation for a Kids-only reset. Focused Kids hardening passed 49 of
+      49 tests, and built captures show both unavailable and targeted-confirmation states.
+- [x] **Compact and catalog containment:** the top bar mounts one compact branch below 1,280 CSS
+      pixels, More owns six searchable actions plus its anchored regex builder, nested pickers move
+      focus into their search field, Sessions controls retain 44px targets, and the 73-row Node
+      Catalog reserves 132px for profiles while its 167px result viewport scrolls 6,685px of
+      non-shrinking rows. The final projectless FAB guard is `6a1c476a8ae30a58801b7c25d3e33730c7f92c32`.
+- [x] **Local verification:** the integrated focused batch passed 93 of 93 tests, later WSL and
+      recovery batches passed 48 of 48 and 10 of 10, TypeScript passed after each repair, the WSL
+      copy inventory passed with 58 rows and a deliberate negative mutation, the documentation
+      bundle passed 16 assertions, personal-vocabulary coverage passed 1,373 assertions, and the
+      root `build.bat /s` completed before the two narrowly scoped follow-up repairs. The exact
+      final source then completed `npm run build:app` and hidden-desktop interaction evidence.
+- [ ] **Published release:** default-branch integration, remote workflow, uniquely tagged release,
+      unsigned Squirrel.Windows assets, workflow timing, and downloadable-asset verification remain
+      pending until this task is pushed and the release workflow reaches a terminal verdict.
 
 ## v1.0.0 source candidate (2026-08-29)
 

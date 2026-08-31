@@ -19,6 +19,7 @@ import { PinPad } from './PinPad'
 import { EnableKidsModeDialogHost } from './EnableKidsModeDialog'
 import { useEnableKidsDialog } from './entry'
 import { useKidsMode } from '../../state/kidsMode'
+import { popDialog, pushDialog } from '../dialog-stack'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -129,7 +130,7 @@ describe('PinPad completion, and reusing one across steps', () => {
 describe('EnableKidsModeDialog drives choose -> confirm end to end', () => {
   it('a first-time user can choose a PIN, confirm it, and enable the mode', async () => {
     const enable = vi.fn().mockResolvedValue({ ok: true })
-    useKidsMode.setState({ enable } as never)
+    useKidsMode.setState({ enable, credentialState: 'absent', refreshCredentialState: vi.fn(async () => {}) } as never)
     useEnableKidsDialog.getState().show()
 
     mount(<EnableKidsModeDialogHost />)
@@ -160,5 +161,45 @@ describe('EnableKidsModeDialog drives choose -> confirm end to end', () => {
 
     expect(enable).toHaveBeenCalledTimes(1)
     expect(enable).toHaveBeenCalledWith('1234')
+  })
+
+  it('exposes dialog semantics, cycles only its own focus, and restores the opener', async () => {
+    const opener = document.createElement('button')
+    opener.textContent = 'Open Kids mode'
+    document.body.appendChild(opener)
+    opener.focus()
+    useKidsMode.setState({
+      credentialState: 'absent',
+      refreshCredentialState: vi.fn(async () => {}),
+      enable: vi.fn().mockResolvedValue({ ok: true })
+    } as never)
+    useEnableKidsDialog.getState().show()
+    mount(<EnableKidsModeDialogHost />)
+    await settle()
+
+    const dialog = document.querySelector('[role="dialog"]') as HTMLElement
+    expect(dialog).toBeTruthy()
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
+    expect(dialog.getAttribute('aria-labelledby')).toBeTruthy()
+    expect(dialog.getAttribute('aria-describedby')).toBeTruthy()
+
+    const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not([disabled])')]
+    expect(focusable.length).toBeGreaterThan(1)
+    expect(document.activeElement).toBe(focusable[0])
+    focusable[focusable.length - 1]!.focus()
+    act(() => focusable[focusable.length - 1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })))
+    expect(document.activeElement).toBe(focusable[0])
+
+    pushDialog('dialog-above-kids-test')
+    focusable[0]!.focus()
+    act(() => focusable[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })))
+    expect(document.activeElement).toBe(focusable[0])
+    popDialog('dialog-above-kids-test')
+
+    const cancel = [...dialog.querySelectorAll('button')].find((item) => item.textContent === 'Cancel')
+    expect(cancel).toBeTruthy()
+    act(() => cancel!.click())
+    expect(document.activeElement).toBe(opener)
+    opener.remove()
   })
 })

@@ -1926,6 +1926,8 @@ export const CATALOG: Catalog = {
   'wsl.create.actions.create': { en: flat('Create'), yue: flat('建立') },
   'wsl.create.actions.cancelling': { en: flat('Cancelling…'), yue: flat('正在取消…') },
   'wsl.create.actions.creating': { en: flat('Creating…'), yue: flat('正在建立…') },
+  'wsl.create.actions.bindCreated': { en: flat('Bind created instance'), yue: flat('綁定已建立實例') },
+  'wsl.create.actions.bindingCreated': { en: flat('Binding created instance…'), yue: flat('正在綁定已建立實例…') },
   'wsl.create.description': {
     en: [
       'Choose a distribution from the live {brand} catalogue, then give this machine-local instance a unique name.',
@@ -2005,6 +2007,10 @@ export const CATALOG: Catalog = {
     yue: flat('接受字母、數字、空格、句點、連字號同底線。')
   },
   'wsl.create.error.prefix': { en: flat('The {brand} operation reported an error:'), yue: flat('{brand} 操作回報錯誤：') },
+  'wsl.create.error.placementFailed': {
+    en: flat('{brand} instance "{name}" was created, but its frame and first terminal could not be placed: {error}'),
+    yue: flat('{brand} 實例「{name}」已建立，但無法放置框架同第一個終端機：{error}')
+  },
   'wsl.create.progress.starting': {
     en: [
       'Starting {brand} creation…',

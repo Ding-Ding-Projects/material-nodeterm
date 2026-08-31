@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AGENT_CONFIG, BUILTIN_AGENT_IDS, type AgentId } from '@shared/agents/config'
 import { AgentIcon } from '../lib/agentIcons'
 import { useSettings } from '../state/settings'
@@ -103,6 +103,12 @@ export function FabMenu({
       setMenuOpen(true)
     }
   }
+
+  useEffect(() => {
+    if (activeProjectId) return
+    setMenuOpen(false)
+    setProfileMenuOpen(false)
+  }, [activeProjectId])
 
   return (
     <>
@@ -318,7 +324,9 @@ export function FabMenu({
 
         <button
           className={`md3-fab${menuOpen ? ' is-open' : ''}`}
-          title="Add node"
+          title={activeProjectId ? 'Add node' : 'Open or create a project before adding nodes.'}
+          aria-label={activeProjectId ? 'Add node' : 'Add node unavailable. Open or create a project first.'}
+          disabled={!activeProjectId}
           onClick={toggleMenu}
         >
           <PlusIcon />

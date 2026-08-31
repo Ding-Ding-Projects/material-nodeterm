@@ -38,6 +38,16 @@ describe('new node surfaces participate in the clipping sweep', () => {
     expect(CSS).toContain('  .sessions-sidebar {\n    left: 8px;\n    width: calc(100vw - 16px);')
   })
 
+  it('keeps the separated session context button at a 44px interaction target', () => {
+    expect(CSS).toMatch(/\.ss-row__contextline\s*\{[^}]*min-height:\s*44px/s)
+    expect(CSS).toMatch(/\.ss-row__contextline \.ctx-pill\s*\{[^}]*min-height:\s*44px/s)
+  })
+
+  it('keeps WSL frame controls touch-sized with a visible keyboard focus treatment', () => {
+    expect(CSS).toMatch(/\.group-node__wsl \.group-node__wt-btn\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px/s)
+    expect(CSS).toMatch(/\.group-node__wsl \.group-node__wt-btn:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--md-primary\)/s)
+  })
+
   it('keeps narrow toasts clear of the navigation rail and bottom dock', () => {
     expect(CSS).toContain('  .toast-stack {\n    left: calc(var(--nav-rail-w) + 8px);')
     expect(CSS).toContain('    right: 8px;\n    /* The dock is bottom:22px with a 54px shell.')

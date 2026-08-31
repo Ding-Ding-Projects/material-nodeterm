@@ -17,7 +17,14 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
       authoritative: true,
       generation: 1
     } satisfies Snapshot),
-    hasCredential: vi.fn().mockResolvedValue(false),
+    credentialState: vi.fn().mockResolvedValue('absent'),
+    resetCredential: vi.fn().mockResolvedValue({ ok: true, record: {
+      version: 1,
+      enabled: false,
+      name: 'Kids mode',
+      authoritative: true,
+      generation: 2
+    }}),
     onChanged: vi.fn(() => () => {}),
     ...overrides
   }
@@ -35,7 +42,7 @@ describe('Kids-mode authoritative renderer state', () => {
 
   it('gates while the authoritative load is still pending', async () => {
     const load = vi.fn(() => new Promise<Snapshot>(() => {}))
-    install(api({ load, hasCredential: vi.fn(() => new Promise<boolean>(() => {})) }))
+    install(api({ load, credentialState: vi.fn(() => new Promise<string>(() => {})) }))
     const module = await import('./kidsMode')
     void module.useKidsMode.getState().init()
     await Promise.resolve()
@@ -153,5 +160,47 @@ describe('Kids-mode authoritative renderer state', () => {
       generation: 3
     })
     expect(module.kidsDestructiveGateRequired()).toBe(true)
+  })
+
+  it('keeps a present credential explicit and applies a targeted reset locally', async () => {
+    const resetCredential = vi.fn().mockResolvedValue({
+      ok: true,
+      record: { version: 1, enabled: false, name: 'Kids mode', authoritative: true, generation: 2 }
+    })
+    install(api({ credentialState: vi.fn().mockResolvedValue('present'), resetCredential }))
+    const module = await import('./kidsMode')
+    await module.useKidsMode.getState().init()
+    expect(module.useKidsMode.getState().credentialState).toBe('present')
+
+    await expect(module.useKidsMode.getState().resetCredential()).resolves.toEqual({ ok: true })
+    expect(resetCredential).toHaveBeenCalledOnce()
+    expect(module.useKidsMode.getState()).toMatchObject({ enabled: false, credentialState: 'absent' })
+  })
+
+  it('keeps credential state unavailable when its read fails', async () => {
+    install(api({ credentialState: vi.fn().mockRejectedValue(new Error('credential store unavailable')) }))
+    const module = await import('./kidsMode')
+    await module.useKidsMode.getState().init()
+    expect(module.useKidsMode.getState().credentialState).toBe('unavailable')
+  })
+
+  it('does not let an older credential read overwrite a newer local reset', async () => {
+    let releaseCredential!: (state: string) => void
+    const credentialState = vi.fn(() => new Promise<string>((resolve) => { releaseCredential = resolve }))
+    const resetCredential = vi.fn().mockResolvedValue({
+      ok: true,
+      record: { version: 1, enabled: false, name: 'Kids mode', authoritative: true, generation: 2 }
+    })
+    install(api({ credentialState, resetCredential }))
+    const module = await import('./kidsMode')
+    const init = module.useKidsMode.getState().init()
+    await Promise.resolve()
+
+    await module.useKidsMode.getState().resetCredential()
+    expect(module.useKidsMode.getState().credentialState).toBe('absent')
+    releaseCredential('present')
+    await init
+
+    expect(module.useKidsMode.getState().credentialState).toBe('absent')
   })
 })

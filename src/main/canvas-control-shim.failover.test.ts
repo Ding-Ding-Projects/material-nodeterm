@@ -87,7 +87,7 @@ function callShim(
 
 // Git for Windows cannot execute the generated POSIX shim when the existing Codex identity
 // prelude contains its POSIX character-class case pattern. The real-shell proof remains active on
-// POSIX hosts; Deen No coverage is provided by the generated-script contract tests.
+// POSIX hosts; Windows coverage is provided by the generated-script contract tests.
 describe.skipIf(process.platform === 'win32')('canvas-control shim endpoint failover (issue #445)', () => {
   it('a stale primary endpoint fails over to a live sibling endpoint and the verb succeeds', async () => {
     received = []

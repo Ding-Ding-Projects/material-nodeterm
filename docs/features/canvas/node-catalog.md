@@ -61,11 +61,20 @@ Plain text search is the default. The `.*` affordance is anchored beside the cat
 and opens the full regex builder for guided literals, classes, groups, alternation, quantifiers,
 flags, sample text, matches, and capture groups. Up and Down move the active row, Enter creates it,
 Escape clears the query before closing, and focus returns to the FAB or context-menu origin.
+When no project is active, the FAB is disabled and names the exact requirement to open or create a
+project first. This prevents a projectless welcome layer from hiding a node that was created on a
+canvas with nowhere durable to save it.
 
 The dialog follows the active English, playful Cantonese, or bilingual mode and the independent
 funny-level controls. Node names, dependency ids, paths, and capability facts remain exact while
 surrounding copy changes tone. The layout scrolls internally at narrow widths and retains a usable
 touch target at high display scales.
+
+The dialog shell keeps its introduction, search, category chips, profile chooser, and keyboard hint
+at their intrinsic height. Terminal profiles have a bounded internal scroll region for large real
+profile lists, while the result list is the flexible region that owns the remaining dialog height.
+Each result row is non-shrinking, so bilingual names, descriptions, and unavailable reasons remain
+readable instead of being squeezed into a few pixels.
 
 ## Failure modes and security
 

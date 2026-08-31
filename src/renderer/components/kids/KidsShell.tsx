@@ -22,6 +22,8 @@ type Screen = 'home' | 'gate' | 'timesUp' | 'parent' | 'stickers' | 'activity'
  */
 export function KidsShell(): React.JSX.Element {
   const name = useKidsMode((s) => s.name)
+  const credentialState = useKidsMode((s) => s.credentialState)
+  const refreshCredentialState = useKidsMode((s) => s.refreshCredentialState)
   const tickMinute = useKidsActivity((s) => s.tickMinute)
 
   const [screen, setScreen] = useState<Screen>(() => {
@@ -30,6 +32,12 @@ export function KidsShell(): React.JSX.Element {
   })
   const [activity, setActivity] = useState<KidsTileKind | null>(null)
   const [verifiedPin, setVerifiedPin] = useState('')
+
+  // A credential can be changed by another app while this shell is already mounted. Refresh before
+  // routing into the gate so a stale absent/present decision never decides which controls appear.
+  useEffect(() => {
+    void refreshCredentialState()
+  }, [refreshCredentialState])
 
   /** Every "go back to the kid-facing side" action routes through here, so a daily limit that
    *  fired while a grown-up was on the parent/gate screen is honoured the instant they try to
@@ -51,6 +59,10 @@ export function KidsShell(): React.JSX.Element {
     }, 60_000)
     return () => window.clearInterval(id)
   }, [screen, tickMinute])
+
+  if (credentialState === 'loading') {
+    return <div className="md3-kids-shell md3-kids-screen" role="status">Checking the shared PIN state…</div>
+  }
 
   return (
     <div className="md3-kids-shell">

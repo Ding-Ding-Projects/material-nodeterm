@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+- Restore reachable terminal and recovery flows in the Windows desktop application. New WSL
+  frames publish their first terminal in one transaction; existing empty frames offer a verified
+  **Open terminal** action; psmux installer terminals return an acknowledged placement receipt and
+  can be shown again. Kids mode distinguishes present, absent, unavailable, and loading credential
+  states, verifies even a cached no-PIN path against the host, serializes credential and record
+  mutations across processes, and offers a targeted two-key reset when no PIN was set. The compact
+  app bar mounts one branch at laptop widths, moves six secondary actions into a searchable More
+  surface, restores nested-picker focus, keeps Sessions controls touch-sized, and gives the 73-row
+  Node Catalog a bounded profile region plus a flexible scrolling list. Multiverse door creation
+  now survives responsive resizing, and projectless node creation is disabled before a node can be
+  hidden behind the welcome surface. The main integration is
+  [`c9540e21`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/c9540e2166dccc6ceb10b8e1c4d4cd25f9749d23),
+  compact unavailable-action copy is
+  [`4f5cb211`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/4f5cb211394be3a7574aa4c2c3272985283fdbee),
+  and the projectless guard is
+  [`6a1c476a`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/6a1c476a8ae30a58801b7c25d3e33730c7f92c32).
+
+  Windows desktop 嘅終端機同復原流程而家重新接得返。新 WSL 框架會一次過落埋第一個終端機，
+  舊空框架有經即時驗證嘅 **Open terminal**；psmux 安裝終端機會等放置成功先出收據，亦可以再顯示。
+  Kids mode 會分清 PIN 存在、唔存在、檢查唔到同載入中，連快取嘅冇-PIN 路徑都會再問 host；
+  credential 同 record 變更跨 process 用同一鎖序，真係冇設定過 PIN 就可以行指定兩匙重設。
+  精簡工具列喺 laptop 闊度只掛一個分支，六個次要操作搬入可搜尋 More，nested picker focus
+  會正常交接，Sessions 操作保持足夠觸控尺寸，73 行 Node Catalog 就由有界 profile 區加可捲動
+  結果清單負責。Multiverse 起門途中改視窗大小都唔會甩流程，冇開專案亦唔可以再建立一個匿喺
+  welcome 畫面後面嘅節點。主要整合係
+  [`c9540e21`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/c9540e2166dccc6ceb10b8e1c4d4cd25f9749d23)，
+  精簡操作嘅 unavailable 說明係
+  [`4f5cb211`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/4f5cb211394be3a7574aa4c2c3272985283fdbee)，
+  projectless 保護係
+  [`6a1c476a`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/6a1c476a8ae30a58801b7c25d3e33730c7f92c32)。
+
 - Repair release code-name selection so prior release bodies are read once, previously used
   catalog ids and bilingual names are excluded, and the next unused dish with a published photo
   is selected within a bounded probe budget. A missing history snapshot omits the optional name
@@ -1214,6 +1245,14 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
   and the Ollama manager are now reached through the rail's Files/Tools destinations.
 
 ### Fixed
+
+- Windows desktop terminal creation, WSL frame binding, compact top-bar actions, Sessions target
+  sizing, the 73-row Node Catalog, resize-stable Multiverse door construction, and Kids credential
+  recovery now use acknowledged, fail-closed, keyboard-reachable paths. Projectless Add node is
+  disabled before it can create an unreachable node behind the welcome surface. See
+  [`c9540e21`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/c9540e2166dccc6ceb10b8e1c4d4cd25f9749d23),
+  [`4f5cb211`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/4f5cb211394be3a7574aa4c2c3272985283fdbee),
+  and [`6a1c476a`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/6a1c476a8ae30a58801b7c25d3e33730c7f92c32).
 
 - The worktree creation dialog now applies the uploaded personal vocabulary to app-authored
   labels and guidance while keeping paths, branch names, refs, typed values, and Git errors exact.

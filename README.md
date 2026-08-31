@@ -20,9 +20,10 @@ Windows terminals can reconnect through a dedicated session host.
 [Screenshots](#real-application-screenshots) · [Build](#build-from-source) ·
 [Documentation](#documentation) · [Contributing](#contributing) · [License](#license)
 
-**Latest published release baseline:** [v0.4.152](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v0.4.152),
-published 2026-08-29 at 17:09:00 UTC. The source tree currently prepares a deliberate `1.0.0`
-major candidate; that candidate is not published yet.
+**Latest published release baseline:** [v1.0.5](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v1.0.5),
+published 2026-08-30 at 02:40:59 UTC from commit `e7ca458eaba7`. The source package remains at the
+deliberate `1.0.0` major baseline; the release workflow has planned and published stable patch
+releases through `1.0.5` without rewriting that source version.
 
 </div>
 
@@ -49,15 +50,15 @@ custom domain belongs to the upstream repository, so this fork publishes its doc
 instead — note the trailing `/material-nodeterm/`.
 ## Install
 
-The latest verified release baseline for this document is **v0.4.152**:
+The latest verified release baseline for this document is **v1.0.5**:
 
-[**Download nodeterm Setup 0.4.152 for Windows x64**](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.152/nodeterm-Setup-0.4.152.exe)
+[**Download nodeterm Setup 1.0.5 for Windows x64**](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v1.0.5/nodeterm-Setup-1.0.5.exe)
 
 | Release file | Purpose | SHA-256 |
 | --- | --- | --- |
-| [`nodeterm-Setup-0.4.152.exe`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.152/nodeterm-Setup-0.4.152.exe) | Squirrel.Windows installer | `bfb212f39ce8b61f3d229a97dba4f77d2697b12856ea4ddd31f18d974f0aadda` |
-| [`node-terminal-0.4.152-full.nupkg`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.152/node-terminal-0.4.152-full.nupkg) | Full Squirrel package | `082cde5a7629a5c27812d63e54dab2a3380f7f26eb5fbc36a18d7409c8737f63` |
-| [`RELEASES`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.152/RELEASES) | Squirrel update index | `10050585e89c18f392deb36207dafd21ab1f8f7e1ca20d767e4697a6257fae49` |
+| [`nodeterm-Setup-1.0.5.exe`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v1.0.5/nodeterm-Setup-1.0.5.exe) | Squirrel.Windows installer | `1598bb130653973569e3488f73073f656ea90c5549e1f7c3929d1f1efb82d592` |
+| [`node-terminal-1.0.5-full.nupkg`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v1.0.5/node-terminal-1.0.5-full.nupkg) | Full Squirrel package | `6b6a2a2af984df2fa7f805940075e3ee1c74b13073d7fd88fda75f08881d7c57` |
+| [`RELEASES`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v1.0.5/RELEASES) | Squirrel update index | `a6463e4b4c28b3c336fe7c010452462478136ba3814f0b4502043b94fa884dda` |
 
 > [!WARNING]
 > **The installer is unsigned.** Code signing is intentionally not used. Windows SmartScreen
@@ -227,6 +228,24 @@ The Status destination keeps operational state separate from promotional messagi
 
 Kids mode is a user-experience surface. Its gate is not described as encryption or protection from
 someone who controls the computer.
+
+#### Terminal, compact-layout, and Kids recovery evidence
+
+| Compact More | Node Catalog | Real terminal |
+| --- | --- | --- |
+| ![The compact 1013-pixel app bar with a searchable More surface listing six active project actions](./docs/assets/shots/app-compact-more.png) | ![The 73-row Node Catalog with fixed search and profile sections above a flexible scrolling result list](./docs/assets/shots/app-node-catalog-73.png) | ![A real Terminal 1 node on the canvas with one live xterm surface and one matching Sessions row](./docs/assets/shots/app-terminal-created.png) |
+| One compact branch is mounted at laptop width. | Rows retain their full height and the list scrolls internally. | Terminal creation produces a reachable canvas node rather than a hidden or phantom receipt. |
+
+| Projectless protection | Credential unavailable | Targeted reset |
+| --- | --- | --- |
+| ![The projectless canvas with Add node visibly disabled until a project is opened or created](./docs/assets/shots/app-projectless-add-disabled.png) | ![The Kids parent gate refusing entry when the shared credential cannot be checked and offering the targeted recovery action](./docs/assets/shots/app-kids-unavailable-recovery.png) | ![The targeted Kids PIN reset confirmation with two independent keys and a disabled full-range slider](./docs/assets/shots/app-kids-targeted-reset.png) |
+| Projectless node creation cannot hide a node behind the welcome surface. | An unavailable credential stays closed and does not render a misleading keypad. | The recovery names exactly the Kids state it can remove and leaves every other setting unchanged. |
+
+![The AWS Universe picker opened from compact More with keyboard focus transferred to its search field](./docs/assets/shots/app-aws-from-compact-more.png)
+
+The task-specific [capture manifest](./docs/assets/shots/ui-recovery-capture-manifest.json) records
+the built source commits, dimensions, byte sizes, SHA-256 values, exact single-target headless
+method, built-output hashes, and privacy verdict for these captures.
 
 <details>
 <summary><strong>Docker host settings</strong></summary>

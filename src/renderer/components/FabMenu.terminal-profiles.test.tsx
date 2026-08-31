@@ -8,6 +8,7 @@ import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
 import { useSettings } from '../state/settings'
 import { usePersonalVocabulary } from '../state/personalVocabulary'
 import { useSchoolMode } from '../state/schoolMode'
+import { useProjects } from '../state/projects'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -34,6 +35,7 @@ afterEach(() => {
   useSettings.setState({ settings: originalSettings, base: originalBase })
   usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0 })
   useSchoolMode.setState({ enabled: false })
+  useProjects.getState().hydrate({ version: 2, activeProjectId: '', projects: [] })
 })
 
 function button(label: string, startsWith = false): HTMLButtonElement {
@@ -51,6 +53,8 @@ function renderFabMenu(
   onAddTerminal: ReturnType<typeof vi.fn>
   onAddTerminalWithProfile: ReturnType<typeof vi.fn>
 } {
+  const project = useProjects.getState().addProject('Fixture project')
+  useProjects.setState({ projects: [project], activeProjectId: project.id })
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -91,6 +95,17 @@ function openProfileMenu(): void {
 }
 
 describe('FabMenu (nav rail) Windows terminal profile creation', () => {
+  it('closes and disables node creation when no project is active', () => {
+    renderFabMenu()
+    openAddMenu()
+    act(() => useProjects.setState({ activeProjectId: '' }))
+    const add = host?.querySelector<HTMLButtonElement>('.md3-fab')
+    expect(add?.disabled).toBe(true)
+    expect(add?.title).toBe('Open or create a project before adding nodes.')
+    expect(add?.getAttribute('aria-label')).toContain('Open or create a project first.')
+    expect(host?.querySelector('.md3-fab-menu')).toBeNull()
+  })
+
   it('keeps the ordinary Terminal row as the direct saved-default action', () => {
     const { onAddTerminal, onAddTerminalWithProfile } = renderFabMenu()
 

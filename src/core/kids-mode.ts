@@ -5,8 +5,8 @@
 //
 // The record lives in the same SHARED local application-data directory (`~/.nodeterm/shared`),
 // so several apps on one machine honour the same switch and a running app picks up a change
-// LIVE. Entering needs no proof; leaving needs the grown-up PIN. That much is identical, which
-// is exactly why the credential half was extracted rather than copied.
+// LIVE. First enrollment chooses a PIN; later entry and leaving require the grown-up PIN. The
+// credential half is shared with School mode, while record semantics remain separate.
 //
 // Everything the modes MEAN is different, and they must not be collapsed into one:
 //
@@ -25,13 +25,13 @@
 
 import os from 'os'
 import path from 'path'
+import { promises as fs } from 'fs'
 
 import { IPC } from '../shared/ipc'
-import type { KidsModeRecord, KidsModeSnapshot } from '../shared/types'
+import type { KidsCredentialState, KidsModeRecord, KidsModeSnapshot } from '../shared/types'
 import { DEFAULT_KIDS_MODE_NAME } from '../shared/kids-mode-name'
 import { platform } from './platform'
 import {
-  hasCredential as credentialExists,
   isAcceptablePin,
   setCredential as writeCredential,
   verifyPin as checkPin,
@@ -51,6 +51,7 @@ import {
 } from './shared-record-watch'
 
 const MAX_NAME_LENGTH = 80
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 
 // Re-exported from src/shared so the renderer can use it as a pre-IPC default without importing
 // this node:fs-using module into the browser bundle. One definition, so the two cannot drift.
@@ -143,6 +144,9 @@ export class KidsModeStore {
   private lifecycle = 0
   /** Invalidates a read that began before a newer watcher event announced possible replacement. */
   private recordChangeGeneration = 0
+  /** Credential reads and mutations advance one local epoch so stale renderer responses cannot
+   *  describe newer credential state. */
+  private credentialReadEpoch = 0
 
   constructor(deps: KidsModeStoreDeps = {}) {
     this.readSnapshot = deps.readSnapshot ?? readAtomicFileSnapshot
@@ -284,18 +288,31 @@ export class KidsModeStore {
     mutate: (current: KidsModeRecord) => KidsModeRecord
   ): Promise<KidsModeSnapshot> {
     const file = recordFile()
-    const next = await this.withLock(file, async (lease: CrossProcessLease) => {
-      const loaded = await this.loadStrict()
-      const record = mutate(loaded.record)
-      await this.writeCompared(
-        file,
-        JSON.stringify(record, null, 2),
-        loaded.revision,
-        lease,
-        { encoding: 'utf8', mode: 0o600 }
-      )
-      return record
-    })
+    const next = await this.withLock(file, (lease: CrossProcessLease) =>
+      this.mutateRecordWithLease(mutate, lease)
+    )
+
+    return this.publishRecord(next)
+  }
+
+  private async mutateRecordWithLease(
+    mutate: (current: KidsModeRecord) => KidsModeRecord,
+    lease: CrossProcessLease
+  ): Promise<KidsModeRecord> {
+    const file = recordFile()
+    const loaded = await this.loadStrict()
+    const record = mutate(loaded.record)
+    await this.writeCompared(
+      file,
+      JSON.stringify(record, null, 2),
+      loaded.revision,
+      lease,
+      { encoding: 'utf8', mode: 0o600 }
+    )
+    return record
+  }
+
+  private publishRecord(next: KidsModeRecord): KidsModeSnapshot {
 
     const before = this.snapshot()
     this.cache = next
@@ -314,23 +331,94 @@ export class KidsModeStore {
     return run
   }
 
-  hasCredential(): Promise<boolean> {
-    return credentialExists(credentialFile())
+  /**
+   * Classify the shared PIN without exposing any credential material. ENOENT is the only proof
+   * that no PIN exists. Malformed, unreadable, or unsealable bytes remain unavailable so a stale
+   * renderer can never turn an unknown credential into an enrollment or bypass.
+   */
+  private async credentialStateUnlocked(): Promise<KidsCredentialState> {
+    let raw: string
+    try {
+      raw = await fs.readFile(credentialFile(), 'utf8')
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return 'absent'
+      return 'unavailable'
+    }
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      return 'unavailable'
+    }
+    if (!parsed || typeof parsed !== 'object') return 'unavailable'
+    const value = parsed as Record<string, unknown>
+    if (
+      value.version !== 1 ||
+      typeof value.salt !== 'string' ||
+      typeof value.hash !== 'string' ||
+      typeof value.sealed !== 'boolean' ||
+      value.salt.length === 0 ||
+      value.hash.length === 0 ||
+      !BASE64.test(value.salt) ||
+      !BASE64.test(value.hash) ||
+      Buffer.from(value.salt, 'base64').length === 0 ||
+      Buffer.from(value.hash, 'base64').length === 0
+    ) return 'unavailable'
+
+    // A sealed record is usable only when this process can unseal it. The returned bytes stay
+    // inside this method and are never returned, logged, or included in a snapshot.
+    try {
+      if (value.sealed) {
+        const p = platform()
+        if (typeof p.unsealSecret !== 'function') return 'unavailable'
+        const unsealed = p.unsealSecret(Buffer.from(value.hash, 'base64')).toString('utf8')
+        if (!BASE64.test(unsealed) || Buffer.from(unsealed, 'base64').length === 0) return 'unavailable'
+      } else if (Buffer.from(value.hash, 'base64').length === 0) {
+        return 'unavailable'
+      }
+    } catch {
+      return 'unavailable'
+    }
+    return 'present'
   }
 
-  /** Turn it ON. A PIN is required only the first time, and becomes the grown-up PIN. */
+  async credentialState(): Promise<KidsCredentialState> {
+    this.credentialReadEpoch += 1
+    return this.withLock(credentialFile(), async (lease) => {
+      await lease.fence()
+      return this.credentialStateUnlocked()
+    })
+  }
+
+  /** Turn it ON. First enrollment chooses a PIN; every later enable verifies the existing PIN. */
   enable(pin?: string): Promise<KidsModeSnapshot> {
+    this.credentialReadEpoch += 1
     const run = this.chain.then(async () => {
-      if (!(await this.hasCredential())) {
-        const trimmed = (pin ?? '').trim()
-        if (!isAcceptablePin(trimmed)) {
-          throw new Error(
-            `a PIN of at least ${MIN_PIN_LENGTH} characters is required the first time kids mode is turned on`
-          )
+      return this.withLock(credentialFile(), async (credentialLease: CrossProcessLease) => {
+        const credential = await this.credentialStateUnlocked()
+        if (credential === 'unavailable') {
+          throw new Error('the grown-up PIN could not be checked on this machine')
         }
-        await writeCredential(credentialFile(), trimmed)
-      }
-      return this.mutateRecord((current) => ({ ...current, enabled: true }))
+        if (credential === 'absent') {
+          const trimmed = (pin ?? '').trim()
+          if (!isAcceptablePin(trimmed)) {
+            throw new Error(
+              `a PIN of at least ${MIN_PIN_LENGTH} characters is required the first time kids mode is turned on`
+            )
+          }
+          await writeCredential(credentialFile(), trimmed, credentialLease)
+        } else if (!(await checkPin(credentialFile(), (pin ?? '').trim()))) {
+          throw new Error('incorrect PIN')
+        }
+        return this.withLock(recordFile(), async (recordLease: CrossProcessLease) => {
+          const next = await this.mutateRecordWithLease(
+            (current) => ({ ...current, enabled: true }),
+            recordLease
+          )
+          return this.publishRecord(next)
+        })
+      })
     })
     this.chain = run.catch(() => {})
     return run
@@ -349,23 +437,35 @@ export class KidsModeStore {
    * A lock nobody can open is not a lock, it is a lockout, and this one is a self-imposed
    * speed bump rather than a security boundary. So an absent credential disables freely.
    *
-   * This does NOT weaken a real lock: `hasCredential` reports false only for ENOENT. An
-   * unreadable or unsealable credential still throws, still lands in the catch below, and still
-   * keeps the mode locked — deliberately, because "cannot verify" must never read as "no key".
+   * This does NOT weaken a real lock: `credentialState()` reports absent only for ENOENT. An
+   * unreadable or unsealable credential remains unavailable and keeps the mode locked, because
+   * "cannot verify" must never read as "no key".
    */
   disable(pin: string): Promise<{ ok: true; record: KidsModeSnapshot } | { ok: false; error: string }> {
+    this.credentialReadEpoch += 1
     const run = this.chain.then(async () => {
-      if (!(await this.hasCredential())) {
+      return this.withLock(credentialFile(), async (credentialLease: CrossProcessLease) => {
+        const credential = await this.credentialStateUnlocked()
+        if (credential === 'absent') {
+          return {
+            ok: true as const,
+            record: await this.withLock(recordFile(), (recordLease: CrossProcessLease) =>
+              this.mutateRecordWithLease((current) => ({ ...current, enabled: false }), recordLease)
+                .then((next) => this.publishRecord(next))
+            )
+          }
+        }
+        if (credential === 'unavailable') throw new Error('the grown-up PIN could not be checked on this machine')
+        if (!(await checkPin(credentialFile(), pin))) return { ok: false as const, error: 'incorrect PIN' }
+        await credentialLease.fence()
         return {
           ok: true as const,
-          record: await this.mutateRecord((current) => ({ ...current, enabled: false }))
+          record: await this.withLock(recordFile(), (recordLease: CrossProcessLease) =>
+            this.mutateRecordWithLease((current) => ({ ...current, enabled: false }), recordLease)
+              .then((next) => this.publishRecord(next))
+          )
         }
-      }
-      if (!(await checkPin(credentialFile(), pin))) return { ok: false as const, error: 'incorrect PIN' }
-      return {
-        ok: true as const,
-        record: await this.mutateRecord((current) => ({ ...current, enabled: false }))
-      }
+      })
     })
     this.chain = run.catch(() => ({
       ok: false as const,
@@ -375,12 +475,16 @@ export class KidsModeStore {
   }
 
   changePin(currentPin: string, nextPin: string): Promise<boolean> {
+    this.credentialReadEpoch += 1
     const run = this.chain.then(async () => {
-      if (!(await checkPin(credentialFile(), currentPin))) return false
-      const trimmed = nextPin.trim()
-      if (!isAcceptablePin(trimmed)) return false
-      await writeCredential(credentialFile(), trimmed)
-      return true
+      return this.withLock(credentialFile(), async (credentialLease: CrossProcessLease) => {
+        if ((await this.credentialStateUnlocked()) !== 'present') return false
+        if (!(await checkPin(credentialFile(), currentPin))) return false
+        const trimmed = nextPin.trim()
+        if (!isAcceptablePin(trimmed)) return false
+        await writeCredential(credentialFile(), trimmed, credentialLease)
+        return true
+      })
     })
     this.chain = run.catch(() => false)
     return run
@@ -400,8 +504,47 @@ export class KidsModeStore {
    * inventing a stricter rule for one screen.
    */
   async verifyPin(pin: string): Promise<boolean> {
-    if (!(await this.hasCredential())) return true
-    return checkPin(credentialFile(), pin)
+    this.credentialReadEpoch += 1
+    return this.withLock(credentialFile(), async (lease: CrossProcessLease) => {
+      const state = await this.credentialStateUnlocked()
+      if (state === 'absent') return true
+      if (state === 'unavailable') return false
+      await lease.fence()
+      return checkPin(credentialFile(), pin)
+    })
+  }
+
+  /** Remove only the Kids credential and turn the shared Kids record off. */
+  resetCredential(): Promise<
+    | { ok: true; record: KidsModeSnapshot }
+    | { ok: false; error: string }
+  > {
+    this.credentialReadEpoch += 1
+    const run = this.chain.then(async () => {
+      // Credential writers use this lock, so the re-read and removal cannot race a concurrent
+      // enrollment. The record is written first, preserving the safe off state if file removal is
+      // interrupted; a subsequent retry can finish the credential removal without touching other
+      // shared records.
+      const result = await this.withLock(credentialFile(), async (credentialLease: CrossProcessLease) => {
+        const record = await this.withLock(recordFile(), async (recordLease: CrossProcessLease) => {
+          return this.mutateRecordWithLease((current) => ({ ...current, enabled: false }), recordLease)
+        })
+        await credentialLease.fence()
+        await fs.rm(credentialFile(), { force: true })
+        return record
+      })
+      const before = this.snapshot()
+      this.cache = result
+      this.readAuthoritative = true
+      this.watcher.recordWritten()
+      this.notifyIfChanged(before)
+      return { ok: true as const, record: this.snapshot() }
+    })
+    this.chain = run.catch(() => ({
+      ok: false as const,
+      error: 'the Kids mode PIN reset could not be completed'
+    }))
+    return run
   }
 
   registerIpc(): void {
@@ -411,8 +554,9 @@ export class KidsModeStore {
     p.handle(IPC.kidsModeDisable, (pin: string) => this.disable(pin))
     p.handle(IPC.kidsModeRename, (name: string) => this.rename(name))
     p.handle(IPC.kidsModeChangePin, (a: string, b: string) => this.changePin(a, b))
-    p.handle(IPC.kidsModeHasCredential, () => this.hasCredential())
+    p.handle(IPC.kidsModeCredentialState, () => this.credentialState())
     p.handle(IPC.kidsModeVerifyPin, (pin: string) => this.verifyPin(pin))
+    p.handle(IPC.kidsModeResetCredential, () => this.resetCredential())
     this.onChange((r) => p.broadcast(IPC.kidsModeChanged, r))
   }
 }
