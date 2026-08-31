@@ -42,6 +42,12 @@ export function setWslActionHandler(fn: ((groupId: string, action: WslAction) =>
   wslActionHandler = fn
 }
 
+/** Canvas registers the explicit recovery action for a persisted WSL frame with no terminal. */
+let wslTerminalHandler: ((groupId: string) => void) | null = null
+export function setWslTerminalHandler(fn: ((groupId: string) => void) | null): void {
+  wslTerminalHandler = fn
+}
+
 /**
  * A group frame: a dashed, rounded, translucent box that contains child nodes. A floating
  * label pill (color dot + name) sits on the top border; ungroup/× appear top-right on hover.
@@ -112,6 +118,7 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const wslOwnedByApp = useWsl((s) => s.ownedByApp)
   const wslGone = !!wsl && !wslEnumerated.has(wsl.distroName)
   const wslCanManage = canManageWslDistro(wsl, wslEnumerated, wslOwnedByApp)
+  const wslHasTerminal = flowNodes.some((node) => node.parentId === id && node.type === 'terminal')
 
   // On an SSH project the poll is OFF, not merely useless: `git status <path>` would be answered by
   // the LOCAL filesystem for a project whose checkout lives on the host (remote git routing is
@@ -436,6 +443,18 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
               )}
               {wslGone && <em className="group-node__branch--stale"> · {vocab('missing')}</em>}
             </span>
+            {!wslGone && (
+              !wslHasTerminal && (
+                <button
+                  className="group-node__wt-btn"
+                  title={vocab('Open a terminal in this WSL instance')}
+                  aria-label={vocab('Open a terminal in this WSL instance')}
+                  onClick={() => wslTerminalHandler?.(id)}
+                >
+                  {vocab('Open terminal')}
+                </button>
+              )
+            )}
             {!wslGone && (
               <button
                 className="group-node__wt-btn"

@@ -4,6 +4,14 @@ A group frame on the canvas can be **bound to a WSL distribution**. Every termin
 that frame opens in that distribution, which makes "one agent per Linux environment" the same
 gesture as "one frame per environment" — the same shape the worktree binding already uses.
 
+Creating a new instance is one canvas transaction: after `wsl.exe` confirms the instance, the
+renderer publishes the bound group first and one selected terminal child in the same state update.
+The child uses bounded in-frame geometry, the active project's cwd, and the exact distribution
+profile id. A saved WSL frame from an older version with no child is not auto-spawned during load.
+Instead, its header exposes **Open terminal**, which performs the same live revalidation and creates
+one child only after the user asks. If the distribution or its profile cannot be revalidated, the
+action stays closed and reports the unavailable reason rather than falling back to another shell.
+
 ## The one rule that matters
 
 **nodeterm never sleeps, wakes, or deletes a distribution it did not create.**

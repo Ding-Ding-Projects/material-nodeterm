@@ -15,7 +15,8 @@ describe('tmuxInstall', () => {
 
   it('win32: suggests the supported psmux install when WinGet is available', () => {
     expect(tmuxInstall('win32', (command) => command === 'winget')).toEqual({
-      command: 'winget install -e --id marlocarlo.psmux',
+      command:
+        'winget install --exact --id marlocarlo.psmux --source winget --accept-source-agreements --accept-package-agreements --silent',
       label: 'Install psmux'
     })
     expect(tmuxInstall('win32', () => false)).toBeNull()

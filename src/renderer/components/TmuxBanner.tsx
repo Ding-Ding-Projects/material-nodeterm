@@ -16,7 +16,11 @@ export const INSTALL_POLL_MS = 3000
 export const INSTALL_CAP_MS = 5 * 60_000
 export const READY_HIDE_MS = 6000
 
-export type InstallPhase = 'missing' | 'installing' | 'ready' | 'failed'
+export type InstallPhase = 'missing' | 'installing' | 'ready' | 'failed' | 'placement-failed'
+
+export type TerminalCreationReceipt =
+  | { ok: true; nodeId: string }
+  | { ok: false; reason: string }
 
 /** Poll verdict while installing: available wins outright; past the cap → failed. */
 export function pollOutcome(available: boolean, elapsedMs: number): InstallPhase {
@@ -33,7 +37,8 @@ export function multiplexerName(platform: string): string {
 export function bannerCopy(
   phase: InstallPhase,
   platform: string,
-  hasInstallCommand: boolean
+  hasInstallCommand: boolean,
+  placementReason?: string
 ): { title: string; body: string } {
   const name = multiplexerName(platform)
   const win = platform === 'win32'
@@ -58,6 +63,14 @@ export function bannerCopy(
         : 'The install hasn’t completed. Check the terminal node for errors, or install tmux with your package manager and restart nodeterm.'
     }
   }
+  if (phase === 'placement-failed') {
+    return {
+      title: 'Installer terminal unavailable',
+      body:
+        placementReason ??
+        'The installer terminal could not be placed on the canvas. Retry to try the bounded placement search again.'
+    }
+  }
   if (hasInstallCommand) {
     return {
       title,
@@ -72,10 +85,18 @@ export function bannerCopy(
   }
 }
 
-export function TmuxBanner({ onInstall }: { onInstall: (command: string) => void }): JSX.Element | null {
+export function TmuxBanner({
+  onInstall,
+  onShowInstallerTerminal
+}: {
+  onInstall: (command: string) => TerminalCreationReceipt
+  onShowInstallerTerminal?: (nodeId: string) => void
+}): JSX.Element | null {
   const [status, setStatus] = useState<TmuxStatus | null>(null)
   const [dismissed, setDismissed] = useState(false)
   const [phase, setPhase] = useState<InstallPhase>('missing')
+  const [placementReason, setPlacementReason] = useState<string | undefined>()
+  const [installerNodeId, setInstallerNodeId] = useState<string | undefined>()
   const startedAtRef = useRef(0)
 
   useEffect(() => {
@@ -124,9 +145,14 @@ export function TmuxBanner({ onInstall }: { onInstall: (command: string) => void
   if (!status || dismissed) return null
   if (status.available && phase === 'missing') return null
 
-  const { title, body } = bannerCopy(phase, status.platform ?? '', !!status.installCommand)
+  const { title, body } = bannerCopy(
+    phase,
+    status.platform ?? '',
+    !!status.installCommand,
+    placementReason
+  )
 
-  const showInstall = (phase === 'missing' || phase === 'failed') && !!status.installCommand
+  const showInstall = (phase === 'missing' || phase === 'failed' || phase === 'placement-failed') && !!status.installCommand
   return (
     <div className="announce-banner announce-banner--warning">
       <span className="announce-banner__dot" />
@@ -134,12 +160,29 @@ export function TmuxBanner({ onInstall }: { onInstall: (command: string) => void
         <span className="announce-banner__title">{title}</span>
         <span className="announce-banner__body">{body}</span>
       </div>
+      {phase === 'installing' && installerNodeId && (
+        <button
+          className="announce-banner__btn"
+          title="Show installer terminal"
+          onClick={() => onShowInstallerTerminal?.(installerNodeId)}
+        >
+          Show installer terminal
+        </button>
+      )}
       {showInstall && (
         <button
           className="announce-banner__btn"
           title={status.installCommand!}
           onClick={() => {
-            onInstall(status.installCommand!)
+            const receipt = onInstall(status.installCommand!)
+            setPlacementReason(undefined)
+            if (!receipt.ok) {
+              setInstallerNodeId(undefined)
+              setPlacementReason(receipt.reason)
+              setPhase('placement-failed')
+              return
+            }
+            setInstallerNodeId(receipt.nodeId)
             startedAtRef.current = Date.now()
             setPhase('installing')
           }}

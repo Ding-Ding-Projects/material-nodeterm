@@ -36,9 +36,14 @@ export function tmuxInstall(
   }
   if (platform === 'win32') {
     // psmux supplies the tmux command surface on Windows. Keep the install action pinned to the
-    // exact WinGet id so a terminal node never waits on an ambiguous package search.
+    // exact WinGet id and source. Agreement flags make the terminal action non-interactive, so a
+    // psmux install cannot sit forever behind a hidden prompt in the newly-created node.
     if (hasCommand('winget')) {
-      return { command: 'winget install -e --id marlocarlo.psmux', label: 'Install psmux' }
+      return {
+        command:
+          'winget install --exact --id marlocarlo.psmux --source winget --accept-source-agreements --accept-package-agreements --silent',
+        label: 'Install psmux'
+      }
     }
     return null
   }
