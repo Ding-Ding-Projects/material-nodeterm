@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { AnchoredPopover } from '../ui/AnchoredPopover'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
@@ -18,6 +18,8 @@ export interface CompactTopBarMenuProps {
   items: readonly CompactTopBarMenuItem[]
   label?: string
   className?: string
+  /** Optional shared anchor used by compact child pickers opened from this menu. */
+  triggerRef?: RefObject<HTMLButtonElement>
 }
 
 /**
@@ -25,10 +27,11 @@ export interface CompactTopBarMenuProps {
  * second copy of the wide controls: the caller supplies the same callbacks, and this component
  * supplies the local search, regex builder, keyboard path, and focus return.
  */
-export function CompactTopBarMenu({ items, label = 'More', className }: CompactTopBarMenuProps): React.JSX.Element {
+export function CompactTopBarMenu({ items, label = 'More', className, triggerRef: providedTriggerRef }: CompactTopBarMenuProps): React.JSX.Element {
   const vocab = useLocalizedVocabularyText()
   const [open, setOpen] = useState(false)
-  const triggerRef = useRef<HTMLButtonElement>(null)
+  const internalTriggerRef = useRef<HTMLButtonElement>(null)
+  const triggerRef = providedTriggerRef ?? internalTriggerRef
   const inputRef = useRef<HTMLInputElement>(null)
   const search = useRegexSearchField()
 
@@ -99,14 +102,13 @@ export function CompactTopBarMenu({ items, label = 'More', className }: CompactT
             />
           </div>
         </div>
-        <div id="compact-top-bar-actions" className="md3-compact-more__list" role="menu" aria-label={vocab('topBar.more.label', label)}>
+        <div id="compact-top-bar-actions" className="md3-compact-more__list" aria-label={vocab('topBar.more.label', label)}>
           {visible.length === 0 ? (
             <p className="md3-compact-more__empty" role="status">{vocab('topBar.more.empty', 'No actions match this search.')}</p>
           ) : visible.map((item) => (
             <button
               key={item.id}
               type="button"
-              role="menuitem"
               disabled={item.disabled}
               title={item.disabledReason}
               onClick={() => {

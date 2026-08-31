@@ -25,6 +25,8 @@ interface WslCreateDialogProps {
   busy: boolean
   error: WslDialogError | null
   onCreate: (v: { operationId: string; catalogueId: string; name: string }) => void
+  /** Retry only the canvas binding after the machine-local instance was already created. */
+  onBindCreated?: () => void
   onCancelCreate: (operationId: string) => Promise<boolean>
   onCancel: () => void
 }
@@ -48,6 +50,7 @@ export function WslCreateDialog({
   busy,
   error,
   onCreate,
+  onBindCreated,
   onCancelCreate,
   onCancel
 }: WslCreateDialogProps): React.JSX.Element {
@@ -215,6 +218,11 @@ export function WslCreateDialog({
           <Button type="button" variant="text" onClick={() => void cancel()} disabled={cancelRequested}>
             {cancelRequested ? copy('cancelling') : copy('cancel')}
           </Button>
+          {onBindCreated && (
+            <Button type="button" variant="tonal" disabled={busy} onClick={onBindCreated}>
+              {busy ? copy('bindingCreated') : copy('bindCreated')}
+            </Button>
+          )}
           <Button
             type="button"
             variant="filled"

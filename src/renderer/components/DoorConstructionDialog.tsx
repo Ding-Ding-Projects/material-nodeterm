@@ -23,7 +23,8 @@ export interface DoorConstructionDialogProps {
   doorId: string
   pairedDoorId: string
   initialLabel?: string
-  onConstruct: (construction: PortableDoorConstructionV3) => void
+  /** Return false when persistence fails so the reviewable dialog remains open for recovery. */
+  onConstruct: (construction: PortableDoorConstructionV3) => boolean | void
 }
 
 interface PartChoice {
@@ -229,8 +230,7 @@ export function DoorConstructionDialog({ open, onClose, canvasId, targetCanvasId
       setMessage(result.reason)
       return
     }
-    onConstruct(result.construction)
-    onClose()
+    if (onConstruct(result.construction) !== false) onClose()
   }
 
   return (

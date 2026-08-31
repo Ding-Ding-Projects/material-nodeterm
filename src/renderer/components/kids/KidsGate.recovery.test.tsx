@@ -64,10 +64,23 @@ describe('Kids gate credential-state routing', () => {
     mount()
     const button = [...host!.querySelectorAll('button')].find((item) => item.textContent?.includes('I never set this PIN'))
     expect(button).toBeTruthy()
+    vi.spyOn(button!, 'getBoundingClientRect').mockReturnValue({
+      x: 12,
+      y: 18,
+      left: 12,
+      top: 18,
+      right: 132,
+      bottom: 62,
+      width: 120,
+      height: 44,
+      toJSON: () => ({})
+    })
     act(() => button!.click())
     expect(useDestructiveGate.getState().request).toMatchObject({
       title: 'Reset the Kids mode PIN',
-      confirmLabel: 'Reset Kids mode PIN'
+      confirmLabel: 'Reset Kids mode PIN',
+      anchor: { x: 12, y: 62 },
+      restoreFocusEl: button
     })
   })
 

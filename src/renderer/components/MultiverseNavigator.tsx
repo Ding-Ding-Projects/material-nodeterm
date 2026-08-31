@@ -1,14 +1,12 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { MAX_MULTIVERSE_DEPTH, ROOT_CANVAS_ID, multiverseCanvasPath } from '@shared/multiverse-canvases'
 import { useProjects } from '../state/projects'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { AnchoredPopover } from '../ui/AnchoredPopover'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
-import { DoorConstructionDialog } from './DoorConstructionDialog'
-import { createPortableDoorConstruction, type PortableDoorConstructionV3 } from '@shared/door-construction'
 
-interface PendingDoorConstruction {
+export interface PendingDoorConstruction {
   parentCanvasId: string
   childCanvasId: string
   entryDoorId: string
@@ -19,22 +17,17 @@ interface PendingDoorConstruction {
 interface MultiverseNavigatorProps {
   onNavigate: (canvasId: string) => void
   onCreate: (parentCanvasId: string, title: string) => { canvasId?: string; reason?: string }
-  onConstructDoor: (input: {
-    parentCanvasId: string
-    childCanvasId: string
-    entryDoorId: string
-    returnDoorId: string
-    title: string
-    entryConstruction: PortableDoorConstructionV3
-    returnConstruction: PortableDoorConstructionV3
-  }) => { portalId?: string; reason?: string }
+  onBeginDoorConstruction: (pending: PendingDoorConstruction) => void
   /** Optional controlled visibility for compact top-bar composition. */
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  /** Anchor the compact picker to the shared More button instead of mounting a second trigger. */
+  anchorRefOverride?: RefObject<HTMLButtonElement>
+  hideTrigger?: boolean
 }
 
 /** Guided hierarchy picker for root plus scoped Multiverse canvases. */
-export function MultiverseNavigator({ onNavigate, onCreate, onConstructDoor, open: controlledOpen, onOpenChange }: MultiverseNavigatorProps): React.JSX.Element | null {
+export function MultiverseNavigator({ onNavigate, onCreate, onBeginDoorConstruction, open: controlledOpen, onOpenChange, anchorRefOverride, hideTrigger = false }: MultiverseNavigatorProps): React.JSX.Element | null {
   const ts = useLocalizedVocabularyText()
   const project = useProjects((state) => state.projects.find((item) => item.id === state.activeProjectId))
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
@@ -42,8 +35,8 @@ export function MultiverseNavigator({ onNavigate, onCreate, onConstructDoor, ope
   const [parentCanvasId, setParentCanvasId] = useState(ROOT_CANVAS_ID)
   const [title, setTitle] = useState('New Multiverse canvas')
   const [message, setMessage] = useState<string | null>(null)
-  const [pendingDoor, setPendingDoor] = useState<PendingDoorConstruction | null>(null)
-  const anchorRef = useRef<HTMLButtonElement>(null)
+  const internalAnchorRef = useRef<HTMLButtonElement>(null)
+  const anchorRef = anchorRefOverride ?? internalAnchorRef
   const searchRef = useRef<HTMLInputElement>(null)
   const parentSearchRef = useRef<HTMLInputElement>(null)
   const search = useRegexSearchField()
@@ -53,6 +46,12 @@ export function MultiverseNavigator({ onNavigate, onCreate, onConstructDoor, ope
     if (controlledOpen === undefined) setUncontrolledOpen(next)
     onOpenChange?.(next)
   }
+
+  useEffect(() => {
+    if (!open) return
+    const timer = window.setTimeout(() => searchRef.current?.focus(), 0)
+    return () => window.clearTimeout(timer)
+  }, [open])
 
   const rows = useMemo(() => {
     if (!project) return []
@@ -93,55 +92,29 @@ export function MultiverseNavigator({ onNavigate, onCreate, onConstructDoor, ope
     setCreateOpen(false)
     const entryDoorId = `door-${result.canvasId}-entry`
     const returnDoorId = `door-${result.canvasId}-return`
-    setPendingDoor({ parentCanvasId, childCanvasId: result.canvasId, entryDoorId, returnDoorId, title: title.trim() })
-  }
-
-  const finishDoorConstruction = (entryConstruction: PortableDoorConstructionV3): void => {
-    if (!pendingDoor) return
-    const returnConstruction = createPortableDoorConstruction({
-      doorId: pendingDoor.returnDoorId,
-      canvasId: pendingDoor.childCanvasId,
-      targetCanvasId: pendingDoor.parentCanvasId,
-      pairedDoorId: pendingDoor.entryDoorId,
-      label: `Return to ${entryConstruction.label}`,
-      frame: entryConstruction.frame,
-      hinges: entryConstruction.hinges,
-      panel: entryConstruction.panel,
-      handle: entryConstruction.handle,
-      activationCore: { ...entryConstruction.activationCore, armed: true }
-    })
-    const result = onConstructDoor({
-      ...pendingDoor,
-      entryConstruction,
-      returnConstruction
-    })
-    if (!result.portalId) {
-      setMessage(result.reason ?? ts('multiverse.door.failed', 'The door could not be attached to the new canvas.'))
-      return
-    }
-    setPendingDoor(null)
+    onBeginDoorConstruction({ parentCanvasId, childCanvasId: result.canvasId, entryDoorId, returnDoorId, title: title.trim() })
     setOpen(false)
-    setMessage(ts('multiverse.door.created', 'Door constructed and paired.'))
-    onNavigate(pendingDoor.childCanvasId)
   }
 
   return (
     <>
-      <button
-        ref={anchorRef}
-        type="button"
-        className="multiverse-nav__trigger"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title={ts('multiverse.open', 'Open canvas hierarchy')}
-        onClick={() => setOpen(!open)}
-      >
-        <span aria-hidden="true">◎</span>
-        <span className="multiverse-nav__path">
-          {activePath.map((item) => item.title).join(' / ') || active.title}
-        </span>
-        <span className="multiverse-nav__depth">{ts('multiverse.depth', 'Depth {depth}', { depth: String(active.depth) })}</span>
-      </button>
+      {!hideTrigger && (
+        <button
+          ref={anchorRef}
+          type="button"
+          className="multiverse-nav__trigger"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          title={ts('multiverse.open', 'Open canvas hierarchy')}
+          onClick={() => setOpen(!open)}
+        >
+          <span aria-hidden="true">◎</span>
+          <span className="multiverse-nav__path">
+            {activePath.map((item) => item.title).join(' / ') || active.title}
+          </span>
+          <span className="multiverse-nav__depth">{ts('multiverse.depth', 'Depth {depth}', { depth: String(active.depth) })}</span>
+        </button>
+      )}
       <AnchoredPopover anchorRef={anchorRef} open={open} onClose={() => setOpen(false)} width={460} className="multiverse-nav__popover" zIndex={92}>
         <div className="multiverse-nav__header">
           <div>
@@ -229,18 +202,6 @@ export function MultiverseNavigator({ onNavigate, onCreate, onConstructDoor, ope
         </div>
         {message && <p className="multiverse-nav__message" role="status">{message}</p>}
       </AnchoredPopover>
-      {pendingDoor && (
-        <DoorConstructionDialog
-          open
-          onClose={() => setPendingDoor(null)}
-          canvasId={pendingDoor.parentCanvasId}
-          targetCanvasId={pendingDoor.childCanvasId}
-          doorId={pendingDoor.entryDoorId}
-          pairedDoorId={pendingDoor.returnDoorId}
-          initialLabel={pendingDoor.title}
-          onConstruct={finishDoorConstruction}
-        />
-      )}
     </>
   )
 }

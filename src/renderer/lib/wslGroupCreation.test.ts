@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { createWslGroupWithTerminal, WSL_TERMINAL_INSET } from './wslGroupCreation'
+import {
+  appendWslGroupPair,
+  createWslGroupWithTerminal,
+  verifyNewWslBinding,
+  WSL_TERMINAL_INSET
+} from './wslGroupCreation'
 
 describe('createWslGroupWithTerminal', () => {
   it('creates the frame and one selected terminal with a stable WSL profile', () => {
@@ -45,5 +50,54 @@ describe('createWslGroupWithTerminal', () => {
       bindingId: '22222222-2222-4222-8222-222222222222',
       distroName: 'Debian'
     })
+  })
+
+  it('keeps the original canvas when the child terminal placement is refused', () => {
+    const assembled = createWslGroupWithTerminal({
+      distroName: 'Debian',
+      bindingId: '33333333-3333-4333-8333-333333333333',
+      position: { x: 100, y: 100 },
+      index: 1,
+      sessionSource: 'local'
+    })
+    const existing = [{ ...assembled.group, id: 'existing-frame' }]
+    const result = appendWslGroupPair(
+      existing,
+      assembled,
+      { group: 'group-event', terminal: 'terminal-event' },
+      (nodes, node) => node.type === 'terminal'
+        ? { nodes: [...nodes], result: { node: null, error: 'child refused' } }
+        : { nodes: [...nodes, node], result: { node } }
+    )
+
+    expect(result.result).toEqual({ ok: false, reason: 'child refused' })
+    expect(result.nodes).toEqual(existing)
+  })
+
+  it('refuses binding when refreshed machine facts omit or cannot verify the new instance', () => {
+    expect(verifyNewWslBinding({
+      name: 'Debian',
+      enumeratedNames: new Set(),
+      ownedByApp: false
+    })).toEqual({
+      ok: false,
+      reason: 'The refreshed WSL list did not confirm the app-owned instance Debian.',
+      facts: ['Debian']
+    })
+    expect(verifyNewWslBinding({
+      name: 'Debian',
+      enumeratedNames: new Set(['Debian']),
+      ownedByApp: true,
+      refreshError: 'list unavailable'
+    })).toEqual({
+      ok: false,
+      reason: 'The refreshed WSL list failed: list unavailable',
+      facts: ['Debian', 'list unavailable']
+    })
+    expect(verifyNewWslBinding({
+      name: 'Debian',
+      enumeratedNames: new Set(['Debian']),
+      ownedByApp: true
+    })).toEqual({ ok: true })
   })
 })

@@ -123,7 +123,7 @@ import {
 } from '@shared/types'
 import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
-import type { PortableDoorConstructionV3 } from '@shared/door-construction'
+import { createPortableDoorConstruction, type PortableDoorConstructionV3 } from '@shared/door-construction'
 import BrowserNode from '../nodes/BrowserNode'
 import { FilesNode } from '../nodes/FilesNode'
 import { ServiceNode } from '../nodes/ServiceNode'
@@ -170,8 +170,9 @@ import {
 } from '../lib/adhdModes'
 import { TopAppBar } from '../components/TopAppBar'
 import { ProjectSwitcher } from '../components/ProjectSwitcher'
-import { MultiverseNavigator } from '../components/MultiverseNavigator'
+import { MultiverseNavigator, type PendingDoorConstruction } from '../components/MultiverseNavigator'
 import { AwsUniverseNavigator } from '../components/AwsUniverseNavigator'
+import { DoorConstructionDialog } from '../components/DoorConstructionDialog'
 import { PortalLifecycleDialog } from '../components/PortalLifecycleDialog'
 import { projectCanvasView } from '@shared/multiverse-canvases'
 import { portableCanvasProjectionToProject, projectToPortableCanvasV3 } from '../../core/portable-canvas-projection'
@@ -198,7 +199,7 @@ import {
   type NodeCatalogEntry
 } from '@shared/node-catalog'
 import { canAdoptPullRequestOnFrame, isGitHubWorkItem, type GitHubWorkItem } from '@shared/github-work-items'
-import { NodeCreationCoordinator } from '../state/nodeCreationCoordinator'
+import { NodeCreationCoordinator, type NodeCreationResult } from '../state/nodeCreationCoordinator'
 import { setUniverseShopCatalogRuntime } from '../state/universeShopCatalogProvider'
 import {
   IconAgent,
@@ -586,7 +587,13 @@ import {
 import { WslCreateDialog } from '../wsl/WslCreateDialog'
 import { useWsl } from '../state/wsl'
 import { resolveWslApi } from '../wsl/wslCoreApi'
-import { createWslGroupWithTerminal } from '../lib/wslGroupCreation'
+import {
+  appendWslGroupPair,
+  createWslGroupWithTerminal,
+  type WslGroupCreation,
+  verifyNewWslBinding
+} from '../lib/wslGroupCreation'
+import { applySynchronousPlacement } from '../lib/nodePlacementReceipt'
 import { collisionFreePosition } from '../state/nodeCreationCoordinator'
 import type { WslExternalFactError, WslCopyKey } from '../wsl/wslCopy'
 import type { WslCreateError } from '@shared/wsl'
@@ -1444,6 +1451,7 @@ export function Canvas() {
   } | null>(null)
   const [remotePicker, setRemotePicker] = useState<{ x: number; y: number } | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const compactMoreAnchorRef = useRef<HTMLButtonElement>(null)
   const [fileIndex, setFileIndex] = useState<QuickOpenIndexedFile[]>([])
   const [transcriptHits, setTranscriptHits] = useState<TranscriptHit[]>([])
   const transcriptQueryRef = useRef('')
@@ -1454,6 +1462,9 @@ export function Canvas() {
   const captureTsRef = useRef<Record<string, number>>({})
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [notifCenterOpen, setNotifCenterOpen] = useState(false)
+  const [awsUniverseNavigatorOpen, setAwsUniverseNavigatorOpen] = useState(false)
+  const [multiverseNavigatorOpen, setMultiverseNavigatorOpen] = useState(false)
+  const [pendingMultiverseDoor, setPendingMultiverseDoor] = useState<PendingDoorConstruction | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [docsOpen, setDocsOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
@@ -1729,6 +1740,11 @@ export function Canvas() {
   } | null>(null)
   const [wslBusy, setWslBusy] = useState(false)
   const [wslError, setWslError] = useState<WslExternalFactError | null>(null)
+  const [pendingWslCanvasBinding, setPendingWslCanvasBinding] = useState<{
+    projectId: string
+    assembled: WslGroupCreation
+    eventIds: { group: string; terminal: string }
+  } | null>(null)
   const wslCatalogue = useWsl((s) => s.catalogue)
   const wslCatalogueLoading = useWsl((s) => s.catalogueLoading)
   const wslCatalogueError = useWsl((s) => s.catalogueError)
@@ -3683,6 +3699,39 @@ export function Canvas() {
     return result
   }, [activeProjectId, bumpDirty, commitActiveToStore])
 
+  const finishMultiverseDoor = useCallback((entryConstruction: PortableDoorConstructionV3): boolean => {
+    if (!pendingMultiverseDoor) return false
+    const returnConstruction = createPortableDoorConstruction({
+      doorId: pendingMultiverseDoor.returnDoorId,
+      canvasId: pendingMultiverseDoor.childCanvasId,
+      targetCanvasId: pendingMultiverseDoor.parentCanvasId,
+      pairedDoorId: pendingMultiverseDoor.entryDoorId,
+      label: `Return to ${entryConstruction.label}`,
+      frame: entryConstruction.frame,
+      hinges: entryConstruction.hinges,
+      panel: entryConstruction.panel,
+      handle: entryConstruction.handle,
+      activationCore: { ...entryConstruction.activationCore, armed: true }
+    })
+    const result = attachMultiverseDoor({
+      ...pendingMultiverseDoor,
+      entryConstruction,
+      returnConstruction
+    })
+    if (!result.portalId) {
+      setNotice({
+        kind: 'error',
+        text: result.reason ?? profileText('multiverse.door.failed', 'The door could not be attached to the new canvas.')
+      })
+      return false
+    }
+    const childCanvasId = pendingMultiverseDoor.childCanvasId
+    setPendingMultiverseDoor(null)
+    setNotice({ kind: 'info', text: profileText('multiverse.door.created', 'Door constructed and paired.') })
+    navigateMultiverseCanvas(childCanvasId)
+    return true
+  }, [attachMultiverseDoor, navigateMultiverseCanvas, pendingMultiverseDoor, profileText])
+
   const updatePortalProjection = useCallback((projection: ReturnType<typeof projectToPortableCanvasV3>) => {
     if (!activeProjectId) return
     commitActiveToStore()
@@ -5245,18 +5294,26 @@ export function Canvas() {
           reason: 'No free canvas position was found within the bounded placement search.'
         }
       }
-      let placementError: string | undefined
-      setNodes((ns) => {
-        // The node is assembled before this updater so the receipt can carry its stable identity
-        // to the installer banner and its Show action.
-        const appended = nodeCreationCoordinatorRef.current.appendNode(ns, prepared, creationEventId)
-        placementError = appended.result.error
-        if (placementError) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: placementError, bodyKind: 'fact' })
-        return appended.nodes
-      })
-      markDirty()
-      if (placementError) return { ok: false, reason: placementError }
-      return { ok: true, nodeId: prepared.id }
+      // The installer banner needs a delivery receipt, not a promise that React may evaluate the
+      // updater later. Flush this one user-triggered placement so the coordinator's verdict is
+      // known before the caller starts polling or exposes a Show action for the returned node id.
+      const placementResult: NodeCreationResult | undefined = applySynchronousPlacement(
+        setNodes,
+        (ns) => nodeCreationCoordinatorRef.current.appendNode(ns, prepared, creationEventId)
+      )
+      if (!placementResult?.node || placementResult.error) {
+        const reason = placementResult?.error ?? 'The terminal placement was not acknowledged.'
+        notify({
+          kind: 'error',
+          titleKind: 'authored',
+          title: 'Node placement unavailable',
+          body: reason,
+          bodyKind: 'fact'
+        })
+        return { ok: false, reason }
+      }
+      if (!placementResult.duplicate) markDirty()
+      return { ok: true, nodeId: placementResult.node.id }
     },
     [
       setNodes,
@@ -7840,6 +7897,20 @@ export function Canvas() {
     void useWsl.getState().loadCatalogue()
   }, [])
 
+  const commitWslCanvasBinding = useCallback((pending: {
+    assembled: WslGroupCreation
+    eventIds: { group: string; terminal: string }
+  }) => applySynchronousPlacement(
+    setNodes,
+    (ns) => appendWslGroupPair(
+      ns as CanvasNode[],
+      pending.assembled,
+      pending.eventIds,
+      (nodes, node, eventId, options) =>
+        nodeCreationCoordinatorRef.current.appendNode(nodes, node, eventId, options)
+    )
+  ), [setNodes])
+
   const createWslInstanceAndGroup = useCallback(
     async (v: { operationId: string; catalogueId: string; name: string }) => {
       const target = wslDialog
@@ -7877,6 +7948,23 @@ export function Canvas() {
       // Refresh BEFORE deciding anything else, so the frame's chip and the ownership gate start
       // from the real, freshly-enumerated state rather than an assumption about what create() did.
       await useWsl.getState().refresh()
+      const refreshedWsl = useWsl.getState()
+      const bindingVerification = verifyNewWslBinding({
+        name: res.name,
+        enumeratedNames: refreshedWsl.enumeratedNames(),
+        ownedByApp: refreshedWsl.ownedByApp(res.name),
+        refreshError: refreshedWsl.error
+      })
+      if (!bindingVerification.ok) {
+        setWslError({
+          ownership: 'external-factual',
+          text: '',
+          facts: bindingVerification.facts,
+          params: { error: bindingVerification.reason },
+          authoredTemplate: 'failed'
+        })
+        return
+      }
       if (useProjects.getState().activeProjectId !== target.projectId) {
         setWslDialog(null)
         setNotice({
@@ -7894,34 +7982,92 @@ export function Canvas() {
         sessionSource: sessionForProject(target.projectId).source,
         groupSize: WORKTREE_GROUP_SIZE
       })
-      setNodes((ns) => {
-        // Parent and child are committed through one updater. React Flow can render a child only
-        // after its frame exists, and one updater prevents a saved canvas from exposing an empty
-        // WSL frame between those two writes.
-        const groupResult = nodeCreationCoordinatorRef.current.appendNode(
-          ns as CanvasNode[],
-          assembled.group,
-          undefined,
-          { prepend: true }
-        )
-        if (groupResult.result.error) {
-          notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: groupResult.result.error, bodyKind: 'fact' })
-          return groupResult.nodes
-        }
-        const terminalResult = nodeCreationCoordinatorRef.current.appendNode(
-          groupResult.nodes,
-          assembled.terminal
-        )
-        if (terminalResult.result.error) {
-          notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: terminalResult.result.error, bodyKind: 'fact' })
-        }
-        return terminalResult.nodes
-      })
+      const pendingBinding = {
+        projectId: target.projectId,
+        assembled,
+        eventIds: { group: crypto.randomUUID(), terminal: crypto.randomUUID() }
+      }
+      const pairReceipt = commitWslCanvasBinding(pendingBinding)
+      if (!pairReceipt?.ok) {
+        const reason = pairReceipt?.reason ?? 'The WSL frame and terminal placement was not acknowledged.'
+        setPendingWslCanvasBinding(pendingBinding)
+        setWslError({
+          ownership: 'external-factual',
+          text: '',
+          facts: [res.name, reason],
+          params: { name: res.name, error: reason },
+          authoredTemplate: 'placementFailed'
+        })
+        notify({
+          kind: 'error',
+          titleKind: 'authored',
+          title: 'Node placement unavailable',
+          body: reason,
+          bodyKind: 'fact'
+        })
+        return
+      }
+      setPendingWslCanvasBinding(null)
       markDirty()
       setWslDialog(null)
     },
-    [wslDialog, wslCatalogue, setNodes, markDirty, viewCenter]
+    [wslDialog, wslCatalogue, commitWslCanvasBinding, markDirty, viewCenter]
   )
+
+  const bindCreatedWslToCanvas = useCallback(async (): Promise<void> => {
+    const pending = pendingWslCanvasBinding
+    const target = wslDialog
+    if (!pending || !target) return
+    const name = pending.assembled.binding.distroName
+    if (useProjects.getState().activeProjectId !== pending.projectId) {
+      const reason = 'The active project changed, so the created WSL instance was not bound to this canvas.'
+      setWslError({
+        ownership: 'external-factual',
+        text: '',
+        facts: [name],
+        params: { name, error: reason },
+        authoredTemplate: 'placementFailed'
+      })
+      return
+    }
+    setWslBusy(true)
+    await useWsl.getState().refresh()
+    const refreshedWsl = useWsl.getState()
+    const bindingVerification = verifyNewWslBinding({
+      name,
+      enumeratedNames: refreshedWsl.enumeratedNames(),
+      ownedByApp: refreshedWsl.ownedByApp(name),
+      refreshError: refreshedWsl.error
+    })
+    if (!bindingVerification.ok) {
+      setWslBusy(false)
+      setWslError({
+        ownership: 'external-factual',
+        text: '',
+        facts: bindingVerification.facts,
+        params: { error: bindingVerification.reason },
+        authoredTemplate: 'failed'
+      })
+      return
+    }
+    const pairReceipt = commitWslCanvasBinding(pending)
+    setWslBusy(false)
+    if (!pairReceipt?.ok) {
+      const reason = pairReceipt?.reason ?? 'The WSL frame and terminal placement was not acknowledged.'
+      setWslError({
+        ownership: 'external-factual',
+        text: '',
+        facts: [name, reason],
+        params: { name, error: reason },
+        authoredTemplate: 'placementFailed'
+      })
+      return
+    }
+    setPendingWslCanvasBinding(null)
+    setWslError(null)
+    markDirty()
+    setWslDialog(null)
+  }, [commitWslCanvasBinding, markDirty, pendingWslCanvasBinding, wslDialog])
 
   const openTerminalInWslGroup = useCallback(
     (groupId: string): void => {
@@ -17907,9 +18053,148 @@ export function Canvas() {
   // as an empty <kbd>, and the hint's sentence loses that clause with it.
   const paletteChip = chipFor('app.commandPalette')
 
+  const openHelpMenuAt = (anchor: { right: number; bottom: number }): void => {
+    setMenu({
+      // Right-align the approximately 220px menu under its source without leaving the viewport.
+      x: Math.max(8, anchor.right - 220),
+      y: anchor.bottom + 6,
+      items: [
+        { label: 'Keyboard shortcuts', hint: hintLabel('⌘/'), onClick: () => setShortcutsOpen(true) },
+        { label: 'Report a bug…', onClick: () => setBugReportOpen(true) },
+        {
+          label: 'Documentation',
+          onClick: () => {
+            closeAllDrawers()
+            setDocsOpen(true)
+          }
+        },
+        {
+          label: 'GitHub repository',
+          onClick: () => window.nodeTerminal.shell.openExternal(REPO_URL)
+        },
+        { type: 'separator' },
+        {
+          type: 'label',
+          label: `nodeterm${appVersion ? ` v${appVersion}` : ''} · ${describeOs(navigator.userAgent)}`
+        }
+      ]
+    })
+  }
+
   return (
     <div className="canvas-root" data-easter-surface="canvas">
-      <TopAppBar>
+      <TopAppBar
+        compactSlots={{
+          project: (
+            <div className="md3-app-bar__compact-primary">
+              <ProjectSwitcher
+                onSwitch={switchProject}
+                onReconnect={reconnectRelay}
+                onReorder={reorderProject}
+                onOpenWelcome={() => setWelcomeOpen(true)}
+                onRename={renameProject}
+                onSetFolder={setProjectFolder}
+                onCloseProject={closeProject}
+                onRemoteAccess={() => setRemoteDialogOpen(true)}
+                onSetDefaultAccount={setProjectDefaultAccount}
+                onSetDefaultPermissionMode={setProjectDefaultPermissionMode}
+                onSetColor={setProjectColor}
+                onSetIcon={setProjectIcon}
+                onSaveArchive={(id) => void saveProjectArchive(id)}
+                onOpenArchive={() => void importProjectArchive()}
+                archiveBusy={() => projectArchiveBusyRef.current}
+              />
+              <AwsUniverseNavigator
+                onNavigate={navigateAwsUniverse}
+                onCreate={createAwsUniverse}
+                open={awsUniverseNavigatorOpen}
+                onOpenChange={setAwsUniverseNavigatorOpen}
+                anchorRefOverride={compactMoreAnchorRef}
+                hideTrigger
+              />
+              <MultiverseNavigator
+                onNavigate={navigateMultiverseCanvas}
+                onCreate={createMultiverseCanvas}
+                onBeginDoorConstruction={setPendingMultiverseDoor}
+                open={multiverseNavigatorOpen}
+                onOpenChange={setMultiverseNavigatorOpen}
+                anchorRefOverride={compactMoreAnchorRef}
+                hideTrigger
+              />
+            </div>
+          ),
+          commandPalette: (
+            <button
+              className="cluster-search"
+              type="button"
+              title="Command palette"
+              aria-label="Command palette"
+              onClick={() => setPaletteOpen(true)}
+            >
+              <span className="cluster-search__icon" aria-hidden="true">⌕</span>
+              <span className="cluster-search__placeholder">Search everything…</span>
+              {paletteChip ? <span className="kbd">{paletteChip}</span> : null}
+            </button>
+          ),
+          moreTriggerRef: compactMoreAnchorRef,
+          presence: <Facepile onJump={travelToNode} onSwitchProject={travelToProject} />,
+          notifications: (
+            <button
+              className="notif-bell"
+              type="button"
+              title="Notifications"
+              aria-label={unreadNotifCount > 0 ? `Notifications (${unreadNotifCount} unread)` : 'Notifications'}
+              onClick={() => setNotifCenterOpen(true)}
+            >
+              <IconBellFilled />
+              {unreadNotifCount > 0 && (
+                <span className="notif-bell__badge" aria-hidden>
+                  {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+                </span>
+              )}
+            </button>
+          ),
+          menuItems: [
+            {
+              id: 'topBar.awsUniverse',
+              label: 'AWS Universe',
+              onSelect: () => setAwsUniverseNavigatorOpen(true)
+            },
+            {
+              id: 'topBar.multiverse',
+              label: 'Multiverse',
+              onSelect: () => setMultiverseNavigatorOpen(true)
+            },
+            {
+              id: 'topBar.portals',
+              label: 'Portals',
+              onSelect: () => {
+                commitActiveToStore()
+                setPortalLifecycleOpen(true)
+              }
+            },
+            {
+              id: 'topBar.phonePairing',
+              label: 'Pair phone',
+              disabled: !window.nodeTerminal.pairing.supported,
+              disabledReason: window.nodeTerminal.pairing.supported
+                ? undefined
+                : 'Phone pairing is not supported by this host.',
+              onSelect: () => setPhonePairAnchor({ right: Math.max(56, window.innerWidth - 16), bottom: 64 })
+            },
+            {
+              id: 'topBar.dictation',
+              label: dictationOpen ? 'Stop dictation' : 'Dictation',
+              onSelect: toggleDictation
+            },
+            {
+              id: 'topBar.help',
+              label: 'Help',
+              onSelect: () => openHelpMenuAt({ right: Math.max(228, window.innerWidth - 16), bottom: 64 })
+            }
+          ]
+        }}
+      >
       <ProjectSwitcher
           onSwitch={switchProject}
           onReconnect={reconnectRelay}
@@ -17927,8 +18212,19 @@ export function Canvas() {
           onOpenArchive={() => void importProjectArchive()}
           archiveBusy={() => projectArchiveBusyRef.current}
         />
-        <AwsUniverseNavigator onNavigate={navigateAwsUniverse} onCreate={createAwsUniverse} />
-        <MultiverseNavigator onNavigate={navigateMultiverseCanvas} onCreate={createMultiverseCanvas} onConstructDoor={attachMultiverseDoor} />
+        <AwsUniverseNavigator
+          onNavigate={navigateAwsUniverse}
+          onCreate={createAwsUniverse}
+          open={awsUniverseNavigatorOpen}
+          onOpenChange={setAwsUniverseNavigatorOpen}
+        />
+        <MultiverseNavigator
+          onNavigate={navigateMultiverseCanvas}
+          onCreate={createMultiverseCanvas}
+          onBeginDoorConstruction={setPendingMultiverseDoor}
+          open={multiverseNavigatorOpen}
+          onOpenChange={setMultiverseNavigatorOpen}
+        />
         <button
           type="button"
           className="multiverse-nav__portal-trigger"
@@ -18002,37 +18298,25 @@ export function Canvas() {
             title="Help"
             onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect()
-              setMenu({
-                // Right-align the ~220px menu under the button; never off-screen left.
-                x: Math.max(8, r.right - 220),
-                y: r.bottom + 6,
-                items: [
-                  { label: 'Keyboard shortcuts', hint: hintLabel('⌘/'), onClick: () => setShortcutsOpen(true) },
-                  { label: 'Report a bug…', onClick: () => setBugReportOpen(true) },
-                  {
-                    label: 'Documentation',
-                    onClick: () => {
-                      closeAllDrawers()
-                      setDocsOpen(true)
-                    }
-                  },
-                  {
-                    label: 'GitHub repository',
-                    onClick: () => window.nodeTerminal.shell.openExternal(REPO_URL)
-                  },
-                  { type: 'separator' },
-                  {
-                    type: 'label',
-                    label: `nodeterm${appVersion ? ` v${appVersion}` : ''} · ${describeOs(navigator.userAgent)}`
-                  }
-                ]
-              })
+              openHelpMenuAt(r)
             }}
           >
             ?
           </button>
         </div>
       </TopAppBar>
+      {pendingMultiverseDoor && (
+        <DoorConstructionDialog
+          open
+          onClose={() => setPendingMultiverseDoor(null)}
+          canvasId={pendingMultiverseDoor.parentCanvasId}
+          targetCanvasId={pendingMultiverseDoor.childCanvasId}
+          doorId={pendingMultiverseDoor.entryDoorId}
+          pairedDoorId={pendingMultiverseDoor.returnDoorId}
+          initialLabel={pendingMultiverseDoor.title}
+          onConstruct={finishMultiverseDoor}
+        />
+      )}
       <div className="top-banners">
         {nodeFocusSession && (
           <div className="announce-banner announce-banner--info" role="status">
@@ -19473,6 +19757,11 @@ export function Canvas() {
           busy={wslBusy}
           error={wslError}
           onCreate={createWslInstanceAndGroup}
+          onBindCreated={
+            pendingWslCanvasBinding?.projectId === wslDialog.projectId
+              ? () => void bindCreatedWslToCanvas()
+              : undefined
+          }
           onCancelCreate={cancelWslCreation}
           onCancel={() => {
             setWslDialog(null)

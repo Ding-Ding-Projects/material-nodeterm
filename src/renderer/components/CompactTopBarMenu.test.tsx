@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, createRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CompactTopBarMenu } from './CompactTopBarMenu'
@@ -31,9 +31,11 @@ describe('CompactTopBarMenu', () => {
   it('filters local actions and returns focus to More after selection', async () => {
     const onAws = vi.fn()
     const onHelp = vi.fn()
+    const triggerRef = createRef<HTMLButtonElement>()
     act(() => {
       root.render(
         <CompactTopBarMenu
+          triggerRef={triggerRef}
           items={[
             { id: 'aws', label: 'AWS Universe', onSelect: onAws },
             { id: 'help', label: 'Help', onSelect: onHelp }
@@ -44,6 +46,7 @@ describe('CompactTopBarMenu', () => {
 
     const trigger = host.querySelector<HTMLButtonElement>('.md3-compact-more')
     expect(trigger).not.toBeNull()
+    expect(triggerRef.current).toBe(trigger)
     act(() => trigger?.click())
     const input = document.body.querySelector<HTMLInputElement>('#compact-top-bar-search')
     expect(input).not.toBeNull()
@@ -51,11 +54,12 @@ describe('CompactTopBarMenu', () => {
       if (input) Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'aws')
       input?.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    const menuItems = document.body.querySelectorAll('[role="menuitem"]')
+    expect(document.body.querySelector('[role="menu"]')).toBeNull()
+    const menuItems = document.body.querySelectorAll('#compact-top-bar-actions > button')
     expect(menuItems).toHaveLength(1)
     expect(menuItems[0]?.textContent).toContain('AWS Universe')
     act(() => {
-      document.body.querySelector<HTMLButtonElement>('[role="menuitem"]')?.click()
+      document.body.querySelector<HTMLButtonElement>('#compact-top-bar-actions > button')?.click()
     })
     expect(onAws).toHaveBeenCalledTimes(1)
     expect(document.body.querySelector('.md3-compact-more__popover')).toBeNull()

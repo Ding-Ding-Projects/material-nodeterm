@@ -100,6 +100,14 @@ Timeouts remain bounded by the WSL command deadline, and failures stay in the di
 actionable retry path. The progress surface respects reduced motion and exposes status and
 progressbar roles for keyboard and assistive-technology users.
 
+After creation, the renderer refreshes the real machine inventory and requires the returned name
+to be both enumerated and recorded as app-owned before it publishes any canvas binding. The frame
+and first terminal then commit as one transaction with stable creation-event ids. If either
+placement is refused, the canvas returns to its original state while the already-created instance
+remains untouched. The dialog explains that split outcome and offers **Bind created instance**,
+which revalidates the same instance and retries only the frame-and-terminal transaction. That
+recovery action never invokes `wsl.exe --install` a second time.
+
 Every dialog label, action, validation message, status, accessibility name, and progress heading
 resolves through the shared `wsl.create.*` catalogue ids. The catalogue stores templates with
 placeholders such as `{brand}` and `{exe}`; the dialog fills those placeholders only after the

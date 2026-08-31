@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { AWS_UNIVERSE_ROOT_ID, awsUniverseCanvasPath } from '@shared/aws-universes'
 import { useProjects } from '../state/projects'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
@@ -12,17 +12,21 @@ interface AwsUniverseNavigatorProps {
   /** Optional controlled visibility for compact top-bar composition. */
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  /** Anchor the compact picker to the shared More button instead of mounting a second trigger. */
+  anchorRefOverride?: RefObject<HTMLButtonElement>
+  hideTrigger?: boolean
 }
 
 /** Root-only navigator for an unlimited collection of AWS-only Universe instances. */
-export function AwsUniverseNavigator({ onNavigate, onCreate, open: controlledOpen, onOpenChange }: AwsUniverseNavigatorProps): React.JSX.Element | null {
+export function AwsUniverseNavigator({ onNavigate, onCreate, open: controlledOpen, onOpenChange, anchorRefOverride, hideTrigger = false }: AwsUniverseNavigatorProps): React.JSX.Element | null {
   const ts = useLocalizedVocabularyText()
   const project = useProjects((state) => state.projects.find((item) => item.id === state.activeProjectId))
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [title, setTitle] = useState('New AWS Universe')
   const [message, setMessage] = useState<string | null>(null)
-  const anchorRef = useRef<HTMLButtonElement>(null)
+  const internalAnchorRef = useRef<HTMLButtonElement>(null)
+  const anchorRef = anchorRefOverride ?? internalAnchorRef
   const searchRef = useRef<HTMLInputElement>(null)
   const search = useRegexSearchField()
   const open = controlledOpen ?? uncontrolledOpen
@@ -30,6 +34,12 @@ export function AwsUniverseNavigator({ onNavigate, onCreate, open: controlledOpe
     if (controlledOpen === undefined) setUncontrolledOpen(next)
     onOpenChange?.(next)
   }
+
+  useEffect(() => {
+    if (!open) return
+    const timer = window.setTimeout(() => searchRef.current?.focus(), 0)
+    return () => window.clearTimeout(timer)
+  }, [open])
 
   const rows = useMemo(() => project ? (project.childCanvases ?? []).filter((canvas) => canvas.scope === 'aws-universe') : [], [project])
   const visible = useMemo(
@@ -66,19 +76,21 @@ export function AwsUniverseNavigator({ onNavigate, onCreate, open: controlledOpe
 
   return (
     <>
-      <button
-        ref={anchorRef}
-        type="button"
-        className="aws-universe-nav__trigger"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title={ts('awsUniverse.open', 'Open AWS Universe')}
-        onClick={() => setOpen(!open)}
-      >
-        <span aria-hidden="true">◎</span>
-        <span className="aws-universe-nav__path">{activePath.map((item) => item.title).join(' / ')}</span>
-        <span className="aws-universe-nav__scope">{ts('awsUniverse.scope', 'AWS-only scope')}</span>
-      </button>
+      {!hideTrigger && (
+        <button
+          ref={anchorRef}
+          type="button"
+          className="aws-universe-nav__trigger"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          title={ts('awsUniverse.open', 'Open AWS Universe')}
+          onClick={() => setOpen(!open)}
+        >
+          <span aria-hidden="true">◎</span>
+          <span className="aws-universe-nav__path">{activePath.map((item) => item.title).join(' / ')}</span>
+          <span className="aws-universe-nav__scope">{ts('awsUniverse.scope', 'AWS-only scope')}</span>
+        </button>
+      )}
       <AnchoredPopover anchorRef={anchorRef} open={open} onClose={() => setOpen(false)} width={460} className="aws-universe-nav__popover" zIndex={92}>
         <div className="aws-universe-nav__header">
           <div>

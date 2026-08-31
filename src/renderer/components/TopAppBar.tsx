@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useSettings } from '../state/settings'
 import { resolveAppDisplayName } from '@shared/appIdentity'
 import { resolveLogoPreset } from './appearance/BrandMark'
@@ -13,8 +13,12 @@ export interface TopAppBarCompactSlots {
   commandPalette: ReactNode
   /** The existing notification action, including its live unread count. */
   notifications: ReactNode
+  /** The live collaborator facepile. It must remain mounted to maintain its presence projection. */
+  presence?: ReactNode
   /** AWS, Multiverse, Portals, collaborators, phone pairing, dictation, and Help actions. */
   menuItems: readonly CompactTopBarMenuItem[]
+  /** Shared More-button anchor for compact child pickers. */
+  moreTriggerRef?: RefObject<HTMLButtonElement>
 }
 
 /** Width thresholds are CSS pixels, matching the responsive contract and easy to unit-test. */
@@ -84,8 +88,9 @@ export function TopAppBar({ children, compactSlots }: TopAppBarProps) {
         <div className="md3-app-bar__compact" data-app-bar-mode={mode}>
           <div className="md3-app-bar__compact-project">{compactSlots.project}</div>
           <div className="md3-app-bar__compact-action md3-app-bar__compact-action--palette">{compactSlots.commandPalette}</div>
+          {compactSlots.presence ? <div className="md3-app-bar__compact-action md3-app-bar__compact-action--presence">{compactSlots.presence}</div> : null}
           <div className="md3-app-bar__compact-action">{compactSlots.notifications}</div>
-          <CompactTopBarMenu items={compactSlots.menuItems} />
+          <CompactTopBarMenu items={compactSlots.menuItems} triggerRef={compactSlots.moreTriggerRef} />
         </div>
       ) : (
         <div className="md3-app-bar__wide">{children}</div>

@@ -465,6 +465,13 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
                       : vocab('Wake this WSL instance')
                     : vocab(WSL_NOT_OWNED_HINT)
                 }
+                aria-label={
+                  wslCanManage
+                    ? wslInstance?.state === 'running'
+                      ? vocab('Sleep this WSL instance')
+                      : vocab('Wake this WSL instance')
+                    : vocab(WSL_NOT_OWNED_HINT)
+                }
                 disabled={!wslCanManage}
                 onClick={() =>
                   wslActionHandler?.(id, wslInstance?.state === 'running' ? 'sleep' : 'wake')
@@ -484,6 +491,7 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
               <button
                 className="group-node__wt-btn"
                 title={wslCanManage ? vocab('Unregister (deletes the instance permanently)') : vocab(WSL_NOT_OWNED_HINT)}
+                aria-label={wslCanManage ? vocab('Unregister (deletes the instance permanently)') : vocab(WSL_NOT_OWNED_HINT)}
                 disabled={!wslCanManage}
                 onClick={() => wslActionHandler?.(id, 'delete')}
               >

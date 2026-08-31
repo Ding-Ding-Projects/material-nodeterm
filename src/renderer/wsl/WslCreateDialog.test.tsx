@@ -107,6 +107,27 @@ describe('WslCreateDialog', () => {
     expect(create.disabled).toBe(true)
   })
 
+  it('offers a canvas-only retry after the instance exists without invoking creation again', () => {
+    const onBindCreated = vi.fn()
+    const { onCreate } = render({
+      existingNames: new Set(['my-project']),
+      onBindCreated,
+      error: {
+        ownership: 'external-factual',
+        text: '',
+        facts: ['my-project', 'placement refused'],
+        params: { name: 'my-project', error: 'placement refused' },
+        authoredTemplate: 'placementFailed'
+      }
+    })
+    const bind = Array.from(document.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent === 'Bind created instance')
+    expect(bind).toBeDefined()
+    act(() => bind?.click())
+    expect(onBindCreated).toHaveBeenCalledTimes(1)
+    expect(onCreate).not.toHaveBeenCalled()
+  })
+
   it('refuses a name colliding with a real distribution on this machine', () => {
     render()
     const option = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Debian')!
