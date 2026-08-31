@@ -72,7 +72,7 @@ export function trackedSourceFiles(root) {
   // A deliberate sparse checkout still reports every tracked path through `git ls-files`,
   // while files outside its cone are absent on disk. Parse only materialized source files so the
   // checker does not turn an intentional no-submodules/sparse checkout into twenty-five false
-  // ENOENT poke guys. The explicit JSX allowlist remains fail-closed when its path is present.
+  // ENOENT errors. The explicit JSX allowlist remains fail-closed when its path is present.
   return selectTrackedSourceFiles(tracked).filter((file) => existsSync(path.join(root, file)));
 }
 

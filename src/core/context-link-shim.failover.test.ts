@@ -74,7 +74,7 @@ function callShim(
 }
 
 // The generated context shim shares the POSIX-only Codex identity prelude. Keep this real-shell
-// proof on POSIX hosts and report the existing Deen No shell-parser boundary honestly.
+// proof on POSIX hosts and report the existing Windows shell-parser boundary honestly.
 describe.skipIf(process.platform === 'win32')('context-link shim endpoint failover (issue #445)', () => {
   it('a stale primary endpoint fails over to a live sibling endpoint and the read succeeds', async () => {
     asked.length = 0

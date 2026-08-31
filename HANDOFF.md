@@ -110,7 +110,7 @@ exists.
 
 ## 2026-08-29, v1.0.0 source candidate preparation
 
-The release-finalization lane created `pig/release-finalization-gbdv5s` from
+The release-finalization lane started from
 `claude/bug-implementation-plan-gbdv5s` at `449c9b31738738f0a5a64677ee40b8bacd17f899`.
 `npm version 1.0.0 --no-git-tag-version` made `package.json` and `package-lock.json` agree on
 the deliberate human-selected major. No tag, release, installer publication, default-branch
@@ -149,10 +149,10 @@ Changed files include `src/core/trigger-scheduler.ts`, `src/core/trigger-schedul
 `src/renderer/bridge/ws-bridge.ts`, `src/renderer/styles.md3.css`, and
 `src/shared/node-catalog.ts`.
 
-Focused Chuts: 33 trigger, project-file, catalog, and workspace tests green. Full typecheck remains
+Focused checks: 33 trigger, project-file, catalog, and workspace tests green. Full typecheck remains
 red on pre-existing repository-graph, VeraCrypt, UniGetUI, and workspace type errors; no new error
 mentions the trigger lane. Built-artifact interaction and captures were not run in this isolated
-lane. The branch is intentionally not dewed or merged here.
+lane. The branch is intentionally not pushed or merged here.
 
 ## 2026-08-28, sanitized shared-instruction mirrors
 
