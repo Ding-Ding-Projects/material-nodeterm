@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 
 type WorkerMessage =
   | { type: 'ready'; enabled: boolean }
+  | { type: 'acquired'; resource: 'record' }
   | { type: 'done'; enabled: boolean; name: string; authoritative: boolean }
   | { type: 'error'; code: string; message: string }
 
@@ -22,7 +23,7 @@ let caseHome = ''
 let workerBundle = ''
 const children = new Set<TrackedChild>()
 
-function spawnWorker(mode: 'stale-rename' | 'enable'): TrackedChild {
+function spawnWorker(mode: 'stale-rename' | 'enable' | 'reset-hold'): TrackedChild {
   const child = fork(workerBundle, [mode, caseHome], {
     cwd: caseHome,
     execArgv: [],
@@ -143,4 +144,38 @@ describe('Kids mode across real processes', () => {
       name: 'Renamed by stale process'
     })
   }, 20_000)
+
+  it('keeps credential and record mutations in one deterministic lock order', async () => {
+    const credentialFile = path.join(caseHome, '.nodeterm', 'shared', 'kids-mode.credential.json')
+    const recordFile = path.join(caseHome, '.nodeterm', 'shared', 'kids-mode.json')
+    await fs.mkdir(path.dirname(recordFile), { recursive: true })
+    await fs.writeFile(
+      recordFile,
+      JSON.stringify({ version: 1, enabled: true, name: 'Kids mode' }),
+      'utf8'
+    )
+    const seed = spawnWorker('enable')
+    await expect(waitForMessage(seed, 'done')).resolves.toMatchObject({ enabled: true })
+    await waitForExit(seed)
+    children.delete(seed)
+
+    const reset = spawnWorker('reset-hold')
+    await expect(waitForMessage(reset, 'acquired')).resolves.toMatchObject({ resource: 'record' })
+
+    const enable = spawnWorker('enable')
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    reset.child.send({ type: 'release' })
+    await expect(waitForMessage(enable, 'done')).resolves.toMatchObject({ enabled: true })
+    await expect(waitForMessage(reset, 'done')).resolves.toMatchObject({ enabled: false })
+    await waitForExit(enable)
+    await waitForExit(reset)
+    children.delete(enable)
+    children.delete(reset)
+
+    const credential = JSON.parse(await fs.readFile(credentialFile, 'utf8')) as { version: number }
+    const record = JSON.parse(await fs.readFile(recordFile, 'utf8')) as { enabled: boolean }
+    expect(credential.version).toBe(1)
+    expect(record.enabled).toBe(true)
+  }, 30_000)
 })

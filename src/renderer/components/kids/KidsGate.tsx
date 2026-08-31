@@ -54,24 +54,30 @@ export function KidsGate({
   const attempt = async (pin: string) => {
     setBusy(true)
     setMessage(null)
-    const ok = credentialState === 'absent'
-      ? true
-      : credentialState === 'present' && await verifyKidsModePin(window.nodeTerminal.kidsMode, pin)
+    // Even the absent route must ask the authoritative channel. A stale renderer-side
+    // classification must never turn into a local grown-up bypass.
+    const ok = credentialState !== 'unavailable' &&
+      await verifyKidsModePin(window.nodeTerminal.kidsMode, credentialState === 'absent' ? '' : pin)
     setBusy(false)
     if (ok) {
       onVerified(pin)
       return
     }
+    await useKidsMode.getState().refreshCredentialState()
     setMessage("That's not right — try again.")
     setErrorToken(Date.now())
   }
 
-  const requestReset = (): void => {
+  const requestReset = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    const target = event.currentTarget
+    const rect = target.getBoundingClientRect()
     openDestructiveGate({
       title: 'Reset the Kids mode PIN',
       description: 'Remove only the Kids mode PIN and turn Kids mode off. School mode, toy locks, projects, sessions, and other settings stay unchanged.',
       affected: ['Kids mode PIN', 'Kids mode enabled state'],
       confirmLabel: 'Reset Kids mode PIN',
+      anchor: { x: rect.left, y: rect.bottom },
+      restoreFocusEl: target,
       onConfirm: () => {
         void resetCredential().then((result) => {
           if (!result.ok) setMessage(result.error)
@@ -108,7 +114,7 @@ export function KidsGate({
           ariaLabel="Grown-up PIN"
         />
       ) : (
-        <button type="button" className="md3-kids-filled-btn" onClick={() => onVerified('')}>
+        <button type="button" className="md3-kids-filled-btn" onClick={() => void attempt('')}>
           Continue to grown-up controls
         </button>
       )}

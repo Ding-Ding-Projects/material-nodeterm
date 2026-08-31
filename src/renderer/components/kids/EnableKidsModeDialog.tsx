@@ -27,6 +27,9 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
   const [errorToken, setErrorToken] = useState<number | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const dialogId = useRef<string>()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const openerRef = useRef<HTMLElement | null>(null)
+  const focusedReadyState = useRef(false)
   if (!dialogId.current) dialogId.current = nextDialogId()
 
   const reset = () => {
@@ -44,7 +47,11 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
   // Only join the modal stack (and own Escape) while genuinely open — this component itself
   // never unmounts, since it is the ENTRY point mounted unconditionally at the app root.
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      focusedReadyState.current = false
+      return
+    }
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     void refreshCredentialState()
     const id = dialogId.current!
     pushDialog(id)
@@ -55,9 +62,33 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
     return () => {
       popDialog(id)
       window.removeEventListener('keydown', onKey)
+      openerRef.current?.focus()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  useEffect(() => {
+    if (!open || credentialState === 'loading' || focusedReadyState.current) return
+    const first = dialogRef.current?.querySelector<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+    first?.focus()
+    focusedReadyState.current = true
+  }, [open, credentialState])
+
+  const onDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'Tab' || !isTopDialog(dialogId.current!)) return
+    const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )]
+    if (focusable.length === 0) return
+    event.preventDefault()
+    const current = focusable.indexOf(document.activeElement as HTMLElement)
+    const next = event.shiftKey
+      ? (current <= 0 ? focusable.length - 1 : current - 1)
+      : (current + 1) % focusable.length
+    focusable[next]?.focus()
+  }
 
   if (!open) return null
 
@@ -89,9 +120,18 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
   }
 
   return createPortal(
-    <div className="confirm-overlay md3-kids-enable-overlay" onClick={close}>
-      <div className="md3-kids-enable-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="md3-kids-enable-dialog__title">
+    <div className="confirm-overlay md3-kids-enable-overlay" onClick={() => isTopDialog(dialogId.current!) && close()}>
+      <div
+        ref={dialogRef}
+        className="md3-kids-enable-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`kids-enable-title-${dialogId.current}`}
+        aria-describedby={`kids-enable-hint-${dialogId.current}`}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={onDialogKeyDown}
+      >
+        <div className="md3-kids-enable-dialog__title" id={`kids-enable-title-${dialogId.current}`}>
           {credentialState === 'loading'
             ? 'Checking the grown-up PIN'
             : credentialState === 'unavailable'
@@ -102,7 +142,7 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
                   ? 'Choose a grown-up PIN'
                   : 'Enter it again to confirm'}
         </div>
-        <p className="md3-kids-enable-dialog__hint">
+        <p className="md3-kids-enable-dialog__hint" id={`kids-enable-hint-${dialogId.current}`}>
           {credentialState === 'loading'
             ? 'The app is checking the shared PIN state. Nothing will be changed yet.'
             : credentialState === 'unavailable'

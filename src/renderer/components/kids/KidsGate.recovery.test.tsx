@@ -27,8 +27,13 @@ function mount(): void {
 describe('Kids gate credential-state routing', () => {
   beforeEach(() => {
     useDestructiveGate.getState().close()
+    Object.defineProperty(window, 'nodeTerminal', {
+      configurable: true,
+      value: { kidsMode: { verifyPin: vi.fn().mockResolvedValue(true) } }
+    })
     useKidsMode.setState({
       credentialState: 'absent',
+      refreshCredentialState: vi.fn().mockResolvedValue(undefined),
       resetCredential: vi.fn().mockResolvedValue({ ok: true })
     } as never)
   })
@@ -64,5 +69,28 @@ describe('Kids gate credential-state routing', () => {
       title: 'Reset the Kids mode PIN',
       confirmLabel: 'Reset Kids mode PIN'
     })
+  })
+
+  it('checks an absent credential through the authoritative channel', async () => {
+    const verifyPin = vi.fn().mockResolvedValue(false)
+    const refreshCredentialState = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window, 'nodeTerminal', {
+      configurable: true,
+      value: { kidsMode: { verifyPin } }
+    })
+    useKidsMode.setState({ credentialState: 'absent', refreshCredentialState } as never)
+    mount()
+
+    const button = [...host!.querySelectorAll('button')].find((item) =>
+      item.textContent?.includes('Continue to grown-up controls')
+    )
+    await act(async () => {
+      button!.click()
+      await Promise.resolve()
+    })
+
+    expect(verifyPin).toHaveBeenCalledWith('')
+    expect(refreshCredentialState).toHaveBeenCalledOnce()
+    expect(host!.textContent).toContain("That's not right")
   })
 })
