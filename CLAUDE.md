@@ -3176,6 +3176,15 @@ lint; `scripts/check-release-workflow.mjs` guards those semantics locally. See
 Windows build, package, asset, and release steps; installed-app interaction proof is a separate
 verification boundary.
 
+**Both release-note invocations own the same prior-release snapshot.** The first invocation writes
+the publication-ready body, and the post-publication invocation changes only the completed timing.
+`RELEASE_PRIOR_BODIES_FILE` and `RELEASE_IS_FIRST_RELEASE` therefore appear on both steps and are
+checked as one dataflow. The snapshot must be the nested page array emitted by
+`gh api --paginate --slurp`. On this non-first release line, an absent, malformed, flat, or empty
+snapshot returns no optional code name. Treating a missing snapshot as `[]` resets selection to the
+first catalog record, which is exactly how a correct unused dish was replaced during final timing.
+Only an explicit first-release marker may accept a successfully read empty snapshot.
+
 Auto-update runs **only when `app.isPackaged`** (dev = no-op), checks on launch + every 6h, and
 forwards its lifecycle to the renderer over IPC. **Windows uses Electron's built-in
 `autoUpdater`**, because the project packages Squirrel.Windows rather than NSIS. Its stable feed

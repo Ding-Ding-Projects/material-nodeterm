@@ -496,6 +496,35 @@ describe('release workflow semantic contract', () => {
     expect(forgedManifest.output).toMatch(/validated release dataflow/i)
   })
 
+  it('binds one fail-closed prior-release snapshot to both release-notes invocations', () => {
+    const finalizeHistory = [
+      '          RELEASE_ASSET_MANIFEST: ${{ steps.assets.outputs.manifest }}',
+      '          RELEASE_PRIOR_BODIES_FILE: ${{ runner.temp }}/releases-for-plan.json',
+      "          RELEASE_IS_FIRST_RELEASE: 'false'",
+      '          ALREADY_PUBLISHED: ${{ steps.draft.outputs.already_published }}',
+    ].join('\n')
+
+    const noFinalSnapshot = check(
+      replaceOnce(
+        WORKFLOW,
+        finalizeHistory,
+        finalizeHistory.replace('          RELEASE_PRIOR_BODIES_FILE: ${{ runner.temp }}/releases-for-plan.json\n', ''),
+      ),
+    )
+    expect(noFinalSnapshot.status).toBe(1)
+    expect(noFinalSnapshot.output).toMatch(/validated release dataflow/i)
+
+    const firstReleaseReset = check(
+      replaceOnce(
+        WORKFLOW,
+        "          RELEASE_IS_FIRST_RELEASE: 'false'\n          ALREADY_PUBLISHED: ${{ steps.draft.outputs.already_published }}",
+        "          RELEASE_IS_FIRST_RELEASE: 'true'\n          ALREADY_PUBLISHED: ${{ steps.draft.outputs.already_published }}",
+      ),
+    )
+    expect(firstReleaseReset.status).toBe(1)
+    expect(firstReleaseReset.output).toMatch(/validated release dataflow/i)
+  })
+
   it('rechecks version monotonicity and publishes only an explicit latest stable release', () => {
     const noPrepublishVersion = check(
       replaceOnce(

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Keep release code names stable across the publication and completion-timing note passes by
+  binding both invocations to the same paginated release snapshot. Non-first releases now reject
+  missing, malformed, flat, or empty history as unavailable and omit the optional name instead of
+  quietly selecting the first catalog dish again. The release workflow checker and integration
+  tests cover the exact `gh api --paginate --slurp` nested shape, both note passes, and consecutive
+  releases. The dumpling trolley now keeps its receipt between the kitchen and the table.
+
+  Release code name 而家喺 publication 同完成時間兩次 notes 生成都會用同一份已 pagination 嘅
+  release snapshot。唔係第一次發佈時，如果 history 缺失、格式錯、變成 flat array 或者空白，
+  就會當作 unavailable，唔出 optional 名稱，唔會靜雞雞又揀返 catalog 第一款。Workflow checker
+  同 integration tests 會覆蓋 `gh api --paginate --slurp` 真實 nested shape、兩次 notes pass 同連續
+  release。點心車由廚房行到枱面，張單今次終於冇跌咗。
+
 - Repair release code-name selection so prior release bodies are read once, previously used
   catalog ids and bilingual names are excluded, and the next unused dish with a published photo
   is selected within a bounded probe budget. A missing history snapshot omits the optional name
