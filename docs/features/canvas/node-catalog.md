@@ -61,6 +61,9 @@ Plain text search is the default. The `.*` affordance is anchored beside the cat
 and opens the full regex builder for guided literals, classes, groups, alternation, quantifiers,
 flags, sample text, matches, and capture groups. Up and Down move the active row, Enter creates it,
 Escape clears the query before closing, and focus returns to the FAB or context-menu origin.
+When no project is active, the FAB is disabled and names the exact requirement to open or create a
+project first. This prevents a projectless welcome layer from hiding a node that was created on a
+canvas with nowhere durable to save it.
 
 The dialog follows the active English, playful Cantonese, or bilingual mode and the independent
 funny-level controls. Node names, dependency ids, paths, and capability facts remain exact while

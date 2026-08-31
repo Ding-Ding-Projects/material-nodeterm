@@ -1033,8 +1033,15 @@
     transform var(--md-motion-spatial),
     background var(--md-motion-effect);
 }
-.md3-fab:hover {
+.md3-fab:hover:not(:disabled) {
   background: var(--md-surface-container-highest);
+}
+.md3-fab:disabled {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
 }
 .md3-fab.is-open {
   transform: rotate(45deg);
