@@ -65,6 +65,118 @@ import { WorkspaceStorageSection } from './sections/WorkspaceStorageSection'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
+type SettingsSectionHostProps = {
+  isActive: boolean
+  onClose: () => void
+  onNavigate: (id: SettingsSectionId) => void
+  projectId?: string | null
+  providerBlueprints?: Parameters<typeof ProviderAccountsSection>[0]['blueprints']
+}
+
+type SettingsSectionHostRenderer = (
+  props: SettingsSectionHostProps
+) => React.JSX.Element
+
+/**
+ * The page and sidebar must agree about which static settings sections exist. Keep the renderer
+ * map exhaustive so adding a navigation id without a host is a type error, not an empty pane.
+ * Dynamic project sections stay outside this map because their ids and props are runtime data.
+ */
+const SETTINGS_SECTION_HOST_RENDERERS: Record<SettingsSectionId, SettingsSectionHostRenderer> = {
+  terminal: ({ isActive }) => <TerminalSection isActive={isActive} />,
+  shell: ({ isActive }) => <ShellSection isActive={isActive} />,
+  behavior: ({ isActive }) => <BehaviorSection isActive={isActive} />,
+  'workspace-storage': ({ isActive }) => <WorkspaceStorageSection isActive={isActive} />,
+  appearance: ({ isActive }) => <AppearanceSection isActive={isActive} />,
+  'appearance-editor': ({ isActive }) => <AppearanceEditorSection isActive={isActive} />,
+  'app-identity': ({ isActive }) => <AppIdentitySection isActive={isActive} />,
+  notch: ({ isActive }) => <NotchSection isActive={isActive} />,
+  phone: ({ isActive }) => <PhoneSection isActive={isActive} />,
+  speech: ({ isActive, onNavigate }) => (
+    <SpeechSection isActive={isActive} onNavigate={onNavigate} />
+  ),
+  schedule: ({ isActive }) => <ScheduleSection isActive={isActive} />,
+  planner: ({ isActive }) => <PlannerSection isActive={isActive} />,
+  'adhd-modes': ({ isActive }) => <AdhdModesSection isActive={isActive} />,
+  shortcuts: ({ isActive }) => <ShortcutsSection isActive={isActive} />,
+  agents: ({ isActive }) => <AgentsSection isActive={isActive} />,
+  'claude-skills': ({ isActive }) => <ClaudeSkillsSection isActive={isActive} />,
+  usage: ({ isActive }) => <UsageSection isActive={isActive} />,
+  accounts: ({ isActive }) => <AccountsSection isActive={isActive} />,
+  'provider-accounts': ({ isActive, projectId, providerBlueprints }) => (
+    <ProviderAccountsSection
+      isActive={isActive}
+      projectId={projectId ?? null}
+      blueprints={providerBlueprints}
+    />
+  ),
+  'custom-agents': ({ isActive }) => <CustomAgentsSection isActive={isActive} />,
+  'model-gateway': ({ isActive }) => <ModelGatewaySection isActive={isActive} />,
+  notifications: ({ isActive }) => <NotificationsSection isActive={isActive} />,
+  narrator: ({ isActive }) => <NarratorSection isActive={isActive} />,
+  commit: ({ isActive }) => <CommitSection isActive={isActive} />,
+  tmux: ({ isActive }) => <TmuxSection isActive={isActive} />,
+  'github-issues': ({ isActive }) => <GitHubIssuesSection isActive={isActive} />,
+  license: ({ isActive }) => <LicenseSection isActive={isActive} />,
+  presence: ({ isActive }) => <PresenceIdentitySection isActive={isActive} />,
+  remote: ({ isActive, onClose }) => <RemoteSection isActive={isActive} onClose={onClose} />,
+  'team-access': ({ isActive, onClose }) => (
+    <TeamAccessSection isActive={isActive} onClose={onClose} />
+  ),
+  ssh: ({ isActive, onNavigate }) => <SshSection isActive={isActive} onNavigate={onNavigate} />,
+  updates: ({ isActive }) => <UpdatesSection isActive={isActive} />,
+  privacy: ({ isActive }) => <PrivacySection isActive={isActive} />,
+  language: ({ isActive }) => <LanguageSection isActive={isActive} />,
+  'school-mode': ({ isActive }) => <SchoolModeSection isActive={isActive} />,
+  'kids-mode': ({ isActive }) => <KidsModeSection isActive={isActive} />,
+  vocabulary: ({ isActive }) => <PersonalVocabularySection isActive={isActive} />,
+  history: ({ isActive }) => <LocalHistorySection isActive={isActive} />,
+  toylocks: ({ isActive }) => <ToyLocksSection isActive={isActive} />,
+  authenticator: ({ isActive }) => <AuthenticatorSection isActive={isActive} />,
+  support: ({ isActive }) => <SupportTicketsSection isActive={isActive} />,
+  debug: ({ isActive }) => <DebugSection isActive={isActive} />
+}
+
+/** Materializes the page hosts from the same static registry that drives the sidebar. */
+export function renderSettingsSectionHosts(
+  active: SettingsSectionId,
+  onClose: () => void,
+  onNavigate: (id: SettingsSectionId) => void,
+  registry = SETTINGS_SECTION_REGISTRY,
+  platformIsMac = isMac,
+  options: {
+    languageFeaturesAllowed?: boolean
+    projectId?: string | null
+    providerBlueprints?: Parameters<typeof ProviderAccountsSection>[0]['blueprints']
+  } = {}
+): React.JSX.Element[] {
+  const languageFeaturesAllowed = options.languageFeaturesAllowed ?? true
+  return registry.flatMap((entry) => {
+    if (entry.macOnly && !platformIsMac) return []
+    if (
+      !languageFeaturesAllowed &&
+      (entry.id === 'language' || entry.id === 'vocabulary')
+    ) {
+      return []
+    }
+    const render = SETTINGS_SECTION_HOST_RENDERERS[entry.id]
+    if (!render) {
+      throw new Error(`Settings section "${entry.id}" has no registered host renderer.`)
+    }
+    return [
+      <div key={entry.id} data-settings-section-host={entry.id}>
+        {render({
+          isActive: active === entry.id,
+          onClose,
+          onNavigate,
+          projectId: options.projectId,
+          providerBlueprints: options.providerBlueprints
+        })}
+      </div>
+    ]
+  })
+}
+
 export function SettingsPage({
   onClose,
   initialSection,
@@ -284,54 +396,18 @@ export function SettingsPage({
               </p>
             </section>
 
-            <TerminalSection isActive={active === 'terminal'} />
-            <ShellSection isActive={active === 'shell'} />
-            <BehaviorSection isActive={active === 'behavior'} />
-            <AppearanceSection isActive={active === 'appearance'} />
-            <AppearanceEditorSection isActive={active === 'appearance-editor'} />
-            <AppIdentitySection isActive={active === 'app-identity'} />
-            {isMac ? <NotchSection isActive={active === 'notch'} /> : null}
-            <PhoneSection isActive={active === 'phone'} />
-            <SpeechSection isActive={active === 'speech'} onNavigate={setActive} />
-            {languageFeaturesAllowed ? <LanguageSection isActive={active === 'language'} /> : null}
-            <ScheduleSection isActive={active === 'schedule'} />
-            <PlannerSection isActive={active === 'planner'} />
-            <AdhdModesSection isActive={active === 'adhd-modes'} />
-            <ShortcutsSection isActive={active === 'shortcuts'} />
-            <AgentsSection isActive={active === 'agents'} />
-            <ClaudeSkillsSection isActive={active === 'claude-skills'} />
-            <UsageSection isActive={active === 'usage'} />
-            <AccountsSection isActive={active === 'accounts'} />
-            <ProviderAccountsSection
-              isActive={active === 'provider-accounts'}
-              projectId={activeProjectId}
-              blueprints={activeProject?.providerBlueprints}
-            />
-            <CustomAgentsSection isActive={active === 'custom-agents'} />
-            <ModelGatewaySection isActive={active === 'model-gateway'} />
-            <NotificationsSection isActive={active === 'notifications'} />
-            <NarratorSection isActive={active === 'narrator'} />
-            <CommitSection isActive={active === 'commit'} />
-            <TmuxSection isActive={active === 'tmux'} />
-            <GitHubIssuesSection isActive={active === 'github-issues'} />
-            <WorkspaceStorageSection isActive={active === 'workspace-storage'} />
-            <LicenseSection isActive={active === 'license'} />
-            <PresenceIdentitySection isActive={active === 'presence'} />
-            <RemoteSection isActive={active === 'remote'} onClose={onClose} />
-            <TeamAccessSection isActive={active === 'team-access'} onClose={onClose} />
-            <SshSection isActive={active === 'ssh'} onNavigate={setActive} />
-            <UpdatesSection isActive={active === 'updates'} />
-            <PrivacySection isActive={active === 'privacy'} />
-            <SchoolModeSection isActive={active === 'school-mode'} />
-            <KidsModeSection isActive={active === 'kids-mode'} />
-            {languageFeaturesAllowed ? (
-              <PersonalVocabularySection isActive={active === 'vocabulary'} />
-            ) : null}
-            <LocalHistorySection isActive={active === 'history'} />
-            <ToyLocksSection isActive={active === 'toylocks'} />
-            <AuthenticatorSection isActive={active === 'authenticator'} />
-            <SupportTicketsSection isActive={active === 'support'} />
-            <DebugSection isActive={active === 'debug'} />
+            {renderSettingsSectionHosts(
+              active,
+              onClose,
+              setActive,
+              SETTINGS_SECTION_REGISTRY,
+              isMac,
+              {
+                languageFeaturesAllowed,
+                projectId: activeProjectId,
+                providerBlueprints: activeProject?.providerBlueprints
+              }
+            )}
             {openProjects.map((project) => (
               <ProjectSettingsSection
                 key={project.id}

@@ -1,5 +1,20 @@
 # Handoff
 
+## 2026-08-31, settings registry host parity
+
+The settings surface now consumes an exhaustive host-renderer registry in
+`src/renderer/components/settings/SettingsPage.tsx`. Every static entry in
+`SETTINGS_SECTION_REGISTRY` materializes one host, while platform and School mode visibility
+filters remain aligned with the sidebar. Runtime project sections stay in their existing dynamic
+path because their ids and project-scoped data are discovered at render time.
+
+The focused parity Chut is
+`src/renderer/components/settings/SettingsPage.registry.test.tsx`. It passed 2 of 2 cases, the
+existing `nav.test.ts` passed 8 of 8 cases, and removing the `debug` host renderer made both parity
+cases red before the renderer was restored. TypeScript passed; its only message was the documented
+standalone skip for the absent optional sibling checkout. No runtime interaction or HuiShot was run
+because this lane is limited to registry wiring and its focused Chut.
+
 ## 2026-08-30, terminal visibility, compact layout, and Kids recovery
 
 This task repairs the desktop states reported against published `v1.0.5`. The implementation was

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Centralize settings-section host rendering behind an exhaustive registry so every sidebar entry
+  has a real page host, with a focused parity test and a fail-closed missing-host regression.
+  Settings navigation and page mounting now cannot drift silently.
+
+  設定 section host 而家由一個完整 registry 統一管理，每個 sidebar entry 都有真正 page host；
+  focused parity test 仲會特登試一次 missing-host regression，唔畀 navigation 同 page mounting
+  靜雞雞走樣。
+
 - Restore reachable terminal and recovery flows in the Windows desktop application. New WSL
   frames publish their first terminal in one transaction; existing empty frames offer a verified
   **Open terminal** action; psmux installer terminals return an acknowledged placement receipt and

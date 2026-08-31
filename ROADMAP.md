@@ -14,6 +14,13 @@ are recorded below. Do not treat the source candidate as a published release.
 
 ---
 
+## Settings registry parity repair (2026-08-31)
+
+- [x] **Static settings host parity:** `SettingsPage.tsx` now consumes an exhaustive renderer map
+      for every static entry in `SETTINGS_SECTION_REGISTRY`. The focused parity Chut passes 2 of 2,
+      `nav.test.ts` passes 8 of 8, and the deliberate missing-renderer mutation turned both parity
+      cases red before restoration. No runtime capture was required for this registry-only repair.
+
 ## v1.0.6 terminal, compact-layout, and Kids recovery candidate (2026-08-30)
 
 - [x] **Reachable terminal flows:** new WSL frames include one selected in-frame terminal, saved

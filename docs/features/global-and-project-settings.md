@@ -10,6 +10,15 @@ The header reports the override count and offers **Reset all to Global**. Settin
 adjacent regex builder, command-palette destinations, localization, accessibility, tabs, menus,
 appearance, history, and scheduling remain the existing shared components.
 
+## Navigation and host parity
+
+Static settings navigation entries and their rendered hosts share one exhaustive host-renderer map
+in `src/renderer/components/settings/SettingsPage.tsx`. The page materializes a host for every
+entry in `SETTINGS_SECTION_REGISTRY`, while macOS-only and School mode filtered entries retain the
+same visibility rules as the sidebar. Runtime project entries remain a separate list because their
+identities and project-scoped props are discovered at render time. A missing host renderer fails
+closed rather than leaving a navigation row that opens an empty pane.
+
 ## Persistence and migration
 
 Global defaults remain in `settings.json`. Sparse project overrides live in the versioned,
@@ -36,8 +45,14 @@ effective settings layer. A source sweep found no other production call that dir
 
 ## Verification
 
-This ultra-speed lane did not run tests, type-checking, lint, runtime interaction, accessibility
-review, or screenshots. The implementation is committed but unverified by those checks.
+The earlier ultra-speed lane did not run tests, type-checking, lint, runtime interaction,
+accessibility review, or screenshots. That historical note remains attached to the earlier
+implementation record.
+
+The settings registry parity Chut is `src/renderer/components/settings/SettingsPage.registry.test.tsx`.
+It checks that every static navigation entry materializes one host and deliberately verifies the
+missing-renderer failure path. The focused Chut and `nav.test.ts` pass locally; the complete app
+runtime and visual interaction remain outside this registry-only check.
 
 ## Suggested articles
 
