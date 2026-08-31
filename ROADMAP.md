@@ -7,9 +7,9 @@ means captured from the real built artifact, not asserted from source. Anything 
 its real state next to it rather than being silently omitted.
 
 Source candidate package version in `package.json`: `1.0.0`. The latest published release tag is
-`v1.0.5`, targeting `e7ca458eaba7d3f08931a8c2271bad74997184dc`. Version `1.0.0` is the
+`v1.0.6`, targeting `707713ec971193437f3ffcde2cdaf348b69a44ee`. Version `1.0.0` is the
 deliberate human-selected source major; ordinary stable patch releases remain workflow-planned and
-have reached `1.0.5`. The tree currently contains 1,047 test files. Candidate check evidence and remaining runtime receipt blockers
+have reached `1.0.6`. The tree currently contains 1,054 test files. Candidate check evidence and remaining runtime receipt blockers
 are recorded below. Do not treat the source candidate as a published release.
 
 ---
@@ -37,9 +37,14 @@ are recorded below. Do not treat the source candidate as a published release.
       bundle passed 16 assertions, personal-vocabulary coverage passed 1,373 assertions, and the
       root `build.bat /s` completed before the two narrowly scoped follow-up repairs. The exact
       final source then completed `npm run build:app` and hidden-desktop interaction evidence.
-- [ ] **Published release:** default-branch integration, remote workflow, uniquely tagged release,
-      unsigned Squirrel.Windows assets, workflow timing, and downloadable-asset verification remain
-      pending until this task is pushed and the release workflow reaches a terminal verdict.
+- [x] **Published release:** `v1.0.6` targets
+      `707713ec971193437f3ffcde2cdaf348b69a44ee`; release run `33356342329`, security run
+      `33356342334`, and Pages run `33356342311` completed successfully. Its three unsigned
+      Squirrel.Windows assets return anonymous HTTP 200 responses with the exact published byte
+      counts and SHA-256 digests.
+- [x] **Final-note code-name consistency repair:** both release-note passes now receive the same
+      paginated prior-release body snapshot. The workflow checker lists that finalizer input
+      explicitly, and the focused regression removes it and requires the checker to fail.
 
 ## v1.0.0 source candidate (2026-08-29)
 

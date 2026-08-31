@@ -125,8 +125,10 @@ job:
     latest-release view to prove the complete inventory and exact target survived the transition.
 17. **Record the post-publication completion boundary and finalize the notes.** Regenerate notes
     with exact `Workflow started`, `Workflow completed`, and `Workflow duration` values, edit the
-    same published release, then read it back and require exact body equality. A retry of an
-    already-published release verifies those fields and changes nothing.
+    same published release, then read it back and require exact body equality. This final generation
+    receives the same paginated prior-release body snapshot as the pre-publication generation, so
+    adding completion timing cannot silently select a different or previously used code name. A
+    retry of an already-published release verifies those fields and changes nothing.
 18. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
     the collection and the upload — so a failed run still leaves the packaged output, the
     generated notes, and the run context inspectable, without ever masking or reversing the
@@ -243,8 +245,10 @@ printed as **missing**, not guessed at. It always includes:
    bodies, then probes only a bounded number of published catalog photos. If the history snapshot
    cannot be read, the optional name is omitted rather than risking a duplicate. If the catalog
    has no unused published photo within the probe budget, the workflow emits a warning and continues
-   without a code name. The photo remains hosted by the catalog release and is not described as
-   attached to this consumer release.
+   without a code name. Both note-generation passes receive that same snapshot. The workflow
+   checker deliberately removes the finalizer binding and must fail, preventing a completion-timing
+   edit from reverting to the first catalog dish. The photo remains hosted by the catalog release
+   and is not described as attached to this consumer release.
 
 ### `scripts/count-lines.mjs`
 

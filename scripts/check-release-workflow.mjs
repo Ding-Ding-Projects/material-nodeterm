@@ -421,6 +421,7 @@ export function validateReleaseWorkflow(workflow, packageJson) {
         WORKFLOW_STARTED_AT: '${{ steps.timing.outputs.started_at }}',
         RELEASE_ASSET_PATHS: '${{ steps.assets.outputs.paths }}',
         RELEASE_ASSET_MANIFEST: '${{ steps.assets.outputs.manifest }}',
+        RELEASE_PRIOR_BODIES_FILE: '${{ runner.temp }}/releases-for-plan.json',
         ALREADY_PUBLISHED: '${{ steps.draft.outputs.already_published }}',
       },
     ],

@@ -6,6 +6,16 @@ This task repairs the desktop states reported against published `v1.0.5`. The im
 integrated on `codex/integrate-ui-recovery-20260830` from `origin/main` at
 `e7ca458eaba7d3f08931a8c2271bad74997184dc`.
 
+### Release metadata follow-up
+
+The completed v1.0.6 workflow exposed a post-publication metadata defect even though every job was
+green. Its draft notes selected the next unused dim-sum code name from the paginated prior-release
+body inventory. The completion-timed finalizer regenerated the notes without that inventory and
+reused the first dish from v1.0.5. The release workflow now binds `RELEASE_PRIOR_BODIES_FILE` into
+both note-generation passes. `scripts/check-release-workflow.mjs` requires the finalizer binding,
+and `src/main/release-workflow-contract.test.ts` removes it deliberately and requires a red result.
+The v1.0.6 public notes were restored to the draft-selected unused code name before closeout.
+
 ### Commits and behavior
 
 | Commit | Scope |

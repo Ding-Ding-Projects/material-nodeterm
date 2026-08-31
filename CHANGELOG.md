@@ -43,6 +43,17 @@
   排除，再喺有界 photo probe 入面揀下一款已發佈相片嘅未用菜名。讀唔到 history snapshot 就唔出 optional
   菜名，避免撞名；catalog 真係用盡就出 workflow warning，release 照樣繼續。
 
+- Keep the publication-ready and completion-timed release-note passes bound to the same prior-
+  release body snapshot. The v1.0.6 finalizer previously regenerated notes without that input,
+  replacing its unused draft code name with the first catalog dish already used by v1.0.5. The
+  workflow checker now treats the finalizer binding as required dataflow, and a focused mutation
+  proves removing it turns the contract red.
+
+  Publication-ready 同 completion-timed 兩次 release notes 而家會共用同一份舊 release body
+  snapshot。v1.0.6 finalizer 之前漏咗呢個 input，將 draft 揀好嘅未用菜名換返做 v1.0.5
+  已經用過嘅第一款。Workflow checker 而家會將 finalizer binding 當成必要 dataflow，focused
+  mutation 拆走佢就一定報錯，唔再俾碟點心趁填時間時偷偷換枱。
+
 - Stage the detached Windows session host in a versioned runtime under local application data,
   outside Squirrel's replaceable `app-*` directories. Existing host state and named-pipe ownership
   are still checked first, so a live host is attached rather than replaced. New hosts copy the

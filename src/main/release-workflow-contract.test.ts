@@ -597,6 +597,18 @@ describe('release workflow semantic contract', () => {
     expect(always.output).toMatch(/skip an already-published retry/i)
   })
 
+  it('binds the same prior-release snapshot to draft and final release notes', () => {
+    const missingFinalSnapshot = check(
+      replaceOnce(
+        WORKFLOW,
+        '          RELEASE_PRIOR_BODIES_FILE: ${{ runner.temp }}/releases-for-plan.json\n          ALREADY_PUBLISHED: ${{ steps.draft.outputs.already_published }}',
+        '          ALREADY_PUBLISHED: ${{ steps.draft.outputs.already_published }}',
+      ),
+    )
+    expect(missingFinalSnapshot.status).toBe(1)
+    expect(missingFinalSnapshot.output).toMatch(/validated release dataflow/i)
+  })
+
   it('rejects direct and package-script-hidden validation on the runner', () => {
     const direct = check(replaceOnce(WORKFLOW, '        run: npm run dist:win', '        run: npm test'))
     expect(direct.status).toBe(1)
