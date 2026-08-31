@@ -18158,16 +18158,22 @@ export function Canvas() {
             {
               id: 'topBar.awsUniverse',
               label: 'AWS Universe',
+              disabled: !activeProjectId,
+              disabledReason: activeProjectId ? undefined : 'Open or create a project first.',
               onSelect: () => setAwsUniverseNavigatorOpen(true)
             },
             {
               id: 'topBar.multiverse',
               label: 'Multiverse',
+              disabled: !activeProjectId,
+              disabledReason: activeProjectId ? undefined : 'Open or create a project first.',
               onSelect: () => setMultiverseNavigatorOpen(true)
             },
             {
               id: 'topBar.portals',
               label: 'Portals',
+              disabled: !activeProjectId,
+              disabledReason: activeProjectId ? undefined : 'Open or create a project first.',
               onSelect: () => {
                 commitActiveToStore()
                 setPortalLifecycleOpen(true)

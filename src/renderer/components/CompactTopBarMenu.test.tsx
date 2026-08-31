@@ -65,4 +65,25 @@ describe('CompactTopBarMenu', () => {
     expect(document.body.querySelector('.md3-compact-more__popover')).toBeNull()
     expect(document.activeElement).toBe(trigger)
   })
+
+  it('keeps a disabled action visible with its exact unmet condition', () => {
+    act(() => {
+      root.render(
+        <CompactTopBarMenu
+          items={[{
+            id: 'portals',
+            label: 'Portals',
+            disabled: true,
+            disabledReason: 'Open or create a project first.',
+            onSelect: vi.fn()
+          }]}
+        />
+      )
+    })
+    act(() => host.querySelector<HTMLButtonElement>('.md3-compact-more')?.click())
+    const action = document.body.querySelector<HTMLButtonElement>('#compact-top-bar-actions > button')
+    expect(action?.disabled).toBe(true)
+    expect(action?.textContent).toContain('Open or create a project first.')
+    expect(action?.getAttribute('aria-label')).toContain('Open or create a project first.')
+  })
 })

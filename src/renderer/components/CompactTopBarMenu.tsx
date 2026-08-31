@@ -105,22 +105,32 @@ export function CompactTopBarMenu({ items, label = 'More', className, triggerRef
         <div id="compact-top-bar-actions" className="md3-compact-more__list" aria-label={vocab('topBar.more.label', label)}>
           {visible.length === 0 ? (
             <p className="md3-compact-more__empty" role="status">{vocab('topBar.more.empty', 'No actions match this search.')}</p>
-          ) : visible.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              disabled={item.disabled}
-              title={item.disabledReason}
-              onClick={() => {
-                if (item.disabled) return
-                item.onSelect()
-                close()
-              }}
-            >
-              {item.icon && <span aria-hidden="true">{item.icon}</span>}
-              <span>{vocab(item.id, item.label)}</span>
-            </button>
-          ))}
+          ) : visible.map((item) => {
+            const visibleLabel = vocab(item.id, item.label)
+            const visibleReason = item.disabledReason
+              ? vocab(`${item.id}.disabledReason`, item.disabledReason)
+              : undefined
+            return (
+              <button
+                key={item.id}
+                type="button"
+                disabled={item.disabled}
+                title={visibleReason}
+                aria-label={item.disabled && visibleReason ? `${visibleLabel}. ${visibleReason}` : undefined}
+                onClick={() => {
+                  if (item.disabled) return
+                  item.onSelect()
+                  close()
+                }}
+              >
+                {item.icon && <span aria-hidden="true">{item.icon}</span>}
+                <span>{visibleLabel}</span>
+                {item.disabled && visibleReason ? (
+                  <small className="md3-compact-more__reason">{visibleReason}</small>
+                ) : null}
+              </button>
+            )
+          })}
         </div>
       </AnchoredPopover>
     </>
