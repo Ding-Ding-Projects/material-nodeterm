@@ -428,10 +428,11 @@ const api: NodeTerminalApi = {
     disable: (pin) => ipcRenderer.invoke(IPC.kidsModeDisable, pin),
     rename: (name) => ipcRenderer.invoke(IPC.kidsModeRename, name),
     changePin: (currentPin, nextPin) => ipcRenderer.invoke(IPC.kidsModeChangePin, currentPin, nextPin),
-    hasCredential: () => ipcRenderer.invoke(IPC.kidsModeHasCredential),
+    credentialState: () => ipcRenderer.invoke(IPC.kidsModeCredentialState),
     // Read-only PIN check for the grown-up screen's parent gate — never leaves kids mode, unlike
     // `disable`. Always goes over IPC: the renderer never holds or compares a PIN itself.
     verifyPin: (pin) => ipcRenderer.invoke(IPC.kidsModeVerifyPin, pin),
+    resetCredential: () => ipcRenderer.invoke(IPC.kidsModeResetCredential),
     onChanged: subscribe(IPC.kidsModeChanged)
   },
   scheduledSettings: {

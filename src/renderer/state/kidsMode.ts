@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
 import { DEFAULT_KIDS_MODE_NAME } from '@shared/kids-mode-name'
+import type { KidsCredentialState } from '@shared/types'
 
 /**
  * Renderer-side mirror of the shared Kids-mode record (`window.nodeTerminal.kidsMode`, backed by
@@ -23,13 +24,16 @@ export interface KidsModeState {
   /** A displayed OFF is permission only after core proves a strict read for a live watch epoch. */
   policyStatus: KidsModePolicyStatus
   generation: number
-  hasCredential: boolean
+  credentialState: KidsCredentialState | 'loading'
+  /** @deprecated Compatibility only for older test fixtures. Read `credentialState` in UI code. */
+  hasCredential?: boolean
   init(): Promise<void>
   enable(pin?: string): Promise<{ ok: true } | { ok: false; error: string }>
   disable(pin: string): Promise<{ ok: true } | { ok: false; error: string }>
   rename(name: string): Promise<void>
   changePin(currentPin: string, nextPin: string): Promise<boolean>
-  refreshHasCredential(): Promise<void>
+  resetCredential(): Promise<{ ok: true } | { ok: false; error: string }>
+  refreshCredentialState(): Promise<void>
 }
 
 let initStarted = false
@@ -49,7 +53,7 @@ export const useKidsMode = create<KidsModeState>((set) => ({
   hydrated: false,
   policyStatus: 'loading',
   generation: -1,
-  hasCredential: false,
+  credentialState: 'loading',
 
   init: async () => {
     if (initStarted) return
@@ -66,6 +70,13 @@ export const useKidsMode = create<KidsModeState>((set) => ({
           policyStatus: record.authoritative ? 'ready' : 'unavailable',
           generation: record.generation
         })
+        // Credential files are separate from the watched record. Re-read them after every live
+        // record event so another process's enrollment, removal, or vault failure converges here
+        // before a gate decides which controls to render.
+        void window.nodeTerminal.kidsMode.credentialState().then(
+          (state) => set({ credentialState: state }),
+          () => set({ credentialState: 'unavailable' })
+        )
       })
       liveSubscriptionReady = true
     } catch {
@@ -77,7 +88,7 @@ export const useKidsMode = create<KidsModeState>((set) => ({
     try {
       const [recordResult, credentialResult] = await Promise.allSettled([
         window.nodeTerminal.kidsMode.load(),
-        window.nodeTerminal.kidsMode.hasCredential()
+        window.nodeTerminal.kidsMode.credentialState()
       ])
       if (recordResult.status === 'fulfilled' && recordResult.value.generation >= latestGeneration) {
         const record = recordResult.value
@@ -85,10 +96,10 @@ export const useKidsMode = create<KidsModeState>((set) => ({
         set({
           enabled: record.enabled,
           name: record.name,
-          hasCredential:
+          credentialState:
             credentialResult.status === 'fulfilled'
               ? credentialResult.value
-              : useKidsMode.getState().hasCredential,
+              : 'unavailable',
           hydrated: true,
           policyStatus:
             liveSubscriptionReady && record.authoritative ? 'ready' : 'unavailable',
@@ -98,13 +109,11 @@ export const useKidsMode = create<KidsModeState>((set) => ({
         set({
           hydrated: true,
           policyStatus: 'unavailable',
-          ...(credentialResult.status === 'fulfilled'
-            ? { hasCredential: credentialResult.value }
-            : {})
+          credentialState: credentialResult.status === 'fulfilled' ? credentialResult.value : 'unavailable'
         })
       } else if (credentialResult.status === 'fulfilled') {
         // A newer live event won. Credential existence is independent and can still be merged.
-        set({ hasCredential: credentialResult.value, hydrated: true })
+        set({ credentialState: credentialResult.value, hydrated: true })
       }
     } catch {
       set({ hydrated: true, policyStatus: 'unavailable' })
@@ -119,13 +128,13 @@ export const useKidsMode = create<KidsModeState>((set) => ({
         set({
           enabled: record.enabled,
           name: record.name,
-          hasCredential: true,
+          credentialState: 'present',
           policyStatus:
             liveSubscriptionReady && record.authoritative ? 'ready' : 'unavailable',
           generation: record.generation
         })
       } else {
-        set({ hasCredential: true })
+        set({ credentialState: 'present' })
       }
       return { ok: true }
     } catch (e) {
@@ -165,11 +174,21 @@ export const useKidsMode = create<KidsModeState>((set) => ({
 
   changePin: async (currentPin, nextPin) => {
     const ok = await window.nodeTerminal.kidsMode.changePin(currentPin, nextPin)
-    if (ok) set({ hasCredential: true })
+    if (ok) set({ credentialState: 'present' })
     return ok
   },
 
-  refreshHasCredential: async () => {
-    set({ hasCredential: await window.nodeTerminal.kidsMode.hasCredential() })
+  resetCredential: async () => {
+    const result = await window.nodeTerminal.kidsMode.resetCredential()
+    if (result.ok) set({ enabled: false, credentialState: 'absent' })
+    return result.ok ? { ok: true } : { ok: false, error: result.error }
+  },
+
+  refreshCredentialState: async () => {
+    try {
+      set({ credentialState: await window.nodeTerminal.kidsMode.credentialState() })
+    } catch {
+      set({ credentialState: 'unavailable' })
+    }
   }
 }))

@@ -650,7 +650,9 @@ export function buildRealApi(
     rename: (name: string) => client.request(IPC.kidsModeRename, name) as Promise<KidsModeSnapshot>,
     changePin: (currentPin: string, nextPin: string) =>
       client.request(IPC.kidsModeChangePin, currentPin, nextPin) as Promise<boolean>,
-    hasCredential: () => client.request(IPC.kidsModeHasCredential) as Promise<boolean>,
+    credentialState: () => client.request(IPC.kidsModeCredentialState) as ReturnType<KidsModeApi['credentialState']>,
+    resetCredential: () => client.request(IPC.kidsModeResetCredential) as ReturnType<KidsModeApi['resetCredential']>,
+    verifyPin: (pin: string) => client.request(IPC.kidsModeVerifyPin, pin) as Promise<boolean>,
     onChanged: (cb) => client.subscribe(IPC.kidsModeChanged, cb as Listener)
   }
 

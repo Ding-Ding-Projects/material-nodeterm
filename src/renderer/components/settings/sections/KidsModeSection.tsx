@@ -10,6 +10,7 @@ import { SearchableRow } from '../SearchableRow'
 import { SettingsSection } from '../SettingsSection'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SettingsText } from '../SettingsText'
+import { openDestructiveGate } from '../../../state/destructiveGate'
 
 const ROWS = {
   toggle: {
@@ -49,9 +50,10 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
   const vocab = useVocabularyMapper()
   const enabled = useKidsMode((s) => s.enabled)
   const name = useKidsMode((s) => s.name)
-  const hasCredential = useKidsMode((s) => s.hasCredential)
+  const credentialState = useKidsMode((s) => s.credentialState)
   const enable = useKidsMode((s) => s.enable)
   const disable = useKidsMode((s) => s.disable)
+  const resetCredential = useKidsMode((s) => s.resetCredential)
   const rename = useKidsMode((s) => s.rename)
   const changePin = useKidsMode((s) => s.changePin)
 
@@ -66,6 +68,20 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
   const [nextPinDraft, setNextPinDraft] = useState('')
   const [pinChangeMsg, setPinChangeMsg] = useState<string | null>(null)
 
+  const requestReset = (): void => {
+    openDestructiveGate({
+      title: 'Reset the Kids mode PIN',
+      description: 'Remove only the Kids mode PIN and turn Kids mode off. School mode, toy locks, projects, sessions, and other settings stay unchanged.',
+      affected: ['Kids mode PIN', 'Kids mode enabled state'],
+      confirmLabel: 'Reset Kids mode PIN',
+      onConfirm: () => {
+        void resetCredential().then((result) => {
+          if (!result.ok) setError(result.error)
+        })
+      }
+    })
+  }
+
   return (
     // `title={name}`, never the literal "Kids mode": the record is renamable and no surface may
     // reveal the shipped name once a user has changed it — the same rule School mode follows.
@@ -73,9 +89,16 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
       <SearchableRow {...ROWS.toggle}>
         <FieldRow
           label={enabled ? `${name} is on` : `${name} is off`}
-          description={`Keeps everything playful — dim sum, the funny levels and the language modes all stay — and adds limits instead: agents cannot start in a mode that acts without asking, and deleting a session asks twice. It does not sandbox the terminal (see below). It affects every app reading this machine's shared record, not just this one. Turning it OFF needs the grown-up PIN; turning it ON never does.`}
+          description={`Keeps everything playful — dim sum, the funny levels and the language modes all stay — and adds limits instead: agents cannot start in a mode that acts without asking, and deleting a session asks twice. It does not sandbox the terminal (see below). It affects every app reading this machine's shared record, not just this one. First enrollment chooses a PIN; later turning it ON and turning it OFF require the grown-up PIN.`}
           control={
-            enabled && !hasCredential ? (
+            credentialState === 'loading' ? (
+              <p className="text-[12px] text-muted" role="status">Checking the shared PIN state…</p>
+            ) : credentialState === 'unavailable' ? (
+              <div className="flex flex-col items-end gap-2">
+                <p className="max-w-[22rem] text-right text-[12px] text-muted">The shared PIN cannot be checked. Kids mode stays locked until the credential store is available.</p>
+                <Button disabled={busy} onClick={requestReset}>I never set this PIN</Button>
+              </div>
+            ) : enabled && credentialState === 'absent' ? (
               // On with no PIN ever set. The record is shared across every app on this machine and
               // the credential is a separate file, so another app can turn the mode on, and a
               // restore can bring the record back without the credential. Asking for a PIN here
@@ -132,7 +155,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
               </div>
             ) : (
               <div className="flex flex-col items-end gap-2">
-                {!hasCredential ? (
+                {credentialState === 'absent' ? (
                   <div className="flex items-center gap-2">
                     <Input
                       type="password"
@@ -154,12 +177,25 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                     />
                   </div>
                 ) : null}
+                {credentialState === 'present' ? (
+                  <Input
+                    type="password"
+                    value={unlockPin}
+                    onChange={(e) => {
+                      setUnlockPin(e.target.value)
+                      setError(null)
+                    }}
+                    placeholder={vocab('Grown-up PIN')}
+                    className="w-40"
+                    aria-label={`${vocab('Grown-up PIN to turn')} ${name} ${vocab('on')}`}
+                  />
+                ) : null}
                 <Button
                   variant="primary"
-                  disabled={busy || (!hasCredential && (pin.length !== 4 || pin !== pinConfirm))}
+                  disabled={busy || (credentialState === 'absent' && (pin.length !== 4 || pin !== pinConfirm)) || (credentialState === 'present' && unlockPin.length === 0)}
                   onClick={async () => {
                     setBusy(true)
-                    const result = await enable(hasCredential ? undefined : pin)
+                    const result = await enable(credentialState === 'present' ? unlockPin : pin)
                     setBusy(false)
                     if (!result.ok) {
                       setError(result.error)
@@ -168,6 +204,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                     setError(null)
                     setPin('')
                     setPinConfirm('')
+                    setUnlockPin('')
                   }}
                 >
                   Turn on
@@ -178,10 +215,9 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
         />
         {error ? <p className="text-[12px] leading-relaxed text-[color:var(--warn)]"><SettingsText segments={[{ kind: 'fact', value: error }]} /></p> : null}
         <p className="text-[12px] leading-relaxed text-muted-2"><SettingsText segments={[
-          { kind: 'copy', value: "Forgot the PIN? There is no reset flow — delete this machine's " },
-          { kind: 'fact', value: <code>~/.nodeterm/shared</code> },
-          { kind: 'copy', value: ' folder to turn the mode off and clear it.' }
+          { kind: 'copy', value: 'Forgot the PIN? Use the targeted reset below. It changes only this mode and its PIN.' }
         ]} /></p>
+        <Button variant="ghost" disabled={busy} onClick={requestReset}>I never set this PIN</Button>
       </SearchableRow>
 
       <SearchableRow {...ROWS.limits}>
@@ -260,7 +296,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                 aria-label="New grown-up PIN"
               />
               <Button
-                disabled={!hasCredential || currentPinDraft.length === 0 || nextPinDraft.length !== 4}
+                disabled={credentialState !== 'present' || currentPinDraft.length === 0 || nextPinDraft.length !== 4}
                 onClick={async () => {
                   const ok = await changePin(currentPinDraft, nextPinDraft)
                   setPinChangeMsg(ok ? 'PIN changed.' : 'That current PIN did not match.')

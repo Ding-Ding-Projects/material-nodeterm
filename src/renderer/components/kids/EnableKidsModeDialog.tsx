@@ -8,9 +8,9 @@ import { PinPad } from './PinPad'
 import { useEnableKidsDialog } from './entry'
 
 /**
- * First-time PIN setup for entering Kids mode from the nav rail's `child_care` destination — see
- * entry.ts. Only shown when no grown-up PIN exists anywhere on this machine yet; a machine that
- * already has one skips straight to `enable()` with no dialog at all.
+ * PIN setup or verification for entering Kids mode from the nav rail's `child_care` destination —
+ * see entry.ts. A machine with no grown-up PIN gets choose plus confirm; an existing PIN must be
+ * verified before `enable()` can turn the mode on.
  *
  * Mount once at the app root (regardless of whether Kids mode is currently on), since this is the
  * ENTRY path — it has to be reachable from the ordinary developer canvas, before `<KidsShell/>`
@@ -20,6 +20,8 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
   const open = useEnableKidsDialog((s) => s.open)
   const hide = useEnableKidsDialog((s) => s.hide)
   const enable = useKidsMode((s) => s.enable)
+  const credentialState = useKidsMode((s) => s.credentialState)
+  const refreshCredentialState = useKidsMode((s) => s.refreshCredentialState)
   const [step, setStep] = useState<'choose' | 'confirm'>('choose')
   const [chosen, setChosen] = useState('')
   const [errorToken, setErrorToken] = useState<number | undefined>(undefined)
@@ -43,6 +45,7 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
   // never unmounts, since it is the ENTRY point mounted unconditionally at the app root.
   useEffect(() => {
     if (!open) return
+    void refreshCredentialState()
     const id = dialogId.current!
     pushDialog(id)
     const onKey = (e: KeyboardEvent) => {
@@ -63,6 +66,14 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
     setStep('confirm')
   }
 
+  const onVerifyExisting = async (pin: string) => {
+    setBusy(true)
+    const result = await enable(pin)
+    setBusy(false)
+    if (result.ok) close()
+    else setErrorToken(Date.now())
+  }
+
   const onConfirm = async (pin: string) => {
     if (pin !== chosen) {
       setStep('choose')
@@ -81,14 +92,35 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
     <div className="confirm-overlay md3-kids-enable-overlay" onClick={close}>
       <div className="md3-kids-enable-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="md3-kids-enable-dialog__title">
-          {step === 'choose' ? 'Choose a grown-up PIN' : 'Enter it again to confirm'}
+          {credentialState === 'loading'
+            ? 'Checking the grown-up PIN'
+            : credentialState === 'unavailable'
+              ? 'The grown-up PIN is unavailable'
+              : credentialState === 'present'
+                ? 'Enter the grown-up PIN to continue'
+                : step === 'choose'
+                  ? 'Choose a grown-up PIN'
+                  : 'Enter it again to confirm'}
         </div>
         <p className="md3-kids-enable-dialog__hint">
-          {step === 'choose'
-            ? 'This 4-digit PIN unlocks the grown-up screen and turns Kids mode off. You can change it any time from Settings → Kids mode.'
-            : "Type the same 4 digits once more."}
+          {credentialState === 'loading'
+            ? 'The app is checking the shared PIN state. Nothing will be changed yet.'
+            : credentialState === 'unavailable'
+              ? 'The shared PIN cannot be checked. Nothing was changed; try again after the credential store is available.'
+              : credentialState === 'present'
+                ? 'Kids mode already has a PIN. Verify it here before turning the mode on.'
+                : step === 'choose'
+                  ? 'This 4-digit PIN unlocks the grown-up screen and turns Kids mode off. You can change it any time from Settings → Kids mode.'
+                  : 'Type the same 4 digits once more.'}
         </p>
-        <PinPad
+        {credentialState === 'present' ? <PinPad
+          key="verify-existing"
+          length={4}
+          onComplete={onVerifyExisting}
+          errorToken={errorToken}
+          disabled={busy}
+          ariaLabel="Verify the existing grown-up PIN"
+        /> : credentialState === 'absent' ? <PinPad
           // `key` is load-bearing, not tidiness. PinPad holds the typed digits in its OWN state and
           // `push()` early-returns once that reaches `length`. Without a key React reuses one instance
           // across choose -> confirm, so the confirm step arrives still holding the four digits from
@@ -101,8 +133,8 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
           errorToken={errorToken}
           disabled={busy}
           ariaLabel={step === 'choose' ? 'Choose a 4-digit PIN' : 'Confirm the 4-digit PIN'}
-        />
-        {errorToken !== undefined && step === 'choose' ? (
+        /> : null}
+        {errorToken !== undefined && (step === 'choose' || credentialState === 'present') ? (
           <div className="md3-kids-gate__status" role="alert">
             Those didn&apos;t match — try again.
           </div>
