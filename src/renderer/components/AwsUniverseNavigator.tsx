@@ -9,19 +9,27 @@ import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocaliz
 interface AwsUniverseNavigatorProps {
   onNavigate: (canvasId: string) => void
   onCreate: (title: string) => { canvasId?: string; reason?: string }
+  /** Optional controlled visibility for compact top-bar composition. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 /** Root-only navigator for an unlimited collection of AWS-only Universe instances. */
-export function AwsUniverseNavigator({ onNavigate, onCreate }: AwsUniverseNavigatorProps): React.JSX.Element | null {
+export function AwsUniverseNavigator({ onNavigate, onCreate, open: controlledOpen, onOpenChange }: AwsUniverseNavigatorProps): React.JSX.Element | null {
   const ts = useLocalizedVocabularyText()
   const project = useProjects((state) => state.projects.find((item) => item.id === state.activeProjectId))
-  const [open, setOpen] = useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [title, setTitle] = useState('New AWS Universe')
   const [message, setMessage] = useState<string | null>(null)
   const anchorRef = useRef<HTMLButtonElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const search = useRegexSearchField()
+  const open = controlledOpen ?? uncontrolledOpen
+  const setOpen = (next: boolean): void => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next)
+    onOpenChange?.(next)
+  }
 
   const rows = useMemo(() => project ? (project.childCanvases ?? []).filter((canvas) => canvas.scope === 'aws-universe') : [], [project])
   const visible = useMemo(
@@ -65,7 +73,7 @@ export function AwsUniverseNavigator({ onNavigate, onCreate }: AwsUniverseNaviga
         aria-haspopup="dialog"
         aria-expanded={open}
         title={ts('awsUniverse.open', 'Open AWS Universe')}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpen(!open)}
       >
         <span aria-hidden="true">◎</span>
         <span className="aws-universe-nav__path">{activePath.map((item) => item.title).join(' / ')}</span>

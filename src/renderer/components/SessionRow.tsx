@@ -140,13 +140,6 @@ export function SessionRow({
               {row.loop.kind} · {row.loop.count}
             </span>
           )}
-          {row.isAgent && (
-            <ContextMeter
-              sessionId={row.sessionId ?? null}
-              agentId={row.agentId}
-              sourceKey={contextSourceKey(row.agentId, !!row.sshHost)}
-            />
-          )}
           <button
             className="ss-row__ai"
             title={vocab('Name with AI (from terminal output)')}
@@ -166,6 +159,15 @@ export function SessionRow({
             ×
           </button>
         </div>
+        {row.isAgent && (
+          <div className="ss-row__contextline" data-session-context="contained">
+            <ContextMeter
+              sessionId={row.sessionId ?? null}
+              agentId={row.agentId}
+              sourceKey={contextSourceKey(row.agentId, !!row.sshHost)}
+            />
+          </div>
+        )}
         {(row.projectName || row.cwd || row.sshHost || stateAgeLabel) && (
           <div className="ss-meta">
             {row.projectName && <span className="ss-meta__project">{row.projectName}</span>}

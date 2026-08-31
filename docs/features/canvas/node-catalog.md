@@ -67,6 +67,12 @@ funny-level controls. Node names, dependency ids, paths, and capability facts re
 surrounding copy changes tone. The layout scrolls internally at narrow widths and retains a usable
 touch target at high display scales.
 
+The dialog shell keeps its introduction, search, category chips, profile chooser, and keyboard hint
+at their intrinsic height. Terminal profiles have a bounded internal scroll region for large real
+profile lists, while the result list is the flexible region that owns the remaining dialog height.
+Each result row is non-shrinking, so bilingual names, descriptions, and unavailable reasons remain
+readable instead of being squeezed into a few pixels.
+
 ## Failure modes and security
 
 An unavailable session, missing project folder, absent remote binding, or unselected file is a

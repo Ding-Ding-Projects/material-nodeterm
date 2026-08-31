@@ -28,13 +28,16 @@ interface MultiverseNavigatorProps {
     entryConstruction: PortableDoorConstructionV3
     returnConstruction: PortableDoorConstructionV3
   }) => { portalId?: string; reason?: string }
+  /** Optional controlled visibility for compact top-bar composition. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 /** Guided hierarchy picker for root plus scoped Multiverse canvases. */
-export function MultiverseNavigator({ onNavigate, onCreate, onConstructDoor }: MultiverseNavigatorProps): React.JSX.Element | null {
+export function MultiverseNavigator({ onNavigate, onCreate, onConstructDoor, open: controlledOpen, onOpenChange }: MultiverseNavigatorProps): React.JSX.Element | null {
   const ts = useLocalizedVocabularyText()
   const project = useProjects((state) => state.projects.find((item) => item.id === state.activeProjectId))
-  const [open, setOpen] = useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [parentCanvasId, setParentCanvasId] = useState(ROOT_CANVAS_ID)
   const [title, setTitle] = useState('New Multiverse canvas')
@@ -45,6 +48,11 @@ export function MultiverseNavigator({ onNavigate, onCreate, onConstructDoor }: M
   const parentSearchRef = useRef<HTMLInputElement>(null)
   const search = useRegexSearchField()
   const parentSearch = useRegexSearchField()
+  const open = controlledOpen ?? uncontrolledOpen
+  const setOpen = (next: boolean): void => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next)
+    onOpenChange?.(next)
+  }
 
   const rows = useMemo(() => {
     if (!project) return []
@@ -126,7 +134,7 @@ export function MultiverseNavigator({ onNavigate, onCreate, onConstructDoor }: M
         aria-haspopup="dialog"
         aria-expanded={open}
         title={ts('multiverse.open', 'Open canvas hierarchy')}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpen(!open)}
       >
         <span aria-hidden="true">◎</span>
         <span className="multiverse-nav__path">
