@@ -111,6 +111,40 @@ describe('the lock', () => {
     b.dispose()
   })
 
+  it('reports present and verifies an existing PIN before enabling again', async () => {
+    const s = await fresh()
+    await s.enable('1234')
+    await s.disable('1234')
+    expect(await s.credentialState()).toBe('present')
+    await expect(s.enable('wrong')).rejects.toThrow(/incorrect PIN/i)
+    expect(s.isOn()).toBe(false)
+    await s.enable('1234')
+    expect(s.isOn()).toBe(true)
+    s.dispose()
+  })
+
+  it('reports absent and targeted reset removes only the Kids credential', async () => {
+    const s = await fresh()
+    expect(await s.credentialState()).toBe('absent')
+    await s.enable('1234')
+    await fs.writeFile(path.join(sharedDir(), 'unrelated.json'), 'keep me', 'utf8')
+    const result = await s.resetCredential()
+    expect(result.ok).toBe(true)
+    expect(s.isOn()).toBe(false)
+    expect(await s.credentialState()).toBe('absent')
+    await expect(fs.readFile(path.join(sharedDir(), 'unrelated.json'), 'utf8')).resolves.toBe('keep me')
+    s.dispose()
+  })
+
+  it('classifies malformed credential bytes as unavailable, not absent', async () => {
+    await fs.mkdir(sharedDir(), { recursive: true })
+    await fs.writeFile(path.join(sharedDir(), 'kids-mode.credential.json'), '{bad', 'utf8')
+    const s = await fresh()
+    expect(await s.credentialState()).toBe('unavailable')
+    await expect(s.enable('1234')).rejects.toThrow(/could not be checked/i)
+    s.dispose()
+  })
+
   it('stores no plaintext PIN anywhere in the shared directory', async () => {
     const s = await fresh()
     await s.enable('open-sesame')

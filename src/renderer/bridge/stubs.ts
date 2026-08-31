@@ -47,11 +47,8 @@ export function unsupported(name: string): Promise<never> {
 export const noopUnsub: () => () => void = () => () => {}
 
 /**
- * `kidsMode.verifyPin` is optional on the shared API (see shared/types.ts): it is a member the
- * desktop preload implements for real, but it predates the Server Edition's ws-bridge `kidsMode`
- * object and a relay/older bridge can simply lack it. `kidsMode` itself is APP-GLOBAL and never
- * routed through this file's stub object (every session composer spreads the LOCAL preload for it
- * — see relay-api.ts), so there is no `kidsMode` key here for `verifyPin` to join.
+ * `kidsMode.verifyPin` is required on the shared API (see shared/types.ts). This helper remains a
+ * fail-closed adapter for older relay-shaped objects that have not been upgraded at runtime.
  *
  * This is the fail-closed stand-in for the surfaces that reach it instead: a bridge with no
  * `verifyPin` at all must answer "cannot verify" rather than silently letting a caller assume the

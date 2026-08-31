@@ -129,7 +129,7 @@ describe('PinPad completion, and reusing one across steps', () => {
 describe('EnableKidsModeDialog drives choose -> confirm end to end', () => {
   it('a first-time user can choose a PIN, confirm it, and enable the mode', async () => {
     const enable = vi.fn().mockResolvedValue({ ok: true })
-    useKidsMode.setState({ enable } as never)
+    useKidsMode.setState({ enable, credentialState: 'absent', refreshCredentialState: vi.fn(async () => {}) } as never)
     useEnableKidsDialog.getState().show()
 
     mount(<EnableKidsModeDialogHost />)
