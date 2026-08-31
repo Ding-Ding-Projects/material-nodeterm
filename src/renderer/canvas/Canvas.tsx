@@ -96,7 +96,13 @@ import {
   WEBGL_GESTURE_SETTLE_MS
 } from '../terminal/webgl-budget'
 import { StickyNode } from '../nodes/StickyNode'
-import { GroupNode, setDrillHandler, setWorktreeActionHandler, setWslActionHandler } from '../nodes/GroupNode'
+import {
+  GroupNode,
+  setDrillHandler,
+  setWorktreeActionHandler,
+  setWslActionHandler,
+  setWslTerminalHandler
+} from '../nodes/GroupNode'
 import { DrillBreadcrumb } from '../components/DrillBreadcrumb'
 import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
@@ -289,7 +295,7 @@ import {
 import { UpdateCard } from '../components/UpdateCard'
 import { AnnouncementBanner } from '../components/AnnouncementBanner'
 import { ResumeCard } from '../components/ResumeCard'
-import { TmuxBanner } from '../components/TmuxBanner'
+import { TmuxBanner, type TerminalCreationReceipt } from '../components/TmuxBanner'
 import { PtyPressureBanner } from '../components/PtyPressureBanner'
 import { ShortcutCaptureBanner } from '../components/ShortcutCaptureBanner'
 import { ConflictBar } from '../components/ConflictBar'
@@ -576,11 +582,12 @@ import {
   wslProfileIdFor,
   WSL_NOT_OWNED_HINT,
   WSL_GONE_HINT,
-  type GroupWsl
 } from '@shared/wsl-binding'
 import { WslCreateDialog } from '../wsl/WslCreateDialog'
 import { useWsl } from '../state/wsl'
 import { resolveWslApi } from '../wsl/wslCoreApi'
+import { createWslGroupWithTerminal } from '../lib/wslGroupCreation'
+import { collisionFreePosition } from '../state/nodeCreationCoordinator'
 import type { WslExternalFactError, WslCopyKey } from '../wsl/wslCopy'
 import type { WslCreateError } from '@shared/wsl'
 import { boundGroups, scmScopes, defaultScmScope, selectedScmGroupId } from '@shared/scm-scope'
@@ -5183,8 +5190,9 @@ export function Canvas() {
       /** Force the working directory (e.g. a Source Control action running in a worktree scope). */
       cwdOverride?: string,
       /** Explicit Windows profile selection. Omitted means the saved default is snapshotted. */
-      terminalProfileId?: string
-    ) => {
+      terminalProfileId?: string,
+      titleOverride?: string
+    ): TerminalCreationReceipt => {
       const project = useProjects.getState().getProject(activeProjectId)
       if (
         terminalProfileId &&
@@ -5203,7 +5211,7 @@ export function Canvas() {
           ),
           bodyKind: 'authored'
         })
-        return
+        return { ok: false, reason: 'This terminal profile is unavailable for the active session.' }
       }
       const cwd = cwdOverride ?? cwdForNewNodeIn(groupId) ?? project?.cwd
       // No explicit profile requested, but the node is being created inside a WSL-bound frame on
@@ -5214,21 +5222,41 @@ export function Canvas() {
         !project?.ssh && !project?.remote && sessionForProject(activeProjectId ?? '').source === 'local'
       const effectiveProfileId =
         terminalProfileId ?? (isLocalSession ? wslProfileForNewNodeIn(groupId) : undefined)
+      const nodeIndex = nodesRef.current.length
+      const requestedCenter = center ?? emptyNodePos()
+      const creationEventId = crypto.randomUUID()
+      const node = createTerminalNode(
+        nodeIndex,
+        cwd,
+        requestedCenter,
+        initialCommand,
+        project?.ssh,
+        terminalCreationOptionsFor(activeProjectId, effectiveProfileId)
+      )
+      const prepared = groupId ? parentInto(node, groupId) : node
+      prepared.selected = true
+      if (titleOverride) prepared.data = { ...prepared.data, title: titleOverride }
+      const collisionPeers = groupId
+        ? nodesRef.current.filter((candidate) => candidate.parentId === groupId)
+        : nodesRef.current.filter((candidate) => !candidate.parentId)
+      if (!collisionFreePosition(collisionPeers, prepared, prepared.position)) {
+        return {
+          ok: false,
+          reason: 'No free canvas position was found within the bounded placement search.'
+        }
+      }
+      let placementError: string | undefined
       setNodes((ns) => {
-        // In an SSH project the node is stamped remote (runs over the project's master); the
-        // factory takes the project's ssh and roots the terminal at its remoteCwd.
-        const node = createTerminalNode(
-          ns.length,
-          cwd,
-          center ?? emptyNodePos(),
-          initialCommand,
-          project?.ssh,
-          terminalCreationOptionsFor(activeProjectId, effectiveProfileId)
-        )
-        const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
-        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
+        // The node is assembled before this updater so the receipt can carry its stable identity
+        // to the installer banner and its Show action.
+        const appended = nodeCreationCoordinatorRef.current.appendNode(ns, prepared, creationEventId)
+        placementError = appended.result.error
+        if (placementError) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: placementError, bodyKind: 'fact' })
         return appended.nodes
       })
+      markDirty()
+      if (placementError) return { ok: false, reason: placementError }
+      return { ok: true, nodeId: prepared.id }
     },
     [
       setNodes,
@@ -5312,9 +5340,26 @@ export function Canvas() {
    *  through `scmCwd` so an SSH project's remoteCwd wins and a missing scope still falls back to the
    *  project, rather than depending on the panel having pre-resolved the value. */
   const runInTerminal = useCallback(
-    (cmd: string, cwd?: string) => addTerminal(undefined, cmd, undefined, scmCwd(cwd)),
+    (cmd: string, cwd?: string): TerminalCreationReceipt =>
+      addTerminal(
+        undefined,
+        cmd,
+        undefined,
+        scmCwd(cwd),
+        undefined,
+        cmd.includes('marlocarlo.psmux') ? 'Install psmux' : undefined
+      ),
     [addTerminal, scmCwd]
   )
+
+  const showInstallerTerminal = useCallback((nodeId: string): void => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        focusNodeRef.current(nodeId)
+        useTerminalFocus.getState().request(nodeId)
+      })
+    })
+  }, [])
 
   // Turn an approved (or approving) relay connection into a project TAB (Stage 4 Task 6): build the
   // bridged api, wait for mutual approval, then add a session-bound tab. `openRelayTab` guards the
@@ -7840,18 +7885,73 @@ export function Canvas() {
         })
         return
       }
-      const binding: GroupWsl = { bindingId: crypto.randomUUID(), distroName: res.name }
-      const group = createGroupNode(target.at ?? viewCenter() ?? { x: 0, y: 0 }, WORKTREE_GROUP_SIZE, nodesRef.current.length)
-      group.data = { ...group.data, title: res.name, wsl: binding }
-      setNodes((ns) => {
-        const appended = nodeCreationCoordinatorRef.current.appendNode(ns as CanvasNode[], group, undefined, { prepend: true })
-        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
-        return appended.nodes
+      const assembled = createWslGroupWithTerminal({
+        distroName: res.name,
+        bindingId: crypto.randomUUID(),
+        cwd: useProjects.getState().getProject(target.projectId)?.cwd,
+        position: target.at ?? viewCenter() ?? { x: 0, y: 0 },
+        index: nodesRef.current.length,
+        sessionSource: sessionForProject(target.projectId).source,
+        groupSize: WORKTREE_GROUP_SIZE
       })
+      setNodes((ns) => {
+        // Parent and child are committed through one updater. React Flow can render a child only
+        // after its frame exists, and one updater prevents a saved canvas from exposing an empty
+        // WSL frame between those two writes.
+        const groupResult = nodeCreationCoordinatorRef.current.appendNode(
+          ns as CanvasNode[],
+          assembled.group,
+          undefined,
+          { prepend: true }
+        )
+        if (groupResult.result.error) {
+          notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: groupResult.result.error, bodyKind: 'fact' })
+          return groupResult.nodes
+        }
+        const terminalResult = nodeCreationCoordinatorRef.current.appendNode(
+          groupResult.nodes,
+          assembled.terminal
+        )
+        if (terminalResult.result.error) {
+          notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: terminalResult.result.error, bodyKind: 'fact' })
+        }
+        return terminalResult.nodes
+      })
+      markDirty()
       setWslDialog(null)
     },
     [wslDialog, wslCatalogue, setNodes, markDirty, viewCenter]
   )
+
+  const openTerminalInWslGroup = useCallback(
+    (groupId: string): void => {
+      const profileId = wslProfileForNewNodeIn(groupId)
+      if (!profileId) {
+        setNotice({
+          kind: 'error',
+          text: 'This WSL distribution is unavailable on the current machine, so no terminal was opened.'
+        })
+        return
+      }
+      const receipt = addTerminal(undefined, undefined, groupId, undefined, profileId)
+      if (!receipt.ok) {
+        setNotice({ kind: 'error', text: receipt.reason })
+        return
+      }
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          focusNodeRef.current(receipt.nodeId)
+          useTerminalFocus.getState().request(receipt.nodeId)
+        })
+      })
+    },
+    [addTerminal, setNotice, wslProfileForNewNodeIn]
+  )
+
+  useEffect(() => {
+    setWslTerminalHandler(openTerminalInWslGroup)
+    return () => setWslTerminalHandler(null)
+  }, [openTerminalInWslGroup])
 
   const cancelWslCreation = useCallback(async (operationId: string): Promise<boolean> => {
     return resolveWslApi().cancelCreate(operationId)
@@ -17949,7 +18049,7 @@ export function Canvas() {
         )}
         <MinecraftConnectBanner minecraftNodeIds={minecraftNodeIds} />
         <AnnouncementBanner />
-        <TmuxBanner onInstall={runInTerminal} />
+        <TmuxBanner onInstall={runInTerminal} onShowInstallerTerminal={showInstallerTerminal} />
         {drill && <DrillBreadcrumb drill={drill} onExit={exitDrill} />}
         {/* This MACHINE is running out of pty devices — subscribes for itself; a failed
             "Fix automatically…" lands in the same notice strip as every other async op. */}

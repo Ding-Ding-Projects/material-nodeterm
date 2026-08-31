@@ -65,8 +65,13 @@ nothing to reattach to. nodeterm bridges this gap instead of pretending it did n
   session-host attach fails closed and surfaces its real reason; it is not replaced by a plain
   shell or indexed as a persistent session.
 - **No Windows multiplexer is available:** the banner identifies `psmux` as the supported
-  compatible implementation and offers `winget install -e --id marlocarlo.psmux` when `winget`
-  is discoverable. Without Windows Package Manager, the banner remains an honest warning without
+  compatible implementation and offers `winget install --exact --id marlocarlo.psmux --source
+  winget --accept-source-agreements --accept-package-agreements --silent` when `winget` is
+  discoverable. The command is opened in a titled **Install psmux** terminal node, which is
+  selected and framed for immediate inspection. The banner retains **Show installer terminal**
+  while installation is being checked. If the terminal cannot be placed, the banner reports that
+  placement failure immediately and leaves a retry action rather than pretending an install is
+  running. Without Windows Package Manager, the banner remains an honest warning without
   inventing an installer command, and the session host continues to provide persistence.
 - **A selected Windows profile is unavailable:** the node reports that exact profile and lets the
   user choose another. Explicit PowerShell, Git Bash, custom, and WSL profiles never silently fall
