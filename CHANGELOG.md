@@ -1246,6 +1246,14 @@ Commits: [`7e965094`](https://github.com/eneskirca/nodeterm/commit/7e9650942c4e0
 
 ### Fixed
 
+- Windows desktop terminal creation, WSL frame binding, compact top-bar actions, Sessions target
+  sizing, the 73-row Node Catalog, resize-stable Multiverse door construction, and Kids credential
+  recovery now use acknowledged, fail-closed, keyboard-reachable paths. Projectless Add node is
+  disabled before it can create an unreachable node behind the welcome surface. See
+  [`c9540e21`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/c9540e2166dccc6ceb10b8e1c4d4cd25f9749d23),
+  [`4f5cb211`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/4f5cb211394be3a7574aa4c2c3272985283fdbee),
+  and [`6a1c476a`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/6a1c476a8ae30a58801b7c25d3e33730c7f92c32).
+
 - The worktree creation dialog now applies the uploaded personal vocabulary to app-authored
   labels and guidance while keeping paths, branch names, refs, typed values, and Git errors exact.
 
