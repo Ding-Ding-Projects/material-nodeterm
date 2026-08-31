@@ -1,5 +1,113 @@
 # Handoff
 
+## 2026-08-30, terminal visibility, compact layout, and Kids recovery
+
+This task repairs the desktop states reported against published `v1.0.5`. The implementation was
+integrated on `codex/integrate-ui-recovery-20260830` from `origin/main` at
+`e7ca458eaba7d3f08931a8c2271bad74997184dc`.
+
+### Commits and behavior
+
+| Commit | Scope |
+| --- | --- |
+| `a88bd5a01b07ea2ce4083e2c36ce98178688e974` | Responsive top-bar branch, searchable compact More surface, Sessions context containment, and Node Catalog flex/scroll containment. |
+| `f714aaa853a15af2566f69b2572d67bb8ea1e46b` | WSL frame plus first-terminal creation, empty-frame recovery, psmux terminal identity, and noninteractive WinGet flags. |
+| `64386d066e134bda05c44e1ad2e07da6048c2f10` | Explicit Kids credential states, Server Edition verification parity, existing-PIN re-entry, and targeted reset surface. |
+| `d57c32c5476e4d8700511e9a30d480a15f1b1af2` | Cross-process credential and record lock order, stale-read epochs, authoritative no-PIN verification, and dialog focus lifecycle. |
+| `c9540e2166dccc6ceb10b8e1c4d4cd25f9749d23` | Reviewed integration, transactional WSL placement and recovery, acknowledged terminal receipts, resize-stable Multiverse door construction, 44px targets, accessible WSL actions, and generated docs bundle. |
+| `4f5cb211394be3a7574aa4c2c3272985283fdbee` | Visible and accessible unmet-condition copy for project-scoped actions in compact More. |
+| `6a1c476a8ae30a58801b7c25d3e33730c7f92c32` | Projectless Add-node guard, preventing nodes from being created behind the welcome surface. |
+
+New WSL creation now refreshes the real distribution inventory, requires the returned instance to
+be enumerated and app-owned, and commits the frame plus first terminal with stable event ids as one
+canvas transaction. If placement fails after the external instance exists, the dialog keeps a
+typed split-outcome message and offers **Bind created instance**, which retries only the canvas
+transaction after another fresh verification. It never repeats installation.
+
+The psmux banner uses an acknowledged placement result before it starts polling or exposes **Show
+installer terminal**. Its WinGet command is exact, source-pinned, agreement-accepting, and silent.
+No psmux installation was run during evidence capture.
+
+Kids mode now treats `loading`, `present`, `absent`, and `unavailable` as distinct states. Cached
+absence never authorizes entry; the gate calls the host with an empty PIN and refreshes on refusal.
+Enable, disable, verification, PIN changes, and targeted reset use one credential-then-record lock
+order across processes. Renderer credential reads use a monotonic epoch. **I never set this PIN**
+opens the existing two-key plus full-range confirmation, anchored to its trigger with focus return.
+No live credential content was read, displayed, logged, or exported.
+
+### Focused test inventory
+
+The final machine-readable run passed **122 of 122 tests across 21 test files**:
+
+| Test file | Tests | Result |
+| --- | ---: | --- |
+| `AwsUniverseNavigator.focus.test.tsx` | 1 | passed |
+| `CompactTopBarMenu.test.tsx` | 2 | passed |
+| `DoorConstructionDialog.persistence.test.tsx` | 1 | passed |
+| `EnableKidsModeDialog.pinpad-reset.test.tsx` | 6 | passed |
+| `FabMenu.terminal-profiles.test.tsx` | 8 | passed |
+| `kids-mode.process.test.ts` | 2 | passed |
+| `kids-mode.test.ts` | 23 | passed |
+| `KidsGate.recovery.test.tsx` | 4 | passed |
+| `kidsMode.test.ts` | 8 | passed |
+| `MultiverseNavigator.test.tsx` | 3 | passed |
+| `NodeCatalogDialog.layout.test.ts` | 2 | passed |
+| `nodePlacementReceipt.test.ts` | 2 | passed |
+| `SessionRow.test.tsx` | 2 | passed |
+| `SessionRow.vocabulary.test.tsx` | 2 | passed |
+| `styles.clipping.test.ts` | 13 | passed |
+| `tmux-banner-phase.test.ts` | 5 | passed |
+| `tmux-hint.test.ts` | 9 | passed |
+| `TopAppBar.test.tsx` | 5 | passed |
+| `ws-bridge.kids-mode.test.ts` | 1 | passed |
+| `WslCreateDialog.test.tsx` | 19 | passed |
+| `wslGroupCreation.test.ts` | 4 | passed |
+
+Type checking passed after each accepted repair. Its only message was the documented standalone
+skip because the optional sibling checkout was absent. Personal-vocabulary coverage passed 1,373
+assertions, the WSL copy inventory passed 58 rows plus its deliberate negative mutation, the
+documentation bundle passed 16 assertions, and `git diff --check` passed.
+
+### Build and real desktop interaction
+
+The root `build.bat /s` path completed at `c9540e2166dccc6ceb10b8e1c4d4cd25f9749d23`.
+It re-proved Node 24.19.0, the selected v143 Spectre toolchain, Python, native-module ABI loading,
+all build checks, Vite compilation, and the session-host bundle. The two follow-up renderer repairs
+then completed `npm run build:app` at `4f5cb211394be3a7574aa4c2c3272985283fdbee` and
+`6a1c476a8ae30a58801b7c25d3e33730c7f92c32`.
+
+The built desktop was launched only on named off-screen Windows desktops through the cheap Lowlevel
+route. Every CDP run first proved exactly one page target and an exact
+`file:///.../out/renderer/index.html` URL. The real interaction evidence verified:
+
+- Kids home and parent-gate routing without changing the live shared mode record;
+- unavailable credential state shows no keypad, stays closed, and offers the targeted reset;
+- reset confirmation shows two keys, a disabled full-range slider, exact affected state, and focus
+  returns to **I never set this PIN** on cancellation;
+- a 1,013px app bar mounts one compact branch, zero wide branches, one More button, and no page-wide
+  horizontal overflow;
+- More focuses its local search, has one anchored regex builder, and carries no false menu roles;
+- project-scoped More actions show exact disabled reasons without a project and become enabled in
+  an active project;
+- AWS opens from More after More closes, and focus lands on `aws-universe-search`;
+- the Node Catalog renders 73 rows, a 132px profile region, a 167px scrolling result viewport over
+  6,685px, a minimum 76px row, and a viewport-contained dialog;
+- projectless Add node is disabled with its exact requirement; after creating `Project 1`, it
+  enables; selecting Terminal creates one 640×440 React Flow node, one xterm screen, and one
+  Sessions row with no closed state.
+
+The promoted capture files and their hashes are recorded in
+`docs/assets/shots/ui-recovery-capture-manifest.json`. No visible desktop, live terminal output,
+credential, or private path appears in those images.
+
+### Remaining closeout
+
+The source, local tests, build, and hidden interaction evidence are complete. Default-branch
+integration, push, GitHub Actions release publication, unique release/tag verification, installer
+asset downloadability, public issue/Discussion records, and task-owned branch/worktree cleanup are
+the remaining closeout steps. Those states must not be called complete until the remote evidence
+exists.
+
 ## 2026-08-29, v1.0.0 source candidate preparation
 
 The release-finalization lane created `pig/release-finalization-gbdv5s` from
