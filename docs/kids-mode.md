@@ -89,8 +89,17 @@ invalidates every token so an event queued before shutdown is inert when it even
 
 Record mutations do not write a document derived from process-local cache. Rename, enable and
 disable each enter the shared SQLite transaction, strictly read the current canonical record,
-change only their field, and compare-publish the observed revision. This is why a process that
-cached OFF cannot erase another process's newer ON merely by renaming the mode.
+change only their field, and compare-publish the observed revision. Credential-changing operations
+use one consistent operation-wide order: acquire the credential transaction first, then the record
+transaction. Enable and reset keep both locks through their complete read, publish, and removal
+sequence, so one process cannot verify a credential that another process removes before its record
+write. This is why a process that cached OFF cannot erase another process's newer ON merely by
+renaming the mode.
+
+The renderer assigns every credential read and local credential mutation a monotonically increasing
+read epoch. A late IPC response from an older epoch is ignored, while the newest verified state is
+kept. The epoch is independent from the record generation because the two files can change at
+different times.
 
 An unsealable credential (a keychain reset, a machine migration) reads as **"cannot verify"** and
 leaves the mode **locked**, rather than throwing or falling open. The documented recovery is
@@ -248,6 +257,15 @@ Credential presence is no longer represented by an ambiguous boolean. `credentia
 unsealable credential bytes are unavailable and keep the mode locked. Turning Kids mode on with a
 present credential requires entering and verifying that PIN. First enrollment remains a choose and
 confirm flow.
+
+Even when the current renderer classification is `absent`, the grown-up gate calls the authoritative
+`verifyPin('')` channel before entering the controls. A refusal refreshes credential state and keeps
+the gate closed, rather than treating a stale local absence as permission.
+
+The enable dialog is a real modal surface with labelled dialog semantics, initial focus on its first
+available control, a focus loop owned only while it is topmost in the shared dialog stack, and focus
+restoration to the opener after cancel or completion. The forgotten-PIN action is anchored beside
+its own control and passes that control through as the restoration target for the two-key gate.
 
 The grown-up prompt and Settings both offer **I never set this PIN**. After the existing two-key
 plus full-slider confirmation, `resetCredential()` turns Kids mode off and removes only

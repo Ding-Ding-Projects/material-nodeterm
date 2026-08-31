@@ -39,6 +39,19 @@ export interface KidsModeState {
 let initStarted = false
 let liveSubscriptionReady = false
 let latestGeneration = -1
+let credentialReadEpoch = 0
+
+function beginCredentialRead(): number {
+  credentialReadEpoch += 1
+  return credentialReadEpoch
+}
+
+function applyCredentialRead(epoch: number, state: KidsCredentialState): void {
+  if (epoch !== credentialReadEpoch) return
+  setCredentialState(state)
+}
+
+let setCredentialState: (state: KidsCredentialState | 'loading') => void = () => {}
 
 /** Destructive callers fail closed while the shared record is loading or unavailable. */
 export function kidsDestructiveGateRequired(
@@ -47,7 +60,9 @@ export function kidsDestructiveGateRequired(
   return state.enabled || state.policyStatus !== 'ready'
 }
 
-export const useKidsMode = create<KidsModeState>((set) => ({
+export const useKidsMode = create<KidsModeState>((set) => {
+  setCredentialState = (state) => set({ credentialState: state })
+  return ({
   enabled: false,
   name: DEFAULT_KIDS_MODE_NAME,
   hydrated: false,
@@ -73,9 +88,10 @@ export const useKidsMode = create<KidsModeState>((set) => ({
         // Credential files are separate from the watched record. Re-read them after every live
         // record event so another process's enrollment, removal, or vault failure converges here
         // before a gate decides which controls to render.
+        const epoch = beginCredentialRead()
         void window.nodeTerminal.kidsMode.credentialState().then(
-          (state) => set({ credentialState: state }),
-          () => set({ credentialState: 'unavailable' })
+          (state) => applyCredentialRead(epoch, state),
+          () => applyCredentialRead(epoch, 'unavailable')
         )
       })
       liveSubscriptionReady = true
@@ -86,6 +102,7 @@ export const useKidsMode = create<KidsModeState>((set) => ({
     }
 
     try {
+      const credentialEpoch = beginCredentialRead()
       const [recordResult, credentialResult] = await Promise.allSettled([
         window.nodeTerminal.kidsMode.load(),
         window.nodeTerminal.kidsMode.credentialState()
@@ -96,24 +113,28 @@ export const useKidsMode = create<KidsModeState>((set) => ({
         set({
           enabled: record.enabled,
           name: record.name,
-          credentialState:
-            credentialResult.status === 'fulfilled'
-              ? credentialResult.value
-              : 'unavailable',
           hydrated: true,
           policyStatus:
             liveSubscriptionReady && record.authoritative ? 'ready' : 'unavailable',
           generation: record.generation
         })
+        applyCredentialRead(
+          credentialEpoch,
+          credentialResult.status === 'fulfilled' ? credentialResult.value : 'unavailable'
+        )
       } else if (recordResult.status === 'rejected' && latestGeneration < 0) {
         set({
           hydrated: true,
-          policyStatus: 'unavailable',
-          credentialState: credentialResult.status === 'fulfilled' ? credentialResult.value : 'unavailable'
+          policyStatus: 'unavailable'
         })
+        applyCredentialRead(
+          credentialEpoch,
+          credentialResult.status === 'fulfilled' ? credentialResult.value : 'unavailable'
+        )
       } else if (credentialResult.status === 'fulfilled') {
         // A newer live event won. Credential existence is independent and can still be merged.
-        set({ credentialState: credentialResult.value, hydrated: true })
+        applyCredentialRead(credentialEpoch, credentialResult.value)
+        set({ hydrated: true })
       }
     } catch {
       set({ hydrated: true, policyStatus: 'unavailable' })
@@ -121,6 +142,7 @@ export const useKidsMode = create<KidsModeState>((set) => ({
   },
 
   enable: async (pin) => {
+    const operationEpoch = beginCredentialRead()
     try {
       const record = await window.nodeTerminal.kidsMode.enable(pin)
       if (record.generation >= latestGeneration) {
@@ -128,13 +150,13 @@ export const useKidsMode = create<KidsModeState>((set) => ({
         set({
           enabled: record.enabled,
           name: record.name,
-          credentialState: 'present',
           policyStatus:
             liveSubscriptionReady && record.authoritative ? 'ready' : 'unavailable',
           generation: record.generation
         })
+        applyCredentialRead(operationEpoch, 'present')
       } else {
-        set({ credentialState: 'present' })
+        applyCredentialRead(operationEpoch, 'present')
       }
       return { ok: true }
     } catch (e) {
@@ -143,6 +165,7 @@ export const useKidsMode = create<KidsModeState>((set) => ({
   },
 
   disable: async (pin) => {
+    beginCredentialRead()
     const result = await window.nodeTerminal.kidsMode.disable(pin)
     if (result.ok && result.record.generation >= latestGeneration) {
       latestGeneration = result.record.generation
@@ -173,22 +196,29 @@ export const useKidsMode = create<KidsModeState>((set) => ({
   },
 
   changePin: async (currentPin, nextPin) => {
+    const operationEpoch = beginCredentialRead()
     const ok = await window.nodeTerminal.kidsMode.changePin(currentPin, nextPin)
-    if (ok) set({ credentialState: 'present' })
+    if (ok) applyCredentialRead(operationEpoch, 'present')
     return ok
   },
 
   resetCredential: async () => {
+    const operationEpoch = beginCredentialRead()
     const result = await window.nodeTerminal.kidsMode.resetCredential()
-    if (result.ok) set({ enabled: false, credentialState: 'absent' })
+    if (result.ok) {
+      set({ enabled: false })
+      applyCredentialRead(operationEpoch, 'absent')
+    }
     return result.ok ? { ok: true } : { ok: false, error: result.error }
   },
 
   refreshCredentialState: async () => {
+    const epoch = beginCredentialRead()
     try {
-      set({ credentialState: await window.nodeTerminal.kidsMode.credentialState() })
+      applyCredentialRead(epoch, await window.nodeTerminal.kidsMode.credentialState())
     } catch {
-      set({ credentialState: 'unavailable' })
+      applyCredentialRead(epoch, 'unavailable')
     }
   }
-}))
+  })
+})

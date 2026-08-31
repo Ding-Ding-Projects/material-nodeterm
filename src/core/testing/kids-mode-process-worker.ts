@@ -3,12 +3,14 @@
 // Desktop/Server processes do not share.
 
 import { KidsModeStore, type KidsModeStoreDeps } from '../kids-mode'
+import { withCrossProcessLock } from '../fs-transaction-lock'
 import { fakePlatform } from '../platform-fake'
 import { initPlatform } from '../platform'
 import type { SharedRecordWatch, SharedRecordWatchToken } from '../shared-record-watch'
 
 type WorkerMessage =
   | { type: 'ready'; enabled: boolean }
+  | { type: 'acquired'; resource: 'record' }
   | { type: 'done'; enabled: boolean; name: string; authoritative: boolean }
   | { type: 'error'; code: string; message: string }
 
@@ -76,10 +78,26 @@ function waitForRelease(): Promise<void> {
   })
 }
 
+function lockingFixture(modeName: string): KidsModeStoreDeps {
+  if (modeName !== 'reset-hold') return { createWatcher: localWriteWatcher }
+  return {
+    createWatcher: localWriteWatcher,
+    withLock: async (resource, operation) => {
+      return withCrossProcessLock(resource, async (lease) => {
+        if (resource.endsWith('kids-mode.json')) {
+          send({ type: 'acquired', resource: 'record' })
+          await waitForRelease()
+        }
+        return operation(lease)
+      })
+    }
+  }
+}
+
 async function run(): Promise<void> {
   if (!mode || !dataDir) throw new Error('Worker mode and data directory are required.')
   initPlatform(fakePlatform({ userDataDir: dataDir }))
-  const deps: KidsModeStoreDeps = { createWatcher: localWriteWatcher }
+  const deps = lockingFixture(mode)
   const store = new KidsModeStore(deps)
   await store.init()
 
@@ -104,6 +122,18 @@ async function run(): Promise<void> {
       enabled: result.enabled,
       name: result.name,
       authoritative: result.authoritative
+    })
+    store.dispose()
+    return
+  }
+
+  if (mode === 'reset-hold') {
+    const result = await store.resetCredential()
+    send({
+      type: 'done',
+      enabled: result.ok ? result.record.enabled : store.get().enabled,
+      name: result.ok ? result.record.name : store.get().name,
+      authoritative: result.ok ? result.record.authoritative : false
     })
     store.dispose()
     return
