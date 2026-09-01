@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { PasswordField } from './PasswordField'
+import { usePersonalVocabulary } from '../../state/personalVocabulary'
+import { useSchoolMode } from '../../state/schoolMode'
 
 let host: HTMLDivElement
 let root: Root
@@ -48,6 +50,8 @@ function render(ui: React.ReactElement): void {
 }
 
 beforeEach(() => {
+  usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0, loadedAt: null, lastError: null })
+  useSchoolMode.setState({ enabled: false, hydrated: true, name: 'School mode' })
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -57,9 +61,37 @@ afterEach(() => {
   act(() => root.unmount())
   host.remove()
   document.body.innerHTML = ''
+  usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0, loadedAt: null, lastError: null })
+  useSchoolMode.setState({ enabled: false, hydrated: true, name: 'School mode' })
 })
 
 describe('PasswordField', () => {
+  it('maps authored labels and their accessible action names, while keeping the entered value untouched', () => {
+    usePersonalVocabulary.setState({
+      entries: { Password: 'Passcode' },
+      status: 'loaded',
+      entryCount: 1
+    })
+    render(<PasswordField label="Password" value="hunter2" onChange={() => {}} />)
+
+    expect(document.querySelector('.toylock-field__label')?.textContent).toBe('Passcode')
+    expect(revealButton().getAttribute('aria-label')).toBe('Show passcode')
+    expect(input().value).toBe('hunter2')
+  })
+
+  it('restores the shipped label and accessible name while School mode is enabled', () => {
+    usePersonalVocabulary.setState({
+      entries: { Password: 'Passcode' },
+      status: 'loaded',
+      entryCount: 1
+    })
+    useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' })
+    render(<PasswordField label="Password" value="hunter2" onChange={() => {}} />)
+
+    expect(document.querySelector('.toylock-field__label')?.textContent).toBe('Password')
+    expect(revealButton().getAttribute('aria-label')).toBe('Show password')
+  })
+
   it('masks by default and reveals only when asked', () => {
     render(<PasswordField label="Password" value="hunter2" onChange={() => {}} />)
     expect(input().type).toBe('password')

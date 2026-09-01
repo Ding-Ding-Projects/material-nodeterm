@@ -11,6 +11,7 @@ import type { BuiltExport, ExportFormat, ExportKind } from '@shared/export'
 import { FORMAT_INFO, formatsForKind } from '@shared/export'
 import { Select } from '@renderer/ui/Select'
 import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '@renderer/lib/personalVocabulary/ownedCopy'
 
 export interface ExportMenuProps {
   kind: ExportKind
@@ -78,7 +79,11 @@ export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element
         {vocab('Export…')}
       </button>
       {open && (
-        <div className="export-menu__panel" role="group" aria-label={`Export ${label}`}>
+        <div
+          className="export-menu__panel"
+          role="group"
+          aria-label={mapOwnedSentence(vocab, [copy('Export '), fact(label)])}
+        >
           <label className="export-menu__format-label">
             {vocab('Format')}
             <Select
@@ -92,7 +97,7 @@ export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element
               {offered.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.label}
-                  {f.writeOnly ? ' (write-only)' : ''}
+                  {f.writeOnly ? ` (${vocab('write-only')})` : ''}
                 </option>
               ))}
             </Select>
@@ -114,8 +119,9 @@ export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element
           )}
 
           <div className="export-menu__meta">
-            {FORMAT_INFO[format].mimeType} · UTF-8 · {preview?.lineEnding === 'CRLF' ? 'CRLF' : 'LF'} line endings
-            {FORMAT_INFO[format].writeOnly && ' · presentation only, not re-importable'}
+            {FORMAT_INFO[format].mimeType} · UTF-8 · {preview?.lineEnding === 'CRLF' ? 'CRLF' : 'LF'}{' '}
+            {vocab('line endings')}
+            {FORMAT_INFO[format].writeOnly && ` · ${vocab('presentation only, not re-importable')}`}
           </div>
 
           <div className="export-menu__buttons">
@@ -136,7 +142,9 @@ export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element
 
           {saveState.status === 'saved' && (
             <div className="export-menu__result" role="status">
-              {saveState.path ? `${vocab('Saved to')} ${saveState.path}` : vocab('Download started.')}
+              {saveState.path
+                ? mapOwnedSentence(vocab, [copy('Saved to '), fact(saveState.path)])
+                : vocab('Download started.')}
             </div>
           )}
           {saveState.status === 'error' && (

@@ -6,6 +6,7 @@ import { KIDS_DISCLOSURE } from '@shared/kids-mode-policy'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from '@renderer/components/dialog-stack'
 import { PinPad } from './PinPad'
 import { useEnableKidsDialog } from './entry'
+import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
 
 /**
  * PIN setup or verification for entering Kids mode from the nav rail's `child_care` destination —
@@ -26,6 +27,7 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
   const [chosen, setChosen] = useState('')
   const [errorToken, setErrorToken] = useState<number | undefined>(undefined)
   const [busy, setBusy] = useState(false)
+  const vocab = useVocabularyMapper()
   const dialogId = useRef<string>()
   const dialogRef = useRef<HTMLDivElement>(null)
   const openerRef = useRef<HTMLElement | null>(null)
@@ -133,25 +135,25 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
       >
         <div className="md3-kids-enable-dialog__title" id={`kids-enable-title-${dialogId.current}`}>
           {credentialState === 'loading'
-            ? 'Checking the grown-up PIN'
+            ? vocab('Checking the grown-up PIN')
             : credentialState === 'unavailable'
-              ? 'The grown-up PIN is unavailable'
+              ? vocab('The grown-up PIN is unavailable')
               : credentialState === 'present'
-                ? 'Enter the grown-up PIN to continue'
+                ? vocab('Enter the grown-up PIN to continue')
                 : step === 'choose'
-                  ? 'Choose a grown-up PIN'
-                  : 'Enter it again to confirm'}
+                  ? vocab('Choose a grown-up PIN')
+                  : vocab('Enter it again to confirm')}
         </div>
         <p className="md3-kids-enable-dialog__hint" id={`kids-enable-hint-${dialogId.current}`}>
           {credentialState === 'loading'
-            ? 'The app is checking the shared PIN state. Nothing will be changed yet.'
+            ? vocab('The app is checking the shared PIN state. Nothing will be changed yet.')
             : credentialState === 'unavailable'
-              ? 'The shared PIN cannot be checked. Nothing was changed; try again after the credential store is available.'
+              ? vocab('The shared PIN cannot be checked. Nothing was changed; try again after the credential store is available.')
               : credentialState === 'present'
-                ? 'Kids mode already has a PIN. Verify it here before turning the mode on.'
+                ? vocab('Kids mode already has a PIN. Verify it here before turning the mode on.')
                 : step === 'choose'
-                  ? 'This 4-digit PIN unlocks the grown-up screen and turns Kids mode off. You can change it any time from Settings → Kids mode.'
-                  : 'Type the same 4 digits once more.'}
+                  ? vocab('This 4-digit PIN unlocks the grown-up screen and turns Kids mode off. You can change it any time from Settings → Kids mode.')
+                  : vocab('Type the same 4 digits once more.')}
         </p>
         {credentialState === 'present' ? <PinPad
           key="verify-existing"
@@ -172,16 +174,16 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
           onComplete={step === 'choose' ? onChoose : onConfirm}
           errorToken={errorToken}
           disabled={busy}
-          ariaLabel={step === 'choose' ? 'Choose a 4-digit PIN' : 'Confirm the 4-digit PIN'}
+          ariaLabel={step === 'choose' ? vocab('Choose a 4-digit PIN') : vocab('Confirm the 4-digit PIN')}
         /> : null}
         {errorToken !== undefined && (step === 'choose' || credentialState === 'present') ? (
           <div className="md3-kids-gate__status" role="alert">
-            Those didn&apos;t match — try again.
+            {vocab("Those didn't match — try again.")}
           </div>
         ) : null}
-        <p className="md3-kids-disclosure">{KIDS_DISCLOSURE}</p>
+        <p className="md3-kids-disclosure">{vocab(KIDS_DISCLOSURE)}</p>
         <button type="button" className="md3-kids-textbtn" onClick={close}>
-          Cancel
+          {vocab('Cancel')}
         </button>
       </div>
     </div>,

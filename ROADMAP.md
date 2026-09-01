@@ -315,7 +315,10 @@ are recorded below. Do not treat the source candidate as a published release.
       adapters, build/package evidence, runtime interaction, and captures remain pending under the
       stated ultra-speed no-check boundary.
 
-- [ ] Desktop Material Design 3 and personal vocabulary reconciliation: the source audit and focused
+- [ ] Desktop Material Design 3 and personal vocabulary reconciliation: the canonical producer
+      manifest now records every live node, lazy panel, root host, detached entrypoint, bridge, site
+      entrypoint, and native-notification boundary; implementation rows explicitly marked open still
+      require their owning repair commits, focused verification, and runtime evidence. The source audit and focused
   Material Design 3 fixes are present in the audit scripts and shared primitives. The Material Design 3 audit is green
   with deliberate negative regressions. Personal-vocabulary coverage is green with 1,332 assertions,
   including explicit rows for the four new node or panel surfaces, ExportMenu, continuation review,

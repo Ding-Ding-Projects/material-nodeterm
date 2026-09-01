@@ -21,7 +21,10 @@ import { ROOT_CANVAS_ID } from '@shared/multiverse-canvases'
 import { SettingsSection } from '../SettingsSection'
 import { SettingsText } from '../SettingsText'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { schoolModeAllowsOptionalFeatures } from '../../../lib/schoolModePolicy'
+import { useSchoolMode } from '../../../state/schoolMode'
 import { SearchableRow } from '../SearchableRow'
+import { settingsSearchEntryWithVocabulary } from '../vocabulary'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
@@ -156,14 +159,14 @@ function WeekdayPicker({
                       : 'border-border bg-bg text-muted hover:text-text'
                   )}
                 >
-                  {label}
+                  <SettingsText>{label}</SettingsText>
                 </button>
               )
             })}
           </div>
           {selected.length === 0 && (
             <p className="text-[12px] text-[color:var(--warn)]">
-              No days selected — this rule can never become active.
+              <SettingsText>No days selected — this rule can never become active.</SettingsText>
             </p>
           )}
         </>
@@ -404,7 +407,7 @@ function SourceEditor({
 const VALUE_FIELDS: {
   key: SchedulableSettingKey
   label: string
-  render: (value: unknown, onChange: (v: unknown) => void) => React.JSX.Element
+  render: (value: unknown, onChange: (v: unknown) => void, vocab: ReturnType<typeof useVocabularyMapper>) => React.JSX.Element
 }[] = [
   {
     key: 'appTheme',
@@ -420,10 +423,10 @@ const VALUE_FIELDS: {
   {
     key: 'accent',
     label: 'Accent colour',
-    render: (v, onChange) => (
+    render: (v, onChange, vocab) => (
       <input
         type="color"
-        aria-label="Accent colour"
+        aria-label={vocab('Accent colour')}
         className="h-8 w-14 cursor-pointer rounded-md border border-border bg-bg p-0.5"
         value={(v as string) || DEFAULT_SETTINGS.accent}
         onChange={(e) => onChange(e.target.value)}
@@ -655,6 +658,7 @@ function EffectsEditor({
   active: boolean
   onChange: (effects: ScheduleRuleEffects | undefined) => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const projects = useProjects((state) => state.projects.filter((project) => !project.closed))
   const presets = useSettings((state) => state.settings.appearancePresets)
   const appearanceEntries = useSettings((state) => state.settings.elementAppearance)
@@ -697,79 +701,78 @@ function EffectsEditor({
     <div className="space-y-3 rounded-xl border border-outline/30 bg-surface-container-low p-3">
       <div className="flex items-end gap-2">
         <label className="min-w-0 flex-1 text-[12px] font-medium text-muted">
-          Find projects, canvases, layouts, presets, or appearance targets
+          <SettingsText>Find projects, canvases, layouts, presets, or appearance targets</SettingsText>
           <input
             ref={searchRef}
             value={search.value}
             onChange={(event) => search.setValue(event.target.value)}
             className="mt-1 w-full rounded-xl border border-outline/50 bg-surface px-3 py-2 text-[13px] text-text"
-            placeholder="Plain text search"
-            aria-label="Search scheduled effect targets"
+            placeholder={vocab('Plain text search')}
+            aria-label={vocab('Search scheduled effect targets')}
           />
         </label>
         <AnchoredRegexBuilder search={search} fieldRef={searchRef} label="Regex builder for scheduled effect targets" />
       </div>
-      {search.error ? <p className="text-[11px] text-[color:var(--warn)]" role="alert">{search.error}</p> : null}
+      {search.error ? <p className="text-[11px] text-[color:var(--warn)]" role="alert"><SettingsText segments={[{ kind: 'fact', value: search.error }]} /></p> : null}
       <p className="text-[11px] leading-snug text-muted-2">
-        These references are local and exact. Activation never switches projects or canvases. If the
-        selected target is unavailable, the effect stays off until you choose a new exact target.
+        <SettingsText>These references are local and exact. Activation never switches projects or canvases. If the selected target is unavailable, the effect stays off until you choose a new exact target.</SettingsText>
       </p>
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-2 rounded-lg border border-outline/20 p-2">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-semibold text-text">Saved-layout placement</span>
-            {placement ? <Button variant="ghost" onClick={clearPlacement}>Clear</Button> : <Button variant="ghost" onClick={() => changePlacement({ projectId: projects[0]?.id ?? '', canvasId: ROOT_CANVAS_ID, layoutId: '' })} disabled={projects.length === 0}>Add</Button>}
+            <span className="text-[12px] font-semibold text-text"><SettingsText>Saved-layout placement</SettingsText></span>
+            {placement ? <Button variant="ghost" onClick={clearPlacement}><SettingsText>Clear</SettingsText></Button> : <Button variant="ghost" onClick={() => changePlacement({ projectId: projects[0]?.id ?? '', canvasId: ROOT_CANVAS_ID, layoutId: '' })} disabled={projects.length === 0}><SettingsText>Add</SettingsText></Button>}
           </div>
           {placement ? (
             <>
-              <label className="block text-[11px] text-muted">Project
-                <Select value={placement.projectId} onChange={(event) => changePlacement({ projectId: event.target.value, canvasId: ROOT_CANVAS_ID, layoutId: '' })} aria-label="Scheduled placement project">
-                  <option value="">Choose a project</option>
+              <label className="block text-[11px] text-muted"><SettingsText>Project</SettingsText>
+                <Select vocabularyMode="factual" value={placement.projectId} onChange={(event) => changePlacement({ projectId: event.target.value, canvasId: ROOT_CANVAS_ID, layoutId: '' })} aria-label={vocab('Scheduled placement project')}>
+                  <option value=""><SettingsText>Choose a project</SettingsText></option>
                   {projects.filter((candidate) => visible(candidate.name)).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
                 </Select>
               </label>
-              <label className="block text-[11px] text-muted">Canvas
-                <Select value={placement.canvasId} onChange={(event) => changePlacement({ canvasId: event.target.value, layoutId: '' })} aria-label="Scheduled placement canvas" disabled={!project}>
-                  <option value="">Choose a canvas</option>
+              <label className="block text-[11px] text-muted"><SettingsText>Canvas</SettingsText>
+                <Select vocabularyMode="factual" value={placement.canvasId} onChange={(event) => changePlacement({ canvasId: event.target.value, layoutId: '' })} aria-label={vocab('Scheduled placement canvas')} disabled={!project}>
+                  <option value=""><SettingsText>Choose a canvas</SettingsText></option>
                   {canvases.filter((candidate) => visible(candidate.title)).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title}</option>)}
                 </Select>
               </label>
-              <label className="block text-[11px] text-muted">Saved layout
-                <Select value={placement.layoutId} onChange={(event) => changePlacement({ layoutId: event.target.value })} aria-label="Scheduled placement saved layout" disabled={!canvas}>
-                  <option value="">Choose a layout</option>
+              <label className="block text-[11px] text-muted"><SettingsText>Saved layout</SettingsText>
+                <Select vocabularyMode="factual" value={placement.layoutId} onChange={(event) => changePlacement({ layoutId: event.target.value })} aria-label={vocab('Scheduled placement saved layout')} disabled={!canvas}>
+                  <option value=""><SettingsText>Choose a layout</SettingsText></option>
                   {layouts.filter((layout) => visible(layout.name)).map((layout) => <option key={layout.id} value={layout.id}>{layout.name}</option>)}
                 </Select>
               </label>
-              {placement.layoutId && !layouts.some((layout) => layout.id === placement.layoutId) ? <p className="text-[11px] text-[color:var(--warn)]" role="status">This saved layout is unavailable for the selected canvas.</p> : null}
+              {placement.layoutId && !layouts.some((layout) => layout.id === placement.layoutId) ? <p className="text-[11px] text-[color:var(--warn)]" role="status"><SettingsText>This saved layout is unavailable for the selected canvas.</SettingsText></p> : null}
             </>
-          ) : <p className="text-[11px] text-muted-2">No placement effect configured.</p>}
+          ) : <p className="text-[11px] text-muted-2"><SettingsText>No placement effect configured.</SettingsText></p>}
         </div>
         <div className="space-y-2 rounded-lg border border-outline/20 p-2">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-semibold text-text">Appearance preset</span>
-            {appearance ? <Button variant="ghost" onClick={clearAppearance}>Clear</Button> : <Button variant="ghost" onClick={() => changeAppearance({ presetId: presets[0]?.id ?? '', targetId: appearanceTargets[0]?.id ?? '' })} disabled={presets.length === 0 || appearanceTargets.length === 0}>Add</Button>}
+            <span className="text-[12px] font-semibold text-text"><SettingsText>Appearance preset</SettingsText></span>
+            {appearance ? <Button variant="ghost" onClick={clearAppearance}><SettingsText>Clear</SettingsText></Button> : <Button variant="ghost" onClick={() => changeAppearance({ presetId: presets[0]?.id ?? '', targetId: appearanceTargets[0]?.id ?? '' })} disabled={presets.length === 0 || appearanceTargets.length === 0}><SettingsText>Add</SettingsText></Button>}
           </div>
           {appearance ? (
             <>
-              <label className="block text-[11px] text-muted">Preset
-                <Select value={appearance.presetId} onChange={(event) => changeAppearance({ presetId: event.target.value })} aria-label="Scheduled appearance preset">
-                  <option value="">Choose a preset</option>
+              <label className="block text-[11px] text-muted"><SettingsText>Preset</SettingsText>
+                <Select vocabularyMode="factual" value={appearance.presetId} onChange={(event) => changeAppearance({ presetId: event.target.value })} aria-label={vocab('Scheduled appearance preset')}>
+                  <option value=""><SettingsText>Choose a preset</SettingsText></option>
                   {presets.filter((preset) => visible(preset.name)).map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
                 </Select>
               </label>
-              <label className="block text-[11px] text-muted">Exact appearance target
-                <Select value={appearance.targetId} onChange={(event) => changeAppearance({ targetId: event.target.value })} aria-label="Scheduled appearance target">
-                  <option value="">Choose a target</option>
+              <label className="block text-[11px] text-muted"><SettingsText>Exact appearance target</SettingsText>
+                <Select vocabularyMode="factual" value={appearance.targetId} onChange={(event) => changeAppearance({ targetId: event.target.value })} aria-label={vocab('Scheduled appearance target')}>
+                  <option value=""><SettingsText>Choose a target</SettingsText></option>
                   {appearanceTargets.filter((target) => visible(target.label)).map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}
                 </Select>
               </label>
-              {appearance.presetId && !presets.some((preset) => preset.id === appearance.presetId) ? <p className="text-[11px] text-[color:var(--warn)]" role="status">This appearance preset is unavailable.</p> : null}
-              {appearance.targetId && !appearanceTargets.some((target) => target.id === appearance.targetId) ? <p className="text-[11px] text-[color:var(--warn)]" role="status">This appearance target is unavailable.</p> : null}
+              {appearance.presetId && !presets.some((preset) => preset.id === appearance.presetId) ? <p className="text-[11px] text-[color:var(--warn)]" role="status"><SettingsText>This appearance preset is unavailable.</SettingsText></p> : null}
+              {appearance.targetId && !appearanceTargets.some((target) => target.id === appearance.targetId) ? <p className="text-[11px] text-[color:var(--warn)]" role="status"><SettingsText>This appearance target is unavailable.</SettingsText></p> : null}
             </>
-          ) : <p className="text-[11px] text-muted-2">No appearance effect configured.</p>}
+          ) : <p className="text-[11px] text-muted-2"><SettingsText>No appearance effect configured.</SettingsText></p>}
         </div>
       </div>
-      {active ? <p className="text-[11px] font-medium text-accent" role="status">Active effect references are temporary and will restore the saved state when this rule ends.</p> : null}
+      {active ? <p className="text-[11px] font-medium text-accent" role="status"><SettingsText>Active effect references are temporary and will restore the saved state when this rule ends.</SettingsText></p> : null}
     </div>
   )
 }
@@ -782,9 +785,17 @@ function ValuesEditor({
   onChange: (values: SchedulableSettingsPatch) => void
 }): React.JSX.Element {
   const untyped = values as Record<string, unknown>
+  const vocab = useVocabularyMapper()
+  const schoolModeEnabled = useSchoolMode((state) => state.enabled)
+  const schoolModeHydrated = useSchoolMode((state) => state.hydrated)
+  const optionalSettingsAllowed = schoolModeAllowsOptionalFeatures({ enabled: schoolModeEnabled, hydrated: schoolModeHydrated })
+  const visibleFields = optionalSettingsAllowed
+    ? VALUE_FIELDS
+    : VALUE_FIELDS.filter(({ key }) => key !== 'funnyLevelEn' && key !== 'funnyLevelYue')
+  const visibleValueCount = visibleFields.reduce((count, field) => count + (field.key in untyped ? 1 : 0), 0)
   return (
     <div className="space-y-2">
-      {VALUE_FIELDS.map(({ key, label, render }) => {
+      {visibleFields.map(({ key, label, render }) => {
         const included = key in untyped
         return (
           <div key={key} className="flex items-center gap-3">
@@ -797,10 +808,11 @@ function ValuesEditor({
                 else delete next[key]
                 onChange(next as SchedulableSettingsPatch)
               }}
-              aria-label={`Include ${label} in this rule`}
+              vocabularyMode="factual"
+              aria-label={`${vocab('Include')} ${vocab(label)} ${vocab('in this rule')}`}
             />
             <span className={cn('w-48 shrink-0 text-[13px]', included ? 'text-text' : 'text-muted-2')}>
-              {label}
+              <SettingsText>{label}</SettingsText>
             </span>
             <fieldset
               disabled={!included}
@@ -808,14 +820,14 @@ function ValuesEditor({
             >
               {render(untyped[key] ?? DEFAULT_SETTINGS[key], (v) =>
                 onChange({ ...untyped, [key]: v } as SchedulableSettingsPatch)
-              )}
+              , vocab)}
             </fieldset>
           </div>
         )
       })}
-      {Object.keys(values).length === 0 && (
+      {visibleValueCount === 0 && (
         <p className="text-[12px] text-muted-2">
-          No settings selected yet — this rule would do nothing when active.
+          <SettingsText>No settings selected yet — this rule would do nothing when active.</SettingsText>
         </p>
       )}
     </div>
@@ -887,7 +899,12 @@ function RuleCard({
           >
             ↓
           </Button>
-          <Button variant="ghost" onClick={onRemove} aria-label={`${vocab('Remove')} ${rule.label || vocab('rule')}`}>
+          <Button
+            variant="ghost"
+            vocabularyMode="factual"
+            onClick={onRemove}
+            aria-label={`${vocab('Remove')} ${rule.label || vocab('rule')}`}
+          >
             <SettingsText>Remove</SettingsText>
           </Button>
         </div>
@@ -928,6 +945,13 @@ function RuleCard({
 }
 
 export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
+  const sectionDescription = 'Automatically switch appearance settings for a date/time window, or gate them on a Home Assistant entity. Nothing here ever changes your saved settings — an active rule is an overlay, and turns off on its own the moment its window (or its Home Assistant entity) ends.'
+  const mappedEntries = useMemo(
+    () => ENTRIES.map((entry) => settingsSearchEntryWithVocabulary(entry, vocab)),
+    [vocab]
+  )
+  const resolvedVocabulary = { source: 'localized-vocabulary' as const, fields: 'all' as const, searchEntries: 'mapped' as const }
   const file = useScheduledSettings((s) => s.file)
   const hydrated = useScheduledSettings((s) => s.hydrated)
   const loadError = useScheduledSettings((s) => s.loadError)
@@ -967,7 +991,7 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
 
   if (!hydrated || !settingsHydrated) {
     return (
-      <SettingsSection id="schedule" title="Schedule" isActive={isActive} searchEntries={ENTRIES}>
+      <SettingsSection id="schedule" title={vocab('Schedule')} isActive={isActive} searchEntries={mappedEntries} resolvedVocabulary={resolvedVocabulary}>
           <p className="text-[13px] text-muted"><SettingsText>Loading…</SettingsText></p>
       </SettingsSection>
     )
@@ -977,10 +1001,11 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
     return (
       <SettingsSection
         id="schedule"
-        title="Schedule"
-        description="Scheduled appearance overrides are disabled until the saved schedule can be read safely."
+        title={vocab('Schedule')}
+        description={vocab('Scheduled appearance overrides are disabled until the saved schedule can be read safely.')}
         isActive={isActive}
-        searchEntries={ENTRIES}
+        searchEntries={mappedEntries}
+        resolvedVocabulary={resolvedVocabulary}
       >
         <div
           role="alert"
@@ -1009,10 +1034,11 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
   return (
     <SettingsSection
       id="schedule"
-      title="Schedule"
-      description="Automatically switch appearance settings for a date/time window, or gate them on a Home Assistant entity. Nothing here ever changes your saved settings — an active rule is an overlay, and turns off on its own the moment its window (or its Home Assistant entity) ends."
+      title={vocab('Schedule')}
+      description={vocab(sectionDescription)}
       isActive={isActive}
-      searchEntries={ENTRIES}
+      searchEntries={mappedEntries}
+      resolvedVocabulary={resolvedVocabulary}
     >
       <SearchableRow {...ROWS.timezone}>
         <Labeled
@@ -1032,7 +1058,7 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
         <div className="space-y-4">
           {saveError && (
             <p className="rounded-md border border-[color:var(--warn)] bg-[color:var(--warn)]/10 px-3 py-2 text-[13px] text-[color:var(--warn)]">
-              {saveError}
+              <SettingsText segments={[{ kind: 'fact', value: saveError }]} />
             </p>
           )}
           {file.rules.length === 0 && (

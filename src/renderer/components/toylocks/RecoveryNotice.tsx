@@ -35,13 +35,11 @@ export function RecoveryNotice({ compact = false }: { compact?: boolean }): Reac
   return (
     <div className="toylock-recovery">
       <p className="toylock-recovery__disclaimer">
-        {vocab('This lock is enforced by nodeterm, and the credential is stored in this computer\'s own')}
-        {vocab('credential vault. It is not encryption: what is behind it stays readable on disk to anyone')}
-        {vocab('who has this machine.')}
+        {vocab("This lock is enforced by nodeterm, and the credential is stored in this computer's own credential vault. It is not encryption: what is behind it stays readable on disk to anyone who has this machine.")}
       </p>
       {!compact && (
         <p className="toylock-recovery__how">
-          {vocab('Locked out? Delete nodeterm\'s local application-data folder and every lock resets.')}
+          {vocab("Locked out? Delete nodeterm's local application-data folder and every lock resets.")}
         </p>
       )}
       <div className="toylock-recovery__path-row">

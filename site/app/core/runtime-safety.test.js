@@ -47,7 +47,14 @@ describe('Pages playground context-menu DOM transport', () => {
     expect(button).not.toBeNull()
     expect(root.querySelectorAll('.row-item')).toHaveLength(1)
     expect(button.hasAttribute('data-pwned')).toBe(false)
-    expect(JSON.parse(button.dataset.menuExtra)).toEqual({ ...row, canUndo: false })
+    expect(JSON.parse(button.dataset.menuExtra)).toEqual({
+      ...row,
+      titleKind: 'authored',
+      bodyKind: 'authored',
+      titleParts: [{ kind: 'authored', text: row.title }],
+      bodyParts: [{ kind: 'authored', text: row.body }],
+      canUndo: false,
+    })
   })
 })
 

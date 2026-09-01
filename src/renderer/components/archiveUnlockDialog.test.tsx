@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { ArchiveUnlockDialogHost, requestArchivePassword } from './archiveUnlockDialog'
+import { usePersonalVocabulary } from '../state/personalVocabulary'
+import { useSchoolMode } from '../state/schoolMode'
 
 const issue = vi.fn()
 const verify = vi.fn()
@@ -70,6 +72,8 @@ async function settle(): Promise<void> {
 }
 
 beforeEach(() => {
+  usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0, loadedAt: null, lastError: null })
+  useSchoolMode.setState({ enabled: false, hydrated: true, name: 'School mode' })
   issue.mockReset()
   verify.mockReset()
   globalIssue.mockReset()
@@ -96,6 +100,42 @@ afterEach(() => {
 })
 
 describe('the protected project file prompt', () => {
+  it('maps authored copy and accessible names while preserving the requested path', async () => {
+    usePersonalVocabulary.setState({
+      entries: {
+        'This project file is password-protected.': 'This archive needs a key.',
+        Password: 'Passcode',
+        Open: 'Unlock file'
+      },
+      status: 'loaded',
+      entryCount: 3
+    })
+    void requestArchivePassword({ path: '/tmp/secret.nodeterm-project' })
+    await settle()
+
+    expect(must('.confirm__msg').textContent).toContain('This archive needs a key.')
+    expect(must('.confirm__path').textContent).toBe('/tmp/secret.nodeterm-project')
+    expect(must<HTMLInputElement>('.confirm__input').getAttribute('aria-label')).toBe('Passcode')
+    expect(buttonNamed('Unlock file')).not.toBeNull()
+    click(buttonNamed('Cancel')!)
+  })
+
+  it('restores shipped copy and accessible names while School mode is enabled', async () => {
+    usePersonalVocabulary.setState({
+      entries: { 'This project file is password-protected.': 'This archive needs a key.', Password: 'Passcode' },
+      status: 'loaded',
+      entryCount: 2
+    })
+    useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' })
+    void requestArchivePassword({ path: '/tmp/school.nodeterm-project' })
+    await settle()
+
+    expect(must('.confirm__msg').textContent).toContain('This project file is password-protected.')
+    expect(must('.confirm__path').textContent).toBe('/tmp/school.nodeterm-project')
+    expect(must<HTMLInputElement>('.confirm__input').getAttribute('aria-label')).toBe('Password')
+    click(buttonNamed('Cancel')!)
+  })
+
   it('resolves with the typed password', async () => {
     const asked = requestArchivePassword({ path: '/tmp/secret.nodeterm-project' })
     await settle()

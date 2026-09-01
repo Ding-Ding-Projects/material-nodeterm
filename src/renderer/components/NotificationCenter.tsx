@@ -6,6 +6,7 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 import { saveBlobDownload } from '../lib/exportSave'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { copy as copySegment, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
 type FilterKind = 'all' | 'unread' | NotificationKind
 
@@ -55,21 +56,21 @@ function relTime(ts: number): string {
   return `${Math.round(h / 24)}d ago`
 }
 
-export function toMarkdown(items: AppNotification[], vocab: (value: string) => string = (value) => value): string {
+export function toMarkdown(items: AppNotification[]): string {
   return items
     .map((n) => {
       const state = n.dismissedAt == null ? 'active' : 'dismissed'
-      const copy = mapNotificationCopy(n, vocab)
-      return `- **[${n.kind}]** ${copy.title}${copy.body ? ` — ${copy.body}` : ''} _(${state}, ${new Date(n.createdAt).toISOString()})_`
+      return `- **[${n.kind}]** ${n.title}${n.body ? ` — ${n.body}` : ''} _(${state}, ${new Date(n.createdAt).toISOString()})_`
     })
     .join('\n')
 }
 
 export function notificationToExportRecord(
-  n: AppNotification,
-  vocab: (value: string) => string = (value) => value
+  n: AppNotification
 ): Record<string, unknown> {
-  return { ...n, ...mapNotificationCopy(n, vocab), actions: undefined }
+  // Exports are durable records, not the private display boundary. Keep the stored title/body
+  // and their ownership tags byte-identical, so a personal vocabulary never leaks into a file.
+  return { ...n, actions: undefined }
 }
 
 function downloadText(filename: string, text: string, mime: string): void {
@@ -176,7 +177,7 @@ export function NotificationCenter({
       downloadText(
         `notifications-${Date.now()}.json`,
           JSON.stringify(
-            scoped.map((n) => notificationToExportRecord(n, vocab)),
+            scoped.map((n) => notificationToExportRecord(n)),
           null,
           2
         ),
@@ -201,7 +202,7 @@ export function NotificationCenter({
             <input
               ref={searchInputRef}
               type="search"
-              placeholder={search.mode === 'regex' ? 'Search notifications (regex)…' : 'Search notifications…'}
+              placeholder={search.mode === 'regex' ? vocab('Search notifications (regex)…') : vocab('Search notifications…')}
               value={search.value}
               onChange={(e) => search.setValue(e.target.value)}
               aria-label={vocab('Search notifications')}
@@ -210,7 +211,7 @@ export function NotificationCenter({
             <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label="Regex — notification search" zIndex={93} />
           </div>
           {search.error && <div role="alert">{search.error}</div>}
-          <div className="notif-center__filters" role="group" aria-label="Filter by kind">
+          <div className="notif-center__filters" role="group" aria-label={vocab('Filter by kind')}>
             {FILTERS.map((f) => (
               <button
                 key={f.id}
@@ -218,42 +219,57 @@ export function NotificationCenter({
                 aria-pressed={filter === f.id}
                 onClick={() => setFilter(f.id)}
               >
-                {f.label}
+                {vocab(f.label)}
               </button>
             ))}
           </div>
         </div>
         <div className="notif-center__bulkbar">
           <button onClick={allFilteredSelected ? clearFilteredSelection : selectAllFiltered}>
-            {allFilteredSelected ? 'Clear selection' : `Select all (${filteredIds.length})`}
+            {allFilteredSelected
+              ? vocab('Clear selection')
+              : mapOwnedSentence(vocab, [copySegment('Select all ('), fact(String(filteredIds.length)), copySegment(')')])}
           </button>
           <button onClick={invertFilteredSelection} disabled={filteredIds.length === 0}>
-            Invert selection
+            {vocab('Invert selection')}
           </button>
           <button onClick={bulkDismiss} disabled={selectedInFilter.length === 0}>
-            Dismiss ({selectedInFilter.length})
+            {mapOwnedSentence(vocab, [copySegment('Dismiss ('), fact(String(selectedInFilter.length)), copySegment(')')])}
           </button>
           <button
             className="danger"
             disabled={selectedInFilter.length === 0}
             onClick={(e) => onRequestBulkDelete(selectedInFilter, e.currentTarget)}
           >
-            Delete ({selectedInFilter.length})
+            {mapOwnedSentence(vocab, [copySegment('Delete ('), fact(String(selectedInFilter.length)), copySegment(')')])}
           </button>
           <button
             onClick={bulkExport}
-            title="Click to export Markdown, Shift-click for JSON. Exports the selection, or the current filter if nothing is selected."
+            title={vocab(
+              'Click to export Markdown, Shift-click for JSON. Exports the selection, or the current filter if nothing is selected.'
+            )}
           >
-            Export ({selectedInFilter.length > 0 ? selectedInFilter.length : filteredIds.length})
+            {mapOwnedSentence(vocab, [
+              copySegment('Export ('),
+              fact(String(selectedInFilter.length > 0 ? selectedInFilter.length : filteredIds.length)),
+              copySegment(')')
+            ])}
           </button>
           <button onClick={() => markAllRead()} disabled={items.every((n) => n.read)}>
-            Mark all read
+            {vocab('Mark all read')}
           </button>
         </div>
-        <div className="notif-center__list" role="listbox" aria-label="Notifications" aria-multiselectable="true">
-          {filtered.length === 0 && <div className="notif-center__empty">No matching notifications.</div>}
+        <div
+          className="notif-center__list"
+          role="listbox"
+          aria-label={vocab('Notifications')}
+          aria-multiselectable="true"
+        >
+          {filtered.length === 0 && (
+            <div className="notif-center__empty">{vocab('No matching notifications.')}</div>
+          )}
           {filtered.map((n) => {
-            const copy = mapNotificationCopy(n, vocab)
+            const notificationCopy = mapNotificationCopy(n, vocab)
             return (
             <div
               key={n.id}
@@ -261,7 +277,7 @@ export function NotificationCenter({
               role="option"
               aria-selected={selected.has(n.id)}
               tabIndex={0}
-              aria-label={`${copy.title}${n.read ? '' : ', unread'}${n.target ? ', action available' : ''}`}
+              aria-label={`${notificationCopy.title}${n.read ? '' : ', unread'}${n.target ? ', action available' : ''}`}
               onKeyDown={(event) => {
                 if (event.target !== event.currentTarget) return
                 if (event.key === ' ' || event.key === 'Enter') {
@@ -273,11 +289,11 @@ export function NotificationCenter({
               <Checkbox
                 checked={selected.has(n.id)}
                 onChange={() => toggleOne(n.id)}
-                aria-label={`Select: ${copy.title}`}
+                aria-label={mapOwnedSentence(vocab, [copySegment('Select: '), fact(notificationCopy.title)])}
               />
               <div className="notif-center__row-body">
-                <div className="notif-center__row-title">{copy.title}</div>
-                {copy.body && <div className="notif-center__row-text">{copy.body}</div>}
+                <div className="notif-center__row-title">{notificationCopy.title}</div>
+                {notificationCopy.body && <div className="notif-center__row-text">{notificationCopy.body}</div>}
                 <div className="notif-center__row-meta">
                   <span>{n.kind}</span>
                   <span>{relTime(n.createdAt)}</span>
@@ -299,19 +315,19 @@ export function NotificationCenter({
               )}
               {n.dismissedAt == null ? (
                 <button className="notif-center__row-dismiss" onClick={() => dismiss(n.id)}>
-                  Dismiss
+                  {vocab('Dismiss')}
                 </button>
       ) : (
                 <button className="notif-center__row-dismiss" onClick={() => restore(n.id)}>
-                  Restore
+                  {vocab('Restore')}
                 </button>
               )}
               <button
                 className="notif-center__row-dismiss"
-                title="Remove from history permanently"
+                title={vocab('Remove from history permanently')}
                 onClick={(e) => onRequestBulkDelete([n.id], e.currentTarget)}
               >
-                Delete
+                {vocab('Delete')}
               </button>
             </div>
             )

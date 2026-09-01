@@ -22,7 +22,10 @@
 // is deliberately nothing here that names it or explains its absence.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LadderAnswer, LadderChallenge, WhackHit } from '@shared/unlock-ladder-types'
+import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { useSchoolMode } from '../../state/schoolMode'
+import { schoolModeAllowsOptionalFeatures } from '../../lib/schoolModePolicy'
 
 /**
  * How this panel reaches an engine. Two surfaces climb the same ladder against two different
@@ -62,6 +65,10 @@ export function UnlockLadderPanel({
   onDone: () => void
 }): React.JSX.Element {
   const vocab = useVocabularyMapper()
+  const schoolModeAllowsDimSum = schoolModeAllowsOptionalFeatures({
+    enabled: useSchoolMode((state) => state.enabled),
+    hydrated: useSchoolMode((state) => state.hydrated)
+  })
   const link = transport ?? toyLockLadderTransport(lockId ?? '')
   const [challenge, setChallenge] = useState<LadderChallenge | null>(null)
   const [budgetLeft, setBudgetLeft] = useState(0)
@@ -137,7 +144,10 @@ export function UnlockLadderPanel({
   return (
     <div className="toylock-ladder">
       {message && <div className="toylock-ladder__note">{message}</div>}
-      {challenge.kind === 'dimsum' && (
+      {challenge.kind === 'dimsum' && !schoolModeAllowsDimSum && (
+        <div className="toylock-ladder__note">{vocab('This challenge is unavailable in this mode.')}</div>
+      )}
+      {challenge.kind === 'dimsum' && schoolModeAllowsDimSum && (
         <DimSumRung
           challenge={challenge}
           busy={busy}
@@ -158,8 +168,13 @@ export function UnlockLadderPanel({
         />
       )}
       <div className="toylock-ladder__foot">
-        {vocab('Winning ends the wait — nothing more. You still need the password.')} {budgetLeft} {vocab('skip')}
-        {budgetLeft === 1 ? '' : 's'} left this hour.
+        {mapOwnedSentence(vocab, [
+          copy('Winning ends the wait — nothing more. You still need the password. '),
+          fact(String(budgetLeft)),
+          copy(' skip'),
+          copy(budgetLeft === 1 ? '' : 's'),
+          copy(' left this hour.')
+        ])}
       </div>
       <button className="toylock-btn--link" onClick={onDone}>
         {vocab('No thanks, I will wait')}
@@ -177,10 +192,11 @@ function DimSumRung({
   busy: boolean
   onPick: (choice: string) => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
     <div className="toylock-ladder__rung">
       <div className="toylock-ladder__prompt">
-        Which dish is <strong>{challenge.prompt}</strong>?
+        {vocab('Which dish is ')}<strong>{challenge.prompt}</strong>{vocab('?')}
       </div>
       <div className="toylock-ladder__choices">
         {challenge.choices.map((c) => (
@@ -190,7 +206,11 @@ function DimSumRung({
         ))}
       </div>
       <div className="toylock-ladder__hint">
-        {challenge.triesLeft} {challenge.triesLeft === 1 ? 'try' : 'tries'} left on this one.
+        {mapOwnedSentence(vocab, [
+          fact(String(challenge.triesLeft)),
+          copy(challenge.triesLeft === 1 ? ' try' : ' tries'),
+          copy(' left on this one.')
+        ])}
       </div>
     </div>
   )
@@ -205,6 +225,7 @@ function MathRung({
   busy: boolean
   onSubmit: (answers: number[]) => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [values, setValues] = useState<string[]>(() => challenge.questions.map(() => ''))
   // A fresh maths challenge is a fresh set of boxes — keyed off the nonce rather than carrying the
   // previous round's typing into questions it does not answer.
@@ -213,7 +234,7 @@ function MathRung({
 
   return (
     <div className="toylock-ladder__rung">
-      <div className="toylock-ladder__prompt">Ten easy sums. Every one has to be right.</div>
+      <div className="toylock-ladder__prompt">{vocab('Ten easy sums. Every one has to be right.')}</div>
       <div className="toylock-ladder__sums">
         {challenge.questions.map((q, i) => (
           <label key={`${challenge.nonce}:${i}`} className="toylock-ladder__sum">
@@ -222,7 +243,7 @@ function MathRung({
               className="toylock-input toylock-input--code"
               inputMode="numeric"
               value={values[i] ?? ''}
-              aria-label={`${q} equals`}
+              aria-label={mapOwnedSentence(vocab, [fact(String(q)), copy(' equals')])}
               onChange={(e) =>
                 setValues((prev) =>
                   prev.map((v, j) => (j === i ? e.target.value.replace(/[^-0-9]/g, '') : v))
@@ -237,7 +258,7 @@ function MathRung({
         disabled={busy || !complete}
         onClick={() => onSubmit(values.map((v) => Number(v)))}
       >
-        Check my sums
+        {vocab('Check my sums')}
       </button>
     </div>
   )
@@ -250,6 +271,7 @@ function WhackRung({
   challenge: Extract<LadderChallenge, { kind: 'whack' }>
   onDone: (hits: WhackHit[]) => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [started, setStarted] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [score, setScore] = useState(0)
@@ -290,11 +312,16 @@ function WhackRung({
     return (
       <div className="toylock-ladder__rung">
         <div className="toylock-ladder__prompt">
-          Whack-a-mole. Hit {challenge.requiredHits} of them in{' '}
-          {Math.round(challenge.durationMs / 1000)} seconds.
+          {mapOwnedSentence(vocab, [
+            copy('Whack-a-mole. Hit '),
+            fact(String(challenge.requiredHits)),
+            copy(' of them in '),
+            fact(String(Math.round(challenge.durationMs / 1000))),
+            copy(' seconds.')
+          ])}
         </div>
         <button className="toylock-btn toylock-btn--primary" onClick={() => setStarted(true)}>
-          Start
+          {vocab('Start')}
         </button>
       </div>
     )
@@ -304,7 +331,11 @@ function WhackRung({
   return (
     <div className="toylock-ladder__rung">
       <div className="toylock-ladder__prompt">
-        {left}s left · {score}/{challenge.requiredHits}
+        {mapOwnedSentence(vocab, [
+          fact(String(left)),
+          copy('s left · '),
+          fact(`${score}/${challenge.requiredHits}`)
+        ])}
       </div>
       <div
         className="toylock-ladder__grid"
@@ -314,7 +345,10 @@ function WhackRung({
           <button
             key={cell}
             className={`toylock-ladder__hole${visible.has(cell) ? ' toylock-ladder__hole--up' : ''}`}
-            aria-label={visible.has(cell) ? `Mole up in cell ${cell + 1}` : `Empty cell ${cell + 1}`}
+            aria-label={mapOwnedSentence(vocab, [
+              copy(visible.has(cell) ? 'Mole up in cell ' : 'Empty cell '),
+              fact(String(cell + 1))
+            ])}
             onClick={() => tap(cell)}
           >
             {visible.has(cell) ? '🐹' : ''}

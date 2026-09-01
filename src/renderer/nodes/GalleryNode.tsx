@@ -4,9 +4,12 @@ import type { CanvasNode } from '../state/workspace'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import type { MediaAssetReference } from '@shared/media-catalog'
 import { mediaKindForPath, mediaMimeForExtension } from '@shared/media-catalog'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapAroundExactFacts } from './nodeVocabulary'
 
 export default function GalleryNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { deleteElements } = useReactFlow()
+  const vocab = useVocabularyMapper()
   const assets = (data.mediaAssets as MediaAssetReference[] | undefined) ?? []
   const active = assets.find((a) => a.assetId === data.mediaActiveAssetId) ?? assets[0]
   const [src, setSrc] = useState('')
@@ -17,14 +20,15 @@ export default function GalleryNode({ id, data, selected }: NodeProps<CanvasNode
     let alive = true
     setSrc(''); setError('')
     if (!path || path.startsWith('./')) return () => { alive = false }
-    window.nodeTerminal.media.allow(path).then((url) => { if (alive) setSrc(url) }).catch(() => { if (alive) setError('This gallery asset is missing or unavailable.') })
+    window.nodeTerminal.media.allow(path).then((url) => { if (alive) setSrc(url) }).catch(() => { if (alive) setError(vocab('This gallery asset is missing or unavailable.')) })
     return () => { alive = false }
-  }, [path])
+  }, [path, vocab])
   const fill = nodeHeaderFillStyle(data.color)
   const missing = !active || !!active.missing || !src
   const kind = active?.kind
   const count = assets.length
   const thumbs = useMemo(() => assets.slice(0, 12), [assets])
+  const title = String(data.title || vocab('Gallery'))
   const addFiles = async (files: File[]) => {
     const additions: MediaAssetReference[] = []
     for (const file of files.slice(0, 100)) {
@@ -55,13 +59,13 @@ export default function GalleryNode({ id, data, selected }: NodeProps<CanvasNode
     <NodeResizer minWidth={360} minHeight={260} isVisible={selected} color={data.color} />
     <Handle id="flow-in" type="target" position={Position.Top} isConnectable={false} style={{ opacity: 0, pointerEvents: 'none', top: 0 }} />
     <div className={`term-node__header ${fill.className}${fill.filled ? ' term-node__header--filled' : ''}`} style={fill.style}>
-      <span className="term-node__title-text">{String(data.title || 'Gallery')}</span><span className="term-node__spacer" />
-      <span aria-live="polite" className="gallery-node__count">{count} asset{count === 1 ? '' : 's'}</span>
-      <button className="term-node__close" title="Close" aria-label="Close gallery" onClick={() => deleteElements({ nodes: [{ id }] })}>×</button>
+      <span className="term-node__title-text">{title}</span><span className="term-node__spacer" />
+      <span aria-live="polite" className="gallery-node__count">{count} {vocab(count === 1 ? 'asset' : 'assets')}</span>
+      <button className="term-node__close" title={vocab('Close')} aria-label={vocab('Close gallery')} onClick={() => deleteElements({ nodes: [{ id }] })}>×</button>
     </div>
-    <div className="editor-node__body"><div className="gallery-node__stage nodrag nowheel" aria-label="Gallery preview" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void addFiles(Array.from(event.dataTransfer.files)) }}>
-      {missing ? <div className="editor-node__loading" role="status">{error || (!active ? 'No media selected.' : active.missing ? 'Asset missing. Locate it to restore playback.' : 'Loading asset…')}</div> : kind === 'video' ? <video src={src} controls preload="metadata" aria-label={active?.portablePath || 'Gallery video'} /> : <img src={src} alt={active?.portablePath || 'Gallery photo'} />}
-      <div className="gallery-node__thumbs" aria-label="Gallery assets">{thumbs.map((asset) => <button type="button" key={asset.assetId} className={asset === active ? 'is-active' : ''} title={asset.portablePath} aria-label={`Select ${asset.portablePath}`} onClick={() => { data.mediaActiveAssetId = asset.assetId; redraw((value) => value + 1) }}>{asset.kind === 'video' ? '▶' : '▧'}</button>)}<label className="gallery-node__add">Add media<input type="file" accept="image/*,video/*" multiple onChange={(event) => { void addFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = '' }} /></label>{active ? <button type="button" className="gallery-node__remove" onClick={removeActive}>Remove selected</button> : null}</div>
+    <div className="editor-node__body"><div className="gallery-node__stage nodrag nowheel" aria-label={vocab('Gallery preview')} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void addFiles(Array.from(event.dataTransfer.files)) }}>
+      {missing ? <div className="editor-node__loading" role="status">{error || (!active ? vocab('No media selected.') : active.missing ? vocab('Asset missing. Locate it to restore playback.') : vocab('Loading asset…'))}</div> : kind === 'video' ? <video src={src} controls preload="metadata" aria-label={active?.portablePath ? mapAroundExactFacts(active.portablePath, [active.portablePath], vocab) : vocab('Gallery video')} /> : <img src={src} alt={active?.portablePath ? mapAroundExactFacts(active.portablePath, [active.portablePath], vocab) : vocab('Gallery photo')} />}
+      <div className="gallery-node__thumbs" aria-label={vocab('Gallery assets')}>{thumbs.map((asset) => <button type="button" key={asset.assetId} className={asset === active ? 'is-active' : ''} title={asset.portablePath} aria-label={mapAroundExactFacts(`Select ${asset.portablePath}`, [asset.portablePath], vocab)} onClick={() => { data.mediaActiveAssetId = asset.assetId; redraw((value) => value + 1) }}>{asset.kind === 'video' ? '▶' : '▧'}</button>)}<label className="gallery-node__add">{vocab('Add media')}<input type="file" accept="image/*,video/*" multiple onChange={(event) => { void addFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = '' }} /></label>{active ? <button type="button" className="gallery-node__remove" onClick={removeActive}>{vocab('Remove selected')}</button> : null}</div>
     </div></div>
   </div>
 }

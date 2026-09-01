@@ -61,11 +61,16 @@ cleared file never applies partially.
 
 ## Verification boundary
 
-`scripts/check-personal-vocabulary-coverage.mjs` carries hand-written rows for these surfaces and
-checks the production mapper boundary. The field-level copy/fact contract is exercised behaviorally
+`scripts/personal-vocabulary-producer-manifest.mjs` carries the canonical hand-written rows for
+every live Canvas node registration, lazy panel, root host, detached entrypoint, bridge, site
+entrypoint, and native-notification boundary. `scripts/check-personal-vocabulary-coverage.mjs`
+cross-checks live discovery against that fixed list and checks reachability, mapper/segment
+consumption, factual bindings, School-mode/cache policy, privacy, documentation, and focused tests.
+The field-level copy/fact contract is exercised behaviorally
 by `ownedCopy.test.ts`, rather than by brittle source substring needles. The rows are intentionally
 separate from the discovered source list so removing one surface cannot make the inventory shrink
-with the implementation.
+with the implementation. Rows marked open are intentionally reported as incomplete until their
+own implementation repair lands.
 Runtime rendering, narrow-layout behavior, and the packaged artifact remain separate evidence and are
 not claimed by this source-level record.
 

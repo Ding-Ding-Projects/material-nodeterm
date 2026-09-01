@@ -8,6 +8,8 @@ import {
   type CloneProgress
 } from '@shared/clone-url'
 import { Progress } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
 const PARENT_KEY = 'nodeterm.cloneParent'
 
@@ -33,6 +35,7 @@ export function CloneRepoDialog({ open, onClose, onCloned }: CloneRepoDialogProp
   // HOST fs (obligation d — `buildRelayApi` overrides `dialog.selectFolder`). Local session → the
   // native local dialog, byte-identical.
   const { api } = useSession()
+  const vocab = useVocabularyMapper()
   const [url, setUrl] = useState('')
   const [parent, setParent] = useState('')
   const [cloning, setCloning] = useState(false)
@@ -119,30 +122,31 @@ export function CloneRepoDialog({ open, onClose, onCloned }: CloneRepoDialogProp
   return createPortal(
     <div className="confirm-overlay" onClick={cancel}>
       <div className="confirm clone-dialog" onClick={(e) => e.stopPropagation()}>
-        <p className="confirm__msg">Clone a repository</p>
+        <p className="confirm__msg">{vocab('Clone a repository')}</p>
         {/* Floating-label outlined field, the MD3 shape: the label overlaps the field's own top
             border rather than sitting above it as a separate line — see design/v2/MD3
             Overlays.dc.html's "Clone repo dialog". */}
         <div className="md3-field">
           <label className="md3-field__label" htmlFor="clone-dialog-url">
-            Repository URL
+            {vocab('Repository URL')}
           </label>
           <input
             ref={urlRef}
             id="clone-dialog-url"
             className="confirm__input"
             value={url}
-            placeholder="https://github.com/user/repo.git — or user/repo"
+            placeholder={mapOwnedSentence(vocab, [fact('https://github.com/user/repo.git'), copy(' — or '), fact('user/repo')])}
+            aria-label={vocab('Repository URL')}
             spellCheck={false}
             disabled={cloning}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={onKeyDown}
           />
         </div>
-        {showPreview && <div className="clone-dialog__preview">→ {expanded}</div>}
+        {showPreview && <div className="clone-dialog__preview">{mapOwnedSentence(vocab, [copy('→ '), fact(expanded)])}</div>}
         <div className="md3-field">
           <label className="md3-field__label" htmlFor="clone-dialog-parent">
-            Parent folder
+            {vocab('Parent folder')}
           </label>
           <div className="clone-dialog__row">
             <input
@@ -150,6 +154,7 @@ export function CloneRepoDialog({ open, onClose, onCloned }: CloneRepoDialogProp
               className="confirm__input"
               value={parent}
               placeholder="/path/to/projects"
+              aria-label={vocab('Parent folder')}
               spellCheck={false}
               disabled={cloning}
               onChange={(e) => setParent(e.target.value)}
@@ -157,7 +162,8 @@ export function CloneRepoDialog({ open, onClose, onCloned }: CloneRepoDialogProp
             />
             <button
               className="confirm__btn clone-dialog__browse-btn"
-              title="Choose folder"
+              title={vocab('Choose folder')}
+              aria-label={vocab('Choose folder')}
               disabled={cloning}
               onClick={() => {
                 void api.dialog.selectFolder().then((f) => {
@@ -165,7 +171,7 @@ export function CloneRepoDialog({ open, onClose, onCloned }: CloneRepoDialogProp
                 })
               }}
             >
-              Browse
+              {vocab('Browse')}
             </button>
           </div>
         </div>
@@ -173,11 +179,13 @@ export function CloneRepoDialog({ open, onClose, onCloned }: CloneRepoDialogProp
         {cloning && (
           <div className="clone-dialog__progress">
             <div className="clone-dialog__progress-label">
-              {progress ? `${progress.phase}… ${progress.percent}%` : 'Starting clone…'}
+              {progress
+                ? mapOwnedSentence(vocab, [fact(progress.phase), copy('… '), fact(String(progress.percent)), copy('%')])
+                : vocab('Starting clone…')}
             </div>
             <Progress
               value={progress?.percent ?? null}
-              label="Repository clone progress"
+              label={vocab('Repository clone progress')}
               className="clone-dialog__progress-track"
               barClassName="clone-dialog__progress-bar"
             />
@@ -185,10 +193,10 @@ export function CloneRepoDialog({ open, onClose, onCloned }: CloneRepoDialogProp
         )}
         <div className="confirm__actions">
           <button className="confirm__btn" onClick={cancel}>
-            Cancel
+            {vocab('Cancel')}
           </button>
           <button className="confirm__btn primary" disabled={!canClone} onClick={() => void startClone()}>
-            {cloning ? 'Cloning…' : 'Clone'}
+            {cloning ? vocab('Cloning…') : vocab('Clone')}
           </button>
         </div>
       </div>

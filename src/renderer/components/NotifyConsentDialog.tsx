@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
 interface Props {
   onEnable: () => void
@@ -12,6 +14,7 @@ export function NotifyConsentDialog({ onEnable, onDismiss }: Props) {
   // Only the TOPMOST modal answers a key — this one and a ConfirmDialog can be on screen together,
   // and both window listeners used to fire on one Enter (see ./dialog-stack).
   const isTop = useDialogStack()
+  const vocab = useVocabularyMapper()
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!isTop()) return
@@ -36,18 +39,23 @@ export function NotifyConsentDialog({ onEnable, onDismiss }: Props) {
             <path d="M13.7 21a2 2 0 0 1-3.4 0" />
           </svg>
         </div>
-        <h2 className="consent-title">Get notified when Claude finishes</h2>
+        <h2 className="consent-title">{mapOwnedSentence(vocab, [copy('Get notified when '), fact('Claude'), copy(' finishes')])}</h2>
         <p className="consent-desc">
-          nodeterm can ping you when a Claude Code turn finishes while the app is in the
-          background — so you don't have to babysit a running session. You can change this
-          any time in Settings.
+          {mapOwnedSentence(vocab, [
+            fact('nodeterm'),
+            copy(" can ping you when "),
+            fact('Claude Code'),
+            copy(" turn finishes while the app is in the background — so you don't have to babysit a running session. You can change this any time in "),
+            fact('Settings'),
+            copy('.')
+          ])}
         </p>
         <div className="consent-actions">
           <button className="consent-btn ghost" onClick={onDismiss}>
-            Not now
+            {vocab('Not now')}
           </button>
           <button className="consent-btn primary" autoFocus onClick={onEnable}>
-            Enable notifications
+            {vocab('Enable notifications')}
           </button>
         </div>
       </div>

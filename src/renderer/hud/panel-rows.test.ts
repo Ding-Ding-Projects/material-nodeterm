@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { HUD_ROW_CAP, overflowLabel, splitPanelRows, type PanelRow } from './panel-rows'
+import { applyVocabulary } from '../lib/personalVocabulary/apply'
 
 const row = (state: PanelRow['state'], unread = false): PanelRow => ({ state, unread })
 
@@ -49,5 +50,26 @@ describe('overflowLabel', () => {
 
   it('counts a read `done` as idle, not as unread', () => {
     expect(overflowLabel([row('done', false), row('idle')])).toBe('+2 more · 2 idle')
+  })
+
+  it('maps only authored overflow words and keeps counts and separators exact', () => {
+    const map = (text: string): string => applyVocabulary(text, {
+      more: 'extra',
+      'needs you': 'call me',
+      unread: 'new',
+      running: 'busy',
+      idle: 'quiet'
+    })
+    expect(overflowLabel([
+      row('needsYou'),
+      row('done', true),
+      row('working'),
+      row('idle')
+    ], map)).toBe('+4 extra · 1 call me · 1 new · 1 busy · 1 quiet')
+  })
+
+  it('does not let vocabulary terms rewrite a numeric count', () => {
+    const map = (text: string): string => applyVocabulary(text, { '6': 'six words' })
+    expect(overflowLabel(Array.from({ length: 6 }, () => row('idle')), map)).toBe('+6 more · 6 idle')
   })
 })

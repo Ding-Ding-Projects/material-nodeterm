@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { UniGetUiApi, UniGetUiPage, UniGetUiStatus, UniGetUiUniverseState } from '@shared/unigetui'
 import { UNIGETUI_DEFAULT_UNIVERSE_STATE, UNIGETUI_PAGES } from '@shared/unigetui'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
+import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { MaterialSymbol } from '../MaterialSymbol'
@@ -15,6 +16,36 @@ const PAGE_LABELS: Record<UniGetUiPage, string> = {
   overview: 'Overview', discover: 'Discover', installed: 'Installed', updates: 'Updates', operations: 'Operations',
   managers: 'Managers', sources: 'Sources', bundles: 'Bundles', settings: 'Settings', shortcuts: 'Shortcuts',
   logs: 'Logs', backups: 'Backups', help: 'Help'
+}
+
+export function mapUniGetUiPageLabel(page: UniGetUiPage, map: (text: string) => string): string {
+  return map(PAGE_LABELS[page])
+}
+
+export function mapUniGetUiCount(count: number, map: (text: string) => string): string {
+  return mapOwnedSentence(map, [fact(String(count)), copy(' entries shown')])
+}
+
+export function mapUniGetUiVersion(version: string, map: (text: string) => string): string {
+  return mapOwnedSentence(map, [copy('Version '), fact(version)])
+}
+
+export function mapUniGetUiDestructiveLabel(
+  kind: 'uninstall' | 'forget' | 'remove-source' | 'delete-shortcut' | 'remove-bundle',
+  value: string,
+  map: (text: string) => string
+): string {
+  const prefix = kind === 'uninstall'
+    ? 'Uninstall '
+    : kind === 'forget'
+      ? 'Forget operation '
+      : kind === 'remove-source'
+        ? 'Remove source '
+        : kind === 'delete-shortcut'
+          ? 'Delete shortcut '
+          : 'Remove '
+  const suffix = kind === 'remove-bundle' ? ' from bundle?' : '?'
+  return mapOwnedSentence(map, [copy(prefix), fact(value), copy(suffix)])
 }
 
 function asRows(value: unknown): Array<Record<string, unknown>> {
@@ -43,8 +74,8 @@ export function UniGetUiUniversePanel({ onClose }: UniGetUiUniversePanelProps): 
   const [busy, setBusy] = useState(false)
   const [packageOptions, setPackageOptions] = useState<Record<string, unknown>>({ wait: false, elevated: false, interactive: false, preRelease: false, skipHash: false })
   const requestDestructive = useCallback((input: { label: string; run: () => Promise<void> }) => {
-    openDestructiveGate({ title: input.label, description: 'This action changes or removes UniGetUI state and cannot be undone through this panel.', affected: [input.label], confirmLabel: 'Confirm action', onConfirm: () => { void input.run() } })
-  }, [])
+    openDestructiveGate({ title: input.label, description: vocab('This action changes or removes UniGetUI state and cannot be undone through this panel.'), affected: [input.label], confirmLabel: vocab('Confirm action'), onConfirm: () => { void input.run() } })
+  }, [vocab])
   const search = useRegexSearchField()
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -106,18 +137,18 @@ export function UniGetUiUniversePanel({ onClose }: UniGetUiUniversePanelProps): 
           <AnchoredRegexBuilder search={search} fieldRef={searchRef} label={vocab('Open regex builder for this UniGetUI page')} />
           <button type="button" onClick={() => void load(page)} disabled={busy} aria-label={vocab('Refresh UniGetUI page')}><MaterialSymbol name="refresh" size={18} /></button>
         </div>
-        <span role="status">{search.error ?? vocab(`${rows.length} entries shown`)}</span>
+        <span role="status">{search.error ?? mapUniGetUiCount(rows.length, vocab)}</span>
       </div>
       <Tabs
         ariaLabel={vocab('UniGetUI Global Universe sections')}
         value={page}
         onChange={(value) => void load(value as UniGetUiPage)}
-        items={UNIGETUI_PAGES.map((item) => ({ id: item, label: PAGE_LABELS[item] }))}
+        items={UNIGETUI_PAGES.map((item) => ({ id: item, label: mapUniGetUiPageLabel(item, vocab) }))}
       />
       {status && (
         <section className={`unigetui-universe__status unigetui-universe__status--${status.health}`} aria-live="polite">
-          <strong>{status.health === 'ok' ? '✅' : '⚠️'} {vocab(status.health)}</strong>
-          <span>{status.detail ?? (status.version ? `${vocab('Version')} ${status.version}` : vocab('No active UniGetUI session was detected.'))}</span>
+          <strong>{status.health === 'ok' ? '✅' : '⚠️'} {status.health}</strong>
+          <span>{status.detail ?? (status.version ? mapUniGetUiVersion(status.version, vocab) : vocab('No active UniGetUI session was detected.'))}</span>
         </section>
       )}
       {busy && <Progress value={null} label={vocab('Loading UniGetUI data')} />}
@@ -134,7 +165,7 @@ export function UniGetUiUniversePanel({ onClose }: UniGetUiUniversePanelProps): 
 }
 
 function PackageOptions({ value, onChange, vocab }: { value: Record<string, unknown>; onChange: (value: Record<string, unknown>) => void; vocab: (value: string) => string }): React.JSX.Element {
-  const text = (key: string, label: string, placeholder: string) => <label>{vocab(label)}<span className="unigetui-universe__option-input"><input value={typeof value[key] === 'string' ? value[key] as string : ''} placeholder={placeholder} onChange={(event) => onChange({ ...value, [key]: event.target.value || undefined })} />{key === 'location' && <button type="button" onClick={() => void window.nodeTerminal.dialog.selectFolder().then((path) => path && onChange({ ...value, location: path }))}>{vocab('Browse')}</button>}</span></label>
+  const text = (key: string, label: string, placeholder: string) => <label>{vocab(label)}<span className="unigetui-universe__option-input"><input value={typeof value[key] === 'string' ? value[key] as string : ''} placeholder={vocab(placeholder)} onChange={(event) => onChange({ ...value, [key]: event.target.value || undefined })} />{key === 'location' && <button type="button" onClick={() => void window.nodeTerminal.dialog.selectFolder().then((path) => path && onChange({ ...value, location: path }))}>{vocab('Browse')}</button>}</span></label>
   const flag = (key: string, label: string) => <label><input type="checkbox" checked={value[key] === true} onChange={(event) => onChange({ ...value, [key]: event.target.checked })} />{vocab(label)}</label>
   return <details className="unigetui-universe__options"><summary>{vocab('Package operation options')}</summary><div className="unigetui-universe__options-grid">{text('manager', 'Manager', 'winget')}{text('source', 'Source', 'source name')}{text('version', 'Version', 'optional version')}{text('scope', 'Scope', 'User or Machine')}{text('architecture', 'Architecture', 'x64')}{text('location', 'Install location', 'absolute path')}{flag('preRelease', 'Include prerelease')}{flag('interactive', 'Interactive operation')}{flag('elevated', 'Request elevation')}{flag('skipHash', 'Skip hash check')}{flag('wait', 'Wait for completion')}</div></details>
 }
@@ -145,11 +176,11 @@ function DiscoverActions({ api, rows, vocab, options }: { api: UniGetUiApi; rows
 
 function PageActions({ api, page, vocab, onDestructive, onPayload }: { api: UniGetUiApi; page: UniGetUiPage; vocab: (value: string) => string; onDestructive: (action: { label: string; run: () => Promise<void> }) => void; onPayload: (value: unknown) => void }): React.JSX.Element | null {
   const action = (label: string, run: () => Promise<unknown>): React.JSX.Element => <button type="button" onClick={() => void run()}>{vocab(label)}</button>
-  const destructive = (label: string, run: () => Promise<unknown>): React.JSX.Element => <button type="button" onClick={() => onDestructive({ label, run: async () => { await run() } })}>{vocab(label)}</button>
+  const destructive = (label: string, run: () => Promise<unknown>): React.JSX.Element => <button type="button" onClick={() => onDestructive({ label: vocab(label), run: async () => { await run() } })}>{vocab(label)}</button>
   if (page === 'updates') return <div className="unigetui-universe__page-actions">{action('Update all', () => api.packageUpdateAll({ wait: false }))}{action('Show ignored updates', () => api.ignoredUpdates().then(onPayload))}</div>
-  if (page === 'backups') return <div className="unigetui-universe__page-actions">{action('Create local backup', () => api.backupLocalCreate())}{action('List cloud backups', () => api.backupCloudList().then(onPayload))}{action('Create cloud backup', () => api.backupCloudCreate())}{action('Start backup sign-in', () => api.backupLoginStart(false))}{action('Complete backup sign-in', () => api.backupLoginComplete())}{action('Sign out of backup', () => api.backupLogout())}{action('Download cloud backup', () => promptDialog({ message: 'Cloud backup key' }).then((key) => key ? api.backupCloudDownload(key) : undefined))}{action('Restore cloud backup', () => promptDialog({ message: 'Cloud backup key' }).then((key) => key ? api.backupCloudRestore(key, true) : undefined))}</div>
-  if (page === 'sources') return <div className="unigetui-universe__page-actions"><button type="button" onClick={() => void promptDialog({ message: 'Manager id' }).then((manager) => manager && promptDialog({ message: 'Source name' }).then((name) => name && promptDialog({ message: 'Source URL (optional)' }).then((url) => void api.sourceAdd(manager, name, url || undefined))))}>{vocab('Add source')}</button></div>
-  if (page === 'bundles') return <div className="unigetui-universe__page-actions">{action('Refresh bundle', () => api.bundle().then(onPayload))}{destructive('Reset bundle', () => api.bundleReset())}{action('Import bundle file', () => window.nodeTerminal.dialog.selectFile().then((path) => path ? api.bundleImport({ path }) : undefined))}{action('Export bundle', () => api.bundleExport())}<button type="button" onClick={() => void promptDialog({ message: 'Package id' }).then((id) => id ? api.bundleAdd({ id }) : undefined)}>{vocab('Add package')}</button><button type="button" onClick={() => void promptDialog({ message: 'Package id to remove' }).then((id) => id && onDestructive({ label: `Remove ${id} from bundle?`, run: async () => { await api.bundleRemove({ id }) } }))}>{vocab('Remove package')}</button>{action('Install bundle', () => api.bundleInstall({ elevated: false }))}</div>
+  if (page === 'backups') return <div className="unigetui-universe__page-actions">{action('Create local backup', () => api.backupLocalCreate())}{action('List cloud backups', () => api.backupCloudList().then(onPayload))}{action('Create cloud backup', () => api.backupCloudCreate())}{action('Start backup sign-in', () => api.backupLoginStart(false))}{action('Complete backup sign-in', () => api.backupLoginComplete())}{action('Sign out of backup', () => api.backupLogout())}{action('Download cloud backup', () => promptDialog({ message: vocab('Cloud backup key') }).then((key) => key ? api.backupCloudDownload(key) : undefined))}{action('Restore cloud backup', () => promptDialog({ message: vocab('Cloud backup key') }).then((key) => key ? api.backupCloudRestore(key, true) : undefined))}</div>
+  if (page === 'sources') return <div className="unigetui-universe__page-actions"><button type="button" onClick={() => void promptDialog({ message: vocab('Manager id') }).then((manager) => manager && promptDialog({ message: vocab('Source name') }).then((name) => name && promptDialog({ message: vocab('Source URL (optional)') }).then((url) => void api.sourceAdd(manager, name, url || undefined))))}>{vocab('Add source')}</button></div>
+  if (page === 'bundles') return <div className="unigetui-universe__page-actions">{action('Refresh bundle', () => api.bundle().then(onPayload))}{destructive('Reset bundle', () => api.bundleReset())}{action('Import bundle file', () => window.nodeTerminal.dialog.selectFile().then((path) => path ? api.bundleImport({ path }) : undefined))}{action('Export bundle', () => api.bundleExport())}<button type="button" onClick={() => void promptDialog({ message: vocab('Package id') }).then((id) => id ? api.bundleAdd({ id }) : undefined)}>{vocab('Add package')}</button><button type="button" onClick={() => void promptDialog({ message: vocab('Package id to remove') }).then((id) => id && onDestructive({ label: mapUniGetUiDestructiveLabel('remove-bundle', id, vocab), run: async () => { await api.bundleRemove({ id }) } }))}>{vocab('Remove package')}</button>{action('Install bundle', () => api.bundleInstall({ elevated: false }))}</div>
   if (page === 'settings') return <div className="unigetui-universe__page-actions">{destructive('Reset non-secure settings', () => api.settingsReset())}</div>
   if (page === 'shortcuts') return <div className="unigetui-universe__page-actions">{destructive('Reset shortcut decisions', () => api.shortcutResetAll())}</div>
   if (page === 'operations') return <div className="unigetui-universe__page-actions">{action('Refresh operations', () => api.operations().then(onPayload))}</div>
@@ -167,19 +198,19 @@ function DataRows({ api, page, rows, vocab, options, onDestructive, onPayload }:
       actions.push(<button key="download" type="button" onClick={() => void api.packageDownload(id, { ...options, manager } as never)}>{vocab('Download')}</button>)
       actions.push(<button key="reinstall" type="button" onClick={() => void api.packageReinstall(id, { ...options, manager } as never)}>{vocab('Reinstall')}</button>)
       actions.push(<button key="repair" type="button" onClick={() => void api.packageRepair(id, manager, options as never)}>{vocab('Repair')}</button>)
-      actions.push(<button key="uninstall" type="button" onClick={() => destructive(`Uninstall ${id}?`, () => api.packageUninstall(id, manager, options as never))}>{vocab('Uninstall')}</button>)
+      actions.push(<button key="uninstall" type="button" onClick={() => destructive(mapUniGetUiDestructiveLabel('uninstall', id, vocab), () => api.packageUninstall(id, manager, options as never))}>{vocab('Uninstall')}</button>)
       actions.push(<button key="ignore" type="button" onClick={() => void api.ignoredUpdateAdd(id, { manager, version: typeof row.version === 'string' ? row.version : undefined })}>{vocab('Ignore updates')}</button>)
       if (manager && page === 'updates') actions.push(<button key="manager-update" type="button" onClick={() => void api.packageUpdateManager(manager, options as never)}>{vocab('Update manager')}</button>)
     } else if (page === 'operations' && id) {
       actions.push(<button key="output" type="button" onClick={() => void api.operationOutput(id).then(onPayload)}>{vocab('Output')}</button>)
       actions.push(<button key="cancel" type="button" onClick={() => void api.operationCancel(id)}>{vocab('Cancel')}</button>)
       actions.push(<button key="retry" type="button" onClick={() => void api.operationRetry(id)}>{vocab('Retry')}</button>)
-      actions.push(<button key="forget" type="button" onClick={() => destructive(`Forget operation ${id}?`, () => api.operationForget(id))}>{vocab('Forget')}</button>)
+      actions.push(<button key="forget" type="button" onClick={() => destructive(mapUniGetUiDestructiveLabel('forget', id, vocab), () => api.operationForget(id))}>{vocab('Forget')}</button>)
     } else if (page === 'managers' && manager) {
       for (const action of ['enable', 'disable', 'reload', 'maintenance', 'notifications-enable', 'notifications-disable', 'clear-executable']) actions.push(<button key={action} type="button" onClick={() => void api.managerAction(manager, action)}>{vocab(action)}</button>)
       actions.push(<button key="set-executable" type="button" onClick={() => void window.nodeTerminal.dialog.selectFile().then((path) => path ? api.managerAction(manager, 'set-executable', { path }) : undefined)}>{vocab('Set executable')}</button>)
     } else if (page === 'sources' && manager && id) {
-      actions.push(<button key="remove" type="button" onClick={() => destructive(`Remove source ${id}?`, () => api.sourceRemove(manager, id))}>{vocab('Remove')}</button>)
+      actions.push(<button key="remove" type="button" onClick={() => destructive(mapUniGetUiDestructiveLabel('remove-source', id, vocab), () => api.sourceRemove(manager, id))}>{vocab('Remove')}</button>)
     } else if (page === 'settings' && id) {
       const current = typeof row.value === 'string' || typeof row.value === 'boolean' ? row.value : ''
       actions.push(<label key="value">{vocab('Value')}<input defaultValue={String(current)} onBlur={(event) => void api.settingSet(id, typeof current === 'boolean' ? { enabled: event.currentTarget.value === 'true' } : { value: event.currentTarget.value })} /></label>)
@@ -187,7 +218,7 @@ function DataRows({ api, page, rows, vocab, options, onDestructive, onPayload }:
     } else if (page === 'shortcuts' && (typeof row.path === 'string' || id)) {
       const shortcutPath = typeof row.path === 'string' ? row.path : id
       actions.push(<button key="keep" type="button" onClick={() => void api.shortcutSet(shortcutPath, 'keep')}>{vocab('Keep')}</button>)
-      actions.push(<button key="delete" type="button" onClick={() => destructive(`Delete shortcut ${shortcutPath}?`, () => api.shortcutSet(shortcutPath, 'delete'))}>{vocab('Delete')}</button>)
+      actions.push(<button key="delete" type="button" onClick={() => destructive(mapUniGetUiDestructiveLabel('delete-shortcut', shortcutPath, vocab), () => api.shortcutSet(shortcutPath, 'delete'))}>{vocab('Delete')}</button>)
       actions.push(<button key="reset" type="button" onClick={() => void api.shortcutReset(shortcutPath)}>{vocab('Reset')}</button>)
     }
     return <li key={index}><pre>{JSON.stringify(row, null, 2)}</pre>{actions.length > 0 && <div className="unigetui-universe__row-actions">{actions}</div>}</li>

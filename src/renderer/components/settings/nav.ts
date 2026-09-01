@@ -173,12 +173,14 @@ export function allSectionIds(): SettingsSectionId[] {
  */
 export function visibleSettingsGroups(
   isMac: boolean,
-  schoolModeAllowsLanguage = true
+  schoolModeAllowsOptionalFeatures = true
 ): SettingsGroup[] {
   return SETTINGS_GROUPS.map((g) => ({
     ...g,
     sections: g.sections.filter(
-      (s) => (isMac || !s.macOnly) && (schoolModeAllowsLanguage || s.id !== 'language')
+      (s) =>
+        (isMac || !s.macOnly) &&
+        (schoolModeAllowsOptionalFeatures || (s.id !== 'language' && s.id !== 'vocabulary'))
     )
   })).filter((g) => g.sections.length > 0)
 }

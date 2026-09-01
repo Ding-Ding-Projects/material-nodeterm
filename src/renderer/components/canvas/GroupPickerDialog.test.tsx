@@ -4,6 +4,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GroupPickerDialog, type GroupPickerOption } from './GroupPickerDialog'
 import { resetDialogStack } from '../dialog-stack'
+import { usePersonalVocabulary } from '../../state/personalVocabulary'
+import { useSchoolMode } from '../../state/schoolMode'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -19,12 +21,16 @@ describe('GroupPickerDialog', () => {
 
   beforeEach(() => {
     resetDialogStack()
+    usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0, loadedAt: null, lastError: null })
+    useSchoolMode.setState({ enabled: false, hydrated: false })
     host = document.createElement('div')
     document.body.appendChild(host)
   })
 
   afterEach(() => {
     act(() => root?.unmount())
+    usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0, loadedAt: null, lastError: null })
+    useSchoolMode.setState({ enabled: false, hydrated: false })
     root = undefined
     host.remove()
   })
@@ -162,5 +168,30 @@ describe('GroupPickerDialog', () => {
     render()
     const dialog = document.querySelector('[role="dialog"]') as HTMLElement
     expect(dialog.getAttribute('aria-label')).toMatch(/2 nodes/i)
+  })
+
+  it('maps authored copy while preserving group titles and member counts', () => {
+    usePersonalVocabulary.setState({
+      entries: { Add: 'Put', group: 'frame', node: 'item', Groups: 'Frames' },
+      status: 'loaded',
+      entryCount: 5
+    })
+    useSchoolMode.setState({ enabled: false, hydrated: true })
+    render()
+    const dialog = document.querySelector('[role="dialog"]') as HTMLElement
+    expect(dialog.getAttribute('aria-label')).toContain('Put 2 items')
+    expect(dialog.getAttribute('aria-label')).toContain('to existing frame')
+    expect(options()[0].textContent).toContain('Feature work')
+    expect(options()[0].textContent).toContain('4 items')
+    expect(input().getAttribute('aria-label')).toBe('Filter frames')
+  })
+
+  it('keeps the shipped dialog identity when School mode is on', () => {
+    usePersonalVocabulary.setState({ entries: { Add: 'Put', Groups: 'Frames' }, status: 'loaded', entryCount: 2 })
+    useSchoolMode.setState({ enabled: true, hydrated: true })
+    render()
+    const dialog = document.querySelector('[role="dialog"]') as HTMLElement
+    expect(dialog.getAttribute('aria-label')).toContain('Add 2 nodes')
+    expect(input().getAttribute('aria-label')).toBe('Filter groups')
   })
 })
