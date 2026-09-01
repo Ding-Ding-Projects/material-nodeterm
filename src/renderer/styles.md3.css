@@ -14850,3 +14850,105 @@ button.term-node__title-text:focus-visible {
   .unigetui-universe__rows li { align-items: flex-start; flex-wrap: wrap; }
   .unigetui-universe__rows li pre { flex-basis: 100%; order: 1; }
 }
+
+/* =================================================================================================
+ * MOTION IDENTITY LAYER -- every surface enters with the same character, tuned to this app.
+ *
+ * The app's mental model is a canvas of universes: nodes materialize onto it, floating surfaces
+ * grow out of it, and lists assemble. Three moves express that, all built on the two motion tokens
+ * declared above (so reduced-motion zeroes every duration here automatically):
+ *
+ *   1. MATERIALIZE -- a canvas node's content springs from 92% scale with a small rise, on the
+ *      node's CONTENT child only. React Flow owns the wrapper's inline transform for position, so
+ *      animating the wrapper would fight drag and pan; the child is ours.
+ *   2. GROW -- every floating panel (dialog, wizard, drawer, notification centre, export sheet)
+ *      shares the existing md3-pop-in spring while its scrim fades on the effect token. One
+ *      entrance, everywhere, instead of seven animated surfaces and thirty dead ones.
+ *   3. ASSEMBLE -- palette and notification rows cascade in with a per-row stagger, bounded to the
+ *      first eight rows so a long list never queues motion behind itself.
+ *
+ * Entrances only. Nothing here touches drag, zoom, scroll, or any continuously-driven transform.
+ * ================================================================================================= */
+
+:root {
+  --nt-motion-stagger: 14ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --nt-motion-stagger: 0ms;
+  }
+}
+
+/* 1. MATERIALIZE -- the app's signature moment. */
+@keyframes nt-node-materialize {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.react-flow__node > div {
+  animation: nt-node-materialize var(--md3-motion-spatial) backwards;
+}
+
+/* 2. GROW -- panels that previously popped in with no entrance at all. */
+.mdx-dialog,
+.toylock-wizard,
+.kanban-modal,
+.label-picker,
+.export-menu__panel,
+.notif-center,
+.veracrypt-node__confirm,
+.confirm-overlay > :first-child,
+.sc-overlay > :first-child,
+.consent-overlay > :first-child {
+  animation: md3-pop-in var(--md3-motion-spatial) backwards;
+}
+/* The drawer keeps its own slide shape but adopts the shared spring timing. */
+.drawer {
+  animation: nt-drawer-in var(--md3-motion-spatial);
+}
+/* Scrims fade on the effect token so the backdrop never lags its panel. */
+.confirm-overlay,
+.drawer-overlay,
+.kanban-modal-scrim,
+.label-picker__scrim,
+.mdx-dialog-scrim,
+.sc-overlay,
+.consent-overlay,
+.toylock-wizard__backdrop {
+  animation: md3-fade-in var(--md3-motion-effect) backwards;
+}
+
+/* 3. ASSEMBLE -- bounded row cascade. */
+@keyframes nt-row-assemble {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.palette__row,
+.notif-center__row {
+  animation: nt-row-assemble var(--md3-motion-effect) backwards;
+}
+.palette__row:nth-child(2), .notif-center__row:nth-child(2) { animation-delay: calc(var(--nt-motion-stagger) * 1); }
+.palette__row:nth-child(3), .notif-center__row:nth-child(3) { animation-delay: calc(var(--nt-motion-stagger) * 2); }
+.palette__row:nth-child(4), .notif-center__row:nth-child(4) { animation-delay: calc(var(--nt-motion-stagger) * 3); }
+.palette__row:nth-child(5), .notif-center__row:nth-child(5) { animation-delay: calc(var(--nt-motion-stagger) * 4); }
+.palette__row:nth-child(6), .notif-center__row:nth-child(6) { animation-delay: calc(var(--nt-motion-stagger) * 5); }
+.palette__row:nth-child(7), .notif-center__row:nth-child(7) { animation-delay: calc(var(--nt-motion-stagger) * 6); }
+.palette__row:nth-child(8), .notif-center__row:nth-child(8) { animation-delay: calc(var(--nt-motion-stagger) * 7); }
+
+/* Interactive state changes ease instead of snapping. Colour and background only -- never layout. */
+.tab,
+.ss-row {
+  transition: background-color var(--md3-motion-effect), color var(--md3-motion-effect),
+    border-color var(--md3-motion-effect);
+}

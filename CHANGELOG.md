@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Give every floating surface one shared motion character. Dialogs, wizards, drawers, the
+  notification centre, the export sheet, and confirmation panels now enter on the same spring the
+  command palette already used, their scrims fade in step, palette and notification rows cascade
+  with a bounded stagger, canvas nodes materialize onto the board through their content layer so
+  React Flow keeps sole ownership of drag and pan, and tab and session rows ease colour changes
+  instead of snapping. Reduced-motion zeroes every duration and delay through the existing tokens.
+
+  成個 app 而家一種入場性格：dialog、wizard、drawer、通知中心、匯出面板同確認框全部用返
+  command palette 嗰下彈簧入場，scrim 同步淡入，列會有節制咁逐行現身，canvas 節點經內容層
+  現形（拖拉揸手位仍然歸 React Flow 管），tab 同 session 列轉色識滑唔識跳掣。開咗減少動態
+  嘅話，所有時長同延遲一律歸零。
+
 - Map the personal vocabulary across eighteen more node surfaces (torrent, timer, alarm, calendar,
   files, GitHub work items, photo, gallery, Home Assistant control and sensor, shop, kiosk, hosting,
   recovery game, diagnostics, dim sum, virtual machine, and repository graph) while keeping entity
