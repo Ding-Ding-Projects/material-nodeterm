@@ -75,8 +75,9 @@ are recorded below. Do not treat the source candidate as a published release.
 
 - [ ] **Issue #210, existing VeraCrypt containers:** the Windows desktop node, native credential
       prompt, independently observed mount state, Explore, unmount, local favorites, cache wipe,
-      and unsupported non-desktop states are implemented on `main`. Accelerated-lane tests, type checks, reviews,
-      runtime interaction, and captures remain intentionally unrun until a release-grade pass.
+      and unsupported non-desktop states are implemented on `main` and shipped in v1.0.7. The 2026-09-01
+      closeout ran the focused service and node tests green with green type checks; built-artifact
+      runtime interaction and captures remain honest open evidence.
 
 ## Shipped and verified
 
@@ -225,11 +226,12 @@ are recorded below. Do not treat the source candidate as a published release.
       proven red then green. The real BAT-packaged `v0.4.121` release is published. The hosted
       Node-runtime repair and automatic `v0.4.122` release remain pending.
 
-- [ ] **Codex crash-recovery continuation, downstream issue #198:** bounded encrypted one-packet-per-node
+- [x] **Codex crash-recovery continuation, downstream issue #198:** bounded encrypted one-packet-per-node
       provider-event state, typed IPC and preload boundaries, verified provider start and next-turn
-      receipt, and an anchored explicit review card are implemented on this feature branch. Focused tests are
-      authored but were not run under the ultra-speed boundary; type checks, builds, packaging,
-      runtime interaction, reviews, audits, and captures remain pending.
+      receipt, and an anchored explicit review card are implemented on `main` and shipped in v1.0.7.
+      Focused tests (`src/core/agent-continuation.test.ts`, `AgentContinuationReview.test.tsx`) pass
+      against current `main`; type checks pass on both configs. Built-artifact runtime interaction and
+      captures were not run in the 2026-09-01 closeout and remain honest open evidence.
 
 - [ ] **Canvas zones and saved layouts, issue #82 / upstream issue #394**: edge and corner drag
       previews, complete half, third, and quarter targets, and bounded named layout snapshots are

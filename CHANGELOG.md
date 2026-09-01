@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Map the personal vocabulary across eighteen more node surfaces (torrent, timer, alarm, calendar,
+  files, GitHub work items, photo, gallery, Home Assistant control and sensor, shop, kiosk, hosting,
+  recovery game, diagnostics, dim sum, virtual machine, and repository graph) while keeping entity
+  ids, paths, URLs, errors, and readings byte-identical, and repair the Windows relaunch that did
+  nothing while a planner host retained the single-instance lock.
+
+  十八個 node 嘅自家文案而家識過 personal vocabulary，facts 一個 byte 不動；仲有閂咗窗但
+  planner host 未收工嗰陣，撳開 app 冇反應嘅 Windows relaunch 都執返好。
+
 - Fix blank desktop startup recovery for duplicate handler registration. The shared startup reporter
   now publishes only the safe `DUPLICATE_HANDLER` category, shows a native recovery dialog without
   exposing the internal channel name, and exits with status 1 even when dialog display fails.
