@@ -12,7 +12,9 @@ V2 files remain readable, but they are never reproduced on export. In particular
 credentials, machine paths, provider sessions, process state, repository working files, and caches
 stay on the source machine and must be configured again at the destination.
 
-The project context menu provides **Save project as one file…** and **Open project from file…**.
+The project context menu provides **Save project as one file…**, **Save project as one file with
+media…** (the same file after a picker for local media to pack alongside it — the plain save never
+opens a picker) and **Open project from file…**.
 A legacy V2 save file carries the WHOLE project, the way a `.docx` carries a whole document — it is a
 genuine ZIP container (rename it to `.zip` and any archive tool opens it):
 

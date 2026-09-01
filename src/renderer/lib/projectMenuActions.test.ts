@@ -5,6 +5,7 @@ import path from 'node:path'
 import {
   SHARED_PROJECT_ACTIONS,
   SAVE_PROJECT_ARCHIVE_ACTION,
+  SAVE_PROJECT_ARCHIVE_WITH_MEDIA_ACTION,
   OPEN_PROJECT_ARCHIVE_ACTION,
   EDIT_TAB_APPEARANCE_ACTION
 } from './projectMenuActions'
@@ -15,8 +16,9 @@ const switcherSrc = readFileSync(path.join(here, '../components/ProjectSwitcher.
 
 describe('sharedProjectMenuActions', () => {
   it('yields exactly the archive actions and the appearance action', () => {
-    expect(SHARED_PROJECT_ACTIONS.map((a) => a.id)).toEqual(['save-archive', 'open-archive', 'edit-appearance'])
+    expect(SHARED_PROJECT_ACTIONS.map((a) => a.id)).toEqual(['save-archive', 'save-archive-media', 'open-archive', 'edit-appearance'])
     expect(SAVE_PROJECT_ARCHIVE_ACTION.label).toBe('Save project as one file…')
+    expect(SAVE_PROJECT_ARCHIVE_WITH_MEDIA_ACTION.label).toBe('Save project as one file with media…')
     expect(OPEN_PROJECT_ARCHIVE_ACTION.label).toBe('Open project from file…')
     expect(EDIT_TAB_APPEARANCE_ACTION.label).toBe('Edit tab appearance…')
   })
@@ -39,13 +41,23 @@ describe('sharedProjectMenuActions', () => {
 
   it('the sidebar menu (Canvas.tsx) renders the archive actions and the appearance action', () => {
     expect(canvasSrc).toMatch(/label:\s*SAVE_PROJECT_ARCHIVE_ACTION\.label/)
+    expect(canvasSrc).toMatch(/label:\s*SAVE_PROJECT_ARCHIVE_WITH_MEDIA_ACTION\.label/)
     expect(canvasSrc).toMatch(/label:\s*OPEN_PROJECT_ARCHIVE_ACTION\.label/)
     expect(canvasSrc).toMatch(/label:\s*EDIT_TAB_APPEARANCE_ACTION\.label/)
   })
 
   it('the project switcher renders the archive actions and the appearance action', () => {
     expect(switcherSrc).toMatch(/vocab\(SAVE_PROJECT_ARCHIVE_ACTION\.label\)/)
+    expect(switcherSrc).toMatch(/vocab\(SAVE_PROJECT_ARCHIVE_WITH_MEDIA_ACTION\.label\)/)
     expect(switcherSrc).toMatch(/vocab\(OPEN_PROJECT_ARCHIVE_ACTION\.label\)/)
     expect(switcherSrc).toMatch(/vocab\(EDIT_TAB_APPEARANCE_ACTION\.label\)/)
+  })
+
+  // The bug this row exists for: the plain save used to run the media picker unconditionally.
+  it('only the with-media save reaches the portable-media picker', () => {
+    const exportFn = canvasSrc.slice(canvasSrc.indexOf('const exportProjectArchive = useCallback('))
+    const body = exportFn.slice(0, exportFn.indexOf('[api, choosePortableMedia'))
+    expect(body).toMatch(/resolvePortableMediaForSave\(includeMedia, \(\) => choosePortableMedia\(project\)\)/)
+    expect(body).not.toMatch(/await choosePortableMedia\(/)
   })
 })

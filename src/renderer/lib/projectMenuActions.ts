@@ -16,7 +16,7 @@
 // and wire it into both `Canvas.tsx`'s `onProjectContextMenu` and `ProjectSwitcher.tsx`'s
 // actions panel — not just one of them.
 
-export type SharedProjectActionId = 'save-archive' | 'open-archive' | 'edit-appearance'
+export type SharedProjectActionId = 'save-archive' | 'save-archive-media' | 'open-archive' | 'edit-appearance'
 
 export interface SharedProjectAction {
   readonly id: SharedProjectActionId
@@ -29,6 +29,16 @@ export const SAVE_PROJECT_ARCHIVE_ACTION: SharedProjectAction = {
   id: 'save-archive',
   label: 'Save project as one file…',
   description: 'Packs the project (nodes, git history, local settings) into one archive file the user can move or back up.'
+}
+
+/** Same archive, plus a picker for local media files to pack alongside it. Kept as a SEPARATE
+ *  row on purpose: the plain save row must never open a file picker (the picker used to run
+ *  unconditionally, so "Save…" answered with an OS *Open* dialog and a dismissed picker silently
+ *  aborted the save). */
+export const SAVE_PROJECT_ARCHIVE_WITH_MEDIA_ACTION: SharedProjectAction = {
+  id: 'save-archive-media',
+  label: 'Save project as one file with media…',
+  description: 'Same as "Save project as one file…", but first lets the user pick local media files to pack inside the archive.'
 }
 
 export const OPEN_PROJECT_ARCHIVE_ACTION: SharedProjectAction = {
@@ -52,6 +62,7 @@ export const EDIT_TAB_APPEARANCE_ACTION: SharedProjectAction = {
  */
 export const SHARED_PROJECT_ACTIONS: readonly SharedProjectAction[] = [
   SAVE_PROJECT_ARCHIVE_ACTION,
+  SAVE_PROJECT_ARCHIVE_WITH_MEDIA_ACTION,
   OPEN_PROJECT_ARCHIVE_ACTION,
   EDIT_TAB_APPEARANCE_ACTION
 ]

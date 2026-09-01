@@ -18,6 +18,7 @@ import { appearanceId } from '../lib/appearance/registry'
 import { openAppearanceEditor } from '../state/appearanceEditorHost'
 import {
   SAVE_PROJECT_ARCHIVE_ACTION,
+  SAVE_PROJECT_ARCHIVE_WITH_MEDIA_ACTION,
   OPEN_PROJECT_ARCHIVE_ACTION,
   EDIT_TAB_APPEARANCE_ACTION
 } from '../lib/projectMenuActions'
@@ -80,6 +81,8 @@ interface ProjectSwitcherProps {
    *  the sidebar project-header menu (`Canvas.tsx`'s `onProjectContextMenu`); see
    *  `lib/projectMenuActions.ts`. */
   onSaveArchive: (id: string) => void
+  /** {@link SAVE_PROJECT_ARCHIVE_WITH_MEDIA_ACTION} — the same archive after a media picker. */
+  onSaveArchiveWithMedia: (id: string) => void
   /** {@link OPEN_PROJECT_ARCHIVE_ACTION} — restore a project from a previously saved archive
    *  file. Not scoped to a row (it creates a new project), but lives in the per-row panel because
    *  that is where a user goes looking for "save/open this as a file". */
@@ -127,6 +130,7 @@ export function ProjectSwitcher({
   onSetColor,
   onSetIcon,
   onSaveArchive,
+  onSaveArchiveWithMedia,
   onOpenArchive,
   archiveBusy
 }: ProjectSwitcherProps) {
@@ -704,6 +708,15 @@ export function ProjectSwitcher({
                           }}
                         >
                           {vocab(SAVE_PROJECT_ARCHIVE_ACTION.label)}
+                        </button>
+                        <button
+                          disabled={archiveBusy()}
+                          onClick={() => {
+                            closeMenu()
+                            onSaveArchiveWithMedia(p.id)
+                          }}
+                        >
+                          {vocab(SAVE_PROJECT_ARCHIVE_WITH_MEDIA_ACTION.label)}
                         </button>
                         <button
                           disabled={archiveBusy()}

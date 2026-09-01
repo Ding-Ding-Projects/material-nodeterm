@@ -184,9 +184,11 @@ import { appearanceId } from '../lib/appearance/registry'
 import { openAppearanceEditor } from '../state/appearanceEditorHost'
 import {
   SAVE_PROJECT_ARCHIVE_ACTION,
+  SAVE_PROJECT_ARCHIVE_WITH_MEDIA_ACTION,
   OPEN_PROJECT_ARCHIVE_ACTION,
   EDIT_TAB_APPEARANCE_ACTION
 } from '../lib/projectMenuActions'
+import { resolvePortableMediaForSave } from '../lib/projectArchiveSave'
 import { CommandPalette, type Command } from '../components/CommandPalette'
 import { NodeCatalogDialog } from '../components/NodeCatalogDialog'
 import { KioskPwaSetupDialog } from '../components/KioskPwaSetupDialog'
@@ -16928,7 +16930,7 @@ export function Canvas() {
     return new Promise((resolve) => setPortableMediaDialog({ preparationId: prepared.preparationId, candidates: prepared.candidates, resolve }))
   }, [api])
   const exportProjectArchive = useCallback(
-    async (projectId: string, password?: string) => {
+    async (projectId: string, password?: string, includeMedia = false) => {
       if (projectArchiveBusyRef.current) {
         notify({ kind: 'info', titleKind: 'authored', title: 'Project save already running', body: 'Wait for the current save or open to finish.', bodyKind: 'authored' })
         return
@@ -16939,8 +16941,20 @@ export function Canvas() {
         await writeDisk()
         const project = useProjects.getState().projects.find((candidate) => candidate.id === projectId)
         if (!project) return
-        const portableMedia = await choosePortableMedia(project)
-        if (!portableMedia) return
+        // Media is opt-in (`SAVE_PROJECT_ARCHIVE_WITH_MEDIA_ACTION`): the plain save must never
+        // open a file picker, and a dismissed picker is a cancellation the user hears about.
+        const media = await resolvePortableMediaForSave(includeMedia, () => choosePortableMedia(project))
+        if (media.kind === 'cancelled') {
+          notify({
+            kind: 'info',
+            titleKind: 'authored',
+            title: 'Media selection cancelled',
+            body: 'Nothing was saved. Pick media files to pack, or use "Save project as one file…" to save without media.',
+            bodyKind: 'authored'
+          })
+          return
+        }
+        const portableMedia = media.kind === 'plan' ? media.plan : undefined
         // Progress where the action started: packing a repository takes real time, and there is no
         // byte-progress channel — so the copy is honestly indeterminate, never a fabricated %.
         notify({
@@ -16984,7 +16998,7 @@ export function Canvas() {
             bodyKind: 'fact'
           })
         } else if (result.canceled) {
-          await api.workspace.portableMedia.discard(portableMedia.preparationId)
+          if (portableMedia) await api.workspace.portableMedia.discard(portableMedia.preparationId)
           notify({ kind: 'info', titleKind: 'authored', title: 'Project save cancelled' })
         } else {
           notify({ kind: 'error', titleKind: 'authored', title: 'Project save failed', body: result.error, bodyKind: 'fact' })
@@ -17006,7 +17020,7 @@ export function Canvas() {
    * the save file's usefulness silently, and the user finds out weeks later.
    */
   const saveProjectArchive = useCallback(
-    async (projectId: string) => {
+    async (projectId: string, includeMedia = false) => {
       const password = await promptDialog({
         message:
           'Password for this project file — leave blank to save it unprotected. ' +
@@ -17035,7 +17049,7 @@ export function Canvas() {
           return
         }
       }
-      await exportProjectArchive(projectId, password === '' ? undefined : password)
+      await exportProjectArchive(projectId, password === '' ? undefined : password, includeMedia)
     },
     [exportProjectArchive]
   )
@@ -17153,6 +17167,12 @@ export function Canvas() {
             icon: <IconSave />,
             disabled: projectArchiveBusyRef.current,
             onClick: () => void saveProjectArchive(projectId)
+          },
+          {
+            label: SAVE_PROJECT_ARCHIVE_WITH_MEDIA_ACTION.label,
+            icon: <IconSave />,
+            disabled: projectArchiveBusyRef.current,
+            onClick: () => void saveProjectArchive(projectId, true)
           },
           {
             label: OPEN_PROJECT_ARCHIVE_ACTION.label,
@@ -18113,6 +18133,7 @@ export function Canvas() {
                 onSetColor={setProjectColor}
                 onSetIcon={setProjectIcon}
                 onSaveArchive={(id) => void saveProjectArchive(id)}
+                onSaveArchiveWithMedia={(id) => void saveProjectArchive(id, true)}
                 onOpenArchive={() => void importProjectArchive()}
                 archiveBusy={() => projectArchiveBusyRef.current}
               />
@@ -18227,6 +18248,7 @@ export function Canvas() {
           onSetColor={setProjectColor}
           onSetIcon={setProjectIcon}
           onSaveArchive={(id) => void saveProjectArchive(id)}
+          onSaveArchiveWithMedia={(id) => void saveProjectArchive(id, true)}
           onOpenArchive={() => void importProjectArchive()}
           archiveBusy={() => projectArchiveBusyRef.current}
         />
