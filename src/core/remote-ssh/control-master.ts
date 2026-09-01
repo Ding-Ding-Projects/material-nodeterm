@@ -21,13 +21,10 @@ import { PANE_OWNER_FMT, foregroundArgvArgs } from '../agents/pane-owner'
 export const RMT_TMUX_SOCKET = 'nodeterm-rmt'
 
 /**
- * Per-project ControlMaster socket path. Deliberately SHORT and space-free. The macOS userData dir
- * (`~/Library/Application Support/<app>`) cannot host the socket: it both exceeds the unix-domain
- * socket `sun_path` limit (104 bytes — and ssh appends a ~17-char temp suffix while binding the
- * master, pushing a ~102-char path over) AND contains a space, which ssh's `-o ControlPath=` parser
- * rejects ("extra arguments at end of line"). Either makes the master silently fail to bind. So we
- * hash the project id to a fixed length under a short home dir (`~/.nodeterm/ssh-cm/`) — the master
- * socket then always binds, regardless of project id or platform userData location.
+ * Per-project ControlMaster socket path. Deliberately short and space-free so the Unix socket bind
+ * suffix stays within the host limit and the `-o ControlPath=` parser receives one argument. We
+ * hash the project id to a fixed length under a short home dir (`~/.nodeterm/ssh-cm/`) so the master
+ * socket binds regardless of the desktop data-directory spelling.
  */
 export function controlPathFor(projectId: string): string {
   const id = createHash('sha256').update(projectId).digest('hex').slice(0, 16)

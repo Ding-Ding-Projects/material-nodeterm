@@ -37,7 +37,7 @@ import { LicenseSection } from './sections/LicenseSection'
 import { LocalHistorySection } from './sections/LocalHistorySection'
 import { ModelGatewaySection } from './sections/ModelGatewaySection'
 import { NarratorSection } from './sections/NarratorSection'
-import { NotchSection } from './sections/NotchSection'
+import { AgentHudSection } from './sections/AgentHudSection'
 import { NotificationsSection } from './sections/NotificationsSection'
 import { PersonalVocabularySection } from './sections/PersonalVocabularySection'
 import { PhoneSection } from './sections/PhoneSection'
@@ -60,8 +60,6 @@ import { ToyLocksSection } from './sections/ToyLocksSection'
 import { UpdatesSection } from './sections/UpdatesSection'
 import { UsageSection } from './sections/UsageSection'
 import { WorkspaceStorageSection } from './sections/WorkspaceStorageSection'
-
-const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 export function SettingsPage({
   onClose,
@@ -288,7 +286,7 @@ export function SettingsPage({
             <AppearanceSection isActive={active === 'appearance'} />
             <AppearanceEditorSection isActive={active === 'appearance-editor'} />
             <AppIdentitySection isActive={active === 'app-identity'} />
-            {isMac ? <NotchSection isActive={active === 'notch'} /> : null}
+            <AgentHudSection isActive={active === 'agent-hud'} />
             <PhoneSection isActive={active === 'phone'} />
             <SpeechSection isActive={active === 'speech'} onNavigate={setActive} />
             {languageFeaturesAllowed ? <LanguageSection isActive={active === 'language'} /> : null}

@@ -52,7 +52,6 @@ import {
 import { PANE_OWNER_FMT, foregroundArgvArgs, paneOwnerFrom, parsePaneOwner } from './agents/pane-owner'
 import { binariesFor, isAgentPane, type PaneOwner } from '../shared/agents/pane-owner-predicate'
 import { readSpawnResources, spawnResourceNote } from './spawn-resources'
-import { primePtyCeiling, ptyDevicesExhausted, readPtyDevices, spawnFailureHint, type PtyDevices } from './pty-devices'
 import { REAP_SWEEP_MS, shouldReap } from './pty-reap'
 import { ControlModeClient, type ControlSpawn } from './tmux-control-client'
 import {
@@ -68,7 +67,6 @@ import { decideLeadPaneCorrection, resizeLeadPaneArgs } from '../shared/agents/t
 import { releasePty, type ReleasablePty } from './pty-release'
 import { terminateWindowsProcessTree } from '../session-host/windows-process-tree'
 import { effectiveSize, type PtySize } from './pty-size'
-import { machOArch, archMismatch } from './macho-arch'
 import { writeScrollback, readScrollback, deleteScrollback } from './scrollback-store'
 import { claudeConfigDirFor } from './claude-config-dir'
 import {
@@ -285,8 +283,7 @@ export const ACCOUNT_SCOPE_UPDATE_ENV: readonly string[] = [
 // on tmux 3.2+ the old `terminal-overrides ',xterm*:Ms=\E]52;...'` route does NOT work (measured:
 // a copy emitted ZERO OSC 52 to the attached client with the `Ms=` override, and the correct
 // payload with `terminal-features`). The renderer's OSC 52 handler writes the system clipboard, so
-// this is the copy path on EVERY platform and over SSH — no `pbcopy` pipe (that was macOS-only,
-// and half of why copying was broken).
+// this is the copy path on every platform and over SSH.
 // LEAD-PANE WIDTH (issue #119): `leadPaneWidth` (settings.tmuxLeadPaneWidth) is OPT-IN and 0 by
 // default — `leadPaneHookLines` returns '' then, so the default conf is byte-identical to the
 // pre-feature output (pinned in tmux-conf.test.ts). See shared/tmux-lead-pane.ts for the story.
@@ -385,34 +382,6 @@ function findTmux(): string | null {
 
 /** Resolve an absolute ssh path (GUI apps don't inherit the shell PATH). */
 let cachedSsh: string | null | undefined
-/**
- * macOS-only diagnostic for the recurring release-clobber incident: `electron-builder --x64`
- * rebuilds node-pty IN PLACE in node_modules, leaving an x86_64 spawn-helper that an arm64 app
- * cannot posix_spawn — every terminal then fails with an opaque "posix_spawnp failed.". Returns
- * the precise message (with the `npm run rebuild` remedy) when the helper's arch mismatches this
- * process, else null. Fail-open: any read/parse problem returns null (diagnostics only).
- */
-function spawnHelperArchMismatch(): string | null {
-  if (os.platform() !== 'darwin') return null
-  try {
-    const helper = path.join(path.dirname(require.resolve('node-pty/package.json')), 'build', 'Release', 'spawn-helper')
-    const fd = fs.openSync(helper, 'r')
-    const buf = Buffer.alloc(8)
-    fs.readSync(fd, buf, 0, 8, 0)
-    fs.closeSync(fd)
-    const arch = machOArch(buf)
-    if (archMismatch(arch, process.arch)) {
-      return (
-        `node-pty's spawn-helper is ${arch} but this app is ${process.arch} — a cross-arch ` +
-        `release build clobbered node_modules. Fix: run \`npm run rebuild\`, then restart the app.`
-      )
-    }
-  } catch {
-    /* diagnostics only — never mask the real spawn error */
-  }
-  return null
-}
-
 function findSsh(): string | null {
   if (cachedSsh !== undefined) return cachedSsh
   // Subprocess-free (was a sync login-shell `command -v ssh` + an `ssh -V` spawn per fallback,
@@ -489,7 +458,7 @@ export function resolveLocalSessionShell(
  * apps) then render ASCII box-drawing — rounded borders come out as `_`/`|`. Same root cause as
  * the missing-PATH problem: the GUI process never sourced the shell environment. If the inherited
  * env already declares a UTF-8 locale (e.g. the app was launched from a terminal), keep it;
- * otherwise force `en_US.UTF-8`, which is always installed on macOS and guarantees UTF-8 handling.
+ * otherwise force a UTF-8 locale for POSIX shells.
  */
 function resolveLocaleLang(): string | null {
   const cur = process.env.LC_ALL || process.env.LC_CTYPE || process.env.LANG || ''
@@ -788,7 +757,7 @@ export const BACKGROUND_WRITE_LINGER_MS = 10_000
 /**
  * Manages all live PTY processes and bridges them to the renderer over IPC.
  *
- * On macOS/Linux with tmux available, each terminal node attaches to a persistent
+ * On a POSIX host with tmux available, each terminal node attaches to a persistent
  * tmux session named after its node id (`tmux new-session -A`). Closing a node's
  * window only detaches the client — the tmux session (and everything running in it)
  * survives, so reopening the node or restarting the app reattaches and continues
@@ -1484,11 +1453,6 @@ export class PtyManager {
     // own, so a tmux living only on the user's shell PATH is invisible until this resolves.
     void resolveShellPath().then(() => this.ensureTmux())
     this.ensureTmux()
-    // Read the system pty-device ceiling now, while nothing is wrong. The spawn path that needs it
-    // is synchronous and already one failed spawn deep — it cannot await a `sysctl` there, and a
-    // machine at its device limit is exactly a machine where spawning one more process is a bad
-    // idea. See pty-devices.ts.
-    primePtyCeiling()
   }
 
   /**
@@ -2555,42 +2519,12 @@ export class PtyManager {
     }
   }
 
-  /**
-   * The sentence a caller sees when no terminal came back.
-   *
-   * One function because TWO paths now produce it: the spawn that failed (node-pty threw), and the
-   * spawn that was never attempted (the pre-flight in `spawnSession`). Both must say the same thing
-   * about the same machine — a user who is out of pty devices should not be able to tell which of
-   * the two refused them, and the exhaustion copy must exist exactly once (it lives in
-   * `spawnFailureHint`, and this is the only place that supplies its generic fallback).
-   *
-   * `archNote` is a parameter rather than a lookup because it is only ever true of a spawn that
-   * actually tried to exec the helper — see the call sites.
-   */
-  private spawnFailureError(
-    reason: string,
-    archNote: string | null,
-    devices: PtyDevices
-  ): Error {
-    // MEASURED, not guessed. node-pty discards the errno, so the old message ended every failure
-    // with the same advice — restart, or rebuild node-pty for the wrong architecture. Both are
-    // real causes and both are rare, and reading as authoritative sent at least one field report
-    // (2026-08-06) chasing an architecture that was fine. `spawnResourceNote` states what it
-    // actually counted and only names a remedy the numbers support.
+  /** The safe renderer-facing sentence used when the selected shell could not start. */
+  private spawnFailureError(reason: string): Error {
     const resources = spawnResourceNote(readSpawnResources(), this.sessions.size)
-    // ONE closing hint, picked by what was measured (`spawnFailureHint`): arch, else the system
-    // pty-device limit, else the generic guess of last resort.
-    const hint = spawnFailureHint(
-      archNote,
-      devices,
-      `If this persists, restart the app (tmux sessions survive a restart) or run ` +
-        `\`npm run rebuild\` in the repo — a release build may have rebuilt node-pty ` +
-        `for the wrong architecture.`
-    )
-    // Executable, argv and cwd are trusted core-only profile details. node-pty errors can echo any
-    // of them, so renderer-facing copy uses a fixed classification rather than interpolating the
-    // raw reason or resolved launch plan.
-    const safeReason = reason === 'not attempted' ? reason : 'the selected shell could not be started'
+    const hint =
+      'If this persists, restart the app or run `npm run rebuild` in the repository.'
+    const safeReason = reason ? 'the selected shell could not be started' : 'terminal startup failed'
     return new Error(`Failed to spawn terminal (${safeReason}). ${resources} ${hint}`)
   }
 
@@ -2607,57 +2541,6 @@ export class PtyManager {
      *  because this function is synchronous. Null on every path with no proven project owner. */
     overrides?: ProjectSpawnOverrides | null
   ): string {
-    // PRE-FLIGHT — refuse before node-pty is touched, not after it fails.
-    //
-    // node-pty's darwin spawn path LEAKS the pty it opened when `posix_spawn` fails:
-    // `pty_posix_spawn` (node_modules/node-pty/src/unix/pty.cc) opens the master with
-    // `posix_openpt` and the slave with `open()`, and the error branch in `PtyFork` throws without
-    // closing either — measured at 2 `/dev/ptmx` fds + 1 `/dev/ttys*` fd, i.e. 2 pty DEVICES, per
-    // failed spawn (there is a third, smaller leak of one device per SUCCESSFUL spawn from the
-    // `low_fds` cleanup loop's off-by-one). That makes exhaustion self-amplifying: at the ceiling
-    // every spawn fails, every failure eats two more devices, and each retry pushes the ceiling
-    // further away — a 31-minute-old main held 479 masters against 28 tmux panes and dozens of
-    // consecutive failed creates. The leak is node-pty's to fix; ours is to stop feeding it.
-    //
-    // FIRST STATEMENT IN THE FUNCTION, ahead of the swap-out below, because a refusal must leave
-    // the node exactly as it found it. Retiring the shadow first would trade a live background
-    // client for nothing at all: the painter it was making way for never arrives, and nothing
-    // re-attaches a shadow (`shadowAttach` is driven by release/reap, not by a failed create), so
-    // a node nobody is watching would go quietly dark on a machine that is merely full. Nothing
-    // between here and `pty.spawn` is needed to decide this — the reading is machine-wide.
-    //
-    // FAIL-OPEN is the rule here: `ptyDevicesExhausted` is false for anything unmeasured
-    // (non-darwin, a `sysctl` that failed, or a ceiling whose async prime — kicked in `init` — has
-    // not landed yet), so an unknown machine spawns exactly as it always did. Refusing a terminal
-    // on a machine that had room would be a worse bug than the leak this avoids.
-    //
-    // AND THAT IS THE WHOLE FIX — no backoff, no circuit breaker, deliberately. The bursts of
-    // consecutive failed creates in the field log are not a retry storm: NOTHING re-attempts a
-    // create that failed. The renderer's create rejection lands in one `.catch` that only records
-    // `spawnError` for the node's overlay (TerminalNode.tsx) — no timer, no respawn bump, and no
-    // `reportSshDrop`, so a failure cannot even feed the SSH reconnect coordinator (whose own loop
-    // is bounded anyway: 1→2→4→8→15s, then parked until a `connected` event, plus a 10s re-drop
-    // refusal). A burst is therefore N DISTINCT nodes each trying exactly once, fanned out by one
-    // moment — app boot, a project tab switch past the park window, an agent's bulk
-    // `open-terminal --count N`, or one reconnect flush. Rate-limiting that would only stagger
-    // failures the user asked for. What made it look like a storm was the amplification: 40
-    // one-shot creates used to cost 80 devices, and now cost none.
-    const devices = readPtyDevices()
-    if (ptyDevicesExhausted(devices)) {
-      // The REQUESTED program and cwd, not the resolved ones — resolution happens further down and
-      // deliberately has not run. Nothing was chosen, so nothing is claimed to have been.
-      //
-      // `archNote` is deliberately not consulted: it outranks the device note in
-      // `spawnFailureHint`, and no helper was exec'd here, so its architecture cannot be the
-      // reason. Saying "rebuild node-pty" to a machine that is simply full is the 2026-08-06
-      // mistake with a new cause.
-      throw this.spawnFailureError(
-        'not attempted',
-        null,
-        devices
-      )
-    }
-
     // SWAP-OUT, before anything at all is spawned: a painter pty client is arriving for this node,
     // and a session never has both. The painter attaches with `-D` and would kick the shadow off by
     // itself — but only once tmux has processed both attaches, leaving a window where two clients
@@ -2904,12 +2787,14 @@ export class PtyManager {
     // Validation covers both sources: a project settings.json is git-shared (and on an SSH project
     // it lives on the remote HOST), i.e. exactly the foreign provenance this check exists for.
     const reqShell = safeSessionProgram(options.shell ?? overrides?.shell)
-    const program = reqShell === 'ssh' ? findSsh() ?? 'ssh' : reqShell
-    const programArgs = options.shellArgs ?? []
+    const program = resolvedProfile?.shell ?? (reqShell === 'ssh' ? findSsh() ?? 'ssh' : reqShell)
+    // A selected profile's argv is private trusted core output. Renderer/project `shellArgs` never
+    // append to or replace it. This is the point-of-use boundary that makes profile ids non-code.
+    const programArgs = resolvedProfile ? [...resolvedProfile.shellArgs] : options.shellArgs ?? []
     // One resolver for BOTH direct node-pty and the persistent session-host backend, so the two
     // paths cannot drift on "which shell" (see resolveLocalSessionShell).
-    const localSessionShell = resolveLocalSessionShell(program, settings.defaultShell)
-    const localSessionArgs = program ? programArgs : []
+    const localSessionShell = resolvedProfile?.shell ?? resolveLocalSessionShell(program, settings.defaultShell)
+    const localSessionArgs = resolvedProfile ? programArgs : program ? programArgs : []
 
     // SSH project node: run `ssh -t '<remote tmux attach-or-create>'` as the PTY program. The
     // REMOTE tmux provides persistence (over the project's ControlMaster); the local PTY just
@@ -3074,7 +2959,6 @@ export class PtyManager {
       settings.tmuxEnabled &&
       options.persistKey
     ) {
-    } else if (this.tmuxPath && settings.tmuxEnabled && options.persistKey) {
       // attach-or-create the persistent session for this node.
       // `-A` = attach-or-create. `-D` = detach OTHER clients on attach. We use `-D` ONLY for the
       // local renderer client (a remount should take sole ownership of its session). A host-served
@@ -3146,55 +3030,6 @@ export class PtyManager {
           args.push(...programArgs)
         }
       }
-      // Gateway env deliberately has NO `-e` pairs: the values are in this tmux CLIENT's process
-      // environment (merged above) and the conf's `update-environment` list copies them into the
-      // session at create/attach — measured on tmux 3.4, including the removal case (a plain
-      // terminal's client lacks the vars, so tmux strips them from its session even on a server
-      // another node's env seeded). `-e KEY=VALUE` parked the API key on the long-lived attached
-      // client's argv — world-readable in /proc/<pid>/cmdline on a multi-user host, the exact
-      // PR #195 leak class. Custom-agent env keys OUTSIDE the baked gateway list still need the
-      // option appended at runtime on a shared server (the conf assignment cannot know them):
-      // The project's keys need the same treatment for the same reason: their VALUES are in this
-      // tmux client's process env (merged above) and must reach the session without ever appearing
-      // on the long-lived client's argv.
-      // The account-scope names lead the list for the LONG-LIVED server case (#419): the conf is
-      // read once at server start, so a server started by a pre-fix app keeps its old
-      // update-environment array forever — these appends are what retrofit it before this
-      // session is created. A fresh server already has them from the conf (the append dedupes).
-      this.ensureUpdateEnvKeys([
-        ...ACCOUNT_SCOPE_UPDATE_ENV,
-        ...Object.keys(customEnvMerged),
-        ...Object.keys(projectEnv ?? {})
-      ])
-      const hookEnvArgs = Object.entries(hookEnv).flatMap(([k, v]) => ['-e', `${k}=${v}`])
-      const pathEnvArgs = env.PATH ? ['-e', `PATH=${env.PATH}`] : []
-      const langEnvArgs = env.LANG ? ['-e', `LANG=${env.LANG}`] : []
-      const colortermEnvArgs = ['-e', 'COLORTERM=truecolor']
-      const accountEnvArgs = accountDir ? accountTmuxEnvArgs(accountDir) : []
-      const attachFlags = tmuxAttachFlags(!!sinks)
-      args = [
-        '-L',
-        TMUX_SOCKET,
-        '-f',
-        this.confPath,
-        'new-session',
-        ...attachFlags,
-        ...hookEnvArgs,
-        ...pathEnvArgs,
-        ...langEnvArgs,
-        ...colortermEnvArgs,
-        ...accountEnvArgs,
-        '-c',
-        cwd,
-        '-s',
-        sessionName(options.persistKey)
-      ]
-      // Honor a custom session program at creation (ignored on reattach).
-      const shell = program || settings.defaultShell
-      if (shell) {
-        args.push(shell)
-        args.push(...programArgs)
-      }
     } else if (
       !options.sshRemote &&
       options.persistKey &&
@@ -3253,8 +3088,6 @@ export class PtyManager {
             settings.tmuxScrollback
           )) as unknown as pty.IPty
     } else {
-      file = localSessionShell
-      args = localSessionArgs
       try {
         proc = pty.spawn(file, args, {
           name: 'xterm-256color',
@@ -3264,16 +3097,8 @@ export class PtyManager {
           env
         })
       } catch (err) {
-        // node-pty surfaces the underlying failure as a bare "posix_spawnp failed." with no errno.
-        // Two different field causes wear that same message, so BOTH are measured before anything is
-        // said: a cross-arch `electron-builder --x64` run clobbering node-pty's spawn-helper (arm64
-        // app can't exec an x86_64 helper), and the machine being out of pty DEVICES
-        // (`kern.tty.ptmx_max`, 2026-08-11 — 515 `/dev/ttys*` against a ceiling of 511).
         const reason = err instanceof Error ? err.message : String(err)
-        // Re-read the devices rather than reusing the pre-flight's reading: this spawn just consumed
-        // (and, per the leak above, kept) devices of its own, so the number the user is shown should
-        // be the one that was true when the failure happened.
-        throw this.spawnFailureError(reason, spawnHelperArchMismatch(), readPtyDevices())
+        throw this.spawnFailureError(reason)
       }
     }
 
@@ -4588,9 +4413,6 @@ export class PtyManager {
       }
       trustedTarget = { profileId: target.profileId, cwd: target.cwd || os.homedir() }
       await this.resolveTrustedWindowsProfile(trustedTarget.profileId, trustedTarget.cwd)
-      // Profile-switch replacement targets land with the windows-terminal-profiles phase; until
-      // then a target can only be refused (the same copy the fork uses without a resolver).
-      throw new Error('Windows terminal profiles are unavailable on this host.')
     }
     const liveId = this.byPersistKey.get(persistKey)
     const live = this.liveSessionForPersistKey(persistKey)

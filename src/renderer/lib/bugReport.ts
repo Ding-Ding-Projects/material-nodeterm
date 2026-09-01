@@ -20,7 +20,6 @@ export function describeSurface(userAgent: string): 'desktop' | 'server' {
 }
 
 export function describeOs(userAgent: string): string {
-  if (/Mac OS X|Macintosh/.test(userAgent)) return 'macOS'
   if (/Windows/.test(userAgent)) return 'Windows'
   if (/Linux|X11/.test(userAgent)) return 'Linux'
   return 'unknown'
@@ -37,7 +36,7 @@ export function envBlock(env: BugReportEnv): string {
   return lines.join('\n')
 }
 
-const TRUNCATION_MARKER = '… (truncated)'
+const TRUNCATION_MARKER = '... (truncated)'
 
 export function buildBugReportUrl(
   title: string,

@@ -15,6 +15,7 @@ import {
 import { Slider } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { mapNativeNotification } from '../../../lib/personalVocabulary/hostMessage'
+import { notify } from '../../../lib/adhdNotify'
 
 const ROWS = {
   notify: {
@@ -44,9 +45,6 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
   const mobileLiveActivities = useSettings((s) => s.settings.mobileLiveActivities)
   const mobilePushPresenceAware = useSettings((s) => s.settings.mobilePushPresenceAware)
   const update = useSettings((s) => s.update)
-  // The OS refused our test notification (macOS permission denied). macOS never re-prompts
-  // once the app's record exists, so the only way back is the System Settings pane.
-  const [osBlocked, setOsBlocked] = useState(false)
   const [soundError, setSoundError] = useState<Record<SfxKind, string>>({ done: '', needsYou: '' })
 
   const chooseCustomSound = async (kind: SfxKind, file: File): Promise<void> => {
@@ -83,10 +81,8 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
               ariaLabel="Background notifications"
               onChange={(on) => {
                 update({ notifyOnClaudeDone: on, notifyConsentAsked: true })
-                setOsBlocked(false)
-                // Enabling fires a real test notification: on a fresh install this is what
-                // triggers the macOS permission prompt; on a denied/stale record the OS
-                // rejects it and we surface the repair path below.
+                // Enabling fires a real test notification. A refusal becomes a persistent in-app
+                // warning with the recovery action, never an in-page nag.
                 if (on)
                   void window.nodeTerminal
                     .notify(mapNativeNotification({
@@ -97,19 +93,25 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
                       titleKind: 'authored',
                       bodyKind: 'authored'
                     }, vocab))
-                    .then((result) => setOsBlocked(result === 'failed'))
+                    .then((result) => {
+                      if (result !== 'failed') return
+                      notify({
+                        kind: 'warning',
+                        title: 'Windows notifications are blocked',
+                        body: 'Allow notifications for nodeterm in Windows Settings to receive background alerts.',
+                        bodyKind: 'authored',
+                        actions: [
+                          {
+                            label: 'Open notification settings',
+                            onClick: () => void window.nodeTerminal.openNotificationSettings()
+                          }
+                        ]
+                      })
+                    })
               }}
             />
           }
         />
-        {osBlocked && (
-          <div className="mt-2 flex items-center gap-3 text-[13px] text-[color:var(--caution)]">
-            macOS is blocking notifications for this app.
-            <Button onClick={() => void window.nodeTerminal.openNotificationSettings()}>
-              Open System Settings
-            </Button>
-          </div>
-        )}
       </SearchableRow>
       <SearchableRow {...ROWS.sound}>
         <FieldRow

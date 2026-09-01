@@ -69,9 +69,9 @@ export const PRO_FEATURES: readonly ProFeatureDescriptor[] = [
     id: 'teamSeats',
     title: 'Team seats',
     description:
-      "How many teammates can share this Mac over remote access at once. Off caps it at zero, so " +
+      "How many teammates can share this computer over remote access at once. Off caps it at zero, so " +
       "extra devices can't join even while remote access itself is on above — fewer connected " +
-      'teammates means fewer standing per-device connections this Mac has to keep open.'
+      'teammates means fewer standing per-device connections this computer has to keep open.'
   }
 ]
 

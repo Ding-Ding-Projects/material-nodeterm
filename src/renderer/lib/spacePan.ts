@@ -32,7 +32,6 @@ export interface SpaceKeyEvent {
   /** True for the auto-repeat that follows a held key. */
   repeat?: boolean
   ctrlKey?: boolean
-  metaKey?: boolean
   altKey?: boolean
 }
 
@@ -41,7 +40,7 @@ export interface SpaceKeyEvent {
  *
  * Ignored, and each for its own reason:
  *  - not the space bar;
- *  - a MODIFIED space (⌘Space is the OS switcher, Ctrl/Alt+Space belong to other bindings) — taking
+ *  - a MODIFIED space (Ctrl/Alt+Space belongs to other bindings) — taking
  *    those would break something the user meant for someone else;
  *  - the auto-REPEAT of a held key, so engaging happens once per press rather than sixty times a
  *    second;
@@ -51,12 +50,12 @@ export interface SpaceKeyEvent {
 export function spacePanKeydown(e: SpaceKeyEvent, active: Element | null): SpacePanAction {
   if (e.key !== ' ' && e.key !== 'Spacebar') return 'ignore'
   if (e.repeat) return 'ignore'
-  if (e.ctrlKey || e.metaKey || e.altKey) return 'ignore'
+  if (e.ctrlKey || e.altKey) return 'ignore'
   if (typingTarget(active)) return 'ignore'
   return 'engage'
 }
 
-/** Is this keyup the release of the space bar? Modifier-blind on purpose: a user who taps ⌘ while
+/** Is this keyup the release of the space bar? Modifier-blind on purpose: a user who taps Ctrl while
  *  panning still gets a keyup for space, and a pan that never released would strand the canvas in
  *  grab mode. */
 export function isSpaceRelease(e: SpaceKeyEvent): boolean {

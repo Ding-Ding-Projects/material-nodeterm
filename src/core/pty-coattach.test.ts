@@ -27,7 +27,7 @@ let failNextSpawn = false
 // this suite from the mocked `pty.spawn` below to a real session-host shim that never connects,
 // turning 78 passes into 73 failures with `Cannot read properties of undefined (reading 'killed')`.
 // Forcing it false keeps this file testing the plain-shell path it was written for; the session
-// host has its own coverage. Same reasoning as pty-bundled-tmux.test.ts pinning darwin.
+// host has its own dedicated coverage.
 vi.mock('./session-host-backend', () => ({
   sessionHostSupported: () => false,
   createSessionHostPty: () => {
@@ -82,21 +82,6 @@ vi.mock('node-pty', () => ({
 const ALICE = 1
 const BOB = 2
 const CAROL = 3
-
-/**
- * A machine with pty devices to spare, always.
- *
- * Without this the real probe runs a `readdir('/dev')` against the DEVELOPER's host, and
- * `spawnSession`'s pre-flight refuses every create once that host is within `PTY_DEVICE_HEADROOM`
- * of its own `kern.tty.ptmx_max` — which a machine running this app all day genuinely reaches (511
- * on macOS; this one sits in the 480s). Nothing below is about device pressure, so it is pinned
- * healthy rather than left to depend on who is running the suite and how many terminals they have
- * open. The pressure behaviour itself is tested in pty-spawn-preflight.test.ts.
- */
-vi.mock('./pty-devices', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./pty-devices')>()),
-  readPtyDevices: () => ({ ceiling: 511, inUse: 8 })
-}))
 
 describe('terminal co-attach: one PTY, N subscribers', () => {
   let fake: FakePlatform

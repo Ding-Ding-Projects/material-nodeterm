@@ -87,7 +87,7 @@ describe('installLogSink', () => {
     expect(splitTag(42)).toEqual({ tag: '', rest: '42' })
   })
 
-  // Issue #382: the terminal an `npm start` was launched from goes away, macOS revokes the tty
+  // Issue #382: the terminal an `npm start` was launched from can disappear while the process
   // fds, and the next console.log kills the main process. The failure is delivered as an 'error'
   // EVENT on the stream (measured on node 22 — a try/catch at the call site catches nothing), so
   // these drive it the way node does.

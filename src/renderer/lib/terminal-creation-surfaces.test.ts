@@ -122,21 +122,14 @@ describe('terminal creation surface funnels', () => {
 describe('default terminal keyboard shortcut', () => {
   const event = {
     key: 't',
-    metaKey: false,
     ctrlKey: true,
     shiftKey: false
   }
 
-  it('routes Cmd/Ctrl+T to the default-only action', () => {
+  it('routes Ctrl+T to the default-only action', () => {
     expect(defaultTerminalShortcutAction(event, { kanbanOpen: false, typing: false })).toBe(
       'create-default-terminal'
     )
-    expect(
-      defaultTerminalShortcutAction(
-        { ...event, ctrlKey: false, metaKey: true, key: 'T' },
-        { kanbanOpen: false, typing: false }
-      )
-    ).toBe('create-default-terminal')
   })
 
   it('refuses the shortcut under the board, while typing, without a command modifier, or with Shift', () => {

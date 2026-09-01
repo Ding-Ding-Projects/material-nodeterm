@@ -28,8 +28,8 @@ import { readSharedJson, SharedRecordWatcher } from './shared-record-watch'
  * Turning the mode OFF requires a PIN, checked against a stored HASH (scrypt), never a stored
  * plaintext PIN. The hash+salt is written to its OWN file, sealed at rest via the platform's
  * seal/unseal hooks when available (Desktop: Electron `safeStorage`, which is itself backed by
- * the OS credential vault — DPAPI / Keychain / libsecret) and as raw 0600 bytes when it is not
- * (the Server Edition has no OS keychain to seal into — same documented trade-off
+ * the OS credential vault, using DPAPI on Windows) and as raw 0600 bytes when it is not
+ * (the Server Edition has no OS credential vault to seal into, the same documented trade-off
  * `core/agents/node-auth-secret.ts` already makes for the exact same reason). The credential
  * NEVER rides in the shared record file itself (that file is meant to be readable by any local
  * app, and must never carry secret material), never in settings.json, never in an export, log,

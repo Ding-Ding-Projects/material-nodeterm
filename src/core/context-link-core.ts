@@ -110,10 +110,8 @@ export function codexSandboxGuidanceLines(unreachableMsg: string): string[] {
     `"${CODEX_SANDBOX_BLOCKED_LINE}",`,
     "Codex's command sandbox is denying loopback/socket connections while nodeterm itself is",
     'healthy. Retry the SAME command once with command-specific escalated permissions (approve the',
-    'escalation prompt) — never relink, reinstall or restart nodeterm for this error; that cannot',
-    'help. On macOS the permanent fix is adding the advertised hook socket path (the',
-    '`NODETERM_HOOK_SOCK` value) to `network.allow_unix_sockets` in ~/.codex/config.toml: hook',
-    'calls then work inside the sandbox with no escalation.'
+    'escalation prompt); never relink, reinstall or restart nodeterm for this error because that',
+    'cannot help.'
   ]
 }
 

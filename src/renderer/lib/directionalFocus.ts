@@ -1,5 +1,5 @@
 /**
- * "Focus the node over there" — which node a directional move (⌘←/→/↑/↓) lands on, and which
+ * "Focus the node over there" — which node a directional move (Ctrl+Arrow) lands on, and which
  * node the gesture starts from when nothing is focused yet.
  *
  * The gesture is the one terminal multiplexers give you for free (Ghostty's `goto_split`, tmux's
@@ -8,7 +8,7 @@
  * user dragged, so the answer has to be inferred from geometry.
  *
  * Nearest-by-distance is the obvious inference and the wrong one — the closest node in the raw
- * Euclidean sense is very often the one diagonally up-and-left, so ⌘→ lands somewhere the user
+ * Euclidean sense is very often the one diagonally up-and-left, so Ctrl+Right lands somewhere the user
  * never pointed. Candidates are therefore ranked in TWO TIERS:
  *
  *   Tier 0 — the candidate's perpendicular span OVERLAPS the origin's. These are the nodes a user
@@ -30,7 +30,7 @@
  * directly, and that is load-bearing rather than tidy: a GROUPED node's own `position` is relative
  * to its frame, so comparing one against a top-level node's compares two different coordinate
  * spaces. A terminal sitting at (24, 60) inside a frame parked at (4000, 0) would otherwise look
- * like the leftmost node on the canvas, and ⌘← from anywhere would fly to it.
+ * like the leftmost node on the canvas, and Ctrl+Left from anywhere would fly to it.
  */
 import { absolutePosition, nodeFitRect, type FocusableNode } from './nodeFocus'
 
@@ -59,7 +59,7 @@ export interface DirectionalNode extends FocusableNode {
 const PERPENDICULAR_WEIGHT = 2
 
 /** Centers within this many world px of each other along the axis are not "beyond" each other, so
- *  two nodes the grid snapped into the same column never answer each other's ⌘→. */
+ *  two nodes the grid snapped into the same column never answer each other's Ctrl+Right. */
 const AXIS_EPSILON = 1
 
 /**
@@ -105,7 +105,7 @@ export function nextNodeInDirection(
 
 /**
  * The focus target nearest `point`, by center distance — the SEED for a canvas where nothing is
- * focused or selected yet. Without it the first ⌘→ on a freshly opened project would have no
+ * focused or selected yet. Without it the first Ctrl+Right on a freshly opened project would have no
  * origin and do nothing, which is indistinguishable from an unbound chord.
  */
 export function nodeNearestPoint(

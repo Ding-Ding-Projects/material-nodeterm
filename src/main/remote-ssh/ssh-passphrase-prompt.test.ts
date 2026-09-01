@@ -85,7 +85,7 @@ describe('promptForPassphrase / resolvePassphrasePrompt', () => {
 
   it('resolves undefined immediately when no window exists (nobody could ever answer)', async () => {
     installWindow({ destroyed: true })
-    // Must not ride the 5-minute expiry: with the window closed (macOS close-to-dock) the
+    // Must not ride the five-minute expiry: with no live window the
     // watchdog would otherwise hold every reconnect's master for the full window, repeatedly.
     await expect(promptForPassphrase({ identityFile: '/k', retry: false })).resolves.toBeUndefined()
   })

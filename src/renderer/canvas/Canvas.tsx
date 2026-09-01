@@ -43,9 +43,8 @@ import {
 } from '../nodes/TerminalNode'
 import { solveFitPadding } from './fit-view'
 import { paneMenuGroup } from './paneMenuGroup'
-import { MacWheelGestureRouter, trackpadRoutingEnabled } from './wheel-gesture'
+import { WheelGestureRouter, trackpadRoutingEnabled } from './wheel-gesture'
 import { WheelZoomBurstLimiter, clampWheelZoomSpeed, nextWheelZoom } from './wheel-zoom'
-import { isBrowserRuntime } from '@renderer/bridge/runtime'
 import { selectedLocalFilePaths } from './canvas-file-copy'
 import { codexAccountSwitchStillEligible } from './codex-account-switch'
 import {
@@ -283,7 +282,6 @@ import { UpdateCard } from '../components/UpdateCard'
 import { AnnouncementBanner } from '../components/AnnouncementBanner'
 import { ResumeCard } from '../components/ResumeCard'
 import { TmuxBanner } from '../components/TmuxBanner'
-import { PtyPressureBanner } from '../components/PtyPressureBanner'
 import { ShortcutCaptureBanner } from '../components/ShortcutCaptureBanner'
 import { ConflictBar } from '../components/ConflictBar'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -4659,25 +4657,17 @@ export function Canvas() {
   // With settings.wheelZoom on, a PLAIN mouse wheel zooms too (mouse-first workflow) — except
   // inside a `nowheel` node body (focused xterm scrollback, Monaco, markdown/chat panes), which
   // keeps its own scrolling. The hover guard overlay is NOT nowheel, so an unfocused terminal
-  // still zooms under the cursor. On macOS a two-finger TRACKPAD scroll keeps panning even with
-  // wheelZoom on: Chromium reports both devices as an unmodified pixel-wheel, so
-  // MacWheelGestureRouter tells them apart (and stays sticky for the length of one physical
-  // gesture) and hands trackpad packets back to React Flow's own panOnScroll.
+  // still zooms under the cursor. A two-finger trackpad scroll keeps panning even with wheel zoom
+  // on; the bounded router keeps one smooth physical gesture classified consistently.
   const wheelZoom = settings.wheelZoom
   const wheelZoomSpeed = clampWheelZoomSpeed(settings.wheelZoomSpeed)
   // The escape hatch, resolved ONCE: the router and React Flow's panOnScroll below must agree, or
   // a gesture neither of them pans is a gesture that does nothing.
-  const trackpadRouting = trackpadRoutingEnabled(isMac, settings.trackpadPan)
+  const trackpadRouting = trackpadRoutingEnabled(settings.trackpadPan)
   useEffect(() => {
     const wrap = flowWrapRef.current
     if (!wrap) return
-    // Desktop macOS receives raw gesture facts from the main process. The browser bridge cannot
-    // observe that stream, so it keeps the existing delta-shape heuristic.
-    const gestureReporting = isMac && !isBrowserRuntime()
-    const wheelRouting = new MacWheelGestureRouter(gestureReporting)
-    const offGesture = gestureReporting
-      ? window.nodeTerminal.onCanvasTrackpadGesture((active) => wheelRouting.noteGesture(active))
-      : undefined
+    const wheelRouting = new WheelGestureRouter()
     const wheelLimiter = new WheelZoomBurstLimiter()
     const onWheel = (e: WheelEvent) => {
       if (canvasLocked) return
@@ -4689,7 +4679,7 @@ export function Canvas() {
         const target = e.target as HTMLElement | null
         let scroller: boolean | undefined
         const overNativeScrollable = (): boolean => (scroller ??= !!target?.closest('.nowheel'))
-        // A macOS trackpad's two-finger scroll pans the canvas outside native scroll surfaces;
+        // A two-finger scroll pans the canvas outside native scroll surfaces;
         // inside them (terminal, Monaco, markdown) it scrolls that surface as before.
         if (wheelRouting.destination(e, trackpadRouting, overNativeScrollable) === 'flow-pan')
           return
@@ -4715,7 +4705,6 @@ export function Canvas() {
     wrap.addEventListener('wheel', onWheel, { capture: true, passive: false })
     return () => {
       wrap.removeEventListener('wheel', onWheel, { capture: true })
-      offGesture?.()
     }
   }, [getViewport, setViewport, wheelZoom, wheelZoomSpeed, trackpadRouting, canvasLocked])
 
@@ -17577,9 +17566,6 @@ export function Canvas() {
         <AnnouncementBanner />
         <TmuxBanner onInstall={runInTerminal} />
         {drill && <DrillBreadcrumb drill={drill} onExit={exitDrill} />}
-        {/* This MACHINE is running out of pty devices — subscribes for itself; a failed
-            "Fix automatically…" lands in the same notice strip as every other async op. */}
-        <PtyPressureBanner onError={(text) => setNotice({ kind: 'error', text })} />
         {/* App-first just took a chord from a focused terminal, once per command ever —
             subscribes for itself; only the route into Settings is Canvas's to give. */}
         <ShortcutCaptureBanner

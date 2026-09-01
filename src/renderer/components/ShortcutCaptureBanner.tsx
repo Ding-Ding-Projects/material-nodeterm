@@ -6,14 +6,14 @@ import { shortcutCaptureCopy } from './shortcutCaptureCopy'
 // APP command instead of reaching the shell. `noteTerminalCapture` decides WHEN that is worth
 // saying (app-first only, once per command, ever, persisted in settings) — this strip only says it.
 //
-// Its own component, subscribing for itself, for the same reason PtyPressureBanner and TmuxBanner
+// Its own component, subscribing for itself, for the same reason TmuxBanner
 // are: Canvas.tsx is a hot file every other branch touches, and a banner is not canvas logic. The
 // one thing it cannot own is opening Settings (the page's state lives in Canvas), so that arrives
 // as a prop.
 
 /** Informational, not a warning: it names something that already happened correctly and offers a
  *  setting. Longer than a toast because there are two sentences to read, far shorter than the
- *  pty-pressure strips, which stay until the machine's state changes. */
+ *  persistent warning strips, which stay until the machine's state changes. */
 const CAPTURE_NOTICE_MS = 12_000
 
 export function ShortcutCaptureBanner({

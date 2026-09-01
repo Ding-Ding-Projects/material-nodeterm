@@ -8,18 +8,16 @@ import { nodeTokenDir } from './node-token-files'
 import { initPlatform, resetPlatformForTests } from '../platform'
 import { fakePlatform } from '../platform-fake'
 
-// Issue #351: on macOS the userDataDir lives under "Application Support" — a directory name WITH A
-// SPACE. The managed hook script SOURCES the endpoint file (`. "$file"`) under /bin/sh, so an
-// unquoted `NODETERM_NODE_TOKEN_DIR=/Users/x/Library/Application Support/...` made sh try to run
-// `Support/...`, exit 127, and the hook fell back to plain mode for EVERY macOS user. This test
-// proves the file sources cleanly under a REAL /bin/sh — the current-line-27 structural assertion
-// passed while real sh failed, which is exactly the class of bug this repo insists we prove against
+// A Linux Server Edition data directory can contain spaces. The managed hook script SOURCES the
+// endpoint file (`. "$file"`) under /bin/sh, so an unquoted assignment would split the path and
+// exit 127. This test proves the file sources cleanly under a REAL /bin/sh. A source-text assertion
+// can pass while real sh fails, which is exactly the class of bug this repo insists we prove against
 // a real reader.
 let spaced = ''
 beforeAll(async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-ep-sh-'))
-  // A subdir with a space in its name — the "Application Support" shape.
-  spaced = path.join(root, 'App Support', 'node-terminal')
+  // A subdir with a space in its name, matching a valid Linux server data layout.
+  spaced = path.join(root, 'server data', 'node-terminal')
   fs.mkdirSync(spaced, { recursive: true })
   resetPlatformForTests()
   initPlatform(fakePlatform({ userDataDir: spaced }))
@@ -30,7 +28,7 @@ afterAll(() => {
 })
 
 describe('endpoint file sources cleanly under real /bin/sh with a spaced path', () => {
-  it.skipIf(process.platform === 'win32')('preserves the exact NODETERM_NODE_TOKEN_DIR path, space intact', () => {
+  it.skipIf(process.platform !== 'linux')('preserves the exact NODETERM_NODE_TOKEN_DIR path, space intact', () => {
     const p = hookServer.endpointFilePath()
     // Sanity: the writer really is exercising a spaced path this run.
     expect(nodeTokenDir()).toContain(' ')

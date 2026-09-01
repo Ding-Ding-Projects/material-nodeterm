@@ -3,7 +3,7 @@
 // `remoteTranscriptBySession` (src/main) is filled ONLY by hook POSTs, and a tmux session
 // outlives the app — so after an app restart an idle remote agent node has no ref at all, and
 // the local resolvers then search THIS machine's disk for a session that exists only on the
-// host. That is the "⌘M says there is no conversation" case: it healed itself the moment the
+// host. That is the "minimize reports there is no conversation" case: it healed itself the moment the
 // user sent one prompt (the next hook event registered the ref), which is exactly what made it
 // look intermittent.
 //

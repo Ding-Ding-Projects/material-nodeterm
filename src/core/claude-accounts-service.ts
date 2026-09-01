@@ -1,5 +1,5 @@
 // Impure lifecycle for managed Claude accounts: config-dir creation/deletion, login capture
-// (poll .claude.json), CLI version check, per-account hook install. The account LIST lives in
+// (poll .claude.json), per-account hook install. The account list lives in
 // settings.json (renderer-owned via useSettings); this module only owns the filesystem.
 //
 // Lives in core so BOTH shells serve it. Before this the four channels were registered only by
@@ -10,16 +10,12 @@
 import { randomUUID } from 'crypto'
 import { promises as fs } from 'fs'
 import path from 'path'
-import { execFile } from 'child_process'
-import { promisify } from 'util'
 import { IPC } from '../shared/ipc'
-import { isSupportedClaudeVersion, parseLoginCapture } from './claude-accounts-core'
+import { parseLoginCapture } from './claude-accounts-core'
 import { claudeConfigDirFor } from './claude-config-dir'
 import { installClaudeHooksInto, ensureClaudeFullscreenTuiInto } from './agents/hooks/claude'
-import { findInLoginPath } from './pty-manager'
 import { platform } from './platform'
 
-const execFileP = promisify(execFile)
 const LOGIN_POLL_MS = 2000
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000
 
@@ -38,7 +34,7 @@ export interface ClaudeAccountsRemote {
   add(
     projectId: string,
     id: string
-  ): Promise<{ configDir: string; versionSupported: boolean } | null>
+  ): Promise<{ configDir: string } | null>
   readLogin(projectId: string, id: string): Promise<string | null>
   remove(projectId: string, id: string): Promise<void>
 }
@@ -65,20 +61,6 @@ export interface ClaudeAccountsDeps {
 
 const waiters = new Map<string, { cancelled: boolean }>()
 
-async function checkClaudeVersion(): Promise<boolean> {
-  // The < 2.1 warning is about the shared macOS Keychain service; on Linux/Windows
-  // credentials are files inside each config dir, so no version collides.
-  if (process.platform !== 'darwin') return true
-  try {
-    const claude = await findInLoginPath('claude')
-    if (!claude) return false
-    const { stdout } = await execFileP(claude, ['--version'], { timeout: 5000 })
-    return isSupportedClaudeVersion(stdout.trim())
-  } catch {
-    return false
-  }
-}
-
 /** Register the four `claude-accounts:*` channels on the core platform seam. */
 export function registerClaudeAccountsIpc(deps: ClaudeAccountsDeps = {}): void {
   const pollMs = deps.pollMs ?? LOGIN_POLL_MS
@@ -98,7 +80,7 @@ export function registerClaudeAccountsIpc(deps: ClaudeAccountsDeps = {}): void {
       const res = await remote.r.add(remote.projectId, id)
       // Null means the project wasn't connected / mkdir failed: still return the id so the renderer
       // can show the pending row; the login node will surface the connection error itself.
-      return { id, configDir: res?.configDir ?? '', versionSupported: res?.versionSupported ?? true }
+      return { id, configDir: res?.configDir ?? '' }
     }
     const configDir = claudeConfigDirFor(id)
     await fs.mkdir(configDir, { recursive: true })
@@ -110,8 +92,7 @@ export function registerClaudeAccountsIpc(deps: ClaudeAccountsDeps = {}): void {
     // Ensure fullscreen TUI in the new account dir (write-if-absent, version-gated). Best-effort,
     // off the response path — the memoized probe + write both fail open.
     void ensureClaudeFullscreenTuiInto(configDir)
-    const versionSupported = await checkClaudeVersion()
-    return { id, configDir, versionSupported }
+    return { id, configDir }
   })
 
   platform().handle(IPC.claudeAccountsWaitLogin, async (id: string, ctx?: AccountCtx) => {

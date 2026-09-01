@@ -98,8 +98,6 @@ const PROMOTIONAL_PATTERNS: RegExp[] = [
   /\blimited[-\s]time\b/i,
   /\b\d+%\s*off\b/i,
   // links to app stores / donation / sponsorship hosts (checked against the "Learn more" url too)
-  /apps\.apple\.com/i,
-  /itunes\.apple\.com/i,
   /play\.google\.com/i,
   /github\.com\/sponsors/i,
   /opencollective\.com/i,

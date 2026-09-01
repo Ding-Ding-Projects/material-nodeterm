@@ -26,7 +26,6 @@ import {
   SceneDictation,
   SceneKanban,
   SceneKeepAwake,
-  SceneNotch,
   SceneNotify,
   ScenePhone
 } from './scenes'
@@ -46,8 +45,7 @@ function formatSize(mb: number): string {
 }
 
 /** Info step + the setting it configures, one per screen. Step 0 is the welcome cover; the last
- *  step is the mobile-app announcement (info-only). Steps are addressed by ID, not index, because
- *  the notch step only exists on macOS — an index-keyed tour would shift under it. */
+ *  step is the mobile-app announcement (info-only). Steps are addressed by ID, not index. */
 const STEPS = [
   'cover',
   'agents',
@@ -55,7 +53,6 @@ const STEPS = [
   'kanban',
   'notify',
   'keepawake',
-  ...(isMac ? (['notch'] as const) : []),
   'phone'
 ] as const
 type StepId = (typeof STEPS)[number]
@@ -244,7 +241,6 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
             {stepId === 'keepawake' && (
               <SceneKeepAwake agentId={agentId} label={agent.label} color={agent.color} />
             )}
-            {stepId === 'notch' && <SceneNotch />}
             {stepId === 'phone' && <ScenePhone />}
           </div>
           <div className="onb-pane">
@@ -429,33 +425,6 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
                   <span>Keep awake while agents work</span>
                 </div>
                 <div className="onb-fineprint">Change any time in Settings → Behavior.</div>
-              </>
-            )}
-
-            {stepId === 'notch' && (
-              <>
-                <h2>Your agents, inside the notch</h2>
-                <p>
-                  On a MacBook, nodeterm can grow the notch into a small black capsule: a walking
-                  mascot for every agent that's working, a red dot when one needs you, and a green
-                  blob when one has finished and you haven't looked yet.
-                </p>
-                <p>
-                  Point at it and it opens a mini panel of your live sessions — hit <strong>Go</strong>{' '}
-                  and nodeterm comes forward with that node centred.
-                </p>
-                <div className="onb-toggle-row">
-                  <Switch
-                    checked={settings.notchHud}
-                    ariaLabel="Notch HUD"
-                    onChange={(on) => update({ notchHud: on })}
-                  />
-                  <span>Show the notch HUD</span>
-                </div>
-                <div className="onb-fineprint">
-                  Fine-tune it any time in Settings → Interface → Notch — including the notch width,
-                  which is what makes the capsule sit flush on your Mac.
-                </div>
               </>
             )}
 

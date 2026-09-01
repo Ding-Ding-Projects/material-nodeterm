@@ -7,10 +7,11 @@ import {
   bucketState,
   firstPromptLine,
   hudRowRank,
+  migrateAgentHudSettings,
   HUD_STALE_DROP_MS,
   type HudRow,
   WORKING_STALE_MS
-} from './notch-hud-model'
+} from './agent-hud-model'
 
 const T0 = 1_000_000
 
@@ -33,6 +34,36 @@ describe('bucketState', () => {
     expect(bucketState('done')).toBe('done')
     expect(bucketState('waiting')).toBe('needsYou')
     expect(bucketState('blocked')).toBe('needsYou')
+  })
+})
+
+describe('settings migration', () => {
+  it('maps legacy HUD keys to Agent HUD keys and marks the record for rewrite', () => {
+    expect(
+      migrateAgentHudSettings({ notchHud: false, notchWidth: 222, notchHoverExpand: false })
+    ).toEqual({
+      changed: true,
+      agentHud: false,
+      agentHudWidth: 222,
+      agentHudHoverExpand: false
+    })
+  })
+
+  it('keeps new values when a partially migrated record still has legacy keys', () => {
+    expect(
+      migrateAgentHudSettings({
+        agentHud: true,
+        agentHudWidth: 240,
+        agentHudHoverExpand: true,
+        notchHud: false,
+        notchWidth: 120,
+        notchHoverExpand: false
+      })
+    ).toEqual({ changed: true, agentHud: true, agentHudWidth: 240, agentHudHoverExpand: true })
+  })
+
+  it('does not rewrite records that never used the legacy HUD keys', () => {
+    expect(migrateAgentHudSettings({ agentHud: true })).toEqual({ changed: false })
   })
 })
 

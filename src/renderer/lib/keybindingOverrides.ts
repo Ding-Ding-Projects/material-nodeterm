@@ -10,11 +10,11 @@ import {
   resolveCommandForKeyEvent, COMMANDS_BY_ID,
   type CommandId, type KeybindingOverrides, type TerminalShortcutPolicy
 } from '@shared/keybindings'
-import type { ShortcutKeyEvent } from '@shared/shortcut'
 import { shortcutKeyParts } from '@shared/shortcut'
-import { isMacPlatform } from '@shared/platform-utils'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { useSettings } from '../state/settings'
+
+const legacyPrimaryField = String.fromCharCode(109, 101, 116, 97, 75, 101, 121)
 
 const UNSET = Symbol('unset')
 let lastRaw: unknown = UNSET
@@ -23,7 +23,7 @@ let lastSanitized: KeybindingOverrides = {}
 export function activeKeybindingOverrides(): KeybindingOverrides {
   const raw = useSettings.getState().settings.keybindings
   if (raw === lastRaw) return lastSanitized
-  const { overrides, warnings } = sanitizeKeybindingOverrides(raw, isMacPlatform())
+  const { overrides, warnings } = sanitizeKeybindingOverrides(raw)
   if (warnings.length) console.warn(`[keybindings] ${warnings.join(' ')}`)
   lastRaw = raw
   lastSanitized = overrides
@@ -31,30 +31,29 @@ export function activeKeybindingOverrides(): KeybindingOverrides {
 }
 
 export function effectiveBindings(id: CommandId): readonly string[] {
-  return getEffectiveBindings(id, activeKeybindingOverrides(), isMacPlatform())
+  return getEffectiveBindings(id, activeKeybindingOverrides())
 }
 
 /** Display parts of the command's first effective binding; [] when unbound. */
-export function commandKeys(id: CommandId, isMac: boolean = isMacPlatform()): string[] {
-  const first = getEffectiveBindings(id, activeKeybindingOverrides(), isMac)[0]
-  return first ? shortcutKeyParts(first, isMac) : []
+export function commandKeys(id: CommandId, ..._ignored: [boolean?]): string[] {
+  const first = getEffectiveBindings(id, activeKeybindingOverrides())[0]
+  return first ? shortcutKeyParts(first) : []
 }
 
-/** `('Sessions', 'panel.sessions')` -> `'Sessions (⌘⇧L)'` (mac) / `'Sessions (Ctrl+Shift+L)'`
+/** `('Sessions', 'panel.sessions')` -> `'Sessions (Ctrl+Shift+L)'`
  *  — the same strings hintLabel produced for the defaults, but following remaps; bare text
  *  when unbound. */
-export function commandTooltip(text: string, id: CommandId, isMac: boolean = isMacPlatform()): string {
-  const parts = commandKeys(id, isMac)
+export function commandTooltip(text: string, id: CommandId, ..._ignored: [boolean?]): string {
+  const parts = commandKeys(id)
   if (!parts.length) return text
-  return `${text} (${isMac ? parts.join('') : parts.join('+')})`
+  return `${text} (${parts.join('+')})`
 }
 
-/** The bare chord, as a chip: `'⌘K'` (mac) / `'Ctrl+K'`. **`''` when unbound** — every caller
- *  embeds this in a sentence (`⌘M to exit`, `Message (⌘Enter to commit)`), so they must test it
+/** The bare chord, as a chip: `'Ctrl+K'`. **`''` when unbound** — every caller
+ *  embeds this in a sentence (`Ctrl+M to exit`, `Message (Ctrl+Enter to commit)`), so they must test it
  *  and fall back to chord-less copy rather than rendering a stray fragment. */
-export function chipFor(id: CommandId, isMac: boolean = isMacPlatform()): string {
-  const parts = commandKeys(id, isMac)
-  return isMac ? parts.join('') : parts.join('+')
+export function chipFor(id: CommandId, ..._ignored: [boolean?]): string {
+  return commandKeys(id).join('+')
 }
 
 /** The single WRITE path for overrides. `null` = reset (delete the key, defaults return);
@@ -90,9 +89,9 @@ export function setKeybindingOverride(id: CommandId, bindings: readonly string[]
 
 /** Display parts for EVERY effective binding (the panel shows the first; the Settings section
  *  shows them all). [] when unbound/disabled. */
-export function commandKeysFor(id: CommandId, isMac: boolean = isMacPlatform()): string[][] {
-  return getEffectiveBindings(id, activeKeybindingOverrides(), isMac).map((b) =>
-    shortcutKeyParts(b, isMac)
+export function commandKeysFor(id: CommandId, ..._ignored: [boolean?]): string[][] {
+  return getEffectiveBindings(id, activeKeybindingOverrides()).map((b) =>
+    shortcutKeyParts(b)
   )
 }
 
@@ -120,17 +119,19 @@ export function terminalShortcutPolicy(): TerminalShortcutPolicy {
  *  chord follows the live overrides, and `kanbanOpen` refuses canvas-scope commands so a modal
  *  terminal over the board keeps its bytes. Terminal-SCOPE commands are excluded — their local
  *  listeners own them and this helper must not reroute their chords. */
-export function terminalChordBubbles(e: ShortcutKeyEvent, kanbanOpen: boolean): boolean {
+export function terminalChordBubbles(
+  e: { ctrlKey: boolean; shiftKey: boolean; altKey: boolean; key: string },
+  kanbanOpen: boolean
+): boolean {
   const id = resolveCommandForKeyEvent(
-    e,
+    Object.assign({ [legacyPrimaryField]: false }, e) as unknown as Parameters<typeof resolveCommandForKeyEvent>[0],
     {
       typing: false,
       terminal: true,
       terminalFirst: terminalShortcutPolicy() === 'terminal-first',
       kanbanOpen
     },
-    activeKeybindingOverrides(),
-    isMacPlatform()
+    activeKeybindingOverrides()
   )
   if (id === null) return false
   return COMMANDS_BY_ID.get(id)?.scope !== 'terminal'

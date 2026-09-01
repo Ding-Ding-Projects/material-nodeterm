@@ -23,7 +23,7 @@ export type VocabularyMap = <T extends string | undefined | null>(text: T) => T
  *
  * Everything else is deliberately left byte-identical:
  * - `onClick` / `onPick` — behaviour, not text.
- * - `shortcut` — canonical key tokens (`'⌘'`, `'T'`). They are a keyboard contract that
+ * - `shortcut` — canonical key tokens (`'Ctrl'`, `'T'`). They are a keyboard contract that
  *   `aria-keyshortcuts` re-emits verbatim; a replacement here would announce a chord that does
  *   not exist and would drift from what the key listener actually does.
  * - `accountPresentation` — an account's identity (email, id) is a factual external record.

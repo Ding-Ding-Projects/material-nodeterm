@@ -1,7 +1,7 @@
 // Home Assistant long-lived access tokens, one per rule. Same at-rest contract as
-// `agents/node-auth-secret.ts`: sealed via the platform's `sealSecret`/`unsealSecret` (Electron's
-// Keychain-backed `safeStorage`) when the shell can seal, else a raw 0600 file — the Server
-// Edition's documented "headless, no OS keychain" degrade (see `core/platform.ts`'s doc on those
+// `agents/node-auth-secret.ts`: sealed via the platform's `sealSecret`/`unsealSecret` (Windows
+// DPAPI-backed `safeStorage`) when the shell can seal, else a raw 0600 file. This is the Server
+// Edition's documented "headless, no OS credential vault" degrade (see `core/platform.ts`'s doc on those
 // two hooks). A shell supplies BOTH hooks or NEITHER; `seals()` throws if exactly one is present,
 // same as `node-auth-secret.ts`.
 //

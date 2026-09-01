@@ -56,14 +56,8 @@ function knownInstallDirs(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): st
     if (env['ProgramFiles(x86)']) dirs.push(`${env['ProgramFiles(x86)']}\\Ollama`)
     return dirs
   }
-  if (platform === 'darwin') {
-    // The macOS .app also symlinks its CLI into /usr/local/bin on first launch, but a fresh
-    // install may not have launched the menu-bar app yet — the .app's own Resources dir is
-    // checked directly too.
-    return ['/usr/local/bin', '/opt/homebrew/bin', '/Applications/Ollama.app/Contents/Resources']
-  }
-  // linux and everything else POSIX-like
-  return ['/usr/local/bin', '/usr/bin', '/snap/bin', '/opt/ollama/bin']
+  if (platform === 'linux') return ['/usr/local/bin', '/usr/bin', '/snap/bin', '/opt/ollama/bin']
+  return []
 }
 
 function binaryName(platform: NodeJS.Platform): string {

@@ -117,8 +117,8 @@ export function computeTrustKey(entry: CodexTrustEntry): string {
 export function getCodexCanonicalTrustPath(sourcePath: string): string {
   try {
     // Why: Codex canonicalizes trust paths before building config keys. On
-    // macOS, /var is a symlink to /private/var; trusting the raw path still
-    // leaves the TUI in review/trust prompts.
+    // Canonicalizing the path before hashing keeps symlinked Linux data roots from leaving
+    // the client in review or trust prompts.
     return realpathSync.native(sourcePath)
   } catch {
     return sourcePath
@@ -530,9 +530,7 @@ export function writeConfigAtomically(configPath: string, contents: string): voi
   try {
     writeFileSync(tmpPath, contents, 'utf-8')
     if (existsSync(configPath)) {
-      // Why: rotate a .bak before overwriting so a user can recover if our
-      // edit ever goes wrong. (on macOS
-      // a plain copyFileSync is sufficient.)
+      // Why: rotate a .bak before overwriting so a user can recover if our edit ever goes wrong.
       copyFileSync(configPath, `${configPath}.bak`)
     }
     renameAtomicSync(tmpPath, configPath)

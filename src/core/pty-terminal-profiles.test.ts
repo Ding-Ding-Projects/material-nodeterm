@@ -1,7 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import fs from 'fs'
-import os from 'os'
-import path from 'path'
 import { IPC } from '../shared/ipc'
 import { DEFAULT_SETTINGS } from '../shared/types'
 import { initPlatform, resetPlatformForTests } from './platform'
@@ -44,11 +41,6 @@ vi.mock('node-pty', () => ({ spawn: nodePty.spawn }))
 
 vi.mock('../session-host/windows-process-tree', () => ({
   terminateWindowsProcessTree: windowsProcess.terminate
-}))
-
-vi.mock('./pty-devices', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./pty-devices')>()),
-  readPtyDevices: () => ({ ceiling: 511, inUse: 8 })
 }))
 
 function fakePty(ready?: Promise<{ fresh: boolean; screen?: string }>) {
@@ -451,39 +443,33 @@ describe('PtyManager trusted Windows profile spawn boundary', () => {
   })
 
   it('reattaches a proven warm legacy tmux generation without resolving its removed profile', async () => {
-    const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nodeterm-tmux-probe-'))
-    const oldPath = process.env.PATH
-    try {
-      for (const name of ['-L', 'node-terminal', 'has-session', '-t', 'nt-node-warm-tmux'])
-        fs.writeFileSync(path.join(probeDir, `${name}.exe`), '')
-      process.env.PATH = `${probeDir}${path.delimiter}${oldPath ?? ''}`
-      const resolveForSpawn = vi.fn().mockRejectedValue(new Error('removed legacy profile'))
-      const manager = await makeManager({ resolveForSpawn })
-      backend.supported.mockReturnValue(false)
-      ;(manager as unknown as { tmuxPath: string | null }).tmuxPath = String.raw`C:\Windows\System32\where.exe`
+    const resolveForSpawn = vi.fn().mockRejectedValue(new Error('removed legacy profile'))
+    const confirmedProcessRun = vi.fn(async (_file: string, args: readonly string[]) => {
+      if (args.includes('has-session')) return {}
+      throw new Error(`unexpected tmux operation: ${args.join(' ')}`)
+    })
+    const manager = await makeManager({ resolveForSpawn }, { confirmedProcessRun })
+    backend.supported.mockReturnValue(false)
+    ;(manager as unknown as { tmuxPath: string | null }).tmuxPath = 'fake-tmux.exe'
 
-      await expect(
-        host.handlers[IPC.ptyCreate](7, {
-          cols: 80,
-          rows: 24,
-          persistKey: 'node-warm-tmux',
-          profileId: 'git-bash',
-          cwd: String.raw`Z:\removed\legacy-project`
-        })
-      ).resolves.toMatchObject({ sessionId: 'pty-1', fresh: false, persistent: true })
+    await expect(
+      host.handlers[IPC.ptyCreate](7, {
+        cols: 80,
+        rows: 24,
+        persistKey: 'node-warm-tmux',
+        profileId: 'git-bash',
+        cwd: String.raw`Z:\removed\legacy-project`
+      })
+    ).resolves.toMatchObject({ sessionId: 'pty-1', fresh: false, persistent: true })
 
-      expect(resolveForSpawn).not.toHaveBeenCalled()
-      expect(backend.create).not.toHaveBeenCalled()
-      expect(backend.attachExisting).not.toHaveBeenCalled()
-      expect(nodePty.spawn).toHaveBeenCalledTimes(1)
-      const args = nodePty.spawn.mock.calls[0][1] as string[]
-      expect(args).toContain('attach-session')
-      expect(args).not.toContain('new-session')
-      expect(args).not.toContain(String.raw`Z:\removed\legacy-project`)
-    } finally {
-      process.env.PATH = oldPath
-      fs.rmSync(probeDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
-    }
+    expect(resolveForSpawn).not.toHaveBeenCalled()
+    expect(backend.create).not.toHaveBeenCalled()
+    expect(backend.attachExisting).not.toHaveBeenCalled()
+    expect(nodePty.spawn).toHaveBeenCalledTimes(1)
+    const args = nodePty.spawn.mock.calls[0][1] as string[]
+    expect(args).toContain('attach-session')
+    expect(args).not.toContain('new-session')
+    expect(args).not.toContain(String.raw`Z:\removed\legacy-project`)
   })
 
   it('preflights a selected target before teardown and keeps private launch paths out of errors', async () => {

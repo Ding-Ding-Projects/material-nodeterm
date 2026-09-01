@@ -49,7 +49,7 @@ describe('mergeManagedHook', () => {
         {
           type: 'command',
           command:
-            "if [ -x '/Users/x/.someapp/agent-hooks/claude-hook.sh' ]; then /bin/sh '/Users/x/.someapp/agent-hooks/claude-hook.sh'; fi"
+            "if [ -x '/srv/other-app/agent-hooks/claude-hook.sh' ]; then /bin/sh '/srv/other-app/agent-hooks/claude-hook.sh'; fi"
         }
       ]
     }

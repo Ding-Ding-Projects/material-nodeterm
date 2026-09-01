@@ -18,16 +18,16 @@ import { localAgentCwd } from './commit-message'
  */
 describe('localAgentCwd', () => {
   it('uses the project folder for a LOCAL project', () => {
-    expect(localAgentCwd('/Users/enes/code/app', false, '/Users/enes')).toBe('/Users/enes/code/app')
+    expect(localAgentCwd('C:\\Users\\dev\\code\\app', false, 'C:\\Users\\dev')).toBe('C:\\Users\\dev\\code\\app')
   })
 
   it('falls back to home for a REMOTE project — that path is on the server', () => {
-    expect(localAgentCwd('/root/nodeterm', true, '/Users/enes')).toBe('/Users/enes')
+    expect(localAgentCwd('/srv/nodeterm', true, 'C:\\Users\\dev')).toBe('C:\\Users\\dev')
   })
 
   it('falls back to home for a project with no folder at all', () => {
     // The pre-existing `cwd || os.homedir()` behaviour, kept.
-    expect(localAgentCwd('', false, '/Users/enes')).toBe('/Users/enes')
+    expect(localAgentCwd('', false, 'C:\\Users\\dev')).toBe('C:\\Users\\dev')
   })
 })
 

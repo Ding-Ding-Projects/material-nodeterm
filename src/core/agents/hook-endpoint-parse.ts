@@ -1,8 +1,8 @@
 /**
  * TS-side parser for the endpoint env file (`hook-endpoint.env` / `hook-endpoint-<project>.env`).
  *
- * Since #351 both writers `posixQuote` every value so the file sources cleanly under /bin/sh when
- * a path carries a space (macOS "Application Support") or a token carries a shell metachar. Shell
+ * Both writers `posixQuote` every value so the file sources cleanly under /bin/sh when a Linux
+ * Server Edition path carries a space or a token carries a shell metachar. Shell
  * consumers get the unquoting for free from `. "$file"`; every TypeScript consumer must unquote
  * through THIS function instead of splitting on `=` naively — a naive read keeps the literal
  * quote characters, which breaks the constant-time bearer check (opencode plugin) and turns

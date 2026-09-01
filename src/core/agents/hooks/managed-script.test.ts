@@ -405,10 +405,9 @@ describe('buildManagedScript', () => {
   })
 
   describe('endpoint failover (dead-primary retry against a live sibling endpoint)', () => {
-    it('lists the three known candidate endpoint files', () => {
+    it('lists the two known Linux local endpoint files', () => {
       expect(s).toContain('"$HOME/.nodeterm-server/hook-endpoint.env"')
       expect(s).toContain('"$HOME/.config/node-terminal/hook-endpoint.env"')
-      expect(s).toContain('"$HOME/Library/Application Support/node-terminal/hook-endpoint.env"')
     })
     it('also globs the per-project SSH endpoints, with $HOME quoted but the pattern NOT', () => {
       // A quoted glob never expands — the whole self-heal for a session left on a dead project
@@ -423,11 +422,9 @@ describe('buildManagedScript', () => {
       // live endpoint under N dead siblings — see the measured table in managed-script.ts.
       const list = s.slice(s.indexOf('nt_candidates() {'), s.indexOf('nt_adopt() {'))
       const server = list.indexOf('"$HOME/.nodeterm-server/hook-endpoint.env"')
-      const appSupport = list.indexOf('"$HOME/Library/Application Support/node-terminal/hook-endpoint.env"')
       const glob = list.indexOf('"$HOME"/.nodeterm/hook-endpoint-*.env')
       expect(server).toBeGreaterThan(-1)
-      expect(glob).toBeGreaterThan(appSupport)
-      expect(appSupport).toBeGreaterThan(server)
+      expect(glob).toBeGreaterThan(server)
     })
     it('keeps mtime as the tie-break WITHIN the tunnel group only (ls -t over the glob matches)', () => {
       // The live project's endpoint is rewritten and VERIFIED on every connect, so freshest-first is
@@ -476,8 +473,9 @@ describe('buildManagedScript', () => {
       expect(loop).toContain('nt_adopt "$nt_ep" || continue')
     })
     it('splits the candidate list on NEWLINES with globbing off (paths contain spaces)', () => {
-      // "Application Support" has a space in it. Default IFS would split it into two bogus paths;
-      // an unquoted expansion without `set -f` would re-glob a path containing a glob character.
+      // A Linux Server Edition path may have a space in it. Default IFS would split it into two
+      // bogus paths; an unquoted expansion without `set -f` would re-glob a path containing a glob
+      // character.
       expect(s).toContain('IFS="\n"')
       expect(s).toContain('  set -f\n')
       expect(s).toContain('  set +f\n')
@@ -591,8 +589,8 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeo
         dead,
         // NODETERM_NODE_TOKEN_DIR is single-quoted, matching hook-server.ts's writeEndpointFile:
         // it is a filesystem path, and an unquoted `VAR=value` assignment has POSIX sh strip
-        // every backslash (win32) or word-split on a space (any platform, e.g. macOS's
-        // "Application Support") when the managed script later sources this file.
+        // every backslash (win32) or word-split on a space when the managed script later sources
+        // this file.
         `NODETERM_HOOK_SOCK=${quotePathForPosixShell(join(home, '.nodeterm', 'hook-oldproject.sock'))}\nNODETERM_HOOK_TOKEN=dead-token\nNODETERM_HOOK_VERSION=1\nNODETERM_NODE_TOKEN_DIR=${quotePathForPosixShell(deadTokens)}\n`,
         'utf8'
       )
@@ -665,10 +663,10 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeo
   )
 
   /**
-   * The measured outage, reproduced. On the live host (Mac closed, 8 agents running):
+   * The measured outage, reproduced. On the live host (desktop endpoint unavailable, 8 agents running):
    *
    *   hook-endpoint-project-mrkigsjp-4.env  13:25  the primary — excluded as already tried
-   *   hook-endpoint-project-msq9marh-4.env  12:52  another project's tunnel to the SAME Mac, dead
+   *   hook-endpoint-project-msq9marh-4.env  12:52  another project's tunnel to the same desktop, dead
    *   .nodeterm-server/hook-endpoint.env    00:26  the host's own Server Edition — ALIVE
    *
    * A freshest-by-mtime single retry lands on the dead sibling and gives up; that host's mirror
@@ -692,7 +690,7 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeo
         `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'hook-mrkigsjp.sock')}\nNODETERM_HOOK_TOKEN=primary-token\nNODETERM_HOOK_VERSION=2\n`,
         'utf8'
       )
-      // Another project's tunnel to the SAME Mac. Also dead — they share one fate.
+      // Another project's tunnel to the same desktop. Also dead, they share one fate.
       const sibling = join(home, '.nodeterm', 'hook-endpoint-project-msq9marh-4.env')
       writeFileSync(
         sibling,
@@ -747,15 +745,15 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeo
 
   // Locals are ordered too, and one of them has a SPACE in its path. A dead local must not end the
   // walk (an exited Server Edition leaves its endpoint file behind), and default IFS would have
-  // split "Application Support" into two paths that exist nowhere.
+  // split a spaced Linux data path into two paths that exist nowhere.
   it.skipIf(!shAvailable)('walks past a dead local to one whose path contains a space', () => {
     const home = join(dir, 'home-space')
     const bin = join(dir, 'bin-space')
     const log = join(dir, 'curl-space.log')
-    const appSupportDir = join(home, 'Library', 'Application Support', 'node-terminal')
+    const linuxDesktopDir = join(home, '.config', 'node-terminal')
     mkdirSync(join(home, '.nodeterm'), { recursive: true })
     mkdirSync(join(home, '.nodeterm-server'), { recursive: true })
-    mkdirSync(appSupportDir, { recursive: true })
+    mkdirSync(linuxDesktopDir, { recursive: true })
     mkdirSync(bin, { recursive: true })
     const primary = join(home, '.nodeterm', 'hook-endpoint-project-a.env')
     writeFileSync(
@@ -771,7 +769,7 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeo
     )
     // The live desktop installed on this same host.
     writeFileSync(
-      join(appSupportDir, 'hook-endpoint.env'),
+      join(linuxDesktopDir, 'hook-endpoint.env'),
       'NODETERM_HOOK_PORT=45999\nNODETERM_HOOK_TOKEN=desktop-token\nNODETERM_HOOK_VERSION=2\n',
       'utf8'
     )

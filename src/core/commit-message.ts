@@ -1,9 +1,10 @@
 import { execFile, spawn } from 'child_process'
 import fs from 'fs'
 import os from 'os'
+import path from 'path'
 import { promisify } from 'util'
 import type { GitResult, Settings } from '../shared/types'
-import { findInPathString, shellPathNow } from './exec-path'
+import { findExecutableSync } from './exec-path'
 import { resolveGitRemote, runRemoteGit } from './remote-ssh/remote-git'
 
 const run = promisify(execFile)
@@ -14,29 +15,28 @@ const TIMEOUT_MS = 120_000
 
 const bytes = (s: string) => Buffer.byteLength(s, 'utf-8')
 
-/** Resolve a CLI binary to an absolute path (GUI apps don't inherit the shell PATH). */
+/** Resolve a CLI binary to an absolute path without invoking a shell. */
 function resolveBinary(name: string): string | null {
-  if (name.startsWith('/')) return fs.existsSync(name) ? name : null
-  const candidates = [
-    `${os.homedir()}/.local/bin/${name}`,
-    `${os.homedir()}/.claude/local/${name}`,
-    `/opt/homebrew/bin/${name}`,
-    `/usr/local/bin/${name}`,
-    `/usr/bin/${name}`
-  ]
-  for (const c of candidates) {
-    try {
-      if (fs.existsSync(c)) return c
-    } catch {
-      // ignore
-    }
-  }
-  // Resolve via PATH without a shell OR a subprocess: walk the cached login-shell PATH from
-  // exec-path.ts (the inherited GUI PATH misses user-installed bins). `name` comes from a user
-  // setting (custom commit agent) — reject anything that isn't a bare binary name to keep it
-  // well out of injection territory.
+  if (path.isAbsolute(name)) return fs.existsSync(name) ? name : null
   if (!/^[A-Za-z0-9._-]+$/.test(name)) return null
-  return findInPathString(name, shellPathNow() ?? process.env.PATH)
+  const home = os.homedir()
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming')
+    return findExecutableSync(name, [
+      path.join(appData, 'npm', `${name}.cmd`),
+      path.join(home, '.local', 'bin', `${name}.exe`),
+      path.join(home, '.local', 'bin', `${name}.cmd`)
+    ])
+  }
+  if (process.platform === 'linux') {
+    return findExecutableSync(name, [
+      path.join(home, '.local', 'bin', name),
+      path.join(home, '.claude', 'local', name),
+      path.join('/usr/local/bin', name),
+      path.join('/usr/bin', name)
+    ])
+  }
+  return null
 }
 
 async function git(cwd: string, args: string[]): Promise<string> {
@@ -235,14 +235,13 @@ export async function generateCommitMessage(cwd: string, settings: Settings): Pr
  *
  * The agent always runs on THIS machine — only the git reads route over an SSH project's
  * ControlMaster (see `git` above), and by the time we spawn, the diff is already inside the prompt.
- * So a REMOTE project's cwd is a path on the server, and handing it to a local `spawn` is asking
- * macOS to chdir into a directory that does not exist here.
+ * So a REMOTE project's cwd is a path on the server, and handing it to a local `spawn` asks the
+ * local process to enter a directory that does not exist here.
  *
  * That failed in the most misleading way possible: Node reports a missing CWD as `spawn <command>
  * ENOENT`, naming the BINARY. The 2026-08-05 report was "Error: spawn
- * /Users/enes/.local/bin/claude ENOENT" on SSH servers — which reads as "claude is not installed"
- * and sent the hunt to the CLI, while claude was sitting exactly where the path said and the
- * unreachable thing was `/root/<project>` on a Mac.
+ * C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd ENOENT" for an SSH project, which reads as
+ * "claude is not installed" while the unreachable object was the server-only project directory.
  *
  * Home is the right substitute rather than, say, a temp dir: it is where every other read-only
  * agent invocation without a project runs (`cwd || os.homedir()` has always been the fallback for

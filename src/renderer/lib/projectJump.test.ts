@@ -9,7 +9,6 @@ function ev(over: Partial<ProjectJumpEvent> = {}): ProjectJumpEvent {
   return {
     type: "keydown",
     code: "Digit1",
-    metaKey: false,
     ctrlKey: true,
     altKey: false,
     shiftKey: false,
@@ -24,12 +23,9 @@ const desktop = (projects: { id: string; closed?: boolean }[] = THREE) => ({
 });
 
 describe("projectJumpDigit", () => {
-  it("reads the 1-9 digit off the physical key code, under either primary modifier", () => {
+  it("reads the 1-9 digit off the physical key code with Ctrl", () => {
     expect(projectJumpDigit(ev({ code: "Digit1" }))).toBe(1);
     expect(projectJumpDigit(ev({ code: "Digit9" }))).toBe(9);
-    expect(
-      projectJumpDigit(ev({ code: "Digit4", ctrlKey: false, metaKey: true })),
-    ).toBe(4);
   });
 
   it("is not the chord without a primary modifier, or on Digit0", () => {
@@ -76,7 +72,7 @@ describe("projectJumpTarget", () => {
     ).toBeNull();
   });
 
-  // REGRESSION GUARD (review #1): Chrome/Firefox/Safari own Ctrl+1-9 (Cmd+1-9 on macOS) for tab
+  // REGRESSION GUARD (review #1): browser tabs own Ctrl+1-9 for tab
   // switching and a page cannot preventDefault it, so the Server Edition can neither perform the
   // switch nor justify swallowing the key.
   it("is null in a browser tab, even for a digit that would resolve on the desktop", () => {

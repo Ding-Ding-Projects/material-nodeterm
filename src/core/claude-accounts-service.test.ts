@@ -128,7 +128,7 @@ describe('the remote leg is resolved lazily, and its absence falls back to LOCAL
       remote: () => ({
         add: async (projectId, id) => {
           calls.push(`add:${projectId}:${id}`)
-          return { configDir: `~/.nodeterm/claude-accounts/${id}`, versionSupported: true }
+          return { configDir: `~/.nodeterm/claude-accounts/${id}` }
         },
         readLogin: async () => JSON.stringify({ oauthAccount: { email: 'r@h.com' } }),
         remove: async (projectId, id) => {

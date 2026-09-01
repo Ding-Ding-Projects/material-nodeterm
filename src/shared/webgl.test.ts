@@ -6,9 +6,6 @@ import { resolveTerminalRenderer } from './webgl'
 // pinned, and moving one is a deliberate act with evidence behind it (see webgl.ts).
 describe('resolveTerminalRenderer', () => {
   it("'auto' is per-terminal WebGL — one default, every platform", () => {
-    // The macOS branch ('dom', then 'shared') existed for compositor-blamed blackouts that were
-    // root-caused to the addon-webgl 0.19 dispose crash (pinned + healed) — the platform split
-    // died with the evidence for it. WEBGL_BUDGET_DESKTOP_MAC stays as the macOS pressure cap.
     expect(resolveTerminalRenderer('auto')).toBe('webgl')
   })
 

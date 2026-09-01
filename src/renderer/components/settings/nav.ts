@@ -9,7 +9,7 @@ export type SettingsSectionId =
   | 'appearance'
   | 'appearance-editor'
   | 'app-identity'
-  | 'notch'
+  | 'agent-hud'
   | 'phone'
   | 'speech'
   | 'schedule'
@@ -55,8 +55,6 @@ export interface ProjectNavItem {
 export interface SettingsSectionRef {
   id: SettingsSectionId
   title: string
-  /** Only meaningful on macOS (the notch capsule) — hidden elsewhere by `visibleSettingsGroups`. */
-  macOnly?: boolean
   /** Project-section rows only (`project-${string}` ids): the project's own color/icon, so the
    *  sidebar can render its `ProjectGlyph` beside the title instead of the generic folder glyph
    *  every project section used to share. Absent on every static section. */
@@ -104,7 +102,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'appearance', title: 'Appearance' },
       { id: 'appearance-editor', title: 'Appearance editor' },
       { id: 'app-identity', title: 'App name & logo' },
-      { id: 'notch', title: 'Notch', macOnly: true },
+      { id: 'agent-hud', title: 'Agent HUD' },
       { id: 'notifications', title: 'Notifications' },
       { id: 'language', title: 'Language' },
       { id: 'narrator', title: 'Narrator' },
@@ -163,18 +161,18 @@ export function allSectionIds(): SettingsSectionId[] {
 }
 
 /**
- * The groups as the sidebar should render them for this platform: a mac-only section is dropped
- * entirely off macOS (an empty group would be dropped too, though none exists today). Pure — the
- * caller passes the platform so this stays testable.
+ * The groups as the sidebar should render them for this platform. The platform argument remains
+ * for the language-mode filtering contract; Agent HUD is a Windows desktop section with no
+ * platform-specific navigation marker.
  */
 export function visibleSettingsGroups(
-  isMac: boolean,
+  _isMac: boolean,
   schoolModeAllowsLanguage = true
 ): SettingsGroup[] {
   return SETTINGS_GROUPS.map((g) => ({
     ...g,
     sections: g.sections.filter(
-      (s) => (isMac || !s.macOnly) && (schoolModeAllowsLanguage || s.id !== 'language')
+      (s) => schoolModeAllowsLanguage || s.id !== 'language'
     )
   })).filter((g) => g.sections.length > 0)
 }

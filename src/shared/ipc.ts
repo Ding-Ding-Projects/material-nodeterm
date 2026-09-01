@@ -35,20 +35,6 @@ export const IPC = {
    *  Model switching uses this instead of typing an exit slash-command into an agent composer. */
   ptyTerminateForeground: 'pty:terminate-foreground',
   ptyReadSessionName: 'pty:read-session-name',
-  /** Shell → renderer: this MACHINE's pty-device pressure band changed (core/pty-pressure.ts).
-   *  Payload: `PtyPressure` — `{ level, usage, ceiling }`. Sent on band CHANGES only, and re-sent
-   *  for a held band at most once every five minutes; `level: 'none'` is what clears the banner.
-   *  Desktop only — see the Server Edition note beside the monitor in src/server/index.ts. */
-  ptyPressure: 'pty:pressure',
-  /** Main → renderer: a trackpad scroll or pinch opened or closed on the main window. The main
-   *  ledger emits only edge transitions, not the raw pointer-packet stream. Server Edition keeps
-   *  its renderer heuristic because a browser has no equivalent raw input source. */
-  canvasTrackpadGesture: 'canvas:trackpad-gesture',
-  /** Renderer → main: the user clicked "Fix automatically…" on the pty-pressure banner. Raises
-   *  `kern.tty.ptmx_max` now AND installs a LaunchDaemon so it survives reboot, via ONE
-   *  administrator-privileges osascript (macOS's own password dialog). Resolves
-   *  `PtyLimitFixResult`. NEVER invoked on the app's own initiative — see main/ptmx-limit.ts. */
-  ptyRaiseDeviceLimit: 'pty:raise-device-limit',
   terminalProfilesList: 'terminal-profiles:list',
   terminalProfilesRefresh: 'terminal-profiles:refresh',
   virtualMachineTools: 'virtual-machine:tools',
@@ -151,7 +137,7 @@ export const IPC = {
   /** Write text to the system clipboard from the MAIN process. Renderer-side `clipboard` access is
    *  deprecated in Electron; resolves true only after MAIN completes the write. */
   clipboardWrite: 'clipboard:write',
-  /** Copy local files as file references (not bytes/text) to the macOS system clipboard. */
+  /** Copy local files as real File Explorer references, not bytes or text. */
   clipboardWriteFiles: 'clipboard:write-files',
   appNotify: 'app:notify',
   appOpenNotificationSettings: 'app:open-notification-settings',
@@ -178,7 +164,7 @@ export const IPC = {
    *  `external` opt). See core/ack-sweep.ts. */
   agentUnreadClear: 'agent:unread-clear',
   agentSubagentActivity: 'agent:subagent-activity',
-  /** macOS Notch HUD (docs/notch-hud.md). main → hud: push the current row array. */
+  /** Agent HUD (docs/agent-hud.md). main to hud: push the current row array. */
   hudRows: 'hud:rows',
   /** hud → main: toggle window click-through on hotspot enter/leave. Arg: `ignore: boolean`. */
   hudSetIgnoreMouse: 'hud:set-ignore-mouse',
@@ -186,7 +172,7 @@ export const IPC = {
    *  Arg: `nodeId: string`. Reuses the notification-click focus path. */
   hudFocusNode: 'hud:focus-node',
   /** hud → main: the panel expanded/collapsed. Arg: `expanded: boolean`. Marks NOTHING as read —
-   *  the handler is deliberately a no-op (notch-hud.ts `onExpanded`). It used to clear every done
+   *  the handler is deliberately a no-op (agent-hud.ts `onExpanded`). It used to clear every done
    *  latch ("you looked"), which with three finished sessions waiting meant opening the panel and
    *  clicking one silently swallowed the other two. Read is strictly per row: `hudFocusNode` clears
    *  that row, `hudDismiss` hides one by hand. Still wired because the expand state may drive more

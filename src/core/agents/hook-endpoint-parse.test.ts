@@ -3,8 +3,8 @@ import { parseEndpointEnv } from './hook-endpoint-parse'
 import { posixQuote } from '../../shared/ssh'
 
 describe('parseEndpointEnv', () => {
-  it('unquotes the exact posixQuote form both writers emit (spaced macOS path, #351)', () => {
-    const dir = '/Users/work/Library/Application Support/node-terminal/node-tokens'
+  it('unquotes the exact posixQuote form both writers emit (spaced Linux server path)', () => {
+    const dir = '/srv/node terminal/node-tokens'
     // Built with the SAME posixQuote the writers use — not a hand-approximated fixture.
     const body =
       `NODETERM_HOOK_PORT=${posixQuote('54321')}\n` +

@@ -1,14 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { UpdateInfo } from '../shared/types'
 import {
-  NON_WINDOWS_UPDATER_PROTOCOL,
   WINDOWS_STABLE_FEED_URL,
   WINDOWS_UPDATER_PROTOCOL,
   compareVersions,
   createInstallGate,
   createWindowsSquirrelController,
   registerBeforeQuitForUpdate,
-  updaterProtocolFor,
   versionForAppChannel,
   versionFromSquirrelReleaseName,
   windowsFeedURL,
@@ -106,10 +104,8 @@ function createStableController(overrides?: {
 }
 
 describe('Squirrel updater protocol and feed selection', () => {
-  it('selects the Squirrel protocol only for Windows', () => {
-    expect(updaterProtocolFor('win32')).toBe(WINDOWS_UPDATER_PROTOCOL)
-    expect(updaterProtocolFor('darwin')).toBe(NON_WINDOWS_UPDATER_PROTOCOL)
-    expect(updaterProtocolFor('linux')).toBe(NON_WINDOWS_UPDATER_PROTOCOL)
+  it('exports the one supported updater protocol', () => {
+    expect(WINDOWS_UPDATER_PROTOCOL).toBe('squirrel-windows')
   })
 
   it('pins stable builds to the official feed and ignores all fixture overrides', () => {

@@ -216,8 +216,7 @@ describe('buildLinkedContextInstructions', () => {
       expect(body).toContain(CODEX_SANDBOX_BLOCKED_LINE)
       expect(body.toLowerCase()).toContain('escalated permissions')
       expect(body).toMatch(/never relink, reinstall or restart nodeterm/)
-      expect(body).toContain('network.allow_unix_sockets')
-      expect(body).toContain('~/.codex/config.toml')
+      expect(body).not.toContain('network.allow_')
     }
   })
 
@@ -234,7 +233,7 @@ describe('buildLinkedContextInstructions', () => {
 // discipline the canvas-control shim gets in full (canvas-control-shim.test.ts runs that one for
 // real); the two share `nt_read_node_token`, so the behaviour is covered there.
 describe('the context-link shim', () => {
-  it('is valid POSIX sh', async () => {
+  it.skipIf(process.platform === 'win32')('is valid POSIX sh', async () => {
     const { execFile } = await import('node:child_process')
     const { promisify } = await import('node:util')
     const fs = await import('node:fs')

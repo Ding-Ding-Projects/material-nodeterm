@@ -202,7 +202,7 @@ export function sessionStateAgeLabel(updatedAt: number | undefined, nowMs: numbe
 }
 
 /**
- * Resolves the Cmd/Ctrl+N project shortcut: N is 1-based, matches sidebar/store array order.
+ * Resolves the Ctrl+N project shortcut: N is 1-based, matches sidebar/store array order.
  * Only 1-9 are addressable — out of range (including an empty or short project list) is null,
  * a silent no-op at the call site rather than a wraparound or error.
  */

@@ -11,22 +11,20 @@ describe('detectOllamaInstalled', () => {
     expect(result).toEqual({ found: true, via: 'path' })
   })
 
-  it('falls back to well-known install locations when PATH misses it (a packaged GUI app often has a narrower PATH than an interactive shell)', () => {
+  it('falls back to well-known Linux install locations when PATH misses it', () => {
     const result = detectOllamaInstalled({
-      platform: 'darwin',
-      env: { PATH: '/usr/bin' },
-      exists: (p) => p === '/usr/local/bin/ollama'
+      platform: 'linux',
+      env: { PATH: '/opt/nothing' },
+      exists: (p) => p === '/usr/bin/ollama'
     })
     expect(result).toEqual({ found: true, via: 'known-location' })
   })
 
-  it('checks the macOS .app Resources dir too, not only /usr/local/bin', () => {
-    const result = detectOllamaInstalled({
-      platform: 'darwin',
-      env: { PATH: '' },
-      exists: (p) => p === '/Applications/Ollama.app/Contents/Resources/ollama'
-    })
-    expect(result).toEqual({ found: true, via: 'known-location' })
+  it('does not invent fixed install locations on an unsupported platform', () => {
+    const seen: string[] = []
+    const result = detectOllamaInstalled({ platform: 'aix', env: {}, exists: (p) => { seen.push(p); return true } })
+    expect(result).toEqual({ found: false, via: null })
+    expect(seen).toEqual([])
   })
 
   it('checks the Windows LOCALAPPDATA install directory with the .exe suffix', () => {

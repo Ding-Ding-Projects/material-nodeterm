@@ -10,7 +10,6 @@ import type {
   PairingDoneResult,
   Project,
   PtyCreateOptions,
-  PtyPressure,
   LogRecord,
   RecycledInfo,
   RelayPeerPending,
@@ -1177,17 +1176,6 @@ const api: NodeTerminalApi = {
     ipcRenderer.on(IPC.appMemoryPressure, handler)
     return () => ipcRenderer.removeListener(IPC.appMemoryPressure, handler)
   },
-  onPtyPressure: (listener) => {
-    const handler = (_e: unknown, reading: PtyPressure) => listener(reading)
-    ipcRenderer.on(IPC.ptyPressure, handler)
-    return () => ipcRenderer.removeListener(IPC.ptyPressure, handler)
-  },
-  onCanvasTrackpadGesture: (listener) => {
-    const handler = (_e: unknown, active: boolean) => listener(active)
-    ipcRenderer.on(IPC.canvasTrackpadGesture, handler)
-    return () => ipcRenderer.removeListener(IPC.canvasTrackpadGesture, handler)
-  },
-  raisePtyDeviceLimit: () => ipcRenderer.invoke(IPC.ptyRaiseDeviceLimit),
   answerPermission: (payload) => ipcRenderer.invoke(IPC.agentAnswerPermission, payload),
   ackDone: (nodeId) => {
     void ipcRenderer.invoke(IPC.agentAckDone, nodeId)

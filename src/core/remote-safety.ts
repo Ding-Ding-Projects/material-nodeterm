@@ -63,7 +63,7 @@ const REMOTE_HOME_UNSAFE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029"`$\\;&|<>(){
  * allowlist of LETTERS can only ever be a list of the alphabets its author thought of.
  *
  * So it enumerates what is DANGEROUS instead (`REMOTE_HOME_UNSAFE`), which is a closed set. Anything
- * else — any script's letters, spaces (`/Users/First Last` is ordinary on macOS), dots, dashes,
+ * else. Any script's letters, spaces (`C:\\Users\\First Last` is ordinary on Windows), dots, dashes,
  * underscores, `+`, apostrophes — is just a path.
  *
  * It must also be ABSOLUTE: a relative answer would build relative remote paths against whatever

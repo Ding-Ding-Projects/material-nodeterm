@@ -89,7 +89,6 @@ export function terminalProfileCreationActions(
 
 export interface DefaultTerminalShortcutEvent {
   key: string
-  metaKey: boolean
   ctrlKey: boolean
   shiftKey: boolean
 }
@@ -99,14 +98,14 @@ export interface DefaultTerminalShortcutContext {
   typing: boolean
 }
 
-/** Pure decision behind the Canvas Cmd/Ctrl+T route. Board coverage and editable-focus refusal are
+/** Pure decision behind the Canvas Ctrl+T route. Board coverage and editable-focus refusal are
  * part of the shortcut contract, while the returned action is intentionally default-only. */
 export function defaultTerminalShortcutAction(
   event: DefaultTerminalShortcutEvent,
   context: DefaultTerminalShortcutContext
 ): 'create-default-terminal' | null {
   if (context.kanbanOpen || context.typing) return null
-  if (!(event.metaKey || event.ctrlKey)) return null
+  if (!event.ctrlKey) return null
   if (event.shiftKey || event.key.toLowerCase() !== 't') return null
   return 'create-default-terminal'
 }

@@ -244,22 +244,22 @@ describe('RemoteHooks.setup — a hostile remote $HOME', () => {
   })
 
   it('quotes every path it builds from $HOME, so a home with a space still installs', async () => {
-    const { rh, conn, runs } = harness({ responses: { $HOME: '/Users/Enes K' } })
+    const { rh, conn, runs } = harness({ responses: { $HOME: '/home/Enes K' } })
     const res = await rh.setup('p1', conn, '/s.sock', { port: 51234, token: 'tok', version: '1' })
-    expect(res?.endpointPath).toBe('/Users/Enes K/.nodeterm/hook-endpoint-p1.env')
+    expect(res?.endpointPath).toBe('/home/Enes K/.nodeterm/hook-endpoint-p1.env')
     const joined = runs.map((r) => r.cmd)
-    expect(joined.some((j) => j.includes(`mkdir -p '/Users/Enes K/.nodeterm'`))).toBe(true)
+    expect(joined.some((j) => j.includes(`mkdir -p '/home/Enes K/.nodeterm'`))).toBe(true)
     expect(
       joined.some(
-        (j) => j.includes('cat > ') && j.includes("/Users/Enes K/.nodeterm/hook-endpoint-p1.env'")
+        (j) => j.includes('cat > ') && j.includes("/home/Enes K/.nodeterm/hook-endpoint-p1.env'")
       )
     ).toBe(true)
-    expect(joined.some((j) => j.includes(`cat > '/Users/Enes K/.claude/settings.json'`))).toBe(true)
+    expect(joined.some((j) => j.includes(`cat > '/home/Enes K/.claude/settings.json'`))).toBe(true)
     // No path derived from $HOME survives UNQUOTED in any remote SHELL LINE (the last argv element
     // of an ssh child is the command the remote shell parses; the `-R` forward spec is an ssh
     // OPTION, not a shell word, so it is excluded by construction).
     const shellLines = runs.map((r) => r.args[r.args.length - 1])
-    expect(shellLines.some((line) => /(?<!')\/Users\/Enes K/.test(line))).toBe(false)
+    expect(shellLines.some((line) => /(?<!')\/home\/Enes K/.test(line))).toBe(false)
   })
 })
 
@@ -334,14 +334,14 @@ describe('RemoteHooks — the opencode XDG path expression', () => {
 
 describe('RemoteHooks.ensureFullscreenTui — the fourth $(dirname …) site', () => {
   it('quotes the substitution, so a home with a space gets ONE mkdir argument', async () => {
-    // Unquoted, `$(dirname '/Users/Enes Kirca/.claude/settings.json')` word-splits into two mkdir
+    // Unquoted, a remote home with spaces word-splits the dirname substitution into two mkdir
     // args (measured ARGC=2): junk directories, then the quoted `cat >` fails and the catch
-    // swallows it — fullscreen-TUI silently never written for any macOS user with a spaced home.
+    // swallows it, so the fullscreen TUI setting is never written for a spaced remote home.
     const { rh, conn: c, runs } = harness({ responses: { 'settings.json': '{}' } })
-    await rh.ensureFullscreenTui(c, '/s.sock', '/Users/Enes Kirca')
+    await rh.ensureFullscreenTui(c, '/s.sock', '/home/Enes Kirca')
     const write = runs.map((r) => r.args[r.args.length - 1]).find((l) => l.includes('mkdir -p'))
     expect(write).toBeTruthy()
-    expect(write).toContain(`mkdir -p "$(dirname '/Users/Enes Kirca/.claude/settings.json')"`)
+    expect(write).toContain(`mkdir -p "$(dirname '/home/Enes Kirca/.claude/settings.json')"`)
     // win32: the real-/bin/sh half only. Measured on this machine: `execFileSync('/bin/sh', …)`
     // fails with `ENOENT` — Node's child_process resolves a path-containing argument directly via
     // CreateProcess with no PATH search and no MSYS/Git-Bash translation, so there is no real
@@ -351,10 +351,10 @@ describe('RemoteHooks.ensureFullscreenTui — the fourth $(dirname …) site', (
     if (process.platform === 'win32') return
     const argc = execFileSync(
       '/bin/sh',
-      ['-c', `set -- "$(dirname '/Users/Enes Kirca/.claude/settings.json')"; echo "ARGC=$#|$1"`],
+      ['-c', `set -- "$(dirname '/home/Enes Kirca/.claude/settings.json')"; echo "ARGC=$#|$1"`],
       { encoding: 'utf8' }
     ).trim()
-    expect(argc).toBe('ARGC=1|/Users/Enes Kirca/.claude')
+    expect(argc).toBe('ARGC=1|/home/Enes Kirca/.claude')
   })
 })
 
@@ -628,8 +628,11 @@ describe('RemoteHooks.installCanvasControl', () => {
     // ~/.claude/skills — the same gap installIntoAccountDir exists for on the hook side.
     const { rh, calls } = harness()
     await rh.installCanvasSkillIntoAccountDir(conn, '/s.sock', '/home/u', 'acc-1')
-    const target = '/home/u/.nodeterm/claude-accounts/acc-1/skills/manage-nodeterm-canvas/SKILL.md'
+    const target = '/home/u/.claude/skills/manage-nodeterm-canvas/SKILL.md'
     expect(calls.some((c) => isWriteTo(c.args, target))).toBe(true)
+    expect(calls.some((c) => c.args.join(' ').includes(
+      "ln -s '/home/u/.claude/skills' '/home/u/.nodeterm/claude-accounts/acc-1/skills'"
+    ))).toBe(true)
     // the shim is (re)written too — installCanvasControl may have failed open earlier.
     expect(calls.some((c) => isWriteTo(c.args, '/home/u/.nodeterm/nodeterm.sh'))).toBe(true)
   })
@@ -685,8 +688,11 @@ describe('RemoteHooks.installContextLink', () => {
   it('installs the skill into a remote managed-account config dir', async () => {
     const { rh, calls } = harness()
     await rh.installContextLinkSkillIntoAccountDir(conn, '/s.sock', '/home/u', 'acc-1')
-    const target = '/home/u/.nodeterm/claude-accounts/acc-1/skills/get-linked-context/SKILL.md'
+    const target = '/home/u/.claude/skills/get-linked-context/SKILL.md'
     expect(calls.some((c) => isWriteTo(c.args, target))).toBe(true)
+    expect(calls.some((c) => c.args.join(' ').includes(
+      "ln -s '/home/u/.claude/skills' '/home/u/.nodeterm/claude-accounts/acc-1/skills'"
+    ))).toBe(true)
     expect(calls.some((c) => isWriteTo(c.args, '/home/u/.nodeterm/context.sh'))).toBe(true)
   })
 

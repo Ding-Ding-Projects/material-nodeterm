@@ -39,13 +39,13 @@ describe('applyVocabularyToMenuItems', () => {
     const items: MenuItem[] = [
       // The label MUST be one the vocabulary rewrites, or this row returns early untouched and the
       // assertion below passes against an implementation that does translate shortcut tokens.
-      { label: 'Delete', onClick: () => {}, shortcut: ['⌘', 'Delete'] },
+      { label: 'Delete', onClick: () => {}, shortcut: ['Ctrl', 'Delete'] },
       { type: 'separator' },
       colors
     ]
     const out = applyVocabularyToMenuItems(items, map)
     expect(out[0]).toMatchObject({ label: 'Yeet' })
-    expect((out[0] as { shortcut?: string[] }).shortcut).toEqual(['⌘', 'Delete'])
+    expect((out[0] as { shortcut?: string[] }).shortcut).toEqual(['Ctrl', 'Delete'])
     expect(out[1]).toBe(items[1])
     expect(out[2]).toBe(colors)
   })

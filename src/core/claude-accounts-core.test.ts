@@ -23,7 +23,6 @@ import {
   AUTH_ENV_STRIP,
   accountTmuxEnvArgs,
   parseLoginCapture,
-  isSupportedClaudeVersion,
   transcriptRootFor,
   isSafeLocalTranscriptPath
 } from './claude-accounts-core'
@@ -125,17 +124,6 @@ describe('transcriptRootFor', () => {
   })
   it('rejects account ids that could traverse out of the root', () => {
     expect(() => transcriptRootFor('/Users/x', '/ud', '../evil')).toThrow()
-  })
-})
-
-describe('isSupportedClaudeVersion', () => {
-  it('accepts 2.1+ and rejects older', () => {
-    expect(isSupportedClaudeVersion('2.1.0 (Claude Code)')).toBe(true)
-    expect(isSupportedClaudeVersion('2.10.3 (Claude Code)')).toBe(true)
-    expect(isSupportedClaudeVersion('3.0.0')).toBe(true)
-    expect(isSupportedClaudeVersion('2.0.14 (Claude Code)')).toBe(false)
-    expect(isSupportedClaudeVersion('1.0.44')).toBe(false)
-    expect(isSupportedClaudeVersion('garbage')).toBe(false) // unparseable → unsupported (warn)
   })
 })
 

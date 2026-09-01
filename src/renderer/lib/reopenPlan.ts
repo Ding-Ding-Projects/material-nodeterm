@@ -2,7 +2,7 @@ import type { ReopenEntry } from '@renderer/state/reopenHistory'
 import type { ReopenNodeSnapshot } from './reopenNode'
 import type { CanvasNode } from '@renderer/state/workspace'
 
-/** What `app.reopenLastClosed` (Cmd+Shift+T) should do for ONE popped history entry. Pure
+/** What `app.reopenLastClosed` (Ctrl+Shift+T) should do for ONE popped history entry. Pure
  *  decision only — no store writes, no `setNodes`, no navigation. `Canvas.tsx` executes
  *  whichever variant comes back; `'skip'` means the entry was stale (already reopened another
  *  way, its project was permanently deleted, or every node it held recreated to nothing) and the

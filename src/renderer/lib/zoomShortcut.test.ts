@@ -16,23 +16,21 @@ function ev(over: Partial<ZoomShortcutEvent> = {}): ZoomShortcutEvent {
   return {
     type: 'keydown',
     code: 'Digit0',
-    metaKey: true,
-    ctrlKey: false,
+    ctrlKey: true,
     altKey: false,
     shiftKey: false,
     repeat: false,
     ...over
-  }
+  } as ZoomShortcutEvent
 }
 
 const ZOOM_100 = ev()
-const FIT_ALL = ev({ code: 'Digit1', metaKey: false, shiftKey: true })
+const FIT_ALL = ev({ code: 'Digit1', ctrlKey: false, shiftKey: true })
 const FREE = { boardOpen: false, textFocus: false }
 
 describe('zoomShortcutChord', () => {
-  it('reads ⌘/Ctrl+0 as "back to 100%", off the physical key code', () => {
+  it('reads Ctrl+0 as "back to 100%", off the physical key code', () => {
     expect(zoomShortcutChord(ZOOM_100)).toBe('zoom-100')
-    expect(zoomShortcutChord(ev({ metaKey: false, ctrlKey: true }))).toBe('zoom-100')
   })
 
   it('reads Shift+1 as "fit everything"', () => {
@@ -40,13 +38,13 @@ describe('zoomShortcutChord', () => {
   })
 
   it('is not the chord without its exact modifiers', () => {
-    expect(zoomShortcutChord(ev({ metaKey: false }))).toBeNull() // bare 0
-    expect(zoomShortcutChord(ev({ shiftKey: true }))).toBeNull() // ⌘⇧0
-    expect(zoomShortcutChord(ev({ altKey: true }))).toBeNull() // ⌥⌘0 / AltGr
+    expect(zoomShortcutChord(ev({ ctrlKey: false }))).toBeNull() // bare 0
+    expect(zoomShortcutChord(ev({ shiftKey: true }))).toBeNull() // Ctrl+Shift+0
+    expect(zoomShortcutChord(ev({ altKey: true }))).toBeNull() // Ctrl+Alt+0 / AltGr
     expect(zoomShortcutChord(ev({ code: 'Digit1', shiftKey: true, altKey: true }))).toBeNull()
-    expect(zoomShortcutChord(ev({ code: 'Digit1', metaKey: false, shiftKey: false }))).toBeNull()
-    expect(zoomShortcutChord(ev({ code: 'Digit1', shiftKey: true }))).toBeNull() // ⌘⇧1
-    expect(zoomShortcutChord(ev({ code: 'Digit2', metaKey: false, shiftKey: true }))).toBeNull()
+    expect(zoomShortcutChord(ev({ code: 'Digit1', shiftKey: false }))).toBeNull()
+    expect(zoomShortcutChord(ev({ code: 'Digit1', shiftKey: true }))).toBeNull() // Ctrl+Shift+1
+    expect(zoomShortcutChord(ev({ code: 'Digit2', shiftKey: true }))).toBeNull()
   })
 
   it('only fires on a FRESH keydown', () => {
@@ -57,12 +55,12 @@ describe('zoomShortcutChord', () => {
     expect(zoomShortcutChord({ ...FIT_ALL, repeat: true })).toBeNull()
   })
 
-  // REGRESSION GUARD: the ⌘/Ctrl+1-9 project jump lives one `else if` away in the same handler.
+  // REGRESSION GUARD: the Ctrl+1-9 project jump lives one `else if` away in the same handler.
   // Neither matcher may ever claim a key the other one wants.
   it('never claims a key the project-jump chord claims, and vice versa', () => {
     for (let d = 0; d <= 9; d++) {
       const plain = ev({ code: `Digit${d}`, shiftKey: false })
-      const shifted = ev({ code: `Digit${d}`, metaKey: false, shiftKey: true })
+      const shifted = ev({ code: `Digit${d}`, shiftKey: true })
       for (const e of [plain, shifted]) {
         expect(zoomShortcutChord(e) !== null && projectJumpDigit(e) !== null).toBe(false)
       }

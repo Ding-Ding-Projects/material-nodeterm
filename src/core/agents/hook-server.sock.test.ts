@@ -65,7 +65,9 @@ async function post(
   return { status: stdout.trim(), body }
 }
 
-describe('hook server unix-socket listener', () => {
+const linuxSuite = process.platform === 'linux' ? describe : describe.skip
+
+linuxSuite('hook server unix-socket listener', () => {
   it('binds hook.sock at 0600 inside a 0700 sock/ dir under the data dir', () => {
     const sock = hookServer.getSockPath()
     expect(sock).toBe(path.join(dir, 'sock', 'hook.sock'))
@@ -127,7 +129,7 @@ describe('hook server unix-socket listener', () => {
 
 // The per-node identity machinery must be transport-agnostic: the verified-only verbs (sticky &
 // co.) demand a token THIS instance minted for THAT node id, on the socket exactly as on TCP.
-describe('unix-socket listener — verified-only verbs keep their gate', () => {
+linuxSuite('unix-socket listener — verified-only verbs keep their gate', () => {
   const SECRET = Buffer.alloc(32, 9)
 
   beforeAll(() => {

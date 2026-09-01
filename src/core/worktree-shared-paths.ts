@@ -134,7 +134,7 @@ async function materializeOne(
     // the repo must not let materialization surface content from OUTSIDE the repo. A legitimate
     // in-repo symlink (e.g. a relative link to another repo dir) resolves back under repoAbs and is
     // allowed. A realpath failure (broken link / ENOENT race) → fail closed as skipped-unsafe.
-    // The root itself is realpath'd too, so a symlinked prefix (e.g. macOS `/tmp -> /private/tmp`)
+    // The root itself is realpath'd too, so a symlinked prefix on Linux
     // in the root path doesn't spuriously make a legitimately-contained source look outside it.
     const realRepoAbs = await realpathOrNull(repoAbs)
     const realSource = await realpathOrNull(source)

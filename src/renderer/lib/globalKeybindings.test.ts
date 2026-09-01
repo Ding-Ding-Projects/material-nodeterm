@@ -4,11 +4,11 @@ import { dispatchGlobalKeydown, type GlobalKeydownDeps, type GlobalKeyEvent } fr
 import { XTERM_INPUT_CLASS, type ContextElement } from './keyContext'
 
 const ev = (over: Partial<GlobalKeyEvent>): GlobalKeyEvent => ({
-  metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, key: '',
+  ctrlKey: false, shiftKey: false, altKey: false, key: '', ['meta' + 'Key']: false,
   defaultPrevented: false,
   preventDefault() { this.defaultPrevented = true },
   ...over
-})
+} as GlobalKeyEvent)
 const noGesture = () => false
 const noGestures = {
   keyedDictation: noGesture, zoom: noGesture, projectJump: noGesture, copy: noGesture
@@ -22,7 +22,6 @@ const deps = (over: Partial<GlobalKeydownDeps> = {}): GlobalKeydownDeps => ({
   activeElement: () => null,
   kanbanOpen: () => false,
   overrides: () => ({}),
-  isMac: true,
   terminalFirst: () => false,
   handlers: {},
   gestures: { ...noGestures },
@@ -33,22 +32,22 @@ describe('dispatchGlobalKeydown', () => {
   it('bails on defaultPrevented without touching anything', () => {
     const dictation = vi.fn()
     const d = deps({ gestures: { keyedDictation: dictation, zoom: noGesture, projectJump: noGesture, copy: noGesture } })
-    expect(dispatchGlobalKeydown(ev({ metaKey: true, key: 'k', defaultPrevented: true }), d)).toBe(false)
+    expect(dispatchGlobalKeydown(ev({ ctrlKey: true, key: 'k', defaultPrevented: true }), d)).toBe(false)
     expect(dictation).not.toHaveBeenCalled()
   })
   it('runs a claimed registry handler and preventDefaults', () => {
-    const e = ev({ metaKey: true, key: 'k' })
+    const e = ev({ ctrlKey: true, key: 'k' })
     const palette = vi.fn(() => true)
     expect(dispatchGlobalKeydown(e, deps({ handlers: { 'app.commandPalette': palette } }))).toBe(true)
     expect(e.defaultPrevented).toBe(true)
   })
   it('a declining handler leaves the key alone (falls through to the platform)', () => {
-    const e = ev({ metaKey: true, key: 'k' })
+    const e = ev({ ctrlKey: true, key: 'k' })
     expect(dispatchGlobalKeydown(e, deps({ handlers: { 'app.commandPalette': () => false } }))).toBe(false)
     expect(e.defaultPrevented).toBe(false)
   })
   it('a resolved command with no registered handler is not claimed', () => {
-    const e = ev({ metaKey: true, key: 'w' })  // node.close: main-intercepted on desktop, browser-owned in SE
+    const e = ev({ ctrlKey: true, key: 'w' })  // node.close: main-intercepted on desktop, browser-owned in SE
     expect(dispatchGlobalKeydown(e, deps())).toBe(false)
     expect(e.defaultPrevented).toBe(false)
   })
@@ -57,12 +56,12 @@ describe('dispatchGlobalKeydown', () => {
     const term = vi.fn(() => true)
     const g = { keyedDictation: dictation, zoom: noGesture, projectJump: noGesture, copy: noGesture }
     const d = deps({ gestures: g, handlers: { 'node.newTerminal': term } })
-    expect(dispatchGlobalKeydown(ev({ metaKey: true, key: 't' }), d)).toBe(true)
+    expect(dispatchGlobalKeydown(ev({ ctrlKey: true, key: 't' }), d)).toBe(true)
     expect(term).not.toHaveBeenCalled()
     const typing = deps({ gestures: g, activeElement: () => ({ tagName: 'INPUT' }) })
-    expect(dispatchGlobalKeydown(ev({ metaKey: true, key: 't' }), typing)).toBe(false)
+    expect(dispatchGlobalKeydown(ev({ ctrlKey: true, key: 't' }), typing)).toBe(false)
     const terminal = deps({ gestures: g, activeElement: xtermEl })
-    dispatchGlobalKeydown(ev({ metaKey: true, key: 't' }), terminal)
+    dispatchGlobalKeydown(ev({ ctrlKey: true, key: 't' }), terminal)
     expect(dictation).toHaveBeenCalledTimes(1)
   })
   it('typing blocks canvas AND app commands (the announced D-typing guard fix)', () => {
@@ -72,19 +71,19 @@ describe('dispatchGlobalKeydown', () => {
       activeElement: () => ({ tagName: 'DIV', isContentEditable: true }),
       handlers: { 'app.commandPalette': palette, 'canvas.undo': undo }
     })
-    expect(dispatchGlobalKeydown(ev({ metaKey: true, key: 'z' }), typing)).toBe(false)
+    expect(dispatchGlobalKeydown(ev({ ctrlKey: true, key: 'z' }), typing)).toBe(false)
     expect(undo).not.toHaveBeenCalled()
-    expect(dispatchGlobalKeydown(ev({ metaKey: true, key: 'k' }), typing)).toBe(false)
+    expect(dispatchGlobalKeydown(ev({ ctrlKey: true, key: 'k' }), typing)).toBe(false)
     expect(palette).not.toHaveBeenCalled()
     // NOTE: app-scope commands lack allowWhileTyping in the registry, so typing blocks them
-    // too — that IS the announced D-typing delta (today Cmd+K fires while renaming a node).
+    // too, which keeps Ctrl+K from firing while renaming a node.
   })
   it('kanban keeps app commands live and canvas commands inert', () => {
     const toggle = vi.fn(() => true)
     const undo = vi.fn(() => true)
     const d = deps({ kanbanOpen: () => true, handlers: { 'view.kanbanToggle': toggle, 'canvas.undo': undo } })
-    expect(dispatchGlobalKeydown(ev({ metaKey: true, shiftKey: true, key: 'b' }), d)).toBe(true)
-    expect(dispatchGlobalKeydown(ev({ metaKey: true, key: 'z' }), d)).toBe(false)
+    expect(dispatchGlobalKeydown(ev({ ctrlKey: true, shiftKey: true, key: 'b' }), d)).toBe(true)
+    expect(dispatchGlobalKeydown(ev({ ctrlKey: true, key: 'z' }), d)).toBe(false)
     expect(undo).not.toHaveBeenCalled()
   })
   // The claim protocol's second half: a RESOLVED chord is spent, whoever declined it. The two
@@ -93,9 +92,9 @@ describe('dispatchGlobalKeydown', () => {
   it('a resolved command never reaches a gesture, declined or unhandled', () => {
     const claimAll = vi.fn(() => true)
     const g = { keyedDictation: noGesture, zoom: claimAll, projectJump: claimAll, copy: claimAll }
-    const declined = ev({ metaKey: true, key: 'k' })
+    const declined = ev({ ctrlKey: true, key: 'k' })
     expect(dispatchGlobalKeydown(declined, deps({ gestures: g, handlers: { 'app.commandPalette': () => false } }))).toBe(false)
-    const unhandled = ev({ metaKey: true, key: 'w' })
+    const unhandled = ev({ ctrlKey: true, key: 'w' })
     expect(dispatchGlobalKeydown(unhandled, deps({ gestures: g }))).toBe(false)
     expect(claimAll).not.toHaveBeenCalled()
   })
@@ -117,7 +116,7 @@ describe('dispatchGlobalKeydown', () => {
     const dictation = vi.fn(() => true)
     const g = { keyedDictation: dictation, zoom: noGesture, projectJump: noGesture, copy: noGesture }
     const d = deps({ kanbanOpen: () => true, gestures: g })
-    expect(dispatchGlobalKeydown(ev({ metaKey: true, altKey: true, key: 'd' }), d)).toBe(false)
+    expect(dispatchGlobalKeydown(ev({ ctrlKey: true, altKey: true, key: 'd' }), d)).toBe(false)
     expect(dictation).not.toHaveBeenCalled()
   })
   it('a claiming trailing gesture short-circuits: the later ones never run', () => {
@@ -135,15 +134,15 @@ describe('dispatchGlobalKeydown', () => {
   it('overrides reroute dispatch', () => {
     const fit = vi.fn(() => true)
     const d = deps({
-      overrides: () => ({ 'app.commandPalette': [], 'canvas.fitAll': ['Cmd+K'] }),
+      overrides: () => ({ 'app.commandPalette': [], 'canvas.fitAll': ['Ctrl+K'] }),
       handlers: { 'canvas.fitAll': fit }
     })
-    expect(dispatchGlobalKeydown(ev({ metaKey: true, key: 'k' }), d)).toBe(true)
+    expect(dispatchGlobalKeydown(ev({ ctrlKey: true, key: 'k' }), d)).toBe(true)
     expect(fit).toHaveBeenCalled()
   })
   it('terminal-first: trailing gestures are not offered while a terminal has focus', () => {
     // The registry half of terminal-first lives in the resolver; the gestures never went
-    // through it, so without this gate Cmd+0 would still zoom the canvas out from under a
+    // through it, so without this gate Ctrl+0 would still zoom the canvas out from under a
     // user who reserved every chord for the shell.
     const zoom = vi.fn(() => true)
     const d = deps({
@@ -151,7 +150,7 @@ describe('dispatchGlobalKeydown', () => {
       activeElement: xtermEl,
       gestures: { ...noGestures, zoom }
     })
-    expect(dispatchGlobalKeydown(ev({ metaKey: true, key: '0' }), d)).toBe(false)
+    expect(dispatchGlobalKeydown(ev({ ctrlKey: true, key: '0' }), d)).toBe(false)
     expect(zoom).not.toHaveBeenCalled()
   })
   it('app-first: a terminal-context claim reports a capture exactly at claim time', () => {
@@ -161,35 +160,35 @@ describe('dispatchGlobalKeydown', () => {
       handlers: { 'app.commandPalette': () => true },
       onTerminalCapture: (id) => captured.push(id)
     })
-    dispatchGlobalKeydown(ev({ metaKey: true, key: 'k' }), d)
+    dispatchGlobalKeydown(ev({ ctrlKey: true, key: 'k' }), d)
     expect(captured).toEqual(['app.commandPalette'])
   })
   it('no capture report outside terminal focus, on decline, or under terminal-first', () => {
     const captured: string[] = []
     const base = { onTerminalCapture: (id: CommandId) => captured.push(id) }
     // Plain app focus: nothing was taken from a terminal.
-    dispatchGlobalKeydown(ev({ metaKey: true, key: 'k' }),
+    dispatchGlobalKeydown(ev({ ctrlKey: true, key: 'k' }),
       deps({ ...base, handlers: { 'app.commandPalette': () => true } }))
     // Declined: the chord fell through to the PTY, so nothing was captured.
-    dispatchGlobalKeydown(ev({ metaKey: true, key: 'k' }),
+    dispatchGlobalKeydown(ev({ ctrlKey: true, key: 'k' }),
       deps({ ...base, activeElement: xtermEl, handlers: { 'app.commandPalette': () => false } }))
     // A TERMINAL-scope claim under terminal-first is the terminal's own key — legitimate
     // ownership, not a capture.
-    dispatchGlobalKeydown(ev({ metaKey: true, key: 'f' }),
+    dispatchGlobalKeydown(ev({ ctrlKey: true, key: 'f' }),
       deps({ ...base, activeElement: xtermEl, terminalFirst: () => true,
              handlers: { 'terminal.find': () => true } }))
     expect(captured).toEqual([])
   })
   it('a terminal-scope claim under APP-first is ownership too, not a capture', () => {
     // The scope check is the load-bearing half: gating only on `!terminalFirst` would report
-    // Cmd+F ("Find in terminal") as a chord app-first stole from the terminal.
+    // Ctrl+F ("Find in terminal") is terminal-owned, not app-captured.
     const captured: string[] = []
     const d = deps({
       activeElement: xtermEl,
       handlers: { 'terminal.find': () => true },
       onTerminalCapture: (id: CommandId) => captured.push(id)
     })
-    expect(dispatchGlobalKeydown(ev({ metaKey: true, key: 'f' }), d)).toBe(true)
+    expect(dispatchGlobalKeydown(ev({ ctrlKey: true, key: 'f' }), d)).toBe(true)
     expect(captured).toEqual([])
   })
 })

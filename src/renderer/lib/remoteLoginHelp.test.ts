@@ -6,17 +6,12 @@ import {
 } from './remoteLoginHelp'
 
 describe('remote-login help copy', () => {
-  it('never says "Remote Login" to a Windows reader — their machine has no such setting', () => {
-    // The whole reason this module exists. "Remote Login" is macOS's name; on Windows the thing to
-    // turn on is the OpenSSH Server optional feature, and telling a Windows user to find "Remote
-    // Login" sends them hunting for a switch that does not exist under that name.
+  it('names the OpenSSH Server feature to a Windows reader', () => {
     expect(remoteLoginCopyFor('win32').what).toBe('OpenSSH Server')
     expect(remoteLoginCopyFor('win32').what).not.toContain('Remote Login')
-    expect(remoteLoginCopyFor('darwin').what).toBe('Remote Login')
   })
 
   it('labels the control for the settings app the platform actually has', () => {
-    expect(remoteLoginCopyFor('darwin').button).toBe('Open System Settings')
     expect(remoteLoginCopyFor('win32').button).toBe('Open Windows Settings')
   })
 
@@ -40,12 +35,10 @@ describe('remote-login help copy', () => {
   })
 
   it('reads the platform from either navigator field', () => {
-    expect(detectHelpPlatform({ platform: 'MacIntel' })).toBe('darwin')
     expect(detectHelpPlatform({ platform: 'Win32' })).toBe('win32')
     expect(detectHelpPlatform({ platform: '', userAgent: 'Mozilla/5.0 (Windows NT 10.0)' })).toBe('win32')
     expect(detectHelpPlatform({ platform: 'Linux x86_64' })).toBe('linux')
-    // Unknown is not macOS: defaulting to darwin would put "Remote Login" and a mac-only button in
-    // front of somebody whose platform we failed to read.
+    // Unknown uses the command-based Linux path instead of inventing a settings destination.
     expect(detectHelpPlatform({})).toBe('linux')
   })
 })

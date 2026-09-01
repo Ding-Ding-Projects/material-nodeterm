@@ -51,7 +51,11 @@ const APP_AGENT_ENV = 'NODETERM_APP_AGENT_SOCK'
  *  reason sshBin()/findSsh() exist), and a bare `spawn('ssh-agent')` miss is only a console.error
  *  whose visible symptom is "a passphrase prompt on every connect this run" with no diagnostic. */
 function findSshAgent(): string {
-  for (const p of ['/usr/bin/ssh-agent', '/opt/homebrew/bin/ssh-agent', '/usr/local/bin/ssh-agent']) {
+  const windowsRoot = process.env.WINDIR || process.env.SystemRoot || 'C:\\Windows'
+  const fallbacks = process.platform === 'win32'
+    ? [path.join(windowsRoot, 'System32', 'OpenSSH', 'ssh-agent.exe')]
+    : ['/usr/bin/ssh-agent', '/usr/local/bin/ssh-agent']
+  for (const p of fallbacks) {
     if (existsSync(p)) return p
   }
   return 'ssh-agent' // PATH as a last resort; a miss fails into env()'s fail-closed posture
@@ -91,7 +95,7 @@ function defaultDataDirKey(): string {
 }
 
 /** The socket lives in the same short, space-free home dir as the ControlMaster sockets: a unix
- *  socket path is capped near 104 bytes, which userData (~/Library/Application Support/…) eats.
+ *  socket path is capped near 104 bytes, so the stable short app directory avoids long paths.
  *  Keyed by data dir like `controlPathFor` is keyed by project id, so a second instance
  *  (`NT_MULTI=1`, ./dev-test.sh, a dev build next to the installed app) binds its own socket
  *  instead of unlinking the first one's and silently leaving that app agentless when it quits. */

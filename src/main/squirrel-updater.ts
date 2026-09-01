@@ -1,13 +1,10 @@
 import type { UpdateInfo } from '../shared/types'
 
 /**
- * Windows is packaged as Squirrel.Windows, so it must use Electron's built-in autoUpdater.
- * `electron-updater` always selects its NSIS backend on Windows and cannot consume the RELEASES
- * plus full `.nupkg` set this repository publishes.
+ * Windows is packaged as Squirrel.Windows, so it uses Electron's built-in autoUpdater against the
+ * RELEASES plus full `.nupkg` set this repository publishes.
  */
 export const WINDOWS_UPDATER_PROTOCOL = 'squirrel-windows' as const
-export const NON_WINDOWS_UPDATER_PROTOCOL = 'electron-builder' as const
-export type UpdaterProtocol = typeof WINDOWS_UPDATER_PROTOCOL | typeof NON_WINDOWS_UPDATER_PROTOCOL
 
 export const WINDOWS_STABLE_FEED_URL =
   'https://github.com/Ding-Ding-Projects/material-nodeterm/releases/latest/download'
@@ -63,10 +60,6 @@ export function registerBeforeQuitForUpdate(
   listener?: () => void
 ): void {
   if (listener) registerOnce(listener)
-}
-
-export function updaterProtocolFor(platform: NodeJS.Platform | string): UpdaterProtocol {
-  return platform === 'win32' ? WINDOWS_UPDATER_PROTOCOL : NON_WINDOWS_UPDATER_PROTOCOL
 }
 
 function parseVersion(version: string): ParsedVersion | null {
@@ -207,8 +200,8 @@ export function createInstallGate(options: {
       installing = true
       try {
         options.quitAndInstall()
-        // electron-updater can synchronously emit `error` instead of throwing. Its listener
-        // releases `installing` through installFailed(), making this attempt observably false.
+        // The backend can synchronously emit `error` instead of throwing. Its listener releases
+        // `installing` through installFailed(), making this attempt observably false.
         return installing
       } catch (error) {
         reportInstallFailure(error)

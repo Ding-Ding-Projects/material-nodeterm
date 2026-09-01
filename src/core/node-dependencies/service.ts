@@ -53,7 +53,7 @@ const ALLOWED_TRANSITIONS: Record<NodeDependencyState, readonly NodeDependencySt
 }
 
 function platformName(): NodeDependencyPlatform | null {
-  if (process.platform === 'win32' || process.platform === 'darwin' || process.platform === 'linux') {
+  if (process.platform === 'win32' || process.platform === 'linux') {
     return process.platform
   }
   return null

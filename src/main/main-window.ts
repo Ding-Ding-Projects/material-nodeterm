@@ -1,9 +1,6 @@
 // Live main-window tracking. Everything in the main process that pushes IPC to the
-// renderer must resolve the window AT SEND TIME via getMainWindow()/sendToMain() —
-// never capture a BrowserWindow in a closure at init. On macOS the window can be
-// closed (app stays alive) and recreated from the dock; a captured reference then
-// points at a destroyed window and every send is silently dropped (that bug shipped:
-// agent status badges died after a close→reopen cycle).
+// renderer must resolve the window at send time via getMainWindow()/sendToMain(). Never capture a
+// BrowserWindow in an initialization closure because a renderer restart can replace it.
 
 // Structural view of BrowserWindow (keeps this module electron-free and unit-testable).
 export interface MainWindowLike {
@@ -37,9 +34,7 @@ export function sendToMain(channel: string, ...args: unknown[]): void {
   getMainWindow()?.webContents.send(channel, ...args)
 }
 
-/** The attached renderer client ids — Electron has exactly one (the main window's webContents),
- *  or none while the window is closed on macOS. Resolved AT CALL TIME, like sendToMain, so a
- *  recreated window is picked up. Feeds CorePlatform.clientIds(). */
+/** The attached renderer client ids. Resolved at call time so a replacement window is picked up. */
 export function mainWindowClientIds(): number[] {
   const id = getMainWindow()?.webContents.id
   return typeof id === 'number' ? [id] : []
@@ -51,7 +46,7 @@ export type CrashReloadAction = 'reload' | 'give-up' | 'ignore'
 // reloads it. Reload automatically, but bounded: a crash on the boot path would otherwise
 // reload forever. 'clean-exit' is a deliberate teardown (window close, navigation), never
 // reloaded; everything else — crashed, oom, abnormal-exit, launch-failed, and 'killed'
-// (macOS memory-pressure jetsam included) — deserves an attempt.
+// deserves an attempt.
 export function createCrashReloadPolicy(
   opts?: { maxReloads?: number; windowMs?: number }
 ): (reason: string, now: number) => CrashReloadAction {
@@ -67,27 +62,13 @@ export function createCrashReloadPolicy(
   }
 }
 
-// macOS convention: closing the window hides it (the app — and its tmux sessions,
-// hook server, updater, license watchers — keeps running); a real close only happens
-// on quit. Other platforms quit on window close, so never intercept there.
-export function shouldHideOnClose(platform: NodeJS.Platform | string, quitting: boolean): boolean {
-  return platform === 'darwin' && !quitting
-}
-
 export type CloseAction = 'default' | 'hide' | 'leave-fullscreen-then-hide'
 
-/**
- * What the close-event handler should do. Hiding a FULLSCREEN window without leaving fullscreen
- * first strands its empty Space as a black screen the user can still swipe to (issue #78, the
- * known Electron behavior electron/electron#20263) — so fullscreen must be exited, the async
- * `leave-full-screen` transition awaited, and only THEN the window hidden. The quit path is not
- * affected: there the window really closes and the app (and its Space) goes away with it.
- */
+/** The Windows close button always follows the native close path. */
 export function closeAction(
-  platform: NodeJS.Platform | string,
-  quitting: boolean,
-  isFullScreen: boolean
+  _platform: NodeJS.Platform | string,
+  _quitting: boolean,
+  _isFullScreen: boolean
 ): CloseAction {
-  if (!shouldHideOnClose(platform, quitting)) return 'default'
-  return isFullScreen ? 'leave-fullscreen-then-hide' : 'hide'
+  return 'default'
 }

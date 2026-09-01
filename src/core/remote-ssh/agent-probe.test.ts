@@ -13,7 +13,7 @@ import {
 import type { SshConnection } from '../../shared/ssh'
 
 const conn: SshConnection = { host: 'h.example.com', user: 'deploy', port: 2222 }
-const AMBIENT = '/tmp/launchd.abc/Listeners'
+const AMBIENT = path.join(os.tmpdir(), 'ssh-agent.sock')
 
 beforeEach(() => clearAgentProbeCache())
 
@@ -126,14 +126,16 @@ describe('probeAgentSockToPin', () => {
   })
 })
 
-// The probe's real substrate is `ssh -G` output, and the -G dialect is OpenSSH's, not ours — so
+// The probe's real substrate is `ssh -G` output, and the -G dialect is OpenSSH's, not ours, so
 // run the REAL binary against a fixture config (same discipline as remote-claude-usage.test.ts
 // running its generated sh for real). `-F` pins the config; ssh resolves ~/.ssh/config off
 // pw_dir, so HOME games would not isolate it.
-const realSsh = ['/usr/bin/ssh', '/usr/local/bin/ssh', '/opt/homebrew/bin/ssh'].find((p) =>
-  existsSync(p)
-)
-describe.skipIf(!realSsh || process.platform === 'win32')('probe against a real ssh -G', () => {
+const sshRoot = process.env.WINDIR || process.env.SystemRoot || 'C:\\Windows'
+const realSsh = (process.platform === 'win32'
+  ? [path.join(sshRoot, 'System32', 'OpenSSH', 'ssh.exe')]
+  : ['/usr/bin/ssh', '/usr/local/bin/ssh']
+).find((p) => existsSync(p))
+describe.skipIf(!realSsh)('probe against a real ssh -G', () => {
   let dir: string
   let cfg: string
   beforeEach(() => {

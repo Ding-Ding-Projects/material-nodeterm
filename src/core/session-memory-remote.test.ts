@@ -251,14 +251,15 @@ describe('remoteSessionMemoryCommand under a real POSIX shell', { timeout: REAL_
     expect(r.mem).toEqual({ availableMb: 13184, totalMb: 64160 })
   })
 
-  // A host with no /proc/meminfo (the macOS/BSD shape). Deliberately NO free/vm_stat/sysctl
+  // A host with no /proc/meminfo, as on remote systems that do not expose Linux procfs. Deliberately NO
+  // free/vm_stat/sysctl
   // fallback: the sweep still answers with rows, and `mem` is null = "no signal", never a zero.
   //
   // COVERAGE LIMIT: the `cat` stub is what creates that condition on Linux. On a host that has no
-  // /proc/meminfo to begin with (macOS) the stub changes nothing, so there the test observes the
+  // /proc/meminfo to begin with the stub changes nothing, so that run observes the
   // NATIVE shape rather than a simulated one — the end state asserted is identical on both, but
   // only the Linux run proves the stub-induced failure path. Making it strictly meaningful on
-  // macOS would need a `mem`-producing fallback, which is deliberately not implemented.
+  // non-Linux host would need a `mem`-producing fallback, which is deliberately not implemented.
   it('still reports rows with mem:null when /proc/meminfo is unreadable', async () => {
     // Stub `cat` so reading /proc/meminfo fails the way it does off Linux.
     const noproc = fakeHost('sessmem no mem ', {

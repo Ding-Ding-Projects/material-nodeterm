@@ -25,7 +25,7 @@ vi.mock('./platform', () => ({
       ? {
           // A reversible stand-in for the OS credential vault: enough to prove the store
           // round-trips through seal/unseal and base64-encodes before sealing, without needing a
-          // real keychain in CI.
+          // real credential vault in CI.
           sealSecret: (b: Buffer) => Buffer.from(`sealed:${b.toString('utf8')}`, 'utf8'),
           unsealSecret: (b: Buffer) => {
             const s = b.toString('utf8')
@@ -180,7 +180,7 @@ describe('the credential never becomes readable', () => {
   })
 
   it('treats an unsealable credential as unverifiable, never as a crash', async () => {
-    // A keychain reset or a machine migration makes the sealed bytes undecipherable. The
+    // A credential-vault reset or a machine migration makes the sealed bytes undecipherable. The
     // documented recovery is deleting the shared directory — the app must say "wrong PIN", not
     // throw on a boot path.
     const s = await fresh()
@@ -196,7 +196,7 @@ describe('the credential never becomes readable', () => {
     s.dispose()
   })
 
-  it('works with no sealing available at all — the Server Edition has no keychain', async () => {
+  it('works with no sealing available at all because Server Edition has no credential vault', async () => {
     sealAvailable = false
     vi.resetModules()
     const { SchoolModeStore: S } = await import('./school-mode')

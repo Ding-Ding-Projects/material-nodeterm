@@ -79,7 +79,7 @@ describe('fileOpenTarget', () => {
   })
 
   it('hands binaries and archives to the OS', () => {
-    expect(fileOpenTarget('/a/installer.dmg')).toBe('os')
+    expect(fileOpenTarget('/a/installer.exe')).toBe('os')
     expect(fileOpenTarget('/a/bundle.zip')).toBe('os')
     expect(fileOpenTarget('/a/data.sqlite')).toBe('os')
   })
@@ -87,7 +87,7 @@ describe('fileOpenTarget', () => {
   // shell.openPath opens a path on THIS machine. For a remote listing that is either a silent
   // no-op or, if the path happens to exist locally too, an unrelated local file.
   it('never hands a remote path to the OS', () => {
-    expect(fileOpenTarget('/a/installer.dmg', { remote: true })).toBe('canvas')
+    expect(fileOpenTarget('/a/installer.exe', { remote: true })).toBe('canvas')
     expect(fileOpenTarget('/a/bundle.zip', { remote: true })).toBe('canvas')
     expect(fileOpenTarget('/a/notes.md', { remote: true })).toBe('canvas')
   })

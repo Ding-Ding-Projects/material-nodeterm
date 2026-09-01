@@ -46,7 +46,11 @@ const PROBE_TIMEOUT_MS = 3_000
 const PROBE_TTL_MS = 15_000
 
 function findSsh(): string | null {
-  return findExecutableSync('ssh', ['/usr/bin/ssh', '/usr/local/bin/ssh', '/opt/homebrew/bin/ssh'])
+  const windowsRoot = process.env.WINDIR || process.env.SystemRoot || 'C:\\Windows'
+  const fallbacks = process.platform === 'win32'
+    ? [path.join(windowsRoot, 'System32', 'OpenSSH', 'ssh.exe')]
+    : ['/usr/bin/ssh', '/usr/local/bin/ssh']
+  return findExecutableSync('ssh', fallbacks)
 }
 
 /** The `identityagent` line of an `ssh -G` dump, verbatim, or undefined when the effective config

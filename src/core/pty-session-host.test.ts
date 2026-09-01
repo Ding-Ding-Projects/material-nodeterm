@@ -47,11 +47,6 @@ vi.mock('node-pty', () => ({
   })
 }))
 
-vi.mock('./pty-devices', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./pty-devices')>()),
-  readPtyDevices: () => ({ ceiling: 511, inUse: 8 })
-}))
-
 function fakeSessionHostPty(ready = Promise.resolve({ fresh: true })) {
   let dataCb: ((data: string) => void) | undefined
   let exitCb: ((e: { exitCode: number }) => void) | undefined

@@ -812,32 +812,21 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim keeps credent
   })
 })
 
-// Issue #367: Codex's command sandbox denies connect() for every address family (Linux seccomp;
-// macOS seatbelt deny-default), so curl dies with HTTP 000 while nodeterm is perfectly healthy —
+// Issue #367: Codex's command sandbox can deny connect() for every address family, so curl dies
+// with HTTP 000 while nodeterm is perfectly healthy.
 // and the old message ("control endpoint unreachable") sent agents off to relink/restart a server
 // that was never the problem. Codex exports CODEX_SANDBOX_NETWORK_DISABLED=1 into every sandboxed
-// command, so the shim can tell the two failures apart. Run against real /bin/sh with a genuinely
-// dead endpoint; `uname` is faked on PATH so the macOS-only remedy line is deterministic on any CI.
-describe('codex-sandbox self-diagnosis (issue #367)', () => {
+// command, so the shim can tell the two failures apart. Run against a real POSIX shell with a
+// genuinely dead endpoint where that shell is available.
+describe.skipIf(process.platform === 'win32')('codex-sandbox self-diagnosis (issue #367)', () => {
   let deadSock = ''
-  let unameDir = (os: 'Darwin' | 'Linux'): string => os // reassigned in beforeAll
 
   beforeAll(() => {
     deadSock = path.join(dir, 'nobody-listens.sock')
-    const bins: Record<string, string> = {}
-    unameDir = (osName) => {
-      if (!bins[osName]) {
-        const d = path.join(dir, `fake-uname-${osName.toLowerCase()}`)
-        fs.mkdirSync(d, { recursive: true })
-        fs.writeFileSync(path.join(d, 'uname'), `#!/bin/sh\necho ${osName}\n`, { mode: 0o755 })
-        bins[osName] = d
-      }
-      return bins[osName]
-    }
   })
 
-  const sandboxEnv = (osName: 'Darwin' | 'Linux', extra: Record<string, string> = {}): Record<string, string> => ({
-    PATH: `${unameDir(osName)}:${process.env.PATH ?? ''}`,
+  const sandboxEnv = (extra: Record<string, string> = {}): Record<string, string> => ({
+    PATH: process.env.PATH ?? '',
     NODETERM_HOOK_PORT: '',
     NODETERM_HOOK_SOCK: deadSock,
     CODEX_SANDBOX_NETWORK_DISABLED: '1',
@@ -845,27 +834,21 @@ describe('codex-sandbox self-diagnosis (issue #367)', () => {
   })
 
   it('under the sandbox, a dead socket names the sandbox and the escalated retry — not "unreachable"', async () => {
-    await expect(callShim(['list'], sandboxEnv('Linux'))).rejects.toMatchObject({
+    await expect(callShim(['list'], sandboxEnv())).rejects.toMatchObject({
       code: 1,
       stderr: expect.stringContaining("Codex's sandbox blocked this connection to nodeterm")
     })
-    await expect(callShim(['list'], sandboxEnv('Linux'))).rejects.toMatchObject({
+    await expect(callShim(['list'], sandboxEnv())).rejects.toMatchObject({
       stderr: expect.stringContaining('escalated permissions')
     })
-    const err = await callShim(['list'], sandboxEnv('Linux')).catch((e) => e as { stderr: string })
+    const err = await callShim(['list'], sandboxEnv()).catch((e) => e as { stderr: string })
     expect(err.stderr).toContain('do not relink or restart it')
     expect(err.stderr).not.toContain('Could not reach nodeterm')
   })
 
-  it('on Darwin with a socket advertised, it also prints the config.toml allowlist remedy with the path', async () => {
-    const err = await callShim(['list'], sandboxEnv('Darwin')).catch((e) => e as { stderr: string })
-    expect(err.stderr).toContain(`network.allow_unix_sockets = ["${deadSock}"]`)
-    expect(err.stderr).toContain('~/.codex/config.toml')
-  })
-
-  it('on Linux the allowlist line is withheld — the Linux sandbox has no such allowlist', async () => {
-    const err = await callShim(['list'], sandboxEnv('Linux')).catch((e) => e as { stderr: string })
-    expect(err.stderr).not.toContain('network.allow_unix_sockets')
+  it('does not advertise an unsupported socket allowlist', async () => {
+    const err = await callShim(['list'], sandboxEnv()).catch((e) => e as { stderr: string })
+    expect(err.stderr).not.toContain('network.allow_')
   })
 
   it('the same diagnosis fires on the TCP branch (a sandboxed curl to loopback dies identically)', async () => {
@@ -876,7 +859,7 @@ describe('codex-sandbox self-diagnosis (issue #367)', () => {
     const freePort = (probe.address() as { port: number }).port
     await new Promise<void>((r) => probe.close(() => r()))
     const err = await callShim(['list'], {
-      PATH: `${unameDir('Linux')}:${process.env.PATH ?? ''}`,
+      PATH: process.env.PATH ?? '',
       NODETERM_HOOK_PORT: String(freePort),
       CODEX_SANDBOX_NETWORK_DISABLED: '1'
     }).catch((e) => e as { stderr: string })
@@ -888,7 +871,7 @@ describe('codex-sandbox self-diagnosis (issue #367)', () => {
   // red, and inverting it turns this one red.
   it('without CODEX_SANDBOX_NETWORK_DISABLED the original genuine-unreachable message stands', async () => {
     const err = await callShim(['list'], {
-      PATH: `${unameDir('Darwin')}:${process.env.PATH ?? ''}`,
+      PATH: process.env.PATH ?? '',
       NODETERM_HOOK_PORT: '',
       NODETERM_HOOK_SOCK: deadSock
     }).catch((e) => e as { stderr: string })
@@ -931,7 +914,7 @@ describe('parseControlBody', () => {
   })
 })
 
-describe('sticky through the shim (verified-only verb)', () => {
+describe.skipIf(process.platform === 'win32')('sticky through the shim (verified-only verb)', () => {
   // `sticky` is in `requiresVerified`, so unlike every other shim test these calls must present
   // the per-node token — the same file-in-a-directory arrangement `buildPtyEnv` hands a real
   // session. The secret is scoped to this describe so the rest of the suite keeps exercising the
@@ -1002,7 +985,9 @@ describe('sticky through the shim (verified-only verb)', () => {
 // refused through the other, with "Restart agent" as the only advice — and an in-place agent
 // restart re-launches the CLI in the same pane, with the same environment and the same endpoint
 // file, so it could never have helped.
-describe('a latched node is not refused just because its endpoint advertises no dir (#384)', () => {
+describe.skipIf(process.platform === 'win32')(
+  'a latched node is not refused just because its endpoint advertises no dir (#384)',
+  () => {
   const SECRET = Buffer.alloc(32, 11)
   let home = ''
   let tokens = ''
@@ -1050,4 +1035,5 @@ describe('a latched node is not refused just because its endpoint advertises no 
     // Not merely tolerated — actually identified, which is what the latch was protecting.
     expect(received.at(-1)?.verified).toBe(true)
   })
-})
+  }
+)

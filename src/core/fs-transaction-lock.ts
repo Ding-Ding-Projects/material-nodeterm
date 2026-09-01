@@ -10,7 +10,7 @@
 // it automatically, and no process ever guesses that a foreign PID or old timestamp means dead.
 // The sidecar contains no credentials; it is only the lock rendezvous for one canonical physical
 // resource. Node/Electron's runtime floor is enforced separately because `node:sqlite` is the
-// dependency that makes this guarantee true on Windows, macOS, and Linux.
+// dependency that makes this guarantee true on Windows and Linux.
 
 import { createHash } from 'crypto'
 import { promises as fs } from 'fs'

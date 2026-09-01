@@ -11,12 +11,12 @@
 // WHAT THIS GUARANTEES, and each line is asserted in school-mode.test.ts:
 //   - a PIN is never stored; only a scrypt hash of it, over a per-credential random salt
 //   - the hash is sealed at rest when the platform offers a credential vault, and stored as raw
-//     0600 bytes when it does not (the Server Edition has no keychain — the same documented
+//     0600 bytes when it does not (the Server Edition has no credential vault, the same documented
 //     trade-off core/agents/node-auth-secret.ts already makes)
 //   - the hash is base64-encoded BEFORE sealing, because sealSecret encrypts the UTF-8 CONTENT of
 //     the buffer it is handed, and not every byte of a binary hash is valid UTF-8
 //   - an unsealable credential reads as "cannot verify" and the mode stays LOCKED, rather than
-//     throwing on a boot path or falling open. A keychain reset or a machine migration is a
+//     throwing on a boot path or falling open. A credential-vault reset or a machine migration is a
 //     normal event, and the documented recovery is deleting the shared directory
 //   - comparison is timing-safe
 
@@ -157,7 +157,7 @@ export async function verifyPin(file: string, pin: string): Promise<boolean> {
       ? Buffer.from(platform().unsealSecret!(Buffer.from(stored.hash, 'base64')).toString('utf8'), 'base64')
       : Buffer.from(stored.hash, 'base64')
   } catch {
-    // Unseal fails across a machine migration or a keychain reset. "Cannot verify", never a crash.
+    // Unseal fails across a machine migration or a credential-vault reset. "Cannot verify", never a crash.
     return false
   }
   const candidate = deriveHash(pin, Buffer.from(stored.salt, 'base64'))

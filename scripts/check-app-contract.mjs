@@ -862,14 +862,23 @@ const FEATURES = [
     docs: ['docs/team-presence.md'],
   },
   {
-    // macOS-only by nature, but a shipped surface with its own settings section — so it is a
-    // contract like any other. A feature that exists on only one platform still has to exist.
-    id: 'notch-hud',
-    label: 'Notch HUD (macOS)',
-    files: ['src/main/notch-hud.ts', 'src/renderer/components/settings/sections/NotchSection.tsx'],
-    contentChecks: [['src/main/notch-hud.ts', 'export function initNotchHud']],
-    settingsSection: 'notch',
-    docs: ['docs/notch-hud.md'],
+    id: 'agent-hud',
+    label: 'Agent HUD',
+    files: [
+      'src/main/agent-hud.ts',
+      'src/main/agent-hud-model.ts',
+      'src/renderer/components/settings/sections/AgentHudSection.tsx',
+    ],
+    contentChecks: [
+      ['src/main/agent-hud.ts', 'export function initAgentHud'],
+      ['src/main/agent-hud-model.ts', 'export function createHudModel'],
+      ['src/renderer/components/settings/sections/AgentHudSection.tsx', 'export function AgentHudSection'],
+    ],
+    settingsSection: 'agent-hud',
+    docs: ['docs/agent-hud.md'],
+    focusedTests: [
+      ['src/main/agent-hud-model.test.ts', "describe('bucketState'"],
+    ],
   },
   {
     id: 'agent-mascots',

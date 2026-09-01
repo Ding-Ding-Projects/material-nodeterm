@@ -80,10 +80,8 @@ export interface ShortcutDef {
   allowInTerminal?: boolean
 }
 
-// Defaults are stored in the canonical `Ctrl+…` notation (see shared/shortcut.ts): `Ctrl` still
-// means the platform primary modifier at match time (⌘ for a Server Edition browser tab on a real
-// Mac), so these are the same chords as the pre-rewire `Cmd+…` strings — only the canonical
-// spelling changed. Pre-rewire settings.json values keep working through the parse-only alias.
+// Defaults are stored in the canonical `Ctrl+…` notation. Pre-rewire settings.json values keep
+// working through the parse-only `Cmd` and `Command` aliases.
 export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: 'commandPalette', group: 'General', label: 'Command palette', default: 'Ctrl+K', keywords: ['command', 'palette', 'quick', 'open'], scope: 'app', allowInTerminal: true },
   { id: 'settings', group: 'General', label: 'Settings', default: 'Ctrl+,', keywords: ['settings', 'preferences', 'open'], scope: 'app', allowInTerminal: true },
@@ -155,7 +153,7 @@ function shortcutScope(id: ShortcutAction): ShortcutScope {
 export function findShortcutConflicts(map: ShortcutMap): [ShortcutAction, ShortcutAction][] {
   const chordKey = (combo: string): string => {
     const p = parseShortcut(combo)
-    return `${p.cmd ? 'C' : ''}${p.alt ? 'A' : ''}${p.shift ? 'S' : ''}+${p.key ?? ''}`
+    return `${p.cmd || p.ctrl ? 'C' : ''}${p.alt ? 'A' : ''}${p.shift ? 'S' : ''}+${p.key ?? ''}`
   }
   // Bucketed: two actions with the same chord only conflict when their dispatch contexts can
   // actually collide (see `conflictBucket`). Grouping by chord alone would flag e.g. a
@@ -195,8 +193,7 @@ export interface ShortcutDispatchContext {
  * hand at each call site (see `shortcuts-dispatch-wiring.test.ts`) — this is the SAME decision
  * expressed once, for a future single dispatcher or for a caller that wants to ask "what would
  * fire here" without re-deriving the per-site guards. It does not replace any of those wired
- * call sites in this change; each keeps its own `matchesShortcut(e, shortcuts.<id>, isMac)`
- * check today.
+ * call sites in this change; each keeps its own `matchesShortcut(e, shortcuts.<id>)` check today.
  *
  * `scm`-scope actions are never returned here: they dispatch from their own focused composer's
  * local onKeyDown, never from a window-level listener — resolving `commitStaged` here would
@@ -206,7 +203,7 @@ export function resolveShortcutAction(
   e: ShortcutKeyEvent,
   ctx: ShortcutDispatchContext,
   map: ShortcutMap,
-  isMac: boolean
+  _legacyPlatformFlag?: boolean
 ): ShortcutAction | null {
   for (const def of SHORTCUT_DEFS) {
     if (def.scope === 'scm') continue
@@ -214,7 +211,7 @@ export function resolveShortcutAction(
     if (ctx.terminal && !(def.scope === 'terminal' || def.allowInTerminal)) continue
     if (!ctx.terminal && def.scope === 'terminal') continue
     if (ctx.kanbanOpen && def.scope === 'canvas') continue
-    if (matchesShortcut(e, map[def.id], isMac)) return def.id
+    if (matchesShortcut(e, map[def.id])) return def.id
   }
   return null
 }

@@ -342,7 +342,6 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
   useEffect(() => {
     void useSshServers.getState().hydrate()
   }, [])
-  const [versionWarning, setVersionWarning] = useState(false)
   const [pendingRemove, setPendingRemove] = useState<PendingAccountRemoval | null>(null)
   const [removingAccountId, setRemovingAccountId] = useState<string | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
@@ -778,7 +777,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     }
     setAddingOn(host ?? LOCAL_TARGET)
     setAddError(null)
-    let added: { id: string; versionSupported: boolean }
+    let added: { id: string }
     try {
       added = await window.nodeTerminal.claudeAccounts.add(projectId ? { projectId } : undefined)
     } catch (e) {
@@ -802,9 +801,6 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
       // still going when the thing to do next is on the canvas.
       setAddingOn(null)
     }
-    // Non-blocking: the account still isolates config, but an old CLI's unscoped macOS keychain
-    // service would collide across accounts — surface a dismissable warning.
-    if (!added.versionSupported) setVersionWarning(true)
     const account: ClaudeAccount = {
       id: added.id,
       label: 'New account',
@@ -1015,19 +1011,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     >
       <SearchableRow {...ROWS.accounts}>
     <div className="space-y-4" data-easter-surface="account">
-          {versionWarning ? (
-            <div className="flex items-start justify-between gap-3 rounded-md border border-[color:var(--danger)]/40 bg-[color:var(--danger)]/10 px-3 py-2 text-[13px] leading-relaxed text-[color:var(--danger)]">
-              <span><SettingsText>Your installed Claude CLI is older than the version that scopes credentials per config dir. Accounts still isolate their config, but on macOS logins may collide in the shared keychain. Update the Claude CLI to keep them fully separate.</SettingsText></span>
-              <button
-                className="shrink-0 cursor-pointer text-muted hover:text-text"
-                onClick={() => setVersionWarning(false)}
-              >
-                <SettingsText>Dismiss</SettingsText>
-              </button>
-            </div>
-          ) : null}
-
-          <MachinePanel label="This Mac" remote={false}>
+          <MachinePanel label="This computer" remote={false}>
             <ProviderSection
               provider="Claude"
               addLabel="Add account"

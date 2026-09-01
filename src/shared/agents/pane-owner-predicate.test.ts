@@ -19,7 +19,7 @@ const owner = (argv: string[], command = 'node') => ({
 describe('isAgentPane', () => {
   it('recognises the expected agent binary in the foreground group', () => {
     expect(isAgentPane(owner(['node /usr/local/bin/claude --resume x']), 'claude')).toBe('agent')
-    expect(isAgentPane(owner(['/opt/homebrew/bin/codex']), 'codex')).toBe('agent')
+    expect(isAgentPane(owner(['/usr/bin/codex']), 'codex')).toBe('agent')
     expect(isAgentPane(owner(['gemini']), 'gemini')).toBe('agent')
   })
 

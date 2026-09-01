@@ -80,7 +80,7 @@ describe('installTerminalFocusMirror', () => {
     // The measured trap: `focusout` fires with activeElement === <body>, so an IMMEDIATE read here
     // would report false-then-true on every hop between terminals — a window, however brief, in
     // which main re-arms the intercepts under a terminal that never lost focus. Two chords land in
-    // that window in practice (⌘W closing a node mid-edit is the one users would file).
+    // that window in practice (Ctrl+W closing a node mid-edit is the one users would file).
     b.focus()
     await settle()
     expect(report).not.toHaveBeenCalled()
@@ -108,7 +108,7 @@ describe('installTerminalFocusMirror', () => {
     expect(report.mock.calls).toEqual([[false]])
 
     // ...and coming back must re-engage. Without this leg the mirror would be stuck FALSE for a
-    // terminal that still holds focus — the intercepts would keep claiming ⌘W under a user who
+    // terminal that still holds focus — the intercepts would keep claiming Ctrl+W under a user who
     // asked their terminal to have it, with no event left to correct it.
     report.mockClear()
     window.dispatchEvent(new Event('focus'))
@@ -147,7 +147,7 @@ describe('installTerminalFocusMirror', () => {
     // still be on it. jsdom fires NOTHING here (measured), and the browsers disagree about whether
     // they fire `blur` — so the mirror may not lean on an event. Left uncorrected this is the worst
     // failure this feature has: main believes a terminal is focused forever, stands its intercepts
-    // down forever, and ⌘W/⌘M go to the application MENU — closing and minimizing the window.
+    // down forever, and Ctrl+W/Ctrl+M go to the application MENU — closing and minimizing the window.
     term.remove()
     expect(report).not.toHaveBeenCalled() // nothing observed it yet — that is the whole problem
 

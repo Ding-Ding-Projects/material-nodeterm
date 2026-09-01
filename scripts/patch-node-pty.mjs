@@ -3,11 +3,9 @@
  * patch-node-pty.mjs — version-pinned local fix for node-pty 1.1.0:
  *   - the Windows ConPTY baton/handle race during pre-first-output teardown.
  *
- * (This script also used to patch node-pty's darwin `pty_posix_spawn` ptmx descriptor leak —
- * microsoft/node-pty#950, filed by us. The macOS desktop was deleted (Windows-only product
- * decision, 2026-08), and the leak lives in a darwin-only compilation unit that the Windows and
- * Linux builds never compile, so that patch was removed with it. If the mac build ever returns,
- * the unix patch is in this file's git history and the upstream issue tracks the real fix.)
+ * The script deliberately owns only the Windows native fix. Unix-specific native patches were
+ * removed when desktop delivery became Windows-only, so this file cannot silently reintroduce a
+ * second platform's native behavior during installation.
  *
  * WINDOWS FAILURE
  *   node-pty deletes its native `pty_baton` as soon as the shell process handle signals. The

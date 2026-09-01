@@ -4,6 +4,8 @@ import type {
   GitHubSecretAvailability
 } from '../../shared/github-issues'
 import { execFile } from 'node:child_process'
+import os from 'node:os'
+import path from 'node:path'
 import { promisify } from 'node:util'
 import type { SecretStore } from '../secret-store'
 
@@ -15,13 +17,24 @@ const execute = promisify(execFile)
 export const runGitHubCliCommand: CommandRunner = async (command, args) => {
   if (command !== 'gh') return { ok: false, stdout: '', stderr: 'unsupported command' }
   try {
+    const env: NodeJS.ProcessEnv = { ...process.env }
+    if (process.platform === 'win32') {
+      const home = os.homedir()
+      const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local')
+      const programFiles = process.env.ProgramFiles || 'C:\\Program Files'
+      const inheritedKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') || 'Path'
+      env[inheritedKey] = [
+        path.join(programFiles, 'GitHub CLI'),
+        path.join(localAppData, 'Programs', 'GitHub CLI'),
+        process.env[inheritedKey] || ''
+      ].filter(Boolean).join(path.delimiter)
+    } else if (process.platform === 'linux') {
+      env.PATH = ['/usr/local/bin', '/usr/bin', '/bin', process.env.PATH || ''].filter(Boolean).join(path.delimiter)
+    }
     const result = await execute(command, args, {
       timeout: 15_000,
       maxBuffer: 1024 * 1024,
-      env: {
-        ...process.env,
-        PATH: `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin${process.env.PATH ? `:${process.env.PATH}` : ''}`
-      }
+      env
     })
     return { ok: true, stdout: result.stdout, stderr: result.stderr }
   } catch (error) {

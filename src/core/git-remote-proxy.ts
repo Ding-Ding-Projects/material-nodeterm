@@ -1,16 +1,15 @@
 import { execFile } from 'child_process'
+import os from 'os'
 import path from 'path'
 
 /**
  * Executor for the hook server's `/git/remote-op` route: runs a network git operation LOCALLY,
  * in this (GUI) process, on behalf of the mobile companion.
  *
- * Why it exists: the phone drives source control over an SSH exec channel, and on macOS that
- * channel cannot open the login Keychain — `git-credential-osxkeychain` fails with
- * errSecInteractionNotAllowed (-25308), git falls back to a /dev/tty prompt that an exec channel
- * doesn't have, and every push/pull/fetch against an https remote dies. The same commands run
- * fine inside the desktop app's GUI session, so the phone asks the app (via the loopback hook
- * server, bearer-token gated) to run them here.
+ * Why it exists: the phone drives source control over an SSH exec channel, but that channel may
+ * not inherit the interactive user's credential-helper environment. Git can then fall back to a
+ * terminal prompt that an exec channel does not have. The same commands run inside the desktop
+ * app's user session, so the phone asks the app, through the loopback hook server, to run them.
  *
  * Security: the request names an op from a FIXED whitelist — never argv — plus a cwd and an
  * optional branch. The branch is validated before it is placed in argv (it could otherwise read
@@ -81,17 +80,28 @@ export function argsForRemoteOp(op: string, branch?: string): string[] | null {
   }
 }
 
-// Same env recipe as git-service.ts: GUI apps on macOS don't inherit the shell PATH, so a
-// credential helper installed by Homebrew wouldn't be found; GIT_TERMINAL_PROMPT=0 makes a
-// credential MISS fail fast instead of hanging on a prompt (no TTY here either); LC_ALL=C pins
-// git's messages to English — the phone keys its push retry on the exact fatal wording.
+// Same environment recipe as git-service.ts. Windows desktop sessions receive the standard Git
+// locations even when Explorer supplied a narrow PATH; Linux Server Edition receives the standard
+// system directories. GIT_TERMINAL_PROMPT=0 makes a credential miss return instead of hanging on a
+// prompt. LC_ALL=C pins git's messages to English because the phone keys one retry on exact text.
 function gitEnv(): NodeJS.ProcessEnv {
-  return {
-    ...process.env,
-    PATH: `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin${process.env.PATH ? `:${process.env.PATH}` : ''}`,
-    GIT_TERMINAL_PROMPT: '0',
-    LC_ALL: 'C'
+  const env: NodeJS.ProcessEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' }
+  if (process.platform === 'win32') {
+    const home = os.homedir()
+    const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local')
+    const programFiles = process.env.ProgramFiles || 'C:\\Program Files'
+    const inheritedKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') || 'Path'
+    const inherited = process.env[inheritedKey] || ''
+    env[inheritedKey] = [
+      path.join(programFiles, 'Git', 'cmd'),
+      path.join(programFiles, 'GitHub CLI'),
+      path.join(localAppData, 'Programs', 'GitHub CLI'),
+      inherited
+    ].filter(Boolean).join(path.delimiter)
+  } else if (process.platform === 'linux') {
+    env.PATH = ['/usr/local/bin', '/usr/bin', '/bin', process.env.PATH || ''].filter(Boolean).join(path.delimiter)
   }
+  return env
 }
 
 /** Validate + run. Invalid requests return ok:false/exitCode:-1 without spawning anything. */
