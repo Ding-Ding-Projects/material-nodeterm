@@ -155,6 +155,8 @@ import { AgentContinuationReview } from '../components/AgentContinuationReview'
 import { contextSourceKey } from '../state/contextWindow'
 import { AdhdElapsedChip, AdhdMomentumNote } from '../components/AdhdNodeSurfaces'
 import { markNodeActivity, markNodeOpened } from '../lib/nodeActivity'
+import { Localized } from '../ui/Localized'
+import { StatusChip } from '../ui/md3/StatusChip'
 import { AccountIdentityPills } from '../components/AccountIdentityPills'
 import { presentAccount } from '../lib/accountPresentation'
 import { isZoomModifierHeld } from '../lib/zoomModifier'
@@ -2122,6 +2124,9 @@ export function TerminalNode({
   // Set when the session fell back to the system account because this node's account folder was
   // missing at spawn (Task 3 fallback) — flags the account chip with a warning tint + tooltip.
   const [accountFallback, setAccountFallback] = useState(false)
+  // `PtyCreateResult.persistenceUnavailable`: the session host could not be probed, so this
+  // generation is a plain shell. Shown as a chip whose click re-creates (re-probes) the session.
+  const [persistenceUnavailable, setPersistenceUnavailable] = useState<string | null>(null)
   // Co-attach state published by the (park-surviving) transport listeners — see CoState.
   const [co, setCo_] = useState<CoState>(() => getCo(termKey))
   const [agentRelaunchRetrying, setAgentRelaunchRetrying] = useState(false)
@@ -2179,6 +2184,7 @@ export function TerminalNode({
   // the message is on screen rather than in a log.
   const retrySpawn = (): void => {
     setCo(termKey, { spawnError: null })
+    setPersistenceUnavailable(null)
     updateNodeData(id, (n) => ({
       respawnNonce: ((n.data.respawnNonce as number | undefined) ?? 0) + 1
     }))
@@ -3416,6 +3422,7 @@ export function TerminalNode({
             cursor,
             coAttachMouse,
             persistent,
+            persistenceUnavailable: degradedReason,
             unavailable,
             agentLaunch
           }) => {
@@ -3493,6 +3500,7 @@ export function TerminalNode({
             // Published for the mount-stable observer effect, which cannot see this closure.
             sessionPersistentRef.current = sessionPersistent
             if (fellBack) setAccountFallback(true)
+            if (!disposed) setPersistenceUnavailable(degradedReason ?? null)
             // Catch up a size change that landed while the spawn was in flight (applyFit skips the
             // IPC until sessionId is set, and the observer won't re-fire without another change).
             applyFit()
@@ -5553,6 +5561,16 @@ export function TerminalNode({
               warning={accountFallback}
             />
           ) : null}
+          {persistenceUnavailable && (
+            <button
+              type="button"
+              className="term-persist-chip nodrag"
+              title={`${persistenceUnavailable} — ${vocab('This shell will not survive a restart. Click to try reattaching.')}`}
+              onClick={retrySpawn}
+            >
+              <StatusChip tone="attention" size="compact">{vocab('Not persistent · retry')}</StatusChip>
+            </button>
+          )}
           {data.ssh && !accountPresentation ? (
             <span
               className="term-ssh-chip"
@@ -6018,21 +6036,23 @@ export function TerminalNode({
             </div>
           )}
           {!co.closed && !co.ended && co.spawnError && (
-            <div className="term-node__closed nodrag">
-              <span>
-                {profileText(
-                  'terminalProfiles.error.spawnLead',
-                  'This terminal could not be started. {error}',
-                  { error: co.spawnError }
-                )}
-              </span>
+            <div className="term-node__closed nodrag" role="alert">
+              {/* The host error is a FACT, interpolated once into its own block: the bilingual
+                  one-line join used to print it twice (once per language) across the node. */}
+              <Localized
+                id="terminalProfiles.error.spawnLead"
+                fallback="This terminal could not be started."
+                className="term-node__closed-lead"
+                secondaryClassName="term-node__closed-secondary"
+              />
+              <code className="term-node__closed-detail">{co.spawnError}</code>
               {terminalProfileId !== undefined && (
-                <span>
-                  {profileText(
-                    'terminalProfiles.error.nodeRecovery',
-                    'Choose Restart with profile… from this node’s menu, then try again.'
-                  )}
-                </span>
+                <Localized
+                  id="terminalProfiles.error.nodeRecovery"
+                  fallback="Choose Restart with profile… from this node’s menu, then try again."
+                  className="term-node__closed-lead"
+                  secondaryClassName="term-node__closed-secondary"
+                />
               )}
               <button className="term-node__reopen" onClick={retrySpawn}>
                 {profileText('terminalProfiles.error.tryAgain', 'Try again')}

@@ -79,4 +79,13 @@ describe('stable session-host runtime', () => {
     )
     expect(unref).toHaveBeenCalledOnce()
   })
+
+  it('returns a spawn failure instead of swallowing it', () => {
+    const spawnImpl = vi.fn(() => {
+      throw Object.assign(new Error('spawn EACCES'), { code: 'EACCES' })
+    }) as any
+    const result = spawnSessionHost('exe', 'host.cjs', 'state', spawnImpl)
+    expect(result).toEqual({ ok: false, error: expect.objectContaining({ message: 'spawn EACCES' }) })
+    expect(spawnSessionHost('exe', 'host.cjs', 'state', vi.fn(() => ({ unref: vi.fn() })) as any)).toEqual({ ok: true })
+  })
 })

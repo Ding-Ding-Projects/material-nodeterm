@@ -154,7 +154,7 @@ const REQUIRED_TERMINAL_PROFILE_COPY = {
   'terminalProfiles.header.unavailableTitleWithReason': '{profile} is unavailable: {reason}',
 
   'terminalProfiles.error.unresolved': 'The terminal profile could not be resolved.',
-  'terminalProfiles.error.spawnLead': 'This terminal could not be started. {error}',
+  'terminalProfiles.error.spawnLead': 'This terminal could not be started.',
   'terminalProfiles.error.recovery':
     'Choose Restart with profile… from this card’s menu, then try again.',
   'terminalProfiles.error.nodeRecovery':

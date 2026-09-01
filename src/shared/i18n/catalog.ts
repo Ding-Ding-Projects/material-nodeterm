@@ -1536,8 +1536,8 @@ export const CATALOG: Catalog = {
     yue: flat('無法解析終端機設定檔。')
   },
   'terminalProfiles.error.spawnLead': {
-    en: flat('This terminal could not be started. {error}'),
-    yue: flat('呢個終端機無法啟動。{error}')
+    en: flat('This terminal could not be started.'),
+    yue: flat('呢個終端機無法啟動。')
   },
   'terminalProfiles.error.recovery': {
     en: flat('Choose Restart with profile… from this card’s menu, then try again.'),

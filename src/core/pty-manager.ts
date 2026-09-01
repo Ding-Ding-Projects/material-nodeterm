@@ -2143,6 +2143,13 @@ export class PtyManager {
     // cold generation is resolved and forced to the native session host below.
     const resolveWindowsProfile = this.shouldResolveWindowsProfile(options)
     let warmWindowsBackend: 'session-host' | 'tmux' | undefined
+    // Set when the session host could not be probed. The create then DEGRADES to a plain,
+    // non-persistent ConPTY shell and reports why (`PtyCreateResult.persistenceUnavailable`)
+    // instead of refusing the terminal: a host that is slow, blocked by a scanner, or crashed
+    // before publishing its state used to leave the node dead with "did not come up in time",
+    // and every retry hit the same wall. The renderer shows the reason as a chip with a retry
+    // that re-probes; the shell is never reported as persistent.
+    let persistenceUnavailable: string | undefined
     const settings = this.getSettings()
     if (
       resolveWindowsProfile &&
@@ -2154,11 +2161,11 @@ export class PtyManager {
           if (await sessionHostHasSession(sessionName(options.persistKey)))
             warmWindowsBackend = 'session-host'
         } catch (error) {
-          throw new Error(
+          persistenceUnavailable =
             `Could not check the existing persistent terminal before reattaching: ${
               error instanceof Error ? error.message : String(error)
             }`
-          )
+          console.warn(`[pty] ${persistenceUnavailable} — starting a non-persistent shell instead`)
         }
       }
       if (!warmWindowsBackend && this.tmuxPath) {
@@ -2258,7 +2265,8 @@ export class PtyManager {
       undefined,
       resolvedProfile,
       warmWindowsBackend,
-      projectOverrides
+      projectOverrides,
+      persistenceUnavailable !== undefined
     )
     const spawned = this.sessions.get(sessionId)
     // PANE OWNERSHIP (agent messaging, PR #237 fix round 2): record the OWNING project of a pane
@@ -2327,10 +2335,11 @@ export class PtyManager {
     // (`persisted` in spawnSession) — i.e. exactly "this session survives losing its client",
     // which is what the renderer's cache-dispose levers must not assume. See PtyCreateResult.
     const persistent = !!spawned?.persistKey
+    const degraded = persistenceUnavailable && !persistent ? { persistenceUnavailable } : {}
     if (accountFallback) {
-      return { sessionId, fresh, accountFallback, persistent, ...(screen ? { screen } : {}) }
+      return { sessionId, fresh, accountFallback, persistent, ...degraded, ...(screen ? { screen } : {}) }
     }
-    return { sessionId, fresh, persistent, ...(screen ? { screen } : {}) }
+    return { sessionId, fresh, persistent, ...degraded, ...(screen ? { screen } : {}) }
   }
 
   /** Does the node's remote tmux session exist (over the project's ControlMaster)? Async so the
@@ -2594,7 +2603,9 @@ export class PtyManager {
     warmWindowsBackend?: 'session-host' | 'tmux',
     /** What the OWNING project contributes (see `projectSpawnOverrides`) — already resolved,
      *  because this function is synchronous. Null on every path with no proven project owner. */
-    overrides?: ProjectSpawnOverrides | null
+    overrides?: ProjectSpawnOverrides | null,
+    /** The session host could not be probed (see `create`): spawn a plain shell, never persistent. */
+    skipPersistence = false
   ): string {
     // PRE-FLIGHT — refuse before node-pty is touched, not after it fails.
     //
@@ -3150,6 +3161,7 @@ export class PtyManager {
       !options.sshRemote &&
       options.persistKey &&
       settings.tmuxEnabled &&
+      !skipPersistence &&
       sessionHostSupported()
     ) {
       // Native Windows profiles always use this persistence backend. The `!resolvedProfile`

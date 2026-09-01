@@ -185,7 +185,7 @@ export function spawnSessionHost(
   scriptPath: string,
   userDataDir: string,
   spawnImpl = spawn,
-): void {
+): SpawnSessionHostResult {
   try {
     const child = spawnImpl(executablePath, [scriptPath, userDataDir], {
       detached: true,
@@ -194,7 +194,42 @@ export function spawnSessionHost(
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
     })
     child.unref()
+    return { ok: true }
+  } catch (error) {
+    // Still never throws — but the failure is RETURNED so the connect timeout that follows can
+    // name it. A `catch {}` here meant a blocked or quarantined staged runtime surfaced as the
+    // generic "did not come up in time" with nothing pointing at the cause.
+    return { ok: false, error: error instanceof Error ? error : new Error(String(error)) }
+  }
+}
+
+export type SpawnSessionHostResult = { ok: true } | { ok: false; error: Error }
+
+const HOST_LOG_TAIL_BYTES = 8192
+
+/**
+ * The last `fatal:` line the host wrote to `<userDataDir>/session-host.log`, or null. Bounded to
+ * the file's tail; a missing or unreadable log is null, never a throw — this only decorates a
+ * timeout message and must not be able to replace it with a different failure.
+ */
+export async function readSessionHostFatalLine(userDataDir: string): Promise<string | null> {
+  const logPath = path.join(userDataDir, 'session-host.log')
+  let handle: fs.promises.FileHandle | null = null
+  try {
+    handle = await fs.promises.open(logPath, 'r')
+    const { size } = await handle.stat()
+    const length = Math.min(size, HOST_LOG_TAIL_BYTES)
+    const buffer = Buffer.alloc(length)
+    await handle.read(buffer, 0, length, size - length)
+    const lines = buffer.toString('utf8').split(/\r?\n/)
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const line = lines[index].trim()
+      if (line.includes('fatal:')) return line
+    }
+    return null
   } catch {
-    /* the caller's subsequent connect attempt will fail and surface the real error */
+    return null
+  } finally {
+    await handle?.close().catch(() => undefined)
   }
 }

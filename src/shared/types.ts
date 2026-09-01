@@ -332,6 +332,13 @@ export interface PtyCreateResult {
    */
   persistent?: boolean
   /**
+   * Set when the persistent backend could not even be PROBED at create time (the Windows session
+   * host did not come up) and core spawned a plain, non-persistent shell instead of refusing the
+   * terminal outright. Always paired with `persistent:false`. The renderer shows it as a chip
+   * with a retry: the next create re-probes and warm-attaches if the host recovered.
+   */
+  persistenceUnavailable?: string
+  /**
    * REFUSED: this node's session was permanently destroyed by ANOTHER client, so nothing was
    * spawned (`sessionId` is empty) — the terminal shows the "closed by <name>" state instead.
    *

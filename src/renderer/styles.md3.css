@@ -2052,6 +2052,42 @@ button.term-node__title-text:focus-visible {
   font-size: 12px;
   flex-direction: column;
   gap: 10px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.term-node__closed-lead {
+  display: block;
+  max-width: 100%;
+}
+.term-node__closed-secondary {
+  display: block;
+  margin-top: 2px;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+/* The host's own error text: one block, monospace, wrapped — never joined into the prose. */
+.term-node__closed-detail {
+  display: block;
+  max-width: 100%;
+  max-height: 40%;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: var(--md-shape-medium);
+  background: color-mix(in srgb, var(--md-surface-container-highest) 80%, transparent);
+  color: var(--md-on-surface);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: left;
+  white-space: pre-wrap;
+}
+/* Non-persistent chip (PtyCreateResult.persistenceUnavailable): a bare button wrapping the
+   attention StatusChip, so the chip is clickable without a second pill recipe. */
+.term-persist-chip {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
 }
 .term-node__reopen {
   border: 1px solid var(--md-outline);

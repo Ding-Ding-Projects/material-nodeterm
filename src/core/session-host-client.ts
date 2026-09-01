@@ -28,6 +28,7 @@ import {
 } from '../session-host/protocol'
 import {
   prepareSessionHostRuntime,
+  readSessionHostFatalLine,
   resolveSessionHostScript,
   spawnSessionHost,
 } from './session-host-launcher'
@@ -44,6 +45,17 @@ export interface SessionSubscriber {
 export const SESSION_HOST_REQUEST_TIMEOUT_MS = 10_000
 
 const RECONNECT_DELAYS_MS = [50, 100, 250, 500, 1_000, 2_000] as const
+/**
+ * How long a freshly spawned host may take to publish its state and answer hello. The host's own
+ * worst legitimate path is a startup race lost to a sibling instance: `probeExisting` in host.ts
+ * makes up to ten ~1.15 s observations before it either exits quietly or takes over, and a first
+ * launch on Windows additionally pays a real-time scan of the freshly staged multi-hundred-MB
+ * runtime. The previous 30 × 150 ms (4.5 s) budget timed out inside that window and refused the
+ * terminal while the host was still legitimately coming up.
+ */
+export const SESSION_HOST_STARTUP_TIMEOUT_MS = 15_000
+const STARTUP_POLL_MIN_MS = 150
+const STARTUP_POLL_MAX_MS = 500
 const RECONNECT_REPAINT_PREFIX = '\x1b[3J\x1b[2J\x1b[H'
 const HANDSHAKE_TIMEOUT_MS = 2_000
 const KILL_CONFIRMATION_ATTEMPTS = 2
@@ -245,6 +257,8 @@ export class SessionHostClient {
       resourcesPath?: string | null
       repoRoot?: string | null
       runtimeDir?: string | null
+      /** Test seam: how long a spawned host may take to come up (default: production budget). */
+      startupTimeoutMs?: number
     }
   ) {}
 
@@ -364,10 +378,14 @@ export class SessionHostClient {
       userDataDir: this.deps.userDataDir,
       runtimeDir: this.deps.runtimeDir,
     })
-    spawnSessionHost(runtime.executablePath, runtime.scriptPath, this.deps.userDataDir)
+    const spawned = spawnSessionHost(runtime.executablePath, runtime.scriptPath, this.deps.userDataDir)
     let lastPublicationError: Error | null = null
-    for (let attempt = 0; attempt < 30; attempt++) {
-      await sleep(150)
+    const budget = this.deps.startupTimeoutMs ?? SESSION_HOST_STARTUP_TIMEOUT_MS
+    const deadline = Date.now() + budget
+    let delay = STARTUP_POLL_MIN_MS
+    while (Date.now() < deadline) {
+      await sleep(Math.min(delay, Math.max(0, deadline - Date.now())))
+      delay = Math.min(STARTUP_POLL_MAX_MS, Math.round(delay * 1.5))
       try {
         if (await this.tryConnectOnce()) {
           const socket = this.socket
@@ -382,7 +400,16 @@ export class SessionHostClient {
       }
     }
     if (lastPublicationError) throw lastPublicationError
-    throw new Error('session-host did not come up in time')
+    // Name what is known. A swallowed spawn failure or the host's own `fatal:` log line is the
+    // difference between a message that says "try again" and one that says what to fix.
+    const detail: string[] = []
+    if (!spawned.ok) detail.push(`launch failed: ${spawned.error.message}`)
+    const fatal = await readSessionHostFatalLine(this.deps.userDataDir)
+    if (fatal) detail.push(`host log: ${fatal}`)
+    throw new Error(
+      `session-host did not come up in time (${Math.round(budget / 1000)} s)` +
+        (detail.length ? ` — ${detail.join('; ')}` : '')
+    )
   }
 
   private isTransientPublicationLock(error: Error): boolean {
@@ -761,10 +788,6 @@ export class SessionHostClient {
     request: SessionHostRequestBody,
     onSuccess?: (result: T, socket: net.Socket) => void
   ): Promise<T> {
-    await this.ensureConnected()
-    const socket = this.socket
-    if (!socket) throw new Error('session-host: not connected')
-    return this.requestOnSocket(socket, request, onSuccess)
     // A peer-initiated close races the client's own 'close' event: a cached socket can look live
     // here while the peer already hung up, and a frame written into that gap fails (EPIPE) for
     // work the host never saw. requestOnSocket defers the actual write by one REAL event-loop

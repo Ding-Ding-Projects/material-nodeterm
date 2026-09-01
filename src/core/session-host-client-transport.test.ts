@@ -18,10 +18,12 @@ const launcherMocks: {
   resolveSessionHostScript: ReturnType<typeof vi.fn<SessionHostLauncherModule["resolveSessionHostScript"]>>;
   prepareSessionHostRuntime: ReturnType<typeof vi.fn<SessionHostLauncherModule["prepareSessionHostRuntime"]>>;
   spawnSessionHost: ReturnType<typeof vi.fn<SessionHostLauncherModule["spawnSessionHost"]>>;
+  readSessionHostFatalLine: ReturnType<typeof vi.fn<SessionHostLauncherModule["readSessionHostFatalLine"]>>;
 } = vi.hoisted(() => ({
   resolveSessionHostScript: vi.fn<SessionHostLauncherModule["resolveSessionHostScript"]>(),
   prepareSessionHostRuntime: vi.fn<SessionHostLauncherModule["prepareSessionHostRuntime"]>(),
   spawnSessionHost: vi.fn<SessionHostLauncherModule["spawnSessionHost"]>(),
+  readSessionHostFatalLine: vi.fn<SessionHostLauncherModule["readSessionHostFatalLine"]>(),
 }));
 
 const identityMocks = vi.hoisted(() => ({
@@ -333,6 +335,31 @@ describe("SessionHostClient transport boundaries", () => {
       "nt-launched",
     ]);
     expect(launcherMocks.spawnSessionHost).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the swallowed spawn failure and the host's fatal log line on a startup timeout", async () => {
+    const userDataDir = makeTempDir();
+    identityMocks.readExistingSessionHostIdentity.mockReturnValue({
+      kind: "absent",
+      missing: "state",
+    });
+    launcherMocks.resolveSessionHostScript.mockReturnValue("fake-session-host.cjs");
+    launcherMocks.prepareSessionHostRuntime.mockResolvedValue({
+      executablePath: "fake-runtime",
+      scriptPath: "fake-session-host.cjs",
+    });
+    launcherMocks.spawnSessionHost.mockReturnValue({
+      ok: false,
+      error: new Error("EACCES: staged runtime blocked"),
+    });
+    launcherMocks.readSessionHostFatalLine.mockResolvedValue(
+      "fatal: existing host ownership state is unreadable",
+    );
+
+    const client = new SessionHostClient({ userDataDir, startupTimeoutMs: 300 });
+    await expect(within(client.listSessions(), 2_000)).rejects.toThrow(
+      /did not come up in time.*launch failed: EACCES: staged runtime blocked.*host log: fatal: existing host ownership state is unreadable/,
+    );
   });
 
   it.each(["EISDIR", "EACCES", "EIO"])(

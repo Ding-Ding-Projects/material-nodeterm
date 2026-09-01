@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Keep a Windows terminal usable when the session host is slow or broken. The host connect
+  budget grows from 4.5 s to 15 s with backoff (the host's own startup-race path can take ~12 s),
+  a swallowed spawn failure and the host log's last `fatal:` line are named in the timeout
+  message, the unreachable resend loop in the client is live again, and a create whose
+  persistence probe fails now opens a plain non-persistent shell with a "Not persistent · retry"
+  chip instead of a dead node. The spawn-error overlay stacks its bilingual copy and prints the
+  host error once, in its own scrollable block.
+
+  Windows 個 session host 慢或者壞咗，terminal 唔會再死住：連接預算由 4.5 秒加到 15 秒兼
+  backoff，spawn 失敗同 host log 最後一行 `fatal:` 會寫入錯誤訊息，client 入面本來永遠行唔到
+  嘅重送迴圈執返生，probe 失敗就先開個普通 shell 加粒「Not persistent · retry」chip。錯誤
+  overlay 中英分行，host 錯誤只印一次。
+
 - Stop "New AWS Universe" from blanking the whole window. The Universe's Shop node was stored in
   React Flow shape instead of persisted-node shape, so the canvas load effect threw on its missing
   `size` and React unmounted the entire tree into a black canvas. Both universe kinds now share

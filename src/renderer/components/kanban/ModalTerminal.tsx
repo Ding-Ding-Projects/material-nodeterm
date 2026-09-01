@@ -1,3 +1,4 @@
+import { Localized } from '../../ui/Localized'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -651,20 +652,19 @@ export function ModalTerminal({
       <div ref={hostRef} className="kanban-modal__term" />
       {spawnError !== null && (
         <div className="term-node__closed nodrag" role="alert">
-          <span>
-            {profileText(
-              'terminalProfiles.error.spawnLead',
-              'This terminal could not be started. {error}',
-              {
-                error:
-                  spawnError ||
-                  profileText(
-                    'terminalProfiles.error.unresolved',
-                    'The terminal profile could not be resolved.'
-                  )
-              }
-            )}
-          </span>
+          <Localized
+            id="terminalProfiles.error.spawnLead"
+            fallback="This terminal could not be started."
+            className="term-node__closed-lead"
+            secondaryClassName="term-node__closed-secondary"
+          />
+          <code className="term-node__closed-detail">
+            {spawnError ||
+              profileText(
+                'terminalProfiles.error.unresolved',
+                'The terminal profile could not be resolved.'
+              )}
+          </code>
           <span>
             {terminalProfileId !== undefined
               ? profileText(

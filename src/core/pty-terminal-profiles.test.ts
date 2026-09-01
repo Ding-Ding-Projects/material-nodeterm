@@ -195,6 +195,27 @@ describe('PtyManager trusted Windows profile spawn boundary', () => {
     expect(nodePty.spawn).not.toHaveBeenCalled()
   })
 
+  it('degrades to a plain, non-persistent shell when the session host cannot be probed', async () => {
+    const { resolver } = resolverReturning(wslPlan)
+    await makeManager(resolver)
+    backend.supported.mockReturnValue(true)
+    backend.hasSession.mockRejectedValue(new Error('session-host did not come up in time (15 s)'))
+
+    const result = (await create({ profileId: wslPlan.profileId, cwd: wslPlan.cwd })) as {
+      persistent?: boolean
+      persistenceUnavailable?: string
+    }
+
+    expect(backend.create).not.toHaveBeenCalled()
+    expect(nodePty.spawn).toHaveBeenCalledWith(
+      wslPlan.shell,
+      wslPlan.shellArgs,
+      expect.objectContaining({ cwd: wslPlan.cwd })
+    )
+    expect(result.persistent).toBe(false)
+    expect(result.persistenceUnavailable).toMatch(/did not come up in time/)
+  })
+
   it('lets an explicit profile replace caller shell and argv rather than appending either', async () => {
     const trusted: ResolvedWindowsTerminalProfile = {
       profileId: 'pwsh',
