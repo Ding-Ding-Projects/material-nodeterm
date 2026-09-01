@@ -45,6 +45,66 @@ export function mainWindowClientIds(): number[] {
   return typeof id === 'number' ? [id] : []
 }
 
+export type MainWindowActivationResult =
+  | 'queued-until-ready'
+  | 'ready'
+  | 'focused-existing'
+  | 'created-main'
+
+export interface MainWindowActivationController {
+  request(): MainWindowActivationResult
+  markReady(): MainWindowActivationResult
+}
+
+/**
+ * Queue launch activation until desktop boot has created its first main window, then focus the
+ * tracked main window on later activation requests. The aggregate BrowserWindow list is not an
+ * authority here because helper windows can outlive the main window.
+ */
+export function createMainWindowActivationController(deps: {
+  getMainWindow(): MainWindowLike | null
+  createMainWindow(): MainWindowLike
+}): MainWindowActivationController {
+  let ready = false
+  let pending = false
+
+  const activate = (): MainWindowActivationResult => {
+    const existing = deps.getMainWindow()
+    if (!existing) {
+      deps.createMainWindow()
+      return 'created-main'
+    }
+    if (existing.isMinimized()) existing.restore()
+    existing.show()
+    existing.focus()
+    return 'focused-existing'
+  }
+
+  return {
+    request() {
+      if (!ready) {
+        pending = true
+        return 'queued-until-ready'
+      }
+      return activate()
+    },
+    markReady() {
+      ready = true
+      if (!pending) return 'ready'
+      pending = false
+      return activate()
+    }
+  }
+}
+
+/** Whether Planner continuity intentionally retains a non-macOS host after its last UI closes. */
+export function plannerRetainsHostAfterWindowClose(
+  platform: NodeJS.Platform | string,
+  hasEnabledSchedules: boolean
+): boolean {
+  return platform !== 'darwin' && hasEnabledSchedules
+}
+
 export type CrashReloadAction = 'reload' | 'give-up' | 'ignore'
 
 // A dead renderer leaves the (single) window a permanent blank page — nothing in Electron

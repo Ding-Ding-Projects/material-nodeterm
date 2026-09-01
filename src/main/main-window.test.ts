@@ -4,6 +4,8 @@ import {
   getMainWindow,
   sendToMain,
   mainWindowClientIds,
+  createMainWindowActivationController,
+  plannerRetainsHostAfterWindowClose,
   shouldHideOnClose,
   shouldQuitHostOnWindowClose,
   closeAction,
@@ -110,6 +112,75 @@ describe('main-window tracking', () => {
     setMainWindow(w)
     w.emitClosed()
     expect(getMainWindow()).toBeNull()
+  })
+})
+
+describe('main-window activation', () => {
+  it('queues an early second-instance request until the initial main window is ready', () => {
+    let current: MainWindowLike | null = null
+    const createMainWindow = vi.fn(() => fakeWindow())
+    const controller = createMainWindowActivationController({
+      getMainWindow: () => current,
+      createMainWindow
+    })
+
+    expect(controller.request()).toBe('queued-until-ready')
+    expect(createMainWindow).not.toHaveBeenCalled()
+
+    current = fakeWindow()
+    expect(controller.markReady()).toBe('focused-existing')
+    expect(current.show).toHaveBeenCalledOnce()
+    expect(current.focus).toHaveBeenCalledOnce()
+    expect(createMainWindow).not.toHaveBeenCalled()
+  })
+
+  it('restores, shows, and focuses an existing main window', () => {
+    const current = fakeWindow()
+    current.isMinimized = () => true
+    const createMainWindow = vi.fn(() => fakeWindow())
+    const controller = createMainWindowActivationController({
+      getMainWindow: () => current,
+      createMainWindow
+    })
+    controller.markReady()
+
+    expect(controller.request()).toBe('focused-existing')
+    expect(current.restore).toHaveBeenCalledOnce()
+    expect(current.show).toHaveBeenCalledOnce()
+    expect(current.focus).toHaveBeenCalledOnce()
+    expect(createMainWindow).not.toHaveBeenCalled()
+  })
+
+  it('recreates the main window for an enabled-Planner host even while a helper window survives', () => {
+    const closedMain = fakeWindow()
+    const helperWindow = fakeWindow()
+    setMainWindow(closedMain)
+    const replacement = fakeWindow()
+    const createMainWindow = vi.fn(() => {
+      setMainWindow(replacement)
+      return replacement
+    })
+    const controller = createMainWindowActivationController({
+      getMainWindow,
+      createMainWindow
+    })
+    controller.markReady()
+
+    expect(plannerRetainsHostAfterWindowClose('win32', true)).toBe(true)
+    closedMain.destroy()
+    closedMain.emitClosed()
+    expect(getMainWindow()).toBeNull()
+    expect(helperWindow.isDestroyed()).toBe(false)
+
+    expect(controller.request()).toBe('created-main')
+    expect(createMainWindow).toHaveBeenCalledOnce()
+    expect(getMainWindow()).toBe(replacement)
+  })
+
+  it('does not treat disabled schedules or macOS host retention as Planner-owned', () => {
+    expect(plannerRetainsHostAfterWindowClose('win32', false)).toBe(false)
+    expect(plannerRetainsHostAfterWindowClose('linux', false)).toBe(false)
+    expect(plannerRetainsHostAfterWindowClose('darwin', true)).toBe(false)
   })
 })
 

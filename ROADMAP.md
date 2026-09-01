@@ -554,6 +554,12 @@ intentionally unchecked because this task publishes the plan only.
        current lane, including UI-close continuity, ordered durable occurrence delivery, schema 3
        planner-definition transfer, and the destination Configure action. It remains unticked until
        required checks and packaged interaction evidence land.
+  - [ ] Verify issue #215 in the real built Windows desktop application after the approved hidden-
+        desktop route is available. Source repair and 22 focused lifecycle tests cover retained-host
+        relaunch, helper-window presence, early activation, existing-window focus, and Planner
+        retention. The focused compile and real build pass; the full type check remains red in
+        unrelated repository-graph and VeraCrypt source. Real close, process disappearance, and
+        immediate relaunch evidence remain open.
 - [ ] Add Calendar nodes for local calendars and ICS, with guided CalDAV, Google Calendar, and
       Microsoft 365 provider bindings, recurrence/timezone views, offline cache, and create/edit/
       delete flows. Host-owned provider adapters, credential storage, loopback OAuth PKCE, bounded

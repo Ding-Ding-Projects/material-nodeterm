@@ -5180,6 +5180,34 @@ The coordinating owner must exercise parsing, type checking, building, and the r
 flow before integrating this feature branch. The similarly numbered eneskirca/nodeterm PR #198 is
 a separate merged paste-injection security change and was inspected only to avoid confusing the
 two records.
+
+# Windows close and immediate relaunch repair, downstream issue #215
+
+An enabled Planner schedule intentionally keeps the desktop host alive after the last Windows main
+window closes. The retained main process therefore keeps the single-instance lock, which is expected
+Planner continuity. The defect was the `second-instance` handler: `getMainWindow()` correctly
+returned `null` after the close, and the handler returned without recreating the UI. The new launch
+then exited as the losing instance while the retained host stayed windowless. An aggregate Electron
+window count was not a valid fallback because the Notch HUD or canvas widgets can survive without a
+main window.
+
+`src/main/main-window.ts` now owns one readiness-aware activation controller. It queues an early
+activation until initial desktop boot is complete, restores and focuses an existing tracked main
+window, or creates one replacement when the tracked main window is absent. `src/main/index.ts` uses
+that controller for both `second-instance` and platform `activate`, and uses the shared Planner
+retention predicate for title-bar and last-window lifecycle decisions. Explicit Quit, bounded flush,
+unsaved-work confirmation, and persistent session detach behavior remain unchanged.
+
+Focused coverage in `src/main/main-window.test.ts` passes 22 tests. The deliberate negative
+regression removed the replacement-window call and failed the enabled-Planner/helper-window case;
+restoring the call returned the file to 22 passing tests. The approved hidden-desktop endpoint was
+unreachable (`WinError 10061`) and the direct cheap-route CLI was not installed, so no visible
+desktop fallback was used. A focused compile of `src/main/main-window.ts` passes. `npm run build`
+passes the vocabulary, Material audit, personal-vocabulary, WSL-copy, changelog, offline-docs,
+feature-inventory, main, preload, renderer, and session-host build paths. The full type check is red
+only in unrelated `src/core/repository-graph-service.ts` and `src/core/veracrypt/service.ts` errors
+already present at the lane baseline. Real built-application close, process disappearance, and
+immediate relaunch evidence remain for the coordinating owner when the approved route is available.
 # 2026-08-28, scheduled saved-layout and appearance effects, issue #211
 
 This isolated feature lane implements scheduled settings schema version 2. `SavedCanvasLayout`

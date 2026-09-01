@@ -42,6 +42,11 @@ so evaluation continues without an attached UI. On Windows this is the only titl
 background-host exception; without an enabled schedule, the same close enters the complete bounded
 application shutdown path and releases every auxiliary window and application-owned process.
 Explicit application quit still stops the service.
+On Windows and Linux, that retained host continues to own the application's single-instance lock.
+A later launch is delivered to the retained host, which creates a replacement main window when the
+tracked main window is absent. Helper windows such as the Notch HUD and canvas widgets do not count
+as the main window and cannot block recreation. A launch request that arrives before desktop startup
+has created its first window is queued until the initial window is ready.
 Each sweep advances a durable last-tick
 marker. A due instant older than two minutes is recorded as `missed`; a current due instant is
 `fired` and is delivered to the notification seams. A clock moving backwards advances the marker to
@@ -88,17 +93,21 @@ leaves the destination schedules unchanged, so import itself has no external sid
 
 ## Verification status
 
-This ultra-speed lane did not run tests, type checks, lint, security checks, builds, packaging,
-installer execution, runtime interaction, or screenshots. Those checks remain required before a release
-claim. The implementation paths are `src/shared/planner-occurrences.ts`,
+Focused lifecycle coverage in `src/main/main-window.test.ts` passes 22 tests, including the
+enabled-Planner retained-host path, an unrelated surviving helper window, queued pre-ready
+activation, and existing-window restore/show/focus. A focused `tsc` compile of
+`src/main/main-window.ts` passes, and `npm run build` completes the main, preload, renderer, and
+session-host outputs. The full repository type check is still red in unrelated repository-graph
+and VeraCrypt source that predates this repair. The implementation paths are
+`src/main/main-window.ts`, `src/main/index.ts`, `src/shared/planner-occurrences.ts`,
 `src/core/planner-occurrence-service.ts`, `src/core/portable-planner.ts`,
 `src/core/portable-canvas-projection.ts`, `src/core/project-archive.ts`,
 `src/preload/index.ts`, `src/renderer/bridge/ws-bridge.ts`, and
 `src/renderer/components/settings/sections/PlannerSection.tsx`.
 The offline documentation bundle is regenerated from this article by
-`node scripts/build-docs-bundle.mjs`. Tests, type checks, lint, security checks, builds, packaging,
-installer execution, runtime interaction, and screenshots remain intentionally unrun in this
-ultra-speed implementation lane.
+`node scripts/build-docs-bundle.mjs`. Real built-application close, process disappearance, and
+immediate relaunch interaction remains unverified because the approved hidden-desktop endpoint was
+unavailable during issue #215 repair. No visible-desktop substitute was used.
 
 ## Suggested articles
 
