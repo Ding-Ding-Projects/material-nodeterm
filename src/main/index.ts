@@ -204,8 +204,7 @@ import {
 import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
 import { initUpdater } from './updater'
 import {
-  desktopBootstrapFailureDialog,
-  publicDesktopBootstrapFailure
+  reportDesktopBootstrapFailure
 } from './squirrel-lifecycle'
 import { decryptArchive, encryptArchive, looksLikeEncryptedArchive } from '../core/project-archive-encryption'
 import { ArchiveUnlockGuard } from '../core/archive-unlock-guard'
@@ -4937,15 +4936,11 @@ app.whenReady().then(async () => {
     mainWindowActivation.request()
   })
 }).catch((error: unknown) => {
-  const publicFailure = publicDesktopBootstrapFailure(error)
-  console.error(publicFailure)
-  const failure = desktopBootstrapFailureDialog(error)
-  try {
-    dialog.showErrorBox(failure.title, failure.content)
-  } catch {
-    // The sanitized stderr line remains available when the operating system cannot show UI.
-  }
-  app.exit(1)
+  reportDesktopBootstrapFailure(error, {
+    log: (message) => console.error(message),
+    showErrorBox: (title, content) => dialog.showErrorBox(title, content),
+    exit: (code) => app.exit(code)
+  })
 })
 
 app.on('window-all-closed', () => {
