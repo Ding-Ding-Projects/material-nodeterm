@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { Dialog } from '../ui/md3/Dialog'
+import { ListRow } from '../ui/md3/ListRow'
+import { TextField } from '../ui/md3/TextField'
 
 /**
  * VS Code-style "Publish to GitHub" picker: an editable repository name plus a
@@ -27,36 +29,36 @@ export function PublishDialog({
 
   return (
     <Dialog open onClose={onCancel} title={vocab('Publish to GitHub')} className="pubdlg">
-        <input
+        <TextField
           className="pubdlg__name"
+          label="Repository name"
           autoFocus
           spellCheck={false}
           value={name}
-          placeholder={vocab('Repository name')}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Escape') onCancel()
             if (e.key === 'Enter' && trimmed) onPublish(trimmed, true)
           }}
         />
-        <button
+        <ListRow
           className="pubdlg__opt"
+          icon={<LockIcon />}
+          label={vocab('Publish to GitHub private repository')}
+          sub={hint('private')}
+          vocabularyMode="factual"
           disabled={!trimmed}
           onClick={() => onPublish(trimmed, true)}
-        >
-          <LockIcon />
-          <span className="pubdlg__opt-label">{vocab('Publish to GitHub private repository')}</span>
-          <span className="pubdlg__opt-hint">{hint('private')}</span>
-        </button>
-        <button
+        />
+        <ListRow
           className="pubdlg__opt"
+          icon={<GlobeIcon />}
+          label={vocab('Publish to GitHub public repository')}
+          sub={hint('public')}
+          vocabularyMode="factual"
           disabled={!trimmed}
           onClick={() => onPublish(trimmed, false)}
-        >
-          <GlobeIcon />
-          <span className="pubdlg__opt-label">{vocab('Publish to GitHub public repository')}</span>
-          <span className="pubdlg__opt-hint">{hint('public')}</span>
-        </button>
+        />
     </Dialog>
   )
 }

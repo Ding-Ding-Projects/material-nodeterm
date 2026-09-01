@@ -10,6 +10,9 @@ import {
 } from '@shared/kiosk-pwa'
 import { Dialog } from '../ui/md3/Dialog'
 import { Button } from '../ui/md3/Button'
+import { Checkbox } from '../ui/md3/Checkbox'
+import { ListRow } from '../ui/md3/ListRow'
+import { SegmentedButton } from '../ui/md3/SegmentedButton'
 import { TextField } from '../ui/md3/TextField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
@@ -95,18 +98,27 @@ export function KioskPwaSetupDialog({ open, onClose, apps, initialMode = 'kiosk'
   return (
     <Dialog open={open} onClose={onClose} title="New kiosk or PWA session" className="kiosk-pwa-setup-dialog">
       <p className="kiosk-pwa-setup-dialog__intro">Choose a secure web address or an installed app. Credentials, profile data, and host paths stay on this computer.</p>
-      <div className="kiosk-pwa-setup-dialog__modes" role="radiogroup" aria-label={vocab('Session mode')}>
-        {(['kiosk', 'pwa'] as const).map((value) => (
-          <button key={value} type="button" role="radio" aria-checked={mode === value} className={mode === value ? 'is-selected' : ''} onClick={() => setMode(value)}>
-            {value === 'kiosk' ? 'Kiosk' : 'PWA'}
-          </button>
-        ))}
-      </div>
+      <SegmentedButton
+        className="kiosk-pwa-setup-dialog__modes"
+        ariaLabel="Session mode"
+        value={mode}
+        options={[{ value: 'kiosk', label: 'Kiosk' }, { value: 'pwa', label: 'PWA' }]}
+        onChange={setMode}
+      />
       <TextField label="Display name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} supportText="This label is portable. Runtime handles and profile state are local." />
-      <div className="kiosk-pwa-setup-dialog__target-kind" role="radiogroup" aria-label={vocab('Session target')}>
-        <button type="button" role="radio" aria-checked={targetKind === 'url'} className={targetKind === 'url' ? 'is-selected' : ''} onClick={() => setTargetKind('url')}>Secure URL</button>
-        <button type="button" role="radio" aria-checked={targetKind === 'app'} className={targetKind === 'app' ? 'is-selected' : ''} onClick={() => setTargetKind('app')} disabled={mode === 'pwa' && apps.filter((app) => app.installed).length === 0} title={mode === 'pwa' && apps.filter((app) => app.installed).length === 0 ? 'No installed apps are available on this computer.' : undefined}>Installed app</button>
-      </div>
+      <SegmentedButton
+        className="kiosk-pwa-setup-dialog__target-kind"
+        ariaLabel="Session target"
+        value={targetKind}
+        options={[
+          { value: 'url', label: 'Secure URL' },
+          { value: 'app', label: 'Installed app', disabled: mode === 'pwa' && apps.filter((app) => app.installed).length === 0 }
+        ]}
+        onChange={setTargetKind}
+      />
+      {mode === 'pwa' && apps.filter((app) => app.installed).length === 0 && (
+        <p className="kiosk-pwa-setup-dialog__availability" role="status">No installed apps are available on this computer.</p>
+      )}
       {targetKind === 'url' ? (
         <TextField label="HTTPS address" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.invalid" supportText="HTTPS is required. HTTP is accepted only for localhost development." />
       ) : (
@@ -122,9 +134,7 @@ export function KioskPwaSetupDialog({ open, onClose, apps, initialMode = 'kiosk'
           />
           <div className="kiosk-pwa-setup-dialog__app-list" role="listbox" aria-label={vocab('Installed apps')}>
             {visibleApps.map((app) => (
-              <button key={app.appId} type="button" role="option" aria-selected={selectedAppId === app.appId} className={selectedAppId === app.appId ? 'is-selected' : ''} onClick={() => setSelectedAppId(app.appId)}>
-                <span>{app.name}</span><small>{app.startUrl}</small>
-              </button>
+              <ListRow key={app.appId} role="option" aria-selected={selectedAppId === app.appId} className={selectedAppId === app.appId ? 'is-selected' : ''} label={app.name} sub={app.startUrl} vocabularyMode="factual" onClick={() => setSelectedAppId(app.appId)} />
             ))}
             {visibleApps.length === 0 && <div role="status">No installed apps are available for this search.</div>}
           </div>
@@ -134,7 +144,7 @@ export function KioskPwaSetupDialog({ open, onClose, apps, initialMode = 'kiosk'
         <legend>Permissions, all denied until selected</legend>
         {KIOSK_PWA_PERMISSIONS.map((permission) => (
           <label key={permission}>
-            <input type="checkbox" checked={permissions.includes(permission)} onChange={(event) => setPermissions((current) => event.target.checked ? [...current, permission] : current.filter((item) => item !== permission))} />
+            <Checkbox checked={permissions.includes(permission)} onChange={(event) => setPermissions((current) => event.target.checked ? [...current, permission] : current.filter((item) => item !== permission))} />
             {PERMISSION_LABELS[permission]}
           </label>
         ))}

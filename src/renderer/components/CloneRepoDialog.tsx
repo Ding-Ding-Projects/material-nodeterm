@@ -7,7 +7,7 @@ import {
   deriveRepoDirName,
   type CloneProgress
 } from '@shared/clone-url'
-import { Progress } from '@renderer/ui/md3'
+import { Button, Progress, TextField } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
@@ -126,54 +126,44 @@ export function CloneRepoDialog({ open, onClose, onCloned }: CloneRepoDialogProp
         {/* Floating-label outlined field, the MD3 shape: the label overlaps the field's own top
             border rather than sitting above it as a separate line — see design/v2/MD3
             Overlays.dc.html's "Clone repo dialog". */}
-        <div className="md3-field">
-          <label className="md3-field__label" htmlFor="clone-dialog-url">
-            {vocab('Repository URL')}
-          </label>
-          <input
-            ref={urlRef}
-            id="clone-dialog-url"
-            className="confirm__input"
-            value={url}
-            placeholder={mapOwnedSentence(vocab, [fact('https://github.com/user/repo.git'), copy(' — or '), fact('user/repo')])}
-            aria-label={vocab('Repository URL')}
+        <TextField
+          ref={urlRef}
+          id="clone-dialog-url"
+          label="Repository URL"
+          vocabularyMode="factual"
+          value={url}
+          placeholder={mapOwnedSentence(vocab, [fact('https://github.com/user/repo.git'), copy(' — or '), fact('user/repo')])}
+          spellCheck={false}
+          disabled={cloning}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={onKeyDown}
+        />
+        {showPreview && <div className="clone-dialog__preview">{mapOwnedSentence(vocab, [copy('→ '), fact(expanded)])}</div>}
+        <div className="clone-dialog__row">
+          <TextField
+            id="clone-dialog-parent"
+            label="Parent folder"
+            value={parent}
+            placeholder="/path/to/projects"
             spellCheck={false}
             disabled={cloning}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => setParent(e.target.value)}
             onKeyDown={onKeyDown}
           />
-        </div>
-        {showPreview && <div className="clone-dialog__preview">{mapOwnedSentence(vocab, [copy('→ '), fact(expanded)])}</div>}
-        <div className="md3-field">
-          <label className="md3-field__label" htmlFor="clone-dialog-parent">
-            {vocab('Parent folder')}
-          </label>
-          <div className="clone-dialog__row">
-            <input
-              id="clone-dialog-parent"
-              className="confirm__input"
-              value={parent}
-              placeholder="/path/to/projects"
-              aria-label={vocab('Parent folder')}
-              spellCheck={false}
-              disabled={cloning}
-              onChange={(e) => setParent(e.target.value)}
-              onKeyDown={onKeyDown}
-            />
-            <button
-              className="confirm__btn clone-dialog__browse-btn"
-              title={vocab('Choose folder')}
-              aria-label={vocab('Choose folder')}
-              disabled={cloning}
-              onClick={() => {
-                void api.dialog.selectFolder().then((f) => {
-                  if (f) setParent(f)
-                })
-              }}
-            >
-              {vocab('Browse')}
-            </button>
-          </div>
+          <Button
+            variant="outlined"
+            className="clone-dialog__browse-btn"
+            title="Choose folder"
+            aria-label="Choose folder"
+            disabled={cloning}
+            onClick={() => {
+              void api.dialog.selectFolder().then((f) => {
+                if (f) setParent(f)
+              })
+            }}
+          >
+            Browse
+          </Button>
         </div>
         {error && <div className="clone-dialog__error">{error}</div>}
         {cloning && (
@@ -192,12 +182,12 @@ export function CloneRepoDialog({ open, onClose, onCloned }: CloneRepoDialogProp
           </div>
         )}
         <div className="confirm__actions">
-          <button className="confirm__btn" onClick={cancel}>
-            {vocab('Cancel')}
-          </button>
-          <button className="confirm__btn primary" disabled={!canClone} onClick={() => void startClone()}>
-            {cloning ? vocab('Cloning…') : vocab('Clone')}
-          </button>
+          <Button variant="outlined" className="confirm__btn" onClick={cancel}>
+            Cancel
+          </Button>
+          <Button className="confirm__btn primary" disabled={!canClone} onClick={() => void startClone()}>
+            {cloning ? 'Cloning…' : 'Clone'}
+          </Button>
         </div>
       </div>
     </div>,

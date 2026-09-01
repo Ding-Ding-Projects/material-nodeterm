@@ -4,7 +4,7 @@ import { confirmKeyAction } from './confirm-key'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from './dialog-stack'
 import { useI18n } from '@renderer/lib/i18n'
 import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
-import { Checkbox } from '@renderer/ui/md3'
+import { Button, Checkbox } from '@renderer/ui/md3'
 import type { DisplaySegment } from '../lib/personalVocabulary/ownedCopy'
 import { mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
@@ -170,18 +170,21 @@ export function ConfirmDialog({
               (or Space) into a deletion. On a danger dialog the safe button is the focused one; on a
               harmless one the primary action may keep it. */}
           {!alert && (
-            <button className="confirm__btn" autoFocus={autoFocusButtons && danger} onClick={onCancel}>
+            <Button variant="outlined" className="confirm__btn" vocabularyMode="factual" autoFocus={autoFocusButtons && danger} onClick={onCancel}>
               {cancelText}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
+            variant={danger ? 'outlined' : 'filled'}
+            danger={danger}
             className={`confirm__btn${danger ? ' danger' : ' primary'}`}
+            vocabularyMode="factual"
             autoFocus={autoFocusButtons && !danger}
             onClick={onConfirm}
             disabled={busy}
           >
             {confirmText}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

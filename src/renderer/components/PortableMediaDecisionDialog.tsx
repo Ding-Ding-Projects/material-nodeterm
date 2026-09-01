@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { Button, Chip, SearchField } from '../ui/md3'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import type { PortableMediaCandidate, PortableMediaDecision } from '@shared/portable-media'
@@ -25,10 +26,17 @@ export function PortableMediaDecisionDialog({ candidates, onDecisions, onCancel 
     <div className="md3-dialog portable-media-decision" role="dialog" aria-modal="true" aria-label={vocab('Choose portable media assets')}>
       <header className="md3-dialog__header"><h2>{vocab('Choose portable media')}</h2><p>{vocab('Included media travels by content address. Machine-local sources never travel.')}</p></header>
       <div className="menu-filter">
-        <div className="menu-filter__row">
-          <input ref={inputRef} className="menu-filter__input" value={search.value} onChange={(event) => search.setValue(event.target.value)} placeholder={vocab(search.mode === 'regex' ? 'Filter media… (regex)' : 'Filter media…')} aria-label={vocab('Filter portable media')} />
-          <AnchoredRegexBuilder search={search} fieldRef={inputRef} label={vocab('Regex — portable media')} />
-        </div>
+        <SearchField
+          ref={inputRef}
+          dense
+          value={search.value}
+          onChange={(event) => search.setValue(event.target.value)}
+          placeholder={search.mode === 'regex' ? 'Filter media… (regex)' : 'Filter media…'}
+          aria-label="Filter portable media"
+          trailingSlot={
+            <AnchoredRegexBuilder search={search} fieldRef={inputRef} label={vocab('Regex — portable media')} />
+          }
+        />
         {search.error && <div className="menu-filter__error" role="alert">{search.error}</div>}
       </div>
       <div className="portable-media-decision__list" role="list" aria-label={vocab('Portable media choices')}>
@@ -38,13 +46,13 @@ export function PortableMediaDecisionDialog({ candidates, onDecisions, onCancel 
             <div className="portable-media-decision__actions" role="group" aria-label={mapOwnedSentence(vocab, [copy('Decision for '), fact(candidate.label)])}>
               {(['include', 'omit', 'locate-later'] as const).map((decision) => {
                 const disabled = decision === 'include' && !candidate.includeEnabled
-                return <button key={decision} type="button" disabled={disabled} title={disabled ? candidate.includeDisabledReason : undefined} aria-description={disabled ? candidate.includeDisabledReason : undefined} aria-pressed={decisions.get(candidate.assetId) === decision} onClick={() => choose(candidate.assetId, decision)}>{vocab(decision === 'include' ? 'Include' : decision === 'omit' ? 'Omit' : 'Locate Later')}</button>
+                return <Chip key={decision} disabled={disabled} title={disabled ? candidate.includeDisabledReason : undefined} aria-description={disabled ? candidate.includeDisabledReason : undefined} selected={decisions.get(candidate.assetId) === decision} onClick={() => choose(candidate.assetId, decision)}>{decision === 'include' ? 'Include' : decision === 'omit' ? 'Omit' : 'Locate Later'}</Chip>
               })}
             </div>
           </article>
         ))}
       </div>
-      <footer className="md3-dialog__actions"><button type="button" onClick={onCancel}>{vocab('Cancel')}</button><button type="button" className="md3-button--filled" onClick={() => onDecisions(decisions)}>{vocab('Continue with choices')}</button></footer>
+      <footer className="md3-dialog__actions"><Button variant="text" onClick={onCancel}>Cancel</Button><Button onClick={() => onDecisions(decisions)}>Continue with choices</Button></footer>
     </div>
   )
 }

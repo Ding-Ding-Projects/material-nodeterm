@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Button } from '../ui/md3/Button'
+import { Input } from '../ui/Input'
 import { NAME_MAX_LEN, PRESENCE_COLORS } from '@shared/presence'
 import { suggestIdentity } from '../state/presence'
 import { setMeAll, useActiveSessionPresence } from '../session/session'
@@ -43,8 +45,9 @@ export function PresenceNamePrompt(): JSX.Element | null {
     <div className="presence-prompt nodrag nowheel">
       <div className="presence-prompt__title">Someone else is on this canvas</div>
       <div className="presence-prompt__body">Pick a name so they know who is who.</div>
-      <input
+      <Input
         className="presence-prompt__input"
+        vocabularyMode="factual"
         autoFocus
         value={name}
         maxLength={NAME_MAX_LEN}
@@ -69,12 +72,12 @@ export function PresenceNamePrompt(): JSX.Element | null {
         ))}
       </div>
       <div className="presence-prompt__actions">
-        <button className="presence-prompt__skip" onClick={() => setDismissed(true)}>
+        <Button variant="text" size="small" className="presence-prompt__skip" onClick={() => setDismissed(true)}>
           Skip
-        </button>
-        <button className="presence-prompt__ok" disabled={!name.trim()} onClick={submit}>
+        </Button>
+        <Button size="small" className="presence-prompt__ok" disabled={!name.trim()} onClick={submit}>
           Join
-        </button>
+        </Button>
       </div>
     </div>
   )

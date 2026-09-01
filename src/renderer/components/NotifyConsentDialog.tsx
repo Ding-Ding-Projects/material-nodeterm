@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Button } from '../ui/md3/Button'
 import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
@@ -51,12 +52,12 @@ export function NotifyConsentDialog({ onEnable, onDismiss }: Props) {
           ])}
         </p>
         <div className="consent-actions">
-          <button className="consent-btn ghost" onClick={onDismiss}>
-            {vocab('Not now')}
-          </button>
-          <button className="consent-btn primary" autoFocus onClick={onEnable}>
-            {vocab('Enable notifications')}
-          </button>
+          <Button variant="text" className="consent-btn ghost" onClick={onDismiss}>
+            Not now
+          </Button>
+          <Button className="consent-btn primary" autoFocus onClick={onEnable}>
+            Enable notifications
+          </Button>
         </div>
       </div>
     </div>,

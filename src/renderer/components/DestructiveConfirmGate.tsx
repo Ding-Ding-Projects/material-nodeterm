@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMenuFlip } from '../ui/useMenuFlip'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from './dialog-stack'
-import { Slider } from '@renderer/ui/md3'
+import { Button, Slider } from '@renderer/ui/md3'
 import { useVocabularyMapper, useVocabularyTemplate } from '../lib/personalVocabulary/useVocabularyText'
 
 export interface DestructiveConfirmGateProps {
@@ -170,10 +170,11 @@ export function DestructiveConfirmGate({
       {!completing && (
         <>
           <div className="destgate__keys">
-            <button
+            <Button
               ref={firstKeyRef}
-              type="button"
+              variant="tonal"
               className="destgate__key"
+              vocabularyMode="factual"
               aria-pressed={keyA}
               onClick={() => setKeyA((v) => !v)}
             >
@@ -181,10 +182,11 @@ export function DestructiveConfirmGate({
                 {keyA ? '🔓' : '🔒'}
               </span>
               Key 1{keyA ? ' — armed' : ''}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="tonal"
               className="destgate__key"
+              vocabularyMode="factual"
               aria-pressed={keyB}
               onClick={() => setKeyB((v) => !v)}
             >
@@ -192,7 +194,7 @@ export function DestructiveConfirmGate({
                 {keyB ? '🔓' : '🔒'}
               </span>
               Key 2{keyB ? ' — armed' : ''}
-            </button>
+            </Button>
           </div>
 
           <div className="destgate__slider-wrap">
@@ -229,9 +231,9 @@ export function DestructiveConfirmGate({
           </div>
 
           <div className="destgate__actions">
-            <button type="button" className="destgate__exit" onClick={handleCancel}>
-              {vocab('Emergency exit')}
-            </button>
+            <Button variant="outlined" danger className="destgate__exit" onClick={handleCancel}>
+              Emergency exit
+            </Button>
             <span className="destgate__hint">{visibleConfirmLabel} {vocab('requires both keys + full slide')}</span>
           </div>
         </>

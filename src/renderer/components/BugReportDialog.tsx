@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
 import { BODY_BUDGET, buildBugReportUrl, envBlock, type BugReportEnv } from '../lib/bugReport'
-import { TextArea } from '@renderer/ui/md3'
+import { Button, TextArea, TextField } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
@@ -52,12 +52,11 @@ export function BugReportDialog({ env, onOpen, onClose }: BugReportDialogProps) 
         }}
       >
         <p className="confirm__msg">{vocab('Report a bug')}</p>
-        <input
+        <TextField
           ref={titleRef}
-          className="confirm__input"
+          label="Issue title"
           value={title}
-          placeholder={vocab('Short summary of the problem')}
-          aria-label={vocab('Issue title')}
+          placeholder="Short summary of the problem"
           spellCheck={false}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
@@ -85,12 +84,12 @@ export function BugReportDialog({ env, onOpen, onClose }: BugReportDialogProps) 
           ])}
         </p>
         <div className="confirm__actions">
-          <button className="confirm__btn" onClick={onClose}>
-            {vocab('Cancel')}
-          </button>
-          <button className="confirm__btn primary" disabled={!canSubmit} onClick={submit}>
+          <Button variant="outlined" className="confirm__btn" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button className="confirm__btn primary" vocabularyMode="factual" disabled={!canSubmit} onClick={submit}>
             {mapOwnedSentence(vocab, [copy('Open on '), fact('GitHub')])}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

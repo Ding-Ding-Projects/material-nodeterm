@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { Button } from '../ui/md3/Button'
+import { Input } from '../ui/Input'
 import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
@@ -56,9 +58,10 @@ export function InputDialog({
     <div className="confirm-overlay" onClick={onCancel}>
       <div className="confirm" onClick={(e) => e.stopPropagation()}>
         <p className="confirm__msg">{vocab(message)}</p>
-        <input
+        <Input
           ref={inputRef}
           className="confirm__input"
+          vocabularyMode="factual"
           type={password ? 'password' : 'text'}
           autoComplete={password ? 'off' : undefined}
           value={value}
@@ -81,12 +84,12 @@ export function InputDialog({
           </p>
         ) : null}
         <div className="confirm__actions">
-          <button className="confirm__btn" onClick={onCancel}>
+          <Button variant="outlined" className="confirm__btn" vocabularyMode="factual" onClick={onCancel}>
             {vocab(cancelLabel)}
-          </button>
-          <button className="confirm__btn primary" onClick={() => onSubmit(value)}>
+          </Button>
+          <Button className="confirm__btn primary" vocabularyMode="factual" onClick={() => onSubmit(value)}>
             {vocab(confirmLabel)}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

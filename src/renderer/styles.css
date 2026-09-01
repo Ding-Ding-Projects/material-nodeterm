@@ -2385,17 +2385,6 @@ body,
   font-size: 15px;
   font-weight: 600;
 }
-.remote-dialog__x {
-  background: transparent;
-  border: none;
-  color: rgba(var(--tint-rgb), 0.55);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-.remote-dialog__x:hover {
-  color: var(--text-strong);
-}
 .remote-dialog__desc {
   margin: 6px 0 14px;
   font-size: 12px;
@@ -5355,10 +5344,6 @@ button.group-node__setup:disabled {
   cursor: pointer;
 }
 
-.confirm__btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
 
 /* ---- Clone repo dialog (reuses the .confirm shell) ---- */
 
@@ -5467,35 +5452,10 @@ button.group-node__setup:disabled {
   gap: 10px;
 }
 
-.consent-btn {
-  flex: 1;
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: background 0.15s, border-color 0.15s;
-}
 
-.consent-btn.ghost {
-  background: transparent;
-  border-color: var(--border);
-  color: var(--text);
-}
 
-.consent-btn.ghost:hover {
-  background: rgba(var(--tint-rgb), 0.06);
-}
 
-.consent-btn.primary {
-  background: var(--accent);
-  color: #fff;
-}
 
-.consent-btn.primary:hover {
-  background: var(--accent-hover);
-}
 
 /* A failed attempt reported INSIDE the dialog, so the field keeps focus and the reason sits
    beside what caused it — an error banner elsewhere loses both. */
@@ -5569,17 +5529,6 @@ button.group-node__setup:disabled {
   cursor: pointer;
 }
 
-.confirm__input {
-  width: 100%;
-  box-sizing: border-box;
-  margin: 0 0 16px;
-  background: rgba(var(--tint-rgb), 0.06);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 13px;
-  padding: 8px 10px;
-}
 
 .confirm__actions {
   display: flex;
@@ -5587,29 +5536,8 @@ button.group-node__setup:disabled {
   gap: 8px;
 }
 
-.confirm__btn {
-  background: var(--panel-header);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 13px;
-  padding: 7px 14px;
-  cursor: pointer;
-}
 
-.confirm__btn.danger {
-  background: var(--danger);
-  border-color: transparent;
-  color: #fff;
-  font-weight: 600;
-}
 
-.confirm__btn.primary {
-  background: var(--accent);
-  border-color: transparent;
-  color: #fff;
-  font-weight: 600;
-}
 
 /* ---- Web folder/file picker (Server Edition; reuses the .confirm shell) ---- */
 .confirm.dir-picker {
@@ -7795,65 +7723,6 @@ button.group-node__setup:disabled {
   padding: 6px;
   overflow: hidden;
 }
-.pubdlg__name {
-  width: 100%;
-  background: var(--md-surface);
-  border: 1px solid var(--accent);
-  border-radius: 7px;
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 14px;
-  padding: 9px 11px;
-  outline: none;
-  margin-bottom: 6px;
-}
-.pubdlg__name::placeholder {
-  color: var(--muted);
-}
-.pubdlg__opt {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  background: transparent;
-  border: none;
-  border-radius: 7px;
-  color: var(--text);
-  text-align: left;
-  font-size: 13px;
-  padding: 9px 10px;
-  cursor: pointer;
-}
-.pubdlg__opt:hover:not(:disabled),
-.pubdlg__opt:focus-visible {
-  background: var(--accent);
-  color: #fff;
-  outline: none;
-}
-.pubdlg__opt:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.pubdlg__icon {
-  flex: none;
-  opacity: 0.85;
-}
-.pubdlg__opt-label {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pubdlg__opt-hint {
-  flex: none;
-  font-size: 11px;
-  opacity: 0.6;
-  font-family: Menlo, Monaco, monospace;
-}
-.pubdlg__opt:hover .pubdlg__opt-hint {
-  opacity: 0.85;
-}
 
 .scm-more {
   background: transparent;
@@ -8894,16 +8763,6 @@ button.group-node__setup:disabled {
   color: var(--muted);
 }
 
-.presence-prompt__input {
-  width: 100%;
-  padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--panel-header);
-  color: var(--text);
-  font-size: 13px;
-  outline: none;
-}
 
 .presence-prompt__colors {
   display: flex;
@@ -8929,30 +8788,9 @@ button.group-node__setup:disabled {
   gap: 8px;
 }
 
-.presence-prompt__ok,
-.presence-prompt__skip {
-  padding: 4px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  cursor: pointer;
-}
 
-.presence-prompt__ok {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-}
 
-.presence-prompt__ok:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
 
-.presence-prompt__skip {
-  background: transparent;
-  color: var(--muted);
-  border: 1px solid var(--border);
-}
 
 /* ---- Bug report dialog (help menu → Report a bug…) ---- */
 .bug-report {
@@ -11972,24 +11810,6 @@ button.group-node__setup:disabled {
   display: flex;
   gap: 10px;
 }
-.destgate__key {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 8px;
-  background: rgba(var(--tint-rgb), 0.05);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--muted);
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.destgate__key:hover {
-  background: rgba(var(--tint-rgb), 0.1);
-}
 
 .destgate__key[aria-pressed="true"] {
   border-color: var(--danger);
@@ -12101,19 +11921,6 @@ button.group-node__setup:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-.destgate__exit {
-  padding: 8px 12px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
-  background: rgba(var(--tint-rgb), 0.08);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  cursor: pointer;
-}
-.destgate__exit:hover {
-  background: rgba(var(--tint-rgb), 0.14);
 }
 
 .destgate__hint {

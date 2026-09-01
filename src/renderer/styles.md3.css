@@ -5536,60 +5536,9 @@ button.term-node__title-text:focus-visible {
 .confirm__option {
   color: var(--md-on-surface-variant);
 }
-.confirm__input {
-  background: var(--md-surface-container-lowest);
-  border: 1px solid var(--md-outline);
-  border-radius: 16px;
-  color: var(--md-on-surface);
-  font-family: var(--md3-font-ui);
-  padding: 16px 18px;
-  transition: border-color var(--md3-motion-effect);
-}
-.confirm__input:focus {
-  border-color: var(--md-primary);
-  outline: 2px solid var(--md-primary-container);
-  outline-offset: -3px;
-}
 .confirm__actions {
   margin-top: 4px;
   gap: 8px;
-}
-.confirm__btn {
-  min-height: 40px;
-  padding: 0 18px;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
-  color: var(--md-primary);
-  font-family: var(--md3-font-ui);
-  font-size: 14px;
-  font-weight: 600;
-  transition: background var(--md3-motion-effect);
-}
-.confirm__btn:hover {
-  background: var(--md-surface-container-highest);
-}
-.confirm__btn:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 2px;
-}
-.confirm__btn.primary {
-  background: var(--md-primary);
-  color: var(--md-on-primary);
-  padding: 0 22px;
-}
-.confirm__btn.primary:hover {
-  background: var(--md-primary);
-  filter: brightness(1.06);
-}
-.confirm__btn.danger {
-  background: var(--md-error);
-  color: var(--md-on-error, #fff);
-  padding: 0 22px;
-}
-.confirm__btn.danger:hover {
-  background: var(--md-error);
-  filter: brightness(1.08);
 }
 
 /* ---- MD3: Clone repo dialog (outlined text fields with floating labels) ---- */
@@ -5601,35 +5550,9 @@ button.term-node__title-text:focus-visible {
 /* The label/input pair for one field, positioned so the label overlaps the field's top border —
    the standard MD3 outlined-text-field look. The label's background patch matches the dialog
    surface it sits on, "cutting" the border line under it. */
-.md3-field {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  margin-top: 18px;
-}
-.md3-field__label {
-  position: absolute;
-  top: -8px;
-  left: 14px;
-  padding: 0 6px;
-  background: var(--md-surface-container-high);
-  color: var(--md-primary);
-  font-family: var(--md3-font-ui);
-  font-size: 11.5px;
-  font-weight: 600;
-  pointer-events: none;
-  z-index: 1;
-}
 .clone-dialog__row {
   gap: 8px;
   align-items: stretch;
-}
-.clone-dialog__row .confirm__input {
-  flex: 1;
-}
-.clone-dialog__browse-btn {
-  flex: none;
-  align-self: center;
 }
 .clone-dialog__preview {
   margin: 6px 4px 0;
@@ -5852,21 +5775,6 @@ button.term-node__title-text:focus-visible {
 /* Each key is a pill, not a card — matches the "Hold D / Hold K" chips in the prototype.
    Arming is a SAFE step (only the slide is destructive), so it earns a success accent, not a
    danger one — the danger colour is reserved for the actual point of no return below. */
-.destgate__key {
-  flex-direction: row;
-  justify-content: center;
-  height: 36px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: transparent;
-  border: 1px solid var(--md-outline);
-  color: var(--md-on-surface-variant);
-  font-family: var(--md3-font-ui);
-  transition: background var(--md3-motion-effect), border-color var(--md3-motion-effect), color var(--md3-motion-effect);
-}
-.destgate__key:hover {
-  background: var(--md-surface-container-highest);
-}
 .destgate__key[aria-pressed='true'] {
   border-color: var(--md-success);
   background: var(--md-success-container);
@@ -5945,20 +5853,6 @@ button.term-node__title-text:focus-visible {
   color: var(--md-on-success-container);
   border-radius: var(--md-shape-section);
   font-family: var(--md3-font-ui);
-}
-.destgate__exit {
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 999px;
-  background: transparent;
-  border: none;
-  color: var(--md-primary);
-  font-family: var(--md3-font-ui);
-  font-weight: 600;
-  transition: background var(--md3-motion-effect);
-}
-.destgate__exit:hover {
-  background: var(--md-surface-container-highest);
 }
 .destgate__hint {
   color: var(--md-on-surface-variant);
@@ -13797,31 +13691,8 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   flex-wrap: wrap;
 }
 
-.kiosk-pwa-setup-dialog__modes button,
-.kiosk-pwa-setup-dialog__target-kind button,
-.kiosk-pwa-setup-dialog__app-list button {
-  min-height: 40px;
-  border: 1px solid var(--md-outline);
-  border-radius: var(--md-shape-medium);
-  padding: 8px 14px;
-  background: var(--md-surface-container);
-  color: var(--md-on-surface);
-  cursor: pointer;
-}
 
-.kiosk-pwa-setup-dialog__modes button.is-selected,
-.kiosk-pwa-setup-dialog__target-kind button.is-selected,
-.kiosk-pwa-setup-dialog__app-list button.is-selected {
-  border-color: var(--md-primary);
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-}
 
-.kiosk-pwa-setup-dialog__modes button:disabled,
-.kiosk-pwa-setup-dialog__target-kind button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
 
 .kiosk-pwa-setup-dialog__app-list {
   display: grid;
@@ -13831,11 +13702,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   padding: 8px 0;
 }
 
-.kiosk-pwa-setup-dialog__app-list button {
-  display: grid;
-  gap: 3px;
-  text-align: left;
-}
 
 /* CloudFormation manager: compact guided controls inside a service node. */
 .cloudformation-manager {
@@ -13927,10 +13793,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   text-align: left;
 }
 
-.kiosk-pwa-setup-dialog__app-list small {
-  color: var(--md-on-surface-variant);
-  overflow-wrap: anywhere;
-}
 
 .kiosk-pwa-setup-dialog__permissions {
   display: grid;

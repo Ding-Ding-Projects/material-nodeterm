@@ -271,18 +271,6 @@ const KNOWN_FULLY_COVERED_EXCEPTIONS: KnownFullyCoveredException[] = [
       'retained as the measured narrow-layout fallback.'
   },
   {
-    selector: '.destgate__key:hover',
-    reason:
-      "The two-key destructive confirmation uses a calibrated legacy hover wash that remains distinct " +
-      'from its selected danger state; property-name coverage alone cannot prove that visual distinction.'
-  },
-  {
-    selector: '.destgate__exit:hover',
-    reason:
-      "The emergency-exit hover treatment is intentionally tuned separately from the destructive key " +
-      'controls so the cancellation route remains visually recognizable.'
-  },
-  {
     selector: '.alarm-clock-node__options',
     reason:
       "The options row keeps an 8px gap rather than the shared day-row 5px gap so its wrapped " +
@@ -383,10 +371,6 @@ const KNOWN_PARTIAL_OVERRIDES: KnownPartialOverride[] = [
   { selector: ".confirm", stillMissing: ["display", "flex-direction", "max-height", "max-width", "width"] },
   { selector: ".confirm-overlay", stillMissing: ["-webkit-app-region", "align-items", "display", "inset", "justify-content", "position", "z-index"] },
   { selector: ".confirm__actions", stillMissing: ["display", "justify-content"] },
-  { selector: ".confirm__btn", stillMissing: ["cursor"] },
-  { selector: ".confirm__btn.danger", stillMissing: ["border-color", "font-weight"] },
-  { selector: ".confirm__btn.primary", stillMissing: ["border-color", "font-weight"] },
-  { selector: ".confirm__input", stillMissing: ["box-sizing", "font-size", "margin", "width"] },
   { selector: ".confirm__msg", stillMissing: ["flex", "margin", "min-height", "overflow-wrap", "overflow-y", "white-space"] },
   { selector: ".confirm__option", stillMissing: ["align-items", "cursor", "display", "font-size", "gap", "margin"] },
   { selector: ".ctx-bar", stillMissing: ["border-radius", "height", "overflow"] },
@@ -413,11 +397,9 @@ const KNOWN_PARTIAL_OVERRIDES: KnownPartialOverride[] = [
   { selector: ".destgate__affected", stillMissing: ["font-size", "margin-top", "max-height", "overflow-y", "padding"] },
   { selector: ".destgate__complete", stillMissing: ["align-items", "animation", "display", "font-size", "font-weight", "gap", "justify-content", "padding"] },
   { selector: ".destgate__desc", stillMissing: ["font-size", "margin-top"] },
-  { selector: ".destgate__exit", stillMissing: ["cursor", "font-size"] },
   { selector: ".destgate__head", stillMissing: ["align-items", "display"] },
   { selector: ".destgate__hint", stillMissing: ["font-size"] },
   { selector: ".destgate__icon", stillMissing: ["align-items", "display", "flex", "justify-content"] },
-  { selector: ".destgate__key", stillMissing: ["align-items", "cursor", "display", "flex", "font-size", "font-weight", "gap"] },
   { selector: ".destgate__key-glyph", stillMissing: ["line-height"] },
   { selector: ".destgate__keys", stillMissing: ["display"] },
   { selector: ".destgate__slider", stillMissing: ["-webkit-appearance", "appearance", "cursor", "outline", "width"] },

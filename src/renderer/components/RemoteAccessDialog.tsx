@@ -4,6 +4,7 @@ import { useDialogStack } from './dialog-stack'
 import { useProjects } from '../state/projects'
 import { hostShareOptions } from '../lib/relayHostShare'
 import { Button } from '@renderer/ui/Button'
+import { IconButton } from '@renderer/ui/md3/IconButton'
 import { CopyButton } from '@renderer/ui/CopyButton'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
@@ -106,9 +107,9 @@ export function RemoteAccessDialog({ onClose }: { onClose: () => void }): React.
       <div className="remote-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="remote-dialog__head">
           <h3>{vocab('Remote access')}</h3>
-          <button className="remote-dialog__x" onClick={onClose} title={vocab('Close')}>
+          <IconButton className="remote-dialog__x" size="dense" onClick={onClose} title="Close" aria-label="Close">
             ×
-          </button>
+          </IconButton>
         </div>
         <p className="remote-dialog__desc">
           {vocab('Open terminals on a Docker host you own — end-to-end encrypted over the relay. Hosting and connecting are free.')}
