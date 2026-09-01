@@ -1007,120 +1007,6 @@
 }
 
 /* ---------------------------------------------------------------------------
- * Radio -- native grouping and keyboard behavior with a tokenized M3 surface.
- * ------------------------------------------------------------------------ */
-.mdx-radio {
-  appearance: none;
-  flex: none;
-  width: 20px;
-  height: 20px;
-  margin: 0;
-  border: 2px solid var(--md-on-surface-variant);
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
-  position: relative;
-  transition:
-    border-color var(--md-motion-effect),
-    background var(--md-motion-effect);
-}
-.mdx-radio::after {
-  content: '';
-  position: absolute;
-  inset: 4px;
-  border-radius: 50%;
-  background: var(--md-on-primary);
-  transform: scale(0);
-  transition: transform var(--md-motion-effect);
-}
-.mdx-radio:checked {
-  border-color: var(--md-primary);
-  background: var(--md-primary);
-}
-.mdx-radio:checked::after {
-  transform: scale(1);
-}
-.mdx-radio:hover:not(:disabled) {
-  box-shadow: 0 0 0 8px color-mix(in srgb, var(--md-primary) 12%, transparent);
-}
-.mdx-radio:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 2px;
-}
-.mdx-radio:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
-}
-
-/* ---------------------------------------------------------------------------
- * Progress -- determinate and indeterminate linear indicators for long operations.
- * ------------------------------------------------------------------------ */
-.mdx-progress {
-  position: relative;
-  width: 100%;
-  height: 4px;
-  overflow: hidden;
-  border-radius: var(--md-shape-full);
-  background: var(--md-surface-container-highest);
-}
-.mdx-progress__bar {
-  height: 100%;
-  min-width: 0;
-  border-radius: inherit;
-  background: var(--md-primary);
-  transition: width var(--md-motion-effect);
-}
-.mdx-progress--indeterminate .mdx-progress__bar {
-  width: 40%;
-  animation: mdx-progress-indeterminate 1.2s cubic-bezier(0.34, 0.80, 0.34, 1) infinite;
-}
-@keyframes mdx-progress-indeterminate {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(250%); }
-}
-
-/* ---------------------------------------------------------------------------
- * Tabs -- browser-style tablist with a shared selected state and focus ring.
- * ------------------------------------------------------------------------ */
-.mdx-tabs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.mdx-tabs > [role='tab'] {
-  min-height: 40px;
-  padding: 0 16px;
-  border: 1px solid transparent;
-  border-radius: var(--md-shape-full);
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  font-family: var(--md-font-ui);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background var(--md-motion-effect),
-    color var(--md-motion-effect),
-    border-color var(--md-motion-effect);
-}
-.mdx-tabs > [role='tab']:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
-  color: var(--md-on-surface);
-}
-.mdx-tabs > [role='tab'][aria-selected='true'] {
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-}
-.mdx-tabs > [role='tab']:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 2px;
-}
-.mdx-tabs > [role='tab']:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
-}
-
-/* ---------------------------------------------------------------------------
  * TextArea -- the same outlined field anatomy as .mdx-input, sized for prose.
  * ------------------------------------------------------------------------ */
 .mdx-textarea {
@@ -1182,4 +1068,211 @@
     animation: none;
     width: 100%;
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * SearchField -- the docked search pill (HANDOFF: "docked bar 44px pill surface-container-high"),
+ * one input plus a trailing slot for the `.*` anchored-regex trigger. `min-height`, never
+ * `height`, and `flex: 0 0 auto`: the previous per-panel copies of this recipe carried a
+ * `flex-basis`, which a COLUMN flex parent applied to the main axis and grew the pill to ~220px
+ * tall (the Notifications oval).
+ * ------------------------------------------------------------------------ */
+.mdx-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 6px 0 16px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface-variant);
+  box-sizing: border-box;
+  transition: background var(--md-motion-effect), outline-color var(--md-motion-effect);
+}
+.mdx-search--dense {
+  min-height: 40px;
+  padding-left: 14px;
+}
+.mdx-search:focus-within {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -1px;
+}
+.mdx-search__icon {
+  flex: none;
+  display: inline-flex;
+  color: var(--md-on-surface-variant);
+}
+.mdx-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13.5px;
+  outline: none;
+}
+.mdx-search__input::placeholder {
+  color: var(--md-on-surface-variant);
+}
+.mdx-search__input::-webkit-search-cancel-button {
+  appearance: none;
+}
+.mdx-search__trailing {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+ * ChipRow -- a wrapping row of chips that is never height-capped. The panels that capped one
+ * (`max-height` + `overflow-y: auto`) clipped the third row of 44px chips mid-glyph with a
+ * two-pixel scroll gutter as the only hint; a long row collapses behind a "+N more" chip instead.
+ * ------------------------------------------------------------------------ */
+.mdx-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.mdx-chip-row__label {
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Snackbar -- the one transient-message recipe. Stack is fixed bottom-left (the corner nothing
+ * else owns) above every scrim; `--mdx-snackbar-inset` lets a full-height dialog lift the
+ * stack clear of its own footer. Inverse surface per M3, section radius, no shadow.
+ * ------------------------------------------------------------------------ */
+:root {
+  --mdx-snackbar-inset: 0px;
+}
+.mdx-snackbar-stack {
+  position: fixed;
+  left: 20px;
+  bottom: calc(20px + var(--mdx-snackbar-inset, 0px));
+  z-index: 121;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(400px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  pointer-events: none;
+}
+.mdx-snackbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 12px 12px 16px;
+  border-radius: var(--md-shape-medium);
+  border-left: 3px solid var(--md-primary);
+  background: var(--md-inverse-surface);
+  color: var(--md-inverse-on-surface);
+  font-family: var(--md-font-ui);
+  pointer-events: auto;
+  animation: mdx-snackbar-in var(--md-motion-effect) ease-out backwards;
+}
+.mdx-snackbar--success { border-left-color: var(--md-success); }
+.mdx-snackbar--warning { border-left-color: var(--md-warning); }
+.mdx-snackbar--error { border-left-color: var(--md-error); }
+.mdx-snackbar--progress { border-left-color: var(--md-tertiary); }
+.mdx-snackbar__icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--md-inverse-on-surface) 12%, transparent);
+  font-size: 12px;
+  font-weight: 700;
+}
+.mdx-snackbar__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mdx-snackbar__title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.mdx-snackbar__text {
+  font-size: 12px;
+  opacity: 0.9;
+  overflow-wrap: anywhere;
+}
+.mdx-snackbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.mdx-snackbar__action {
+  min-height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-inverse-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mdx-snackbar__action:hover,
+.mdx-snackbar__dismiss:hover {
+  background: color-mix(in srgb, var(--md-inverse-on-surface) 10%, transparent);
+}
+.mdx-snackbar__dismiss {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mdx-snackbar__action:focus-visible,
+.mdx-snackbar__dismiss:focus-visible {
+  outline: 2px solid var(--md-inverse-primary);
+  outline-offset: 2px;
+}
+@keyframes mdx-snackbar-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------------------------------------------------------------------------
+ * Localized secondary line -- the compact Cantonese line under bilingual copy. One class, on
+ * tokens; it used to be a Tailwind utility string (`text-muted-2`, a 25%-alpha tint).
+ * ------------------------------------------------------------------------ */
+.mdx-secondary {
+  display: block;
+  margin-top: 2px;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mdx-snackbar { animation: none; }
 }

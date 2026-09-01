@@ -31,7 +31,7 @@ export function Localized({
   return (
     <Tag className={className}>
       <span>{primary}</span>
-      <span className={secondaryClassName ?? 'mt-0.5 block text-[12px] text-muted-2'}>
+      <span className={secondaryClassName ?? 'mdx-secondary'}>
         {secondary}
       </span>
     </Tag>

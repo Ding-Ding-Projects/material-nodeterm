@@ -52,6 +52,7 @@
     "make-social": "node scripts/make-social.mjs",
     "count-lines": "node scripts/count-lines.mjs",
     "check:app-contract": "node scripts/check-app-contract.mjs",
+    "check:md3-controls": "node scripts/check-md3-controls.mjs",
     "check:material-audit": "node scripts/check-material-audit.mjs",
     "check:design-parity": "node scripts/check-design-parity.mjs",
     "check:vocabulary-coverage": "node scripts/check-personal-vocabulary-coverage.mjs",

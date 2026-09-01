@@ -126,6 +126,30 @@
   --md-sys-color-tertiary-container: var(--md-tertiary-container);
   --md-sys-elevation-1: 0 1px 3px rgb(0 0 0 / 20%);
   --md-sys-typescale-headline-small: 500 24px/32px var(--md-font-ui);
+  /* M3 typescale (the subset the sheets reference), declared once here for both themes. */
+  --md-typescale-title-large: 400 22px/28px var(--md-font-ui);
+  --md-typescale-title-medium: 500 16px/24px var(--md-font-ui);
+  --md-typescale-body-medium: 400 14px/20px var(--md-font-ui);
+  --md-typescale-body-small: 400 12px/16px var(--md-font-ui);
+  --md-typescale-label-large: 500 14px/20px var(--md-font-ui);
+  --md-sys-typescale-body-small: var(--md-typescale-body-small);
+  /* Compat aliases for the `--md-sys-*` / `corner` spellings a few node sheets still use. Every
+     one resolves to the canonical role above; the dangling-token guard in styles.theme.test.ts
+     now scans styles.md3.css too, which is how these were found undefined. */
+  --md-elevation-1: var(--md-sys-elevation-1);
+  --md-sys-elevation-level2: var(--md-elevation-2);
+  --md-sys-elevation-level3: var(--md-elevation-3);
+  --md-shape-corner-full: var(--md-shape-full);
+  --md-shape-corner-large: var(--md-shape-large);
+  --md-sys-shape-corner-full: var(--md-shape-full);
+  --md-sys-shape-corner-large: var(--md-shape-large);
+  --md-sys-shape-corner-medium: var(--md-shape-medium);
+  --md-sys-color-error-container: var(--md-error-container);
+  --md-sys-color-on-error-container: var(--md-on-error-container);
+  --md-sys-color-on-primary-container: var(--md-on-primary-container);
+  --md-sys-color-on-tertiary-container: var(--md-on-tertiary-container);
+  --md-sys-color-primary-container: var(--md-primary-container);
+  --md-sys-color-secondary: var(--md-secondary);
   --on-surface-variant: var(--md-on-surface-variant);
   --outline-variant: var(--md-outline-variant);
   --surface: var(--md-surface);

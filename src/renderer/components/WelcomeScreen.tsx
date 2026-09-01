@@ -81,7 +81,7 @@ function VocabularyLocalized({
   return (
     <Tag className={className}>
       <span>{vocab(resolved.primary)}</span>
-      <span className={secondaryClassName ?? 'mt-0.5 block text-[12px] text-muted-2'}>
+      <span className={secondaryClassName ?? 'mdx-secondary'}>
         {vocab(resolved.secondary)}
       </span>
     </Tag>

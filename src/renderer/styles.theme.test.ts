@@ -25,6 +25,8 @@ const CSS = readFileSync(join(__dirname, 'styles.css'), 'utf8')
  * `.mc-console` dangling-token defect stays catchable.
  */
 const FONTS_CSS = readFileSync(join(__dirname, 'fonts.css'), 'utf8')
+const MD3_CSS = readFileSync(join(__dirname, 'styles.md3.css'), 'utf8')
+const PRIMITIVES_CSS = readFileSync(join(__dirname, 'ui', 'md3', 'primitives.css'), 'utf8')
 
 /**
  * Where the light block actually starts. This MUST be anchored to the selector at the start of a
@@ -135,17 +137,42 @@ describe('every CSS variable resolves', () => {
     '--cmascot-h',
     '--cmascot-sheet-w',
     '--cmascot-sheet-h', // notch HUD sprite sheets
-    '--nt-rainbow-duration' // App.tsx, from the user's rainbow-speed setting
+    '--nt-rainbow-duration', // App.tsx, from the user's rainbow-speed setting
+    '--nt-adhd-motion-scale', // lib/adhdModes.ts via App.tsx, only while a mode is on
+    '--nt-adhd-chroma',
+    '--nt-adhd-dim',
+    '--md3-ring-deg' // AuthenticatorSection.tsx, inline per credential (progress ring angle)
   ])
 
+  const defined = new Set([
+    ...Array.from(CSS.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm), (x) => x[1]),
+    ...Array.from(FONTS_CSS.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm), (x) => x[1]),
+    ...Array.from(MD3_CSS.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm), (x) => x[1]),
+    ...Array.from(PRIMITIVES_CSS.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm), (x) => x[1])
+  ])
+  // `@property` registrations define a token as surely as a `:root` declaration does.
+  for (const sheet of [CSS, MD3_CSS, PRIMITIVES_CSS]) {
+    for (const match of sheet.matchAll(/@property\s+(--[a-z0-9-]+)/g)) defined.add(match[1])
+  }
+  const danglingIn = (sheet: string): string[] => {
+    const rules = sheet.replace(/\/\*[\s\S]*?\*\//g, '')
+    const used = new Set(Array.from(rules.matchAll(/var\(\s*(--[a-z0-9-]+)/g), (x) => x[1]))
+    return [...used].filter((v) => !defined.has(v) && !SET_FROM_JS.has(v)).sort()
+  }
+
   it('references no variable that is never defined', () => {
-    const defined = new Set([
-      ...Array.from(CSS.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm), (x) => x[1]),
-      ...Array.from(FONTS_CSS.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm), (x) => x[1])
-    ])
-    const used = new Set(Array.from(CSS.matchAll(/var\(\s*(--[a-z0-9-]+)/g), (x) => x[1]))
-    const dangling = [...used].filter((v) => !defined.has(v) && !SET_FROM_JS.has(v)).sort()
-    expect(dangling).toEqual([])
+    expect(danglingIn(CSS)).toEqual([])
+  })
+
+  // The md3 sheet and the primitive sheet used to escape this guard, which is how five
+  // `--md-typescale-*` references shipped with no definition anywhere (their `font:` fallbacks
+  // quietly won). Same rule, same definition set, all three sheets.
+  it('styles.md3.css references no variable that is never defined', () => {
+    expect(danglingIn(MD3_CSS)).toEqual([])
+  })
+
+  it('primitives.css references no variable that is never defined', () => {
+    expect(danglingIn(PRIMITIVES_CSS)).toEqual([])
   })
 })
 

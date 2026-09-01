@@ -321,6 +321,17 @@ interface KnownPartialOverride {
  * not be recomputed live.
  */
 const KNOWN_PARTIAL_OVERRIDES: KnownPartialOverride[] = [
+  // The motion-identity commit re-declared these in md3 for transitions/animation only.
+  { selector: ".tab", stillMissing: ["-webkit-app-region", "position", "display", "align-items", "gap", "padding", "height", "border-radius", "color", "font-size", "cursor", "white-space"] },
+  { selector: ".drawer-overlay", stillMissing: ["-webkit-app-region", "position", "inset", "z-index", "background", "display", "justify-content"] },
+  { selector: ".sc-overlay", stillMissing: ["-webkit-app-region", "position", "inset", "z-index", "display", "align-items", "justify-content", "background"] },
+  { selector: ".drawer", stillMissing: ["width", "max-width", "height", "background", "border-left", "box-shadow", "display", "flex-direction"] },
+  { selector: ".consent-overlay", stillMissing: ["position", "inset", "z-index", "display", "align-items", "justify-content", "background", "backdrop-filter", "-webkit-app-region"] },
+  { selector: ".ss-row", stillMissing: ["display", "align-items", "gap", "padding", "border-radius", "cursor", "border"] },
+  { selector: ".label-picker__scrim", stillMissing: ["position", "inset", "z-index"] },
+  { selector: ".export-menu__panel", stillMissing: ["margin-top", "padding", "border", "border-radius", "background", "display", "flex-direction", "gap", "font-size", "max-width"] },
+  { selector: ".toylock-wizard__backdrop", stillMissing: ["position", "inset", "z-index"] },
+  { selector: ".toylock-wizard", stillMissing: ["position", "z-index", "width", "max-height", "overflow-y", "padding", "border-radius", "background", "border", "box-shadow", "color", "display", "flex-direction", "gap"] },
   { selector: ".palette-overlay", stillMissing: ["animation"] },
   { selector: ".sc-btn.primary", stillMissing: ["font-weight"] },
   { selector: ".confirm.worktree-dialog", stillMissing: ["min-height"] },

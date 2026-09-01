@@ -34,6 +34,26 @@ import {
 Importing anything from the barrel (`index.ts`) also pulls in `primitives.css`, so no separate
 stylesheet import is required.
 
+Three primitives were added for the recurring shapes the per-panel copies kept getting wrong:
+
+| Component | Recipe | Replaces |
+| --- | --- | --- |
+| `SearchField` | 44px docked search pill (`'dense'` = 40px), input + trailing slot for the `.*` regex trigger; `min-height` and `flex: 0 0 auto`, never `height` + `flex-basis` | `.md3-history-search`, `.md3-status-search`, `.md3-settings-search`, `.cluster-search`, `.notif-center__search input`, `.startpage__searchbar` |
+| `ChipRow` | wrapping chip row, never height-capped; optional `collapseAfter` folds the tail behind a "+N more" chip | every `max-height` + `overflow-y: auto` chip row (Node Catalog profiles/categories, CloudFormation pills, Cloudflare tunnel pills) |
+| `Snackbar` + `SnackbarStack` | inverse-surface transient message, fixed bottom-left, `--mdx-snackbar-inset` lets a tall dialog lift it clear of its footer | `.toast` / `.toast-stack`, `.easter-eggs__toast` |
+
+The bilingual secondary line every `Localized` renders is `.mdx-secondary` (on tokens), no longer
+a Tailwind utility string.
+
+### The raw-control guard
+
+`node scripts/check-md3-controls.mjs` (`npm run check:md3-controls`) fails on any `<button>`,
+`<input>`, `<select>` or `<textarea>` rendered outside `ui/md3/` and the delegating `ui/*`
+wrappers, unless the file is listed in `scripts/md3-raw-controls-allowlist.json`. The allowlist
+was generated once from the tree and may only shrink: a migrated file must be removed from it
+(the guard fails on a stale entry too), and a new file starts clean.
+`src/renderer/ui/md3/rawControls.guard.test.ts` pins the guard and the allowlist to the tree.
+
 | Component | Recipe | Notes |
 | --- | --- | --- |
 | `Button` | 40px pill; `filled` / `tonal` / `outlined` / `text`, plus a `danger` colour overlay | New CSS (`.mdx-btn*`) |

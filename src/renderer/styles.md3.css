@@ -13203,14 +13203,6 @@ button.term-node__title-text:focus-visible {
 .kanban-col {
   border-radius: var(--md-shape-node);
 }
-.sticky-node,
-.loop-node,
-.native-loop-node,
-.destgate__complete,
-.destgate__exit,
-.notif-center__row {
-  border-radius: var(--md-shape-section);
-}
 .palette,
 .palette--full,
 .ctx-menu,
@@ -15040,4 +15032,17 @@ button.term-node__title-text:focus-visible {
 .ss-row {
   transition: background-color var(--md3-motion-effect), color var(--md3-motion-effect),
     border-color var(--md3-motion-effect);
+}
+
+/* Section-radius owners. Kept as the LAST rule that names these selectors on purpose: the
+   material audit (`scripts/check-material-audit.mjs`, `ownsRadiusToken`) reads the final block
+   for each owner, and the row-cascade motion rules above name `.notif-center__row` without a
+   radius. Same value, same specificity — the cascade is unchanged. */
+.sticky-node,
+.loop-node,
+.native-loop-node,
+.destgate__complete,
+.destgate__exit,
+.notif-center__row {
+  border-radius: var(--md-shape-section);
 }

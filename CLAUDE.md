@@ -2752,6 +2752,17 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   The completeness check must fail when any one of those exact records is absent or stale; finding
   one design-system marker somewhere in a file is not proof that the file's whole rendered surface
   conforms.
+- **No raw form controls outside `src/renderer/ui/md3/`** (2026-09). A bare `<button>`/`<input>`/
+  `<select>`/`<textarea>` in a renderer component is how a panel drifts to browser defaults, so
+  `scripts/check-md3-controls.mjs` fails on any file that renders one and is not on
+  `scripts/md3-raw-controls-allowlist.json` — an allowlist generated once from the tree that may
+  only shrink (a stale entry fails too). The recurring shapes have primitives: `SearchField` (44 px
+  pill, `min-height` + `flex: 0 0 auto`, because the per-panel copies carried a `flex-basis` that a
+  COLUMN parent grew into the 220 px Notifications oval), `ChipRow` (never `max-height`-capped; the
+  132 px cap clipped the Node Catalog's third row of 44 px chips) and `Snackbar` (bottom-left, with
+  `--mdx-snackbar-inset` so a full-height dialog lifts it off its own footer). The
+  `styles.theme.test.ts` dangling-token guard scans `styles.md3.css` and `primitives.css` too; it
+  found five `--md-typescale-*` references that had never been defined.
 - **The existing Kids-mode-default documentation and landing site keeps its current visual style.**
   It is the narrow appearance exception to the element-level Material Design 3 rule and must not
   be restyled to resemble the desktop application. The exception does not cover stale facts,

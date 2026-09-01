@@ -129,6 +129,13 @@ need it too, and wire it in the same change.
 
 ## House rules
 
+- **No raw form controls outside `src/renderer/ui/md3/`.** Render `Button`, `IconButton`,
+  `Chip`, `ChipRow`, `TextField`, `SearchField`, `Select`, `Switch`, `Snackbar`, `Dialog`… from the
+  primitive barrel instead of a bare `<button>`/`<input>`/`<select>`/`<textarea>`; that is what
+  keeps a panel on the tokens, the state layers and the focus rings. `npm run check:md3-controls`
+  enforces it against a shrink-only allowlist — a file you migrate comes OFF the list in the same
+  change. See `docs/md3-primitives.md`.
+
 - **Anything path-shaped: read `docs/windows-support.md` first.** Windows is the delivery target
   and most of this was written on macOS, so the recurring defect is code that is genuinely correct
   on POSIX — `split('/')`, `startsWith('/')` as an is-absolute test, a bare `fs.rename`. Use

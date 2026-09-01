@@ -69,5 +69,14 @@ export type { ProgressProps } from './Progress'
 export { Tabs } from './Tabs'
 export type { TabOption, TabsProps } from './Tabs'
 
+export { SearchField } from './SearchField'
+export type { SearchFieldProps } from './SearchField'
+
+export { ChipRow } from './ChipRow'
+export type { ChipRowProps } from './ChipRow'
+
+export { Snackbar, SnackbarStack } from './Snackbar'
+export type { SnackbarProps, SnackbarAction, SnackbarTone } from './Snackbar'
+
 export { Divider } from './Divider'
 export type { DividerProps } from './Divider'
