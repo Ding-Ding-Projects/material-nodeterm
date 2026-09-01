@@ -582,6 +582,12 @@ Lifecycle, by intent:
   running. `killAll()` deliberately does NOT kill sessions.
 - **Node reopen / app relaunch** (nothing parked) → a new PTY attaches to the same
   `nt-<nodeId>` session. tmux redraws itself; the session host returns its serialized live screen.
+- **Planner-retained host relaunch** → an enabled Planner schedule intentionally leaves the desktop
+  host alive after its last Windows/Linux main window closes. The retained host still owns the
+  single-instance lock, so the later launch must restore the tracked main window or create one when
+  none exists. `BrowserWindow.getAllWindows()` is not authority: the Notch HUD or a canvas widget
+  can outlive the main window. Pre-ready activation is queued until the initial main window exists;
+  explicit Quit still owns teardown and never reopens the UI.
 - **User clicks ×** → `destroy(persistKey)` kills the backend session, permanently ending it. For a
   REMOTE node it kills the remote session **and then the local one of the same name** — normally a
   no-op, but it reaps the orphan the pre-`requireRemote` local fallback below could leave behind.

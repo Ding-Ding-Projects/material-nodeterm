@@ -220,7 +220,15 @@ import {
   isValidPendingId,
   syntheticAnsweredEvent
 } from '../core/agents/pending-approvals'
-import { setMainWindow, getMainWindow, sendToMain, closeAction, createCrashReloadPolicy } from './main-window'
+import {
+  setMainWindow,
+  getMainWindow,
+  sendToMain,
+  closeAction,
+  createCrashReloadPolicy,
+  createMainWindowActivationController,
+  plannerRetainsHostAfterWindowClose
+} from './main-window'
 import {
   MENU_ITEM_ID_CLOSE,
   MENU_ITEM_ID_KANBAN,
@@ -909,16 +917,21 @@ const browserUseBackend = new NodeTermBrowserUseBackend((sessionId) => {
 // (`new-session -A -D`), whose `-D` detaches the first instance's clients — leaving
 // "[detached (from session ...)]" dead terminals. Bail out and focus the existing window
 // instead. (This guards against a stray real GUI launch.)
+//
+// An enabled Planner schedule intentionally keeps the host alive after its last window closes.
+// That retained host still owns the single-instance lock, so a later launch arrives here and must
+// create a replacement main window. Queue an unusually early launch until boot has created its
+// initial window; creating before the app-ready services are wired would produce a half-live UI.
+const mainWindowActivation = createMainWindowActivationController({
+  getMainWindow,
+  createMainWindow: () => createWindow()
+})
 const gotSingleInstanceLock = NT_MULTI || app.requestSingleInstanceLock()
 if (!gotSingleInstanceLock) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    const win = getMainWindow()
-    if (!win) return
-    if (win.isMinimized()) win.restore()
-    win.show()
-    win.focus()
+    mainWindowActivation.request()
   })
 }
 
@@ -1343,7 +1356,10 @@ function createWindow(): BrowserWindow {
     // A title-bar close is a UI close, not an explicit host shutdown. When the planner owns an
     // enabled schedule, let this window be destroyed and let window-all-closed keep the process
     // alive. Menu Quit and app shutdown still reach before-quit and stop the planner normally.
-    if (!quitting && plannerRuntime.hasEnabledSchedules()) return
+    if (
+      !quitting &&
+      plannerRetainsHostAfterWindowClose(process.platform, plannerRuntime.hasEnabledSchedules())
+    ) return
     // action === 'default': the window is really closing. On Windows/Linux the native title-bar
     // × reaches this directly (no app.quit() first), so the confirm gate must sit here too, not
     // only in before-quit — otherwise the window (and with it the only place to show a dialog)
@@ -2740,6 +2756,7 @@ app.whenReady().then(async () => {
     return undefined
   })
   const win = createWindow()
+  mainWindowActivation.markReady()
   // NT_MULTI instances are throwaway dev sandboxes. The dock badge is the one marker that is
   // always visible on macOS (the window title is hidden by titleBarStyle: 'hiddenInset', and the
   // dev dock icon/name are Electron's own), so a test instance can never be mistaken for the
@@ -4760,16 +4777,9 @@ app.whenReady().then(async () => {
   })
 
   app.on('activate', () => {
-    // With hide-on-close the window usually still exists — just re-show it. Only a truly
-    // gone window (e.g. renderer crash) is recreated; createWindow re-registers it as the
-    // main window, so send-time resolution keeps agent-status forwarding alive.
-    const existing = getMainWindow()
-    if (existing) {
-      existing.show()
-      existing.focus()
-    } else if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-    }
+    // The tracked main window is the authority. A Notch HUD or canvas widget can keep Electron's
+    // aggregate window list non-empty after the main window closes, but neither is a relaunch UI.
+    mainWindowActivation.request()
   })
 }).catch((error: unknown) => {
   const publicFailure = publicDesktopBootstrapFailure(error)
@@ -4790,7 +4800,7 @@ app.on('window-all-closed', () => {
     // Keep the host alive when a local planner schedule is enabled. The window is allowed to be
     // closed, but the host-owned occurrence service must continue while the computer is available.
     // A later explicit Quit still follows before-quit and stops the service normally.
-    if (plannerRuntime.hasEnabledSchedules()) return
+    if (plannerRetainsHostAfterWindowClose(process.platform, plannerRuntime.hasEnabledSchedules())) return
     app.quit()
   } else {
     void ptyManager.killAll()

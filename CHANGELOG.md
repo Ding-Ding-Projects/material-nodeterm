@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Fix Windows relaunch after an enabled Planner schedule keeps the host process alive without a
+  main window. The single-instance and platform activation paths now restore the tracked main
+  window or create one replacement, even when a helper window still exists. Early activation is
+  queued until desktop startup has created its first main window, while explicit Quit keeps its
+  existing bounded teardown and persistent terminal sessions remain detached rather than killed.
+
+  修正 Windows 開住 Planner schedule、關閉主視窗之後再開程式冇反應嘅問題。Single-instance 同
+  platform activation 而家會以真正主視窗做準，有就 restore、show 同 focus，冇就開一個新主視窗；
+  就算 helper window 仲喺度都唔會扮主角。太早到嘅 activation 會等 desktop startup 完成，明確
+  Quit 仍然行原有 bounded teardown，persistent terminal session 只 detach，唔會畀人亂斬。
+
 - Add byte-identical sanitized shared-instruction blocks to `AGENTS.md` and `CLAUDE.md`, preserve
   all project-specific guidance outside the managed markers, and add deterministic synchronization,
   private-vocabulary validation, public-detail scanning, parity checks, sensitive-input refusal,
