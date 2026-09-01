@@ -133,6 +133,7 @@ The concrete source remediations in this pass are:
 | --- | --- | --- | --- | --- | --- |
 | `desktop-app-shell` | Application shell and mode routing | `src/renderer/App.tsx` | `export default function App` | `md3-kids-boot-splash` | Source reviewed; runtime proof pending |
 | `desktop-canvas-shell` | Canvas shell and surface composition | `src/renderer/canvas/Canvas.tsx` | `function Canvas` | `md3-canvas-row` | Source reviewed; runtime proof pending |
+| `desktop-app-error-boundary` | Application error recovery card | `src/renderer/components/AppErrorBoundary.tsx` | `export class AppErrorBoundary` | `app-error` | Source reviewed; runtime proof pending |
 | `desktop-top-app-bar` | Top app bar | `src/renderer/components/TopAppBar.tsx` | `export function TopAppBar` | `md3-app-bar` | Source reviewed; runtime proof pending |
 | `desktop-nav-rail` | Navigation rail and node-creation FAB | `src/renderer/components/NavRail.tsx` | `export function NavRail` | `md3-nav-rail` | Source reviewed; runtime proof pending |
 | `desktop-project-switcher` | Project switcher menu | `src/renderer/components/ProjectSwitcher.tsx` | `export function ProjectSwitcher` | `md3-switcher-menu` | Source reviewed; runtime proof pending |

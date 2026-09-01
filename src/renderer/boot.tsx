@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { ensureClaudeCliCaps } from './state/permissionMode'
 import { ensureCodexIdentityCaps } from './state/codexIdentity'
 import './fonts.css'
@@ -42,4 +43,8 @@ void refreshAgentEnv()
 
 // Note: StrictMode is intentionally not used — its double mount in dev would open
 // two PTY sessions per terminal node.
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(<App />)
+ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+  <AppErrorBoundary>
+    <App />
+  </AppErrorBoundary>
+)

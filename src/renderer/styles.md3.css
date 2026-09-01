@@ -2185,6 +2185,59 @@ button.term-node__title-text:focus-visible {
   color: color-mix(in srgb, var(--md-on-error-container) 85%, transparent);
 }
 
+/* App-level error boundary (components/AppErrorBoundary.tsx): the recovery card drawn where the
+   whole React tree would otherwise have unmounted into a black canvas. Tonal error container,
+   section radius, no shadow — the same recipe as a node's error card, scaled to the window. */
+.app-error {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  font-family: var(--font-ui);
+  z-index: 200;
+}
+.app-error__card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(560px, 100%);
+  padding: 24px;
+  border-radius: var(--md-shape-extra-large);
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.app-error__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.app-error__lead {
+  margin: 0;
+  font-size: 13px;
+}
+.app-error__message {
+  margin: 0;
+  max-height: 40vh;
+  overflow: auto;
+  padding: 12px;
+  border-radius: var(--md-shape-medium);
+  background: color-mix(in srgb, var(--md-surface) 60%, transparent);
+  color: var(--md-on-surface);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.app-error__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 /* ---------------------------------------------------------------------------------------------
    Context meter (ContextMeter.tsx) — compact header pill + popover. Tertiary is the meter's own
    fill colour per the handoff table; the fullness colour (meterColor() in the component) is now

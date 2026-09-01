@@ -31,7 +31,7 @@ import type { PortableDoorConstructionV3 } from '@shared/door-construction'
 import { deletePortablePortal, navigatePortablePortal } from '../../core/portal-lifecycle'
 import { portableCanvasProjectionToProject, projectToPortableCanvasV3 } from '../../core/portable-canvas-projection'
 import type { ProjectCapability } from '@shared/project-capabilities'
-import { applyCanvasMutation, createProject, createShopNode, reorderGroupWithinParent } from './workspace'
+import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
 import { markWorkspaceDirty } from './workspaceDirty'
 
 interface ProjectsState {
@@ -487,12 +487,24 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     const existing = (project.childCanvases ?? []).filter((canvas): canvas is ProjectAwsUniverseCanvas => canvas.scope === 'aws-universe' && canvas.parentCanvasId === AWS_UNIVERSE_ROOT_ID && canvas.depth === 1 && !!canvas.viewport)
     if (existing.length >= MAX_AWS_UNIVERSE_INSTANCES) return { reason: 'The portable resource safety bound has been reached.' }
     const id = nextAwsUniverseId(existing)
-    let shop: CanvasNodeState
-    try {
-      shop = createShopNode(id, 'aws-universe', existing.length, undefined, { universeDepth: 1 }) as unknown as CanvasNodeState
-    } catch (error) {
-      return { reason: error instanceof Error ? error.message : 'The AWS Universe Shop could not be created.' }
+    // Same factory as the Multiverse path: it yields a persisted node STATE (`kind`/`size`).
+    // `createShopNode` from workspace.ts yields a React Flow node (`type`/`width`), and storing
+    // that here made `nodeStatesToFlow` throw on `size.height` inside the canvas load effect —
+    // which unmounted the whole React tree into a black screen on every "new AWS Universe".
+    const created = createSpecialUniverseCanvas({
+      id,
+      scope: 'aws-universe',
+      parentCanvasId: AWS_UNIVERSE_ROOT_ID,
+      depth: 1,
+      title,
+      order: existing.length,
+      viewport: { x: 0, y: 0, zoom: 1 }
+    })
+    if (created.refused || !created.shop) {
+      return { reason: created.reason ?? 'The AWS Universe Shop could not be created.' }
     }
+    const { alarmSchedule: _awsAlarmSchedule, ...portableAwsShop } = created.shop
+    const shop: CanvasNodeState = { ...portableAwsShop, kind: 'shop' } as CanvasNodeState
     const portal: CanvasNodeState = {
       id: `aws-universe-portal-${id}`,
       kind: 'aws-universe',
@@ -540,27 +552,36 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       return { reason: 'The return construction identity does not match the selected door route.' }
     }
     const portalId = `portal-${input.childCanvasId}`
-    if (project.portals?.some((portal) => portal.childCanvasId === input.childCanvasId || portal.id === portalId)) {
-      return { reason: 'This child canvas already has a portal.' }
+    // `createMultiverseCanvas` records a construction-less placeholder portal for the child the
+    // moment the canvas exists, so the door dialog that follows must FILL that placeholder rather
+    // than be refused by it — before this, every freshly created child answered "already has a
+    // portal" and the dialog could never close. Only a portal that already carries a
+    // construction is a genuine duplicate.
+    const existingPortal = project.portals?.find((portal) => portal.childCanvasId === input.childCanvasId || portal.id === portalId)
+    if (existingPortal && (existingPortal.entryConstruction || existingPortal.returnConstruction)) {
+      return { reason: 'This child canvas already has a constructed portal.' }
+    }
+    const portal = {
+      id: existingPortal?.id ?? portalId,
+      parentCanvasId: input.parentCanvasId,
+      childCanvasId: input.childCanvasId,
+      entryDoorId: input.entryDoorId,
+      returnDoorId: input.returnDoorId,
+      title: input.title,
+      depth: child.depth,
+      status: existingPortal?.status ?? ('open' as const),
+      entryConstruction: input.entryConstruction,
+      returnConstruction: input.returnConstruction
     }
     set((state) => ({
       projects: state.projects.map((item) => item.id !== projectId ? item : {
         ...item,
-        portals: [...(item.portals ?? []), {
-          id: portalId,
-          parentCanvasId: input.parentCanvasId,
-          childCanvasId: input.childCanvasId,
-          entryDoorId: input.entryDoorId,
-          returnDoorId: input.returnDoorId,
-          title: input.title,
-          depth: child.depth,
-          status: 'open' as const,
-          entryConstruction: input.entryConstruction,
-          returnConstruction: input.returnConstruction
-        }]
+        portals: existingPortal
+          ? (item.portals ?? []).map((candidate) => candidate.id === existingPortal.id ? portal : candidate)
+          : [...(item.portals ?? []), portal]
       })
     }))
-    return { portalId }
+    return { portalId: portal.id }
   },
 
   setPortalStatus(projectId, portalId, status) {

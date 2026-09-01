@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- Stop "New AWS Universe" from blanking the whole window. The Universe's Shop node was stored in
+  React Flow shape instead of persisted-node shape, so the canvas load effect threw on its missing
+  `size` and React unmounted the entire tree into a black canvas. Both universe kinds now share
+  one Shop factory, a Multiverse child's door dialog fills the portal placeholder the canvas
+  creation already recorded instead of being refused as a duplicate, and an app-level error
+  boundary now draws a recovery card with the message and a Reload action wherever a render or
+  effect throws, so a crash can never again look like a frozen black screen.
+
+  「開新 AWS Universe」唔會再成個 window 黑晒：Shop node 用錯咗 React Flow 嘅形狀入庫，
+  load effect 一讀 `size` 就爆，React 就整棵樹拆走。而家兩種 universe 共用一個 Shop
+  factory，Multiverse 嘅門對話框會填返建 canvas 時已經記低嘅 portal 位而唔係話「已經有」，
+  仲加咗 app 級 error boundary：邊度爆就邊度畫張復原卡出嚟，有 message 有 Reload 掣。
+
+- Make "Save project as one file…" save without detours. The portable-media picker used to run
+  before every save, so the menu answered with an OS Open dialog and a dismissed picker silently
+  aborted the save. Media is now a separate "… with media…" row on both project menus, and a
+  dismissed picker is reported instead of swallowed.
+
+  「將 project 儲成一個檔案…」唔會再先彈個 Open 對話框出嚟：揀 media 而家係另一行
+  「…連媒體…」，撳取消亦會話返你知，唔會靜靜雞唔儲。
+
 - Give every floating surface one shared motion character. Dialogs, wizards, drawers, the
   notification centre, the export sheet, and confirmation panels now enter on the same spring the
   command palette already used, their scrims fade in step, palette and notification rows cascade
