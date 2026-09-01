@@ -10,6 +10,7 @@
 //   3. Every row is rendered. A cap would have to announce itself.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { IconButton } from '../ui/md3/IconButton'
 import type { AgentState } from '@shared/agents/normalize'
 import { formatBytes } from '@shared/fsLimits'
 import type { ExportTable } from '@shared/export'
@@ -278,14 +279,16 @@ export function SessionMemoryPanel({
               <span className="sessmem-row__cmd md3-sessmem-row__cmd">{v.row.command}</span>
               <span className="sessmem-row__mb md3-sessmem-row__mb">{formatMb(v.row.totalMb)}</span>
             </button>
-            <button
+            <IconButton
+              size="dense"
               className="sessmem-row__kill md3-sessmem-row__kill"
+              vocabularyMode="factual"
               title={vocab('End this session')}
               aria-label={`${vocab('End')} ${v.title}`}
               onClick={() => onKillSession(v.row.nodeId, v.orphan)}
             >
               ×
-            </button>
+            </IconButton>
             {v.row.childCount > 0 && (
               // "child processes", NOT "MCP servers": `pane_pid` is the pane's SHELL, so the count
               // is the agent CLI itself plus everything it spawned. A claude session with two MCP
@@ -331,15 +334,16 @@ export function SessionMemoryPanel({
         </span>
         {/* A relay tab has nothing to retry — the answer is a stub, not a failure. */}
         {!relay && (
-          <button
+          <IconButton
+            size="dense"
             className={`sessmem-panel__refresh md3-sessmem-refresh${loading ? ' spin' : ''}`}
-            title={vocab('Re-measure')}
-            aria-label={vocab('Re-measure')}
+            title="Re-measure"
+            aria-label="Re-measure"
             disabled={loading}
             onClick={sweep}
           >
             ⟳
-          </button>
+          </IconButton>
         )}
       </div>
     </div>

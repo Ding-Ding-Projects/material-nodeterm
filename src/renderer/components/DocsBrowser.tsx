@@ -10,6 +10,7 @@
 // that bundle. Full write-up: docs/features/help/in-app-documentation.md.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '../ui/md3/Button'
 import { SearchField } from '../ui/md3/SearchField'
 import {
   groupArticles,
@@ -207,16 +208,17 @@ export function DocsBrowser({ initialPath }: { initialPath?: string } = {}): JSX
           <div>{vocab('The documentation bundle failed to load.')}</div>
           <div className="md3-docs__pending-detail">{state.error}</div>
           <div className="md3-docs__pending-actions">
-            <button type="button" className="md3-docs__button" onClick={retry}>
-              {vocab('Try again')}
-            </button>
-            <button
-              type="button"
+            <Button size="small" className="md3-docs__button" onClick={retry}>
+              Try again
+            </Button>
+            <Button
+              size="small"
+              variant="tonal"
               className="md3-docs__button"
               onClick={() => window.nodeTerminal.shell.openExternal(`${REPO_URL}/tree/main/docs`)}
             >
-              {vocab('Read it on GitHub')}
-            </button>
+              Read it on GitHub
+            </Button>
           </div>
         </div>
       </div>
@@ -285,25 +287,27 @@ export function DocsBrowser({ initialPath }: { initialPath?: string } = {}): JSX
 
         <div className="md3-docs__main">
           <div className="md3-docs__crumbs">
-            <button
-              type="button"
+            <Button
+              variant="text"
+              size="small"
               className="md3-docs__button md3-docs__button--quiet"
               disabled={trail.length === 0}
               onClick={goBack}
-            title={vocab(trail.length === 0 ? 'Nothing to go back to yet' : 'Back to the previous article')}
+              title={trail.length === 0 ? 'Nothing to go back to yet' : 'Back to the previous article'}
             >
-              ← {vocab('Back')}
-            </button>
+              ← Back
+            </Button>
             {article && (
-              <button
-                type="button"
+              <Button
+                variant="text"
+                size="small"
                 className="md3-docs__button md3-docs__button--quiet"
+                leadingIcon={<IconExternal />}
                 onClick={() => window.nodeTerminal.shell.openExternal(repoBlobUrl(article.path))}
-                title={vocab('Open this article on GitHub')}
+                title="Open this article on GitHub"
               >
-                <IconExternal />
-                {vocab('View source')}
-              </button>
+                View source
+              </Button>
             )}
           </div>
 
@@ -313,20 +317,22 @@ export function DocsBrowser({ initialPath }: { initialPath?: string } = {}): JSX
                 <strong>{outside}</strong> is part of the repository but not of the offline
                 documentation bundle.
               </span>
-              <button
-                type="button"
+              <Button
+                size="small"
+                variant="tonal"
                 className="md3-docs__button"
                 onClick={() => window.nodeTerminal.shell.openExternal(repoBlobUrl(outside))}
               >
-                {vocab('Open on GitHub')}
-              </button>
-              <button
-                type="button"
+                Open on GitHub
+              </Button>
+              <Button
+                variant="text"
+                size="small"
                 className="md3-docs__button md3-docs__button--quiet"
                 onClick={() => setOutside(null)}
               >
-                {vocab('Dismiss')}
-              </button>
+                Dismiss
+              </Button>
             </div>
           )}
 

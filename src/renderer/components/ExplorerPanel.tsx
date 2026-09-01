@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Button, IconButton, SearchField } from '../ui/md3'
 import { createPortal } from 'react-dom'
 import type { DirEntry, FsApi } from '@shared/types'
 import { gitignoreAdd, gitignoreHasExact, gitignoreRemove } from '@shared/gitignore'
@@ -598,24 +599,25 @@ export function ExplorerPanel({
         <div className="drawer__head">
           <h2>{project?.name || vocab('Explorer')}</h2>
           <div className="ex-head-actions">
-            <button type="button" title="Refresh" aria-label="Refresh" onClick={() => setVersion((v) => v + 1)}>
+            <IconButton size="dense" title="Refresh" aria-label="Refresh" onClick={() => setVersion((v) => v + 1)}>
               ↻
-            </button>
+            </IconButton>
             {onTogglePin && (
-              <button
-                type="button"
+              <IconButton
+                size="dense"
+                active={pinned}
                 className={pinned ? 'is-on' : ''}
-                 title={pinned ? 'Unpin' : 'Pin'}
+                title={pinned ? 'Unpin' : 'Pin'}
                 aria-label={pinned ? 'Unpin' : 'Pin'}
                 aria-pressed={pinned}
                 onClick={onTogglePin}
               >
                 <IconPin />
-              </button>
+              </IconButton>
             )}
-             <button type="button" className="drawer__close" title="Close" aria-label="Close" onClick={onClose}>
+            <IconButton size="dense" className="drawer__close" title="Close" aria-label="Close" onClick={onClose}>
               ×
-            </button>
+            </IconButton>
           </div>
         </div>
 
@@ -628,15 +630,18 @@ export function ExplorerPanel({
         {cwd && (
           <>
             <div className="ex-filter-row md3-explorer__filter">
-              <input
+              <SearchField
                 ref={filterInputRef}
+                dense
                 className="ex-filter-input"
                 value={filter.value}
-                spellCheck={false}
-                placeholder={vocab(filter.mode === 'regex' ? 'Filter files (regex)…' : 'Filter files…')}
+                placeholder={filter.mode === 'regex' ? 'Filter files (regex)…' : 'Filter files…'}
+                aria-label="Filter files"
                 onChange={(e) => filter.setValue(e.target.value)}
+                trailingSlot={
+                  <AnchoredRegexBuilder search={filter} fieldRef={filterInputRef} label="Regex — Explorer filter" />
+                }
               />
-              <AnchoredRegexBuilder search={filter} fieldRef={filterInputRef} label="Regex — Explorer filter" />
             </div>
             {filter.error && <p className="ex-filter-error">{filter.error}</p>}
             {filter.active && (
@@ -696,20 +701,23 @@ export function ExplorerPanel({
                   {d.dir && d.status === 'running' ? ` (${vocab('folder')})` : ''}
                 </span>
                 {d.status === 'done' && d.localPath && (
-                  <button
+                  <Button
+                    variant="text"
+                    size="small"
                     className="ex-dls__act"
                     onClick={() => window.nodeTerminal.shell.reveal(d.localPath!)}
                   >
-                    {vocab('Reveal')}
-                  </button>
+                    Reveal
+                  </Button>
                 )}
-                <button
+                <IconButton
+                  size="dense"
                   className="ex-dls__act ex-dls__dismiss"
-                  aria-label={vocab('Dismiss')}
+                  aria-label="Dismiss"
                   onClick={() => setDownloads((list) => list.filter((x) => x.id !== d.id))}
                 >
                   <MaterialSymbol name="close" size={15} />
-                </button>
+                </IconButton>
               </div>
             ))}
           </div>

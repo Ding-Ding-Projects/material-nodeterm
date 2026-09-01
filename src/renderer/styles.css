@@ -4042,22 +4042,7 @@ body,
   border-bottom: 1px solid var(--border);
 }
 
-.ex-filter-input {
-  flex: 1;
-  min-width: 0;
-  height: 26px;
-  background: var(--md-surface-dim);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 12px;
-  padding: 0 8px;
-  outline: none;
-}
 
-.ex-filter-input:focus {
-  border-color: var(--accent);
-}
 
 .ex-filter-error {
   margin: 0;
@@ -4126,9 +4111,6 @@ body,
   color: var(--accent);
 }
 
-.ex-head-actions button svg {
-  display: block;
-}
 
 .ex-body {
   padding: 6px 4px 20px;
@@ -4687,18 +4669,7 @@ body,
   gap: 8px;
 }
 
-.ex-head-actions button {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-}
 
-.ex-head-actions button:hover {
-  color: var(--text);
-}
 
 .ex-body {
   padding: 6px 4px 20px;
@@ -4879,50 +4850,11 @@ body,
   display: flex;
   gap: 4px;
 }
-.logpanel__chip {
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  border-radius: 999px;
-  font-size: 11px;
-  padding: 2px 9px;
-  cursor: pointer;
-}
-.logpanel__chip.is-on {
-  background: rgba(var(--tint-rgb), 0.08);
-  color: var(--text);
-}
 .logpanel__chip--warn.is-on {
   color: var(--warn);
 }
 .logpanel__chip--error.is-on {
   color: var(--danger);
-}
-.logpanel__filter {
-  flex: 1;
-  min-width: 80px;
-  background: rgba(var(--tint-rgb), 0.06);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 12px;
-  padding: 4px 9px;
-}
-.logpanel__filter:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.logpanel__act {
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-  border-radius: 8px;
-  font-size: 12px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-.logpanel__act:hover {
-  background: rgba(var(--tint-rgb), 0.08);
 }
 .logpanel__feed {
   flex: 1;
@@ -5011,21 +4943,7 @@ body,
   white-space: nowrap;
 }
 
-.ex-dls__act {
-  margin-left: auto;
-  background: transparent;
-  border: none;
-  color: var(--accent);
-  font-size: 12px;
-  cursor: pointer;
-  padding: 0 2px;
-}
 
-/* The `+ .ex-dls__act` sibling is the dismiss ×: only the FIRST action pushes right. */
-.ex-dls__act + .ex-dls__act {
-  margin-left: 0;
-  color: var(--muted);
-}
 
 .ex-dls__spin {
   flex-shrink: 0;
@@ -7387,18 +7305,6 @@ button.group-node__setup:disabled {
   font-variant-numeric: tabular-nums;
   color: var(--text-strong);
 }
-.sessmem-row__kill {
-  flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  color: rgba(var(--tint-rgb), 0.45);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
 
 /* The pane's descendants — the agent CLI itself included, since pane_pid is the pane's shell. */
 .sessmem-row__kids {
@@ -7425,19 +7331,6 @@ button.group-node__setup:disabled {
   border-top: 1px solid rgba(var(--tint-rgb), 0.1);
   font-size: 11px;
   color: rgba(var(--tint-rgb), 0.5);
-}
-.sessmem-panel__refresh {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: 11px;
-  background: transparent;
-  color: rgba(var(--tint-rgb), 0.7);
-  font-size: 13px;
-  cursor: pointer;
 }
 
 .sessmem-panel__refresh:disabled { opacity: 0.4; cursor: default; }
@@ -13462,15 +13355,6 @@ button.group-node__setup:disabled {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
-}
-.local-history__presets button {
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(var(--tint-rgb), 0.15);
-  background: transparent;
-  color: var(--text-strong);
-  font-size: 10.5px;
-  cursor: pointer;
 }
 .local-history__presets button:hover { background: rgba(var(--tint-rgb), 0.08); }
 

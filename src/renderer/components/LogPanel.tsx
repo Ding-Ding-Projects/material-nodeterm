@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button, Chip, IconButton, SearchField } from '../ui/md3'
 import { createPortal } from 'react-dom'
 import type { LogRecord } from '@shared/types'
 
@@ -105,31 +106,34 @@ export function LogPanel({ onClose }: LogPanelProps) {
           <h2>Debug log</h2>
           <div className="logpanel__chips">
             {LEVELS.map((l) => (
-              <button
+              <Chip
                 key={l}
+                selected={levels.has(l)}
+                vocabularyMode="factual"
                 className={`logpanel__chip logpanel__chip--${l}${levels.has(l) ? ' is-on' : ''}`}
                 onClick={() => toggleLevel(l)}
               >
                 {l}
-              </button>
+              </Chip>
             ))}
           </div>
-          <input
+          <SearchField
+            dense
             className="logpanel__filter"
             placeholder="Filter…"
+            aria-label="Filter log lines"
             value={query}
-            spellCheck={false}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <button className="logpanel__act" title="Copy the filtered lines" onClick={copyAll}>
+          <Button variant="text" size="small" className="logpanel__act" title="Copy the filtered lines" onClick={copyAll}>
             Copy
-          </button>
-          <button className="logpanel__act" title="Empty the ring" onClick={clear}>
+          </Button>
+          <Button variant="text" size="small" className="logpanel__act" title="Empty the ring" onClick={clear}>
             Clear
-          </button>
-          <button className="drawer__close" onClick={onClose}>
+          </Button>
+          <IconButton size="dense" className="drawer__close" aria-label="Close" onClick={onClose}>
             ×
-          </button>
+          </IconButton>
         </div>
         <div
           className="logpanel__feed"

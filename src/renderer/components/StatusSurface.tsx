@@ -20,6 +20,7 @@
 // only reported drift after someone had already edited one copy.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button, Chip } from '../ui/md3'
 import { SearchField } from '../ui/md3/SearchField'
 import { CHANGELOG_RELEASES } from '@shared/changelog-data'
 import captureManifestRaw from '../../../docs/assets/shots/capture-manifest.json?raw'
@@ -98,15 +99,17 @@ function StatusCard({
             <span className="status-card__age">{vocab('evidence')}: {describeRecordedAt(card.recordedAt, nowMs)}</span>
           </div>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="text"
+          size="small"
           className="status-card__expand"
+          vocabularyMode="factual"
           aria-expanded={open}
           aria-controls={`status-evidence-${card.id}`}
           onClick={onToggle}
         >
           {open ? vocab('Hide evidence') : `${vocab('Evidence')} (${detailCount})`}
-        </button>
+        </Button>
       </div>
       <p className="status-card__summary">{renderStatusSummary(card, vocab)}</p>
       {open && (
@@ -250,26 +253,26 @@ export function StatusSurface(): JSX.Element {
           </div>
         )}
         <div className="md3-status-filters" role="group" aria-label={vocab('Filter status checks by state')}>
-          <button
-            type="button"
+          <Chip
+            selected={stateFilter === 'all'}
+            vocabularyMode="factual"
             className={`status-filter-chip${stateFilter === 'all' ? ' status-filter-chip--on' : ''}`}
-            aria-pressed={stateFilter === 'all'}
             onClick={() => setStateFilter('all')}
           >
-            {vocab('All')} ({model.cards.length})
-          </button>
+            {`${vocab('All')} (${model.cards.length})`}
+          </Chip>
           {GATE_STATE_ORDER.map((s) => (
-            <button
+            <Chip
               key={s}
-              type="button"
+              selected={stateFilter === s}
+              vocabularyMode="factual"
               className={`status-filter-chip${stateFilter === s ? ' status-filter-chip--on' : ''}`}
-              aria-pressed={stateFilter === s}
               disabled={counts[s] === 0}
-               title={counts[s] === 0 ? vocab('No gate is in this state right now') : undefined}
+              title={counts[s] === 0 ? vocab('No gate is in this state right now') : undefined}
               onClick={() => setStateFilter(s)}
             >
-               <span aria-hidden="true">{GATE_STATE_META[s].emoji}</span> {vocab(GATE_STATE_META[s].label)} ({counts[s]})
-            </button>
+              <span aria-hidden="true">{GATE_STATE_META[s].emoji}</span> {vocab(GATE_STATE_META[s].label)} ({counts[s]})
+            </Chip>
           ))}
         </div>
       </div>

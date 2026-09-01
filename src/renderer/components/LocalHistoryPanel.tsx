@@ -13,6 +13,8 @@
 // docs/local-history.md.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button, Chip } from '../ui/md3'
+import { Input } from '../ui/Input'
 import { SearchField } from '../ui/md3/SearchField'
 import type { ExportTable } from '@shared/export'
 import { buildTableExport } from '@shared/export'
@@ -218,7 +220,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
         <div className="local-history__dates md3-history-dates">
           <label className="md3-history-date-field">
             {vocab('From')}
-            <input
+            <Input
               type="date"
               value={fromInput}
               onChange={(e) => {
@@ -230,7 +232,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
           </label>
           <label className="md3-history-date-field">
             {vocab('To')}
-            <input
+            <Input
               type="date"
               value={toInput}
               onChange={(e) => {
@@ -242,15 +244,14 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
           </label>
           <div className="local-history__presets md3-history-presets" role="group" aria-label={vocab('Date range presets')}>
             {PRESETS.map((p) => (
-              <button
+              <Chip
                 key={p}
-                type="button"
+                selected={activePreset === p}
                 className={`md3-history-preset${activePreset === p ? ' md3-history-preset--active' : ''}`}
-                aria-pressed={activePreset === p}
                 onClick={() => applyPreset(p)}
               >
-                {vocab(DATE_RANGE_PRESET_LABELS[p])}
-              </button>
+                {DATE_RANGE_PRESET_LABELS[p]}
+              </Chip>
             ))}
           </div>
         </div>
@@ -359,9 +360,9 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
                   {isCurrent ? (
                     <span className="md3-history-current-chip">{vocab('CURRENT')}</span>
                   ) : (
-                    <button type="button" className="local-history__restore md3-history-restore" onClick={() => setRestoring(e)}>
-                      {vocab('Restore as new')}
-                    </button>
+                    <Button variant="outlined" size="small" className="local-history__restore md3-history-restore" onClick={() => setRestoring(e)}>
+                      Restore as new
+                    </Button>
                   )}
                 </li>
               )

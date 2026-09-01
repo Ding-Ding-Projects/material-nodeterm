@@ -7354,14 +7354,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   font-weight: 600;
 }
 
-.sessmem-row__kill {
-  color: var(--md-on-surface-variant);
-  border-radius: var(--md-shape-full);
-}
-.sessmem-row__kill:hover {
-  color: var(--md-error);
-  background: var(--md-error-container);
-}
 
 .sessmem-row__kids {
   color: var(--md-on-surface-variant);
@@ -7385,19 +7377,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   color: var(--md-on-surface-variant);
 }
 
-.sessmem-panel__refresh {
-  color: var(--md-on-surface-variant);
-  border-radius: var(--md-shape-full);
-  transition: background var(--md-motion-effect), color var(--md-motion-effect);
-}
-.sessmem-panel__refresh:hover {
-  color: var(--md-on-surface);
-  background: var(--md-surface-container-highest);
-}
-.sessmem-panel__refresh:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 1px;
-}
 
 /* Embedded (full-page History screen) rather than the RAM pill's floating popover: lay out in
    normal flow instead of an anchored 380px box. Higher specificity than the bare `.sessmem-panel`
@@ -7488,31 +7467,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-.md3-history-preset {
-  min-height: 32px;
-  padding: 0 14px;
-  border-radius: var(--md-shape-full);
-  border: 1px solid var(--md-outline);
-  background: transparent;
-  color: var(--md-on-surface);
-  font-family: var(--md-font-ui);
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--md-motion-effect), border-color var(--md-motion-effect), color var(--md-motion-effect);
-}
-.md3-history-preset:hover {
-  background: var(--md-surface-container-high);
-}
-.md3-history-preset--active {
-  border-color: transparent;
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-}
-.md3-history-preset:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 1px;
 }
 
 .local-history__date-error {
@@ -7667,30 +7621,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   letter-spacing: 0.02em;
 }
 
-.local-history__restore,
-.md3-history-restore {
-  flex: 0 0 auto;
-  min-height: 32px;
-  padding: 0 14px;
-  border-radius: var(--md-shape-full);
-  border: 1px solid var(--md-outline);
-  background: transparent;
-  color: var(--md-on-surface);
-  font-family: var(--md-font-ui);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--md-motion-effect);
-}
-.local-history__restore:hover,
-.md3-history-restore:hover {
-  background: var(--md-surface-container-high);
-}
-.local-history__restore:focus-visible,
-.md3-history-restore:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 1px;
-}
 
 /* --------------------------------------------------------------------------------------------
    Changelog viewer (src/renderer/components/changelog/*) — genuinely new UI, so it uses the
@@ -9457,23 +9387,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   color: var(--md-on-surface);
 }
 
-.md3-explorer .ex-head-actions button {
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--md-shape-full);
-  color: var(--md-on-surface-variant);
-  font-size: inherit;
-  transition:
-    background var(--md-motion-effect),
-    color var(--md-motion-effect);
-}
-.md3-explorer .ex-head-actions button:hover {
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface);
-}
 
 .md3-explorer .ex-filter-row {
   margin: 10px 12px 6px;
@@ -9483,21 +9396,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   background: var(--md-surface-container-high);
   border-bottom: none;
   gap: 6px;
-}
-.md3-explorer .ex-filter-input {
-  height: 40px;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  color: var(--md-on-surface);
-  font-family: var(--font-ui);
-  font-size: 13px;
-}
-.md3-explorer .ex-filter-input::placeholder {
-  color: var(--md-on-surface-variant);
-}
-.md3-explorer .ex-filter-input:focus {
-  border-color: transparent;
 }
 .md3-explorer .ex-filter-error {
   color: var(--md-error);
@@ -11923,42 +11821,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   gap: 8px;
 }
 
-.md3-docs__button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 0 14px;
-  border-radius: var(--md-shape-full);
-  border: 1px solid var(--md-outline);
-  background: transparent;
-  color: var(--md-on-surface);
-  font-family: var(--md-font-ui);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--md-motion-effect), border-color var(--md-motion-effect);
-}
-.md3-docs__button:hover:not(:disabled) {
-  background: var(--md-surface-container-high);
-}
-.md3-docs__button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.md3-docs__button:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 2px;
-}
-.md3-docs__button--quiet {
-  border-color: transparent;
-  color: var(--md-on-surface-variant);
-}
-.md3-docs__button svg {
-  width: 14px;
-  height: 14px;
-}
-
 .md3-docs__notice {
   display: flex;
   align-items: center;
@@ -12345,37 +12207,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   flex-wrap: wrap;
   gap: 8px;
 }
-.status-filter-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 0 12px;
-  border-radius: var(--md-shape-full);
-  border: 1px solid var(--md-outline);
-  background: transparent;
-  color: var(--md-on-surface);
-  font-family: var(--md-font-ui);
-  font-size: 12px;
-  cursor: pointer;
-}
-.status-filter-chip:hover:not(:disabled) {
-  background: var(--md-surface-container-high);
-}
-.status-filter-chip--on {
-  border-color: transparent;
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-}
-.status-filter-chip:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.status-filter-chip:focus-visible {
-  outline: 2px solid var(--md-primary);
-  outline-offset: 2px;
-}
-
 .md3-status-screen__body {
   min-height: 0;
 }
@@ -12463,21 +12294,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 }
 .status-card--failed .status-card__age {
   color: var(--md-on-error-container);
-}
-.status-card__expand {
-  flex-shrink: 0;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: var(--md-shape-full);
-  border: 1px solid var(--md-outline);
-  background: transparent;
-  color: inherit;
-  font-family: var(--md-font-ui);
-  font-size: 12px;
-  cursor: pointer;
-}
-.status-card__expand:hover {
-  background: var(--md-surface-container-high);
 }
 .status-card__expand:focus-visible,
 .status-card__facts a:focus-visible {
