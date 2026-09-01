@@ -618,7 +618,7 @@
   width: 340px;
   max-width: 38vw;
   min-width: 160px;
-  height: 44px;
+  min-height: 44px;
   padding: 0 8px 0 18px;
   border-radius: var(--md-shape-full);
   border: none;
@@ -721,7 +721,7 @@
   display: flex;
   align-items: stretch;
   flex-shrink: 0;
-  height: 44px;
+  min-height: 44px;
   border-radius: var(--md-shape-full);
   overflow: hidden;
   background: var(--md-secondary-container);
@@ -1125,7 +1125,7 @@
 }
 .md3-rail-item__pill {
   width: 56px;
-  height: 32px;
+  min-height: 32px;
   border-radius: var(--md-shape-full);
   display: flex;
   align-items: center;
@@ -1181,7 +1181,7 @@
   z-index: 20;
   display: flex;
   align-items: center;
-  height: 44px;
+  min-height: 44px;
   border-radius: var(--md-shape-full);
   background: var(--md-surface-container-high);
   padding: 0 6px;
@@ -1790,7 +1790,7 @@ button.term-node__title-text:focus-visible {
    surface-container-highest.
    --------------------------------------------------------------------------------------------- */
 .term-node__status {
-  height: 26px;
+  min-height: 26px;
   padding: 0 11px;
   border-radius: var(--md-shape-full);
   font-size: 11.5px;
@@ -4057,7 +4057,7 @@ button.term-node__title-text:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 24px;
+  min-height: 24px;
   padding: 0 10px;
   border-radius: 999px;
   font-size: 10.5px;
@@ -5251,7 +5251,7 @@ button.term-node__title-text:focus-visible {
   border-bottom: none;
 }
 .menu-filter__row {
-  height: 38px;
+  min-height: 38px;
   padding: 0 6px 0 12px;
   border-radius: 999px;
   background: var(--md-surface-container-highest);
@@ -5555,7 +5555,7 @@ button.term-node__title-text:focus-visible {
   gap: 8px;
 }
 .confirm__btn {
-  height: 40px;
+  min-height: 40px;
   padding: 0 18px;
   border-radius: 999px;
   border: none;
@@ -5947,7 +5947,7 @@ button.term-node__title-text:focus-visible {
   font-family: var(--md3-font-ui);
 }
 .destgate__exit {
-  height: 40px;
+  min-height: 40px;
   padding: 0 16px;
   border-radius: 999px;
   background: transparent;
@@ -6044,7 +6044,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 .bulk-bar__select-all,
 .bulk-bar__invert,
 .bulk-bar__clear {
-  height: 28px;
+  min-height: 28px;
   padding: 0 12px;
   border: 1px solid var(--md-outline);
   border-radius: 999px;
@@ -6063,7 +6063,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   font-family: var(--md3-font-ui);
 }
 .bulk-bar__action {
-  height: 28px;
+  min-height: 28px;
   padding: 0 12px;
   border: 1px solid var(--md-outline-variant);
   border-radius: 999px;
@@ -6878,7 +6878,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
+  min-height: 32px;
   padding: 0 10px;
   border: none;
   border-radius: var(--md-shape-full);
@@ -6901,7 +6901,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 44px;
+  min-height: 44px;
   padding: 0 6px 0 14px;
   border-radius: var(--md-shape-full);
   background: var(--md-surface-container-high);
@@ -6942,7 +6942,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   width: 100%;
   align-items: center;
   gap: 12px;
-  height: 40px;
+  min-height: 40px;
   padding: 0 16px;
   border: none;
   border-radius: var(--md-shape-full);
@@ -7596,7 +7596,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   gap: 6px;
 }
 .md3-history-preset {
-  height: 32px;
+  min-height: 32px;
   padding: 0 14px;
   border-radius: var(--md-shape-full);
   border: 1px solid var(--md-outline);
@@ -7640,7 +7640,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
+  min-height: 28px;
   padding: 0 10px;
   border-radius: var(--md-shape-full);
   border: 1px solid var(--md-outline-variant);
@@ -7761,7 +7761,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 
 .md3-history-current-chip {
   flex: 0 0 auto;
-  height: 26px;
+  min-height: 26px;
   display: inline-flex;
   align-items: center;
   padding: 0 12px;
@@ -7776,7 +7776,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 .local-history__restore,
 .md3-history-restore {
   flex: 0 0 auto;
-  height: 32px;
+  min-height: 32px;
   padding: 0 14px;
   border-radius: var(--md-shape-full);
   border: 1px solid var(--md-outline);
@@ -7880,7 +7880,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 }
 
 .md3-changelog-version {
-  height: 28px;
+  min-height: 28px;
   display: inline-flex;
   align-items: center;
   padding: 0 13px;
@@ -8065,7 +8065,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 36px;
+  min-height: 36px;
   padding: 0 16px;
   border-radius: var(--md-shape-full);
   border: 1px solid var(--md-outline);
@@ -8172,7 +8172,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   align-items: center;
   gap: 6px;
   flex: none;
-  height: 40px;
+  min-height: 40px;
   padding: 0 16px;
   border-radius: var(--md-shape-full);
   border: 1px solid var(--md-outline);
@@ -8550,7 +8550,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 }
 
 .onb-btn {
-  height: 40px;
+  min-height: 40px;
   padding: 0 20px;
   background: transparent;
   border: 1px solid var(--md-outline);
@@ -8736,7 +8736,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
+  min-height: 40px;
   padding: 0 18px;
   border-radius: var(--md-shape-full);
   background: var(--md-secondary-container);
@@ -8957,7 +8957,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 }
 
 .md3-kids-textbtn {
-  height: 44px;
+  min-height: 44px;
   padding: 0 24px;
   border-radius: var(--md-shape-full);
   border: none;
@@ -8978,7 +8978,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 44px;
+  min-height: 44px;
   padding: 0 22px;
   border-radius: var(--md-shape-full);
   font-family: inherit;
@@ -9387,7 +9387,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
+  min-height: 40px;
   padding: 0 16px;
   border-radius: var(--md-shape-full);
   border: 1px solid var(--md-outline-variant);
@@ -9584,7 +9584,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 .md3-explorer .ex-filter-row {
   margin: 10px 12px 6px;
   padding: 0 8px 0 16px;
-  height: 40px;
+  min-height: 40px;
   border-radius: var(--md-shape-full);
   background: var(--md-surface-container-high);
   border-bottom: none;
@@ -9618,7 +9618,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 }
 
 .md3-explorer .ex-row {
-  height: 34px;
+  min-height: 34px;
   gap: 8px;
   padding-right: 10px;
   border-radius: var(--md-shape-full);
@@ -9795,7 +9795,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 28px;
+  min-height: 28px;
   padding: 0 10px 0 8px;
   max-width: 220px;
   border: none;
@@ -9970,7 +9970,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   top: 9px;
   right: 9px;
   width: 30px;
-  height: 30px;
+  min-height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -10157,7 +10157,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
    ============================================================================================ */
 
 .bind-select {
-  height: 40px;
+  min-height: 40px;
   padding: 0 12px 0 14px;
   border-radius: var(--md-shape-full);
   border: 1px solid var(--md-outline);
@@ -10386,7 +10386,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 /* Buttons -- MD3 pill filled / outlined / text */
 .md3-ollama .sc-btn,
 .md3-converter .sc-btn {
-  height: 36px;
+  min-height: 36px;
   padding: 0 16px;
   border-radius: var(--md-shape-full);
   border: 1px solid var(--md-outline);
@@ -11778,7 +11778,9 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   gap: 8px;
   max-width: min(560px, calc(100vw - var(--nav-rail-w) - 48px));
   padding: 8px 16px;
-  border-radius: var(--md-shape-full);
+  /* extra-large, not full: bilingual prose wraps to two lines and a 999px radius on a two-line
+     box draws an oval whose corners cut into the text. */
+  border-radius: var(--md-shape-extra-large);
   background: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
   font-size: 13px;
@@ -12031,7 +12033,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
+  min-height: 32px;
   padding: 0 14px;
   border-radius: var(--md-shape-full);
   border: 1px solid var(--md-outline);
@@ -12453,7 +12455,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
+  min-height: 32px;
   padding: 0 12px;
   border-radius: var(--md-shape-full);
   border: 1px solid var(--md-outline);
@@ -12570,7 +12572,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 }
 .status-card__expand {
   flex-shrink: 0;
-  height: 30px;
+  min-height: 30px;
   padding: 0 12px;
   border-radius: var(--md-shape-full);
   border: 1px solid var(--md-outline);
