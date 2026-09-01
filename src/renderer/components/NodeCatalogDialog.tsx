@@ -11,6 +11,7 @@ import {
 } from '@shared/node-catalog'
 import { Dialog } from '../ui/md3/Dialog'
 import { Chip } from '../ui/md3/Chip'
+import { ChipRow } from '../ui/md3/ChipRow'
 import { TextField } from '../ui/md3/TextField'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
@@ -60,6 +61,10 @@ function entryText(entry: NodeCatalogEntry, kind: 'label' | 'description'): { id
 }
 
 /** Guided registry picker shared by the FAB, pane context menu and command palette. */
+/** Profile chips shown before the row folds behind "+N more" — two rows of 32px chips in the
+ *  dialog's width; the selected default and the first machine profiles stay visible. */
+const PROFILE_CHIPS_SHOWN = 8
+
 export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoices = [], namedTerminalProfiles = [], onCreate, onOpenDocumentation }: NodeCatalogDialogProps) {
   const { t, emoji } = useI18n()
   const profileText = useLocalizedVocabularyText()
@@ -169,7 +174,7 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
         />
       </div>
 
-      <div className="node-catalog-dialog__categories" role="toolbar" aria-label={profileText('nodeCatalog.categories', 'Node categories')}>
+      <ChipRow className="node-catalog-dialog__categories" role="toolbar" aria-label={profileText('nodeCatalog.categories', 'Node categories')}>
         <Chip selected={category === 'all'} onClick={() => { setCategory('all'); setActive(0) }}>
           {profileText('nodeCatalog.category.all', 'All')}
         </Chip>
@@ -181,38 +186,43 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
             </Chip>
           )
         })}
-      </div>
+      </ChipRow>
 
       {(terminalProfileChoices.length > 0 || namedTerminalProfiles.length > 0) && (
-        <div className="node-catalog-dialog__profiles" role="group" aria-label={profileText('nodeCatalog.profile.label', 'Terminal profile')}>
-          <span className="node-catalog-dialog__profile-label">{profileText('nodeCatalog.profile.label', 'Terminal profile')}</span>
-          <button type="button" className={!terminalProfileId && !namedTerminalProfileId ? 'is-selected' : ''} onClick={() => { setTerminalProfileId(undefined); setNamedTerminalProfileId(undefined) }}>
+        <ChipRow
+          className="node-catalog-dialog__profiles"
+          role="group"
+          aria-label={profileText('nodeCatalog.profile.label', 'Terminal profile')}
+          label={profileText('nodeCatalog.profile.label', 'Terminal profile')}
+          collapseAfter={PROFILE_CHIPS_SHOWN}
+        >
+          <Chip selected={!terminalProfileId && !namedTerminalProfileId} onClick={() => { setTerminalProfileId(undefined); setNamedTerminalProfileId(undefined) }}>
             {profileText('nodeCatalog.profile.auto', 'Use saved default')}
-          </button>
+          </Chip>
           {terminalProfileChoices.map((profile) => (
-            <button
+            <Chip
               key={profile.id}
-              type="button"
+              vocabularyMode="factual"
               disabled={profile.disabled}
-              className={terminalProfileId === profile.id && !namedTerminalProfileId ? 'is-selected' : ''}
+              selected={terminalProfileId === profile.id && !namedTerminalProfileId}
               title={profile.hint}
               onClick={() => { setTerminalProfileId(profile.id); setNamedTerminalProfileId(undefined) }}
             >
               {profile.label}
-            </button>
+            </Chip>
           ))}
           {namedTerminalProfiles.map((profile) => (
-            <button
+            <Chip
               key={profile.id}
-              type="button"
-              className={namedTerminalProfileId === profile.id ? 'is-selected' : ''}
+              vocabularyMode="factual"
+              selected={namedTerminalProfileId === profile.id}
               title={`${profile.cwd}${profile.startupCommand ? ` · ${profile.startupCommand}` : ''}`}
               onClick={() => { setNamedTerminalProfileId(profile.id); setTerminalProfileId(undefined) }}
             >
               {profile.name}
-            </button>
+            </Chip>
           ))}
-        </div>
+        </ChipRow>
       )}
 
       <div id="node-catalog-results" className="node-catalog-dialog__list" role="listbox" aria-label={profileText('nodeCatalog.results', 'Node catalog results')}>

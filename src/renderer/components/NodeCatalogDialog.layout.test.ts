@@ -23,8 +23,10 @@ describe('Node Catalog layout containment', () => {
     expect(list).toMatch(/min-height:\s*0/)
     expect(list).toMatch(/overflow-y:\s*auto/)
     expect(profiles).toMatch(/flex-shrink:\s*0|flex:\s*0 0 auto/)
-    expect(profiles).toMatch(/max-height:\s*132px/)
-    expect(profiles).toMatch(/overflow-y:\s*auto/)
+    // A chip row is never height-capped: the 132px cap used to clip the third row of chips
+    // mid-glyph. Long rows fold behind the ChipRow's "+N more" chip instead.
+    expect(profiles).not.toMatch(/max-height/)
+    expect(rule('.node-catalog-dialog__categories')).not.toMatch(/max-height/)
   })
 
   it('keeps every result row from shrinking its bilingual content', () => {

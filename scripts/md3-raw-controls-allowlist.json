@@ -41,7 +41,6 @@
   "src/renderer/components/NodeCatalogDialog.tsx",
   "src/renderer/components/NodeIconPicker.tsx",
   "src/renderer/components/NotificationCenter.tsx",
-  "src/renderer/components/NotificationToasts.tsx",
   "src/renderer/components/NotifyConsentDialog.tsx",
   "src/renderer/components/PhonePairPopover.tsx",
   "src/renderer/components/PortableBindingWizard.tsx",

@@ -51,15 +51,15 @@ describe('NotificationToasts personal vocabulary', () => {
     })
     render()
 
-    expect(document.body.querySelector('.toast__title')?.textContent).toBe('shell box failed')
-    expect(document.body.querySelector('.toast__text')?.textContent).toBe(
+    expect(document.body.querySelector('.mdx-snackbar__title')?.textContent).toBe('shell box failed')
+    expect(document.body.querySelector('.mdx-snackbar__text')?.textContent).toBe(
       'fatal: could not read from remote terminal repository'
     )
-    expect(document.body.querySelector('.toast__action')?.textContent).toBe('Go again')
+    expect(document.body.querySelector('.mdx-snackbar__action')?.textContent).toBe('Go again')
     // The accessible name is built from the SAME translated title, so a screen reader and the
     // screen never name the toast two different ways.
     expect(
-      document.body.querySelector('.toast__dismiss')?.getAttribute('aria-label')
+      document.body.querySelector('.mdx-snackbar__dismiss')?.getAttribute('aria-label')
     ).toBe('Dismiss: shell box failed')
   })
 
@@ -75,7 +75,7 @@ describe('NotificationToasts personal vocabulary', () => {
       useNotifications.getState().push({ kind: 'error', title: 'terminal failed', autoDismissMs: null })
     })
     render()
-    expect(document.body.querySelector('.toast__title')?.textContent).toBe('terminal failed')
+    expect(document.body.querySelector('.mdx-snackbar__title')?.textContent).toBe('terminal failed')
   })
 
   it('maps an explicitly authored body while keeping the default fact body exact', () => {
@@ -95,7 +95,7 @@ describe('NotificationToasts personal vocabulary', () => {
       })
     })
     render()
-    expect(document.body.querySelector('.toast__text')?.textContent).toBe('Open the shell box now')
+    expect(document.body.querySelector('.mdx-snackbar__text')?.textContent).toBe('Open the shell box now')
   })
 
   it('keeps an explicitly factual title exact', () => {
@@ -115,7 +115,7 @@ describe('NotificationToasts personal vocabulary', () => {
       })
     })
     render()
-    expect(document.body.querySelector('.toast__title')?.textContent).toBe('terminal process exited with code 1')
+    expect(document.body.querySelector('.mdx-snackbar__title')?.textContent).toBe('terminal process exited with code 1')
   })
 })
 

@@ -11764,140 +11764,17 @@ button.group-node__setup:disabled {
    See src/renderer/state/notifications.ts and docs/notifications.md.
    ================================================================================== */
 
-.toast-stack {
-  position: fixed;
-  left: 20px;
-  bottom: 20px;
-  z-index: 90; /* above every dialog overlay (confirm-overlay is 70) — a toast must never be
-                  trapped behind a modal, since it can arrive while one is open */
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 360px;
-  max-width: calc(100vw - 40px);
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  pointer-events: none;
-}
 
-.toast {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 12px 12px 14px;
-  background: rgba(var(--menu-rgb), 0.98); /* --menu-rgb: own floating-surface ramp, not
-    md-aliased */
-  border: 1px solid var(--md-outline-variant);
-  border-left: 3px solid var(--md-primary);
-  border-radius: var(--md-shape-medium); /* was a literal 12px — exact match to the shipped scale */
-  box-shadow: 0 14px 40px rgba(0, 0, 0, calc(0.5 * var(--shadow-k)));
-  pointer-events: auto;
-  animation: nt-toast-in 180ms ease-out;
-}
-@media (prefers-reduced-motion: reduce) {
-  .toast {
-    animation: none;
-  }
-}
-@keyframes nt-toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
-.toast__icon {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  background: rgba(var(--tint-rgb), 0.1); /* already token-driven via --tint-rgb (themes on its
-    own); numerically equal to --md-outline-variant, but that role means a divider, not an icon
-    fill, so left un-relabeled rather than borrow a role for a coincidence */
-  color: var(--md-primary);
-}
 
-.toast--warning .toast__icon {
-  color: var(--md-warning);
-  background: rgba(255, 214, 10, 0.14); /* this is --caution's hex (#ffd60a), not --warn's
-    (#ff9f0a) — the icon text and its wash use two different hues already, pre-existing. --caution
-    has no --md-* role (see .dock-dirty.dirty above) and no --caution-rgb triplet to retint, so
-    mapping to --md-warning-container would shift the hue itself rather than relabel it — left,
-    flagged rather than silently folded in */
-}
 
-.toast--progress .toast__icon {
-  animation: nt-spin 1s linear infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .toast--progress .toast__icon {
-    animation: none;
-  }
-}
 @keyframes nt-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-.toast__body {
-  flex: 1;
-  min-width: 0;
-}
-.toast__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--md-on-surface);
-}
-.toast__text {
-  margin-top: 2px;
-  font-size: 12.5px;
-  color: var(--md-on-surface-variant);
-  word-break: break-word;
-}
-.toast__actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-.toast__action {
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--md-primary);
-  background: rgba(var(--tint-rgb), 0.08);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: 7px; /* no exact --md-shape step (extra-small 6 / small 8) — left as its own
-    authored radius */
-  cursor: pointer;
-}
 
-.toast__dismiss {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  min-width: 22px; /* adequate hit target even on a narrow toast */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  line-height: 1;
-  color: var(--md-on-surface-variant);
-  background: transparent;
-  border: none;
-  border-radius: var(--md-shape-extra-small); /* was a literal 6px — exact match to the shipped
-    scale */
-  cursor: pointer;
-}
 
 /* ---- Notification centre trigger (bell in the top-right controls cluster) ---- */
 .controls-cluster .notif-bell {
@@ -11945,37 +11822,6 @@ button.group-node__setup:disabled {
   font-size: 15px;
   flex: 1;
 }
-.notif-center__search {
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--md-outline-variant);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.notif-center__search input {
-  width: 100%;
-  padding: 7px 10px;
-  background: rgba(var(--tint-rgb), 0.06);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--md-shape-small); /* was a literal 8px — exact match to the shipped scale */
-  color: var(--md-on-surface);
-  font-size: 13px;
-}
-.notif-center__filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.notif-center__filter {
-  padding: 3px 9px;
-  font-size: 11.5px;
-  font-weight: 600;
-  border-radius: var(--md-shape-full); /* was a literal 999px — exact match to the shipped scale */
-  border: 1px solid var(--md-outline-variant);
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  cursor: pointer;
-}
 
 .notif-center__bulkbar {
   display: flex;
@@ -11987,29 +11833,7 @@ button.group-node__setup:disabled {
   color: var(--md-on-surface-variant);
   flex-wrap: wrap;
 }
-.notif-center__bulkbar button {
-  padding: 4px 9px;
-  font-size: 12px;
-  border-radius: 7px; /* no exact --md-shape step (extra-small 6 / small 8) — left as its own
-    authored radius */
-  border: 1px solid var(--md-outline-variant);
-  background: rgba(var(--tint-rgb), 0.06);
-  color: var(--md-on-surface);
-  cursor: pointer;
-}
 
-.notif-center__bulkbar button:disabled {
-  color: var(--md-on-surface-variant);
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-.notif-center__bulkbar button.danger {
-  color: var(--md-error);
-  border-color: rgba(var(--danger-rgb), 0.8); /* was a frozen rgba(255,69,58,0.35) that never
-    followed the light theme's darker danger hue — and 0.35 was also simply invisible:
-    1.56:1 dark / 1.77:1 light against 1.4.11's 3:1 for the boundary marking this button as
-    the destructive one. 0.8 measures 3.20 / 4.00. */
-}
 .notif-center__list {
   flex: 1;
   overflow-y: auto;
@@ -12055,17 +11879,6 @@ button.group-node__setup:disabled {
   font-size: 10.5px;
   color: var(--muted-2); /* --muted-2 (0.25) has no exact --md-* role — sits between
     --md-outline-variant (0.1) and --md-outline (0.35) */
-}
-.notif-center__row-dismiss {
-  flex: none;
-  padding: 3px 8px;
-  font-size: 11px;
-  border-radius: var(--md-shape-extra-small); /* was a literal 6px — exact match to the shipped
-    scale */
-  border: 1px solid var(--md-outline-variant);
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  cursor: pointer;
 }
 
 /* ==================================================================================

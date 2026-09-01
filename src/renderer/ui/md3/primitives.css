@@ -136,7 +136,10 @@
   color: var(--md-error);
 }
 .mdx-btn--danger.mdx-btn--outlined {
-  border-color: color-mix(in srgb, var(--md-error) 55%, var(--md-outline) 45%);
+  /* Solid error, not a mix with --md-outline: the 55/45 mix measured 2.45:1 on
+     --md-surface-container in the light theme, under WCAG 1.4.11's 3:1 for the boundary that
+     marks this as the destructive action (styles.theme.test.ts). */
+  border-color: var(--md-error);
 }
 
 /* ============================================================================

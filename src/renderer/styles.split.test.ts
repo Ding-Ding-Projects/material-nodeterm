@@ -257,22 +257,6 @@ const KNOWN_FULLY_COVERED_EXCEPTIONS: KnownFullyCoveredException[] = [
       'would lose that fight and the docked search bar would shrink to a 34px icon button.'
   },
   {
-    selector: '.notif-center__bulkbar button.danger',
-    reason:
-      "base's border-color rgba(var(--danger-rgb), 0.8) was hand-measured to clear WCAG 1.4.11's " +
-      "3:1 non-text contrast floor for this destructive-button marker (base comment: '0.8 measures " +
-      "3.20 / 4.00'); md3's solid var(--md-error) is a different, unverified contrast value. " +
-      'Confirmed by running styles.theme.test.ts: deleting the base rule turned ' +
-      "'the destructive bulk-action border clears 3:1' red."
-  },
-  {
-    selector: '.toast--warning .toast__icon',
-    reason:
-      "base's own comment says this one was deliberately NOT folded into md3's --md-warning-container " +
-      "role: 'mapping to --md-warning-container would shift the hue itself rather than relabel it — " +
-      "left, flagged rather than silently folded in'."
-  },
-  {
     selector: '.destgate-overlay--anchored',
     reason:
       "The anchored destructive-confirmation scrim uses a deliberately lighter legacy alpha so the " +
@@ -557,8 +541,6 @@ const KNOWN_PARTIAL_OVERRIDES: KnownPartialOverride[] = [
   { selector: ".notif-center__row-dismiss", stillMissing: ["background", "cursor", "flex", "font-size", "padding"] },
   { selector: ".notif-center__row-text", stillMissing: ["color", "font-size", "margin-top", "word-break"] },
   { selector: ".notif-center__row-title", stillMissing: ["color", "font-size"] },
-  { selector: ".notif-center__search", stillMissing: ["display", "flex-direction", "gap", "padding"] },
-  { selector: ".notif-center__search input", stillMissing: ["color", "font-size", "width"] },
   { selector: ".onb", stillMissing: ["align-items", "display", "inset", "justify-content", "position", "z-index"] },
   { selector: ".onb-agent", stillMissing: ["align-items", "cursor", "display", "font-size", "font-weight", "gap", "padding"] },
   { selector: ".onb-btn", stillMissing: ["cursor"] },
@@ -665,13 +647,6 @@ const KNOWN_PARTIAL_OVERRIDES: KnownPartialOverride[] = [
   { selector: ".term-md__content th", stillMissing: ["border", "padding"] },
   { selector: ".term-node__mascot--pulse", stillMissing: ["filter", "opacity"] },
   { selector: ".term-ssh-chip", stillMissing: ["flex-shrink", "max-width"] },
-  { selector: ".toast", stillMissing: ["align-items", "display", "gap", "pointer-events"] },
-  { selector: ".toast-stack", stillMissing: ["bottom", "display", "flex-direction", "left", "max-height", "max-width", "overflow-y", "pointer-events", "position", "width", "z-index"] },
-  { selector: ".toast__action", stillMissing: ["cursor", "font-size", "font-weight"] },
-  { selector: ".toast__dismiss", stillMissing: ["align-items", "background", "border", "cursor", "display", "flex", "font-size", "height", "justify-content", "line-height", "min-width", "width"] },
-  { selector: ".toast__icon", stillMissing: ["align-items", "display", "flex", "font-size", "font-weight", "justify-content"] },
-  { selector: ".toast__text", stillMissing: ["color", "font-size", "margin-top", "word-break"] },
-  { selector: ".toast__title", stillMissing: ["color", "font-size"] },
   { selector: ".tooltip", stillMissing: ["pointer-events", "position", "transform", "z-index"] },
   { selector: ".top-banners", stillMissing: ["-webkit-app-region", "align-items", "display", "flex-direction", "gap", "left", "pointer-events", "position", "transform", "z-index"] },
   { selector: ":root", stillMissing: ["--accent", "--accent-hover", "--accent-rgb", "--accent-text", "--agent-working", "--bg", "--border", "--canvas-bg", "--canvas-dot", "--card-rgb", "--caution", "--danger", "--danger-rgb", "--git-graph-base-ref", "--git-graph-lane-1", "--git-graph-lane-2", "--git-graph-lane-3", "--git-graph-lane-4", "--git-graph-lane-5", "--git-graph-ref", "--git-graph-remote-ref", "--knob", "--md-canvas-dot", "--md-error", "--md-error-container", "--md-inverse-on-surface", "--md-inverse-primary", "--md-inverse-surface", "--md-on-error", "--md-on-error-container", "--md-on-primary", "--md-on-primary-container", "--md-on-secondary", "--md-on-secondary-container", "--md-on-success-container", "--md-on-surface", "--md-on-surface-variant", "--md-on-tertiary", "--md-on-tertiary-container", "--md-on-warning-container", "--md-outline", "--md-outline-variant", "--md-primary", "--md-primary-container", "--md-scrim", "--md-secondary", "--md-secondary-container", "--md-shadow", "--md-shape-extra-large", "--md-shape-extra-small", "--md-shape-full", "--md-shape-large", "--md-shape-medium", "--md-shape-none", "--md-shape-small", "--md-success", "--md-success-container", "--md-surface", "--md-surface-bright", "--md-surface-container", "--md-surface-container-high", "--md-surface-container-highest", "--md-surface-container-low", "--md-surface-container-lowest", "--md-surface-dim", "--md-tertiary", "--md-tertiary-container", "--md-warning", "--md-warning-container", "--menu-rgb", "--minimap-mask", "--mono", "--mono-font", "--muted", "--muted-2", "--panel", "--panel-2", "--panel-header", "--popover-rgb", "--radius", "--radius-full", "--radius-lg", "--radius-none", "--radius-sm", "--radius-xl", "--radius-xs", "--radius-xxl", "--scrim-k", "--scrim-rgb", "--shadow-k", "--success", "--surface-black", "--surface-deep", "--surface-overlay", "--surface-raised", "--surface-sunken", "--term-bg", "--text", "--text-strong", "--tint-rgb", "--warn", "--warn-rgb", "-webkit-font-smoothing", "color-scheme", "font-family", "font-size"] },

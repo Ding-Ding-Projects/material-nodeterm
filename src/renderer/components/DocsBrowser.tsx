@@ -10,6 +10,7 @@
 // that bundle. Full write-up: docs/features/help/in-app-documentation.md.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { SearchField } from '../ui/md3/SearchField'
 import {
   groupArticles,
   searchArticles,
@@ -231,25 +232,20 @@ export function DocsBrowser({ initialPath }: { initialPath?: string } = {}): JSX
             {mapOwnedSentence(vocab, docsArticleCountSegments(articles.length, `article${articles.length === 1 ? '' : 's'}, bundled with this build — no network needed`))}
           </div>
         </div>
-        <div className="md3-docs__search md3-history-search">
-          <input
-            ref={searchInputRef}
-            type="text"
-            className="md3-history-search__input"
-            placeholder={vocab(
-              search.mode === 'regex' ? 'Search titles and content (regex)…' : 'Search titles and content…'
-            )}
-            value={search.value}
-            spellCheck={false}
-            onChange={(e) => search.setValue(e.target.value)}
-            aria-label={vocab('Search documentation')}
-          />
-          <AnchoredRegexBuilder
+        <SearchField
+          ref={searchInputRef}
+          className="md3-docs__search"
+          dense
+          placeholder={search.mode === 'regex' ? 'Search titles and content (regex)…' : 'Search titles and content…'}
+          value={search.value}
+          onChange={(e) => search.setValue(e.target.value)}
+          aria-label="Search documentation"
+          trailingSlot={<AnchoredRegexBuilder
             search={search}
             fieldRef={searchInputRef}
             label="Regex — Documentation search"
-          />
-        </div>
+          />}
+        />
       </div>
       {search.error && (
         <div className="md3-docs__error" role="alert">

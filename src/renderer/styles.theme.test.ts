@@ -635,16 +635,33 @@ describe('measured contrast floors', () => {
   })
 
   it('the destructive bulk-action border clears 3:1 — it is what marks the button', () => {
-    const m = /\.notif-center__bulkbar button\.danger\s*\{[^}]*border-color:\s*rgba\(var\(--danger-rgb\),\s*([\d.]+)\)/.exec(RULES)
-    expect(m, 'the danger border must stay a themed --danger-rgb tint').toBeTruthy()
-    const alpha = +m![1]
+    // The notification centre's Delete row is the outlined danger Button primitive; its border is
+    // solid `var(--md-error)` (primitives.css — a 55/45 mix with --md-outline measured 2.45:1 in
+    // the light theme) on the panel's `--md-surface-container`, held to 1.4.11's 3:1 floor.
+    const PRIMITIVES = readFileSync(join(__dirname, 'ui', 'md3', 'primitives.css'), 'utf8')
+    expect(PRIMITIVES).toMatch(/\.mdx-btn--danger\.mdx-btn--outlined\s*\{[^}]*border-color:\s*var\(--md-error\)/)
+    const hexRgb = (hex: string): [number, number, number] => {
+      const h = hex.replace('#', '')
+      const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+      return [parseInt(full.slice(0, 2), 16), parseInt(full.slice(2, 4), 16), parseInt(full.slice(4, 6), 16)]
+    }
+    const hexToken = (block: string, name: string): [number, number, number] => {
+      const m = new RegExp(`^\\s*${name}\\s*:\\s*(#[0-9a-fA-F]{3,6})`, 'm').exec(block)
+      expect(m, `${name} must be a hex literal`).toBeTruthy()
+      return hexRgb(m![1])
+    }
+    const ratio = (a: [number, number, number], b: [number, number, number]): number => {
+      const la = luminance(...a)
+      const lb = luminance(...b)
+      return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+    }
     for (const [theme, block] of [
       ['dark', DARK],
       ['light', LIGHT]
     ] as const) {
-      const menu = String(token(block, '--menu-rgb')).split(',').map((n) => parseInt(n.trim(), 10))
-      const border = over(rgbTriple(block, '--danger-rgb'), alpha, menu)
-      expect(contrast(border, menu), `${theme}: danger border on the panel`).toBeGreaterThanOrEqual(3)
+      const border = hexToken(block, '--md-error')
+      const panel = hexToken(block, '--md-surface-container')
+      expect(ratio(border, panel), `${theme}: danger border on the panel`).toBeGreaterThanOrEqual(3)
     }
   })
 })

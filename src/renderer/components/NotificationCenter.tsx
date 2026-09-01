@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNotifications, type AppNotification, type NotificationKind } from '../state/notifications'
 import { Checkbox } from '@renderer/ui/md3'
+import { Button, Chip, ChipRow, SearchField } from '../ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { saveBlobDownload } from '../lib/exportSave'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
@@ -198,52 +199,51 @@ export function NotificationCenter({
           </button>
         </div>
         <div className="notif-center__search">
-          <div className="md3-history-search">
-            <input
-              ref={searchInputRef}
-              type="search"
-              placeholder={search.mode === 'regex' ? vocab('Search notifications (regex)…') : vocab('Search notifications…')}
-              value={search.value}
-              onChange={(e) => search.setValue(e.target.value)}
-              aria-label={vocab('Search notifications')}
-              spellCheck={false}
-            />
+          <SearchField
+            ref={searchInputRef}
+            placeholder={search.mode === 'regex' ? 'Search notifications (regex)…' : 'Search notifications…'}
+            value={search.value}
+            onChange={(e) => search.setValue(e.target.value)}
+            aria-label="Search notifications"
+            trailingSlot={
             <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label="Regex — notification search" zIndex={93} />
-          </div>
-          {search.error && <div role="alert">{search.error}</div>}
-          <div className="notif-center__filters" role="group" aria-label={vocab('Filter by kind')}>
+          }
+          />
+          {search.error && <div className="notif-center__search-error" role="alert">{search.error}</div>}
+          <ChipRow className="notif-center__filters" role="group" aria-label={vocab('Filter by kind')}>
             {FILTERS.map((f) => (
-              <button
-                key={f.id}
-                className={`notif-center__filter${filter === f.id ? ' active' : ''}`}
-                aria-pressed={filter === f.id}
-                onClick={() => setFilter(f.id)}
-              >
-                {vocab(f.label)}
-              </button>
+              <Chip key={f.id} selected={filter === f.id} onClick={() => setFilter(f.id)}>
+                {f.label}
+              </Chip>
             ))}
-          </div>
+          </ChipRow>
         </div>
         <div className="notif-center__bulkbar">
-          <button onClick={allFilteredSelected ? clearFilteredSelection : selectAllFiltered}>
+          <Button variant="tonal" size="small" onClick={allFilteredSelected ? clearFilteredSelection : selectAllFiltered}>
             {allFilteredSelected
               ? vocab('Clear selection')
               : mapOwnedSentence(vocab, [copySegment('Select all ('), fact(String(filteredIds.length)), copySegment(')')])}
-          </button>
-          <button onClick={invertFilteredSelection} disabled={filteredIds.length === 0}>
+          </Button>
+          <Button variant="tonal" size="small" vocabularyMode="factual" onClick={invertFilteredSelection} disabled={filteredIds.length === 0}>
             {vocab('Invert selection')}
-          </button>
-          <button onClick={bulkDismiss} disabled={selectedInFilter.length === 0}>
+          </Button>
+          <Button variant="tonal" size="small" vocabularyMode="factual" onClick={bulkDismiss} disabled={selectedInFilter.length === 0}>
             {mapOwnedSentence(vocab, [copySegment('Dismiss ('), fact(String(selectedInFilter.length)), copySegment(')')])}
-          </button>
-          <button
-            className="danger"
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            danger
+            vocabularyMode="factual"
             disabled={selectedInFilter.length === 0}
             onClick={(e) => onRequestBulkDelete(selectedInFilter, e.currentTarget)}
           >
             {mapOwnedSentence(vocab, [copySegment('Delete ('), fact(String(selectedInFilter.length)), copySegment(')')])}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="tonal"
+            size="small"
+            vocabularyMode="factual"
             onClick={bulkExport}
             title={vocab(
               'Click to export Markdown, Shift-click for JSON. Exports the selection, or the current filter if nothing is selected.'
@@ -254,10 +254,10 @@ export function NotificationCenter({
               fact(String(selectedInFilter.length > 0 ? selectedInFilter.length : filteredIds.length)),
               copySegment(')')
             ])}
-          </button>
-          <button onClick={() => markAllRead()} disabled={items.every((n) => n.read)}>
+          </Button>
+          <Button variant="tonal" size="small" vocabularyMode="factual" onClick={() => markAllRead()} disabled={items.every((n) => n.read)}>
             {vocab('Mark all read')}
-          </button>
+          </Button>
         </div>
         <div
           className="notif-center__list"
@@ -302,8 +302,10 @@ export function NotificationCenter({
                 </div>
               </div>
               {n.target && onGoToNode && (
-                <button
-                  className="notif-center__row-dismiss"
+                <Button
+                  variant="text"
+                  size="small"
+                  className="notif-center__row-action"
                   onClick={() => {
                     markAllRead([n.id])
                     onGoToNode(n.target!.nodeId)
@@ -311,24 +313,27 @@ export function NotificationCenter({
                   }}
                 >
                   Open agent
-                </button>
+                </Button>
               )}
               {n.dismissedAt == null ? (
-                <button className="notif-center__row-dismiss" onClick={() => dismiss(n.id)}>
-                  {vocab('Dismiss')}
-                </button>
-      ) : (
-                <button className="notif-center__row-dismiss" onClick={() => restore(n.id)}>
-                  {vocab('Restore')}
-                </button>
+                <Button variant="text" size="small" className="notif-center__row-action" onClick={() => dismiss(n.id)}>
+                  Dismiss
+                </Button>
+              ) : (
+                <Button variant="text" size="small" className="notif-center__row-action" onClick={() => restore(n.id)}>
+                  Restore
+                </Button>
               )}
-              <button
-                className="notif-center__row-dismiss"
-                title={vocab('Remove from history permanently')}
+              <Button
+                variant="text"
+                size="small"
+                danger
+                className="notif-center__row-action"
+                title="Remove from history permanently"
                 onClick={(e) => onRequestBulkDelete([n.id], e.currentTarget)}
               >
-                {vocab('Delete')}
-              </button>
+                Delete
+              </Button>
             </div>
             )
           })}

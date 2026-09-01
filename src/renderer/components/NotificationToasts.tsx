@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Snackbar, SnackbarStack } from '../ui/md3/Snackbar'
 import { createPortal } from 'react-dom'
 import {
   useNotifications,
@@ -61,44 +62,22 @@ function Toast({ n }: { n: AppNotification }): React.JSX.Element {
   }, [n.id])
 
   return (
-    <div
-      className={`toast toast--${n.kind}`}
-      role={n.kind === 'error' || n.kind === 'warning' ? 'alert' : 'status'}
-      aria-live={n.kind === 'error' || n.kind === 'warning' ? 'assertive' : 'polite'}
-    >
-      <span className="toast__icon" aria-hidden>
-        {KIND_ICON[n.kind]}
-      </span>
-      <div className="toast__body">
-        <span className="sr-only">{vocab(KIND_LABEL[n.kind])}: </span>
-        <div className="toast__title">{title}</div>
-        {body && <div className="toast__text">{body}</div>}
-        {n.actions && n.actions.length > 0 && (
-          <div className="toast__actions">
-            {n.actions.map((a, i) => (
-              <button
-                key={i}
-                className="toast__action"
-                onClick={() => {
-                  a.onClick()
-                  dismiss(n.id)
-                }}
-              >
-                {vocab(a.label)}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      <button
-        className="toast__dismiss"
-        aria-label={`${dismissLabel}: ${title}`}
-        title={dismissLabel}
-        onClick={() => dismiss(n.id)}
-      >
-        ×
-      </button>
-    </div>
+    <Snackbar
+      tone={n.kind}
+      icon={KIND_ICON[n.kind]}
+      srPrefix={`${vocab(KIND_LABEL[n.kind])}: `}
+      title={title}
+      text={body}
+      actions={n.actions?.map((a) => ({
+        label: a.label,
+        onClick: () => {
+          a.onClick()
+          dismiss(n.id)
+        }
+      }))}
+      onDismiss={() => dismiss(n.id)}
+      dismissLabel={`${dismissLabel}: ${title}`}
+    />
   )
 }
 
@@ -122,7 +101,7 @@ export function NotificationToasts(): React.JSX.Element | null {
   const stackLabel = useVocabularyMapper()('Notifications')
   if (active.length === 0) return null
   return createPortal(
-    <div className="toast-stack" aria-label={stackLabel}>
+    <SnackbarStack className="toast-stack" aria-label={stackLabel}>
       {/* Newest at the bottom (closest to where the corner "grows"), oldest scrolls up and out —
           the stack itself scrolls if it ever grows past the viewport rather than clipping. */}
       {active
@@ -131,7 +110,7 @@ export function NotificationToasts(): React.JSX.Element | null {
         .map((n) => (
           <Toast key={n.id} n={n} />
         ))}
-    </div>,
+    </SnackbarStack>,
     document.body
   )
 }

@@ -20,6 +20,9 @@ export interface SnackbarProps extends Omit<HTMLAttributes<HTMLDivElement>, 'tit
   onDismiss?: () => void
   /** Accessible name for the dismiss button; authored, mapped through the vocabulary. */
   dismissLabel?: string
+  /** Visually hidden prefix read before the title ("Error: "), kept OUT of the title element so
+   *  the visible title stays the exact fact it was given. */
+  srPrefix?: string
 }
 
 /**
@@ -35,6 +38,7 @@ export function Snackbar({
   actions,
   onDismiss,
   dismissLabel = 'Dismiss',
+  srPrefix,
   className,
   ...rest
 }: SnackbarProps): React.JSX.Element {
@@ -49,6 +53,7 @@ export function Snackbar({
     >
       {icon && <span className="mdx-snackbar__icon" aria-hidden>{icon}</span>}
       <div className="mdx-snackbar__body">
+        {srPrefix && <span className="sr-only">{srPrefix}</span>}
         <div className="mdx-snackbar__title">{title}</div>
         {text && <div className="mdx-snackbar__text">{text}</div>}
         {actions && actions.length > 0 && (

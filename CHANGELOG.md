@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Put the Notifications panel and the Node Catalog on the shared Material 3 primitives. The
+  Notifications search sat inside a 220 px oval because a row-shaped search recipe carried a
+  `flex-basis` that its column parent applied to the main axis; it is now the new `SearchField`
+  pill (also adopted by the documentation, settings-history and status filters), the filters are
+  real filter chips and the bulk actions real buttons. The Node Catalog's terminal-profile and
+  category rows no longer clip their third row: they are `ChipRow`s that fold long tails behind a
+  "+N more" chip. Every transient message — app toasts and the easter-egg discovery card — renders
+  through one `Snackbar` primitive that yields to an open dialog instead of painting over its
+  footer. New `scripts/check-md3-controls.mjs` refuses raw form controls outside `ui/md3` against
+  a shrink-only allowlist, the theme test's dangling-token guard now scans the MD3 sheet (five
+  undefined typescale tokens found and defined), and the outlined danger button's border is solid
+  error red after measuring 2.45:1 in the light theme.
+
+  通知面板同節點目錄改用共用嘅 Material 3 primitives：搜尋框唔會再變成 220px 嘅大鴨蛋（舊配方帶咗
+  `flex-basis`，直排嘅父層照單全收），篩選變真 filter chip，批次動作變真掣；終端機設定檔同分類
+  嗰兩行 chip 唔會再切走第三行，改為摺埋做「+N more」。所有短訊（app toast、彩蛋卡）都經一個
+  `Snackbar` 出，開住 dialog 嗰陣會讓路。新加 `check-md3-controls.mjs` 守住 `ui/md3` 以外唔准出
+  現原生 form control。
+
 - Keep a Windows terminal usable when the session host is slow or broken. The host connect
   budget grows from 4.5 s to 15 s with backoff (the host's own startup-race path can take ~12 s),
   a swallowed spawn failure and the host log's last `fatal:` line are named in the timeout

@@ -13,6 +13,7 @@
 // docs/local-history.md.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { SearchField } from '../ui/md3/SearchField'
 import type { ExportTable } from '@shared/export'
 import { buildTableExport } from '@shared/export'
 import type { HistoryAction, HistoryEntry } from '@shared/local-history'
@@ -264,19 +265,18 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
           </div>
         )}
 
-        <div className="md3-history-search">
-          <input
-            ref={searchInputRef}
-            type="text"
-            className="local-history__search md3-history-search__input"
-            placeholder={vocab(search.mode === 'regex' ? 'Search what changed (regex)…' : 'Search what changed…')}
-            value={search.value}
-            spellCheck={false}
-            onChange={(e) => search.setValue(e.target.value)}
-            aria-label={vocab('Search history')}
-          />
-          <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label="Regex — Settings history search" />
-        </div>
+        <SearchField
+          ref={searchInputRef}
+          className="local-history__search"
+          dense
+          placeholder={search.mode === 'regex' ? 'Search what changed (regex)…' : 'Search what changed…'}
+          value={search.value}
+          onChange={(e) => search.setValue(e.target.value)}
+          aria-label="Search history"
+          trailingSlot={
+            <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label="Regex — Settings history search" />
+          }
+        />
         {search.error && (
           <div className="local-history__date-error" role="alert">
             {search.error}

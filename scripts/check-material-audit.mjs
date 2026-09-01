@@ -177,7 +177,7 @@ const SURFACES = [
     ['destination-status', 'Status destination', 'src/renderer/components/StatusSurface.tsx', 'export function StatusSurface', 'md3-status-screen'],
     ['destination-shortcuts', 'Shortcuts destination', 'src/renderer/components/ShortcutsPanel.tsx', 'export function ShortcutsPanel', 'shortcuts'],
     ['destination-notification-center', 'Notification center', 'src/renderer/components/NotificationCenter.tsx', 'export function NotificationCenter', 'notif-center'],
-    ['destination-notification-toasts', 'Notification toast stack', 'src/renderer/components/NotificationToasts.tsx', 'export function NotificationToasts', 'toast-stack'],
+    ['destination-notification-toasts', 'Notification toast stack', 'src/renderer/components/NotificationToasts.tsx', 'export function NotificationToasts', 'mdx-snackbar-stack'],
     ['destination-session-memory', 'Session memory panel', 'src/renderer/components/SessionMemoryPanel.tsx', 'export function SessionMemoryPanel', 'sessmem-panel'],
     ['destination-usage', 'Usage indicator and popover', 'src/renderer/components/UsageIndicator.tsx', 'export function UsageIndicator', 'usage-pill'],
     ['destination-updates', 'Update status card', 'src/renderer/components/UpdateCard.tsx', 'export function UpdateCard', 'update-card'],
@@ -358,6 +358,8 @@ const SURFACES = [
   ...rows('overlay', [
     ['overlay-publish', 'Publish destination dialog', 'src/renderer/components/PublishDialog.tsx', 'export function PublishDialog', 'pubdlg'],
     ['overlay-find-bar', 'Terminal find bar', 'src/renderer/components/FindBar.tsx', 'export function FindBar', 'term-node__find'],
+    ['overlay-node-catalog', 'Node catalog dialog', 'src/renderer/components/NodeCatalogDialog.tsx', 'export function NodeCatalogDialog', 'node-catalog-dialog'],
+    ['overlay-easter-egg-toast', 'Easter egg discovery snackbar', 'src/renderer/components/EasterEggs.tsx', 'export function EasterEggs', 'mdx-snackbar'],
     ['overlay-remote-picker', 'Remote picker menu', 'src/renderer/components/RemotePicker.tsx', 'export function RemotePicker', 'ctx-menu'],
   ]),
 ]
@@ -372,7 +374,7 @@ settings-page settings-sidebar settings-section settings-field-row settings-sear
 overlay-anchored-popover overlay-command-palette overlay-context-menu overlay-filterable-menu overlay-vocabulary-context-menu overlay-regex-builder overlay-anchored-regex overlay-confirm overlay-destructive-gate overlay-destructive-host overlay-clone overlay-bug-report overlay-input overlay-worktree overlay-existing-worktree-picker overlay-ssh-project overlay-remote-access overlay-ssh-passphrase overlay-wsl-create overlay-group-picker overlay-branch-select overlay-color-field overlay-color-menu overlay-color-picker overlay-icon-menu overlay-appearance-editor overlay-phone-pair overlay-presence-name overlay-notify-consent overlay-upgrade overlay-prompt overlay-archive-unlock overlay-lock-wizard overlay-unlock-prompt overlay-unlock-ladder overlay-two-key-export overlay-tooltip overlay-export-menu overlay-agent-continuation overlay-dialog-picker overlay-wsl-create-clipping
 status-capability-notice status-pty-pressure status-server-deployment status-tmux-banner status-resume-card status-system-resource status-presence-layer status-facepile status-account-pills status-node-boundary
 state-theme-dark state-theme-light state-focus-visible state-hover state-disabled state-selected state-pressed state-error state-empty state-loading state-progress state-progress-indeterminate state-reduced-motion state-narrow-layout state-display-scale state-drag-over state-locked state-unavailable state-working state-needs-you state-scrim state-tooltip state-tab-overflow
-site-home site-docs-index site-docs-agent-support site-docs-linked-agent-inbox site-docs-canvas-lifecycle site-docs-changelog site-docs-dim-sum site-docs-exports site-docs-kanban site-docs-language site-docs-narrator site-docs-node-kinds site-docs-packaging site-docs-personal-vocabulary site-docs-projects site-docs-remote site-docs-school site-docs-server site-docs-source-control site-docs-speech site-docs-terminal site-docs-toy-locks site-docs-windows site-styles desktop-onboarding desktop-fab-menu destination-password-manager destination-adapter-catalog destination-minecraft-backups destination-minecraft-players destination-minecraft-properties destination-dim-sum overlay-publish overlay-find-bar overlay-remote-picker
+site-home site-docs-index site-docs-agent-support site-docs-linked-agent-inbox site-docs-canvas-lifecycle site-docs-changelog site-docs-dim-sum site-docs-exports site-docs-kanban site-docs-language site-docs-narrator site-docs-node-kinds site-docs-packaging site-docs-personal-vocabulary site-docs-projects site-docs-remote site-docs-school site-docs-server site-docs-source-control site-docs-speech site-docs-terminal site-docs-toy-locks site-docs-windows site-styles desktop-onboarding desktop-fab-menu destination-password-manager destination-adapter-catalog destination-minecraft-backups destination-minecraft-players destination-minecraft-properties destination-dim-sum overlay-publish overlay-find-bar overlay-node-catalog overlay-easter-egg-toast overlay-remote-picker
 `.trim().split(/\s+/)
 
 function inventoryErrors(rowsToCheck) {

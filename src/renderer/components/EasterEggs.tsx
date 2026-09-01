@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Snackbar, SnackbarStack } from '../ui/md3/Snackbar'
 import { EASTER_EGG_CATALOG, eggCopy, type EasterEggEntry } from '@shared/easter-eggs'
 import { useI18n } from '../lib/i18n'
 import { useSchoolMode } from '../state/schoolMode'
@@ -130,16 +131,15 @@ export function EasterEggs(): React.JSX.Element | null {
   return (
     <>
       {active && (
-        <div className="easter-eggs__toast" role="status" aria-live="polite">
-          <strong>{vocab(active.title)}</strong>
-          <span>{copyFor(active)}</span>
-          <button type="button" onClick={() => setActive(null)} aria-label={vocab('Dismiss Easter egg')}>
-            {vocab('Dismiss')}
-          </button>
-          <button type="button" onClick={() => { setOpen(true); setActive(null) }}>
-            {vocab('View discovery history')}
-          </button>
-        </div>
+        <SnackbarStack className="easter-eggs__toast">
+          <Snackbar
+            title={vocab(active.title)}
+            text={copyFor(active)}
+            actions={[{ label: 'View discovery history', onClick: () => { setOpen(true); setActive(null) } }]}
+            onDismiss={() => setActive(null)}
+            dismissLabel="Dismiss Easter egg"
+          />
+        </SnackbarStack>
       )}
       {open && (
         <div className="easter-eggs__backdrop" role="presentation" onClick={() => setOpen(false)}>

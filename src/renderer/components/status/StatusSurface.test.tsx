@@ -110,7 +110,7 @@ describe('StatusSurface', () => {
 
   it('the search field filters by title and carries the anchored regex builder affordance', async () => {
     await render()
-    const input = host.querySelector<HTMLInputElement>('.md3-status-search__input')
+    const input = host.querySelector<HTMLInputElement>('.md3-status-search .mdx-search__input')
     if (!input) throw new Error('no search input')
     // The anchored regex builder trigger sits beside the field, per the house search contract.
     expect(host.querySelector('.md3-status-search .md3-regex-trigger')).not.toBeNull()

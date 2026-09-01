@@ -20,6 +20,7 @@
 // only reported drift after someone had already edited one copy.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { SearchField } from '../ui/md3/SearchField'
 import { CHANGELOG_RELEASES } from '@shared/changelog-data'
 import captureManifestRaw from '../../../docs/assets/shots/capture-manifest.json?raw'
 import packageJsonRaw from '../../../package.json?raw'
@@ -231,19 +232,18 @@ export function StatusSurface(): JSX.Element {
       </div>
 
       <div className="md3-status-screen__toolbar">
-        <div className="md3-status-search">
-          <input
-            ref={searchInputRef}
-            type="text"
-            className="md3-status-search__input"
-            placeholder={search.mode === 'regex' ? vocab('Filter gates (regex)…') : vocab('Filter gates…')}
-            value={search.value}
-            spellCheck={false}
-            onChange={(e) => search.setValue(e.target.value)}
-            aria-label={vocab('Filter status checks')}
-          />
-          <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label={vocab('Regex — status gate filter')} />
-        </div>
+        <SearchField
+          ref={searchInputRef}
+          className="md3-status-search"
+          dense
+          placeholder={search.mode === 'regex' ? 'Filter gates (regex)…' : 'Filter gates…'}
+          value={search.value}
+          onChange={(e) => search.setValue(e.target.value)}
+          aria-label="Filter status checks"
+          trailingSlot={
+            <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label={vocab('Regex — status gate filter')} />
+          }
+        />
         {search.error && (
           <div className="md3-status-screen__search-error" role="alert">
             {search.error}

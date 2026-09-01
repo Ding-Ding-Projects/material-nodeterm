@@ -186,7 +186,7 @@ The concrete source remediations in this pass are:
 | `destination-status` | Status destination | `src/renderer/components/StatusSurface.tsx` | `export function StatusSurface` | `md3-status-screen` | Source reviewed; runtime proof pending |
 | `destination-shortcuts` | Shortcuts destination | `src/renderer/components/ShortcutsPanel.tsx` | `export function ShortcutsPanel` | `shortcuts` | Source reviewed; runtime proof pending |
 | `destination-notification-center` | Notification center | `src/renderer/components/NotificationCenter.tsx` | `export function NotificationCenter` | `notif-center` | Source reviewed; runtime proof pending |
-| `destination-notification-toasts` | Notification toast stack | `src/renderer/components/NotificationToasts.tsx` | `export function NotificationToasts` | `toast-stack` | Source reviewed; runtime proof pending |
+| `destination-notification-toasts` | Notification toast stack | `src/renderer/components/NotificationToasts.tsx` | `export function NotificationToasts` | `mdx-snackbar-stack` | Source reviewed; runtime proof pending |
 | `destination-session-memory` | Session memory panel | `src/renderer/components/SessionMemoryPanel.tsx` | `export function SessionMemoryPanel` | `sessmem-panel` | Source reviewed; runtime proof pending |
 | `destination-usage` | Usage indicator and popover | `src/renderer/components/UsageIndicator.tsx` | `export function UsageIndicator` | `usage-pill` | Source reviewed; runtime proof pending |
 | `destination-updates` | Update status card | `src/renderer/components/UpdateCard.tsx` | `export function UpdateCard` | `update-card` | Source reviewed; runtime proof pending |
@@ -327,6 +327,8 @@ The concrete source remediations in this pass are:
 | `destination-dim-sum` | Dim sum startup surprise | `src/renderer/components/DimSumSurprise.tsx` | `export function DimSumSurprise` | `dimsum-toast` | Source reviewed; runtime proof pending |
 | `overlay-publish` | Publish destination dialog | `src/renderer/components/PublishDialog.tsx` | `export function PublishDialog` | `pubdlg` | Source reviewed; runtime proof pending |
 | `overlay-find-bar` | Terminal find bar | `src/renderer/components/FindBar.tsx` | `export function FindBar` | `term-node__find` | Source reviewed; runtime proof pending |
+| `overlay-node-catalog` | Node catalog dialog | `src/renderer/components/NodeCatalogDialog.tsx` | `export function NodeCatalogDialog` | `node-catalog-dialog` | Source reviewed; runtime proof pending |
+| `overlay-easter-egg-toast` | Easter egg discovery snackbar | `src/renderer/components/EasterEggs.tsx` | `export function EasterEggs` | `mdx-snackbar` | Source reviewed; runtime proof pending |
 | `overlay-remote-picker` | Remote picker menu | `src/renderer/components/RemotePicker.tsx` | `export function RemotePicker` | `ctx-menu` | Source reviewed; runtime proof pending |
 
 ### State and pseudo-state audit

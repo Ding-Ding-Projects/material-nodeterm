@@ -168,7 +168,7 @@ describe('shell and session vocabulary boundaries', () => {
     usePersonalVocabulary.setState({ entries: { 'Built-app captures': 'Capture report' }, status: 'loaded', entryCount: 1 })
     mount(<StatusSurface />)
     expect(host?.textContent).toContain('Capture report')
-    const input = host?.querySelector<HTMLInputElement>('.md3-status-search__input')
+    const input = host?.querySelector<HTMLInputElement>('.md3-status-search .mdx-search__input')
     if (!input) throw new Error('missing status search')
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
     act(() => {
@@ -177,7 +177,7 @@ describe('shell and session vocabulary boundaries', () => {
     })
     expect(host?.querySelectorAll('.status-card')).toHaveLength(1)
     act(() => useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' }))
-    const restoredSearch = host?.querySelector<HTMLInputElement>('.md3-status-search__input')
+    const restoredSearch = host?.querySelector<HTMLInputElement>('.md3-status-search .mdx-search__input')
     const restoredSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
     act(() => {
       restoredSetter?.call(restoredSearch, '')
