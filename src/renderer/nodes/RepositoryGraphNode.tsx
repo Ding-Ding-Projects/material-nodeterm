@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { saveBlobDownload } from '../lib/exportSave'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import type { RepositoryGraphExportInput, RepositoryGraphMode, RepositoryGraphProgress, RepositoryGraphSnapshot } from '@shared/repository-graph'
 import type { CanvasNode } from '../state/workspace'
@@ -43,13 +44,9 @@ export function mapRepositoryGraphProgress(
 }
 
 function download(content: string, filename: string): void {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
-  URL.revokeObjectURL(url)
+  // Object-URL lifetime belongs to the shared download primitive (lib/exportSave): a same-turn
+  // revoke can cancel Chromium before the download starts (exportSave.guard.test.ts).
+  saveBlobDownload(new Blob([content], { type: 'text/plain;charset=utf-8' }), filename)
 }
 
 export default function RepositoryGraphNode({ id, data, selected }: NodeProps<CanvasNode>): React.JSX.Element {
