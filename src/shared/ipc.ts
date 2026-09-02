@@ -156,6 +156,10 @@ export const IPC = {
   /** Copy local files as file references (not bytes/text) to the macOS system clipboard. */
   clipboardWriteFiles: 'clipboard:write-files',
   appNotify: 'app:notify',
+  /** Electron-only renderer projection for stable native chrome copy. */
+  nativeCopyGetEpoch: 'app:native-copy-get-epoch',
+  nativeCopyReplace: 'app:native-copy-replace',
+  nativeCopyReset: 'app:native-copy-reset',
   appOpenNotificationSettings: 'app:open-notification-settings',
   appFocusNode: 'app:focus-node',
   appSetBadge: 'app:set-badge',
