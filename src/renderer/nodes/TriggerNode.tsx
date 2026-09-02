@@ -14,6 +14,9 @@ import {
   type TriggerSpec,
   type TriggerStatus,
 } from "@shared/trigger";
+import { Button, TextArea } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
+import { Select } from '@renderer/ui/Select'
 
 const LOCAL_TIME_ZONE =
   Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -247,19 +250,19 @@ export default function TriggerNode({
           rejectEmpty={false}
         />
         <span className="term-node__spacer" />
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           className="term-node__close"
           title={vocab("Close")}
           aria-label={vocab("Close Trigger")}
           onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×
-        </button>
+        </Button>
       </div>
       <div className="trigger-node__body nodrag nowheel">
         <label>
           {copy("trigger.scheduleType", "Schedule type")}
-          <select
+          <Select vocabularyMode="factual"
             aria-label={copy("trigger.scheduleType", "Schedule type")}
             value={spec.schedule.kind}
             onChange={(event) => {
@@ -281,12 +284,12 @@ export default function TriggerNode({
             </option>
             <option value="cron">{copy("trigger.cron", "Cron")}</option>
             <option value="once">{copy("trigger.once", "Once")}</option>
-          </select>
+          </Select>
         </label>
         {spec.schedule.kind === "interval" ? (
           <label>
             {copy("trigger.everyMinutes", "Every minutes")}
-            <input
+            <Input vocabularyMode="factual"
               type="number"
               min={1}
               max={527040}
@@ -301,7 +304,7 @@ export default function TriggerNode({
         {spec.schedule.kind === "cron" ? (
           <label>
             {copy("trigger.cronExpression", "Five-field cron")}
-            <input
+            <Input vocabularyMode="factual"
               value={spec.schedule.expr}
               maxLength={256}
               aria-label={copy("trigger.cronExpression", "Five-field cron")}
@@ -313,7 +316,7 @@ export default function TriggerNode({
         {spec.schedule.kind === "once" ? (
           <label>
             {copy("trigger.runAt", "Run at")}
-            <input
+            <Input vocabularyMode="factual"
               type="datetime-local"
               value={localInputValue(spec.schedule.at)}
               aria-label={copy("trigger.runAt", "Run at")}
@@ -332,7 +335,7 @@ export default function TriggerNode({
         </p>
         <label>
           {vocab("Target")}
-          <select
+          <Select vocabularyMode="factual"
             value={spec.target}
             aria-label={vocab("Trigger target")}
             onChange={(event) => setSpec({ target: event.target.value })}
@@ -344,23 +347,23 @@ export default function TriggerNode({
                 {target.agentId ? ` · ${target.agentId}` : ""}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <div className="trigger-node__target-search">
-          <input
+          <Input vocabularyMode="factual"
             value={targetSearch}
             placeholder={vocab("Search targets")}
             aria-label={vocab("Search targets")}
             onChange={(event) => setTargetSearch(event.target.value)}
           />
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             type="button"
             aria-expanded={regexOpen}
             title={vocab("Open regex builder")}
             onClick={() => setRegexOpen((open) => !open)}
           >
             {" .* "}
-          </button>
+          </Button>
         </div>
         {regexOpen ? (
           <div
@@ -370,14 +373,14 @@ export default function TriggerNode({
           >
             <label>
               {vocab("Pattern")}
-              <input
+              <Input vocabularyMode="factual"
                 value={regexPattern}
                 onChange={(event) => setRegexPattern(event.target.value)}
               />
             </label>
             <label>
               {vocab("Flags")}
-              <input
+              <Input vocabularyMode="factual"
                 value={regexFlags}
                 onChange={(event) => setRegexFlags(event.target.value)}
               />
@@ -391,7 +394,7 @@ export default function TriggerNode({
         ) : null}
         <label>
           {vocab("Payload")}
-          <textarea
+          <TextArea vocabularyMode="factual"
             value={spec.payload}
             maxLength={16_384}
             rows={4}
@@ -401,7 +404,7 @@ export default function TriggerNode({
         </label>
         <label>
           {vocab("Note")}
-          <input
+          <Input vocabularyMode="factual"
             value={spec.note ?? ""}
             maxLength={500}
             aria-label={vocab("Trigger note")}
@@ -433,27 +436,27 @@ export default function TriggerNode({
           <span>{status.inFlight ? vocab("Running") : vocab("Idle")}</span>
         </div>
         <div className="trigger-node__actions">
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             type="button"
             disabled={!validSpec || !api}
             onClick={() => setReview("arm")}
           >
             {vocab("Arm")}
-          </button>
-          <button
+          </Button>
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             type="button"
             disabled={!status.armed || !api}
             onClick={() => void disarm()}
           >
             {vocab("Disarm")}
-          </button>
-          <button
+          </Button>
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             type="button"
             disabled={!validSpec || !api || status.inFlight}
             onClick={() => setReview("run")}
           >
             {vocab("Run now")}
-          </button>
+          </Button>
         </div>
         <div className="trigger-node__history">
           <div className="trigger-node__history-head">
@@ -503,16 +506,16 @@ export default function TriggerNode({
             )}
           </p>
           <div>
-            <button type="button" onClick={() => setReview(null)}>
+            <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => setReview(null)}>
               {vocab("Cancel")}
-            </button>
-            <button
+            </Button>
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               type="button"
               disabled={!validSpec}
               onClick={() => void (review === "arm" ? arm() : runNow())}
             >
               {review === "arm" ? vocab("Confirm arm") : vocab("Confirm run")}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

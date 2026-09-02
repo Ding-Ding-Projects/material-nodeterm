@@ -12,6 +12,8 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { openDestructiveGate } from '../state/destructiveGate'
 import { Radio } from '../ui/md3'
+import { Button, Checkbox, IconButton } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 function bytes(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '0 B'
@@ -134,7 +136,7 @@ function TorrentTaskCard({ task, busy, destination, torrent, run }: TorrentTaskC
           ], map)}</summary>
           <div className="torrent-node__picker-search">
             <label htmlFor={`${task.id}-file-search`}>{map('Filter files')}</label>
-            <input
+            <Input vocabularyMode="factual"
               ref={fileSearchRef}
               id={`${task.id}-file-search`}
               value={fileSearch.value}
@@ -145,14 +147,13 @@ function TorrentTaskCard({ task, busy, destination, torrent, run }: TorrentTaskC
           </div>
           {fileSearch.error && <p className="torrent-node__error" role="alert">{fileSearch.error}</p>}
           <div className="torrent-node__selection-actions">
-            <button type="button" disabled={busy || visibleFiles.length === 0} onClick={() => void run(() => torrent.chooseFiles(task.id, [...new Set([...task.files.filter((file) => file.selected).map((file) => file.path), ...visibleFiles.map((file) => file.path)])]))}>{map('Select filtered')}</button>
-            <button type="button" disabled={busy || visibleFiles.length === 0} onClick={() => void run(() => torrent.chooseFiles(task.id, task.files.filter((file) => file.selected && !visibleFiles.some((visible) => visible.path === file.path)).map((file) => file.path)))}>{map('Clear filtered')}</button>
+            <Button variant="outlined" size="small" vocabularyMode="factual" disabled={busy || visibleFiles.length === 0} onClick={() => void run(() => torrent.chooseFiles(task.id, [...new Set([...task.files.filter((file) => file.selected).map((file) => file.path), ...visibleFiles.map((file) => file.path)])]))}>{map('Select filtered')}</Button>
+            <Button variant="outlined" size="small" vocabularyMode="factual" disabled={busy || visibleFiles.length === 0} onClick={() => void run(() => torrent.chooseFiles(task.id, task.files.filter((file) => file.selected && !visibleFiles.some((visible) => visible.path === file.path)).map((file) => file.path)))}>{map('Clear filtered')}</Button>
           </div>
           <div className="torrent-node__files">
             {visibleFiles.length === 0 ? <p className="torrent-node__empty">{map('No files match this filter.')}</p> : visibleFiles.map((file) => (
               <label key={file.path}>
-                <input
-                  type="checkbox"
+                <Checkbox vocabularyMode="factual"
                   checked={file.selected}
                   disabled={busy}
                   onChange={(event) => void run(() => torrent.chooseFiles(task.id, task.files.filter((entry) => entry.path === file.path ? event.target.checked : entry.selected).map((entry) => entry.path)))}
@@ -172,7 +173,7 @@ function TorrentTaskCard({ task, busy, destination, torrent, run }: TorrentTaskC
         ], map)}</summary>
         <div className="torrent-node__picker-search">
           <label htmlFor={`${task.id}-seed-search`}>{map('Find a seeding policy')}</label>
-          <input
+          <Input vocabularyMode="factual"
             ref={seedSearchRef}
             id={`${task.id}-seed-search`}
             value={seedSearch.value}
@@ -194,13 +195,13 @@ function TorrentTaskCard({ task, busy, destination, torrent, run }: TorrentTaskC
 
       {startReason && task.status !== 'completed' && task.status !== 'cancelled' && <p className="torrent-node__hint">{startReason}</p>}
       <div className="torrent-node__task-actions">
-        {(task.status === 'queued' || task.status === 'metadata') && <button type="button" disabled={!canStart} onClick={() => void run(() => torrent.start(task.id))}>{map('Start')}</button>}
-        {task.status === 'downloading' && <button type="button" disabled={busy} onClick={() => void run(() => torrent.pause(task.id))}>{map('Pause')}</button>}
-        {task.status === 'paused' && <button type="button" disabled={!canStart} onClick={() => void run(() => torrent.resume(task.id))}>{map('Resume')}</button>}
-        <button type="button" disabled={busy || task.status === 'completed' || task.status === 'cancelled'} onClick={() => void run(() => torrent.cancel(task.id))}>{map('Cancel')}</button>
-        <button type="button" disabled={busy || (task.status !== 'failed' && task.status !== 'cancelled')} onClick={() => void run(() => torrent.retry(task.id))}>{map('Retry')}</button>
-        <button type="button" disabled={busy || !!task.destination || !destination} onClick={() => void run(() => torrent.setDestination(task.id, destination))}>{map('Use folder')}</button>
-        <button type="button" disabled={busy} onClick={requestRemove}>{map('Remove task')}</button>
+        {(task.status === 'queued' || task.status === 'metadata') && <Button variant="outlined" size="small" vocabularyMode="factual" disabled={!canStart} onClick={() => void run(() => torrent.start(task.id))}>{map('Start')}</Button>}
+        {task.status === 'downloading' && <Button variant="outlined" size="small" vocabularyMode="factual" disabled={busy} onClick={() => void run(() => torrent.pause(task.id))}>{map('Pause')}</Button>}
+        {task.status === 'paused' && <Button variant="outlined" size="small" vocabularyMode="factual" disabled={!canStart} onClick={() => void run(() => torrent.resume(task.id))}>{map('Resume')}</Button>}
+        <Button variant="outlined" size="small" vocabularyMode="factual" disabled={busy || task.status === 'completed' || task.status === 'cancelled'} onClick={() => void run(() => torrent.cancel(task.id))}>{map('Cancel')}</Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual" disabled={busy || (task.status !== 'failed' && task.status !== 'cancelled')} onClick={() => void run(() => torrent.retry(task.id))}>{map('Retry')}</Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual" disabled={busy || !!task.destination || !destination} onClick={() => void run(() => torrent.setDestination(task.id, destination))}>{map('Use folder')}</Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual" disabled={busy} onClick={requestRemove}>{map('Remove task')}</Button>
       </div>
     </article>
   )
@@ -290,7 +291,7 @@ export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode
       <div className={`term-node__header ${fill.className}${fill.filled ? ' term-node__header--filled' : ''}`} style={fill.style}>
         <EditableNodeTitle value={data.title} onChange={(title) => updateNodeData(id, { title })} emptyLabel="Torrent downloader" title="Click to rename" ariaLabel="Torrent downloader node name" rejectEmpty={false} />
         <span className="term-node__spacer" />
-        <button className="term-node__close" title={map('Refresh torrent tasks')} aria-label={map('Refresh torrent tasks')} onClick={() => void load()}>⟳</button>
+        <IconButton size="compact" className="term-node__close" icon="refresh" vocabularyMode="factual" title={map('Refresh torrent tasks')} aria-label={map('Refresh torrent tasks')} onClick={() => void load()} />
       </div>
       <div className="torrent-node__body nodrag nowheel">
         <div className="torrent-node__runtime" role="status">
@@ -298,21 +299,21 @@ export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode
         </div>
         <label className="torrent-node__field" htmlFor={`${id}-magnet`}>
           <span>{map('Magnet URI')}</span>
-          <input id={`${id}-magnet`} aria-label={map('Magnet URI')} value={data.torrentMagnet ?? ''} spellCheck={false} placeholder="magnet:?xt=urn:btih:…" onChange={(event) => updateNodeData(id, { torrentMagnet: event.target.value })} />
+          <Input vocabularyMode="factual" id={`${id}-magnet`} aria-label={map('Magnet URI')} value={data.torrentMagnet ?? ''} spellCheck={false} placeholder="magnet:?xt=urn:btih:…" onChange={(event) => updateNodeData(id, { torrentMagnet: event.target.value })} />
         </label>
         <div className="torrent-node__actions">
-          <button type="button" disabled={!runtime?.available || !data.torrentMagnet?.trim() || busy} onClick={() => void inspectMagnet()}>{map('Inspect magnet')}</button>
-          <button type="button" disabled={!runtime?.available || busy} onClick={() => void inspectTorrentFile()}>{map('Inspect .torrent file')}</button>
+          <Button variant="outlined" size="small" vocabularyMode="factual" disabled={!runtime?.available || !data.torrentMagnet?.trim() || busy} onClick={() => void inspectMagnet()}>{map('Inspect magnet')}</Button>
+          <Button variant="outlined" size="small" vocabularyMode="factual" disabled={!runtime?.available || busy} onClick={() => void inspectTorrentFile()}>{map('Inspect .torrent file')}</Button>
         </div>
         <p className="torrent-node__hint">{map('Inspection reads metadata first. Choose files and a download folder, then start the task explicitly.')}</p>
         <div className="torrent-node__destination">
           <label htmlFor={`${id}-destination`}>{map('Download folder')}</label>
-          <input id={`${id}-destination`} aria-label={map('Download folder')} value={destination} readOnly placeholder={map('Choose a destination folder')} />
-          <button type="button" onClick={() => void pickDestination()}>{map('Browse…')}</button>
+          <Input vocabularyMode="factual" id={`${id}-destination`} aria-label={map('Download folder')} value={destination} readOnly placeholder={map('Choose a destination folder')} />
+          <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void pickDestination()}>{map('Browse…')}</Button>
         </div>
         <div className="torrent-node__search">
           <label htmlFor={`${id}-search`}>{map('Tasks')}</label>
-          <input ref={taskSearchRef} id={`${id}-search`} value={taskSearch.value} placeholder={map(taskSearch.mode === 'regex' ? 'Regex pattern' : 'Search tasks')} onChange={(event) => taskSearch.setValue(event.target.value)} />
+          <Input vocabularyMode="factual" ref={taskSearchRef} id={`${id}-search`} value={taskSearch.value} placeholder={map(taskSearch.mode === 'regex' ? 'Regex pattern' : 'Search tasks')} onChange={(event) => taskSearch.setValue(event.target.value)} />
           <AnchoredRegexBuilder search={taskSearch} fieldRef={taskSearchRef} label={map('Regex builder for torrent tasks')} />
         </div>
         {taskSearch.error && <p className="torrent-node__error" role="alert">{taskSearch.error}</p>}

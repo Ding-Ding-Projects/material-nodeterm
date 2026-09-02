@@ -11949,19 +11949,15 @@ button.group-node__setup:disabled {
 .home-assistant-control .term-node__header [role="status"] { max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--md-sys-color-on-surface-variant); }
 .home-assistant-control__body { max-height: 560px; overflow: auto; padding: 10px; }
 .home-assistant-control__body section { margin: 0 0 12px; padding: 10px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; background: var(--md-sys-color-surface-container-low); }
+.home-assistant-control__body .mdx-input, .home-assistant-control__body .mdx-select, .home-assistant-control__body .mdx-textarea { width: 100%; }
+.home-assistant-control__body .mdx-textarea { min-height: 88px; resize: vertical; }
 .home-assistant-control__body h3 { margin: 0 0 8px; font-size: 14px; }
 .home-assistant-control__body label { display: flex; flex-direction: column; gap: 4px; margin: 7px 0; font-size: 12px; font-weight: 600; }
-.home-assistant-control__body input, .home-assistant-control__body select, .home-assistant-control__body textarea { min-height: 40px; width: 100%; border: 1px solid var(--md-sys-color-outline); border-radius: 8px; padding: 7px 10px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); }
-.home-assistant-control__body textarea { min-height: 88px; resize: vertical; }
-.home-assistant-control__body input[type="checkbox"] { width: 24px; min-height: 24px; align-self: flex-start; accent-color: var(--md-sys-color-primary); }
 .home-assistant-control__schema-field > span { font-weight: 700; }
 .home-assistant-control__schema-field small { font-weight: 400; }
 .home-assistant-control__search { display: grid; grid-template-columns: minmax(0, 1fr) 40px; gap: 6px; align-items: end; }
 .home-assistant-control__search label { min-width: 0; }
 .home-assistant-control__actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
-.home-assistant-control button { min-height: 40px; border: 0; border-radius: 20px; padding: 0 14px; background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); cursor: pointer; }
-.home-assistant-control button:disabled { opacity: .48; cursor: not-allowed; }
-.home-assistant-control button:focus-visible, .home-assistant-control input:focus-visible, .home-assistant-control select:focus-visible, .home-assistant-control textarea:focus-visible, .home-assistant-control summary:focus-visible { outline: 3px solid var(--md-sys-color-primary); outline-offset: 2px; }
 .home-assistant-control__empty, .home-assistant-control__omission, .home-assistant-control small { color: var(--md-sys-color-on-surface-variant); font-size: 11px; line-height: 1.4; }
 .home-assistant-control__omission { margin: 10px; }
 @media (max-width: 560px) { .home-assistant-control__search { grid-template-columns: 1fr; } .home-assistant-control__body { padding: 6px; } }
