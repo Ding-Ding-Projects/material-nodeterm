@@ -168,7 +168,6 @@
   "src/renderer/nodes/RepositoryGraphNode.tsx",
   "src/renderer/nodes/ServiceNode.tsx",
   "src/renderer/nodes/ShopNode.tsx",
-  "src/renderer/nodes/TerminalNode.tsx",
   "src/renderer/nodes/TimerNode.tsx",
   "src/renderer/nodes/TorrentNode.tsx",
   "src/renderer/nodes/TriggerNode.tsx",

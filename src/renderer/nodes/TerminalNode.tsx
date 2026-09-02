@@ -144,7 +144,7 @@ import {
 } from '../terminal/agent-restart'
 import { WakeInputBuffer } from '../terminal/wake-input-buffer'
 import { FindBar } from '../components/FindBar'
-import { IconSearch, IconChat, IconMic, IconReload, IconPictureInPicture, IconEye, IconEyeOff, IconGrid, IconFocus } from '../components/icons'
+import { IconSearch, IconChat, IconMic, IconReload, IconPictureInPicture, IconEye, IconEyeOff, IconFocus } from '../components/icons'
 import { NodeLabels } from '../components/kanban/NodeLabels'
 import { GitHubWorkItemAttachment } from './GitHubWorkItemAttachment'
 import { Tooltip } from '../components/Tooltip'
@@ -157,6 +157,8 @@ import { AdhdElapsedChip, AdhdMomentumNote } from '../components/AdhdNodeSurface
 import { markNodeActivity, markNodeOpened } from '../lib/nodeActivity'
 import { Localized } from '../ui/Localized'
 import { StatusChip } from '../ui/md3/StatusChip'
+import { Button, IconButton } from '../ui/md3'
+import { Input } from '../ui/Input'
 import { AccountIdentityPills } from '../components/AccountIdentityPills'
 import { presentAccount } from '../lib/accountPresentation'
 import { isZoomModifierHeld } from '../lib/zoomModifier'
@@ -1712,6 +1714,10 @@ export function TerminalNode({
   // mount-time meter rehydration, the find bar's transcript index) — deliberately NOT `showUsage`,
   // which now spans three agents. See lib/transcriptGates.ts for what sharing that gate broke.
   const claudeTranscript = readsClaudeTranscript(agentHarnessId)
+  // `claudeTranscript`, NOT `showUsage`: the transcript leg of the search is gated on the
+  // claude-transcript fact (see the `useTerminalSearch` call above), so keying the label on the
+  // meter promised a codex/gemini node a conversation search it does not run.
+  const searchLabel = claudeTranscript ? 'Search terminal + conversation' : 'Search this terminal'
   // The header 💬 now opens the board-log comments flyout (right side); ⌘M keeps the markdown/chat view.
   const [commentsOpen, setCommentsOpen] = useState(false)
   const canRenameNode = !!agentHarnessId && canRename(agentHarnessId) // WRITE leg: push `/rename <name>` back
@@ -5387,22 +5393,26 @@ export function TerminalNode({
           }`}
           style={headerFill.style}
         >
-          <button
+          <IconButton
+            size="compact"
             className="term-node__collapse"
-            title={vocab(collapsed ? 'Expand' : 'Collapse')}
+            icon={collapsed ? 'chevron_right' : 'arrow_drop_down'}
+            aria-label={collapsed ? 'Expand' : 'Collapse'}
+            title={collapsed ? 'Expand' : 'Collapse'}
             onClick={toggleCollapse}
-          >
-            {collapsed ? '▸' : '▾'}
-          </button>
-          <button
-            className="term-node__color"
-            style={{ background: data.color }}
-            title={vocab('Color')}
+          />
+          <IconButton
+            size="compact"
+            className="term-node__color-btn"
+            aria-label="Color"
+            title="Color"
             onClick={(e) => {
               const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
               setColorAnchor((a) => (a ? null : { x: r.left, y: r.bottom }))
             }}
-          />
+          >
+            <span className="mdx-icon-btn__swatch" style={{ background: data.color }} />
+          </IconButton>
           {colorAnchor && (
             <ColorMenu
               x={colorAnchor.x}
@@ -5413,8 +5423,8 @@ export function TerminalNode({
             />
           )}
           {data.icon ? (
-            <button
-              type="button"
+            <IconButton
+              size="compact"
               className="term-node__icon nodrag"
               title="Change icon"
               aria-label="Change session icon"
@@ -5428,12 +5438,15 @@ export function TerminalNode({
               }}
             >
               <NodeIconView icon={data.icon as NodeIcon} size={15} />
-            </button>
+            </IconButton>
           ) : null}
           {agentId && (
-            <button
+            <IconButton
+              size="compact"
               className="term-node__folder-drag nodrag"
               draggable
+              icon="folder_open"
+              vocabularyMode="factual"
               title={`${vocab('Drag to an Explorer folder to open a new')} ${data.title} ${vocab('there')}`}
               aria-label={`${vocab('Choose an Explorer folder for a new')} ${data.title} ${vocab('agent')}`}
               onDragStart={(event) => {
@@ -5447,14 +5460,15 @@ export function TerminalNode({
                   new CustomEvent(OPEN_EXPLORER_FOR_AGENT_EVENT, { detail: { nodeId: id } })
                 )
               }}
-            >
-              <MaterialSymbol name="folder_open" size={16} />
-            </button>
+            />
           )}
           {contextLinkCapable && agentId && (
-            <button
+            <IconButton
+              size="compact"
               className="term-node__collaboration-drag nodrag"
               draggable
+              icon="link"
+              active={agentCollaborationPending}
               aria-pressed={agentCollaborationPending}
               aria-grabbed={agentCollaborationPending}
               title="Drag this agent onto another agent to share context"
@@ -5471,14 +5485,14 @@ export function TerminalNode({
                   new CustomEvent(AGENT_COLLABORATION_PICK_EVENT, { detail: { nodeId: id } })
                 )
               }}
-            >
-              <MaterialSymbol name="link" size={16} />
-            </button>
+            />
           )}
           {contextLinkCapable && (
-            <button
+            <IconButton
+              size="compact"
               className="term-node__link-agent nodrag"
-              type="button"
+              icon="link"
+              vocabularyMode="factual"
               title={profileText('agentLink.headerAction.title', 'Link to another agent')}
               aria-label={profileText('agentLink.headerAction.aria', 'Link {title} to another agent', {
                 title: String(data.title || 'agent')
@@ -5487,14 +5501,13 @@ export function TerminalNode({
                 event.stopPropagation()
                 requestAgentLinkPicker(id, event.currentTarget)
               }}
-            >
-              <MaterialSymbol name="link" size={16} />
-            </button>
+            />
           )}
           {editingTitle ? (
-            <input
-              className="term-node__title nodrag"
+            <Input
+              className="mdx-input--bare term-node__title nodrag"
               value={data.title}
+              aria-label="Node title"
               spellCheck={false}
               autoFocus
               onChange={(e) => updateNodeData(id, { title: e.target.value })}
@@ -5562,14 +5575,16 @@ export function TerminalNode({
             />
           ) : null}
           {persistenceUnavailable && (
-            <button
-              type="button"
+            <Button
+              variant="text"
+              size="small"
               className="term-persist-chip nodrag"
+              vocabularyMode="factual"
               title={`${persistenceUnavailable} — ${vocab('This shell will not survive a restart. Click to try reattaching.')}`}
               onClick={retrySpawn}
             >
               <StatusChip tone="attention" size="compact">{vocab('Not persistent · retry')}</StatusChip>
-            </button>
+            </Button>
           )}
           {data.ssh && !accountPresentation ? (
             <span
@@ -5613,17 +5628,19 @@ export function TerminalNode({
             refuse (a pane that now belongs to something else, a spawn that is still coming up),
             and a badge with no way forward is a dead end. Muted on purpose: nothing is wrong. */}
           {status?.hibernated && (
-            <button
+            <Button
+              variant="text"
+              size="small"
               className="term-node__status term-node__status--sleeping nodrag"
-              title={vocab('Agent hibernated to save memory — click to resume')}
+              title="Agent hibernated to save memory — click to resume"
               onClick={(e) => {
                 e.stopPropagation()
                 wakeRef.current()
               }}
             >
               <span className="term-node__status-dot" />
-              {vocab('SLEEPING')}
-            </button>
+              SLEEPING
+            </Button>
           )}
           {/* Dismissed (cron/schedule) entries are retained as a fact but hidden everywhere they
             were shown before — chip included, so the × still does exactly what it always did to
@@ -5656,17 +5673,19 @@ export function TerminalNode({
             >
               <span className="term-node__status-dot" />
               {vocab(pendingLaunchExecuting ? 'LAUNCHING' : pendingLaunchError ? 'FAILED' : 'QUEUED')}
-              <button
+              <IconButton
+                size="compact"
                 className="term-node__queued-run"
                 disabled={pendingLaunchExecuting}
-                title={vocab(pendingLaunchError ? 'Retry queued launch' : 'Run now without waiting')}
+                aria-label={pendingLaunchError ? 'Retry queued launch' : 'Run now without waiting'}
+                title={pendingLaunchError ? 'Retry queued launch' : 'Run now without waiting'}
                 onClick={(e) => {
                   e.stopPropagation()
                   runPendingLaunchNow()
                 }}
               >
                 ▶
-              </button>
+              </IconButton>
             </span>
           )}
           {(status?.state === 'waiting' || status?.state === 'blocked') && (
@@ -5684,9 +5703,12 @@ export function TerminalNode({
             state leaves `blocked` (the store clears pendingId). */}
           {status?.state === 'blocked' && status?.pendingId && (
             <span className="term-node__approve nodrag">
-              <button
+              <Button
+                variant="tonal"
+                size="small"
                 className="term-node__approve-btn term-node__approve-btn--allow"
-                title={vocab('Approve this permission request')}
+                leadingIcon={<MaterialSymbol name="check" size={16} />}
+                title="Approve this permission request"
                 onClick={() =>
                   void window.nodeTerminal.answerPermission({
                     nodeId: id,
@@ -5695,11 +5717,15 @@ export function TerminalNode({
                   })
                 }
               >
-                ✓ {vocab('Approve')}
-              </button>
-              <button
+                Approve
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                danger
                 className="term-node__approve-btn term-node__approve-btn--deny"
-                title={vocab('Deny this permission request')}
+                leadingIcon={<MaterialSymbol name="close" size={16} />}
+                title="Deny this permission request"
                 onClick={() =>
                   void window.nodeTerminal.answerPermission({
                     nodeId: id,
@@ -5708,8 +5734,8 @@ export function TerminalNode({
                   })
                 }
               >
-                ✕ {vocab('Deny')}
-              </button>
+                Deny
+              </Button>
             </span>
           )}
           {isUnread && (
@@ -5724,12 +5750,14 @@ export function TerminalNode({
           {!editingTitle && <span className="term-node__spacer" />}
           {canMoveIntoWorktree && (
             <Tooltip label={vocab("Move this terminal into the group's worktree")}>
-              <button
+              <IconButton
+                size="compact"
                 className="term-node__move-worktree nodrag"
+                aria-label="Move this terminal into the group's worktree"
                 onClick={() => moveIntoWorktreeHandler?.(id)}
               >
                 ↪
-              </button>
+              </IconButton>
             </Tooltip>
           )}
           {/* Refresh: rebuild THIS node's view and re-attach to the same session (the context
@@ -5740,8 +5768,10 @@ export function TerminalNode({
             which quits the CLI itself; this touches nothing but the viewer. */}
           {!isHidden('refresh', hiddenHeaderButtons) && (
             <Tooltip label={vocab('Refresh — rebuild this view; the session keeps running')}>
-              <button
+              <IconButton
+                size="compact"
                 className="term-node__refresh nodrag"
+                aria-label="Refresh — rebuild this view; the session keeps running"
                 onClick={(e) => {
                   e.stopPropagation()
                   updateNodeData(id, (n) => ({
@@ -5750,7 +5780,7 @@ export function TerminalNode({
                 }}
               >
                 <IconReload />
-              </button>
+              </IconButton>
             </Tooltip>
           )}
           {/* "Escape to widget" (docs/features/terminals/canvas-widget.md): pop this node's live session into its
@@ -5768,35 +5798,37 @@ export function TerminalNode({
             does not report (nothing sets that field). */}
           {canEscapeToWidget({ browserRuntime: isBrowserRuntime(), remoteSession, sessionSource: session.source }) && (
             <Tooltip label={vocab('Escape to widget — always-on-top window, same live session')}>
-              <button
+              <IconButton
+                size="compact"
                 className="term-node__widget-escape nodrag"
+                aria-label="Escape to widget — always-on-top window, same live session"
                 onClick={(e) => {
                   e.stopPropagation()
                   void window.nodeTerminal.canvasWidget.open(id)
                 }}
               >
                 <IconPictureInPicture />
-              </button>
+              </IconButton>
             </Tooltip>
           )}
-          {/* `claudeTranscript`, NOT `showUsage`: the transcript leg of the search is gated on the
-            claude-transcript fact (see the `useTerminalSearch` call above), so keying the label on
-            the meter promised a codex/gemini node a conversation search it does not run. */}
-          <Tooltip
-            label={vocab(claudeTranscript ? 'Search terminal + conversation' : 'Search this terminal')}
-          >
-            <button
+          <Tooltip label={vocab(searchLabel)}>
+            <IconButton
+              size="compact"
               className="term-node__search nodrag"
+              aria-label={searchLabel}
+              active={searchOpen}
               onClick={() => setSearchOpen((v) => !v)}
               aria-pressed={searchOpen}
             >
               <IconSearch />
-            </button>
+            </IconButton>
           </Tooltip>
           {!isHidden('mic', hiddenHeaderButtons) && (
             <Tooltip label={vocab('Dictate into this terminal')}>
-              <button
+              <IconButton
+                size="compact"
                 className="term-node__mic nodrag"
+                aria-label="Dictate into this terminal"
                 onClick={(e) => {
                   e.stopPropagation()
                   window.dispatchEvent(
@@ -5807,42 +5839,49 @@ export function TerminalNode({
                 }}
               >
                 <IconMic />
-              </button>
+              </IconButton>
             </Tooltip>
           )}
           {!isHidden('ai-name', hiddenHeaderButtons) && (
             <Tooltip label={vocab('Name with AI (from terminal output)')}>
-              <button className="term-node__ai nodrag" disabled={naming} onClick={nameWithAi}>
-                {naming ? '…' : '✦'}
-              </button>
+              <IconButton size="compact" className="term-node__ai nodrag" aria-label="Name with AI (from terminal output)" disabled={naming} onClick={nameWithAi}>
+                {naming ? '…' : <MaterialSymbol name="auto_awesome" size={16} />}
+              </IconButton>
             </Tooltip>
           )}
           {!isHidden('comments', hiddenHeaderButtons) && (
             <Tooltip label={vocab('Comments & activity')}>
-              <button
+              <IconButton
+                size="compact"
                 className="term-node__chat nodrag"
+                aria-label="Comments & activity"
+                active={commentsOpen}
                 aria-pressed={commentsOpen}
                 onClick={() => setCommentsOpen((v) => !v)}
               >
                 <IconChat />
-              </button>
+              </IconButton>
             </Tooltip>
           )}
-          <button
+          <IconButton
+            size="compact"
             className="term-node__close"
-            title={vocab('Close (ends the session)')}
+            icon="close"
+            aria-label="Close (ends the session)"
+            title="Close (ends the session)"
             // React Flow's onBeforeDelete boundary asks first; Canvas.deleteNodes ends the session
             // only after authorization. Destroying here would make the confirmation cosmetic.
             onClick={() => deleteElements({ nodes: [{ id }] })}
-          >
-            ×
-          </button>
+          />
         </div>
         {fanoutCapable && !isHidden('hide-fanout', hiddenHeaderButtons) && (
           <Tooltip label={hideFanout ? 'Show subagent/loop cards' : 'Hide subagent/loop cards'}>
-            <button
+            <IconButton
+              size="compact"
               className="term-node__hide-fanout nodrag"
               title={hideFanout ? 'Show subagent/loop cards' : 'Hide subagent/loop cards'}
+              aria-label={hideFanout ? 'Show subagent/loop cards' : 'Hide subagent/loop cards'}
+              active={hideFanout}
               aria-pressed={hideFanout}
               onClick={(e) => {
                 e.stopPropagation()
@@ -5850,7 +5889,7 @@ export function TerminalNode({
               }}
             >
               {hideFanout ? <IconEyeOff /> : <IconEye />}
-            </button>
+            </IconButton>
           </Tooltip>
         )}
         {fanoutCapable &&
@@ -5858,21 +5897,23 @@ export function TerminalNode({
           fanoutCount >= 2 &&
           !isHidden('tidy-fanout', hiddenHeaderButtons) && (
             <Tooltip label="Tidy subagent cards into a grid">
-              <button
+              <IconButton
+                size="compact"
                 className="term-node__tidy-fanout nodrag"
+                icon="grid_view"
                 title="Tidy subagent cards into a grid"
+                aria-label="Tidy subagent cards into a grid"
                 onClick={(e) => {
                   e.stopPropagation()
                   useAgentNodes.getState().tidyFanout(id)
                 }}
-              >
-                <IconGrid />
-              </button>
+              />
             </Tooltip>
           )}
         {!isHidden('maximize', hiddenHeaderButtons) && (
           <Tooltip label="Focus this node alone (F11 to return)">
-            <button
+            <IconButton
+              size="compact"
               className="term-node__focus nodrag"
               title="Focus this node alone (F11 to return)"
               aria-label="Focus this node alone"
@@ -5882,22 +5923,23 @@ export function TerminalNode({
               }}
             >
               <IconFocus />
-            </button>
+            </IconButton>
           </Tooltip>
         )}
         {!collapsed && !isHidden('maximize', hiddenHeaderButtons) && (
           <MaximizeButton id={id} maximized={!!data.premaxRect} />
         )}
-        <button
+        <IconButton
+          size="compact"
           className="term-node__close"
+          icon="close"
+          aria-label="Close (ends the session)"
           title="Close (ends the session)"
           onClick={() => {
             transport.destroy(id)
             deleteElements({ nodes: [{ id }] })
           }}
-        >
-          ×
-        </button>
+        />
       </div>
 
         {searchOpen && !collapsed && (
@@ -6030,9 +6072,9 @@ export function TerminalNode({
           {!co.closed && co.ended && (
             <div className="term-node__closed nodrag">
               <span>{vocab('Session ended — the node was moved and never came back.')}</span>
-              <button className="term-node__reopen" onClick={reopenEnded}>
-                {vocab('Reopen')}
-              </button>
+              <Button variant="outlined" size="small" className="term-node__reopen" onClick={reopenEnded}>
+                Reopen
+              </Button>
             </div>
           )}
           {!co.closed && !co.ended && co.spawnError && (
@@ -6054,9 +6096,9 @@ export function TerminalNode({
                   secondaryClassName="term-node__closed-secondary"
                 />
               )}
-              <button className="term-node__reopen" onClick={retrySpawn}>
+              <Button variant="outlined" size="small" className="term-node__reopen" vocabularyMode="factual" onClick={retrySpawn}>
                 {profileText('terminalProfiles.error.tryAgain', 'Try again')}
-              </button>
+              </Button>
             </div>
           )}
           {!co.closed && !co.ended && !co.spawnError && co.agentRelaunchError && (
@@ -6070,8 +6112,11 @@ export function TerminalNode({
                   }
                 )}
               </span>
-              <button
+              <Button
+                variant="outlined"
+                size="small"
                 className="term-node__reopen"
+                vocabularyMode="factual"
                 onClick={retryAgentRelaunch}
                 disabled={agentRelaunchRetrying}
                 aria-busy={agentRelaunchRetrying}
@@ -6082,7 +6127,7 @@ export function TerminalNode({
                       'Preparing a fresh session…'
                     )
                   : profileText('terminalProfiles.error.agentTryAgain', 'Try agent again')}
-              </button>
+              </Button>
             </div>
           )}
           {!co.closed && !co.ended && pendingLaunch && pendingLaunchErrorDisplay && (
@@ -6092,13 +6137,15 @@ export function TerminalNode({
                   ? vocab(pendingLaunchErrorDisplay.text)
                   : pendingLaunchErrorDisplay.text}
               </span>
-              <button
+              <Button
+                variant="outlined"
+                size="small"
                 className="term-node__reopen"
                 disabled={pendingLaunchExecuting}
                 onClick={runPendingLaunchNow}
               >
-                {pendingLaunchExecuting ? vocab('Launching…') : vocab('Retry queued launch')}
-              </button>
+                {pendingLaunchExecuting ? 'Launching…' : 'Retry queued launch'}
+              </Button>
             </div>
           )}
           {!co.closed && !co.ended && !co.spawnError && !co.agentRelaunchError && co.offline && (
@@ -6110,9 +6157,9 @@ export function TerminalNode({
                   : vocab('the host')}{' '}
                 — {vocab('this session was not started locally.')}
               </span>
-              <button className="term-node__reopen" onClick={reconnectOffline}>
-                {vocab('Reconnect')}
-              </button>
+              <Button variant="outlined" size="small" className="term-node__reopen" onClick={reconnectOffline}>
+                Reconnect
+              </Button>
             </div>
           )}
           {armed && !mdMode && (

@@ -1519,17 +1519,6 @@
   color: var(--md-error);
 }
 
-.term-node__collapse,
-.term-node__folder-drag,
-.term-node__collaboration-drag,
-.term-node__link-agent,
-.term-node__ai,
-.term-node__move-worktree,
-.term-node__search,
-.term-node__refresh,
-.term-node__mic,
-.term-node__chat,
-.term-node__close,
 .term-node__find-btn {
   border-radius: var(--md-shape-full);
   color: var(--md-on-surface-variant);
@@ -1541,86 +1530,23 @@
   cursor: pointer;
   line-height: 1;
 }
+.term-node__folder-drag,
+.term-node__collaboration-drag {
+  cursor: grab;
+}
 .term-node__find-btn {
   font-size: 12px;
   padding: 2px 5px;
   flex-shrink: 0;
 }
 
-.term-node__collapse {
-  font-size: 11px;
-  padding: 2px 4px;
-  flex-shrink: 0;
-}
-
-.term-node__folder-drag {
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  flex-shrink: 0;
-  display: inline-grid;
-  place-items: center;
-  cursor: grab;
-}
-
-.term-node__collaboration-drag {
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  flex-shrink: 0;
-  display: inline-grid;
-  place-items: center;
-  cursor: grab;
-}
-
-.term-node__link-agent {
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  flex-shrink: 0;
-  display: inline-grid;
-  place-items: center;
-}
-
-.term-node__close {
-  font-size: 16px;
-  padding: 2px 6px;
-}
-
-.term-node__chat,
-.term-node__mic,
-.term-node__refresh,
-.term-node__search {
-  padding: 2px 5px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-}
-
-.term-node__ai,
-.term-node__move-worktree {
-  font-size: 13px;
-  padding: 2px 5px;
-  flex-shrink: 0;
-}
-
 /* Hover steps one surface-container level up from the header's own surface-container-high. */
-.term-node__collapse:hover,
-.term-node__folder-drag:hover,
-.term-node__collaboration-drag:hover,
-.term-node__link-agent:hover,
-.term-node__ai:hover:not(:disabled),
-.term-node__move-worktree:hover,
-.term-node__search:hover,
-.term-node__refresh:hover,
-.term-node__mic:hover,
-.term-node__chat:hover,
 .term-node__find-btn:hover:not(:disabled) {
   background: var(--md-surface-container-highest);
   color: var(--md-on-surface);
 }
 
-.term-node__close:hover {
+.md3-icon-btn.term-node__close:hover {
   background: color-mix(in srgb, var(--md-error) 20%, transparent);
   color: var(--md-error);
 }
@@ -1847,14 +1773,27 @@ button.term-node__title-text:focus-visible {
   color: var(--md-on-surface-variant);
   background: var(--md-surface-container-highest);
 }
-.term-node__status--sleeping {
-  border: none;
-  padding: 0;
-  font: inherit;
-  font-size: 9.5px;
+/* The SLEEPING wake affordance is a text Button wearing the status-badge recipe: the compound
+   selector outranks the primitive's own pill so the badge stays badge-sized. */
+.mdx-btn.term-node__status--sleeping {
+  min-height: 26px;
+  padding: 0 11px;
+  font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  cursor: pointer;
+  letter-spacing: 0.02em;
+  gap: 5px;
+}
+.mdx-btn.term-persist-chip {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+}
+.md3-icon-btn.term-node__queued-run {
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  font-size: 10px;
+  color: inherit;
 }
 
 .term-node__status--queued {
@@ -1864,35 +1803,21 @@ button.term-node__title-text:focus-visible {
 .term-node__status--sleeping:hover {
   color: var(--md-on-surface);
 }
-.term-node__queued-run:hover {
-  color: var(--md-primary);
-  opacity: 1;
-}
 
-.term-node__approve-btn {
-  border-radius: var(--md-shape-full);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1;
-  padding: 3px 7px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.term-node__approve-btn--allow {
+.mdx-btn.term-node__approve-btn--allow {
   color: var(--md-on-success-container);
   border-color: transparent;
   background: var(--md-success-container);
 }
-.term-node__approve-btn--allow:hover {
+.mdx-btn.term-node__approve-btn--allow:hover {
   background: color-mix(in srgb, var(--md-success-container) 80%, var(--md-success) 20%);
 }
-.term-node__approve-btn--deny {
+.mdx-btn.term-node__approve-btn--deny {
   color: var(--md-on-error-container);
   border-color: transparent;
   background: var(--md-error-container);
 }
-.term-node__approve-btn--deny:hover {
+.mdx-btn.term-node__approve-btn--deny:hover {
   background: color-mix(in srgb, var(--md-error-container) 80%, var(--md-error) 20%);
 }
 
@@ -2086,18 +2011,6 @@ button.term-node__title-text:focus-visible {
   border: none;
   background: transparent;
   cursor: pointer;
-}
-.term-node__reopen {
-  border: 1px solid var(--md-outline);
-  border-radius: var(--md-shape-full);
-  background: transparent;
-  color: var(--md-on-surface);
-  padding: 4px 12px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.term-node__reopen:hover {
-  background: var(--md-surface-container-high);
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -12100,26 +12013,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 
 /* "Escape to widget" header button — standalone rule rather than joining the shared header-icon
    selector lists above, so this addition never has to touch those (already very long) lists. */
-.term-node__widget-escape {
-  border-radius: var(--md-shape-full);
-  color: var(--md-on-surface-variant);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  line-height: 1;
-  padding: 2px 5px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  transition:
-    background var(--md-motion-effect),
-    color var(--md-motion-effect);
-}
-
-.term-node__widget-escape:hover {
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface);
-}
 
 .term-node__widget-escape:focus-visible {
   outline: 2px solid var(--md-primary);
