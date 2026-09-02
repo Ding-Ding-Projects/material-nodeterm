@@ -20,6 +20,8 @@ import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { MaterialSymbol } from '../components/MaterialSymbol'
 import { AdapterCatalog } from '../components/converter/AdapterCatalog'
 import type { CanvasNode } from '../state/workspace'
+import { Button, Checkbox, Chip, IconButton } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 interface PickedFile {
   path: string
@@ -265,13 +267,13 @@ export default function ConverterNode({ id, data, selected }: NodeProps<CanvasNo
         <MaterialSymbol name="description" size={18} label="File converter" />
         <EditableNodeTitle value={data.title ?? 'File converter'} onChange={(title) => updateNodeData(id, { title })} emptyLabel="File converter" title="Click to rename" ariaLabel="File converter node name" rejectEmpty={false} />
         <span className="term-node__spacer" />
-        <button className="term-node__close" title="Close" aria-label="Close" onClick={() => void deleteElements({ nodes: [{ id }] })}>×</button>
+        <IconButton size="compact" className="term-node__close" icon="close" title="Close" aria-label="Close" onClick={() => void deleteElements({ nodes: [{ id }] })} />
       </div>
       <div className="converter-node__body nodrag nowheel">
-        <input ref={inputRef} type="file" multiple hidden onChange={(event) => void onFileInput(event)} />
+        <Input vocabularyMode="factual" ref={inputRef} type="file" multiple hidden onChange={(event) => void onFileInput(event)} />
         <div className="converter-node__tabs" role="tablist" aria-label="Converter views">
-          <button role="tab" aria-selected={view === 'convert'} onClick={() => setView('convert')}>Convert</button>
-          <button role="tab" aria-selected={view === 'queue'} onClick={() => setView('queue')}>Queue ({summary.total})</button>
+          <Chip vocabularyMode="factual" selected={view === 'convert'} role="tab" aria-selected={view === 'convert'} onClick={() => setView('convert')}>Convert</Chip>
+          <Chip vocabularyMode="factual" selected={view === 'queue'} role="tab" aria-selected={view === 'queue'} onClick={() => setView('queue')}>Queue ({summary.total})</Chip>
         </div>
         {error && <p className="cv-item__error" role="alert">{error}</p>}
         {view === 'convert' ? (
@@ -281,8 +283,8 @@ export default function ConverterNode({ id, data, selected }: NodeProps<CanvasNo
               <strong>Drop files here</strong>
               <span>or use a real file picker</span>
               <div className="cv-actions">
-                <button className="sc-btn" type="button" onClick={() => void chooseFiles()}>Add files…</button>
-                {!isBrowserRuntime() && <button className="sc-btn" type="button" onClick={() => void chooseFolder()}>Add folder…</button>}
+                <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void chooseFiles()}>Add files…</Button>
+                {!isBrowserRuntime() && <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void chooseFolder()}>Add folder…</Button>}
               </div>
             </div>
             {pending.length > 0 && (
@@ -296,21 +298,21 @@ export default function ConverterNode({ id, data, selected }: NodeProps<CanvasNo
             <section>
               <h4>Target format</h4>
               <AdapterCatalog catalog={catalog} selectedId={selectedAdapterId} suggestedIds={suggestedIds} onSelect={(value) => { setSelectedAdapterId(value); setLossyAcknowledged(false) }} />
-              {selectedAdapter?.lossy && <div className="cv-lossy"><strong>Loss disclosure</strong><ul>{(selectedAdapter.lossyNotes ?? []).map((note) => <li key={note}>{note}</li>)}</ul><label><input type="checkbox" checked={lossyAcknowledged} onChange={(event) => setLossyAcknowledged(event.target.checked)} /> I understand and want to convert anyway</label></div>}
+              {selectedAdapter?.lossy && <div className="cv-lossy"><strong>Loss disclosure</strong><ul>{(selectedAdapter.lossyNotes ?? []).map((note) => <li key={note}>{note}</li>)}</ul><label><Checkbox vocabularyMode="factual" checked={lossyAcknowledged} onChange={(event) => setLossyAcknowledged(event.target.checked)} /> I understand and want to convert anyway</label></div>}
             </section>
             <section className="converter-node__destination">
               <h4>Output folder</h4>
-              <div className="cv-actions"><button className="sc-btn" type="button" onClick={() => void chooseDestination()}>{destination ? 'Change folder…' : 'Choose folder…'}</button><span title={destination}>{destination || 'No output folder selected'}</span></div>
+              <div className="cv-actions"><Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void chooseDestination()}>{destination ? 'Change folder…' : 'Choose folder…'}</Button><span title={destination}>{destination || 'No output folder selected'}</span></div>
               {preflight && <p className="cv-preflight">{preflight.destDirExists ? '' : 'Folder will be created. '}{preflight.writable ? '' : 'Not writable. '}{preflight.freeBytes === null ? 'Free space unknown.' : `Free space: ${formatBytes(preflight.freeBytes)}.`} Estimated need: {formatBytes(preflight.estimatedNeededBytes)}.{preflight.sufficient === false ? ' Not enough free space for the current queue.' : ''}</p>}
-              <button className="sc-btn primary" type="button" disabled={!selectedAdapter || !destination || pending.length === 0} onClick={() => void addToQueue()}>Add to queue</button>
+              <Button variant="filled" size="small" vocabularyMode="factual" type="button" disabled={!selectedAdapter || !destination || pending.length === 0} onClick={() => void addToQueue()}>Add to queue</Button>
             </section>
           </>
         ) : (
           <section>
-            <div className="cv-queue-controls"><button className="sc-btn" type="button" disabled={!queue.length} onClick={() => run(summary.running ? api.converter.pause() : api.converter.start())}>{summary.running ? 'Pause' : 'Start'}</button><label className="cv-concurrency">Parallel <input type="number" min={1} max={6} value={summary.concurrency} onChange={(event) => run(api.converter.setConcurrency(Number(event.target.value)))} /></label><button className="cv-item__link" type="button" onClick={() => run(api.converter.cancelAll())}>Cancel all</button><button className="cv-item__link" type="button" onClick={() => run(api.converter.clearFinished())}>Clear finished</button>{summary.scanning && <span className="cv-scanning">Scanning folder…</span>}</div>
+            <div className="cv-queue-controls"><Button variant="outlined" size="small" vocabularyMode="factual" disabled={!queue.length} onClick={() => run(summary.running ? api.converter.pause() : api.converter.start())}>{summary.running ? 'Pause' : 'Start'}</Button><label className="cv-concurrency">Parallel <Input vocabularyMode="factual" type="number" min={1} max={6} value={summary.concurrency} onChange={(event) => run(api.converter.setConcurrency(Number(event.target.value)))} /></label><Button variant="text" size="small" vocabularyMode="factual" onClick={() => run(api.converter.cancelAll())}>Cancel all</Button><Button variant="text" size="small" vocabularyMode="factual" onClick={() => run(api.converter.clearFinished())}>Clear finished</Button>{summary.scanning && <span className="cv-scanning">Scanning folder…</span>}</div>
             <p className="cv-summary-counts">{counts.queued} queued · {counts.running} running · {counts.attention} need attention · {counts.done} done · {counts.failed} failed · {counts.cancelled} cancelled</p>
             {vscodeAvailable === false && <p className="cv-empty-note">VS Code was not found on this machine. Install it or choose Reveal to use the platform file manager.</p>}
-            {queue.length === 0 ? <p className="cv-empty-note">Nothing in the queue yet.</p> : <ul className="cv-items">{queue.map((item) => { const pct = item.totalBytes ? Math.round((item.progressBytes / item.totalBytes) * 100) : 0; return <li className={`cv-item cv-item--${item.status}`} key={item.id}><div className="cv-item__row"><MaterialSymbol name={statusIcon(item.status)} size={16} /><span className="cv-item__name" title={item.sourcePath}>{item.sourceName}</span><span className="cv-item__arrow">→</span><span className="cv-item__dest" title={item.destPath}>{item.destPath.split(/[\\/]/).pop()}</span><span className="cv-item__size">{formatBytes(item.sourceBytes)}</span><span className="cv-item__status">{item.status.replace('-', ' ')}</span></div>{item.status === 'running' && <div className="cv-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><div className="cv-progress__bar" style={{ width: `${pct}%` }} /></div>}{item.error && <p className="cv-item__error">{item.error}</p>}{item.status === 'needs-confirm' && <div className="cv-confirm"><span>Review the required confirmation before running.</span><button className="sc-btn" type="button" onClick={() => run(api.converter.resolvePending([item.id], { overwrite: true, lossyAcknowledged: true }))}>Confirm and continue</button></div>}<div className="cv-item__actions">{['queued', 'running', 'paused'].includes(item.status) && <button className="cv-item__link" type="button" onClick={() => run(api.converter.cancelItem(item.id))}>Cancel</button>}{['failed', 'cancelled'].includes(item.status) && <button className="cv-item__link" type="button" onClick={() => run(api.converter.retryItem(item.id))}>Retry</button>}{item.status === 'done' && <><button className="cv-item__link" type="button" disabled={vscodeAvailable !== true} title={vscodeAvailable === false ? 'VS Code was not found on this machine.' : 'Open in VS Code'} onClick={() => openInEditor(item.destPath)}>Open in VS Code</button><button className="cv-item__link" type="button" onClick={() => api.shell.reveal(item.destPath)}>Reveal</button></>}{['done', 'failed', 'cancelled'].includes(item.status) && <button className="cv-item__link" type="button" onClick={() => run(api.converter.removeItem(item.id))}>Remove</button>}</div></li> })}</ul>}
+            {queue.length === 0 ? <p className="cv-empty-note">Nothing in the queue yet.</p> : <ul className="cv-items">{queue.map((item) => { const pct = item.totalBytes ? Math.round((item.progressBytes / item.totalBytes) * 100) : 0; return <li className={`cv-item cv-item--${item.status}`} key={item.id}><div className="cv-item__row"><MaterialSymbol name={statusIcon(item.status)} size={16} /><span className="cv-item__name" title={item.sourcePath}>{item.sourceName}</span><span className="cv-item__arrow">→</span><span className="cv-item__dest" title={item.destPath}>{item.destPath.split(/[\\/]/).pop()}</span><span className="cv-item__size">{formatBytes(item.sourceBytes)}</span><span className="cv-item__status">{item.status.replace('-', ' ')}</span></div>{item.status === 'running' && <div className="cv-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><div className="cv-progress__bar" style={{ width: `${pct}%` }} /></div>}{item.error && <p className="cv-item__error">{item.error}</p>}{item.status === 'needs-confirm' && <div className="cv-confirm"><span>Review the required confirmation before running.</span><Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => run(api.converter.resolvePending([item.id], { overwrite: true, lossyAcknowledged: true }))}>Confirm and continue</Button></div>}<div className="cv-item__actions">{['queued', 'running', 'paused'].includes(item.status) && <Button variant="text" size="small" vocabularyMode="factual" onClick={() => run(api.converter.cancelItem(item.id))}>Cancel</Button>}{['failed', 'cancelled'].includes(item.status) && <Button variant="text" size="small" vocabularyMode="factual" onClick={() => run(api.converter.retryItem(item.id))}>Retry</Button>}{item.status === 'done' && <><Button variant="text" size="small" vocabularyMode="factual" disabled={vscodeAvailable !== true} title={vscodeAvailable === false ? 'VS Code was not found on this machine.' : 'Open in VS Code'} onClick={() => openInEditor(item.destPath)}>Open in VS Code</Button><Button variant="text" size="small" vocabularyMode="factual" onClick={() => api.shell.reveal(item.destPath)}>Reveal</Button></>}{['done', 'failed', 'cancelled'].includes(item.status) && <Button variant="text" size="small" vocabularyMode="factual" onClick={() => run(api.converter.removeItem(item.id))}>Remove</Button>}</div></li> })}</ul>}
           </section>
         )}
       </div>

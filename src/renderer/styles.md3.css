@@ -114,9 +114,9 @@
 .shop-node__aws-wizard-entry { display: grid; gap: 6px; margin: 12px 0; }
 .shop-node__aws-wizard-entry > span { color: var(--md-on-surface-variant); font-size: .8rem; }
 .shop-node__aws-wizard-entry label { display: grid; gap: 4px; font-size: .8rem; }
-.shop-node__aws-wizard-entry select, .shop-node__aws-wizard-entry input { min-width: 0; width: 100%; box-sizing: border-box; }
+.shop-node__aws-wizard-entry .mdx-select, .shop-node__aws-wizard-entry .mdx-input { min-width: 0; width: 100%; box-sizing: border-box; }
 .shop-node__aws-wizard-search { display: flex; gap: 6px; align-items: center; }
-.shop-node__aws-wizard-search input { flex: 1; }
+.shop-node__aws-wizard-search .mdx-input { flex: 1; }
 .shop-node__aws-wizard-popover { width: min(1080px, calc(100vw - 16px)); }
 .shop-node__aws-preview { display: grid; gap: 8px; margin-top: 12px; padding: 12px; border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-md); background: var(--md-surface-container-high); }
 .shop-node__aws-preview h3, .shop-node__aws-preview p { margin: 0; }
@@ -3412,20 +3412,16 @@ button.term-node__title-text:focus-visible {
 .veracrypt-node__status.is-error { color:var(--md-error,#ffb4ab); }
 .veracrypt-node__note { color:var(--md-on-surface-variant,#9a9a9e); }
 .veracrypt-node__field { display:grid; gap:5px; color:var(--md-on-surface-variant); font-size:12px; }
-.veracrypt-node__field select,.veracrypt-node__field input { min-height:38px; min-width:0; padding:6px 9px; color:inherit; background:var(--md-surface); border:1px solid var(--md-outline); border-radius:var(--md-shape-small); }
 .veracrypt-node__path-row { display:flex; gap:6px; min-width:0; }
-.veracrypt-node__path-row input { flex:1; }
-.veracrypt-node__path-row button,.veracrypt-node__actions button,.veracrypt-node__favorites button,.veracrypt-node__mounted button { min-height:38px; padding:6px 10px; color:var(--md-on-surface); background:var(--md-surface-container-high); border:1px solid var(--md-outline-variant); border-radius:var(--md-shape-small); cursor:pointer; }
+.veracrypt-node__path-row .mdx-input { flex:1; }
+.veracrypt-node__favorites .mdx-btn { text-align:left; overflow-wrap:anywhere; }
 .veracrypt-node__actions { display:flex; flex-wrap:wrap; gap:7px; }
-.veracrypt-node__actions .primary { color:var(--md-on-primary); background:var(--md-primary); border-color:var(--md-primary); }
 .veracrypt-node__confirm { display:grid; gap:7px; padding:10px; color:var(--md-on-error-container); background:var(--md-error-container); border:1px solid var(--md-error); border-radius:var(--md-shape-small); }
 .veracrypt-node__confirm p { margin:0; overflow-wrap:anywhere; }
-.veracrypt-node__actions button:disabled { cursor:not-allowed; opacity:.55; }
 .veracrypt-node__checks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
 .veracrypt-node__checks label { display:flex; align-items:center; gap:6px; min-height:32px; color:var(--md-on-surface-variant); }
 .veracrypt-node__favorites,.veracrypt-node__mounted { display:grid; gap:6px; padding-top:8px; border-top:1px solid var(--md-outline-variant); }
 .veracrypt-node__favorites h3,.veracrypt-node__mounted h3 { margin:0; font-size:13px; }
-.veracrypt-node__favorites button { text-align:left; overflow-wrap:anywhere; }
 .veracrypt-node__mounted article { display:grid; grid-template-columns:max-content minmax(0,1fr) max-content max-content; align-items:center; gap:7px; padding:7px; background:var(--md-surface-container-high); border-radius:var(--md-shape-small); }
 .veracrypt-node__mounted article span { min-width:0; overflow-wrap:anywhere; color:var(--md-on-surface-variant); font-size:11px; }
 .veracrypt-node :is(button,input,select):focus-visible { outline:2px solid var(--md-primary); outline-offset:2px; }
@@ -9492,23 +9488,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   border-bottom: 1px solid var(--md-outline-variant);
   margin: -10px -12px 10px;
   padding: 6px 12px 0;
-}
-.converter-node__tabs button {
-  min-height: 36px;
-  padding: 0 14px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: var(--md-shape-small, 8px) var(--md-shape-small, 8px) 0 0;
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 650;
-}
-.converter-node__tabs button[aria-selected='true'] {
-  border-bottom-color: var(--md-primary);
-  color: var(--md-primary);
-  background: var(--md-secondary-container);
 }
 .converter-node__drop {
   display: grid;

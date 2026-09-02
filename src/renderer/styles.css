@@ -11932,16 +11932,12 @@ button.group-node__setup:disabled {
 .calendar-node__title { font-weight: 650; }
 .calendar-node__state { max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; opacity: .76; }
 .calendar-node__toolbar { display: flex; gap: 4px; padding: 8px 10px 0; border-bottom: 1px solid var(--md-sys-color-outline-variant, #cac4d0); }
-.calendar-node__toolbar button[aria-selected="true"] { background: var(--md-sys-color-secondary-container, #e8def8); font-weight: 650; }
 .calendar-node__body { padding: 10px; overflow: auto; max-height: 450px; }
 .calendar-node__filters, .calendar-node__source, .calendar-node__row { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-bottom: 10px; }
 .calendar-node__filters label, .calendar-node__source label, .calendar-node__row label, .calendar-node__editor label { display: flex; flex: 1 1 160px; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; }
-.calendar-node__filters input, .calendar-node__source select, .calendar-node__row input, .calendar-node__editor input { min-height: 34px; border: 1px solid var(--md-sys-color-outline, #79747e); border-radius: 8px; padding: 6px 9px; background: var(--md-sys-color-surface, #fffbfe); color: inherit; }
 .calendar-node__picker-search { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
-.calendar-node__picker-search input { flex: 1; min-width: 0; }
+.calendar-node__picker-search .mdx-input, .calendar-node__filters .mdx-input, .calendar-node__row .mdx-input, .calendar-node__editor .mdx-input, .calendar-node__source .mdx-select { flex: 1; min-width: 0; }
 .calendar-node__picker-search .md3-regex-trigger { flex: 0 0 34px; padding: 0; }
-.calendar-node button { min-height: 34px; border: 0; border-radius: 18px; padding: 0 12px; cursor: pointer; background: var(--md-sys-color-secondary-container, #e8def8); color: var(--md-sys-color-on-secondary-container, #1d192b); }
-.calendar-node button:disabled { opacity: .5; cursor: not-allowed; }
 .calendar-node__hint, .calendar-node__cache { margin: 4px 0; font-size: 11px; opacity: .76; }
 .calendar-node__regex { flex: 1 1 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline-variant, #cac4d0); border-radius: 12px; background: var(--md-sys-color-surface-container-high, #ece6f0); }
 .calendar-node__regex p { margin: 4px 0; font-size: 11px; }
@@ -11978,10 +11974,8 @@ button.group-node__setup:disabled {
 .calendar-node__event { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px; border-radius: 12px; background: var(--md-sys-color-surface-container-high, #ece6f0); }
 .calendar-node__event > div:first-child { min-width: 0; display: grid; gap: 2px; }
 .calendar-node__event-select { display: flex; align-items: center; gap: 6px; }
-.calendar-node__event-select input { min-height: 18px; }
 .calendar-node__event span, .calendar-node__event small { display: block; font-size: 11px; opacity: .78; overflow-wrap: anywhere; }
 .calendar-node__event-actions { display: flex; flex: 0 0 auto; gap: 4px; }
-.calendar-node__event-actions button { min-height: 30px; padding: 0 8px; }
 .calendar-node__empty, .calendar-node__error { padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high, #ece6f0); font-size: 12px; }
 .calendar-node__error { color: var(--md-sys-color-error, #ba1a1a); }
 .calendar-node__editor { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--md-sys-color-outline-variant, #cac4d0); border-radius: 12px; }
@@ -11997,11 +11991,8 @@ button.group-node__setup:disabled {
 .ha-sensor-node__body section { display: grid; gap: 8px; margin-bottom: 12px; padding: 10px; border-radius: 14px; background: var(--md-sys-color-surface-container-low, #f7f2fa); }
 .ha-sensor-node__body h3, .ha-sensor-node__body p { margin: 0; }
 .ha-sensor-node__actions, .ha-sensor-node__search, .ha-sensor-node__settings { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
-.ha-sensor-node button { min-height: 36px; border: 0; border-radius: 18px; padding: 0 12px; background: var(--md-sys-color-secondary-container, #e8def8); color: var(--md-sys-color-on-secondary-container, #1d192b); cursor: pointer; }
-.ha-sensor-node button:disabled { opacity: .5; cursor: not-allowed; }
-.ha-sensor-node button:focus-visible, .ha-sensor-node input:focus-visible, .ha-sensor-node summary:focus-visible { outline: 3px solid var(--md-sys-color-primary, #6750a4); outline-offset: 2px; }
-.ha-sensor-node input { min-height: 36px; box-sizing: border-box; border: 1px solid var(--md-sys-color-outline, #79747e); border-radius: 8px; padding: 6px 9px; background: var(--md-sys-color-surface, #fffbfe); color: inherit; }
-.ha-sensor-node__search > input { flex: 1 1 180px; min-width: 0; }
+.ha-sensor-node__search > .mdx-input { flex: 1 1 180px; min-width: 0; }
+.ha-sensor-node summary:focus-visible { outline: 3px solid var(--md-sys-color-primary, #6750a4); outline-offset: 2px; }
 .ha-sensor-node__configure, .ha-sensor-node__settings { padding: 9px; border: 1px solid var(--md-sys-color-outline-variant, #cac4d0); border-radius: 12px; }
 .ha-sensor-node__configure label, .ha-sensor-node__settings label { display: flex; flex: 1 1 150px; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; }
 .ha-sensor-node__catalog { max-height: 190px; overflow: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 5px; }
@@ -12023,7 +12014,6 @@ button.group-node__setup:disabled {
 .ha-sensor-node__trend { height: 74px; display: flex; align-items: end; gap: 2px; padding: 6px; border-radius: 10px; background: var(--md-sys-color-surface, #fffbfe); }
 .ha-sensor-node__trend span { flex: 1; min-width: 2px; border-radius: 3px 3px 0 0; background: var(--md-sys-color-primary, #6750a4); }
 .ha-sensor-node__mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 5px; margin-top: 8px; }
-.ha-sensor-node__mode-grid button[aria-pressed="true"] { background: var(--md-sys-color-primary, #6750a4); color: var(--md-sys-color-on-primary, #fff); }
 .ha-sensor-node__empty { padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high, #ece6f0); }
 @media (max-width: 560px) { .ha-sensor-node__cards, .ha-sensor-node__catalog { grid-template-columns: 1fr; } .ha-sensor-node__actions button { flex: 1 1 130px; } }
 @media (prefers-reduced-motion: reduce) { .ha-sensor-node *, .ha-sensor-node *::before, .ha-sensor-node *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
@@ -14769,10 +14759,8 @@ body.focus-mode .dock:hover {
 .repository-graph-node__status, .repository-graph-node__hint, .repository-graph-node__error { margin: 0; }
 .repository-graph-node__status.is-error, .repository-graph-node__error { color: var(--md-sys-color-error); }
 .repository-graph-node__tabs, .repository-graph-node__toolbar, .repository-graph-node__summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.repository-graph-node__tabs button.is-active { background: var(--md-sys-color-secondary-container); }
-.repository-graph-node__toolbar select, .repository-graph-node__toolbar input, .repository-graph-node__toolbar button, .repository-graph-node__tabs button, .repository-graph-node__node, .repository-graph-node__detail button { min-height: 36px; }
 .repository-graph-node__search { display: flex; flex: 1 1 280px; align-items: center; gap: 4px; }
-.repository-graph-node__search input { width: 100%; }
+.repository-graph-node__search .mdx-input { width: 100%; }
 .repository-graph-node__summary { font-size: 0.85em; opacity: 0.8; }
 .repository-graph-node__visual { border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; background: var(--md-sys-color-surface-container-low); overflow: auto; min-height: 120px; }
 .repository-graph-node__visual svg { display: block; width: 100%; min-width: 560px; color: var(--md-sys-color-primary); }
@@ -14783,5 +14771,4 @@ body.focus-mode .dock:hover {
 .repository-graph-node__node { width: 100%; border: 0; display: flex; justify-content: space-between; align-items: center; text-align: left; background: transparent; color: inherit; padding: 8px 10px; cursor: pointer; }
 .repository-graph-node__node:hover, .repository-graph-node__node:focus-visible { background: var(--md-sys-color-surface-container-high); }
 .repository-graph-node__detail { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 10px; background: var(--md-sys-color-surface-container); font-size: 0.84em; }
-.repository-graph-node__detail button { border: 0; background: transparent; color: var(--md-sys-color-primary); cursor: pointer; text-decoration: underline; }
 .repository-graph-node details { max-height: 160px; overflow: auto; }

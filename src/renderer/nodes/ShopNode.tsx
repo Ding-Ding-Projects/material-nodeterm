@@ -25,6 +25,8 @@ import type { AwsWizardCommandOption, AwsWizardServiceOption } from '@shared/aws
 import type { AwsManagerRequest, AwsManagerResult, AwsOperationPreview, AwsManagerProgress } from '@shared/aws-resource'
 import { useActiveSessionApi } from '../session/session'
 import { openDestructiveGate } from '../state/destructiveGate'
+import { Input } from '@renderer/ui/Input'
+import { Select } from '@renderer/ui/Select'
 
 function newOperationId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `aws-operation-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
@@ -251,17 +253,17 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
         {scope === 'aws-universe' && (
           <div className="shop-node__aws-wizard-entry">
             <label>{copy('Search AWS services', ['AWS'])}
-              <div className="shop-node__aws-wizard-search"><input ref={wizardServiceSearchRef} value={wizardServiceSearch.value} onChange={(event) => wizardServiceSearch.setValue(event.target.value)} aria-label={copy('Search AWS services', ['AWS'])} /><AnchoredRegexBuilder search={wizardServiceSearch} fieldRef={wizardServiceSearchRef} label={copy('Regex for AWS service search', ['AWS'])} zIndex={96} /></div>
+              <div className="shop-node__aws-wizard-search"><Input vocabularyMode="factual" ref={wizardServiceSearchRef} value={wizardServiceSearch.value} onChange={(event) => wizardServiceSearch.setValue(event.target.value)} aria-label={copy('Search AWS services', ['AWS'])} /><AnchoredRegexBuilder search={wizardServiceSearch} fieldRef={wizardServiceSearchRef} label={copy('Regex for AWS service search', ['AWS'])} zIndex={96} /></div>
             </label>
-            <select value={wizardServiceId} onChange={(event) => setWizardServiceId(event.target.value)} aria-label={copy('Choose AWS service', ['AWS'])}>
+            <Select vocabularyMode="factual" value={wizardServiceId} onChange={(event) => setWizardServiceId(event.target.value)} aria-label={copy('Choose AWS service', ['AWS'])}>
               {visibleWizardServices.map((service) => <option key={service.id} value={service.id}>{service.label} ({service.id})</option>)}
-            </select>
+            </Select>
             <label>{copy('Search operations')}
-              <div className="shop-node__aws-wizard-search"><input ref={wizardCommandSearchRef} value={wizardCommandSearch.value} onChange={(event) => wizardCommandSearch.setValue(event.target.value)} aria-label={copy('Search operations')} /><AnchoredRegexBuilder search={wizardCommandSearch} fieldRef={wizardCommandSearchRef} label={copy('Regex for AWS operation search', ['AWS'])} zIndex={96} /></div>
+              <div className="shop-node__aws-wizard-search"><Input vocabularyMode="factual" ref={wizardCommandSearchRef} value={wizardCommandSearch.value} onChange={(event) => wizardCommandSearch.setValue(event.target.value)} aria-label={copy('Search operations')} /><AnchoredRegexBuilder search={wizardCommandSearch} fieldRef={wizardCommandSearchRef} label={copy('Regex for AWS operation search', ['AWS'])} zIndex={96} /></div>
             </label>
-            <select value={wizardCommandName} onChange={(event) => setWizardCommandName(event.target.value)} aria-label={copy('Choose AWS operation', ['AWS'])}>
+            <Select vocabularyMode="factual" value={wizardCommandName} onChange={(event) => setWizardCommandName(event.target.value)} aria-label={copy('Choose AWS operation', ['AWS'])}>
               {visibleWizardCommands.map((command) => <option key={command.name} value={command.name}>{command.name}</option>)}
-            </select>
+            </Select>
             <Button ref={wizardAnchorRef} type="button" variant="primary" disabled={!wizardServiceId || !wizardCommandName} onClick={loadSelectedWizard} title={!wizardServiceId || !wizardCommandName ? copy('Choose an AWS service and operation from the current model inventory first.') : copy('Open the typed AWS operation wizard')}>
               {copy('Open typed AWS operation wizard')}
             </Button>
@@ -273,7 +275,7 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
             {ts('universeShop.search.label', 'Search catalog')}
           </label>
           <div className="shop-node__search-control">
-            <input
+            <Input vocabularyMode="factual"
               ref={inputRef}
               id={`${id}-catalog-search`}
               data-appearance-id={appearanceId('node', `${id}:shop-search`)}

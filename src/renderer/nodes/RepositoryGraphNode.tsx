@@ -13,6 +13,9 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 import { saveBlobDownload } from '../lib/exportSave'
 import { normalizeRepositoryGraphIntent } from '@shared/repository-graph'
 import { graphEdgeEndpoints } from '../lib/repositoryGraphVisual'
+import { Button, Chip, IconButton } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
+import { Select } from '@renderer/ui/Select'
 
 const MODES: readonly RepositoryGraphMode[] = ['code', 'dependencies', 'combined']
 const EXPORTS: readonly RepositoryGraphExportInput['format'][] = ['json', 'jsonl', 'csv', 'tsv', 'markdown', 'html', 'graphml', 'dot']
@@ -125,19 +128,19 @@ export default function RepositoryGraphNode({ id, data, selected }: NodeProps<Ca
       <div className={`term-node__header ${headerFill.className}${headerFill.filled ? ' term-node__header--filled' : ''}`} style={headerFill.style}>
         <EditableNodeTitle value={data.title} onChange={(title) => updateNodeData(id, { title })} emptyLabel={vocab('Repository graph')} title={vocab('Click to rename')} ariaLabel={vocab('Repository graph node name')} rejectEmpty={false} />
         <span className="term-node__spacer" />
-        <button type="button" onClick={() => void refresh()} aria-label={vocab('Refresh repository graph')} title={vocab('Refresh repository graph')}>⟳</button>
+        <IconButton size="compact" className="term-node__refresh" icon="refresh" vocabularyMode="factual" onClick={() => void refresh()} aria-label={vocab('Refresh repository graph')} title={vocab('Refresh repository graph')} />
       </div>
       <div className="repository-graph-node__body nodrag nowheel">
         <p className={`repository-graph-node__status${error ? ' is-error' : ''}`} role={error ? 'alert' : 'status'}>{status}</p>
         <p className="repository-graph-node__hint">{vocab('The source root is resolved by this host from the active project. Derived graph data stays machine-local.')}</p>
         <div className="repository-graph-node__tabs" role="tablist" aria-label={vocab('Repository graph views')}>
-          {MODES.map((candidate) => <button key={candidate} type="button" role="tab" aria-selected={mode === candidate} className={mode === candidate ? 'is-active' : ''} onClick={() => { setMode(candidate); setIntent({ mode: candidate }); search.setValue('') }}>{vocab(modeLabel(candidate))}</button>)}
+          {MODES.map((candidate) => <Chip vocabularyMode="factual" selected={mode === candidate} key={candidate} role="tab" aria-selected={mode === candidate} className={mode === candidate ? 'is-active' : ''} onClick={() => { setMode(candidate); setIntent({ mode: candidate }); search.setValue('') }}>{vocab(modeLabel(candidate))}</Chip>)}
         </div>
         <div className="repository-graph-node__toolbar">
-          <div className="repository-graph-node__search"><input ref={searchRef} aria-label={vocab('Search graph nodes')} value={search.value} onChange={(event) => search.setValue(event.target.value)} placeholder={search.mode === 'regex' ? vocab('Regex pattern') : vocab('Search nodes, paths, symbols')} /><AnchoredRegexBuilder search={search} fieldRef={searchRef} label={vocab('Regex builder for graph nodes')} /></div>
-          <select aria-label={vocab('Export graph format')} value={exportFormat} onChange={(event) => setExportFormat(event.target.value as RepositoryGraphExportInput['format'])}>{EXPORTS.map((format) => <option key={format} value={format}>{format.toUpperCase()}</option>)}</select>
-          <button type="button" onClick={() => void doExport()} disabled={!snapshot}>{vocab('Export')}</button>
-          {progress?.status === 'running' && <button type="button" onClick={() => void api.repositoryGraph.cancel(progress.operationId)}>{vocab('Cancel')}</button>}
+          <div className="repository-graph-node__search"><Input vocabularyMode="factual" ref={searchRef} aria-label={vocab('Search graph nodes')} value={search.value} onChange={(event) => search.setValue(event.target.value)} placeholder={search.mode === 'regex' ? vocab('Regex pattern') : vocab('Search nodes, paths, symbols')} /><AnchoredRegexBuilder search={search} fieldRef={searchRef} label={vocab('Regex builder for graph nodes')} /></div>
+          <Select vocabularyMode="factual" aria-label={vocab('Export graph format')} value={exportFormat} onChange={(event) => setExportFormat(event.target.value as RepositoryGraphExportInput['format'])}>{EXPORTS.map((format) => <option key={format} value={format}>{format.toUpperCase()}</option>)}</Select>
+          <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void doExport()} disabled={!snapshot}>{vocab('Export')}</Button>
+          {progress?.status === 'running' && <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void api.repositoryGraph.cancel(progress.operationId)}>{vocab('Cancel')}</Button>}
         </div>
         {search.error && <p className="repository-graph-node__error" role="alert">{search.error}</p>}
         {progress && progress.status === 'running' && <progress max={progress.total || 1} value={progress.completed} aria-label={mapRepositoryGraphProgress(progress.completed, progress.total, vocab)} />}
@@ -152,7 +155,7 @@ export default function RepositoryGraphNode({ id, data, selected }: NodeProps<Ca
           </svg>
         </div>}
         <section className="repository-graph-node__list" role="list" aria-label={vocab('Graph nodes')}>
-          {!snapshot || visibleNodes.length === 0 ? <p>{vocab(snapshot ? 'No graph nodes match this search.' : 'Refresh to build a verified graph snapshot.')}</p> : visibleNodes.map((node) => <article className="repository-graph-node__row" key={node.id} role="listitem"><button type="button" className="repository-graph-node__node" onClick={() => { const expanded = new Set(intent.expandedNodeIds ?? []); expanded.has(node.id) ? expanded.delete(node.id) : expanded.add(node.id); setIntent({ expandedNodeIds: [...expanded].slice(0, 2000) }) }} aria-expanded={intent.expandedNodeIds?.includes(node.id)}><strong>{node.label}</strong><span>{mapOwnedSentence(vocab, [fact(node.kind), ...(node.unresolved ? [copy(' · unresolved')] : [])])}</span></button>{intent.expandedNodeIds?.includes(node.id) && <div className="repository-graph-node__detail"><code>{node.id}</code>{node.detail && <span>{node.detail}</span>}{node.source && <button type="button" onClick={() => void openSource(node)}>{node.source.path}{node.source.line ? `:${node.source.line}:${node.source.column ?? 1}` : ''}</button>}</div>}</article>)}
+          {!snapshot || visibleNodes.length === 0 ? <p>{vocab(snapshot ? 'No graph nodes match this search.' : 'Refresh to build a verified graph snapshot.')}</p> : visibleNodes.map((node) => <article className="repository-graph-node__row" key={node.id} role="listitem"><Button variant="outlined" size="small" vocabularyMode="factual" className="repository-graph-node__node" onClick={() => { const expanded = new Set(intent.expandedNodeIds ?? []); expanded.has(node.id) ? expanded.delete(node.id) : expanded.add(node.id); setIntent({ expandedNodeIds: [...expanded].slice(0, 2000) }) }} aria-expanded={intent.expandedNodeIds?.includes(node.id)}><strong>{node.label}</strong><span>{mapOwnedSentence(vocab, [fact(node.kind), ...(node.unresolved ? [copy(' · unresolved')] : [])])}</span></Button>{intent.expandedNodeIds?.includes(node.id) && <div className="repository-graph-node__detail"><code>{node.id}</code>{node.detail && <span>{node.detail}</span>}{node.source && <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void openSource(node)}>{node.source.path}{node.source.line ? `:${node.source.line}:${node.source.column ?? 1}` : ''}</Button>}</div>}</article>)}
         </section>
         {snapshot?.omissions.length ? <details><summary>{vocab('Omissions and unsupported relationships')}</summary><ul>{snapshot.omissions.slice(0, 100).map((item) => <li key={item}>{item}</li>)}</ul></details> : null}
       </div>
