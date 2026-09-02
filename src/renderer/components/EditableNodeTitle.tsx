@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button } from '../ui/md3'
+import { Input } from '../ui/Input'
 
 /**
  * The one click-to-rename title control every node header uses.
@@ -106,8 +108,9 @@ export function EditableNodeTitle({
 
   if (editing) {
     return (
-      <input
-        className={`term-node__title nodrag${inputClassName ? ` ${inputClassName}` : ''}`}
+      <Input
+        vocabularyMode="factual"
+        className={`mdx-input--bare term-node__title nodrag${inputClassName ? ` ${inputClassName}` : ''}`}
         value={value}
         spellCheck={false}
         autoFocus
@@ -129,8 +132,9 @@ export function EditableNodeTitle({
   }
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="text"
+      vocabularyMode="factual"
       className={`nodrag${baseTriggerClassName ? ` ${baseTriggerClassName}` : ''}${triggerClassName ? ` ${triggerClassName}` : ''}`}
       title={vocab(title)}
       aria-label={ariaLabel ? `${vocab(ariaLabel)}: ${value || 'untitled'}` : undefined}
@@ -138,6 +142,6 @@ export function EditableNodeTitle({
       onClick={startEdit}
     >
       {value || (typeof emptyLabel === 'string' ? vocab(emptyLabel) : emptyLabel) || vocab('Untitled')}
-    </button>
+    </Button>
   )
 }

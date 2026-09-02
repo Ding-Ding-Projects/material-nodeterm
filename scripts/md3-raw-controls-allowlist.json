@@ -2,9 +2,5 @@
   "src/renderer/components/AppErrorBoundary.tsx",
   "src/renderer/components/ContextMenu.tsx",
   "src/renderer/components/Dock.tsx",
-  "src/renderer/components/EditableNodeTitle.tsx",
-  "src/renderer/components/ExplorerPanel.tsx",
-  "src/renderer/components/FabMenu.tsx",
-  "src/renderer/components/NavRail.tsx",
-  "src/renderer/components/menu/FilterableMenu.tsx"
+  "src/renderer/components/ExplorerPanel.tsx"
 ]

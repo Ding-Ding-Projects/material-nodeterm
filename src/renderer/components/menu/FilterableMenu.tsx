@@ -1,6 +1,7 @@
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import type { UseMenuFilterResult, MenuFilterItem } from './useMenuFilter'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { Input } from '../../ui/Input'
 
 interface FilterableMenuHeaderProps<T extends MenuFilterItem> {
   filter: UseMenuFilterResult<T>
@@ -31,8 +32,10 @@ export function FilterableMenuHeader<T extends MenuFilterItem>({
   return (
     <div className="menu-filter" onMouseDown={(e) => e.stopPropagation()}>
       <div className="menu-filter__row">
-        <input
+        <Input
           ref={filter.inputRef}
+          type="search"
+          vocabularyMode="factual"
           className="menu-filter__input"
           value={filter.search.value}
           spellCheck={false}

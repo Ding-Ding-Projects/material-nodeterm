@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { FabMenu, type FabMenuProps } from './FabMenu'
+import { Button } from '../ui/md3'
 
 export interface RailDestination {
   id: string
@@ -32,8 +33,9 @@ export function NavRail({ destinations, kidsLabel, onOpenKids, ...fab }: NavRail
       <FabMenu {...fab} />
       <div className="md3-nav-rail__items">
         {destinations.map((d) => (
-          <button
+          <Button
             key={d.id}
+            variant="text" vocabularyMode="factual"
             className={`md3-rail-item${d.active ? ' is-active' : ''}`}
             title={d.label}
             aria-current={d.active || undefined}
@@ -48,16 +50,16 @@ export function NavRail({ destinations, kidsLabel, onOpenKids, ...fab }: NavRail
               )}
             </span>
             <span className="md3-rail-item__label">{d.label}</span>
-          </button>
+          </Button>
         ))}
       </div>
       <div className="md3-nav-rail__spacer" />
-      <button className="md3-rail-item md3-rail-item--kids" title={kidsLabel} onClick={onOpenKids}>
+      <Button variant="text" vocabularyMode="factual" className="md3-rail-item md3-rail-item--kids" title={kidsLabel} onClick={onOpenKids}>
         <span className="md3-rail-item__pill">
           <KidsIcon />
         </span>
         <span className="md3-rail-item__label">{kidsLabel}</span>
-      </button>
+      </Button>
     </nav>
   )
 }

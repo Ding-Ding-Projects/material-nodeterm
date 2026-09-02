@@ -12,6 +12,7 @@ import { IconLock } from './icons'
 import { writeAuthenticatorDrag } from '../lib/explorerNodeDrag'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
+import { Fab, ListRow } from '../ui/md3'
 
 export interface FabMenuProps {
   /** Opens the single typed registry used by every creation surface. */
@@ -144,12 +145,7 @@ export function FabMenu({
             </div>
             {profileMenuOpen ? (
               <>
-                <button role="menuitem" onClick={() => setProfileMenuOpen(false)}>
-                  <BackIcon />
-                  <span>
-                    {profileText('terminalProfiles.create.backToNewNodes', 'Back to new nodes')}
-                  </span>
-                </button>
+                <ListRow role="menuitem" vocabularyMode="factual" icon={<BackIcon />} label={profileText('terminalProfiles.create.backToNewNodes', 'Back to new nodes')} onClick={() => setProfileMenuOpen(false)} />
                 {terminalProfileChoices.length ? (
                   terminalProfileChoices.map((profile, index) => {
                     const disabled = profile.disabled || !onAddTerminalWithProfile
@@ -169,76 +165,46 @@ export function FabMenu({
                       ? `fab-terminal-profile-reason-${index}`
                       : undefined
                     return (
-                      <button
+                      <ListRow
                         key={profile.id}
                         role="menuitem"
+                        vocabularyMode="factual"
                         aria-disabled={disabled || undefined}
                         aria-describedby={reasonId}
                         title={disabledReason}
+                        icon={<TerminalIcon />}
+                        label={profile.label}
+                        sub={disabledReason ? <span id={reasonId} className="md3-fab-menu__hint">{disabledReason}</span> : undefined}
                         onClick={() => {
                           if (disabled || !onAddTerminalWithProfile) return
                           pick(() => onAddTerminalWithProfile(profile.id))()
                         }}
-                      >
-                        <TerminalIcon />
-                        <span className="md3-fab-menu__copy">
-                          <span>{profile.label}</span>
-                          {disabledReason ? (
-                            <span id={reasonId} className="md3-fab-menu__hint">
-                              {disabledReason}
-                            </span>
-                          ) : null}
-                        </span>
-                      </button>
+                      />
                     )
                   })
                 ) : (
-                  <button
+                  <ListRow
                     role="menuitem"
+                    vocabularyMode="factual"
                     aria-disabled="true"
                     aria-describedby="fab-terminal-profile-empty-reason"
                     title={profileEmptyState.hint}
-                  >
-                    <TerminalIcon />
-                    <span className="md3-fab-menu__copy">
-                      <span>{profileEmptyState.label}</span>
-                      <span
-                        id="fab-terminal-profile-empty-reason"
-                        className="md3-fab-menu__hint"
-                      >
-                        {profileEmptyState.hint}
-                      </span>
-                    </span>
-                  </button>
+                    icon={<TerminalIcon />}
+                    label={profileEmptyState.label}
+                    sub={<span id="fab-terminal-profile-empty-reason" className="md3-fab-menu__hint">{profileEmptyState.hint}</span>}
+                  />
                 )}
               </>
             ) : (
               <>
-                <button role="menuitem" onClick={pick(onAddTerminal)}>
-                  <TerminalIcon />
-                  <span>{vocab('Terminal')}</span>
-                </button>
+                <ListRow role="menuitem" onClick={pick(onAddTerminal)} vocabularyMode="factual" icon={<TerminalIcon />} label={<>{vocab('Terminal')}</>} />
                 {offersTerminalProfiles ? (
-                  <button role="menuitem" onClick={() => setProfileMenuOpen(true)}>
-                    <TerminalIcon />
-                    <span>
-                      {profileText(
-                        'terminalProfiles.create.menuLabel',
-                        'New terminal with profile…'
-                      )}
-                    </span>
-                  </button>
+                  <ListRow role="menuitem" vocabularyMode="factual" icon={<TerminalIcon />} label={profileText('terminalProfiles.create.menuLabel', 'New terminal with profile…')} onClick={() => setProfileMenuOpen(true)} />
                 ) : null}
-                <button role="menuitem" onClick={pick(onAddRemote)}>
-                  <TerminalIcon />
-                  <span>{vocab('Remote…')}</span>
-                </button>
+                <ListRow role="menuitem" onClick={pick(onAddRemote)} vocabularyMode="factual" icon={<TerminalIcon />} label={<>{vocab('Remote…')}</>} />
                 {BUILTIN_AGENT_IDS.filter((aid) => !disabledAgents.includes(aid)).flatMap((aid) => {
                   const base = (
-                    <button role="menuitem" key={aid} onClick={pick(() => onAddAgent(aid))}>
-                      <AgentIcon agentId={aid} size={18} />
-                      <span>{AGENT_CONFIG[aid].label}</span>
-                    </button>
+                    <ListRow role="menuitem" key={aid} vocabularyMode="factual" icon={<AgentIcon agentId={aid} size={18} />} label={AGENT_CONFIG[aid].label} onClick={pick(() => onAddAgent(aid))} />
                   )
                   if (aid !== 'claude') return [base]
                   // SSH project with no accounts on its host: a disabled row saying where this
@@ -247,10 +213,7 @@ export function FabMenu({
                   if (acctHint) {
                     return [
                       base,
-                      <button role="menuitem" key={`${aid}-acct-hint`} disabled title={acctHint}>
-                        <AgentIcon agentId={aid} size={18} />
-                        <span>No accounts on this host yet</span>
-                      </button>
+                      <ListRow role="menuitem" key={`${aid}-acct-hint`} disabled title={acctHint} vocabularyMode="factual" icon={<AgentIcon agentId={aid} size={18} />} label={<>No accounts on this host yet</>} />
                     ]
                   }
                   // Claude picks up one flat entry per logged-in local account.
@@ -258,45 +221,21 @@ export function FabMenu({
                   return [
                     base,
                     ...localAccounts.map((a) => (
-                      <button
-                        role="menuitem"
-                        key={`${aid}-${a.id}`}
-                        onClick={pick(() => onAddAgent(aid, a.id))}
-                      >
-                        <AgentIcon agentId={aid} size={18} />
-                        <span>
-                          Claude — {a.label}
-                          {a.id === defaultAccountId ? ' ✓' : ''}
-                        </span>
-                      </button>
+                      <ListRow role="menuitem" key={`${aid}-${a.id}`} onClick={pick(() => onAddAgent(aid, a.id))} vocabularyMode="factual" icon={<AgentIcon agentId={aid} size={18} />} label={<>Claude — {a.label}
+                          {a.id === defaultAccountId ? ' ✓' : ''}</>} />
                     ))
                   ]
                 })}
                 {customAgents
                   .filter((c) => !disabledAgents.includes(c.id))
                   .map((c) => (
-                    <button role="menuitem" key={c.id} onClick={pick(() => onAddAgent(c.id))}>
-                      <AgentIcon agentId={c.id} size={18} />
-                      <span>{c.label}</span>
-                    </button>
+                    <ListRow role="menuitem" key={c.id} vocabularyMode="factual" icon={<AgentIcon agentId={c.id} size={18} />} label={c.label} onClick={pick(() => onAddAgent(c.id))} />
                   ))}
-                <button role="menuitem" onClick={pick(onAddSticky)}>
-                  <NoteIcon />
-                  <span>Sticky Note</span>
-                </button>
-                <button role="menuitem" onClick={pick(onAddLoop)}>
-                  <LoopIcon />
-                  <span>Loop</span>
-                </button>
-                <button role="menuitem" onClick={pick(onAddTimer)}>
-                  <span aria-hidden="true">◷</span>
-                  <span>Timer</span>
-                </button>
-                <button role="menuitem" onClick={pick(onAddAlarmClock)}>
-                  <AlarmIcon />
-                  <span>Alarm Clock</span>
-                </button>
-                <button
+                <ListRow role="menuitem" onClick={pick(onAddSticky)} vocabularyMode="factual" icon={<NoteIcon />} label={<>Sticky Note</>} />
+                <ListRow role="menuitem" onClick={pick(onAddLoop)} vocabularyMode="factual" icon={<LoopIcon />} label={<>Loop</>} />
+                <ListRow role="menuitem" vocabularyMode="factual" icon={<span aria-hidden="true">◷</span>} label="Timer" onClick={pick(onAddTimer)} />
+                <ListRow role="menuitem" onClick={pick(onAddAlarmClock)} vocabularyMode="factual" icon={<AlarmIcon />} label={<>Alarm Clock</>} />
+                <ListRow
                   role="menuitem"
                   draggable
                   onDragStart={(e) => {
@@ -304,36 +243,29 @@ export function FabMenu({
                   }}
                   onClick={pick(onAddAuthenticator)}
                   title="Click to add, or drag onto the canvas to place it"
-                >
-                  <IconLock />
-                  <span>Authenticator</span>
-                </button>
-                <button role="menuitem" onClick={pick(onOpenCatalog)}>
-                  <CatalogIcon />
-                  <span>Browse node catalog…</span>
-                </button>
-                <button role="menuitem" onClick={pick(onOpenFile)}>
-                  <EditorIcon />
-                  <span>Open file…</span>
-                </button>
-                <button role="menuitem" onClick={pick(onConnectRemote)}>
-                  <RemoteIcon />
-                  <span>New Remote Connection</span>
-                </button>
+                
+                  vocabularyMode="factual"
+                  icon={<IconLock />}
+                  label="Authenticator"
+                />
+                <ListRow role="menuitem" onClick={pick(onOpenCatalog)} vocabularyMode="factual" icon={<CatalogIcon />} label={<>Browse node catalog…</>} />
+                <ListRow role="menuitem" onClick={pick(onOpenFile)} vocabularyMode="factual" icon={<EditorIcon />} label={<>Open file…</>} />
+                <ListRow role="menuitem" onClick={pick(onConnectRemote)} vocabularyMode="factual" icon={<RemoteIcon />} label={<>New Remote Connection</>} />
               </>
             )}
           </div>
         )}
 
-        <button
-          className={`md3-fab${menuOpen ? ' is-open' : ''}`}
+        <Fab
+          open={menuOpen}
+          vocabularyMode="factual"
           title={activeProjectId ? 'Add node' : 'Open or create a project before adding nodes.'}
           aria-label={activeProjectId ? 'Add node' : 'Add node unavailable. Open or create a project first.'}
           disabled={!activeProjectId}
           onClick={toggleMenu}
         >
           <PlusIcon />
-        </button>
+        </Fab>
       </div>
     </>
   )
