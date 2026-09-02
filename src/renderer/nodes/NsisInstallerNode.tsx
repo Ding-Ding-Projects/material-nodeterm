@@ -21,6 +21,7 @@ import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '@renderer/lib/regex/useRegexSearchField'
 import { MaterialSymbol } from '../components/MaterialSymbol'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button, IconButton, TextArea } from '@renderer/ui/md3'
 
 /**
  * A GUI for authoring a Windows NSIS installer script for ANOTHER project.
@@ -139,13 +140,15 @@ export default function NsisInstallerNode({ id, data, selected }: NodeProps<Canv
           rejectEmpty={false}
         />
         <span className="term-node__spacer" />
-        <button
+        <IconButton
+          size="compact"
           className="term-node__close"
+          icon="close"
+          vocabularyMode="factual"
           title={vocab('Close')}
+          aria-label={vocab('Close')}
           onClick={() => deleteElements({ nodes: [{ id }] })}
-        >
-          ×
-        </button>
+        />
       </div>
 
       <div className="nsis-node__body nodrag nowheel">
@@ -261,15 +264,17 @@ export default function NsisInstallerNode({ id, data, selected }: NodeProps<Canv
               placeholder={vocab('Not set -- install skips the license page')}
               aria-label={vocab('License file path')}
             />
-            <button
-              type="button"
+            <Button
+              variant="outlined"
+              size="small"
+              vocabularyMode="factual"
               className="nsis-node__browse"
               onClick={browseLicense}
               disabled={browseBusy === 'license'}
               title={vocab('Browse for a license file')}
             >
               {vocab('Browse…')}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -282,39 +287,45 @@ export default function NsisInstallerNode({ id, data, selected }: NodeProps<Canv
               placeholder={vocab("Not set -- uses NSIS's default icon")}
               aria-label={vocab('Icon file path')}
             />
-            <button
-              type="button"
+            <Button
+              variant="outlined"
+              size="small"
+              vocabularyMode="factual"
               className="nsis-node__browse"
               onClick={browseIcon}
               disabled={browseBusy === 'icon'}
               title={vocab('Browse for a .ico file')}
             >
               {vocab('Browse…')}
-            </button>
+            </Button>
           </div>
         </div>
 
         <div className="nsis-node__field">
           <span>{vocab('Files & folders to install')}</span>
           <div className="nsis-node__path-row">
-            <button
-              type="button"
+            <Button
+              variant="outlined"
+              size="small"
+              vocabularyMode="factual"
               className="nsis-node__browse"
               onClick={addSourceFolder}
               disabled={browseBusy === 'source'}
               title={vocab('Add a folder')}
             >
               {vocab('Add folder…')}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              vocabularyMode="factual"
               className="nsis-node__browse"
               onClick={addSourceFiles}
               disabled={browseBusy === 'source'}
               title={vocab('Add files')}
             >
               {vocab('Add files…')}
-            </button>
+            </Button>
           </div>
 
           {local.sourcePaths.length === 0 ? (
@@ -325,8 +336,10 @@ export default function NsisInstallerNode({ id, data, selected }: NodeProps<Canv
             <>
               <div className="menu-filter nsis-node__search">
                 <div className="menu-filter__row">
-                  <input
+                  <Input
                     ref={inputRef}
+                    type="search"
+                    vocabularyMode="factual"
                     className="menu-filter__input"
                     value={search.value}
                     spellCheck={false}
@@ -350,15 +363,15 @@ export default function NsisInstallerNode({ id, data, selected }: NodeProps<Canv
                   filteredSources.map((p) => (
                     <li key={p} className="nsis-node__source-row" title={p}>
                       <span className="nsis-node__source-path">{p}</span>
-                      <button
-                        type="button"
-                        className="term-node__close"
+                      <IconButton
+                        size="compact"
+                        className="nsis-node__remove"
+                        icon="close"
+                        vocabularyMode="factual"
                         title={vocab('Remove')}
                         aria-label={`${vocab('Remove')} ${p}`}
                         onClick={() => removeSource(p)}
-                      >
-                        ×
-                      </button>
+                      />
                     </li>
                   ))
                 )}
@@ -374,8 +387,9 @@ export default function NsisInstallerNode({ id, data, selected }: NodeProps<Canv
               <em className="nsis-node__incomplete">{vocab(' — fill in the fields above for a full script')}</em>
             )}
           </span>
-          <textarea
+          <TextArea
             className="nsis-node__preview"
+            vocabularyMode="factual"
             readOnly
             value={preview}
             aria-label={vocab('Generated NSIS script preview')}

@@ -26,6 +26,8 @@ import {
   type RecoveryPoint,
   type RecoveryTransition
 } from '@shared/recovery-game'
+import { Button, IconButton } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 export function pointLabel(point: RecoveryPoint, snapshot: RecoveryGameSnapshot): string {
   const kind = recoveryCellKind(point)
@@ -158,7 +160,7 @@ export default function RecoveryGameNode({ id, data, selected }: NodeProps<Canva
         <span className="recovery-game-node__glyph" aria-hidden="true">◇</span>
         <EditableNodeTitle value={String(data.title ?? '')} onChange={(title) => updateNodeData(id, { title })} emptyLabel={vocab('Recovery game')} title={vocab('Click to rename')} ariaLabel={vocab('Recovery game node name')} rejectEmpty={false} />
         <span className="term-node__spacer" />
-        <button className="term-node__close" title={vocab('Close')} aria-label={vocab('Close recovery game')} onClick={() => void deleteElements({ nodes: [{ id }] })}>×</button>
+        <IconButton size="compact" className="term-node__close" icon="close" vocabularyMode="factual" title={vocab('Close')} aria-label={vocab('Close recovery game')} onClick={() => void deleteElements({ nodes: [{ id }] })} />
       </div>
 
       <div className="recovery-game-node__body nodrag nowheel">
@@ -170,7 +172,9 @@ export default function RecoveryGameNode({ id, data, selected }: NodeProps<Canva
         <div className="recovery-game-node__search">
           <label htmlFor={`${id}-recovery-search`}>{vocab('Find a board location')}</label>
           <div className="recovery-game-node__search-row">
-            <input
+            <Input
+              type="search"
+              vocabularyMode="factual"
               id={`${id}-recovery-search`}
               ref={boardSearchRef}
               value={boardSearch.value}
@@ -244,12 +248,12 @@ export default function RecoveryGameNode({ id, data, selected }: NodeProps<Canva
         </div>
 
         <div className="recovery-game-node__controls" aria-label={vocab('Movement controls')}>
-          <button type="button" onClick={() => move('up')} disabled={snapshot.coreActivated || snapshot.player.y === 0} aria-describedby={statusId} title={vocab(snapshot.player.y === 0 ? 'The top edge blocks this move.' : 'Move up')}>↑</button>
-          <button type="button" onClick={() => move('left')} disabled={snapshot.coreActivated || snapshot.player.x === 0} aria-describedby={statusId} title={vocab(snapshot.player.x === 0 ? 'The left edge blocks this move.' : 'Move left')}>←</button>
-          <button type="button" onClick={() => move('down')} disabled={snapshot.coreActivated || snapshot.player.y === RECOVERY_BOARD_HEIGHT - 1} aria-describedby={statusId} title={vocab(snapshot.player.y === RECOVERY_BOARD_HEIGHT - 1 ? 'The bottom edge blocks this move.' : 'Move down')}>↓</button>
-          <button type="button" onClick={() => move('right')} disabled={snapshot.coreActivated || snapshot.player.x === RECOVERY_BOARD_WIDTH - 1} aria-describedby={statusId} title={vocab(snapshot.player.x === RECOVERY_BOARD_WIDTH - 1 ? 'The right edge blocks this move.' : 'Move right')}>→</button>
-           <button type="button" className="recovery-game-node__activate" onClick={activate} disabled={coreReason !== null} aria-describedby={statusId} title={localizedCoreReason ?? vocab('Activate the core')}>{vocab('Activate core')}</button>
-          <button type="button" className="recovery-game-node__reset" onClick={reset} aria-describedby={statusId} title={vocab('Reset the recovery game')}>{vocab('Reset game')}</button>
+          <IconButton size="compact" vocabularyMode="factual" aria-label={vocab('Move up')} onClick={() => move('up')} disabled={snapshot.coreActivated || snapshot.player.y === 0} aria-describedby={statusId} title={vocab(snapshot.player.y === 0 ? 'The top edge blocks this move.' : 'Move up')}>↑</IconButton>
+          <IconButton size="compact" vocabularyMode="factual" aria-label={vocab('Move left')} onClick={() => move('left')} disabled={snapshot.coreActivated || snapshot.player.x === 0} aria-describedby={statusId} title={vocab(snapshot.player.x === 0 ? 'The left edge blocks this move.' : 'Move left')}>←</IconButton>
+          <IconButton size="compact" vocabularyMode="factual" aria-label={vocab('Move down')} onClick={() => move('down')} disabled={snapshot.coreActivated || snapshot.player.y === RECOVERY_BOARD_HEIGHT - 1} aria-describedby={statusId} title={vocab(snapshot.player.y === RECOVERY_BOARD_HEIGHT - 1 ? 'The bottom edge blocks this move.' : 'Move down')}>↓</IconButton>
+          <IconButton size="compact" vocabularyMode="factual" aria-label={vocab('Move right')} onClick={() => move('right')} disabled={snapshot.coreActivated || snapshot.player.x === RECOVERY_BOARD_WIDTH - 1} aria-describedby={statusId} title={vocab(snapshot.player.x === RECOVERY_BOARD_WIDTH - 1 ? 'The right edge blocks this move.' : 'Move right')}>→</IconButton>
+           <Button variant="filled" size="small" vocabularyMode="factual" className="recovery-game-node__activate" onClick={activate} disabled={coreReason !== null} aria-describedby={statusId} title={localizedCoreReason ?? vocab('Activate the core')}>{vocab('Activate core')}</Button>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="recovery-game-node__reset" onClick={reset} aria-describedby={statusId} title={vocab('Reset the recovery game')}>{vocab('Reset game')}</Button>
         </div>
 
          <p id={statusId} className="recovery-game-node__status" role="status" aria-live="polite">{status}</p>

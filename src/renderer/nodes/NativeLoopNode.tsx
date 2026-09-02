@@ -1,7 +1,8 @@
 import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import { LOOP_DEFAULT_INTERVAL_MS, validLoopInterval } from '../lib/nativeLoop'
 import type { CanvasNode } from '../state/workspace'
-import { TextArea } from '@renderer/ui/md3'
+import { Button, IconButton, TextArea } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
@@ -68,15 +69,14 @@ export function NativeLoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
 
       <div className="native-loop-node__header">
         <span className="native-loop-node__clock">↻</span>
-        <input
-          className="native-loop-node__title nodrag"
+        <Input
+          className="mdx-input--bare native-loop-node__title nodrag"
+          vocabularyMode="factual"
           value={data.title}
           aria-label={vocab('Loop title')}
           onChange={(event) => updateNodeData(id, { title: event.target.value })}
         />
-        <button className="native-loop-node__close" title={vocab('Delete Loop')} onClick={() => deleteElements({ nodes: [{ id }] })}>
-          ×
-        </button>
+        <IconButton size="compact" className="native-loop-node__close" icon="close" vocabularyMode="factual" title={vocab('Delete Loop')} aria-label={vocab('Delete Loop')} onClick={() => deleteElements({ nodes: [{ id }] })} />
       </div>
 
       <TextArea
@@ -89,8 +89,9 @@ export function NativeLoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
 
       <div className="native-loop-node__interval nodrag">
         <span>{vocab('Every')}</span>
-        <input
+        <Input
           type="number"
+          vocabularyMode="factual"
           min={1}
           value={interval.value}
           aria-label={vocab('Loop interval')}
@@ -114,19 +115,25 @@ export function NativeLoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
       </div>
 
       <div className="native-loop-node__actions nodrag">
-        <button
+        <Button
+          variant={data.loopEnabled ? 'tonal' : 'filled'}
+          size="small"
+          vocabularyMode="factual"
           className={data.loopEnabled ? 'active' : ''}
           onClick={toggleEnabled}
           disabled={!String(data.loopTask ?? '').trim() || targetCount === 0}
         >
           {vocab(data.loopEnabled ? 'Pause' : 'Start')}
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outlined"
+          size="small"
+          vocabularyMode="factual"
           onClick={() => runNativeLoop(id)}
           disabled={!String(data.loopTask ?? '').trim() || targetCount === 0}
         >
           {vocab('Run now')}
-        </button>
+        </Button>
       </div>
     </div>
   )
