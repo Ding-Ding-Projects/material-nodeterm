@@ -42,6 +42,7 @@ import { isMacPlatform } from '@shared/platform-utils'
 import { recordingKeydown, recordingKeyup, type RecordingState } from './shortcutRecording'
 import { IconRecordKey } from './ShortcutRowIcons'
 import { Tooltip } from '../Tooltip'
+import { Button } from '@renderer/ui/md3'
 
 const isMac = isMacPlatform()
 
@@ -148,7 +149,7 @@ export function ShortcutRecorderButton({
         'flex size-6 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 text-muted hover:bg-fill-weak hover:text-text focus-visible:text-text'
       : 'min-w-[120px] cursor-pointer rounded-md border border-border bg-panel-header px-3 py-1.5 text-[13px] font-medium text-text outline-none hover:bg-[rgba(255,255,255,0.06)]'
   const btn = (
-    <button
+    <Button variant="outlined" size="small" vocabularyMode="factual"
       type="button"
       // Observability only — no dispatcher reads it (see the header). Keeps the armed state
       // visible to tests and to anyone inspecting the DOM.
@@ -176,7 +177,7 @@ export function ShortcutRecorderButton({
       ) : (
         idleLabel
       )}
-    </button>
+    </Button>
   )
   // Only the icon appearance gets the custom tooltip — the 'button' appearance has visible text,
   // and wrapping it would change its markup. `appearance` is fixed per instance, so the wrapper

@@ -13,6 +13,7 @@
 // ACTUAL folder path, never a vague "app data" gesture. See docs/toy-locks.md.
 import { useEffect, useState } from 'react'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 export function RecoveryNotice({ compact = false }: { compact?: boolean }): React.JSX.Element {
   const vocab = useVocabularyMapper()
@@ -44,9 +45,9 @@ export function RecoveryNotice({ compact = false }: { compact?: boolean }): Reac
       )}
       <div className="toylock-recovery__path-row">
         <code className="toylock-recovery__path">{dir ?? '…'}</code>
-        <button className="toylock-btn toylock-btn--sm" onClick={copy} disabled={!dir}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" className="toylock-btn toylock-btn--sm" onClick={copy} disabled={!dir}>
           {vocab('Copy path')}
-        </button>
+        </Button>
       </div>
     </div>
   )

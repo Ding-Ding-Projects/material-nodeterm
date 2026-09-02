@@ -26,6 +26,8 @@ import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/owned
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { useSchoolMode } from '../../state/schoolMode'
 import { schoolModeAllowsOptionalFeatures } from '../../lib/schoolModePolicy'
+import { Button } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 /**
  * How this panel reaches an engine. Two surfaces climb the same ladder against two different
@@ -134,9 +136,9 @@ export function UnlockLadderPanel({
         <div className="toylock-ladder__note">
           {message ?? vocab('No game is on offer right now — the clock is the way through.')}
         </div>
-        <button className="toylock-btn" onClick={onDone}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" className="toylock-btn" onClick={onDone}>
           {vocab('Back to the password')}
-        </button>
+        </Button>
       </div>
     )
   }
@@ -176,9 +178,9 @@ export function UnlockLadderPanel({
           copy(' left this hour.')
         ])}
       </div>
-      <button className="toylock-btn--link" onClick={onDone}>
+      <Button variant="outlined" size="small" vocabularyMode="factual" className="toylock-btn--link" onClick={onDone}>
         {vocab('No thanks, I will wait')}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -200,9 +202,9 @@ function DimSumRung({
       </div>
       <div className="toylock-ladder__choices">
         {challenge.choices.map((c) => (
-          <button key={c} className="toylock-btn" disabled={busy} onClick={() => onPick(c)}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" key={c} className="toylock-btn" disabled={busy} onClick={() => onPick(c)}>
             {c}
-          </button>
+          </Button>
         ))}
       </div>
       <div className="toylock-ladder__hint">
@@ -239,7 +241,7 @@ function MathRung({
         {challenge.questions.map((q, i) => (
           <label key={`${challenge.nonce}:${i}`} className="toylock-ladder__sum">
             <span>{q} =</span>
-            <input
+            <Input vocabularyMode="factual"
               className="toylock-input toylock-input--code"
               inputMode="numeric"
               value={values[i] ?? ''}
@@ -253,13 +255,13 @@ function MathRung({
           </label>
         ))}
       </div>
-      <button
+      <Button variant="filled" size="small" vocabularyMode="factual"
         className="toylock-btn toylock-btn--primary"
         disabled={busy || !complete}
         onClick={() => onSubmit(values.map((v) => Number(v)))}
       >
         {vocab('Check my sums')}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -320,9 +322,9 @@ function WhackRung({
             copy(' seconds.')
           ])}
         </div>
-        <button className="toylock-btn toylock-btn--primary" onClick={() => setStarted(true)}>
+        <Button variant="filled" size="small" vocabularyMode="factual" className="toylock-btn toylock-btn--primary" onClick={() => setStarted(true)}>
           {vocab('Start')}
-        </button>
+        </Button>
       </div>
     )
   }
@@ -342,7 +344,7 @@ function WhackRung({
         style={{ gridTemplateColumns: `repeat(${challenge.gridSize}, 1fr)` }}
       >
         {Array.from({ length: challenge.gridSize * challenge.gridSize }, (_, cell) => (
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             key={cell}
             className={`toylock-ladder__hole${visible.has(cell) ? ' toylock-ladder__hole--up' : ''}`}
             aria-label={mapOwnedSentence(vocab, [
@@ -352,7 +354,7 @@ function WhackRung({
             onClick={() => tap(cell)}
           >
             {visible.has(cell) ? '🐹' : ''}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

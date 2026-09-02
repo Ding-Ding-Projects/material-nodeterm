@@ -4,6 +4,7 @@ import { ColorPicker } from './ColorPicker'
 import { useAnchoredPosition } from '@renderer/lib/appearance/useAnchoredPosition'
 import { parseAnyColor, toHex } from '@renderer/lib/color/convert'
 import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 /**
  * A labelled swatch that opens the full infinite `ColorPicker` in a small anchored popover — the
@@ -62,7 +63,7 @@ export function ColorField({
     <div className="color-field">
       <span className="color-field__label">{labelText}</span>
       <div className="color-field__controls">
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           ref={anchorRef}
           type="button"
           className="color-field__swatch"
@@ -71,10 +72,10 @@ export function ColorField({
           onClick={() => setOpen((o) => !o)}
         >
           {!swatchBg && <span className="color-field__unset" aria-hidden="true" />}
-        </button>
+        </Button>
         <span className="color-field__value">{value ?? vocab('Not set — inherits the platform default')}</span>
         {onClear && value && (
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             type="button"
             className="color-field__reset"
             title={`${vocab('Reset')} ${labelText} ${vocab('to the platform default')}`}
@@ -82,7 +83,7 @@ export function ColorField({
             onClick={onClear}
           >
             ↺
-          </button>
+          </Button>
         )}
       </div>
       {open &&

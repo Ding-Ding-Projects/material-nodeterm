@@ -35,6 +35,7 @@ import { IconButton, TextArea } from '@renderer/ui/md3'
 import { BrowserDrivingIndicator } from '../../nodes/BrowserDrivingChip'
 import { NoteMarkdown } from '../NoteMarkdown'
 import { relativeTime } from '../../lib/relativeTime'
+import { Button } from '@renderer/ui/md3'
 
 interface CardModalProps {
   session: KanbanSession
@@ -301,7 +302,7 @@ export function CardModal({
         >
           <span className="kanban-card__nodedot" style={{ background: session.color }} />
           {session.kind === 'terminal' && (
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               type="button"
               className={`kanban-modal__icon${session.icon ? '' : ' kanban-modal__icon--empty'}`}
               title={session.icon ? 'Change icon' : 'Set icon'}
@@ -313,7 +314,7 @@ export function CardModal({
               }
             >
               {session.icon ? <NodeIconView icon={session.icon} size={16} /> : <MaterialSymbol name="palette" size={18} />}
-            </button>
+            </Button>
           )}
           {editingTitle ? (
             <Input

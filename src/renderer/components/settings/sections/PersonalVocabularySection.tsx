@@ -13,6 +13,7 @@ import {
   VOCAB_MAX_KEY_LENGTH,
   VOCAB_MAX_VALUE_LENGTH
 } from '../../../lib/personalVocabulary/schema'
+import { Input } from '@renderer/ui/Input'
 
 const ROWS = {
   upload: {
@@ -116,12 +117,12 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
           control={
             <div className="flex flex-col items-end gap-2">
               {/* The input itself is visually hidden and driven by a real MD3 button. A native
-                  `<input type="file">` renders the browser's own "Choose File / No file chosen"
+                  `<Input vocabularyMode="factual" type="file">` renders the browser's own "Choose File / No file chosen"
                   control, which no amount of `file:` styling makes part of the design system --
                   it was the one element on this screen drawn entirely by Chromium. The input
                   keeps its id and label so the FieldRow's `htmlFor` and screen readers are
                   unchanged. */}
-              <input
+              <Input vocabularyMode="factual"
                 ref={inputRef}
                 id="personal-vocabulary-file"
                 type="file"

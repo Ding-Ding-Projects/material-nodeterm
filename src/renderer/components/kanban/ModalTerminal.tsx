@@ -54,6 +54,7 @@ import { isWindowsPlatform } from '@shared/platform-utils'
 import { windowsTerminalProfileId } from '../../terminal/windows-terminal-profile'
 import { coldAgentLaunchIntent } from '../../terminal/agent-launch-intent'
 import { ensureActivePermissionMode } from '../../state/permissionMode'
+import { Button } from '@renderer/ui/md3'
 
 /** The subset of a node's `data` a SECOND client needs to attach to its session the same way the
  *  canvas TerminalNode does. Canvas fills it from the node's data; sticky/chat cards pass `{}`. */
@@ -673,12 +674,12 @@ export function ModalTerminal({
                 )
               : 'Check the connection or executable, then try again.'}
           </span>
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             className="term-node__reopen"
             onClick={() => setSpawnAttempt((attempt) => attempt + 1)}
           >
             {profileText('terminalProfiles.error.tryAgain', 'Try again')}
-          </button>
+          </Button>
         </div>
       )}
       {spawnError === null && sessionEnded && (
@@ -689,9 +690,9 @@ export function ModalTerminal({
               'This persistent session ended before a replacement was ready. Nothing was restarted.'
             )}
           </span>
-          <button className="term-node__reopen" onClick={onOpenCanvas}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="term-node__reopen" onClick={onOpenCanvas}>
             {profileText('terminalProfiles.error.openCanvasToReopen', 'Open on canvas to reopen')}
-          </button>
+          </Button>
         </div>
       )}
     </div>

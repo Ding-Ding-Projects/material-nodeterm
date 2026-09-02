@@ -284,14 +284,14 @@ function EntryRow({
               aria-hidden="true"
               style={{ '--md3-ring-deg': `${ringDegrees}deg` } as React.CSSProperties}
             />
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               className="toylock-code-text"
               onClick={copyCode}
               aria-label={`${vocab('Copy current code')} ${code.code}`}
               title={vocab('Copy code')}
             >
               <span aria-live="polite">{groupDigits(code.code)}</span>
-            </button>
+            </Button>
             <span className="toylock-hint" aria-hidden="true">
               {secondsRemaining}s · next {groupDigits(code.next)}
             </span>

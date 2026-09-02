@@ -91,7 +91,7 @@ export function LabelPicker({
         <div className="label-picker__colhead">Colors</div>
         <div className="label-picker__colors">
           {LABEL_COLOR_OPTIONS.map((opt) => (
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               key={opt.color}
               className="label-picker__colorrow"
               onClick={() => onChange(recolorLabel(board, editLabel.id, opt.color))}
@@ -99,7 +99,7 @@ export function LabelPicker({
               <span className="label-picker__swatch" style={{ background: opt.bg }} />
               <span className="label-picker__colorname">{opt.title}</span>
               {editLabel.color === opt.color && <span className="label-picker__check">✓</span>}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -142,12 +142,12 @@ export function LabelPicker({
           const s = labelSwatch(l.color)
           return (
             <div key={l.id} className="label-picker__row">
-              <button className="label-picker__pick" onClick={() => toggle(l.id)}>
+              <Button variant="outlined" size="small" vocabularyMode="factual" className="label-picker__pick" onClick={() => toggle(l.id)}>
                 <span className="kanban-label-chip" style={{ background: s.bg, color: s.fg }}>
                   {l.name || 'Label'}
                 </span>
                 {assignedIds.has(l.id) && <span className="label-picker__rowcheck">✓</span>}
-              </button>
+              </Button>
               <IconButton size="dense"
                 className="label-picker__more"
                 title="Edit label" aria-label="Edit label"
@@ -161,14 +161,14 @@ export function LabelPicker({
       </div>
       {canCreate && (
         <div className="label-picker__createrow">
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               className="label-picker__createcolor"
               title="Pick color"
               onClick={() => setColorMenuOpen((v) => !v)}
             >
               <span className="label-picker__swatch" style={{ background: labelSwatch(createColor).bg }} />
               <span className="label-picker__caret">▾</span>
-            </button>
+            </Button>
             <Button variant="tonal" size="small" vocabularyMode="factual" className="label-picker__create" onClick={create}>
               Create{' '}
               <span
@@ -181,7 +181,7 @@ export function LabelPicker({
             {colorMenuOpen && (
               <div className="label-picker__createcolors">
                 {LABEL_COLOR_OPTIONS.map((opt) => (
-                  <button
+                  <Button variant="outlined" size="small" vocabularyMode="factual"
                     key={opt.color}
                     className="label-picker__colorrow"
                     onClick={() => {
@@ -193,7 +193,7 @@ export function LabelPicker({
                     <span className="label-picker__swatch" style={{ background: opt.bg }} />
                     <span className="label-picker__colorname">{opt.title}</span>
                     {createColor === opt.color && <span className="label-picker__check">✓</span>}
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}

@@ -10,6 +10,7 @@ import { Button, Checkbox, SearchField, TextArea } from '@renderer/ui/md3'
 import { useI18n } from '@renderer/lib/i18n'
 import { AnchoredRegexBuilder } from '@renderer/components/regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '@renderer/lib/regex/useRegexSearchField'
+import { Input } from '@renderer/ui/Input'
 
 interface BoardLogPanelProps {
   /** The card/node whose activity this panel shows — feed + composer are scoped to `card.id`.
@@ -258,7 +259,7 @@ export function BoardLogPanel({ card }: BoardLogPanelProps) {
           onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy' }}
           onDrop={(event) => { event.preventDefault(); void addFiles(event.dataTransfer.files) }}
         >
-          <input ref={inputRef} className="board-log__file-input" type="file" multiple onChange={(event) => { if (event.target.files) void addFiles(event.target.files); event.currentTarget.value = '' }} />
+          <Input vocabularyMode="factual" ref={inputRef} className="board-log__file-input" type="file" multiple onChange={(event) => { if (event.target.files) void addFiles(event.target.files); event.currentTarget.value = '' }} />
           <Button variant="outlined" size="small" vocabularyMode="factual" className="board-log__add-files" onClick={() => inputRef.current?.click()} disabled={posting} aria-label={ts('kanban.comments.addFiles', 'Add files')}>
             <span aria-hidden="true">＋</span> {ts('kanban.comments.addFiles', 'Add files')}
           </Button>

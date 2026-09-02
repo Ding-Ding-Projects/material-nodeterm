@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { useMenuFlip } from '@renderer/ui/useMenuFlip'
 import { TERMINAL_THEMES, resolveTerminalTheme, type TerminalTheme } from '@renderer/terminal/themes'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
+import { Select } from '@renderer/ui/Select'
 
 /** The colours worth showing at a glance: the field, then the hues a prompt actually uses. */
 function swatchColors(t: TerminalTheme): string[] {
@@ -41,11 +43,11 @@ function Group({
     <>
       <div className="md3-theme-menu__group">{vocab(label)}</div>
       {themes.map((t) => (
-        <button type="button" key={t.id} onClick={() => onPick(t.id)}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" key={t.id} onClick={() => onPick(t.id)}>
           <span className="md3-theme-menu__check">{t.id === value ? '✓' : ''}</span>
           <Swatch theme={t} />
           <span className="md3-theme-menu__name">{vocab(t.label)}</span>
-        </button>
+        </Button>
       ))}
     </>
   )
@@ -54,7 +56,7 @@ function Group({
 /**
  * Terminal colour-theme picker.
  *
- * A native `<select>` can only show names, and the thing being chosen is a set of colours — so
+ * A native `<Select vocabularyMode="factual">` can only show names, and the thing being chosen is a set of colours — so
  * this is the app's own dropdown idiom instead (portal + full-screen `.tab-backdrop` click-catcher,
  * same as BranchSelect and the tab caret menu, but its own `md3-theme-menu` — not the shared
  * `.tab-menu` those use — so restyling one never restyles the other), with every row carrying its
@@ -82,11 +84,11 @@ export function ThemeSelect({
 
   return (
     <>
-      <button type="button" className="md3-theme-trigger" onClick={open}>
+      <Button variant="outlined" size="small" vocabularyMode="factual" className="md3-theme-trigger" onClick={open}>
         <Swatch theme={current} />
         <span className="md3-theme-trigger__val">{vocab(current.label)}</span>
         <span className="md3-theme-trigger__chev">⌄</span>
-      </button>
+      </Button>
       {menu && (
         <ThemeMenu
           anchor={menu}

@@ -9,6 +9,7 @@ import {
 import { cn } from '@renderer/ui/cn'
 import { ProjectGlyph } from '../ProjectGlyph'
 import EmojiPickerLazy from './EmojiPickerLazy'
+import { Chip } from '@renderer/ui/md3'
 
 /**
  * The project-icon picker: a live preview + Reset over four tabs (Avatar — a disabled stub Task 5
@@ -204,9 +205,10 @@ export function ProjectIconPicker({
         <div className="text-[13px] font-semibold text-text">Color</div>
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Color">
           {colors.map((c) => (
-            <button
+            <Chip
+              vocabularyMode="factual"
+              selected={color === c}
               key={c}
-              type="button"
               data-project-color={c}
               aria-label={`Color ${c}`}
               aria-pressed={color === c}
@@ -234,9 +236,10 @@ export function ProjectIconPicker({
             const Icon = t.icon
             const selected = tab === t.id
             return (
-              <button
+              <Chip
+                vocabularyMode="factual"
+                selected={selected}
                 key={t.id}
-                type="button"
                 role="tab"
                 aria-selected={selected}
                 disabled={t.disabled}
@@ -250,7 +253,7 @@ export function ProjectIconPicker({
               >
                 <Icon className="size-3.5" />
                 {t.label}
-              </button>
+              </Chip>
             )
           })}
         </div>
@@ -289,9 +292,9 @@ export function ProjectIconPicker({
               {LUCIDE_ICON_IDS.map((n) => {
                 const selected = icon?.type === 'lucide' && icon.name === n
                 return (
-                  <button
+                  <Chip vocabularyMode="factual" selected={selected}
                     key={n}
-                    type="button"
+                   
                     data-lucide-id={n}
                     aria-label={n}
                     aria-pressed={selected}
@@ -305,7 +308,7 @@ export function ProjectIconPicker({
                     <span className="flex size-5 items-center justify-center">
                       <ProjectGlyph icon={{ type: 'lucide', name: n }} color={color} name={name} size={20} />
                     </span>
-                  </button>
+                  </Chip>
                 )
               })}
             </div>

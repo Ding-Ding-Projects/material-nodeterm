@@ -11,6 +11,7 @@ import { USAGE_PROVIDER_IDS, providerLabel } from '@shared/usage-limits'
 import { AGENT_CONFIG } from '@shared/agents/config'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SettingsText } from '../SettingsText'
+import { Slider } from '@renderer/ui/md3'
 
 const ROWS = {
   percentMode: {
@@ -243,8 +244,8 @@ export function UsageSection({ isActive }: { isActive: boolean }): React.JSX.Ele
               />
               <label className="flex items-center gap-2 text-xs">
                 <span>Threshold</span>
-                <input
-                  type="range"
+                <Slider vocabularyMode="factual"
+                  
                   min={50}
                   max={100}
                   step={1}

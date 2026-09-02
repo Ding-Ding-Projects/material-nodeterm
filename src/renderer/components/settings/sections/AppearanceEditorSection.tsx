@@ -199,7 +199,7 @@ export function AppearanceEditorSection({ isActive }: { isActive: boolean }): Re
               Export presets…
             </Button>
             <Button onClick={() => fileInputRef.current?.click()}>Import presets…</Button>
-            <input
+            <Input vocabularyMode="factual"
               ref={fileInputRef}
               type="file"
               accept="application/json"

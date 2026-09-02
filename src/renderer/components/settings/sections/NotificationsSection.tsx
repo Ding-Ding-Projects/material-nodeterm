@@ -15,6 +15,7 @@ import {
 import { Slider } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { mapNativeNotification } from '../../../lib/personalVocabulary/hostMessage'
+import { Input } from '@renderer/ui/Input'
 
 const ROWS = {
   notify: {
@@ -196,7 +197,7 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
                   return (
                     <div key={kind} className="flex min-w-0 flex-wrap items-center justify-end gap-2">
                       <span className="min-w-28 text-right text-[12px] text-muted">{label}</span>
-                      <input
+                      <Input vocabularyMode="factual"
                         id={inputId}
                         type="file"
                         accept="audio/*"

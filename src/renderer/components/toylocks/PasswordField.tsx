@@ -1,5 +1,5 @@
 // The one password/PIN input every lock surface uses, so the lock dialogs stop being two bare
-// `<input type="password">` boxes with different bugs.
+// `<Input vocabularyMode="factual" type="password">` boxes with different bugs.
 //
 // What a password field owes the person typing into it, and what the previous ones did not give:
 //
@@ -15,6 +15,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
+import { Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 export function PasswordField({
   label,
@@ -70,7 +72,7 @@ export function PasswordField({
         {labelText}
       </label>
       <div className="toylock-passwordfield">
-        <input
+        <Input vocabularyMode="factual"
           id={id}
           ref={ref}
           type={revealed ? 'text' : 'password'}
@@ -91,8 +93,8 @@ export function PasswordField({
           }}
           onBlur={() => setCapsLock(false)}
         />
-        <button
-          type="button"
+        <Chip vocabularyMode="factual" selected={revealed}
+         
           className="toylock-passwordfield__reveal"
           // The accessible name says what the button DOES next, which is what a screen-reader user
           // needs, rather than describing the current state and leaving them to infer it.
@@ -108,7 +110,7 @@ export function PasswordField({
           }}
         >
           {revealed ? '🙈' : '👁'}
-        </button>
+        </Chip>
       </div>
       {capsLock && (
         <div className="toylock-field__warn" role="status">

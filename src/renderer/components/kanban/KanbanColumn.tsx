@@ -156,7 +156,7 @@ export const KanbanColumn = memo(function KanbanColumn({
         onDragEnd={onDragEnd}
       >
         {column ? (
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             className="kanban-col__dot"
             style={{ background: column.color }}
             title="Column color"
@@ -205,7 +205,7 @@ export const KanbanColumn = memo(function KanbanColumn({
       {column && swatchesOpen && (
         <div className="kanban-col__swatches">
           {NODE_COLORS.map((c) => (
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               key={c}
               className="kanban-col__swatch"
               style={{ background: c }}
@@ -267,7 +267,7 @@ export const KanbanColumn = memo(function KanbanColumn({
             }}
           >
             {activeSubmenu && (
-              <button
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 ref={submenuBackRef}
                 className="kanban-col__newback"
                 onClick={returnToCreateRoot}
@@ -277,12 +277,12 @@ export const KanbanColumn = memo(function KanbanColumn({
                   'terminalProfiles.create.backToNewSessions',
                   'Back to new sessions'
                 )}
-              </button>
+              </Button>
             )}
             {(activeSubmenu?.children ?? createOptions).map((option) => {
               if (option.type === 'submenu') {
                 return (
-                  <button
+                  <Button variant="outlined" size="small" vocabularyMode="factual"
                     key={option.key}
                     ref={(element) => {
                       if (element) rootOptionRefs.current.set(option.key, element)
@@ -296,11 +296,11 @@ export const KanbanColumn = memo(function KanbanColumn({
                     <span className="kanban-col__newicon">{option.icon}</span>
                     <span className="kanban-col__newlabel">{option.label}</span>
                     <span className="kanban-col__newchevron" aria-hidden>›</span>
-                  </button>
+                  </Button>
                 )
               }
               return (
-                <button
+                <Button variant="outlined" size="small" vocabularyMode="factual"
                   key={option.key}
                   aria-disabled={option.disabled || undefined}
                   title={option.hint}
@@ -317,7 +317,7 @@ export const KanbanColumn = memo(function KanbanColumn({
                       <span className="kanban-col__newreason">{option.hint}</span>
                     )}
                   </span>
-                </button>
+                </Button>
               )
             })}
           </div>

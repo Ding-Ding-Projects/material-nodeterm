@@ -10,6 +10,7 @@ import { loadIdentity, selectFaces, usePresence } from '../../state/presence'
 import { useBoardLog } from '../../state/boardLog'
 import { useProjects } from '../../state/projects'
 import { alphaTint } from '../color/tint'
+import { Button } from '@renderer/ui/md3'
 
 const initialOf = (name: string): string => (name.trim()[0] ?? '?').toUpperCase()
 
@@ -70,7 +71,7 @@ export function CardMetaBar({ nodeId, board, onChange }: CardMetaBarProps) {
         <span className="kanban-meta__label">Members</span>
         <div className="kanban-meta__row">
           {assignees.map((a) => (
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               key={a.name}
               className="kanban-avatar"
               style={{ background: a.color }}
@@ -78,27 +79,27 @@ export function CardMetaBar({ nodeId, board, onChange }: CardMetaBarProps) {
               onClick={() => onChange(toggleAssignee(board, nodeId, a))}
             >
               {initialOf(a.name)}
-            </button>
+            </Button>
           ))}
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             className="kanban-avatar kanban-avatar--add"
             title="Assign a member"
             onClick={() => setPickerOpen((v) => !v)}
           >
             +
-          </button>
+          </Button>
           {pickerOpen && (
             <div className="kanban-meta__picker">
               {pool.map((p) => {
                 const on = assignees.some((a) => a.name === p.name)
                 return (
-                  <button key={p.name} onClick={() => onChange(toggleAssignee(board, nodeId, p))}>
+                  <Button variant="outlined" size="small" vocabularyMode="factual" key={p.name} onClick={() => onChange(toggleAssignee(board, nodeId, p))}>
                     <span className="kanban-avatar" style={{ background: p.color }}>
                       {initialOf(p.name)}
                     </span>
                     <span className="kanban-meta__pname">{p.name}</span>
                     {on && <span className="kanban-meta__check">✓</span>}
-                  </button>
+                  </Button>
                 )
               })}
             </div>
@@ -109,13 +110,13 @@ export function CardMetaBar({ nodeId, board, onChange }: CardMetaBarProps) {
         <span className="kanban-meta__label">Labels</span>
         <div className="kanban-meta__row kanban-meta__row--labels">
           <LabelChips labels={labels} size="md" />
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             className="kanban-avatar kanban-avatar--add"
             title="Add label"
             onClick={() => setLabelsOpen((v) => !v)}
           >
             +
-          </button>
+          </Button>
           {labelsOpen && (
             <>
               <div className="label-picker__scrim" onMouseDown={() => setLabelsOpen(false)} />

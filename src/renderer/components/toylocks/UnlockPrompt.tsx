@@ -9,6 +9,8 @@ import { UnlockLadderPanel } from './UnlockLadder'
 import { PasswordField } from './PasswordField'
 import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 export function UnlockPrompt({
   record,
@@ -127,7 +129,7 @@ export function UnlockPrompt({
                 ...(record.credentialKind === 'password-totp' ? [copy(' (both required)')] : [])
               ])}
             </span>
-            <input
+            <Input vocabularyMode="factual"
               ref={needsPassword ? undefined : inputRef}
               type="text"
               inputMode="numeric"
@@ -168,15 +170,15 @@ export function UnlockPrompt({
               onDone={() => setPlaying(false)}
             />
           ) : (
-            <button className="toylock-btn--link" onClick={() => setPlaying(true)}>
+            <Button variant="outlined" size="small" vocabularyMode="factual" className="toylock-btn--link" onClick={() => setPlaying(true)}>
               {vocab('Play your way out of the wait')}
-            </button>
+            </Button>
           ))}
         <div className="toylock-wizard__actions">
-          <button className="toylock-btn" onClick={onClose}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="toylock-btn" onClick={onClose}>
             {vocab('Cancel')}
-          </button>
-          <button
+          </Button>
+          <Button variant="filled" size="small" vocabularyMode="factual"
             className="toylock-btn toylock-btn--primary"
             disabled={
               busy || retryAfterMs > 0 || (needsPassword && !password) || (needsCode && !code)
@@ -184,11 +186,11 @@ export function UnlockPrompt({
             onClick={() => void submit()}
           >
             {busy ? vocab('Checking…') : vocab('Unlock')}
-          </button>
+          </Button>
         </div>
-        <button className="toylock-btn--link" onClick={openSupportTickets}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" className="toylock-btn--link" onClick={openSupportTickets}>
           {vocab('Forgotten your password?')}
-        </button>
+        </Button>
       </div>
     </>,
     document.body

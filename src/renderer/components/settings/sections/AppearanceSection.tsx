@@ -27,6 +27,7 @@ import { UI_SCALE_CHOICES, resolveUiScale, uiScaleLabel } from '@shared/ui-scale
 import { SectionReset } from '../SectionReset'
 import { APPEARANCE_RESET_KEYS } from '@renderer/lib/settingsReset'
 import { Button as Md3Button, Slider } from '@renderer/ui/md3'
+import { Chip } from '@renderer/ui/md3'
 
 const ROWS = {
   appTheme: {
@@ -265,9 +266,9 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
           ) : (
             <div className="md3-accent-swatches">
               {NODE_COLORS.map((c) => (
-                <button
+                <Chip vocabularyMode="factual" selected={accent === c}
                   key={c}
-                  type="button"
+                 
                   aria-pressed={accent === c}
                   aria-label={`${vocab('Accent')} ${c}`}
                   onClick={() => update({ accent: c })}
@@ -290,7 +291,7 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
                       <path d="M4 9.5 7.5 13 14 5.5" />
                     </svg>
                   ) : null}
-                </button>
+                </Chip>
               ))}
               {/* The swatches above are a convenience layered ON the continuous picker, never a
                   replacement for it -- this row used to be swatch-only, so any accent outside the

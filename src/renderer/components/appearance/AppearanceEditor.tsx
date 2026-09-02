@@ -37,6 +37,7 @@ import { APPEARANCE_BLEND_MODES } from '@shared/types'
 import type { AppearanceBlendMode, AppearancePreset, AppearanceTextStyle, ElementAppearanceEntry } from '@shared/types'
 import { saveBlobDownload } from '@renderer/lib/exportSave'
 import { Slider } from '@renderer/ui/md3'
+import { Chip } from '@renderer/ui/md3'
 
 type Tab = 'font' | 'color' | 'layout' | 'presets'
 
@@ -146,7 +147,7 @@ export function AppearanceEditorHost(): React.JSX.Element | null {
           <div className="appearance-editor__title">{targetLabel}</div>
           <div className="appearance-editor__kind">{vocab(kindLabel(target.kind))}</div>
         </div>
-        <button
+        <Button size="small" vocabularyMode="factual"
           ref={firstFocusRef}
           type="button"
           className="appearance-editor__close"
@@ -154,7 +155,7 @@ export function AppearanceEditorHost(): React.JSX.Element | null {
           onClick={close}
         >
           ×
-        </button>
+        </Button>
       </div>
 
       <div
@@ -173,16 +174,16 @@ export function AppearanceEditorHost(): React.JSX.Element | null {
             { id: 'presets', label: 'Presets' }
           ] as const
         ).map((t) => (
-          <button
+          <Chip vocabularyMode="factual" selected={tab === t.id}
             key={t.id}
-            type="button"
+           
             role="tab"
             aria-selected={tab === t.id}
             className={`appearance-editor__tab${tab === t.id ? ' is-active' : ''}`}
             onClick={() => setTab(t.id)}
           >
             {vocab(t.label)}
-          </button>
+          </Chip>
         ))}
       </div>
 
@@ -228,7 +229,7 @@ function Row({
       </span>
       <div className="appearance-editor__row-control">{control}</div>
       {onReset && (
-        <button
+        <Button size="small" vocabularyMode="factual"
           type="button"
           className="appearance-editor__row-reset"
           title={vocab(`Reset ${label} to the platform default`)}
@@ -236,7 +237,7 @@ function Row({
           onClick={onReset}
         >
           ↺
-        </button>
+        </Button>
       )}
     </div>
   )
@@ -354,14 +355,14 @@ function FontTab({
       />
 
       <div className="appearance-editor__subhead">
-        <button
+        <Button size="small" vocabularyMode="factual"
           type="button"
           className="appearance-editor__disclosure"
           aria-expanded={showAxes}
           onClick={() => setShowAxes((s) => !s)}
         >
           {showAxes ? '▾' : '▸'} {vocab('Variable font axes (advanced)')}
-        </button>
+        </Button>
       </div>
       {showAxes && (
         <div className="appearance-editor__fields appearance-editor__fields--nested">
@@ -724,7 +725,7 @@ function PresetsTab({
         <div key={p.id} className="appearance-editor__preset-row">
           <span className="appearance-editor__preset-name">{p.name}</span>
           <Button onClick={() => applyPresetToElement(elementId, elementLabel, elementKind, p)}>{vocab('Apply')}</Button>
-          <button
+          <Button size="small" vocabularyMode="factual"
             type="button"
             className="appearance-editor__row-reset"
             aria-label={mapOwnedSentence(vocab, [copy('Delete preset '), fact(p.name)])}
@@ -732,7 +733,7 @@ function PresetsTab({
             onClick={() => deletePreset(p.id)}
           >
             🗑
-          </button>
+          </Button>
         </div>
       ))}
 
@@ -781,7 +782,7 @@ function PresetsTab({
       <div className="flex gap-2">
         <Button onClick={exportPresets} disabled={presets.length === 0}>{vocab('Export presets…')}</Button>
         <Button onClick={() => fileInputRef.current?.click()}>{vocab('Import presets…')}</Button>
-        <input ref={fileInputRef} type="file" accept="application/json" className="hidden" onChange={onImportFile} />
+        <Input vocabularyMode="factual" ref={fileInputRef} type="file" accept="application/json" className="hidden" onChange={onImportFile} />
       </div>
       {importMsg && <p className="appearance-editor__note">{importMsg}</p>}
 

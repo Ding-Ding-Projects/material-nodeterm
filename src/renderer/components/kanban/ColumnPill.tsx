@@ -2,6 +2,7 @@ import { columnForNode } from '../../lib/kanban'
 import { alphaTint } from '../color/tint'
 import { useProjects } from '../../state/projects'
 import { useViewMode } from '../../state/viewMode'
+import { Chip } from '../../ui/md3'
 
 /** Half-pill flush against a session node's TOP edge showing its kanban column — rendered as
  *  a SIBLING of the node's root (the roots are overflow:hidden, which would clip a child
@@ -12,7 +13,8 @@ export function ColumnPill({ nodeId }: { nodeId: string }) {
   )
   if (!column) return null
   return (
-    <button
+    <Chip
+      vocabularyMode="factual"
       className="kanban-node-pill nodrag"
       // alphaTint, NOT `${column.color}2e`: a hex-alpha suffix is only a colour for 6-digit hex,
       // so the moment the column recolour strip offers anything the picker can emit
@@ -29,6 +31,6 @@ export function ColumnPill({ nodeId }: { nodeId: string }) {
       }}
     >
       {column.title}
-    </button>
+    </Chip>
   )
 }

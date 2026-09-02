@@ -49,6 +49,7 @@ import {
   type ShortcutRowStatus,
   type ShortcutStatusFilter
 } from '../shortcutFilter'
+import { Button } from '@renderer/ui/md3'
 
 const DEFAULT_MAP = DEFAULT_SETTINGS.shortcuts
 
@@ -319,7 +320,7 @@ function Chips({
             </kbd>
           ))}
           {onRemove ? (
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               type="button"
               // The chord is named in the label because a row can hold several: "Remove" alone
               // would leave a screen reader with N identical buttons.
@@ -329,7 +330,7 @@ function Chips({
               className="cursor-pointer border-0 bg-transparent px-0.5 text-[12px] leading-none text-muted opacity-0 group-hover/row:opacity-60 hover:!opacity-100 focus-visible:opacity-100"
             >
               ×
-            </button>
+            </Button>
           ) : null}
         </span>
       ))}

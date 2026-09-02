@@ -7,6 +7,8 @@ import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { isValidGitRef, type WorktreeCreateValue, type WorktreeEntry } from '@shared/worktree'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { Radio } from '../ui/md3'
+import { Button } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 interface Props {
   /** 'create' = the pane/palette entry point (a new group frame); 'bind' = an existing group's
@@ -155,7 +157,7 @@ export function WorktreeDialog({
             </div>
             <div className="menu-filter bind-existing__search">
               <div className="menu-filter__row">
-                <input
+                <Input vocabularyMode="factual"
                   ref={existingSearchInputRef}
                   className="menu-filter__input"
                   value={existingSearch.value}
@@ -198,7 +200,7 @@ export function WorktreeDialog({
                   <li key={e.path} className="bind-existing__item">
                     {/* A detached-HEAD worktree cannot be bound (there is no branch to merge or name
                         the group after), so the row is disabled and says why. */}
-                    <button
+                    <Button variant="outlined" size="small" vocabularyMode="factual"
                       className="bind-existing__row"
                       disabled={busy || !e.branch}
                       onClick={() => onBindExisting(e)}
@@ -212,7 +214,7 @@ export function WorktreeDialog({
                         {e.branch ? `⎇ ${e.branch}` : '⎇ (detached HEAD — check out a branch first)'}
                       </span>
                       <span className="bind-existing__path">{e.path}</span>
-                    </button>
+                    </Button>
                   </li>
                 ))
               )}
@@ -252,7 +254,7 @@ export function WorktreeDialog({
         ) : (
           <label className="bind-field">
             {vocabulary('Branch')}
-            <input
+            <Input vocabularyMode="factual"
               value={branch}
               onChange={(e) => {
                 setBranch(e.target.value)
@@ -291,7 +293,7 @@ export function WorktreeDialog({
             ) : (
               <label className="bind-field">
                 {vocabulary('Base')}
-                <input
+                <Input vocabularyMode="factual"
                   value={baseRef}
                   placeholder="e.g. origin/main, a tag, or a commit"
                   onChange={(e) => {
@@ -306,7 +308,7 @@ export function WorktreeDialog({
 
         <label className="bind-field">
           {vocabulary('Worktree path')}
-          <input
+          <Input vocabularyMode="factual"
             value={path}
             onChange={(e) => {
               setPath(e.target.value)
@@ -323,10 +325,10 @@ export function WorktreeDialog({
         {error && <div className="bind-error">{error}</div>}
 
         <div className="confirm__actions">
-          <button className="confirm__btn" onClick={onCancel} disabled={busy}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" onClick={onCancel} disabled={busy}>
             {vocabulary('Cancel')}
-          </button>
-          <button
+          </Button>
+          <Button variant="filled" size="small" vocabularyMode="factual"
             className="confirm__btn primary"
             disabled={!valid}
             onClick={() =>
@@ -340,7 +342,7 @@ export function WorktreeDialog({
             }
           >
             {busy ? vocabulary('Creating…') : createLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

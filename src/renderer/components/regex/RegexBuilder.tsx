@@ -20,6 +20,8 @@ import { IconRegexArrowInsert, IconRegexError, IconRegexQuote, IconRegexWarning 
 import { TextArea } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
+import { Button, Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 export interface RegexBuilderValue {
   pattern: string
@@ -136,7 +138,7 @@ export function RegexBuilder({ value, onChange, onDone, autoFocusPattern = false
         <p className="md3-regex-builder__note">{REGEX_ENGINE_NOTE}</p>
         <div className="md3-regex-builder__token-search">
           <IconSearch />
-          <input
+          <Input vocabularyMode="factual"
             value={tokQuery}
             onChange={(e) => setTokQuery(e.target.value)}
             placeholder={vocab('Filter tokens…')}
@@ -153,7 +155,7 @@ export function RegexBuilder({ value, onChange, onDone, autoFocusPattern = false
               <h3 className="md3-regex-builder__section-title">{vocab(g.title)}</h3>
               <div className="md3-regex-builder__token-list">
                 {g.tokens.map((t) => (
-                  <button
+                  <Button variant="outlined" size="small" vocabularyMode="factual"
                     key={t.label}
                     type="button"
                     className="md3-regex-builder__token"
@@ -162,7 +164,7 @@ export function RegexBuilder({ value, onChange, onDone, autoFocusPattern = false
                   >
                     <span className="md3-regex-builder__token-glyph">{t.label}</span>
                     <span className="md3-regex-builder__token-desc">{vocab(t.hint)}</span>
-                  </button>
+                  </Button>
                 ))}
               </div>
             </section>
@@ -171,10 +173,10 @@ export function RegexBuilder({ value, onChange, onDone, autoFocusPattern = false
             <h3 className="md3-regex-builder__section-title">{vocab('Preset library')}</h3>
             <div className="md3-regex-builder__preset-list">
               {REGEX_PRESETS.map((p) => (
-                <button key={p.name} type="button" className="md3-regex-builder__preset" onClick={() => usePreset(p)}>
+                <Button variant="outlined" size="small" vocabularyMode="factual" key={p.name} type="button" className="md3-regex-builder__preset" onClick={() => usePreset(p)}>
                   <span className="md3-regex-builder__preset-name">{vocab(p.name)}</span>
                   <IconRegexArrowInsert />
-                </button>
+                </Button>
               ))}
             </div>
           </section>
@@ -189,11 +191,11 @@ export function RegexBuilder({ value, onChange, onDone, autoFocusPattern = false
           <span className="md3-regex-builder__count">
             {mapOwnedSentence(vocab, [fact(String(value.pattern.length)), copy(' / '), fact(String(MAX_PATTERN_LENGTH))])}
           </span>
-          <button type="button" className="md3-regex-builder__chip-btn" onClick={copyLiteral}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="md3-regex-builder__chip-btn" onClick={copyLiteral}>
             <IconDuplicate />
             {vocab(copied ? 'Copied' : 'Copy /literal/')}
-          </button>
-          <button
+          </Button>
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             type="button"
             className="md3-regex-builder__chip-btn"
             title={vocab('Escape the whole pattern so it matches itself as literal text')}
@@ -201,19 +203,19 @@ export function RegexBuilder({ value, onChange, onDone, autoFocusPattern = false
           >
             <IconRegexQuote />
             {vocab('Escape literal')}
-          </button>
-          <button
+          </Button>
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             type="button"
             className="md3-regex-builder__chip-btn md3-regex-builder__chip-btn--muted"
             onClick={clearPattern}
           >
             <IconTrash />
             {vocab('Clear')}
-          </button>
+          </Button>
         </div>
         <div className={`md3-regex-builder__pattern-pill${!compiled.ok && value.pattern ? ' md3-regex-builder__pattern-pill--error' : ''}`}>
           <span className="md3-regex-builder__slash">/</span>
-          <input
+          <Input vocabularyMode="factual"
             ref={patternRef}
             autoFocus={autoFocusPattern}
             className="md3-regex-builder__pattern-input"
@@ -232,9 +234,9 @@ export function RegexBuilder({ value, onChange, onDone, autoFocusPattern = false
           {REGEX_FLAGS.map((f) => {
             const on = value.flags.includes(f.flag)
             return (
-              <button
+              <Chip vocabularyMode="factual" selected={on}
                 key={f.flag}
-                type="button"
+               
                 className={`md3-regex-builder__flag-chip${on ? ' md3-regex-builder__flag-chip--on' : ''}`}
                 title={vocab(f.description)}
                 aria-pressed={on}
@@ -242,7 +244,7 @@ export function RegexBuilder({ value, onChange, onDone, autoFocusPattern = false
               >
                 <span className="md3-regex-builder__flag-letter">{f.flag}</span>
                 {vocab(f.label)}
-              </button>
+              </Chip>
             )
           })}
         </div>
@@ -330,7 +332,7 @@ export function RegexBuilder({ value, onChange, onDone, autoFocusPattern = false
             $1 · $&lt;name&gt; · $&amp; · $` · $&apos;
           </span>
         </div>
-        <input
+        <Input vocabularyMode="factual"
           className="md3-regex-builder__replacement"
           value={replacement}
           spellCheck={false}
@@ -411,9 +413,9 @@ export function RegexBuilder({ value, onChange, onDone, autoFocusPattern = false
 
       {onDone && (
         <div className="md3-regex-builder__footer">
-          <button type="button" className="md3-regex-builder__done" onClick={onDone}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="md3-regex-builder__done" onClick={onDone}>
             {vocab('Done')}
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -13,6 +13,7 @@ import { settingsSidebarSearchEntry } from './vocabulary'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { useMemo } from 'react'
 import { visibleSettingsGroups, type SettingsGroup, type SettingsSectionId } from './nav'
+import { Button } from '@renderer/ui/md3'
 
 const isPlatformVariant = false
 
@@ -59,7 +60,7 @@ export function SettingsSidebar({
         className="flex items-center px-4 pb-2 pt-14"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           type="button"
           onClick={onClose}
           aria-label={ts('settings.nav.backToApp', 'Back to app')}
@@ -70,7 +71,7 @@ export function SettingsSidebar({
             <path d="M8.5 3.5 5 7l3.5 3.5" />
           </svg>
           {ts('settings.nav.backToApp', 'Back to app')}
-        </button>
+        </Button>
       </div>
 
       <div className="px-4 pb-4">
@@ -136,7 +137,7 @@ export function SettingsSidebar({
               const sectionTitle = isSchoolMode ? label : ts(`settings.section.${s.id}`, s.title)
               const dimmed = hasQuery && !matchesEntry(search, settingsSidebarSearchEntry(s, schoolModeName, vocab, sectionTitle, true))
               return (
-                <button
+                <Button variant="outlined" size="small" vocabularyMode="factual"
                   key={s.id}
                   type="button"
                   onClick={() => onSelect(s.id)}
@@ -166,7 +167,7 @@ export function SettingsSidebar({
                     )}
                   </span>
                   <span className="md3-settings-nav-row__label">{sectionTitle}</span>
-                </button>
+                </Button>
               )
             })}
           </div>

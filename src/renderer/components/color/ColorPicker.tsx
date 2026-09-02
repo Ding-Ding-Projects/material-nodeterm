@@ -36,6 +36,8 @@ import {
 } from '@renderer/lib/color/convert'
 import { cn } from '@renderer/ui/cn'
 import { copyColorText } from './color-clipboard'
+import { Button, Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 export type ColorFormat = 'hex' | 'rgb' | 'hsl' | 'hsv' | 'hwb' | 'lab' | 'lch' | 'oklab' | 'oklch' | 'cmyk'
 type Format = ColorFormat
@@ -278,7 +280,7 @@ export function ColorPicker({
         </div>
         <div className="color-picker__sliders">
           <label className="sr-only" htmlFor={`${label}-hue`}>{labelText} {vocab('hue')}</label>
-          <input
+          <Input vocabularyMode="factual"
             id={`${label}-hue`}
             className="color-picker__slider color-picker__slider--hue"
             type="range"
@@ -291,7 +293,7 @@ export function ColorPicker({
           {allowAlpha && (
             <>
               <label className="sr-only" htmlFor={`${label}-alpha`}>{labelText} {vocab('alpha')}</label>
-              <input
+              <Input vocabularyMode="factual"
                 id={`${label}-alpha`}
                 className="color-picker__slider color-picker__slider--alpha"
                 style={{ background: alphaBg }}
@@ -306,7 +308,7 @@ export function ColorPicker({
           )}
         </div>
         {hasEyeDropper() && (
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             type="button"
             className="color-picker__eyedropper"
             title={vocab('Pick a colour from the screen')}
@@ -314,28 +316,28 @@ export function ColorPicker({
             onClick={() => void useEyeDropper()}
           >
             💧
-          </button>
+          </Button>
         )}
       </div>
 
       <div className="color-picker__formats" role="tablist" aria-label={`${labelText} ${vocab('colour format')}`}>
         {FORMATS.map((f) => (
-          <button
+          <Chip vocabularyMode="factual" selected={format === f.id}
             key={f.id}
-            type="button"
+           
             role="tab"
             aria-selected={format === f.id}
             className={cn('color-picker__format-tab', format === f.id && 'is-active')}
             onClick={() => setFormat(f.id)}
           >
             {f.label}
-          </button>
+          </Chip>
         ))}
       </div>
 
       <div className="color-picker__entry">
         {format === 'hex' && (
-          <input
+          <Input vocabularyMode="factual"
             className={cn('color-picker__hex-input', invalid && 'is-invalid')}
             aria-label={`${labelText} ${vocab('hex value')}`}
             defaultValue={toHex(rgba, rgba.a < 1)}
@@ -354,9 +356,9 @@ export function ColorPicker({
             onCommit={(next, clipped) => commit(next, format, clipped)}
           />
         )}
-        <button type="button" className="color-picker__copy" onClick={() => void copyCurrent()}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" className="color-picker__copy" onClick={() => void copyCurrent()}>
           {vocab(copied === format ? 'Copied' : 'Copy')}
-        </button>
+        </Button>
       </div>
       {invalid && format === 'hex' && (
         <p className="color-picker__note color-picker__note--warn">
@@ -385,7 +387,7 @@ export function ColorPicker({
 
       <div className="color-picker__swatches" role="group" aria-label={vocab('Quick colours')}>
         {QUICK_SWATCHES.map((c) => (
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             key={c}
             type="button"
             className="color-picker__swatch"
@@ -401,7 +403,7 @@ export function ColorPicker({
       {recents.length > 0 && (
         <div className="color-picker__swatches" role="group" aria-label={vocab('Recently used colours')}>
           {recents.map((c) => (
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               key={c}
               type="button"
               className="color-picker__swatch"
@@ -415,13 +417,13 @@ export function ColorPicker({
           ))}
         </div>
       )}
-      <button
+      <Button variant="outlined" size="small" vocabularyMode="factual"
         type="button"
         className="color-picker__remember"
         onClick={() => pushRecent(toHex(rgba))}
       >
         {vocab('+ Save to recents')}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -635,7 +637,7 @@ function NumField({
   return (
     <label className="color-picker__channel">
       <span>{label}</span>
-      <input
+      <Input vocabularyMode="factual"
         type="number"
         defaultValue={value}
         key={value}

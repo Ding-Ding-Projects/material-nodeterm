@@ -18158,9 +18158,8 @@ export function Canvas() {
             </div>
           ),
           commandPalette: (
-            <button
+            <Button variant="text" vocabularyMode="factual"
               className="cluster-search"
-              type="button"
               title="Command palette"
               aria-label="Command palette"
               onClick={() => setPaletteOpen(true)}
@@ -18168,14 +18167,13 @@ export function Canvas() {
               <span className="cluster-search__icon" aria-hidden="true">⌕</span>
               <span className="cluster-search__placeholder">Search everything…</span>
               {paletteChip ? <span className="kbd">{paletteChip}</span> : null}
-            </button>
+            </Button>
           ),
           moreTriggerRef: compactMoreAnchorRef,
           presence: <Facepile onJump={travelToNode} onSwitchProject={travelToProject} />,
           notifications: (
-            <button
+            <IconButton size="standard" vocabularyMode="factual"
               className="notif-bell"
-              type="button"
               title="Notifications"
               aria-label={unreadNotifCount > 0 ? `Notifications (${unreadNotifCount} unread)` : 'Notifications'}
               onClick={() => setNotifCenterOpen(true)}
@@ -18186,7 +18184,7 @@ export function Canvas() {
                   {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
                 </span>
               )}
-            </button>
+            </IconButton>
           ),
           menuItems: [
             {
@@ -18266,8 +18264,7 @@ export function Canvas() {
           open={multiverseNavigatorOpen}
           onOpenChange={setMultiverseNavigatorOpen}
         />
-        <button
-          type="button"
+        <Button variant="text" size="small" vocabularyMode="factual"
           className="multiverse-nav__portal-trigger"
           title="Manage portal lifecycle"
           onClick={() => {
@@ -18276,11 +18273,11 @@ export function Canvas() {
           }}
         >
           Portals
-        </button>
+        </Button>
         <div className="md3-app-bar__spacer" />
         {/* The docked search bar — the SAME `.cluster-search` button/title the packaged-app
             driver script selects; re-themed, never renamed. */}
-        <button
+        <Button variant="text" vocabularyMode="factual"
           className="cluster-search"
           title="Command palette"
           onClick={() => setPaletteOpen(true)}
@@ -18288,13 +18285,13 @@ export function Canvas() {
           <span className="cluster-search__icon">⌕</span>
             <span className="cluster-search__placeholder">Search everything…</span>
           <span className="kbd">{hintLabel('⌘K')}</span>
-        </button>
+        </Button>
         <div className="md3-app-bar__cluster">
           {/* Mounted here unconditionally (the cluster always renders): the facepile is null
               with no peers — taking no space — but must stay mounted to prune the presence face
               cache (state/presence.ts → selectFaces). */}
           <Facepile onJump={travelToNode} onSwitchProject={travelToProject} />
-          <button
+          <IconButton size="standard" vocabularyMode="factual"
             className="notif-bell"
             title="Notifications"
             aria-label={
@@ -18308,7 +18305,7 @@ export function Canvas() {
                 {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
               </span>
             )}
-          </button>
+          </IconButton>
           {window.nodeTerminal.pairing.supported ? (
             <IconButton size="standard"
               title="Pair phone" aria-label="Pair phone"
@@ -18837,21 +18834,21 @@ export function Canvas() {
             no peers — taking no space — but must stay mounted to prune the presence face cache
             (state/presence.ts → selectFaces). */}
         <Facepile onJump={travelToNode} onSwitchProject={travelToProject} />
-        <button
+        <Button variant="text" vocabularyMode="factual"
           className="cluster-search"
           title="Command palette"
           onClick={() => setPaletteOpen(true)}
         >
           <span className="cluster-search__icon">⌕</span>
           {paletteChip && <span className="kbd">{paletteChip}</span>}
-        </button>
+        </Button>
         <IconButton size="dense" title={commandTooltip('Explorer', 'panel.explorer')} aria-label={commandTooltip('Explorer', 'panel.explorer')} onClick={() => showExplorer('toggle')}>
           <IconExplorer />
         </IconButton>
         <IconButton size="dense" title={commandTooltip('Source Control', 'panel.sourceControl')} aria-label={commandTooltip('Source Control', 'panel.sourceControl')} onClick={() => setScOpen(true)}>
           <IconBranch />
         </IconButton>
-        <button
+        <IconButton size="standard" vocabularyMode="factual" aria-label="Pair phone"
           title="Pair phone"
           onClick={(e) => {
             const r = e.currentTarget.getBoundingClientRect()
@@ -18859,7 +18856,7 @@ export function Canvas() {
           }}
         >
           <IconPhone />
-        </button>
+        </IconButton>
         <IconButton size="dense"
           title={commandTooltip('Settings', 'app.settings')} aria-label={commandTooltip('Settings', 'app.settings')}
           onClick={() => {
@@ -18869,7 +18866,7 @@ export function Canvas() {
         >
           <IconGear />
         </IconButton>
-        <button
+        <IconButton size="standard" vocabularyMode="factual" aria-label="Help"
           title="Help"
           onClick={(e) => {
             const r = e.currentTarget.getBoundingClientRect()
@@ -18898,7 +18895,7 @@ export function Canvas() {
           }}
         >
           ?
-        </button>
+        </IconButton>
       </div>
 
       <div

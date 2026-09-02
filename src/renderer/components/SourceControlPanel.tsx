@@ -328,13 +328,13 @@ export function SourceControlPanel({
           <span className={`scm-letter md3-status-badge ${gitStatusBadgeClass(f.status)}`}>
             {f.status}
           </span>
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             className="scm-path"
             title="Open diff"
             onClick={() => onOpenDiff(f.path, staged, cwd!)}
           >
             {f.path}
-          </button>
+          </Button>
           <DiffStat added={f.added} deleted={f.deleted} />
           <span className="scm-row-actions">
             {!staged && (
@@ -870,7 +870,7 @@ export function SourceControlPanel({
               style={{ top: fileMenu.y, left: fileMenu.x, zIndex: 80 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <button
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 className="ctx-item"
                 onClick={() => {
                   window.nodeTerminal.clipboard.writeText(`${cwd}/${fileMenu.path}`)
@@ -878,8 +878,8 @@ export function SourceControlPanel({
                 }}
               >
                 Copy Path
-              </button>
-              <button
+              </Button>
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 className="ctx-item"
                 onClick={() => {
                   window.nodeTerminal.clipboard.writeText(fileMenu.path)
@@ -887,11 +887,11 @@ export function SourceControlPanel({
                 }}
               >
                 Copy Relative Path
-              </button>
+              </Button>
               <div className="ctx-sep" />
               {/* Always "Add": a file this panel lists is by definition NOT ignored (git status
                   never shows ignored files), so there is nothing to offer removal for here. */}
-              <button
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 className="ctx-item"
                 onClick={() => {
                   const m = fileMenu
@@ -900,9 +900,9 @@ export function SourceControlPanel({
                 }}
               >
                 Add to .gitignore
-              </button>
+              </Button>
               <div className="ctx-sep" />
-              <button
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 className="ctx-item"
                 onClick={() => {
                   window.nodeTerminal.shell.reveal(`${cwd}/${fileMenu.path}`)
@@ -910,7 +910,7 @@ export function SourceControlPanel({
                 }}
               >
                 Reveal in Finder
-              </button>
+              </Button>
             </div>
           </>,
           document.body

@@ -41,6 +41,7 @@ import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
 import { cn } from '@renderer/ui/cn'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { Chip } from '@renderer/ui/md3'
 
 const ROWS = {
   accounts: {
@@ -216,8 +217,8 @@ function AccountColorSwatches({
       className="flex flex-wrap items-center gap-2 pt-1"
     >
       <span className="text-[12px] text-muted">Node color</span>
-      <button
-        type="button"
+      <Chip vocabularyMode="factual" selected={!account.color}
+       
         aria-label="Default"
         aria-pressed={!account.color}
         title="Use the agent's own color"
@@ -228,11 +229,11 @@ function AccountColorSwatches({
         )}
       >
         ×
-      </button>
+      </Chip>
       {NODE_COLORS.map((color) => (
-        <button
+        <Chip vocabularyMode="factual" selected={account.color === color}
           key={color}
-          type="button"
+         
           aria-label={color}
           aria-pressed={account.color === color}
           title={`Use ${color}`}
@@ -241,8 +242,7 @@ function AccountColorSwatches({
           className={cn(
             'size-5 rounded-full border-2',
             account.color === color ? 'border-text' : 'border-transparent'
-          )}
-        />
+          )} />
       ))}
     </div>
   )

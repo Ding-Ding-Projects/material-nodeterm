@@ -12,10 +12,12 @@ import { RegexBuilder } from './RegexBuilder'
 import type { RegexBuilderBinding } from '../../lib/regex/useRegexSearchField'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
+import { Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 interface AnchoredRegexBuilderProps {
   search: RegexBuilderBinding
-  /** The field this builder attaches to. Pass the SAME ref you gave the `<input>` so the popover
+  /** The field this builder attaches to. Pass the SAME ref you gave the `<Input vocabularyMode="factual">` so the popover
    *  opens right beside it. */
   fieldRef?: RefObject<HTMLElement>
   /** Accessible label for the trigger button (defaults to a generic one — pass a field-specific
@@ -90,9 +92,9 @@ export function AnchoredRegexBuilder({
 
   return (
     <>
-      <button
+      <Chip vocabularyMode="factual" selected={search.mode === 'regex'}
         ref={ownTriggerRef}
-        type="button"
+       
         className={`md3-regex-trigger${search.mode === 'regex' ? ' md3-regex-trigger--active' : ''}`}
         title={vocab(triggerTitle)}
         aria-label={vocab(triggerLabel)}
@@ -106,7 +108,7 @@ export function AnchoredRegexBuilder({
         }}
       >
         .*
-      </button>
+      </Chip>
       <AnchoredPopover
         anchorRef={anchor}
         open={open}

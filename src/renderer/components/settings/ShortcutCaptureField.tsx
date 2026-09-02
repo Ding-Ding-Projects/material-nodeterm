@@ -121,7 +121,7 @@ export function ShortcutCaptureField({
           Reset
         </Button>
       ) : null}
-      <button
+      <Button size="small" vocabularyMode="factual"
         type="button"
         className="md3-shortcut-field"
         onClick={startCapturing}
@@ -130,7 +130,7 @@ export function ShortcutCaptureField({
         onBlur={stopCapturing}
       >
         {capturing ? hint || 'Press keys…' : value ? formatShortcut(value, isMac) : 'Unbound'}
-      </button>
+      </Button>
     </div>
   )
 }

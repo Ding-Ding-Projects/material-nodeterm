@@ -15,6 +15,7 @@ import { APP_LOGO_PRESETS } from '@renderer/components/appearance/BrandMark'
 import { DEFAULT_CROP, processLogoFile, type LogoValidationError } from '@renderer/lib/appearance/logoProcess'
 import { LogoProcessGeneration, selectLogoPreset } from '@renderer/lib/appearance/logoSelection'
 import type { AppLogoCrop } from '@shared/types'
+import { Chip } from '@renderer/ui/md3'
 
 const ROWS = {
   name: { title: 'App name', keywords: ['rename', 'name', 'title', 'brand', 'identity'] },
@@ -159,9 +160,9 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
 
           <div className="mt-3 flex flex-wrap gap-2" role="radiogroup" aria-label="Logo preset">
             {APP_LOGO_PRESETS.map((p) => (
-              <button
+              <Chip vocabularyMode="factual" selected={appLogo.selection === p.id}
                 key={p.id}
-                type="button"
+               
                 role="radio"
                 aria-checked={appLogo.selection === p.id}
                 title={p.label}
@@ -170,10 +171,10 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
                 className={`app-logo__preset${appLogo.selection === p.id ? ' is-active' : ''}`}
               >
                 {p.render(28)}
-              </button>
+              </Chip>
             ))}
-            <button
-              type="button"
+            <Chip vocabularyMode="factual" selected={appLogo.selection === 'custom'}
+             
               role="radio"
               aria-checked={appLogo.selection === 'custom'}
               title={appLogo.customImage ? 'Custom image' : 'No custom image uploaded yet'}
@@ -189,14 +190,14 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
                   +
                 </span>
               )}
-            </button>
+            </Chip>
           </div>
 
           <div className="mt-4">
             <Button onClick={() => fileInputRef.current?.click()}>
               {appLogo.customImage ? 'Replace custom image…' : 'Upload custom image…'}
             </Button>
-            <input
+            <Input vocabularyMode="factual"
               ref={fileInputRef}
               type="file"
               accept="image/png,image/jpeg,image/gif,image/webp,image/bmp"

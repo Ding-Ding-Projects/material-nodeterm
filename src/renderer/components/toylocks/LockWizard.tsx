@@ -16,6 +16,8 @@ import { RecoveryNotice } from './RecoveryNotice'
 import { Checkbox, Radio } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 type Step = 'setup' | 'password' | 'totp' | 'done'
 
@@ -258,7 +260,7 @@ export function LockWizard({
                 <option value="until-close">Until nodeterm quits</option>
               </Select>
               {duration === 'minutes' && (
-                <input
+                <Input vocabularyMode="factual"
                   type="number"
                   className="toylock-number"
                   min={1}
@@ -278,10 +280,10 @@ export function LockWizard({
             </label>
             {error && <div className="toylock-error">{error}</div>}
             <div className="toylock-wizard__actions">
-              <button className="toylock-btn" onClick={cancelAndClose}>
+              <Button variant="outlined" size="small" vocabularyMode="factual" className="toylock-btn" onClick={cancelAndClose}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button variant="filled" size="small" vocabularyMode="factual"
                 className="toylock-btn toylock-btn--primary"
                 disabled={busy}
                 onClick={() =>
@@ -297,7 +299,7 @@ export function LockWizard({
                     : credentialKind === 'password-totp'
                       ? 'Set password…'
                       : 'Generate secret…'}
-              </button>
+              </Button>
             </div>
           </>
         )}
@@ -337,10 +339,10 @@ export function LockWizard({
             )}
             {error && <div className="toylock-error">{error}</div>}
             <div className="toylock-wizard__actions">
-              <button className="toylock-btn" onClick={() => setStep('setup')}>
+              <Button variant="outlined" size="small" vocabularyMode="factual" className="toylock-btn" onClick={() => setStep('setup')}>
                 Back
-              </button>
-              <button
+              </Button>
+              <Button variant="filled" size="small" vocabularyMode="factual"
                 className="toylock-btn toylock-btn--primary"
                 // Disabled until the entry can actually succeed. The submit path still re-checks
                 // every one of these: a disabled button is the visible guard, never the real one.
@@ -354,7 +356,7 @@ export function LockWizard({
                   : busy
                     ? 'Locking…'
                     : 'Lock it'}
-              </button>
+              </Button>
             </div>
           </>
         )}
@@ -373,7 +375,7 @@ export function LockWizard({
             </div>
             <div className="toylock-field">
               <span className="toylock-field__label">Type the current code to confirm pairing</span>
-              <input
+              <Input vocabularyMode="factual"
                 ref={firstFieldRef}
                 type="text"
                 inputMode="numeric"
@@ -397,12 +399,12 @@ export function LockWizard({
             </label>
             {error && <div className="toylock-error">{error}</div>}
             <div className="toylock-wizard__actions">
-              <button className="toylock-btn" onClick={cancelAndClose}>
+              <Button variant="outlined" size="small" vocabularyMode="factual" className="toylock-btn" onClick={cancelAndClose}>
                 Cancel
-              </button>
-              <button className="toylock-btn toylock-btn--primary" disabled={busy || totpCode.length < 6} onClick={() => void confirmTotp()}>
+              </Button>
+              <Button variant="filled" size="small" vocabularyMode="factual" className="toylock-btn toylock-btn--primary" disabled={busy || totpCode.length < 6} onClick={() => void confirmTotp()}>
                 {busy ? 'Confirming…' : 'Confirm & lock'}
-              </button>
+              </Button>
             </div>
           </>
         )}
@@ -412,9 +414,9 @@ export function LockWizard({
             <div className="toylock-success">🔒 “{target.label}” is locked.</div>
             <RecoveryNotice />
             <div className="toylock-wizard__actions">
-              <button className="toylock-btn toylock-btn--primary" onClick={onClose}>
+              <Button variant="filled" size="small" vocabularyMode="factual" className="toylock-btn toylock-btn--primary" onClick={onClose}>
                 Done
-              </button>
+              </Button>
             </div>
           </>
         )}

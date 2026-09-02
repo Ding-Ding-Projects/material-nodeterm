@@ -74,7 +74,7 @@ export function PresenceIdentitySection({ isActive }: { isActive: boolean }): Re
             control={
               <div className="flex flex-wrap gap-2">
                 {PRESENCE_COLORS.map((c) => (
-                  <button
+                  <Button size="small" vocabularyMode="factual"
                     key={c}
                     type="button"
                     title={c}

@@ -776,7 +776,7 @@ export const KanbanView = memo(function KanbanView({
                     const key = `local:${l.id}`
                     const on = activeFilter.includes(key)
                     return (
-                      <button
+                      <Button variant="outlined" size="small" vocabularyMode="factual"
                         key={key}
                         className="kanban-filter-row"
                         onClick={() => toggleFilter(key)}
@@ -788,7 +788,7 @@ export const KanbanView = memo(function KanbanView({
                           {l.name || 'Label'}
                         </span>
                         {on && <span className="label-picker__rowcheck">✓</span>}
-                      </button>
+                      </Button>
                     )
                   })}
                   {githubLabels.length > 0 && <div className="kanban-filter-group">GitHub</div>}
@@ -796,7 +796,7 @@ export const KanbanView = memo(function KanbanView({
                     const key = `github:${label.name.normalize('NFKC').toLocaleLowerCase('en-US')}`
                     const on = activeFilter.includes(key)
                     return (
-                      <button
+                      <Button variant="outlined" size="small" vocabularyMode="factual"
                         key={key}
                         className="kanban-filter-row"
                         onClick={() => toggleFilter(key)}
@@ -811,7 +811,7 @@ export const KanbanView = memo(function KanbanView({
                           {label.name}
                         </span>
                         {on && <span className="label-picker__rowcheck">✓</span>}
-                      </button>
+                      </Button>
                     )
                   })}
                   {activeFilter.length > 0 && (

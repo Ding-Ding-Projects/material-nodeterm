@@ -6,6 +6,8 @@ import { canvasImportRefusal } from '../canvas/canvas-image-import'
 import { useProjects } from '../state/projects'
 import { sessionForProject } from '../session/session'
 import { useDialogStack } from './dialog-stack'
+import { Button } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 const PALETTE: readonly string[] = [
   '\u{1F680}', '\u{1F525}', '\u{2B50}', '\u{26A1}', '\u{1F41B}', '\u{1F527}',
@@ -105,23 +107,23 @@ function NodeIconPicker({ title, icon, onDone }: { title: string; icon?: NodeIco
         <p className="confirm__msg">Icon for {title || 'this node'}</p>
         <div className="node-icon-dialog__grid">
           {PALETTE.map((entry) => (
-            <button key={entry} type="button" aria-label={`Use ${entry} as the session icon`} className={`node-icon-dialog__swatch${icon?.type === 'emoji' && icon.value === entry ? ' is-current' : ''}`} onClick={() => onDone({ type: 'emoji', value: entry })}>
+            <Button variant="outlined" size="small" vocabularyMode="factual" key={entry} type="button" aria-label={`Use ${entry} as the session icon`} className={`node-icon-dialog__swatch${icon?.type === 'emoji' && icon.value === entry ? ' is-current' : ''}`} onClick={() => onDone({ type: 'emoji', value: entry })}>
               {entry}
-            </button>
+            </Button>
           ))}
         </div>
         <div className="node-icon-dialog__row">
-          <input ref={inputRef} className="confirm__input node-icon-dialog__input" value={typed} placeholder="Or type any emoji or character" spellCheck={false} onChange={(event) => setTyped(event.target.value)} onKeyDown={(event) => {
+          <Input vocabularyMode="factual" ref={inputRef} className="confirm__input node-icon-dialog__input" value={typed} placeholder="Or type any emoji or character" spellCheck={false} onChange={(event) => setTyped(event.target.value)} onKeyDown={(event) => {
             if (event.key === 'Enter') { event.preventDefault(); commitTyped(typed) }
             else if (event.key === 'Escape') { event.preventDefault(); onDone(undefined) }
           }} />
-          <button type="button" className="confirm__btn" disabled={busy} onClick={() => void chooseImage()}>{busy ? 'Copying…' : 'Choose image…'}</button>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" disabled={busy} onClick={() => void chooseImage()}>{busy ? 'Copying…' : 'Choose image…'}</Button>
         </div>
         {error && <p className="node-icon-dialog__error">{error}</p>}
         <div className="confirm__actions">
-          <button type="button" className="confirm__btn" disabled={!icon} onClick={() => onDone(null)}>Remove icon</button>
-          <button type="button" className="confirm__btn" onClick={() => onDone(undefined)}>Cancel</button>
-          <button type="button" className="confirm__btn primary" onClick={() => commitTyped(typed)}>Use</button>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" disabled={!icon} onClick={() => onDone(null)}>Remove icon</Button>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" onClick={() => onDone(undefined)}>Cancel</Button>
+          <Button variant="filled" size="small" vocabularyMode="factual" type="button" className="confirm__btn primary" onClick={() => commitTyped(typed)}>Use</Button>
         </div>
       </div>
     </div>,

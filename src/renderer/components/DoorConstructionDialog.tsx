@@ -13,6 +13,8 @@ import {
   type PortableDoorConstructionV3,
   type PortableDoorPartV3
 } from '@shared/door-construction'
+import { Button, Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 export interface DoorConstructionDialogProps {
   open: boolean
@@ -95,7 +97,7 @@ function PartPicker({ part, selected, onChoose, ts }: PartPickerProps): React.JS
   return (
     <div className="door-construction__picker">
       <span className="door-construction__picker-label">{partLabel(part, ts)}</span>
-      <button
+      <Button variant="outlined" size="small" vocabularyMode="factual"
         ref={anchorRef}
         type="button"
         className="door-construction__picker-trigger"
@@ -108,7 +110,7 @@ function PartPicker({ part, selected, onChoose, ts }: PartPickerProps): React.JS
       >
         <span>{choiceText(part, selectedChoice, 'title', ts)}</span>
         <span aria-hidden="true">⌄</span>
-      </button>
+      </Button>
       <AnchoredPopover
         anchorRef={anchorRef}
         open={open}
@@ -124,7 +126,7 @@ function PartPicker({ part, selected, onChoose, ts }: PartPickerProps): React.JS
         <div className="door-construction__search">
           <label htmlFor={`door-${part}-search`}>{ts('doorConstruction.search.label', 'Search available parts')}</label>
           <div className="door-construction__search-row">
-            <input
+            <Input vocabularyMode="factual"
               ref={inputRef}
               id={`door-${part}-search`}
               type="search"
@@ -153,9 +155,9 @@ function PartPicker({ part, selected, onChoose, ts }: PartPickerProps): React.JS
           {visible.length === 0 ? (
             <p role="status">{ts('doorConstruction.search.empty', 'No parts match this search.')}</p>
           ) : visible.map((choice) => (
-            <button
+            <Chip vocabularyMode="factual" selected={choice.material === selected.material}
               key={choice.material}
-              type="button"
+             
               role="option"
               aria-selected={choice.material === selected.material}
               className={choice.material === selected.material ? 'is-selected' : ''}
@@ -164,7 +166,7 @@ function PartPicker({ part, selected, onChoose, ts }: PartPickerProps): React.JS
               <strong>{choiceText(part, choice, 'title', ts)}</strong>
               <span>{choiceText(part, choice, 'description', ts)}</span>
               <small>{choice.material}</small>
-            </button>
+            </Chip>
           ))}
         </div>
       </AnchoredPopover>
@@ -249,7 +251,7 @@ export function DoorConstructionDialog({ open, onClose, canvasId, targetCanvasId
       </p>
       <label className="door-construction__field">
         <span>{ts('doorConstruction.name', 'Door name')}</span>
-        <input value={label} maxLength={512} onChange={(event) => { setLabel(event.target.value); setMessage(null) }} />
+        <Input vocabularyMode="factual" value={label} maxLength={512} onChange={(event) => { setLabel(event.target.value); setMessage(null) }} />
       </label>
       <section className="door-construction__parts" aria-label={ts('doorConstruction.parts', 'Door parts')}>
         {(Object.keys(DEFAULT_PARTS) as Array<Exclude<DoorPartId, 'activation-core'>>).map((partId) => (
@@ -264,16 +266,16 @@ export function DoorConstructionDialog({ open, onClose, canvasId, targetCanvasId
         <div className="door-construction__core" role="status" aria-live="polite">
           <strong>{partLabel('activation-core', ts)}</strong>
           <span>{armed ? ts('doorConstruction.core.armed', 'Armed and ready for activation.') : ts('doorConstruction.core.waiting', 'Waiting until the other four parts are configured.')}</span>
-          <button type="button" disabled={!readyForArming} title={!readyForArming ? disabledReason ?? ts('doorConstruction.core.disabled', 'Configure the four physical parts first.') : undefined} onClick={arm}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" disabled={!readyForArming} title={!readyForArming ? disabledReason ?? ts('doorConstruction.core.disabled', 'Configure the four physical parts first.') : undefined} onClick={arm}>
             {ts('doorConstruction.arm', 'Arm activation core')}
-          </button>
+          </Button>
         </div>
       </section>
       {disabledReason && <p className="door-construction__status" role="status">{disabledReason}</p>}
       {message && <p className="door-construction__message" role="status">{message}</p>}
       <div className="door-construction__actions">
-        <button type="button" onClick={onClose}>{ts('doorConstruction.cancel', 'Cancel')}</button>
-        <button type="button" disabled={!!disabledReason} title={disabledReason ?? undefined} onClick={submit}>{ts('doorConstruction.activate', 'Activate door')}</button>
+        <Button variant="outlined" size="small" vocabularyMode="factual" onClick={onClose}>{ts('doorConstruction.cancel', 'Cancel')}</Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual" disabled={!!disabledReason} title={disabledReason ?? undefined} onClick={submit}>{ts('doorConstruction.activate', 'Activate door')}</Button>
       </div>
     </Dialog>
   )

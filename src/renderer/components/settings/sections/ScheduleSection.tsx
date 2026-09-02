@@ -139,7 +139,7 @@ function WeekdayPicker({
               const day = idx as Weekday
               const checked = selected.includes(day)
               return (
-                <button
+                <Button size="small" vocabularyMode="factual"
                   key={day}
                   type="button"
                   role="checkbox"
@@ -160,7 +160,7 @@ function WeekdayPicker({
                   )}
                 >
                   <SettingsText>{label}</SettingsText>
-                </button>
+                </Button>
               )
             })}
           </div>
@@ -424,7 +424,7 @@ const VALUE_FIELDS: {
     key: 'accent',
     label: 'Accent colour',
     render: (v, onChange, vocab) => (
-      <input
+      <Input vocabularyMode="factual"
         type="color"
         aria-label={vocab('Accent colour')}
         className="h-8 w-14 cursor-pointer rounded-md border border-border bg-bg p-0.5"
