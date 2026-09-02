@@ -1,5 +1,6 @@
 import { useProjects } from '../state/projects'
 import { useDrivingLease } from '../state/browserLease'
+import { Button } from '@renderer/ui/md3'
 
 /**
  * The "…is driving" chip (S8 PR 6 of #112, @Corvin): shown on a browser node header (and in the
@@ -24,7 +25,10 @@ export function BrowserDrivingChip({
     <span className="term-node__status term-node__status--driven nodrag" role="status">
       <span className="term-node__status-dot" />
       <span className="browser-driving__label">{ownerTitle} is driving</span>
-      <button
+      <Button
+        variant="tonal"
+        size="small"
+        danger
         className="browser-driving__stop"
         title="Stop agent control of this browser node"
         onClick={(e) => {
@@ -33,7 +37,7 @@ export function BrowserDrivingChip({
         }}
       >
         Stop
-      </button>
+      </Button>
     </span>
   )
 }

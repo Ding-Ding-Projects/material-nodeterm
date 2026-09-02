@@ -12,6 +12,7 @@ import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { normalizeBrowserProfileName } from '@shared/browser-portal'
+import { Input } from '../ui/Input'
 
 /** Same palette used by `groupSelectedNodes`/`createTerminalNode` for new-object color defaults —
  *  a browser profile is just another named, colored object on the project. */
@@ -174,8 +175,10 @@ export function BrowserProfilePicker({
         <Menu role="menu" aria-label={vocab('Browser profile')}>
           <div className="menu-filter" onMouseDown={(e) => e.stopPropagation()}>
             <div className="menu-filter__row">
-              <input
+              <Input
                 ref={searchRef}
+                type="search"
+                vocabularyMode="factual"
                 className="menu-filter__input"
                 value={search.value}
                 placeholder={search.mode === 'regex' ? vocab('Filter profiles… (regex)') : vocab('Filter profiles…')}

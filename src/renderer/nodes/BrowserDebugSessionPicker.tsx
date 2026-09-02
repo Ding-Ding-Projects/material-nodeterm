@@ -8,6 +8,8 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 import { TextField } from '../ui/md3/TextField'
 import { Button } from '../ui/Button'
 import { Select } from '../ui/Select'
+import { Input } from '../ui/Input'
+import { Checkbox } from '../ui/md3/Checkbox'
 
 const PROXY_KINDS: Array<{ value: DebugBrowserProxyKind; label: string }> = [
   { value: 'direct', label: 'Direct connection' },
@@ -125,7 +127,7 @@ export function BrowserDebugSessionPicker({ profiles, selectedId, targetUrl = ''
           <label>
             {vocab('Search debugging profiles')}
             <span className="menu-filter__row">
-              <input ref={profileSearchRef} value={profileSearch.value} onChange={(event) => profileSearch.setValue(event.target.value)} placeholder={vocab('Plain text filter')} />
+              <Input ref={profileSearchRef} type="search" value={profileSearch.value} onChange={(event) => profileSearch.setValue(event.target.value)} placeholder="Plain text filter" aria-label="Filter debugging profiles" />
               <AnchoredRegexBuilder search={profileSearch} fieldRef={profileSearchRef} label={vocab('Regex for debugging profiles')} />
             </span>
           </label>
@@ -144,7 +146,7 @@ export function BrowserDebugSessionPicker({ profiles, selectedId, targetUrl = ''
           <fieldset>
             <legend>{vocab('Proxy')}</legend>
             <span className="menu-filter__row">
-              <input ref={proxySearchRef} value={proxySearch.value} onChange={(event) => proxySearch.setValue(event.target.value)} placeholder={vocab('Filter proxy choices')} aria-label={vocab('Search proxy choices')} />
+              <Input ref={proxySearchRef} type="search" value={proxySearch.value} onChange={(event) => proxySearch.setValue(event.target.value)} placeholder="Filter proxy choices" aria-label={vocab('Search proxy choices')} />
               <AnchoredRegexBuilder search={proxySearch} fieldRef={proxySearchRef} label={vocab('Regex for proxy choices')} />
             </span>
             <Select value={proxyKind} onChange={(event) => setProxyKind(event.target.value as DebugBrowserProxyKind)} aria-label={vocab('Proxy type')}>
@@ -153,7 +155,7 @@ export function BrowserDebugSessionPicker({ profiles, selectedId, targetUrl = ''
             {proxyKind !== 'direct' ? <>
               <TextField label={vocab('Proxy host')} value={proxyHost} onChange={(event) => setProxyHost(event.target.value)} />
               <TextField label={vocab('Proxy port')} type="number" min={1} max={65535} value={proxyPort} onChange={(event) => setProxyPort(event.target.value)} />
-              <label><input type="checkbox" checked={requiresAuthentication} onChange={(event) => setRequiresAuthentication(event.target.checked)} /> {vocab('Proxy requires a local vault credential')}</label>
+              <label><Checkbox checked={requiresAuthentication} onChange={(event) => setRequiresAuthentication(event.target.checked)} /> {vocab('Proxy requires a local vault credential')}</label>
               <p>{vocab('The credential is stored and resolved only by the host. It is never written to the project or sent to the renderer.')}</p>
             </> : null}
           </fieldset>

@@ -27,6 +27,7 @@ import { buildSshArgs } from '@shared/ssh'
 import { travelToNode } from './travel-handler'
 import type { CanvasNode } from '../state/workspace'
 import type { CanvasNodeState, Project } from '@shared/types'
+import { IconButton } from '@renderer/ui/md3'
 
 /** B-side context for one derived foreign projection. It is transient React Flow data, never a
  * project-file record. */
@@ -190,17 +191,18 @@ export function XProjectNode({ id, data, selected }: NodeProps<CanvasNode>) {
           {originName}
         </span>
         <span className="xproj-node__title">{String(data.title || 'projection')}</span>
-        <button
+        <IconButton
+          size="compact"
           className="xproj-node__jump"
+          icon="north_east"
+          vocabularyMode="factual"
           title={`Open in ${originName}`}
           aria-label={`Open ${String(data.title || 'projection')} in ${originName}`}
           onClick={(event) => {
             event.stopPropagation()
             if (spawn) travelToNode(spawn.bNodeId)
           }}
-        >
-          ↗
-        </button>
+        />
       </div>
       <div className="xproj-node__body nodrag nowheel" ref={hostRef} />
       {plate && (

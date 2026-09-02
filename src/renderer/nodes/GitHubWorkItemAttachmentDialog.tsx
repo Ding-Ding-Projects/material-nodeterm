@@ -7,6 +7,8 @@ import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { Button } from '../ui/md3/Button'
+import { ListRow } from '../ui/md3/ListRow'
 
 export interface GitHubWorkItemAttachmentDialogProps {
   open: boolean
@@ -124,9 +126,9 @@ export function GitHubWorkItemAttachmentDialog({
       className="github-work-item-attachment-dialog"
       actions={(
         <>
-          <button type="button" onClick={onClose}>{vocab('Cancel')}</button>
-          <button
-            type="button"
+          <Button variant="text" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="filled"
             disabled={!selected}
             onClick={() => {
               if (!selected) return
@@ -140,7 +142,7 @@ export function GitHubWorkItemAttachmentDialog({
             }}
           >
             {vocab(adopt ? 'Adopt on this frame' : 'Attach to this node')}
-          </button>
+          </Button>
         </>
       )}
     >
@@ -176,18 +178,19 @@ export function GitHubWorkItemAttachmentDialog({
           const key = `${item.repository}#${item.number}`
           const active = key === selectedKey
           return (
-            <button
+            <ListRow
               key={key}
-              type="button"
               role="option"
               aria-selected={active}
               className={`github-work-item-attachment-dialog__item${active ? ' is-selected' : ''}`}
               onClick={() => setSelectedKey(key)}
-            >
-              <strong>{item.repository} #{item.number}</strong>
-              <span>{item.title || vocab('Untitled work item')}</span>
-              <small>{mapOwnedSentence(vocab, [copy(item.kind === 'pull-request' ? 'Pull request' : 'Issue'), copy(' · '), fact(item.state)])}</small>
-            </button>
+              label={
+                <>
+                  <strong>{item.repository} #{item.number}</strong> <span>{item.title || vocab('Untitled work item')}</span>
+                </>
+              }
+              sub={mapOwnedSentence(vocab, [copy(item.kind === 'pull-request' ? 'Pull request' : 'Issue'), copy(' · '), fact(item.state)])}
+            />
           )
         })}
       </div>

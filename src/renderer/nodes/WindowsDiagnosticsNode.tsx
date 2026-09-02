@@ -8,6 +8,8 @@ import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { IconButton } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 const SECTION_LABELS: Record<WindowsDiagnosticSection, string> = {
   drives: 'Drives and storage',
@@ -79,7 +81,7 @@ export default function WindowsDiagnosticsNode({ id, data, selected }: NodeProps
           rejectEmpty={false}
         />
         <span className="term-node__spacer" />
-        <button type="button" className="term-node__close" title={vocab('Refresh diagnostics')} aria-label={vocab('Refresh diagnostics')} onClick={() => void load()}>⟳</button>
+        <IconButton size="compact" className="term-node__refresh" icon="refresh" title="Refresh diagnostics" aria-label="Refresh diagnostics" onClick={() => void load()} />
       </div>
       <div className="windows-diagnostics-node__body nodrag nowheel">
         <p className={`windows-diagnostics-node__status${error || snapshot?.source === 'unavailable' ? ' is-error' : ''}`} role={error || snapshot?.source === 'unavailable' ? 'alert' : 'status'}>{statusText}</p>
@@ -92,7 +94,7 @@ export default function WindowsDiagnosticsNode({ id, data, selected }: NodeProps
           })}
         </div>
         <div className="windows-diagnostics-node__search">
-          <input ref={searchRef} value={search.value} onChange={(event) => search.setValue(event.target.value)} placeholder={search.mode === 'regex' ? vocab('Filter this section with regex') : vocab('Filter this section')} aria-label={`${vocab('Search')} ${sectionLabel(activeSection, vocab)}`} />
+          <Input ref={searchRef} type="search" vocabularyMode="factual" value={search.value} onChange={(event) => search.setValue(event.target.value)} placeholder={search.mode === 'regex' ? vocab('Filter this section with regex') : vocab('Filter this section')} aria-label={`${vocab('Search')} ${sectionLabel(activeSection, vocab)}`} />
           <AnchoredRegexBuilder search={search} fieldRef={searchRef} label={`${vocab('Regex for')} ${sectionLabel(activeSection, vocab)}`} />
         </div>
         {search.error && <p className="windows-diagnostics-node__error" role="alert">{vocab(search.error)}</p>}

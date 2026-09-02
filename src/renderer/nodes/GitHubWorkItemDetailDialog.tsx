@@ -4,6 +4,7 @@ import { Dialog } from '../ui/md3/Dialog'
 import { renderMarkdown } from '../lib/markdown'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { Button } from '../ui/md3/Button'
 export interface GitHubWorkItemDetailDialogProps {
   item: GitHubWorkItem
   nodeId?: string
@@ -27,7 +28,7 @@ export function GitHubWorkItemDetailDialog({ item, nodeId, frameId, onClose }: G
       className="github-work-item-detail-dialog"
       actions={(
         <>
-          <button type="button" onClick={onClose}>{vocab('Close')}</button>
+          <Button variant="text" onClick={onClose}>Close</Button>
           {item.htmlUrl && <a className="github-work-item-detail-dialog__external" href={item.htmlUrl} target="_blank" rel="noreferrer">{vocab('Open on GitHub')}</a>}
         </>
       )}

@@ -6,6 +6,7 @@ import type { MediaAssetReference } from '@shared/media-catalog'
 import { mediaKindForPath, mediaMimeForExtension } from '@shared/media-catalog'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
+import { Button, IconButton } from '@renderer/ui/md3'
 
 export default function GalleryNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { deleteElements } = useReactFlow()
@@ -61,11 +62,11 @@ export default function GalleryNode({ id, data, selected }: NodeProps<CanvasNode
     <div className={`term-node__header ${fill.className}${fill.filled ? ' term-node__header--filled' : ''}`} style={fill.style}>
       <span className="term-node__title-text">{title}</span><span className="term-node__spacer" />
       <span aria-live="polite" className="gallery-node__count">{count} {vocab(count === 1 ? 'asset' : 'assets')}</span>
-      <button className="term-node__close" title={vocab('Close')} aria-label={vocab('Close gallery')} onClick={() => deleteElements({ nodes: [{ id }] })}>×</button>
+      <IconButton size="compact" className="term-node__close" icon="close" title="Close" aria-label="Close gallery" onClick={() => deleteElements({ nodes: [{ id }] })} />
     </div>
     <div className="editor-node__body"><div className="gallery-node__stage nodrag nowheel" aria-label={vocab('Gallery preview')} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void addFiles(Array.from(event.dataTransfer.files)) }}>
       {missing ? <div className="editor-node__loading" role="status">{error || (!active ? vocab('No media selected.') : active.missing ? vocab('Asset missing. Locate it to restore playback.') : vocab('Loading asset…'))}</div> : kind === 'video' ? <video src={src} controls preload="metadata" aria-label={active?.portablePath ? mapAroundExactFacts(active.portablePath, [active.portablePath], vocab) : vocab('Gallery video')} /> : <img src={src} alt={active?.portablePath ? mapAroundExactFacts(active.portablePath, [active.portablePath], vocab) : vocab('Gallery photo')} />}
-      <div className="gallery-node__thumbs" aria-label={vocab('Gallery assets')}>{thumbs.map((asset) => <button type="button" key={asset.assetId} className={asset === active ? 'is-active' : ''} title={asset.portablePath} aria-label={mapAroundExactFacts(`Select ${asset.portablePath}`, [asset.portablePath], vocab)} onClick={() => { data.mediaActiveAssetId = asset.assetId; redraw((value) => value + 1) }}>{asset.kind === 'video' ? '▶' : '▧'}</button>)}<label className="gallery-node__add">{vocab('Add media')}<input type="file" accept="image/*,video/*" multiple onChange={(event) => { void addFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = '' }} /></label>{active ? <button type="button" className="gallery-node__remove" onClick={removeActive}>{vocab('Remove selected')}</button> : null}</div>
+      <div className="gallery-node__thumbs" aria-label={vocab('Gallery assets')}>{thumbs.map((asset) => <button type="button" key={asset.assetId} className={asset === active ? 'is-active' : ''} title={asset.portablePath} aria-label={mapAroundExactFacts(`Select ${asset.portablePath}`, [asset.portablePath], vocab)} onClick={() => { data.mediaActiveAssetId = asset.assetId; redraw((value) => value + 1) }}>{asset.kind === 'video' ? '▶' : '▧'}</button>)}<label className="gallery-node__add">{vocab('Add media')}<input type="file" accept="image/*,video/*" multiple onChange={(event) => { void addFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = '' }} /></label>{active ? <Button variant="outlined" size="small" danger className="gallery-node__remove" vocabularyMode="factual" onClick={removeActive}>{vocab('Remove selected')}</Button> : null}</div>
     </div></div>
   </div>
 }

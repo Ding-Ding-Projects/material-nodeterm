@@ -17,6 +17,8 @@ import { NextcloudManagedPanel } from '../components/nextcloud/NextcloudManagedP
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
+import { Button, IconButton } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 /**
  * One component for the whole service family, including the guided AWS identity manager. They
@@ -206,18 +208,26 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           className={`service-node__header ${headerTint.className}`}
           style={headerTint.style}
         >
-          <button className="term-node__collapse" title={vocab(collapsed ? 'Expand' : 'Collapse')} onClick={toggleCollapse}>
-            {collapsed ? '▸' : '▾'}
-          </button>
-          <button
-            className="term-node__color"
-            style={{ background: data.color }}
-            title={vocab('Color')}
+          <IconButton
+            size="compact"
+            className="term-node__collapse"
+            icon={collapsed ? 'chevron_right' : 'arrow_drop_down'}
+            title={collapsed ? 'Expand' : 'Collapse'}
+            aria-label={collapsed ? 'Expand' : 'Collapse'}
+            onClick={toggleCollapse}
+          />
+          <IconButton
+            size="compact"
+            className="term-node__color-btn"
+            title="Color"
+            aria-label="Color"
             onClick={(e) => {
               const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
               setColorAnchor((a) => (a ? null : { x: r.left, y: r.bottom }))
             }}
-          />
+          >
+            <span className="mdx-icon-btn__swatch" style={{ background: data.color }} />
+          </IconButton>
           {colorAnchor && (
             <ColorMenu
               x={colorAnchor.x}
@@ -284,9 +294,10 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>
               <div className="service-node__field-row">
-                <input
+                <Input
                   id={`${id}-endpoint`}
                   className="service-node__input nodrag"
+                  vocabularyMode="factual"
                   type="text"
                   spellCheck={false}
                   placeholder={ENDPOINT_PLACEHOLDER[kind ?? 'proxmox']}
@@ -312,9 +323,11 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
                     action to take when there is not. The field stays editable afterwards; this is a
                     shortcut into it, not a lock on it. */}
                 {localEndpoint !== undefined && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="outlined"
+                    size="small"
                     className="service-node__local-btn nodrag"
+                    vocabularyMode="factual"
                     disabled={isLocalEndpointSet}
                     title={
                       isLocalEndpointSet
@@ -324,7 +337,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
                     onClick={() => commitEndpoint(localEndpoint)}
                   >
                     {vocab('Use localhost')}
-                  </button>
+                  </Button>
                 )}
               </div>
             </label>

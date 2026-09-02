@@ -7,6 +7,7 @@ import { useProjects } from '../state/projects'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button, IconButton } from '@renderer/ui/md3'
 
 /**
  * The built-in authenticator, on the canvas.
@@ -216,16 +217,15 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
           rejectEmpty={false}
         />
         <span className="term-node__spacer" />
-        <button className="term-node__close" title={vocab('Refresh the list')} onClick={() => void load()}>
-          ⟳
-        </button>
-        <button
+        <IconButton size="compact" className="term-node__refresh" icon="refresh" title="Refresh the list" aria-label="Refresh the list" onClick={() => void load()} />
+        <IconButton
+          size="compact"
           className="term-node__close"
-          title={vocab('Close')}
+          icon="close"
+          title="Close"
+          aria-label="Close"
           onClick={() => void deleteElements({ nodes: [{ id }] })}
-        >
-          ×
-        </button>
+        />
       </div>
 
       <div className="authenticator-node__body nodrag nowheel">
@@ -249,8 +249,11 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
                     <span className="authenticator-node__issuer">{entry.issuer || vocab('Unnamed')}</span>
                     <span className="authenticator-node__account">{entry.account}</span>
                   </div>
-                  <button
+                  <Button
+                    variant="tonal"
+                    size="small"
                     className="authenticator-node__code"
+                    vocabularyMode="factual"
                     // The code IS the button: it is the one thing anybody wants from this row, and
                     // a separate copy icon beside it is a smaller target for the same action.
                     title={vocab(code ? 'Copy this code' : 'Waiting for a code')}
@@ -258,7 +261,7 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
                     onClick={() => code && void copy(entry.id, code)}
                   >
                     {copied === entry.id ? vocab('Copied') : (code ?? '••••••')}
-                  </button>
+                  </Button>
                   {/* Seconds as TEXT beside the bar: a bar alone is colour and length only, which
                       is unreadable to somebody who cannot see it and ambiguous to everybody at a
                       glance. */}
@@ -284,13 +287,16 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
                       are still tellable apart at a glance. */}
                   <span className="authenticator-node__account">{row.managerName}</span>
                 </div>
-                <button
+                <Button
+                  variant="tonal"
+                  size="small"
                   className="authenticator-node__code"
+                  vocabularyMode="factual"
                   title={vocab('Copy this code')}
                   onClick={() => void copy(`${row.managerId}/${row.credentialId}`, row.code.code)}
                 >
                   {copied === `${row.managerId}/${row.credentialId}` ? vocab('Copied') : row.code.code}
-                </button>
+                </Button>
                 <span
                   className="authenticator-node__countdown"
                   title={`${vocab('New code in')} ${vaultSecondsLeft(row.code, now)}s`}

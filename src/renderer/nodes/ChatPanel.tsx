@@ -5,7 +5,7 @@ import { useSession } from '../session/session'
 import type { ChatMessage } from '@shared/types'
 import { chipFor } from '../lib/keybindingOverrides'
 import { E_UNSUPPORTED } from '@shared/rpc'
-import { TextArea } from '@renderer/ui/md3'
+import { Button, TextArea } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { hintLabel } from '@shared/platform-utils'
 import { mapAroundExactFacts } from './nodeVocabulary'
@@ -146,9 +146,9 @@ export function ChatPanel({ nodeId, sessionId, cwd, accountId }: ChatPanelProps)
               <div className="term-chat__empty-detail">{vocab(EMPTY_TEXT[loadState].detail)}</div>
             )}
             {loadState !== 'unsupported' && loadState !== 'ok' && (
-              <button className="term-chat__retry" onClick={load}>
-                {vocab('Retry')}
-              </button>
+              <Button variant="outlined" size="small" className="term-chat__retry" onClick={load}>
+                Retry
+              </Button>
             )}
           </div>
         )}

@@ -3,6 +3,7 @@ import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xy
 import type { CanvasNode } from '../state/workspace'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { IconButton } from '@renderer/ui/md3'
 
 export default function PhotoNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { deleteElements } = useReactFlow()
@@ -23,7 +24,7 @@ export default function PhotoNode({ id, data, selected }: NodeProps<CanvasNode>)
     <Handle id="flow-in" type="target" position={Position.Top} isConnectable={false} style={{ opacity: 0, pointerEvents: 'none', top: 0 }} />
     <div className={`term-node__header ${fill.className}${fill.filled ? ' term-node__header--filled' : ''}`} style={fill.style}>
       <span className="term-node__title-text" title={path}>{title}</span><span className="term-node__spacer" />
-      <button className="term-node__close" title={vocab('Close')} aria-label={vocab('Close photo')} onClick={() => deleteElements({ nodes: [{ id }] })}>×</button>
+      <IconButton size="compact" className="term-node__close" icon="close" vocabularyMode="factual" title={vocab('Close')} aria-label={vocab('Close photo')} onClick={() => deleteElements({ nodes: [{ id }] })} />
     </div>
     <div className="editor-node__body"><div className="editor-node__image nodrag nowheel">
       {src ? <img src={src} alt={title} /> : <span className="editor-node__loading">{error || (path ? vocab('Loading photo…') : vocab('No photo selected.'))}</span>}

@@ -12,6 +12,7 @@ import { commandTooltip } from '../lib/keybindingOverrides'
 import { markWorkspaceDirty } from '../state/workspaceDirty'
 import { maximizeNodeToRect, restoreMaximizedNode, type CanvasNode } from '../state/workspace'
 import { maximizeTargetRect } from '../lib/nodeMaximize'
+import { IconButton } from '@renderer/ui/md3'
 
 export function MaximizeButton({ id, maximized }: { id: string; maximized: boolean }) {
   const { setNodes, getViewport } = useReactFlow()
@@ -37,9 +38,11 @@ export function MaximizeButton({ id, maximized }: { id: string; maximized: boole
         'node.maximize'
       )}
     >
-      <button
+      <IconButton
+        size="compact"
         className="term-node__maximize nodrag"
         aria-label={maximized ? 'Restore node size' : 'Maximize node'}
+        active={maximized}
         aria-pressed={maximized}
         onClick={(e) => {
           e.stopPropagation()
@@ -47,7 +50,7 @@ export function MaximizeButton({ id, maximized }: { id: string; maximized: boole
         }}
       >
         {maximized ? <IconRestoreSize /> : <IconMaximize />}
-      </button>
+      </IconButton>
     </Tooltip>
   )
 }

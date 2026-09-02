@@ -8,6 +8,7 @@ import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
+import { Button, IconButton } from '@renderer/ui/md3'
 
 interface KioskPwaNodeProps {
   id: string
@@ -108,9 +109,9 @@ export function KioskPwaNode({ id, data, selected }: NodeProps<CanvasNode>): Rea
         <span className="kiosk-pwa-node__mode" aria-label={modeLabel}>{intent?.mode === 'pwa' ? 'PWA' : 'Kiosk'}</span>
         <span className="term-node__spacer" />
         <span className="kiosk-pwa-node__state" role="status">{lifecycle}</span>
-        {(lifecycle === 'running' || lifecycle === 'starting') && <button type="button" className="term-node__close" onClick={stop} title={vocab('Exit session')}>{vocab('Exit')}</button>}
-        {(lifecycle === 'stopped' || lifecycle === 'unavailable' || lifecycle === 'error') && <button type="button" className="term-node__close" onClick={recover} title={vocab('Try session again')}>{vocab('Retry')}</button>}
-        <button type="button" className="term-node__close" onClick={() => deleteElements({ nodes: [{ id }] })} title={vocab('Close')}>×</button>
+        {(lifecycle === 'running' || lifecycle === 'starting') && <Button variant="outlined" size="small" className="kiosk-pwa-node__action" onClick={stop} title="Exit session">Exit</Button>}
+        {(lifecycle === 'stopped' || lifecycle === 'unavailable' || lifecycle === 'error') && <Button variant="tonal" size="small" className="kiosk-pwa-node__action" vocabularyMode="factual" onClick={recover} title={vocab('Try session again')}>{vocab('Retry')}</Button>}
+        <IconButton size="compact" className="term-node__close" icon="close" title="Close" aria-label="Close" onClick={() => deleteElements({ nodes: [{ id }] })} />
       </div>
       <div className="editor-node__body kiosk-pwa-node__body">
         {!intent && <div className="kiosk-pwa-node__message" role="alert">{mapAroundExactFacts('This session intent is unavailable. Recreate it from the kiosk or PWA setup.', ['kiosk', 'PWA'], vocab)}</div>}

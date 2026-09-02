@@ -9,6 +9,7 @@ import {
 import { GitHubWorkItemDetailDialog } from './GitHubWorkItemDetailDialog'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { Chip } from '../ui/md3/Chip'
 export interface GitHubWorkItemAttachmentProps {
   items?: readonly GitHubWorkItem[]
   nodeId?: string
@@ -54,10 +55,10 @@ export function GitHubWorkItemAttachment(props: GitHubWorkItemAttachmentProps) {
         const title = item.title.trim() || `${kind} #${item.number}`
         const shortTitle = title.length > 96 ? `${title.slice(0, 93)}…` : title
         return (
-          <button
+          <Chip
             key={`${item.repository}#${item.number}`}
-            type="button"
             className={`github-work-item-chip__item github-work-item-chip__item--${displayState}`}
+            vocabularyMode="factual"
             role="listitem"
             title={mapOwnedSentence(vocab, [fact(item.repository), copy(' #'), fact(String(item.number)), copy(': '), fact(title)])}
             aria-label={mapOwnedSentence(vocab, [
@@ -78,7 +79,7 @@ export function GitHubWorkItemAttachment(props: GitHubWorkItemAttachmentProps) {
             <span className="github-work-item-chip__number">#{item.number}</span>
             <span className="github-work-item-chip__title">{shortTitle}</span>
             <span className="github-work-item-chip__state">{vocab(STATE_LABELS[displayState])}</span>
-          </button>
+          </Chip>
         )
         })}
       </div>

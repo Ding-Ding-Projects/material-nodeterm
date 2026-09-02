@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { BrowserExtensionInfo } from '@shared/types'
 import { E_UNSUPPORTED } from '@shared/rpc'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button, IconButton } from '@renderer/ui/md3'
+import { MaterialSymbol } from '../components/MaterialSymbol'
 
 interface BrowserExtensionsPanelProps {
   /** The profile's Electron session partition (undefined = default session) — see
@@ -107,9 +109,7 @@ export function BrowserExtensionsPanel({ partition, onClose }: BrowserExtensions
     >
       <div className="browser-ext-panel__header">
         <span>{vocab('Extensions (unpacked, Electron subset)')}</span>
-        <button className="browser-node__btn" onClick={onClose} aria-label={vocab('Close')}>
-          ✕
-        </button>
+        <IconButton size="compact" className="browser-node__btn" icon="close" onClick={onClose} aria-label="Close" />
       </div>
       <p className="browser-ext-panel__note">
         {vocab('Loads an unpacked extension directory into this profile. No Chrome Web Store install, and Electron implements only a subset of chrome.* APIs — an extension may partly not work.')}
@@ -134,22 +134,23 @@ export function BrowserExtensionsPanel({ partition, onClose }: BrowserExtensions
                 </span>
                 <span className="browser-ext-panel__item-path">{ext.path}</span>
               </div>
-              <button
+              <IconButton
+                size="compact"
                 className="browser-node__btn"
+                icon="delete"
+                vocabularyMode="factual"
                 disabled={busy}
                 onClick={() => void handleRemove(ext.path)}
                 aria-label={`${vocab('Remove')} ${ext.name}`}
                 title={vocab('Remove')}
-              >
-                ✕
-              </button>
+              />
             </li>
           ))}
       </ul>
       {!unsupported && (
-        <button className="browser-ext-panel__add" disabled={busy} onClick={() => void handleAdd()}>
-          {vocab('+ Load unpacked extension…')}
-        </button>
+        <Button variant="outlined" size="small" className="browser-ext-panel__add" leadingIcon={<MaterialSymbol name="add" size={16} />} disabled={busy} onClick={() => void handleAdd()}>
+          Load unpacked extension…
+        </Button>
       )}
     </div>
   )
