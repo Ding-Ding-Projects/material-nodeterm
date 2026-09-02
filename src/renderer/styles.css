@@ -3244,13 +3244,7 @@ body,
 .wild-dim-sum-node__selection img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--md-shape-medium, 12px); background: var(--md-surface-container-high); }
 .wild-dim-sum-node__selection h3, .wild-dim-sum-node__selection p { margin: 0 0 6px; }
 .wild-dim-sum-node__actions, .wild-dim-sum-node__search { display: flex; gap: 8px; align-items: center; }
-.wild-dim-sum-node__actions button, .wild-dim-sum-node__selection button, .wild-dim-sum-node__list button { min-height: 40px; border: 0; border-radius: var(--md-shape-full, 999px); padding: 8px 14px; background: var(--md-primary-container); color: var(--md-on-primary-container); font: inherit; cursor: pointer; }
-.wild-dim-sum-node__actions button:disabled { opacity: .55; cursor: not-allowed; }
-.wild-dim-sum-node__search input { min-width: 0; flex: 1; min-height: 44px; border: 1px solid var(--md-outline); border-radius: var(--md-shape-small, 8px); padding: 0 12px; background: var(--md-surface-container-low); color: var(--md-on-surface); }
 .wild-dim-sum-node__list { max-height: 210px; overflow: auto; list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.wild-dim-sum-node__list button { width: 100%; border-radius: var(--md-shape-medium, 12px); text-align: start; display: grid; gap: 3px; background: var(--md-surface-container-high); color: var(--md-on-surface); }
-.wild-dim-sum-node__list button[aria-pressed='true'] { outline: 3px solid var(--md-primary); }
-.wild-dim-sum-node__list button:focus-visible, .wild-dim-sum-node__actions button:focus-visible, .wild-dim-sum-node__search input:focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
 .wild-dim-sum-node__count, .wild-dim-sum-node__source { margin: 4px 0; color: var(--md-on-surface-variant); font-size: 12px; }
 .wild-dim-sum-node__notice { border-radius: var(--md-shape-medium, 12px); padding: 10px; background: var(--md-error-container); color: var(--md-on-error-container); }
 .wild-dim-sum-node__progress { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
@@ -13309,51 +13303,18 @@ button.group-node__setup:disabled {
   gap: 7px;
   padding: 0 10px 9px;
 }
-.native-loop-node__interval input,
-.native-loop-node__interval select {
-  height: 28px;
-  box-sizing: border-box;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--md-surface);
-  color: var(--text);
-}
-.native-loop-node__interval input {
-  width: 64px;
-  padding: 0 6px;
-}
 .native-loop-node__meta {
   justify-content: space-between;
   color: var(--muted);
   font-size: 10px;
 }
-.native-loop-node__actions button {
-  flex: 1;
-  height: 30px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--panel-2, var(--md-surface));
-  color: var(--text);
-  cursor: pointer;
-}
-
-.native-loop-node__actions button:disabled {
-  opacity: 0.42;
-  cursor: default;
-}
 
 /* Alarm Clock node: the form stays compact enough for the canvas while keeping every value
    editable, including the wall-clock timezone and occurrence history. */
-.alarm-clock-node__body input, .alarm-clock-node__body select { min-height: 30px; min-width: 0; flex: 1; border: 1px solid var(--md-outline); border-radius: 8px; padding: 4px 7px; background: var(--md-surface-container); color: var(--md-on-surface); }
 .alarm-clock-node__body fieldset label { justify-content: flex-start; }
 .alarm-clock-node__options { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .alarm-clock-node__options label { justify-content: flex-start; }
 .alarm-clock-node__options label:first-child { flex: 1 1 130px; }
-.alarm-clock-node__actions button, .alarm-clock-node__history button { min-height: 30px; border: 0; border-radius: 8px; padding: 5px 10px; background: var(--md-primary); color: var(--md-on-primary); cursor: pointer; }
-.alarm-clock-node__actions button:disabled { opacity: .5; cursor: not-allowed; }
-.alarm-clock-node__actions button.active { background: var(--md-secondary); color: var(--md-on-secondary); }
-.alarm-clock-node__search button { flex: none; font-family: monospace; padding: 5px 7px; }
-.alarm-clock-node__history li button { background: var(--md-secondary-container); color: var(--md-on-secondary-container); font-size: 10px; padding: 3px 6px; }
 .schedule-handle {
   width: 12px;
   height: 12px;
@@ -14231,18 +14192,14 @@ body.focus-mode .dock:hover {
 .timer-node.selected { outline: 2px solid var(--md-primary); outline-offset: 2px; }
 .timer-node__header, .timer-node__actions, .timer-node__modes { display: flex; align-items: center; gap: 8px; }
 .timer-node__header { margin-bottom: 10px; font-weight: 650; }
-.timer-node__header input { min-width: 0; flex: 1; background: transparent; color: inherit; border: 0; font: inherit; }
-.timer-node__header button { min-width: 40px; min-height: 40px; }
 .timer-node__modes { flex-wrap: wrap; }
-.timer-node__modes button[aria-selected="true"] { background: var(--md-primary-container); color: var(--md-on-primary-container); }
 .timer-node__display { display: block; margin: 18px 0; text-align: center; font: 700 44px/1.1 ui-monospace, monospace; letter-spacing: .04em; }
 .timer-node__duration, .timer-node__repeat, .timer-node__alarm { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
-.timer-node input[type="number"] { width: 76px; }
 .timer-node__sequence { margin: 12px 0; padding: 10px; border-radius: 14px; background: var(--md-surface-container-high); }
 .timer-node__sequence > div { display: flex; gap: 8px; margin-top: 6px; }
-.timer-node__sequence input { min-width: 0; flex: 1; }
+.timer-node .mdx-input[type="number"] { width: 76px; }
+.timer-node__sequence .mdx-input { min-width: 0; flex: 1; }
 .timer-node__actions { margin-top: 14px; flex-wrap: wrap; }
-.timer-node__actions button { min-height: 40px; }
 .timer-node__meta { margin-top: 10px; color: var(--md-on-surface-variant); font-size: .82rem; }
 
 /* ================================ Polish pass (issue #78) ==================================
