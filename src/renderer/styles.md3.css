@@ -2361,14 +2361,6 @@ button.term-node__title-text:focus-visible {
 .browser-node__toolbar {
   border-bottom: 1px solid var(--md-outline-variant);
 }
-.browser-node__btn {
-  color: var(--md-on-surface-variant);
-  border-radius: var(--md-shape-full);
-}
-.browser-node__btn:hover:not(:disabled) {
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
-}
 .browser-node__address {
   background: var(--md-surface-container-highest);
   border: 1px solid var(--md-outline-variant);
@@ -4275,17 +4267,6 @@ button.term-node__title-text:focus-visible {
   flex-wrap: wrap;
   gap: 6px;
 }
-.cloudflare-core-manager button,
-.cloudflare-core-manager select,
-.cloudflare-core-manager input {
-  min-height: 40px;
-}
-.cloudflare-core-manager button:focus-visible,
-.cloudflare-core-manager select:focus-visible,
-.cloudflare-core-manager input:focus-visible {
-  outline: 3px solid var(--md-sys-color-secondary);
-  outline-offset: 2px;
-}
 .cloudflare-core-manager__search {
   align-items: center;
   display: inline-flex;
@@ -4298,12 +4279,6 @@ button.term-node__title-text:focus-visible {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   max-height: 160px;
   overflow: auto;
-}
-.cloudflare-core-manager [role='listbox'] button {
-  align-items: flex-start;
-  display: flex;
-  flex-direction: column;
-  text-align: left;
 }
 .cloudflare-core-manager [role='list'] {
   display: grid;
@@ -12454,12 +12429,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   cursor: pointer;
 }
 
-.aws-resource-node__modes button[aria-selected="true"],
-.aws-resource-node__operations button.is-selected {
-  background: var(--md-primary);
-  color: var(--md-on-primary);
-}
-
 .aws-resource-node__binding-grid,
 .aws-resource-node__inputs {
   display: grid;
@@ -12478,26 +12447,22 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   font-size: 12px;
 }
 
-.aws-resource-node__binding input,
-.aws-resource-node__inputs input,
-.aws-resource-node__inputs textarea,
-.aws-resource-node__results-search input {
-  min-height: 38px;
-  border: 1px solid var(--md-outline);
-  border-radius: 8px;
-  padding: 7px 9px;
-  background: var(--md-surface);
-  color: var(--md-on-surface);
-  box-sizing: border-box;
+.aws-resource-node__binding .mdx-input,
+.aws-resource-node__inputs .mdx-input,
+.aws-resource-node__inputs .mdx-textarea,
+.aws-resource-node__results-search .mdx-input {
   width: 100%;
+  box-sizing: border-box;
 }
-
-.aws-resource-node__inputs textarea {
+.aws-resource-node__inputs .mdx-textarea {
   min-height: 88px;
   resize: vertical;
   font-family: var(--font-mono);
 }
-
+.open-webui-node__pills .mdx-chip small {
+  display: block;
+  color: var(--md-on-surface-variant);
+}
 .aws-resource-node__operations {
   overflow-x: auto;
   padding-bottom: 2px;
@@ -12525,18 +12490,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   padding: 8px;
   border-radius: 8px;
   background: var(--md-surface-container-low);
-}
-
-.aws-resource-node button:disabled {
-  cursor: not-allowed;
-  opacity: .5;
-}
-
-.aws-resource-node button:focus-visible,
-.aws-resource-node input:focus-visible,
-.aws-resource-node textarea:focus-visible {
-  outline: 3px solid var(--md-primary);
-  outline-offset: 2px;
 }
 
 @media (max-width: 700px) {
@@ -13494,10 +13447,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 .open-webui-node__search { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .open-webui-node__search > *:first-child { flex: 1 1 auto; min-width: 0; }
 .open-webui-node__pills { display: flex; flex-wrap: wrap; gap: 6px; }
-.open-webui-node__pills button { min-height: 36px; padding: 6px 10px; border: 1px solid var(--md-sys-color-outline); border-radius: 999px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); cursor: pointer; }
-.open-webui-node__pills button.selected, .open-webui-node__pills button[aria-checked=true] { border-color: var(--md-sys-color-primary); background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
-.open-webui-node__pills button:focus-visible, .open-webui-node__actions button:focus-visible { outline: 3px solid var(--md-sys-color-primary); outline-offset: 2px; }
-.open-webui-node__pills button small { display: block; color: var(--md-sys-color-on-surface-variant); }
 .open-webui-node__state > p { margin: 0; font-size: 12px; line-height: 1.45; }
 .open-webui-node__setup { padding: 8px; border-radius: 10px; background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
 .open-webui-node__actions { display: flex; flex-wrap: wrap; gap: 8px; }

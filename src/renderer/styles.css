@@ -7497,18 +7497,6 @@ button.group-node__setup:disabled {
   padding: 4px 6px;
   border-bottom: 1px solid var(--border, #333);
 }
-.browser-node__btn {
-  background: transparent;
-  border: none;
-  color: var(--text, #ddd);
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.browser-node__btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
 .browser-node__address {
   flex: 1;
   min-width: 0;

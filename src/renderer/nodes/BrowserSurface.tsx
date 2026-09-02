@@ -6,6 +6,8 @@ import { useDiscardWhenHidden, webviewAudible } from './useDiscardWhenHidden'
 import { DiscardedPlate } from './DiscardedPlate'
 import { BrowserExtensionsPanel } from './BrowserExtensionsPanel'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { IconButton } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 // Minimal typing for the Electron <webview> element methods/events we use.
 type WebviewEl = HTMLElement & {
@@ -267,21 +269,24 @@ export function BrowserSurface({
   return (
     <div className="browser-surface" ref={rootRef}>
       <div className="browser-node__toolbar nodrag">
-        <button className="browser-node__btn" disabled={!canBack} onClick={() => ref.current?.goBack()} title={vocab('Back')}>
+        <IconButton size="compact" className="browser-node__btn" vocabularyMode="factual" disabled={!canBack} onClick={() => ref.current?.goBack()} title={vocab('Back')} aria-label={vocab('Back')}>
           ◀
-        </button>
-        <button className="browser-node__btn" disabled={!canFwd} onClick={() => ref.current?.goForward()} title={vocab('Forward')}>
+        </IconButton>
+        <IconButton size="compact" className="browser-node__btn" vocabularyMode="factual" disabled={!canFwd} onClick={() => ref.current?.goForward()} title={vocab('Forward')} aria-label={vocab('Forward')}>
           ▶
-        </button>
-        <button
+        </IconButton>
+        <IconButton
+          size="compact"
           className="browser-node__btn"
+          icon={loading ? 'close' : 'refresh'}
+          vocabularyMode="factual"
           onClick={() => (loading ? ref.current?.stop() : ref.current?.reload())}
           title={vocab(loading ? 'Stop' : 'Reload')}
-        >
-          {loading ? '✕' : '⟳'}
-        </button>
-        <input
+          aria-label={vocab(loading ? 'Stop' : 'Reload')}
+        />
+        <Input
           className="browser-node__address"
+          vocabularyMode="factual"
           value={address}
           spellCheck={false}
           placeholder={vocab('Enter a URL and press Enter')}
@@ -291,15 +296,18 @@ export function BrowserSurface({
           }}
         />
         <div className="browser-ext-panel__anchor">
-          <button
+          <IconButton
+            size="compact"
             className="browser-node__btn"
+            vocabularyMode="factual"
+            active={showExtensions}
             onClick={() => setShowExtensions((v) => !v)}
             title={vocab('Extensions')}
             aria-label={vocab('Extensions')}
             aria-expanded={showExtensions}
           >
             ⬒
-          </button>
+          </IconButton>
           {showExtensions && (
             <BrowserExtensionsPanel partition={partition} onClose={() => setShowExtensions(false)} />
           )}
