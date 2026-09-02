@@ -712,12 +712,6 @@ body,
 }
 /* The pinned filter input of a quick-pick menu: full menu width (overrides .tab__edit's
    fixed 120px, which is sized for inline tab renames). */
-.tab-menu__filter {
-  width: auto;
-  align-self: stretch;
-  margin: 2px 2px 6px;
-  padding: 6px 8px;
-}
 .tab-menu__sub button {
   padding-left: 8px;
 }
@@ -4251,40 +4245,9 @@ body,
   color: var(--text);
 }
 
-/* Scope chip: which checkout (main or a bound worktree) the panel acts on. */
-.scm-scope {
-  background: rgba(var(--tint-rgb), 0.06);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 3px 9px;
-  font-family: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.scm-scope:hover {
-  background: rgba(var(--tint-rgb), 0.12);
-}
 
-.scm-branch {
-  background: rgba(122, 162, 247, 0.15);
-  color: var(--accent-text);
-  border: 1px solid rgba(122, 162, 247, 0.3);
-  border-radius: 7px;
-  padding: 3px 9px;
-  font-family: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
 
-.scm-branch:hover {
-  background: rgba(122, 162, 247, 0.25);
-}
 
 .scm-spacer {
   flex: 1;
@@ -4298,24 +4261,8 @@ body,
   color: var(--muted);
 }
 
-.scm-sync {
-  background: var(--panel-header);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  color: var(--text);
-  font-size: 12px;
-  padding: 4px 11px;
-  cursor: pointer;
-}
 
-.scm-sync:hover:not(:disabled) {
-  background: var(--panel-2);
-}
 
-.scm-sync:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 
 .scm-body {
   font-family: Menlo, Monaco, monospace;
@@ -4376,13 +4323,6 @@ body,
   opacity: 1;
 }
 
-.scm-iconbtn {
-  width: 20px;
-  height: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
 /* A repository may have hundreds of worktrees. Keep the dialog controls reachable and scroll only
    the repeated rows; viewport-relative height still fits on short displays. */
 .bind-existing__list {
@@ -4442,10 +4382,6 @@ body,
   cursor: pointer;
 }
 
-.scm-iconbtn:hover {
-  background: var(--panel-header);
-  color: var(--text);
-}
 
 .scm-letter {
   width: 12px;
@@ -4582,37 +4518,9 @@ body,
   box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.18);
 }
 
-.scm-gen {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(10, 132, 255, 0.14);
-  border: 1px solid rgba(10, 132, 255, 0.32);
-  color: var(--accent-text);
-  border-radius: 7px;
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  transition: background 0.15s ease, transform 0.12s ease;
-}
 
-.scm-gen:hover:not(:disabled) {
-  background: rgba(10, 132, 255, 0.26);
-}
 
-.scm-gen:active:not(:disabled) {
-  transform: scale(0.92);
-}
 
-.scm-gen:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 
 .scm-gen.is-generating {
   animation: scm-gen-pulse 0.9s ease-in-out infinite;
@@ -4630,24 +4538,7 @@ body,
   }
 }
 
-.scm-commit-btn {
-  width: 100%;
-  margin-top: 10px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 9px;
-  padding: 11px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.1px;
-  cursor: pointer;
-  transition: filter 0.15s ease, opacity 0.15s ease;
-}
 
-.scm-commit-btn:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
 .confirm__textarea {
   /* Task prose, not a one-liner: fixed comfortable height, user-growable. `font-family` because
      a bare textarea falls back to the UA monospace default, unlike input. */
@@ -4657,10 +4548,6 @@ body,
   resize: vertical;
 }
 
-.scm-commit-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 
 /* ---- Explorer (file tree) ---- */
 .ex-head-actions {
@@ -7582,19 +7469,6 @@ button.group-node__setup:disabled {
   line-height: 1.4;
   color: var(--danger);
 }
-.scm-error__dismiss {
-  flex: none;
-  background: none;
-  border: none;
-  color: rgba(var(--tint-rgb), 0.6);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0 2px;
-}
-.scm-error__dismiss:hover {
-  color: var(--text-strong);
-}
 
 /* Publish to GitHub picker (VS Code-style: name + private/public choice) */
 .pubdlg-overlay {
@@ -7617,20 +7491,6 @@ button.group-node__setup:disabled {
   overflow: hidden;
 }
 
-.scm-more {
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  color: var(--muted);
-  font-size: 15px;
-  line-height: 1;
-  padding: 3px 8px;
-  cursor: pointer;
-}
-.scm-more:hover {
-  background: var(--panel-2);
-  color: var(--text);
-}
 /* Sessions sidebar — row + status dot */
 @keyframes nt-spin { to { transform: rotate(360deg); } }
 

@@ -9551,22 +9551,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   font-weight: 700;
   color: var(--md-on-surface);
 }
-.md3-source-control > .drawer__head > .drawer__close {
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--md-shape-full);
-  color: var(--md-on-surface-variant);
-  transition:
-    background var(--md-motion-effect),
-    color var(--md-motion-effect);
-}
-.md3-source-control > .drawer__head > .drawer__close:hover {
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface);
-}
 
 .md3-source-control .scm-bar {
   padding: 12px 16px;
@@ -9582,35 +9566,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   color: var(--md-on-surface);
 }
 
-.md3-source-control .scm-scope,
-.md3-source-control .scm-branch {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 28px;
-  padding: 0 10px 0 8px;
-  max-width: 220px;
-  border: none;
-  border-radius: var(--md-shape-full);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 600;
-  transition: background var(--md-motion-effect);
-}
-.md3-source-control .scm-scope {
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
-}
-.md3-source-control .scm-scope:hover {
-  background: var(--md-surface-container-highest);
-}
-.md3-source-control .scm-branch {
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-}
-.md3-source-control .scm-branch:hover {
-  filter: brightness(1.08);
-}
 
 .md3-source-control .scm-ahead {
   color: var(--md-success);
@@ -9623,45 +9578,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   font-size: 11px;
 }
 
-.md3-source-control .scm-sync {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 14px;
-  border-radius: var(--md-shape-full);
-  border: 1px solid var(--md-outline);
-  background: transparent;
-  color: var(--md-on-surface);
-  font-family: var(--font-ui);
-  font-size: 12.5px;
-  font-weight: 600;
-  transition: background var(--md-motion-effect);
-}
-.md3-source-control .scm-sync:hover:not(:disabled) {
-  background: var(--md-surface-container-high);
-}
-.md3-source-control .scm-sync:disabled {
-  opacity: 0.5;
-}
 
-.md3-source-control .scm-more {
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--md-shape-full);
-  color: var(--md-on-surface-variant);
-  font-size: 16px;
-  transition:
-    background var(--md-motion-effect),
-    color var(--md-motion-effect);
-}
-.md3-source-control .scm-more:hover {
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
-}
 
 .md3-source-control .scm-body {
   font-family: var(--font-ui);
@@ -9685,13 +9602,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   font-weight: 700;
   letter-spacing: normal;
   text-transform: none;
-}
-.md3-source-control .scm-section-head button {
-  color: var(--md-primary);
-  font-family: var(--font-ui);
-  font-weight: 600;
-  text-transform: none;
-  letter-spacing: normal;
 }
 
 .md3-source-control .scm-file {
@@ -9723,16 +9633,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   font-family: var(--font-mono);
   font-size: 11px;
 }
-.md3-source-control .scm-iconbtn {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--md-shape-full);
-  color: var(--md-on-surface-variant);
-}
-.md3-source-control .scm-iconbtn:hover {
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface);
-}
 .md3-source-control .scm-iconbtn[title='Discard changes']:hover {
   color: var(--md-error);
 }
@@ -9758,44 +9658,8 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   border-color: var(--md-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-primary) 20%, transparent);
 }
-.md3-source-control .scm-gen {
-  top: 9px;
-  right: 9px;
-  width: 30px;
-  min-height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--md-shape-full);
-  background: var(--md-surface-container-high);
-  border: none;
-  color: var(--md-primary);
-  transition: background var(--md-motion-effect);
-}
-.md3-source-control .scm-gen:hover:not(:disabled) {
-  background: var(--md-surface-container-highest);
-}
 .md3-source-control .scm-gen.is-generating {
   color: var(--md-primary);
-}
-.md3-source-control .scm-commit-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: var(--md-shape-full);
-  background: var(--md-primary);
-  color: var(--md-on-primary);
-  font-family: var(--font-ui);
-  font-weight: 600;
-  letter-spacing: normal;
-  padding: 12px;
-  transition:
-    filter var(--md-motion-effect),
-    opacity var(--md-motion-effect);
-}
-.md3-source-control .scm-commit-btn:hover:not(:disabled) {
-  filter: brightness(1.06);
 }
 
 .md3-source-control .scm-error {
@@ -9807,13 +9671,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 .md3-source-control .scm-error__msg {
   color: var(--md-on-error-container);
   font-family: var(--font-mono);
-}
-.md3-source-control .scm-error__dismiss {
-  color: var(--md-on-error-container);
-  opacity: 0.75;
-}
-.md3-source-control .scm-error__dismiss:hover {
-  opacity: 1;
 }
 
 /* ---- Git history (rendered via GitHistoryPanel inside the Source Control drawer) ---- */

@@ -23,7 +23,7 @@ import { defaultScmScope, type ScmScope } from '@shared/scm-scope'
 import { hintLabel } from '@shared/platform-utils'
 import { MaterialSymbol } from './MaterialSymbol'
 import { gitStatusBadgeClass } from '../lib/gitStatusBadge'
-import { TextArea } from '@renderer/ui/md3'
+import { Button, IconButton, ListRow, SearchField, TextArea } from '@renderer/ui/md3'
 import { chipFor, effectiveBindings } from '../lib/keybindingOverrides'
 import { matchesShortcut } from '@shared/shortcut'
 import { isMacPlatform } from '@shared/platform-utils'
@@ -338,11 +338,12 @@ export function SourceControlPanel({
           <DiffStat added={f.added} deleted={f.deleted} />
           <span className="scm-row-actions">
             {!staged && (
-              <button className="scm-iconbtn" title="Discard changes" aria-label="Discard changes" onClick={() => discard(f)}>
+              <IconButton size="dense" className="scm-iconbtn" title="Discard changes" aria-label="Discard changes" onClick={() => discard(f)}>
                 ↩
-              </button>
+              </IconButton>
             )}
-            <button
+            <IconButton
+              size="dense"
               className="scm-iconbtn"
               title={staged ? 'Unstage' : 'Stage'}
               aria-label={staged ? 'Unstage' : 'Stage'}
@@ -351,7 +352,7 @@ export function SourceControlPanel({
               }
             >
               <MaterialSymbol name={staged ? 'remove' : 'add'} size={15} />
-            </button>
+            </IconButton>
           </span>
         </div>
       )
@@ -375,8 +376,11 @@ export function SourceControlPanel({
     if (!status.hasRemote) {
       if (isSsh) return null
       return (
-        <button
+        <Button
+          variant="tonal"
+          size="small"
           className="scm-sync"
+          vocabularyMode="factual"
           disabled={busy || !status.ghAvailable}
           title={
             !status.ghAvailable
@@ -388,19 +392,22 @@ export function SourceControlPanel({
           onClick={() => setPublishOpen(true)}
         >
           Publish to GitHub
-        </button>
+        </Button>
       )
     }
     if (!status.hasUpstream) {
       return (
-        <button
+        <Button
+          variant="tonal"
+          size="small"
           className="scm-sync"
+          vocabularyMode="factual"
           disabled={busy}
           title={`Publish ${status.branch} to origin`}
           onClick={() => act(() => git.push(cwd!))}
         >
           Publish Branch
-        </button>
+        </Button>
       )
     }
     const { ahead, behind } = status
@@ -409,40 +416,48 @@ export function SourceControlPanel({
         <span className="scm-ahead">↑{ahead}</span>
         <span className="scm-behind">↓{behind}</span>
         {ahead > 0 && behind > 0 ? (
-          <button
+          <Button
+            variant="tonal"
+            size="small"
             className="scm-sync"
+            vocabularyMode="factual"
             disabled={busy}
             title={`Pull ${behind}, push ${ahead}`}
+            leadingIcon={<MaterialSymbol name="sync" size={16} />}
             onClick={() => act(() => git.sync(cwd!))}
           >
-            <MaterialSymbol name="sync" size={16} />
             Sync
-          </button>
+          </Button>
         ) : behind > 0 ? (
-          <button
+          <Button
+            variant="tonal"
+            size="small"
             className="scm-sync"
+            vocabularyMode="factual"
             disabled={busy}
             title={`Pull ${behind} commit${behind === 1 ? '' : 's'}`}
+            leadingIcon={<MaterialSymbol name="sync" size={16} />}
             onClick={() => act(() => git.pull(cwd!))}
           >
-            <MaterialSymbol name="sync" size={16} />
             Pull
-          </button>
+          </Button>
         ) : ahead > 0 ? (
-          <button
+          <Button
+            variant="tonal"
+            size="small"
             className="scm-sync"
+            vocabularyMode="factual"
             disabled={busy}
             title={`Push ${ahead} commit${ahead === 1 ? '' : 's'}`}
+            leadingIcon={<MaterialSymbol name="sync" size={16} />}
             onClick={() => act(() => git.push(cwd!))}
           >
-            <MaterialSymbol name="sync" size={16} />
             Push
-          </button>
+          </Button>
         ) : (
-          <button className="scm-sync" disabled title="Up to date with origin">
-            <MaterialSymbol name="sync" size={16} />
+          <Button variant="tonal" size="small" className="scm-sync" vocabularyMode="factual" disabled title="Up to date with origin" leadingIcon={<MaterialSymbol name="sync" size={16} />}>
             Synced
-          </button>
+          </Button>
         )}
       </>
     )
@@ -458,9 +473,9 @@ export function SourceControlPanel({
       <aside className="drawer scm md3-source-control" data-easter-surface="source-control" onClick={(e) => e.stopPropagation()}>
         <div className="drawer__head">
           <h2>Source Control</h2>
-          <button className="drawer__close" aria-label="Close" onClick={onClose}>
+          <IconButton size="dense" className="drawer__close" aria-label="Close" onClick={onClose}>
             <MaterialSymbol name="close" size={19} />
-          </button>
+          </IconButton>
         </div>
 
         {!cwd && (
@@ -473,17 +488,20 @@ export function SourceControlPanel({
           <div className="drawer__body">
             <p className="set-note">No git repository in this folder.</p>
             {scopes.length > 1 && (
-              <button
+              <Button
+                variant="outlined"
+                size="small"
                 className="sc-btn"
+                vocabularyMode="factual"
                 disabled={busy}
+                leadingIcon={<MaterialSymbol name="account_tree" size={16} />}
                 onClick={(event) => {
                   const rect = event.currentTarget.getBoundingClientRect()
                   setScopeMenu({ top: rect.bottom + 4, left: rect.left })
                 }}
               >
-                <MaterialSymbol name="account_tree" size={16} />
                 Choose repository scope
-              </button>
+              </Button>
             )}
             {nestedRepoDiscovery?.repositories.length ? (
               <section className="scm-section">
@@ -503,16 +521,19 @@ export function SourceControlPanel({
                   const nestedScope = scopes.find((candidate) => candidate.cwd === repo.path)
                   if (!nestedScope) return null
                   return (
-                    <button
+                    <Button
+                      variant="outlined"
+                      size="small"
                       className="sc-btn"
+                      vocabularyMode="factual"
                       key={nestedScope.id}
                       disabled={busy}
                       title={nestedScope.cwd}
+                      leadingIcon={<MaterialSymbol name="account_tree" size={16} />}
                       onClick={() => setScopeId(nestedScope.id)}
                     >
-                      <MaterialSymbol name="account_tree" size={16} />
                       {repo.relativePath}
-                    </button>
+                    </Button>
                   )
                 })}
               </section>
@@ -523,15 +544,15 @@ export function SourceControlPanel({
                   Scanned {nestedRepoDiscovery.scannedDirectories} folders.
                 </p>
                 {onRefreshNestedRepos && (
-                  <button className="sc-btn" disabled={busy} onClick={onRefreshNestedRepos}>
+                  <Button variant="outlined" size="small" className="sc-btn" vocabularyMode="factual" disabled={busy} onClick={onRefreshNestedRepos}>
                     Retry repository scan
-                  </button>
+                  </Button>
                 )}
               </section>
             ) : null}
-            <button className="sc-btn" disabled={busy} onClick={() => act(() => git.init(cwd))}>
+            <Button variant="outlined" size="small" className="sc-btn" vocabularyMode="factual" disabled={busy} onClick={() => act(() => git.init(cwd))}>
               Initialize repository
-            </button>
+            </Button>
           </div>
         )}
 
@@ -542,36 +563,43 @@ export function SourceControlPanel({
                   a bound worktree). An SSH project has no worktrees in v1 → no scopes and no
                   "New worktree…": it keeps the plain repo-name chip it always had. */}
               {canPickScope ? (
-                <button
+                <Button
+                  variant="text"
+                  size="small"
                   className="scm-scope"
+                  vocabularyMode="factual"
                   title={scope?.cwd}
+                  leadingIcon={<MaterialSymbol name="account_tree" size={15} />}
+                  trailingIcon={<MaterialSymbol name="arrow_drop_down" size={18} />}
                   onClick={(e) => {
                     const r = e.currentTarget.getBoundingClientRect()
                     setScopeMenu({ top: r.bottom + 4, left: r.left })
                   }}
                 >
-                  <MaterialSymbol name="account_tree" size={15} />
                   {scope?.label ?? status.repoName}
-                  <MaterialSymbol name="arrow_drop_down" size={18} />
-                </button>
+                </Button>
               ) : (
                 <span className="scm-repo">{status.repoName}</span>
               )}
-              <button
+              <Button
+                variant="text"
+                size="small"
                 className="scm-branch"
+                vocabularyMode="factual"
+                leadingIcon={<MaterialSymbol name="call_split" size={15} />}
+                trailingIcon={<MaterialSymbol name="arrow_drop_down" size={18} />}
                 onClick={(e) => {
                   const r = e.currentTarget.getBoundingClientRect()
                   setNewBranch('') // a stale filter from the last open would hide branches
                   setBranchMenu({ top: r.bottom + 4, left: r.left })
                 }}
               >
-                <MaterialSymbol name="call_split" size={15} />
                 {status.branch}
-                <MaterialSymbol name="arrow_drop_down" size={18} />
-              </button>
+              </Button>
               <span className="scm-spacer" />
               {renderRemoteAction()}
-              <button
+              <IconButton
+                size="dense"
                 className="scm-more"
                 title="More actions"
                 aria-label="More source control actions"
@@ -581,7 +609,7 @@ export function SourceControlPanel({
                 }}
               >
                 ⋯
-              </button>
+              </IconButton>
             </div>
 
             <div className="drawer__body scm-body">
@@ -591,7 +619,8 @@ export function SourceControlPanel({
               {(error || genError) && (
                 <div className="scm-error" role="alert">
                   <pre className="scm-error__msg">{error || genError}</pre>
-                  <button
+                  <IconButton
+                    size="dense"
                     className="scm-error__dismiss"
                     title="Dismiss"
                     aria-label="Dismiss error"
@@ -601,7 +630,7 @@ export function SourceControlPanel({
                     }}
                   >
                     <MaterialSymbol name="close" size={16} />
-                  </button>
+                  </IconButton>
                 </div>
               )}
               {/* No proactive GitHub sign-in nag. Push/pull on an existing remote use git's
@@ -628,8 +657,10 @@ export function SourceControlPanel({
                       }
                     }}
                   />
-                  <button
+                  <IconButton
+                    size="dense"
                     className={`scm-gen${generating ? ' is-generating' : ''}`}
+                    vocabularyMode="factual"
                     disabled={generating || stagedCount === 0}
                     title={
                       stagedCount === 0
@@ -640,16 +671,17 @@ export function SourceControlPanel({
                     onClick={generate}
                   >
                     <MaterialSymbol name="auto_awesome" size={16} />
-                  </button>
+                  </IconButton>
                 </div>
-                <button
+                <Button
                   className="scm-commit-btn"
+                  vocabularyMode="factual"
                   disabled={busy || !message.trim() || stagedCount === 0}
+                  leadingIcon={<MaterialSymbol name="check" size={17} />}
                   onClick={commitAndPush}
                 >
-                  <MaterialSymbol name="check" size={17} />
                   {status.hasUpstream ? 'Commit & Push' : 'Commit'} → {status.branch}
-                </button>
+                </Button>
               </section>
 
               {status.staged.length > 0 && (
@@ -658,7 +690,7 @@ export function SourceControlPanel({
                     <span>
                       STAGED · <b>{status.staged.length}</b>
                     </span>
-                    <button onClick={() => act(() => git.unstageAll(cwd))}>unstage all</button>
+                    <Button variant="text" size="small" vocabularyMode="factual" onClick={() => act(() => git.unstageAll(cwd))}>unstage all</Button>
                   </div>
                   {renderFiles(status.staged, true)}
                 </section>
@@ -670,7 +702,7 @@ export function SourceControlPanel({
                     CHANGES · <b>{status.changes.length}</b>
                   </span>
                   {status.changes.length > 0 && (
-                    <button onClick={() => act(() => git.stageAll(cwd))}>+ stage all</button>
+                    <Button variant="text" size="small" vocabularyMode="factual" onClick={() => act(() => git.stageAll(cwd))}>+ stage all</Button>
                   )}
                 </div>
                 {status.changes.length === 0 && status.staged.length === 0 && (
@@ -765,12 +797,13 @@ export function SourceControlPanel({
                   className="tab-menu"
                   style={{ top: branchMenu.top, left: branchMenu.left, zIndex: 80 }}
                 >
-                  <input
-                    className="tab__edit tab-menu__filter"
+                  <SearchField
+                    dense
+                    className="tab-menu__filter"
                     placeholder="Filter branches, or type a new name"
+                    aria-label="Filter branches"
                     value={newBranch}
                     autoFocus
-                    spellCheck={false}
                     onChange={(e) => setNewBranch(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Escape') {
@@ -787,30 +820,26 @@ export function SourceControlPanel({
                   {/* --scroll on the LIST only, so the filter input never scrolls away. */}
                   <div className="tab-menu__list tab-menu--scroll">
                     {shown.map((b) => (
-                      <button key={b} onClick={() => pick(b)}>
-                        {b === status.branch ? '● ' : '   '}
-                        {b}
-                      </button>
+                      <ListRow key={b} vocabularyMode="factual" label={`${b === status.branch ? '● ' : '   '}${b}`} onClick={() => pick(b)} />
                     ))}
                     {remoteShown.length > 0 && (
                       <>
                         {shown.length > 0 && <div className="ctx-sep" />}
                         {remoteShown.map((r) => (
-                          <button
+                          <ListRow
                             key={`r:${r}`}
+                            vocabularyMode="factual"
                             title={`Check out ${r} as a local tracking branch`}
+                            label={`⇣ ${r}`}
                             onClick={() => pick(localName(r))}
-                          >
-                            {'⇣ '}
-                            {r}
-                          </button>
+                          />
                         ))}
                       </>
                     )}
                     {query && !exact && !remoteExact && (
                       <>
                         {(shown.length > 0 || remoteShown.length > 0) && <div className="ctx-sep" />}
-                        <button onClick={createNew}>+ Create branch “{query}”</button>
+                        <ListRow vocabularyMode="factual" label={`+ Create branch “${query}”`} onClick={createNew} />
                       </>
                     )}
                   </div>
