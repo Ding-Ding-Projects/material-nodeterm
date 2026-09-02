@@ -6,6 +6,7 @@ import { resolveAppDisplayName } from '@shared/appIdentity'
 import { resolveLogoPreset } from './appearance/BrandMark'
 import { formatBuildTime, readBuildProvenance } from '@shared/build-provenance'
 import { ProjectGlyph } from './ProjectGlyph'
+import { Button, IconButton } from '@renderer/ui/md3'
 
 /**
  * Whether the start screen may be dismissed back to whatever is behind it. `hasOpenProjects` is
@@ -178,7 +179,7 @@ export function WelcomeScreen({
               the reassurance line beside it, is the fix: always visible, always labeled, and says
               plainly that nothing here touches the other projects. */}
           <div className="md3-welcome__topbar">
-            <button
+            <Button variant="text" vocabularyMode="factual"
               className="md3-welcome__back"
               onClick={onClose}
               title={text('welcome.back', 'Back to your projects')}
@@ -197,21 +198,19 @@ export function WelcomeScreen({
                 <path d="M15 6l-6 6 6 6" />
               </svg>
               <span>{text('welcome.back', 'Back to your projects')}</span>
-            </button>
+            </Button>
             <span className="md3-welcome__back-note">
               {text('welcome.back.note', "They're untouched — nothing here changes them.")}
             </span>
           </div>
           {/* Secondary, conventional corner close — kept for anyone who already reaches for it by
               habit. The button above is the one this screen relies on being found. */}
-          <button
+          <IconButton size="dense" icon="close" vocabularyMode="factual"
             className="md3-welcome__close"
             onClick={onClose}
             title={text('welcome.close', 'Close')}
             aria-label={text('welcome.close', 'Close')}
-          >
-            ×
-          </button>
+           />
         </>
       )}
 
@@ -249,7 +248,7 @@ export function WelcomeScreen({
         />
 
         <div className="md3-welcome__cards">
-          <button className="md3-welcome__card md3-welcome__card--primary" onClick={onNewProject}>
+          <Button variant="tonal" vocabularyMode="factual" className="md3-welcome__card md3-welcome__card--primary" onClick={onNewProject}>
             <svg
               className="md3-welcome__card-icon"
               viewBox="0 0 24 24"
@@ -267,9 +266,9 @@ export function WelcomeScreen({
               <span className="md3-welcome__card-title">{text('welcome.card.newProject', 'New project')}</span>
               <span className="md3-welcome__card-desc">{text('welcome.card.newProject.desc', 'An empty canvas')}</span>
             </span>
-          </button>
+          </Button>
 
-          <button className="md3-welcome__card" onClick={onOpenFolder}>
+          <Button variant="tonal" vocabularyMode="factual" className="md3-welcome__card" onClick={onOpenFolder}>
             <svg
               className="md3-welcome__card-icon"
               viewBox="0 0 24 24"
@@ -286,9 +285,9 @@ export function WelcomeScreen({
               <span className="md3-welcome__card-title">{text('welcome.card.openFolder', 'Open folder…')}</span>
               <span className="md3-welcome__card-desc">{text('welcome.card.openFolder.desc', 'Point at a repo')}</span>
             </span>
-          </button>
+          </Button>
 
-          <button className="md3-welcome__card" onClick={onCloneRepo}>
+          <Button variant="tonal" vocabularyMode="factual" className="md3-welcome__card" onClick={onCloneRepo}>
             <svg
               className="md3-welcome__card-icon"
               viewBox="0 0 24 24"
@@ -306,9 +305,9 @@ export function WelcomeScreen({
               <span className="md3-welcome__card-title">{text('welcome.card.cloneRepo', 'Clone repo…')}</span>
               <span className="md3-welcome__card-desc">{text('welcome.card.cloneRepo.desc', 'From GitHub or a URL')}</span>
             </span>
-          </button>
+          </Button>
 
-          <button className="md3-welcome__card" onClick={onOpenProjectFile}>
+          <Button variant="tonal" vocabularyMode="factual" className="md3-welcome__card" onClick={onOpenProjectFile}>
             <svg
               className="md3-welcome__card-icon"
               viewBox="0 0 24 24"
@@ -331,9 +330,9 @@ export function WelcomeScreen({
                 {text('welcome.card.openProjectFile.desc', 'A saved .nodeterm-project')}
               </span>
             </span>
-          </button>
+          </Button>
 
-          <button className="md3-welcome__card" onClick={onConnectSsh}>
+          <Button variant="tonal" vocabularyMode="factual" className="md3-welcome__card" onClick={onConnectSsh}>
             <svg
               className="md3-welcome__card-icon"
               viewBox="0 0 24 24"
@@ -351,7 +350,7 @@ export function WelcomeScreen({
               <span className="md3-welcome__card-title">{text('welcome.card.connectSsh', 'Connect over SSH…')}</span>
               <span className="md3-welcome__card-desc">{text('welcome.card.connectSsh.desc', 'Work on a remote host')}</span>
             </span>
-          </button>
+          </Button>
         </div>
 
         {closedProjects.length > 0 && (
@@ -400,7 +399,7 @@ export function WelcomeScreen({
                   {p.cwd && <span className="md3-welcome__recent-path">{p.cwd}</span>}
                   <span className="md3-welcome__recent-spacer" />
                   {onDeleteClosed && (
-                    <button
+                    <IconButton size="compact" icon="close" vocabularyMode="factual"
                       className="md3-welcome__recent-del"
                       title={text('welcome.recent.deleteTitle', 'Delete permanently (ends its sessions)')}
                       // The accessible name NAMES THE PROJECT: a screen-reader user moving down a
@@ -411,9 +410,7 @@ export function WelcomeScreen({
                         e.stopPropagation()
                         onDeleteClosed(p.id, p.name, e.currentTarget)
                       }}
-                    >
-                      ×
-                    </button>
+                     />
                   )}
                   <svg
                     className="md3-welcome__recent-arrow"

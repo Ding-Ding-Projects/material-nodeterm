@@ -7,6 +7,7 @@ import { isTopDialog, nextDialogId, popDialog, pushDialog } from '@renderer/comp
 import { PinPad } from './PinPad'
 import { useEnableKidsDialog } from './entry'
 import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 /**
  * PIN setup or verification for entering Kids mode from the nav rail's `child_care` destination —
@@ -182,9 +183,9 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
           </div>
         ) : null}
         <p className="md3-kids-disclosure">{vocab(KIDS_DISCLOSURE)}</p>
-        <button type="button" className="md3-kids-textbtn" onClick={close}>
+        <Button variant="text" vocabularyMode="factual" className="md3-kids-textbtn" onClick={close}>
           {vocab('Cancel')}
-        </button>
+        </Button>
       </div>
     </div>,
     document.body

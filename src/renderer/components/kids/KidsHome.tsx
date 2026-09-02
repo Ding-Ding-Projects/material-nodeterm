@@ -5,6 +5,7 @@ import { KIDS_DISCLOSURE } from '@shared/kids-mode-policy'
 import { useKidsActivity } from '@renderer/state/kidsActivity'
 import { IconBeep, IconBook, IconBrush, IconSparkle, IconSpeaker, IconSun } from './icons'
 import { narrateKidsScreen } from './narration'
+import { Button, IconButton } from '@renderer/ui/md3'
 
 export type KidsTileKind = 'beep' | 'terminal' | 'draw'
 
@@ -113,7 +114,7 @@ export function KidsHome({
           {stickers} sticker{stickers === 1 ? '' : 's'}
         </span>
         <div className="md3-kids-home__spacer" />
-        <button
+        <IconButton size="standard" vocabularyMode="factual"
           type="button"
           className="md3-kids-iconbtn"
           onClick={onOpenGate}
@@ -121,7 +122,7 @@ export function KidsHome({
           title="Grown-up gate"
         >
           <IconLock />
-        </button>
+        </IconButton>
       </div>
 
       <div className="md3-kids-home__avatar">
@@ -134,9 +135,8 @@ export function KidsHome({
 
       <div className="md3-kids-tiles">
         {tiles.map((t) => (
-          <button
+          <Button variant="tonal" vocabularyMode="factual"
             key={t.kind}
-            type="button"
             className={`md3-kids-tile md3-kids-tile--${t.variant}${t.disabled ? ' md3-kids-tile--disabled' : ''}`}
             disabled={t.disabled}
             title={t.disabled ? t.disabledReason : undefined}
@@ -158,7 +158,7 @@ export function KidsHome({
             ) : t.disabled ? (
               <span className="md3-kids-tile__badge">Soon</span>
             ) : null}
-          </button>
+          </Button>
         ))}
       </div>
 

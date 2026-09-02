@@ -30,6 +30,8 @@ import {
   SceneNotify,
   ScenePhone
 } from './scenes'
+import { Button, Chip, ListRow, SegmentedButton } from '@renderer/ui/md3'
+import { MaterialSymbol } from '../MaterialSymbol'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -192,9 +194,9 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
   return createPortal(
     <div className="onb">
       {stepId === 'cover' && <OnbGhostCanvas />}
-      <button className="onb-skip" onClick={onClose}>
+      <Button variant="text" vocabularyMode="factual" className="onb-skip" onClick={onClose}>
         {vocab('Skip setup')}
-      </button>
+      </Button>
 
       {stepId === 'cover' ? (
         <div className="onb-cover">
@@ -230,9 +232,9 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
               <span>Lay your work out in space — pan, zoom, group, connect</span>
             </div>
           </div>
-          <button className="onb-btn onb-btn--primary onb-cover__cta" autoFocus onClick={next}>
+          <Button variant="filled" vocabularyMode="factual" className="onb-btn onb-btn--primary onb-cover__cta" autoFocus onClick={next}>
             Set up in a minute →
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="onb-card">
@@ -266,14 +268,14 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
                 </div>
                 <div className="onb-agent-grid">
                   {BUILTIN_AGENT_IDS.map((id) => (
-                    <button
+                    <Chip vocabularyMode="factual" selected={settings.defaultAgent === id}
                       key={id}
                       className={`onb-agent ${settings.defaultAgent === id ? 'is-selected' : ''}`}
                       onClick={() => update({ defaultAgent: id })}
                     >
                       <AgentIcon agentId={id} />
                       {AGENT_CONFIG[id].label}
-                    </button>
+                    </Chip>
                   ))}
                 </div>
                 <div className="onb-fineprint">
@@ -300,40 +302,33 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
                   {/* A real "I don't use dictation" choice (issue #143), not just the generic Next:
                       selects None, downloads nothing. It is also the DEFAULT, so doing nothing on
                       this step is the same honest opt-out. */}
-                  <button
+                  <ListRow
                     className={`onb-model ${!hasSpeechModel(settings.speech.model) ? 'is-selected' : ''}`}
+                    role="radio"
+                    aria-checked={!hasSpeechModel(settings.speech.model)}
+                    icon={<MaterialSymbol name="radio_button_unchecked" size={18} />}
+                    label={<span className="onb-model__name">No dictation</span>}
+                    sub={<span className="onb-model__size">nothing downloads</span>}
                     onClick={() => {
                       setModelHint('')
                       update({ speech: { ...settings.speech, model: SPEECH_MODEL_NONE } })
                     }}
-                  >
-                    <span className="onb-model__radio" />
-                    <span className="onb-model__name">No dictation</span>
-                    <span className="onb-model__size">nothing downloads</span>
-                  </button>
+                  />
                   {models.map((m) => {
                     const selected = settings.speech.model === m.id
                     const pct = progress[m.id]
                     return (
-                      <button
+                      <ListRow
                         key={m.id}
                         className={`onb-model ${selected ? 'is-selected' : ''}`}
+                        role="radio"
+                        aria-checked={selected}
+                        icon={<MaterialSymbol name={m.downloaded ? 'check_circle' : 'radio_button_unchecked'} size={18} />}
+                        label={<span className="onb-model__name">{modelLabel(m.id)}</span>}
+                        sub={<span className="onb-model__size">{formatSize(m.sizeMB ?? m.approxMB)}</span>}
+                        trailing={typeof pct === 'number' && pct < 100 ? <span className="onb-model__pct">{pct}%</span> : undefined}
                         onClick={() => pickModel(m)}
-                      >
-                        <span className="onb-model__radio" />
-                        <span className="onb-model__name">{modelLabel(m.id)}</span>
-                        <span className="onb-model__size">{formatSize(m.sizeMB ?? m.approxMB)}</span>
-                        {m.downloaded && (
-                          <span className="onb-model__ok">
-                            <OnbCheck />
-                          </span>
-                        )}
-                        {pct !== undefined && (
-                          <span className="onb-model__bar">
-                            <span style={{ width: `${pct}%` }} />
-                          </span>
-                        )}
-                      </button>
+                      />
                     )
                   })}
                 </div>
@@ -374,20 +369,17 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
                 )}
                 <div className="onb-defaultview">
                   <span className="onb-defaultview__label">Open new projects as</span>
-                  <div className="onb-seg" role="group" aria-label="Default view">
-                    <button
-                      className={`onb-seg__btn${settings.defaultProjectView !== 'kanban' ? ' is-on' : ''}`}
-                      onClick={() => update({ defaultProjectView: 'canvas' })}
-                    >
-                      Canvas
-                    </button>
-                    <button
-                      className={`onb-seg__btn${settings.defaultProjectView === 'kanban' ? ' is-on' : ''}`}
-                      onClick={() => update({ defaultProjectView: 'kanban' })}
-                    >
-                      Kanban
-                    </button>
-                  </div>
+                  <SegmentedButton
+                    className="onb-seg"
+                    ariaLabel="Default view"
+                    vocabularyMode="factual"
+                    value={settings.defaultProjectView === 'kanban' ? 'kanban' : 'canvas'}
+                    options={[
+                      { value: 'canvas', label: 'Canvas' },
+                      { value: 'kanban', label: 'Kanban' }
+                    ]}
+                    onChange={(view) => update({ defaultProjectView: view })}
+                  />
                 </div>
               </>
             )}
@@ -401,9 +393,9 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
                   Notifications.
                 </p>
                 <div className="onb-notify-actions">
-                  <button className="onb-btn onb-btn--primary" autoFocus onClick={() => chooseNotifications(true)}>
+                  <Button variant="filled" vocabularyMode="factual" className="onb-btn onb-btn--primary" autoFocus onClick={() => chooseNotifications(true)}>
                     Enable notifications
-                  </button>
+                  </Button>
                   <div className="onb-fineprint">…or just hit Next to leave them off.</div>
                 </div>
               </>
@@ -483,18 +475,18 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
               <div className="onb-nav__btns">
-                <button className="onb-btn" onClick={back}>
+                <Button variant="outlined" vocabularyMode="factual" className="onb-btn" onClick={back}>
                   Back
-                </button>
+                </Button>
                 {/* One consistent footer on every step (a lone Back read as the primary action).
                     Next past the notifications step without choosing = leave them off — the
                     close handler records the unanswered consent as asked+off. */}
-                <button
+                <Button variant="filled" vocabularyMode="factual"
                   className="onb-btn onb-btn--primary"
                   onClick={step === STEP_COUNT - 1 ? onClose : next}
                 >
                   {step === STEP_COUNT - 1 ? 'Finish' : 'Next'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

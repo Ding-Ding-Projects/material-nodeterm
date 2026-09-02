@@ -9628,7 +9628,7 @@ button.group-node__setup:disabled {
   color: var(--text);
 }
 
-.onb-skip {
+.mdx-btn.onb-skip {
   position: absolute;
   top: 40px; /* clears the traffic lights / tab bar drag region */
   right: 24px;
@@ -9828,37 +9828,12 @@ button.group-node__setup:disabled {
   display: flex;
   gap: 8px;
 }
-.onb-btn {
-  background: rgba(var(--tint-rgb), 0.06);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 12.5px;
-  font-weight: 600;
-  padding: 7px 14px;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-}
 
 /* ---- agent picker ---- */
 .onb-agent-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-}
-.onb-agent {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(var(--tint-rgb), 0.04);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  color: var(--text);
-  font-size: 12.5px;
-  font-weight: 600;
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
 }
 
 .onb-dot {
@@ -9874,7 +9849,7 @@ button.group-node__setup:disabled {
   flex-direction: column;
   gap: 6px;
 }
-.onb-model {
+.mdx-row.onb-model {
   position: relative;
   display: flex;
   align-items: center;
@@ -9888,14 +9863,6 @@ button.group-node__setup:disabled {
   cursor: pointer;
   transition: border-color 0.12s, background 0.12s;
   overflow: hidden;
-}
-
-.onb-model__radio {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(var(--tint-rgb), 0.35);
-  flex: none;
 }
 
 .onb-model__name {
@@ -9946,20 +9913,6 @@ button.group-node__setup:disabled {
 .onb-defaultview__label {
   font-size: 13px;
   color: rgba(235, 235, 245, 0.7);
-}
-.onb-seg {
-  display: inline-flex;
-  border: 1px solid rgba(var(--tint-rgb), 0.16);
-  border-radius: 8px;
-  overflow: hidden;
-}
-.onb-seg__btn {
-  background: none;
-  border: none;
-  color: rgba(235, 235, 245, 0.75);
-  font-size: 13px;
-  padding: 6px 14px;
-  cursor: pointer;
 }
 
 .onb-tryit.is-done {
@@ -10044,7 +9997,7 @@ button.group-node__setup:disabled {
   23%, 52% { opacity: 1; transform: scale(1); }
   56%, 100% { opacity: 0; transform: scale(0.97); }
 }
-.onb-menu__item {
+.mdx-row.onb-menu__item {
   display: flex;
   align-items: center;
   gap: 10px;

@@ -11,6 +11,7 @@ import { IconBackArrow, IconBeep, IconBrush } from './icons'
 import type { KidsTileKind } from './KidsHome'
 import { IconTerminal } from '@renderer/components/icons'
 import { narrateKidsScreen } from './narration'
+import { Button, IconButton } from '@renderer/ui/md3'
 
 /** Fixed node ids: the whole point is that "Type things" always reattaches the SAME tmux/session
  *  host session (see PtyManager) — a fresh random id every visit would cold-start a new shell
@@ -127,14 +128,13 @@ function KidsActivityCanvasInner({
   return (
     <div className="md3-kids-activity">
       <div className="md3-kids-activity__bar">
-        <button type="button" className="md3-kids-backbtn" onClick={handleBack}>
+        <Button variant="outlined" vocabularyMode="factual" className="md3-kids-backbtn" onClick={handleBack}>
           <IconBackArrow />
           Back to Beep
-        </button>
+        </Button>
         <div className="md3-kids-activity__title">{TILE_TITLE[active]}</div>
         <div className="md3-kids-activity__switch" role="tablist" aria-label="Switch activity">
-          <button
-            type="button"
+          <IconButton size="dense" vocabularyMode="factual" aria-label="Talk to Beep" active={active === 'beep'}
             role="tab"
             aria-selected={active === 'beep'}
             className={'md3-kids-switchbtn' + (active === 'beep' ? ' md3-kids-switchbtn--active' : '')}
@@ -142,9 +142,8 @@ function KidsActivityCanvasInner({
             title="Talk to Beep"
           >
             <IconBeep size={18} />
-          </button>
-          <button
-            type="button"
+          </IconButton>
+          <IconButton size="dense" vocabularyMode="factual" aria-label="Type things" active={active === 'terminal'}
             role="tab"
             aria-selected={active === 'terminal'}
             className={'md3-kids-switchbtn' + (active === 'terminal' ? ' md3-kids-switchbtn--active' : '')}
@@ -152,9 +151,8 @@ function KidsActivityCanvasInner({
             title="Type things"
           >
             <IconTerminal />
-          </button>
-          <button
-            type="button"
+          </IconButton>
+          <IconButton size="dense" vocabularyMode="factual" aria-label="Draw" active={active === 'draw'}
             role="tab"
             aria-selected={active === 'draw'}
             className={'md3-kids-switchbtn' + (active === 'draw' ? ' md3-kids-switchbtn--active' : '')}
@@ -162,7 +160,7 @@ function KidsActivityCanvasInner({
             title="Draw"
           >
             <IconBrush size={18} />
-          </button>
+          </IconButton>
         </div>
       </div>
       <div className="md3-kids-activity__canvas">

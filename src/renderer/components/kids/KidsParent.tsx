@@ -7,6 +7,7 @@ import { setKidsAllowedPermissionMode, useActivePermissionMode } from '@renderer
 import { IconBackArrow, IconClock, IconCode, IconHourglass, IconSparkle } from './icons'
 import { Md3Switch } from './Md3Switch'
 import { narrateKidsScreen } from './narration'
+import { Button } from '@renderer/ui/md3'
 
 /**
  * The grown-up screen — stats, today's activity, and the switches that actually change what the
@@ -75,14 +76,14 @@ export function KidsParent({
           <div className="md3-kids-parent__subtitle">Time, activity and what Beep is allowed to do.</div>
         </div>
         <div className="md3-kids-home__spacer" />
-        <button type="button" className="md3-kids-outlined-btn" onClick={onBackToKids}>
+        <Button variant="outlined" vocabularyMode="factual" className="md3-kids-outlined-btn" onClick={onBackToKids}>
           <IconBackArrow size={16} />
           Back to kids
-        </button>
-        <button type="button" className="md3-kids-filled-btn" onClick={exitToDeveloperMode} disabled={exiting}>
+        </Button>
+        <Button variant="filled" vocabularyMode="factual" className="md3-kids-filled-btn" onClick={exitToDeveloperMode} disabled={exiting}>
           <IconCode />
           {exiting ? 'Exiting…' : 'Exit to developer mode'}
-        </button>
+        </Button>
       </div>
 
       {exitError ? <div className="md3-kids-gate__status" role="alert">{exitError}</div> : null}

@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { useKidsActivity } from '@renderer/state/kidsActivity'
 import { IconBackArrow, IconSparkle } from './icons'
 import { narrateKidsScreen } from './narration'
+import { Button } from '@renderer/ui/md3'
 
 /**
  * "My stickers" — the real counter the grown-up screen's stat card also reads, not a decoration.
@@ -20,10 +21,10 @@ export function KidsStickers({ onBack }: { onBack: () => void }): React.JSX.Elem
   return (
     <div className="md3-kids-screen md3-kids-stickers" data-screen-label="My stickers">
       <div className="md3-kids-activity__bar">
-        <button type="button" className="md3-kids-backbtn" onClick={onBack}>
+        <Button variant="outlined" vocabularyMode="factual" className="md3-kids-backbtn" onClick={onBack}>
           <IconBackArrow />
           Back to Beep
-        </button>
+        </Button>
         <div className="md3-kids-activity__title">My stickers</div>
       </div>
       <div className="md3-kids-stickers__count">

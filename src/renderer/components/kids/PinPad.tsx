@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Button } from '@renderer/ui/md3'
 
 /**
  * The grown-up PIN keypad — 84px keys, r28, matching `MD3 Kids Mode.dc.html`'s
@@ -102,9 +103,8 @@ export function PinPad({
           k === '' ? (
             <span key={i} className="md3-kids-pinpad__key md3-kids-pinpad__key--blank" aria-hidden="true" />
           ) : (
-            <button
+            <Button variant="tonal" vocabularyMode="factual"
               key={i}
-              type="button"
               className={
                 'md3-kids-pinpad__key' + (k === '⌫' ? ' md3-kids-pinpad__key--back' : '')
               }
@@ -113,7 +113,7 @@ export function PinPad({
               aria-label={k === '⌫' ? 'Backspace' : `Digit ${k}`}
             >
               {k}
-            </button>
+            </Button>
           )
         )}
       </div>

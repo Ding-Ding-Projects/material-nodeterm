@@ -6,6 +6,7 @@ import { openDestructiveGate } from '@renderer/state/destructiveGate'
 import { useKidsMode } from '@renderer/state/kidsMode'
 import { PinPad } from './PinPad'
 import { narrateKidsScreen } from './narration'
+import { Button } from '@renderer/ui/md3'
 
 /**
  * The parent gate — "Just a moment, this part is for a grown-up. Enter the PIN."
@@ -114,21 +115,21 @@ export function KidsGate({
           ariaLabel="Grown-up PIN"
         />
       ) : (
-        <button type="button" className="md3-kids-filled-btn" onClick={() => void attempt('')}>
+        <Button variant="filled" vocabularyMode="factual" className="md3-kids-filled-btn" onClick={() => void attempt('')}>
           Continue to grown-up controls
-        </button>
+        </Button>
       )}
       <div className="md3-kids-gate__status" role="status" aria-live="polite">
         {message}
       </div>
       {variant === 'casual' ? (
-        <button type="button" className="md3-kids-textbtn" onClick={onBackToKids}>
+        <Button variant="text" vocabularyMode="factual" className="md3-kids-textbtn" onClick={onBackToKids}>
           Back to Beep
-        </button>
+        </Button>
       ) : null}
-      <button type="button" className="md3-kids-textbtn" onClick={requestReset}>
+      <Button variant="text" vocabularyMode="factual" className="md3-kids-textbtn" onClick={requestReset}>
         I never set this PIN
-      </button>
+      </Button>
     </div>
   )
 }

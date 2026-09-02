@@ -3,6 +3,7 @@ import type { AgentId } from '@shared/agents/config'
 import { AgentIcon } from '../../lib/agentIcons'
 import { IconTerminal, IconNote, IconEditor } from '../icons'
 import { AgentMascot } from '../../nodes/AgentMascot'
+import { ListRow } from '@renderer/ui/md3'
 
 /**
  * Animated scenes for the first-run setup tour (OnboardingFlow). All motion is CSS-only
@@ -84,22 +85,10 @@ export function SceneAgents({ agentId, label, color }: { agentId: AgentId; label
       {/* a frozen copy of the context menu, replayed (pointer-events off; positioned by the
           scene) — .onb-menu/.onb-menu__item/.onb-menu__icon, never the live .ctx-* classes */}
       <div className="onb-menu">
-        <button className="onb-menu__item" tabIndex={-1}>
-          <span className="onb-menu__icon"><IconTerminal /></span>
-          New terminal
-        </button>
-        <button className="onb-menu__item onb-menu__hl" tabIndex={-1}>
-          <span className="onb-menu__icon"><AgentIcon agentId={agentId} /></span>
-          New {label}
-        </button>
-        <button className="onb-menu__item" tabIndex={-1}>
-          <span className="onb-menu__icon"><IconNote /></span>
-          New sticky note
-        </button>
-        <button className="onb-menu__item" tabIndex={-1}>
-          <span className="onb-menu__icon"><IconEditor /></span>
-          Open file…
-        </button>
+        <ListRow className="onb-menu__item" tabIndex={-1} aria-hidden="true" vocabularyMode="factual" icon={<IconTerminal />} label={<>New terminal</>} />
+        <ListRow className="onb-menu__item onb-menu__hl" tabIndex={-1} aria-hidden="true" vocabularyMode="factual" icon={<AgentIcon agentId={agentId} />} label={<>New {label}</>} />
+        <ListRow className="onb-menu__item" tabIndex={-1} aria-hidden="true" vocabularyMode="factual" icon={<IconNote />} label={<>New sticky note</>} />
+        <ListRow className="onb-menu__item" tabIndex={-1} aria-hidden="true" vocabularyMode="factual" icon={<IconEditor />} label={<>Open file…</>} />
       </div>
       {/* the spawned agent node (term-node look: 3px color top border + panel header) */}
       <div className="onb-node" style={{ borderTopColor: color }}>
