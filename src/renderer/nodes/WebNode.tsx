@@ -9,6 +9,7 @@ import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { useWebviewKeepAlive } from '../state/webviewKeepAlive'
+import { IconButton } from '@renderer/ui/md3'
 
 /**
  * A web view node. When `data.url` is set it loads that live URL; otherwise it serves the
@@ -140,24 +141,26 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
         />
         <span className="term-node__spacer" />
         {url && (
-          <button
-            className="term-node__close"
-            title={vocab('Open in browser')}
+          <IconButton
+            size="compact"
+            className="term-node__open-external"
+            icon="north_east"
+            aria-label="Open in browser"
+            title="Open in browser"
             onClick={() => {
               const safe = httpUrl(url)
               if (safe) window.nodeTerminal.shell.openExternal(safe)
             }}
-          >
-            ↗
-          </button>
+          />
         )}
-        <button
+<IconButton
+          size="compact"
           className="term-node__close"
-          title={vocab('Close')}
+          icon="close"
+          aria-label="Close"
+          title="Close"
           onClick={() => deleteElements({ nodes: [{ id }] })}
-        >
-          ×
-        </button>
+        />
       </div>
 
       <div className="editor-node__body">

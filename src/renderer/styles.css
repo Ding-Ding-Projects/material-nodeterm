@@ -3241,33 +3241,6 @@ body,
   inset: 0;
 }
 
-.editor-node__toggle {
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--muted);
-  font-size: 11px;
-  padding: 3px 9px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.editor-node__save {
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--muted);
-  font-size: 11px;
-  padding: 3px 9px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.editor-node__save:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
 /* Image preview (shown instead of Monaco for image files). */
 .editor-node__image {
   position: absolute;
@@ -4036,8 +4009,6 @@ body,
   border-bottom: 1px solid var(--border);
 }
 
-
-
 .ex-filter-error {
   margin: 0;
   padding: 4px 12px 0;
@@ -4104,7 +4075,6 @@ body,
 .ex-head-actions button.is-on {
   color: var(--accent);
 }
-
 
 .ex-body {
   padding: 6px 4px 20px;
@@ -4245,10 +4215,6 @@ body,
   color: var(--text);
 }
 
-
-
-
-
 .scm-spacer {
   flex: 1;
 }
@@ -4260,9 +4226,6 @@ body,
 .scm-behind {
   color: var(--muted);
 }
-
-
-
 
 .scm-body {
   font-family: Menlo, Monaco, monospace;
@@ -4381,7 +4344,6 @@ body,
   line-height: 1;
   cursor: pointer;
 }
-
 
 .scm-letter {
   width: 12px;
@@ -4518,10 +4480,6 @@ body,
   box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.18);
 }
 
-
-
-
-
 .scm-gen.is-generating {
   animation: scm-gen-pulse 0.9s ease-in-out infinite;
 }
@@ -4538,7 +4496,6 @@ body,
   }
 }
 
-
 .confirm__textarea {
   /* Task prose, not a one-liner: fixed comfortable height, user-growable. `font-family` because
      a bare textarea falls back to the UA monospace default, unlike input. */
@@ -4548,15 +4505,12 @@ body,
   resize: vertical;
 }
 
-
 /* ---- Explorer (file tree) ---- */
 .ex-head-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-
-
 
 .ex-body {
   padding: 6px 4px 20px;
@@ -4829,8 +4783,6 @@ body,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-
 
 .ex-dls__spin {
   flex-shrink: 0;
@@ -5124,16 +5076,6 @@ button.group-node__setup:disabled {
   opacity: 0.75;
 }
 
-.group-node__wt-btn {
-  background: var(--surface-sunken);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 7px;
-  font-size: 13px;
-  padding: 2px 8px;
-  cursor: pointer;
-}
-
 .bind-mode {
   display: flex;
   gap: 18px;
@@ -5148,7 +5090,6 @@ button.group-node__setup:disabled {
   gap: 6px;
   cursor: pointer;
 }
-
 
 /* ---- Clone repo dialog (reuses the .confirm shell) ---- */
 
@@ -5257,11 +5198,6 @@ button.group-node__setup:disabled {
   gap: 10px;
 }
 
-
-
-
-
-
 /* A failed attempt reported INSIDE the dialog, so the field keeps focus and the reason sits
    beside what caused it — an error banner elsewhere loses both. */
 .confirm__error {
@@ -5334,15 +5270,11 @@ button.group-node__setup:disabled {
   cursor: pointer;
 }
 
-
 .confirm__actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
-
-
-
 
 /* ---- Web folder/file picker (Server Edition; reuses the .confirm shell) ---- */
 .confirm.dir-picker {
@@ -5807,16 +5739,6 @@ button.group-node__setup:disabled {
   color: var(--warn);
 }
 
-.group-node__wt-btn {
-  background: var(--md-surface-dim);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 7px;
-  font-size: 13px;
-  padding: 2px 8px;
-  cursor: pointer;
-}
-
 /* ungroup / × — top-right, revealed on hover or when selected. */
 .group-node__actions {
   position: absolute;
@@ -5833,27 +5755,6 @@ button.group-node__setup:disabled {
 .group-node:hover .group-node__actions,
 .group-node.selected .group-node__actions {
   opacity: 1;
-}
-
-.group-node__drill,
-.group-node__ungroup,
-.group-node__close {
-  background: var(--md-surface-dim);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 7px;
-  font-size: 11px;
-  padding: 3px 8px;
-  cursor: pointer;
-}
-
-.group-node__drill {
-  padding: 3px 7px;
-}
-
-.group-node__close {
-  padding: 3px 8px;
-  line-height: 1;
 }
 
 .drill-breadcrumb {
@@ -6086,41 +5987,6 @@ button.group-node__setup:disabled {
   pointer-events: auto;
 }
 
-.annotation-node__dot {
-  width: 11px;
-  height: 11px;
-  flex: none;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.annotation-node__variant,
-.annotation-node__close {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  border-radius: 7px;
-  font-size: 12px;
-  line-height: 1;
-  padding: 3px 6px;
-  cursor: pointer;
-}
-
-.annotation-node__label-input {
-  width: 110px;
-  min-width: 0;
-  min-height: 28px;
-  padding: 4px 7px;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  font: inherit;
-  font-size: 12px;
-}
-
 .annotation-node__thickness-control {
   display: inline-flex;
   align-items: center;
@@ -6180,22 +6046,6 @@ button.group-node__setup:disabled {
   font-size: 12px;
   color: var(--text);
   overflow: hidden;
-}
-
-.subagent-node__expand {
-  width: 16px;
-  height: 16px;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  color: var(--muted);
-  font-size: 10px;
-  cursor: pointer;
 }
 
 .subagent-node__term {
@@ -6305,22 +6155,6 @@ button.group-node__setup:disabled {
   overflow: hidden;
 }
 
-.loop-node__expand {
-  width: 16px;
-  height: 16px;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  color: var(--muted);
-  font-size: 10px;
-  cursor: pointer;
-}
-
 .loop-node__head {
   display: flex;
   align-items: center;
@@ -6359,36 +6193,12 @@ button.group-node__setup:disabled {
 
 .loop-node__play {
   margin-left: auto;
-  flex: none;
-  width: 22px;
-  height: 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(191, 122, 240, 0.18);
-  border: 1px solid #bf7af0;
-  border-radius: 6px;
-  color: #bf7af0;
-  font-size: 10px;
-  cursor: pointer;
 }
 
 /* Dismiss the card (job itself is untouched). Sits at the right edge; when Play is present
    it follows Play with a small gap instead of both auto-margins splitting the space. */
 .loop-node__close {
   margin-left: auto;
-  flex: none;
-  width: 22px;
-  height: 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--muted);
-  font-size: 13px;
-  cursor: pointer;
 }
 
 .loop-node__play + .loop-node__close {
@@ -8516,7 +8326,6 @@ button.group-node__setup:disabled {
   color: var(--muted);
 }
 
-
 .presence-prompt__colors {
   display: flex;
   gap: 6px;
@@ -8540,10 +8349,6 @@ button.group-node__setup:disabled {
   justify-content: flex-end;
   gap: 8px;
 }
-
-
-
-
 
 /* ---- Bug report dialog (help menu → Report a bug…) ---- */
 .bug-report {
@@ -9051,7 +8856,6 @@ button.group-node__setup:disabled {
 }
 
 /* Eco: the agent CLI was exited to reclaim RAM. Quiet — the session is fine. */
-
 
 /* ---- Kanban column pill: half-pill flush against a session node's top edge (rendered as a
    sibling of the overflow:hidden node root, so it can poke above the border). ---- */
@@ -9668,7 +9472,6 @@ button.group-node__setup:disabled {
 .ss-meta__project { color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ss-meta__project + .ss-meta__cwd::before { content: '· '; }
 
-
 .label-picker__createrow {
   position: relative;
   display: flex;
@@ -9870,7 +9673,6 @@ button.group-node__setup:disabled {
   text-align: left;
 }
 
-
 .kanban-due {
   font-size: 10px;
   font-weight: 700;
@@ -9907,7 +9709,6 @@ button.group-node__setup:disabled {
 .board-log__event .board-log__time {
   margin-left: 6px;
 }
-
 
 .kanban-prio-chip {
   letter-spacing: 0.04em;
@@ -11174,17 +10975,11 @@ button.group-node__setup:disabled {
    See src/renderer/state/notifications.ts and docs/notifications.md.
    ================================================================================== */
 
-
-
-
-
 @keyframes nt-spin {
   to {
     transform: rotate(360deg);
   }
 }
-
-
 
 /* ---- Notification centre trigger (bell in the top-right controls cluster) ---- */
 .controls-cluster .notif-bell {
@@ -12339,7 +12134,6 @@ button.group-node__setup:disabled {
 .cv-cat__body {
   padding: 8px 10px 10px;
 }
-
 
 .cv-rows {
   list-style: none;
@@ -14978,27 +14772,6 @@ body.focus-mode .dock:hover {
   color: var(--muted);
   flex-shrink: 0;
 }
-.files-node__btn {
-  min-width: 28px;
-  min-height: 28px;
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  padding: 2px 4px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-.files-node__btn:hover:not(:disabled) {
-  background: rgba(var(--tint-rgb), 0.1);
-  color: var(--text);
-}
-.files-node__btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
 .files-node__crumbs {
   display: flex;
   align-items: center;
@@ -15032,19 +14805,6 @@ body.focus-mode .dock:hover {
   color: var(--text);
   background: rgba(var(--tint-rgb), 0.1);
 }
-.files-node__filter {
-  margin: 0 8px 6px;
-  min-height: 30px;
-  padding: 3px 7px;
-  background: rgba(var(--tint-rgb), 0.06);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 12px;
-  outline: none;
-  flex-shrink: 0;
-}
-.files-node__filter:focus { border-color: var(--accent); }
 .files-node__search {
   display: flex;
   align-items: center;

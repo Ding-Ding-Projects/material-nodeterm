@@ -6,7 +6,7 @@ import { ColorMenu } from '../components/color/ColorMenu'
 import { alphaTint } from '../components/color/tint'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
-import { TextArea } from '@renderer/ui/md3'
+import { IconButton, TextArea } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import { NoteMarkdown } from '../components/NoteMarkdown'
@@ -111,13 +111,19 @@ export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
         className={`sticky-node__header${headerFill?.filled ? ' sticky-node__header--filled' : ''}`}
         style={headerFill?.filled ? headerFill.style : { background: alphaTint(data.color, 51 / 255) }}
       >
-        <button className="term-node__collapse" title={vocab(collapsed ? 'Expand' : 'Collapse')} onClick={toggleCollapse}>
-          {collapsed ? '▸' : '▾'}
-        </button>
-        <button
-          className="term-node__color"
-          style={{ background: data.color }}
-          title={vocab('Color')}
+        <IconButton
+          size="compact"
+          className="term-node__collapse"
+          icon={collapsed ? 'chevron_right' : 'arrow_drop_down'}
+          aria-label={collapsed ? 'Expand' : 'Collapse'}
+          title={collapsed ? 'Expand' : 'Collapse'}
+          onClick={toggleCollapse}
+        />
+        <IconButton
+          size="compact"
+          className="term-node__color-btn"
+          aria-label="Color"
+          title="Color"
           onClick={(e) => {
             // Anchor to the chip's own box, not the pointer: the surface is a body portal, and a
             // colour applied live re-renders this node — an anchor derived from the click point
@@ -125,7 +131,9 @@ export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
             const r = e.currentTarget.getBoundingClientRect()
             setColorAnchor((cur) => (cur ? null : { x: r.left, y: r.bottom + 4 }))
           }}
-        />
+        >
+          <span className="mdx-icon-btn__swatch" style={{ background: data.color }} />
+        </IconButton>
         {colorAnchor && (
           <ColorMenu
             x={colorAnchor.x}
@@ -150,24 +158,18 @@ export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
             up by. That grab area is what the permanent full-width input used to swallow. Absent
             while editing, since the input takes the `flex: 1` role itself. */}
         {!editingTitle && <span className="term-node__spacer" />}
-        <button
+        <IconButton
+          size="compact"
           className="term-node__close"
-          title={vocab('Close')}
+          icon="close"
+          aria-label="Close"
+          title="Close"
           onClick={() => deleteElements({ nodes: [{ id }] })}
-        >
-          ×
-        </button>
+        />
       </div>
 
-      <TextArea
-        className="sticky-node__body nodrag nowheel"
-        value={data.text ?? ''}
-        placeholder={vocab('Write a note…')}
-        spellCheck={false}
-        onChange={(e) => updateNodeData(id, { text: e.target.value })}
-      />
       {editingText ? (
-        <textarea
+        <TextArea
           className="sticky-node__body nodrag nowheel"
           value={data.text ?? ''}
           placeholder="Write a note…"

@@ -1604,7 +1604,6 @@
   flex-shrink: 0;
 }
 
-
 /* Hover steps one surface-container level up from the header's own surface-container-high. */
 .term-node__collapse:hover,
 .term-node__folder-drag:hover,
@@ -1746,7 +1745,6 @@ button.term-node__title-text:focus-visible {
 .term-node__title:focus {
   padding: 2px 4px;
 }
-
 
 .term-node__session,
 .term-ssh-chip,
@@ -2315,21 +2313,6 @@ button.term-node__title-text:focus-visible {
 .editor-node__body {
   background: var(--md-surface);
 }
-.editor-node__toggle,
-.editor-node__save {
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--md-shape-full);
-  color: var(--md-on-surface-variant);
-}
-.editor-node__toggle:hover {
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
-}
-.editor-node__save:not(:disabled) {
-  color: var(--md-on-primary);
-  background: var(--md-primary);
-  border-color: transparent;
-}
 .editor-node__image {
   background-color: var(--md-surface-container-low);
   background-image: linear-gradient(45deg, var(--md-surface-container-high) 25%, transparent 25%),
@@ -2697,6 +2680,15 @@ button.term-node__title-text:focus-visible {
 .sticky-node.selected {
   outline: 1.5px solid var(--md-primary);
 }
+.mdx-textarea.sticky-node__body {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: none;
+}
 .sticky-node__body::placeholder {
   color: color-mix(in srgb, var(--md-on-surface) 40%, transparent);
 }
@@ -2735,20 +2727,6 @@ button.term-node__title-text:focus-visible {
 .group-node__wt-dirty {
   color: var(--md-warning);
 }
-.group-node__wt-btn,
-.group-node__ungroup,
-.group-node__close {
-  background: var(--md-surface-container-highest);
-  border: 1px solid var(--md-outline-variant);
-  color: var(--md-on-surface-variant);
-  border-radius: var(--md-shape-full);
-}
-.group-node__wt-btn:hover,
-.group-node__ungroup:hover,
-.group-node__close:hover {
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
-}
 
 /* ---------------------------------------------------------------------------------------------
    Annotation node — the midpoint toolbar pill only; the line/arrow itself is user-coloured SVG.
@@ -2760,15 +2738,6 @@ button.term-node__title-text:focus-visible {
   background: var(--md-surface-container-highest);
   border: 1px solid var(--md-outline-variant);
   border-radius: var(--md-shape-full);
-}
-.annotation-node__variant,
-.annotation-node__close {
-  color: var(--md-on-surface-variant);
-}
-.annotation-node__variant:hover,
-.annotation-node__close:hover {
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
 }
 .canvas-draw-preview--area {
   border-color: var(--md-primary);
@@ -2801,11 +2770,6 @@ button.term-node__title-text:focus-visible {
   border-style: solid;
   border-color: var(--md-primary);
 }
-.subagent-node__expand:hover,
-.loop-node__expand:hover {
-  background: var(--md-surface-container-high);
-  color: var(--md-on-surface);
-}
 .subagent-node__term {
   background: var(--md-surface-container-lowest);
   border: 1px solid var(--md-outline-variant);
@@ -2836,9 +2800,6 @@ button.term-node__title-text:focus-visible {
 }
 .loop-node__item-n {
   color: var(--md-on-surface-variant);
-}
-.loop-node__play:hover {
-  background: var(--md-surface-container-high);
 }
 .loop-node__close:hover {
   background: color-mix(in srgb, var(--md-error) 18%, transparent);
@@ -3694,7 +3655,6 @@ button.term-node__title-text:focus-visible {
   background: var(--md-outline);
 }
 
-
 /* ---------------------------------------------------------------------------------------------
    "+ New session" column footer menu
    --------------------------------------------------------------------------------------------- */
@@ -3924,7 +3884,6 @@ button.term-node__title-text:focus-visible {
   font-weight: 800;
 }
 
-
 /* Reorder drop indicator: a thin primary line at the edge the drop will land on. No box-shadow
    glow (M3 elevation here is tonal only) — the line is thicker instead, for visibility. */
 .kanban-card--drop-before::before,
@@ -3946,7 +3905,6 @@ button.term-node__title-text:focus-visible {
 .kanban-card--drop-after::after {
   bottom: -5px;
 }
-
 
 /* ---------------------------------------------------------------------------------------------
    Status badges (RUNNING / NEEDS YOU / SLEEPING) — 24px pill, per the design bundle's card-face
@@ -5687,7 +5645,6 @@ button.term-node__title-text:focus-visible {
 
 /* ---- MD3: Notification toasts ---- */
 
-
 /* ---- MD3: Notification centre panel ----
    Stays a right-edge, full-height drawer (the HANDOFF's approved structural changes list a
    settings-drawer → screen swap and a dock → rail swap, but not this panel) — restyled to the
@@ -7154,7 +7111,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   font-weight: 600;
 }
 
-
 .sessmem-row__kids {
   color: var(--md-on-surface-variant);
   font-family: var(--md-font-mono);
@@ -7176,7 +7132,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   border-top: 1px solid var(--md-outline-variant);
   color: var(--md-on-surface-variant);
 }
-
 
 /* Embedded (full-page History screen) rather than the RAM pill's floating popover: lay out in
    normal flow instead of an anchored 380px box. Higher specificity than the bare `.sessmem-panel`
@@ -7420,7 +7375,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   font-weight: 700;
   letter-spacing: 0.02em;
 }
-
 
 /* --------------------------------------------------------------------------------------------
    Changelog viewer (src/renderer/components/changelog/*) — genuinely new UI, so it uses the
@@ -9074,7 +9028,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   }
 }
 
-
 /* Material Design 3 restyle layer. Loaded after styles.css (see boot.tsx), so an equal-
    specificity selector here always wins the cascade against the legacy rule of the same name —
    that is how this file can restyle existing elements (`.scm-file`, `.ex-row`, …) without a
@@ -9186,7 +9139,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   font-weight: 700;
   color: var(--md-on-surface);
 }
-
 
 .md3-explorer .ex-filter-row {
   margin: 10px 12px 6px;
@@ -9366,7 +9318,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   color: var(--md-on-surface);
 }
 
-
 .md3-source-control .scm-ahead {
   color: var(--md-success);
   font-family: var(--font-mono);
@@ -9377,8 +9328,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   font-family: var(--font-mono);
   font-size: 11px;
 }
-
-
 
 .md3-source-control .scm-body {
   font-family: var(--font-ui);
@@ -9860,7 +9809,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 .md3-converter .cv-item__link:hover {
   color: var(--md-on-surface);
 }
-
 
 .md3-ollama select,
 .md3-converter select {
@@ -12269,14 +12217,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 
 /* A locked group frame says so on its own label pill (docs/toy-locks.md). The chip is the unlock
    affordance, so it is a real button rather than decoration. */
-.group-node__lock {
-  border: 0;
-  background: none;
-  padding: 0 2px;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-}
 
 /* The running build, on the front screen. Quiet by design: it is a fact somebody comes looking
    for, never something competing with the actions above it. */
@@ -13126,9 +13066,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   flex-wrap: wrap;
 }
 
-
-
-
 .kiosk-pwa-setup-dialog__app-list {
   display: grid;
   gap: 8px;
@@ -13136,7 +13073,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   overflow-y: auto;
   padding: 8px 0;
 }
-
 
 /* CloudFormation manager: compact guided controls inside a service node. */
 .cloudformation-manager {
@@ -13227,7 +13163,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   gap: 3px;
   text-align: left;
 }
-
 
 .kiosk-pwa-setup-dialog__permissions {
   display: grid;
@@ -13855,7 +13790,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 .easter-eggs__row span,
 .easter-eggs__row small { color: var(--md-on-surface-variant, #cac4d0); }
 .easter-eggs__row code { color: var(--md-primary, #d0bcff); }
-
 
 @media (max-width: 640px) {
   .easter-eggs__backdrop { place-items: stretch; padding: 12px; }

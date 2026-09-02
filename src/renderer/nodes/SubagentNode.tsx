@@ -6,6 +6,7 @@ import { useAgentNodes } from '../state/agentNodes'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { ContextMeter } from '../components/ContextMeter'
 import { contextSourceKey } from '../state/contextWindow'
+import { IconButton } from '@renderer/ui/md3'
 
 function fmtDur(ms: number): string {
   const s = Math.round(ms / 1000)
@@ -68,16 +69,17 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
       <NodeResizer isVisible={selected} minWidth={NODE_MIN_SIZES.subagent.width} minHeight={NODE_MIN_SIZES.subagent.height} color="#d97757" />
       <Handle type="target" position={Position.Top} isConnectable={false} />
       <div className="subagent-node__head nodrag" onClick={toggle} style={{ cursor: 'pointer' }}>
-        <button
+        <IconButton
+          size="compact"
           className="subagent-node__expand"
-          title={vocab(expanded ? 'Collapse' : 'Open output')}
+          icon={expanded ? 'arrow_drop_down' : 'chevron_right'}
+          aria-label={expanded ? 'Collapse' : 'Open output'}
+          title={expanded ? 'Collapse' : 'Open output'}
           onClick={(e) => {
             e.stopPropagation()
             toggle()
           }}
-        >
-          {expanded ? '▾' : '▸'}
-        </button>
+        />
         <span className="subagent-node__dot" />
         <span className="subagent-node__type">{typeLabel}</span>
         <span className="subagent-node__state">{vocab(working ? 'working' : 'done')}</span>

@@ -13,6 +13,9 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 import { GitHubWorkItemAttachment } from './GitHubWorkItemAttachment'
 import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import { useProjectSetup } from '../state/projectSetup'
+import { Button, IconButton } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
+import { MaterialSymbol } from '../components/MaterialSymbol'
 
 export type WorktreeAction = 'merge' | 'remove' | 'unbind' | 'rerun-setup'
 export type WslAction = 'sleep' | 'wake' | 'delete' | 'unbind'
@@ -258,18 +261,20 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
 
       <div className="group-node__label">
         {frameLocked && (
-          <button
+          <IconButton
+            size="compact"
             className="group-node__lock nodrag"
-            title={vocab('This frame is locked — click to unlock')}
+            icon="lock"
+            aria-label="This frame is locked — click to unlock"
+            title="This frame is locked — click to unlock"
             onClick={(e) => promptUnlock(e)}
-          >
-            🔒
-          </button>
+          />
         )}
-        <button
-          className="group-node__dot nodrag"
-          style={{ background: data.color }}
-          title={vocab(frameLocked ? 'Locked — click to unlock' : 'Color')}
+        <IconButton
+          size="compact"
+          className="group-node__dot-btn nodrag"
+          aria-label={frameLocked ? 'Locked — click to unlock' : 'Color'}
+          title={frameLocked ? 'Locked — click to unlock' : 'Color'}
           onClick={(e) => {
             if (frameLocked) {
               promptUnlock(e)
@@ -278,7 +283,9 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
             const r = e.currentTarget.getBoundingClientRect()
             setColorAnchor((cur) => (cur ? null : { x: r.left, y: r.bottom + 4 }))
           }}
-        />
+        >
+          <span className="group-node__dot" style={{ background: data.color }} />
+        </IconButton>
         {colorAnchor && (
           <ColorMenu
             x={colorAnchor.x}
@@ -290,8 +297,9 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
             onClose={() => setColorAnchor(null)}
           />
         )}
-        <input
-          className="group-node__name nodrag"
+        <Input
+          className="mdx-input--bare group-node__name nodrag"
+          aria-label="Frame name"
           value={data.title}
           spellCheck={false}
           readOnly={frameLocked}
@@ -349,7 +357,11 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
               // leave this chip failed and its nodes armed forever. Re-running here re-attaches the
               // group's lane, and a `done` from the new run releases them.
               (setupRun.kind === 'setup' && setupRun.state === 'failed' ? (
-                <button
+                <Button
+                  variant="tonal"
+                  size="small"
+                  danger
+                  vocabularyMode="factual"
                   className={`group-node__setup group-node__setup--${setupBusy ? 'running' : 'failed'} nodrag`}
                   disabled={setupBusy}
                   title={
@@ -363,7 +375,7 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
                   onClick={() => worktreeActionHandler?.(id, 'rerun-setup')}
                 >
                   {setupBusy ? 'setup …' : 'setup ✕ ↻'}
-                </button>
+                </Button>
               ) : (
                 <span
                   className={`group-node__setup group-node__setup--${setupRun.state}`}
@@ -377,33 +389,38 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
                 </span>
               ))}
             {!stale && (
-              <button
+              <IconButton
+                size="compact"
                 className="group-node__wt-btn"
-                title={vocab('Merge to main')}
+                aria-label="Merge to main"
+                title="Merge to main"
                 onClick={() => worktreeActionHandler?.(id, 'merge')}
               >
                 ⤴
-              </button>
+              </IconButton>
             )}
-            <button
+            <Button
+              variant="outlined"
+              size="small"
               className="group-node__wt-btn"
-                title={vocab(
+              title={
                 stale
                   ? 'Unbind (the directory is gone — also prunes the stale git registration)'
                   : 'Unbind worktree (keeps the worktree on disk)'
-              )}
+              }
               onClick={() => worktreeActionHandler?.(id, 'unbind')}
             >
-              {vocab('Unbind')}
-            </button>
+              Unbind
+            </Button>
             {!stale && (
-              <button
+              <IconButton
+                size="compact"
                 className="group-node__wt-btn"
-                title={vocab('Remove worktree')}
+                icon="delete"
+                aria-label="Remove worktree"
+                title="Remove worktree"
                 onClick={() => worktreeActionHandler?.(id, 'remove')}
-              >
-                ✕
-              </button>
+              />
             )}
           </div>
         )}
@@ -445,32 +462,36 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
             </span>
             {!wslGone && (
               !wslHasTerminal && (
-                <button
+                <Button
+                  variant="outlined"
+                  size="small"
                   className="group-node__wt-btn"
-                  title={vocab('Open a terminal in this WSL instance')}
-                  aria-label={vocab('Open a terminal in this WSL instance')}
+                  leadingIcon={<MaterialSymbol name="terminal" size={16} />}
+                  title="Open a terminal in this WSL instance"
+                  aria-label="Open a terminal in this WSL instance"
                   onClick={() => wslTerminalHandler?.(id)}
                 >
-                  {vocab('Open terminal')}
-                </button>
+                  Open terminal
+                </Button>
               )
             )}
             {!wslGone && (
-              <button
+              <IconButton
+                size="compact"
                 className="group-node__wt-btn"
                 title={
                   wslCanManage
                     ? wslInstance?.state === 'running'
-                      ? vocab('Sleep this WSL instance')
-                      : vocab('Wake this WSL instance')
-                    : vocab(WSL_NOT_OWNED_HINT)
+                      ? 'Sleep this WSL instance'
+                      : 'Wake this WSL instance'
+                    : WSL_NOT_OWNED_HINT
                 }
                 aria-label={
                   wslCanManage
                     ? wslInstance?.state === 'running'
-                      ? vocab('Sleep this WSL instance')
-                      : vocab('Wake this WSL instance')
-                    : vocab(WSL_NOT_OWNED_HINT)
+                      ? 'Sleep this WSL instance'
+                      : 'Wake this WSL instance'
+                    : WSL_NOT_OWNED_HINT
                 }
                 disabled={!wslCanManage}
                 onClick={() =>
@@ -478,25 +499,27 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
                 }
               >
                 {wslInstance?.state === 'running' ? '⏾' : '▶'}
-              </button>
+              </IconButton>
             )}
-            <button
+            <Button
+              variant="outlined"
+              size="small"
               className="group-node__wt-btn"
-              title={vocab('Unbind (does not touch the WSL instance)')}
+              title="Unbind (does not touch the WSL instance)"
               onClick={() => wslActionHandler?.(id, 'unbind')}
             >
-              {vocab('Unbind')}
-            </button>
+              Unbind
+            </Button>
             {!wslGone && (
-              <button
+              <IconButton
+                size="compact"
                 className="group-node__wt-btn"
-                title={wslCanManage ? vocab('Unregister (deletes the instance permanently)') : vocab(WSL_NOT_OWNED_HINT)}
-                aria-label={wslCanManage ? vocab('Unregister (deletes the instance permanently)') : vocab(WSL_NOT_OWNED_HINT)}
+                icon="delete"
+                title={wslCanManage ? 'Unregister (deletes the instance permanently)' : WSL_NOT_OWNED_HINT}
+                aria-label={wslCanManage ? 'Unregister (deletes the instance permanently)' : WSL_NOT_OWNED_HINT}
                 disabled={!wslCanManage}
                 onClick={() => wslActionHandler?.(id, 'delete')}
-              >
-                ✕
-              </button>
+              />
             )}
           </div>
         )}
@@ -523,28 +546,32 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
         })()}
 
       <div className="group-node__actions nodrag">
-        <button
+        <IconButton
+          size="compact"
           className="group-node__drill"
+          icon="fit_screen"
           title="Open as canvas"
           aria-label="Open group as canvas"
           onClick={() => drillHandler?.(id)}
-        >
-          ⤢
-        </button>
-        <button
+        />
+        <Button
+          variant="outlined"
+          size="small"
           className="group-node__ungroup"
-          title={vocab(frameLocked ? 'Locked — click to unlock' : 'Ungroup')}
+          leadingIcon={frameLocked ? <MaterialSymbol name="lock" size={16} /> : undefined}
+          title={frameLocked ? 'Locked — click to unlock' : 'Ungroup'}
           onClick={(e) => ungroup(e)}
         >
-          {frameLocked ? '🔒' : vocab('ungroup')}
-        </button>
-        <button
+          {frameLocked ? 'Locked' : 'Ungroup'}
+        </Button>
+        <IconButton
+          size="compact"
           className="group-node__close"
-          title={vocab(frameLocked ? 'Locked — click to unlock' : 'Remove group (keeps nodes)')}
+          icon="close"
+          title={frameLocked ? 'Locked — click to unlock' : 'Remove group (keeps nodes)'}
+          aria-label={frameLocked ? 'Locked — click to unlock' : 'Remove group (keeps nodes)'}
           onClick={(e) => ungroup(e)}
-        >
-          ×
-        </button>
+        />
       </div>
     </div>
   )

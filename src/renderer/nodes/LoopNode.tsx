@@ -6,6 +6,7 @@ import { useAgentNodes } from '../state/agentNodes'
 import { applyLoopDismiss } from '../lib/loopCard'
 import { useSession } from '../session/session'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { IconButton } from '@renderer/ui/md3'
 
 /**
  * Loop/schedule/cron node — first-class (select/drag/resize). Shows the kind, schedule, full
@@ -62,32 +63,34 @@ export function LoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
       <NodeResizer isVisible={selected} minWidth={NODE_MIN_SIZES.loop.width} minHeight={NODE_MIN_SIZES.loop.height} color="#bf7af0" />
       <Handle type="target" position={Position.Top} isConnectable={false} />
       <div className="loop-node__head nodrag" onClick={toggle} style={{ cursor: 'pointer' }}>
-        <button
+        <IconButton
+          size="compact"
           className="loop-node__expand"
-          title={vocab(expanded ? 'Collapse' : 'Open')}
+          icon={expanded ? 'arrow_drop_down' : 'chevron_right'}
+          aria-label={expanded ? 'Collapse' : 'Open'}
+          title={expanded ? 'Collapse' : 'Open'}
           onClick={(e) => {
             e.stopPropagation()
             toggle()
           }}
-        >
-          {expanded ? '▾' : '▸'}
-        </button>
+        />
         <span className="loop-node__dot" />
         <span className="loop-node__type">{label}</span>
         {count > 0 && <span className="loop-node__count">×{count}</span>}
         {schedule && <span className="loop-node__sched">{schedule}</span>}
         {task && (
-          <button className="loop-node__play" title={vocab('Run now (manual trigger)')} onClick={trigger}>
+          <IconButton size="compact" className="loop-node__play" aria-label="Run now (manual trigger)" title="Run now (manual trigger)" onClick={trigger}>
             ▶
-          </button>
+          </IconButton>
         )}
-        <button
+        <IconButton
+          size="compact"
           className="loop-node__close"
-          title={vocab('Dismiss card (does not remove the job)')}
+          icon="close"
+          aria-label="Dismiss card (does not remove the job)"
+          title="Dismiss card (does not remove the job)"
           onClick={dismiss}
-        >
-          ×
-        </button>
+        />
       </div>
       {(task || schedule) && !expanded && <div className="loop-node__task">{task || schedule}</div>}
       {expanded && (

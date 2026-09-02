@@ -12,6 +12,8 @@ import {
   normalizeAnnotationLabel,
   normalizeAnnotationThickness
 } from '@shared/annotation'
+import { IconButton, Slider } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 /** Arrowhead size in the node's own local px space (see AnnotationNode). */
 const ARROW_MARKER_PX = 9
@@ -105,15 +107,18 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
         className="annotation-node__toolbar nodrag"
         style={{ left: midX, top: midY }}
       >
-        <button
+        <IconButton
+          size="compact"
           className="annotation-node__dot"
-          style={{ background: color }}
-          title={vocab('Color')}
+          aria-label="Color"
+          title="Color"
           onClick={(e) => {
             const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
             setColorAnchor((a) => (a ? null : { x: r.left, y: r.bottom }))
           }}
-        />
+        >
+          <span className="mdx-icon-btn__swatch" style={{ background: color }} />
+        </IconButton>
         {colorAnchor && (
           <ColorMenu
             x={colorAnchor.x}
@@ -123,7 +128,7 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
             onClose={() => setColorAnchor(null)}
           />
         )}
-        <input
+        <Input
           className="annotation-node__label-input"
           type="text"
           value={(data.annotationLabel as string) ?? ''}
@@ -136,8 +141,7 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
         />
         <label className="annotation-node__thickness-control">
           <span className="sr-only">{vocab('Line thickness')}</span>
-          <input
-            type="range"
+          <Slider
             min={ANNOTATION_MIN_THICKNESS}
             max={ANNOTATION_MAX_THICKNESS}
             step={1}
@@ -148,22 +152,25 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
           />
           <output aria-label={vocab('Line thickness value')}>{thickness}</output>
         </label>
-        <button
+        <IconButton
+          size="compact"
           className="annotation-node__variant"
-          title={vocab(variant === 'arrow' ? 'Arrowhead on — click for a plain line' : 'Plain line — click to add an arrowhead')}
+          aria-label={variant === 'arrow' ? 'Arrowhead on — click for a plain line' : 'Plain line — click to add an arrowhead'}
+          title={variant === 'arrow' ? 'Arrowhead on — click for a plain line' : 'Plain line — click to add an arrowhead'}
           onClick={() =>
             updateNodeData(id, { annotationVariant: variant === 'arrow' ? 'line' : 'arrow' })
           }
         >
           {variant === 'arrow' ? '→' : '—'}
-        </button>
-        <button
+        </IconButton>
+        <IconButton
+          size="compact"
           className="annotation-node__close"
-          title={vocab('Delete')}
+          icon="delete"
+          aria-label="Delete"
+          title="Delete"
           onClick={() => deleteElements({ nodes: [{ id }] })}
-        >
-          ×
-        </button>
+        />
       </div>
     </div>
   )

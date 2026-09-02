@@ -5,6 +5,7 @@ import type { CanvasNode } from '../state/workspace'
 import { useProjects } from '../state/projects'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { IconButton } from '@renderer/ui/md3'
 
 /**
  * A video player node. A local file is served over the `nt-media://` protocol (allowlisted on
@@ -106,13 +107,14 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
           {displayFileName}
         </span>
         <span className="term-node__spacer" />
-        <button
+<IconButton
+          size="compact"
           className="term-node__close"
-          title={vocab('Close')}
+          icon="close"
+          aria-label="Close"
+          title="Close"
           onClick={() => deleteElements({ nodes: [{ id }] })}
-        >
-          ×
-        </button>
+        />
       </div>
 
       <div className="editor-node__body">

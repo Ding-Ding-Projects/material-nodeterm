@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { saveBlobDownload } from '../lib/exportSave'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import type { RepositoryGraphExportInput, RepositoryGraphMode, RepositoryGraphProgress, RepositoryGraphSnapshot } from '@shared/repository-graph'
 import type { CanvasNode } from '../state/workspace'

@@ -13,6 +13,7 @@ import { tooLargeSize, formatBytes } from '@shared/fsLimits'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { MaximizeButton } from './MaximizeButton'
+import { IconButton } from '@renderer/ui/md3'
 
 /**
  * A Monaco diff editor node for a changed file. Staged diff = HEAD vs index;
@@ -157,13 +158,14 @@ export function DiffNode({ id, data, selected }: NodeProps<CanvasNode>) {
         </span>
         <span className="term-node__spacer" />
         <MaximizeButton id={id} maximized={!!data.premaxRect} />
-        <button
+<IconButton
+          size="compact"
           className="term-node__close"
-          title={vocab('Close')}
+          icon="close"
+          aria-label="Close"
+          title="Close"
           onClick={() => deleteElements({ nodes: [{ id }] })}
-        >
-          ×
-        </button>
+        />
       </div>
 
       {fileMissing ? (

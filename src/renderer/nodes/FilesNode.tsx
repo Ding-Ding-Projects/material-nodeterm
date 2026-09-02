@@ -23,7 +23,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import type { DirEntry } from '@shared/types'
 import { NODE_MIN_SIZES } from '../lib/nodeSizing'
-import { COLLAPSED_HEIGHT, NODE_COLORS, type CanvasNode } from '../state/workspace'
+import { COLLAPSED_HEIGHT, type CanvasNode } from '../state/workspace'
+import { ColorMenu } from '../components/color/ColorMenu'
+import { Button, IconButton } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 import { breadcrumbs, childPath, fileOpenTarget, folderTitle, parentDir } from '../lib/filesNode'
 import { ancestorDirs, createTargetDir, newEntryPath } from '../lib/explorerCreate'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
@@ -58,7 +61,7 @@ function EntryGlyph({ dir }: { dir: boolean }) {
 export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const vocab = useVocabularyMapper()
   const { updateNodeData, deleteElements, setNodes } = useReactFlow()
-  const [showColors, setShowColors] = useState(false)
+  const [colorAnchor, setColorAnchor] = useState<{ x: number; y: number } | null>(null)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleBefore, setTitleBefore] = useState('')
   const [entries, setEntries] = useState<DirEntry[] | null>(null)
@@ -248,38 +251,40 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
       />
 
       <div className="files-node__header" style={{ background: `${data.color}22` }}>
-        <button type="button" className="term-node__collapse" title={vocab(collapsed ? 'Expand' : 'Collapse')} aria-label={vocab(collapsed ? 'Expand files node' : 'Collapse files node')} onClick={toggleCollapse}>
-          {collapsed ? '▸' : '▾'}
-        </button>
-        <button
-          type="button"
-          className="term-node__color"
-          style={{ background: data.color as string }}
-          title={vocab('Color')}
-          aria-label={vocab('Choose node color')}
-          onClick={() => setShowColors((v) => !v)}
+        <IconButton
+          size="compact"
+          className="term-node__collapse"
+          icon={collapsed ? 'chevron_right' : 'arrow_drop_down'}
+          title={collapsed ? 'Expand' : 'Collapse'}
+          aria-label={collapsed ? 'Expand files node' : 'Collapse files node'}
+          onClick={toggleCollapse}
         />
-        {showColors && (
-          <div className="color-popover">
-            {NODE_COLORS.map((c) => (
-              <button
-                key={c}
-                style={{ background: c }}
-                type="button"
-                aria-label={mapOwnedSentence(vocab, [copy('Color '), fact(c)])}
-                onClick={() => {
-                  updateNodeData(id, { color: c })
-                  setShowColors(false)
-                }}
-              />
-            ))}
-          </div>
+        <IconButton
+          size="compact"
+          className="term-node__color-btn"
+          title="Color"
+          aria-label="Choose node color"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect()
+            setColorAnchor((cur) => (cur ? null : { x: r.left, y: r.bottom + 4 }))
+          }}
+        >
+          <span className="mdx-icon-btn__swatch" style={{ background: data.color as string }} />
+        </IconButton>
+        {colorAnchor && (
+          <ColorMenu
+            x={colorAnchor.x}
+            y={colorAnchor.y}
+            value={data.color as string}
+            onPick={(c) => updateNodeData(id, { color: c })}
+            onClose={() => setColorAnchor(null)}
+          />
         )}
         {editingTitle ? (
-          <input
-            className="term-node__title nodrag"
+          <Input
+            className="mdx-input--bare term-node__title nodrag"
             value={(data.title as string) ?? ''}
-            aria-label={vocab('File node title')}
+            aria-label="File node title"
             spellCheck={false}
             autoFocus
             // A hand rename stops the title tracking the folder — same contract as an agent
@@ -320,26 +325,31 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
         )}
         {isSshFs && <span className="files-node__chip">SSH</span>}
         {!editingTitle && <span className="term-node__spacer" />}
-        <button
+        <IconButton
+          size="compact"
           className="files-node__btn nodrag"
-          title={vocab('Up one folder')}
-          aria-label={vocab('Up one folder')}
+          icon="north_west"
+          title="Up one folder"
+          aria-label="Up one folder"
           disabled={cwd === '/'}
           onClick={() => navigate(parentDir(cwd))}
-        >
-          ↑
-        </button>
-        <button
+        />
+        <IconButton
+          size="compact"
           className="files-node__btn nodrag"
-          title={vocab('Refresh')}
-          aria-label={vocab('Refresh')}
+          icon="refresh"
+          title="Refresh"
+          aria-label="Refresh"
           onClick={() => setVersion((v) => v + 1)}
-        >
-          ⟳
-        </button>
-        <button type="button" className="term-node__close" title={vocab('Close')} aria-label={vocab('Close files node')} onClick={() => deleteElements({ nodes: [{ id }] })}>
-          ×
-        </button>
+        />
+        <IconButton
+          size="compact"
+          className="term-node__close"
+          icon="close"
+          title="Close"
+          aria-label="Close files node"
+          onClick={() => deleteElements({ nodes: [{ id }] })}
+        />
       </div>
 
       {!collapsed && (
@@ -350,15 +360,15 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
                 {/* No separator after the ROOT crumb — its own label is already "/", and a
                     separator there renders the doubled "/ / …" this replaced. */}
                 {i > 0 && crumbs[i - 1].name !== '/' && <span className="files-node__sep">/</span>}
-                <button type="button" className="files-node__crumb" title={c.path} aria-label={mapOwnedSentence(vocab, [copy('Open folder '), fact(c.path)])} onClick={() => navigate(c.path)}>
+                <Button variant="text" size="small" className="files-node__crumb" vocabularyMode="factual" title={c.path} aria-label={mapOwnedSentence(vocab, [copy('Open folder '), fact(c.path)])} onClick={() => navigate(c.path)}>
                   {c.name}
-                </button>
+                </Button>
               </span>
             ))}
           </div>
 
           <div className="files-node__search nodrag">
-            <input
+            <Input
               ref={searchRef}
               className="files-node__filter"
               type="search"

@@ -57,7 +57,7 @@ was generated once from the tree and may only shrink: a migrated file must be re
 | Component | Recipe | Notes |
 | --- | --- | --- |
 | `Button` | 40px pill; `filled` / `tonal` / `outlined` / `text`, plus a `danger` colour overlay | New CSS (`.mdx-btn*`) |
-| `IconButton` | 44px round (`'dense'` = 40px) | Reuses `.md3-icon-btn` verbatim |
+| `IconButton` | 44px round (`'dense'` = 40px, `'compact'` = 32px for node headers, frame label pills and card heads; a `.mdx-icon-btn__swatch` child is the colour-picker dot) | Reuses `.md3-icon-btn` verbatim |
 | `Fab` | 56px, r16, `primary-container` (`'small'` = 40px, r12) | Reuses `.md3-fab` verbatim |
 | `Switch` | 52×32 track, 16px→24px knob | Re-exports `ui/Switch.tsx` — see below |
 | `TextField` | Outlined, 56px, r16, floating notched label, `trailingSlot` | New CSS (`.mdx-field*`) |

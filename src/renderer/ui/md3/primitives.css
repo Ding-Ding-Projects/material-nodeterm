@@ -151,6 +151,21 @@
   width: 40px;
   height: 40px;
 }
+/* M3 Expressive extra-small: the size a node header, frame label pill or card head can afford. */
+.mdx-icon-btn--compact {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+/* A colour swatch inside an icon button (node/frame colour pickers). */
+.mdx-icon-btn__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--md-on-surface) 18%, transparent);
+  flex-shrink: 0;
+}
 .mdx-icon-btn.is-active {
   background: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
@@ -716,6 +731,20 @@
 }
 .mdx-input {
   padding: 0 12px;
+}
+/* An inline, borderless text field — a node title that reads as text until it is focused. The
+   outlined anatomy returns on focus so the editable state is still announced visually. */
+.mdx-input--bare {
+  height: auto;
+  min-height: 28px;
+  padding: 2px 6px;
+  border-color: transparent;
+  background: transparent;
+  font: inherit;
+}
+.mdx-input--bare:hover:not(:disabled):not(:focus) {
+  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+  border-color: transparent;
 }
 .mdx-number-field {
   width: 6rem;

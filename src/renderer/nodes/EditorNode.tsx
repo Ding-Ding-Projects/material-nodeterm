@@ -18,6 +18,7 @@ import { pdfBlobUrl } from '../lib/pdfBlob'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { MaximizeButton } from './MaximizeButton'
+import { Button, IconButton } from '@renderer/ui/md3'
 
 // Image extensions get a visual preview instead of the Monaco text editor.
 const IMAGE_MIME: Record<string, string> = {
@@ -289,31 +290,38 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
           imageDims && <span className="editor-node__dims">{imageDims}</span>
         ) : isPdf ? null : (
           <>
-            <button
+            <Button
+              variant="text"
+              size="small"
               className="editor-node__toggle"
+              vocabularyMode="factual"
               title={commandTooltip('Toggle markdown preview', 'node.toggleMarkdown')}
               onClick={togglePreview}
             >
               {vocab(preview ? 'Edit' : 'Preview')}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="tonal"
+              size="small"
               className="editor-node__save"
+              vocabularyMode="factual"
               disabled={!dirty}
               title={hintLabel(`${vocab('Save')} (⌘S)`)}
               onClick={save}
             >
               {vocab('Save')}
-            </button>
+            </Button>
           </>
         )}
         <MaximizeButton id={id} maximized={!!data.premaxRect} />
-        <button
+<IconButton
+          size="compact"
           className="term-node__close"
-          title={vocab('Close')}
+          icon="close"
+          aria-label="Close"
+          title="Close"
           onClick={() => deleteElements({ nodes: [{ id }] })}
-        >
-          ×
-        </button>
+        />
       </div>
 
       <div className="editor-node__body">

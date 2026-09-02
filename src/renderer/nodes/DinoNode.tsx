@@ -9,6 +9,8 @@ import { alphaTint } from '../components/color/tint'
 import { createDinoGame } from './dino/dino-game'
 import { shouldSpectate } from './dino/dino-authority'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { IconButton } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 /**
  * A dino node: a small self-contained T-Rex–style runner on a canvas. No PTY.
@@ -108,9 +110,10 @@ export function DinoNode({ id, data, selected }: NodeProps<CanvasNode>) {
           GroupNode already fixed). 51/255 is exactly what the `33` suffix meant. */}
       <div className="dino-node__header" style={{ background: alphaTint(data.color, 51 / 255) }}>
         <span className="term-node__color" style={{ background: data.color }} />
-        <input
-          className="term-node__title nodrag"
+        <Input
+          className="mdx-input--bare term-node__title nodrag"
           value={data.title}
+          aria-label="Dino node title"
           spellCheck={false}
           onChange={(e) => updateNodeData(id, { title: e.target.value })}
         />
@@ -123,13 +126,14 @@ export function DinoNode({ id, data, selected }: NodeProps<CanvasNode>) {
             ▷ {peer.name} {vocab('is playing')}
           </span>
         )}
-        <button
+<IconButton
+          size="compact"
           className="term-node__close"
-          title={vocab('Close')}
+          icon="close"
+          aria-label="Close"
+          title="Close"
           onClick={() => deleteElements({ nodes: [{ id }] })}
-        >
-          ×
-        </button>
+        />
       </div>
 
       <div ref={hostRef} className="dino-node__body nodrag nowheel" tabIndex={0} />

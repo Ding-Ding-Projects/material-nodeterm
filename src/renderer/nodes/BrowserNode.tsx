@@ -15,6 +15,8 @@ import { portableKioskPwaIntent } from '@shared/kiosk-pwa'
 import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import { BrowserDrivingIndicator } from './BrowserDrivingChip'
 import { useWebviewKeepAlive } from '../state/webviewKeepAlive'
+import { Button, IconButton } from '@renderer/ui/md3'
+import { MaterialSymbol } from '../components/MaterialSymbol'
 
 /** Debounce for persisting a tab's live URL/title while the user navigates — matches the SSH
  *  mirror's 5s write-throttle intent (this repo's established pattern for "don't rewrite the
@@ -201,17 +203,20 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
         <BrowserDrivingIndicator nodeId={id} />
         <span className="term-node__spacer" />
         {isTemporary && (
-          <button
+          <Button
+            variant="tonal"
+            size="small"
             className="browser-node__keep"
-            title={vocab('This popup is temporary — it is not saved with the project. Keep it?')}
+            leadingIcon={<MaterialSymbol name="push_pin" size={16} />}
+            title="This popup is temporary — it is not saved with the project. Keep it?"
             onClick={(e) => {
               e.stopPropagation()
               updateNodeData(id, { temporary: undefined })
               markWorkspaceDirty()
             }}
           >
-            {vocab('Temporary · Keep')}
-          </button>
+            Temporary · Keep
+          </Button>
         )}
         <BrowserProfilePicker
           profiles={projectBrowserProfiles}
@@ -247,9 +252,14 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
             })
           }}
         />
-        <button className="term-node__close" title={vocab('Close')} onClick={() => deleteElements({ nodes: [{ id }] })}>
-          ×
-        </button>
+<IconButton
+          size="compact"
+          className="term-node__close"
+          icon="close"
+          aria-label="Close"
+          title="Close"
+          onClick={() => deleteElements({ nodes: [{ id }] })}
+        />
       </div>
 
       <div className="browser-node__tabs nodrag" role="tablist" aria-label={vocab('Browser tabs')}>
@@ -281,15 +291,14 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
               </span>
             </button>
         ))}
-        <button
-          type="button"
+        <IconButton
+          size="compact"
           className="browser-node__tab-new"
-          title={vocab('New tab')}
-          aria-label={vocab('New tab')}
+          icon="add"
+          title="New tab"
+          aria-label="New tab"
           onClick={newTab}
-        >
-          +
-        </button>
+        />
       </div>
 
       <div className="editor-node__body">

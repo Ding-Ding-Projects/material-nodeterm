@@ -17,8 +17,9 @@ export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
   /** Selected/pressed visual state (a toggle that is currently on). */
   active?: boolean
   /** @default 'standard' — 44px, the shared `.md3-icon-btn` recipe ("every app-bar action").
-   *  `'dense'` is 40px, for a tighter row. */
-  size?: 'standard' | 'dense'
+   *  `'dense'` is 40px, for a tighter row; `'compact'` is the M3 Expressive extra-small (32px)
+   *  for a node header, a frame's label pill or a card head, where 40px would crowd the row. */
+  size?: 'standard' | 'dense' | 'compact'
   vocabularyMode?: VocabularyTextMode
 }
 
@@ -36,12 +37,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
     <button
       ref={ref}
       type={type}
-      className={cn('md3-icon-btn', size === 'dense' && 'mdx-icon-btn--dense', active && 'is-active', className)}
+      className={cn('md3-icon-btn', size === 'dense' && 'mdx-icon-btn--dense', size === 'compact' && 'mdx-icon-btn--compact', active && 'is-active', className)}
       {...rest}
       aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']}
       title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
     >
-      {icon ? <MaterialSymbol name={icon} size={size === 'dense' ? 18 : 20} fill={filled} /> : children}
+      {icon ? <MaterialSymbol name={icon} size={size === 'compact' ? 16 : size === 'dense' ? 18 : 20} fill={filled} /> : children}
     </button>
   )
 })
