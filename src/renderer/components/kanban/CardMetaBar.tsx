@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { Input } from '@renderer/ui/Input'
+import { Chip, IconButton } from '@renderer/ui/md3'
 import type { BoardLogAuthor, KanbanPriority, ProjectKanban } from '@shared/types'
 import { cardMeta, labelsForCard, setCardDue, setCardPriority, toggleAssignee } from '../../lib/kanban'
 import { LabelChips } from './LabelChips'
@@ -127,9 +129,10 @@ export function CardMetaBar({ nodeId, board, onChange }: CardMetaBarProps) {
       <div className="kanban-meta__group">
         <span className="kanban-meta__label">Due date</span>
         <div className="kanban-meta__row">
-          <input
+          <Input
             type="datetime-local"
             className="kanban-meta__due"
+            aria-label="Due date"
             value={due !== undefined ? toLocalInput(due) : ''}
             onChange={(e) =>
               onChange(
@@ -139,13 +142,13 @@ export function CardMetaBar({ nodeId, board, onChange }: CardMetaBarProps) {
           />
           {overdue && <span className="kanban-due kanban-due--overdue">Overdue</span>}
           {due !== undefined && (
-            <button
+            <IconButton size="dense"
               className="kanban-meta__clear"
-              title="Clear due date"
+              title="Clear due date" aria-label="Clear due date"
               onClick={() => onChange(setCardDue(board, nodeId, null))}
             >
               ✕
-            </button>
+            </IconButton>
           )}
         </div>
       </div>
@@ -153,7 +156,7 @@ export function CardMetaBar({ nodeId, board, onChange }: CardMetaBarProps) {
         <span className="kanban-meta__label">Priority</span>
         <div className="kanban-meta__row">
           {PRIORITIES.map((pr) => (
-            <button
+            <Chip vocabularyMode="factual" selected={priority === pr.id}
               key={pr.id}
               className={`kanban-prio${priority === pr.id ? ' kanban-prio--on' : ''}`}
               // alphaTint, NOT `${pr.color}2e`: appending hex alpha is only a colour for 6-digit
@@ -170,7 +173,7 @@ export function CardMetaBar({ nodeId, board, onChange }: CardMetaBarProps) {
               onClick={() => onChange(setCardPriority(board, nodeId, priority === pr.id ? null : pr.id))}
             >
               {pr.label}
-            </button>
+            </Chip>
           ))}
         </div>
       </div>

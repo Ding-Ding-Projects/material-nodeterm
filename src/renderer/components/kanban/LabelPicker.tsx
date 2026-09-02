@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
+import { Input } from '@renderer/ui/Input'
+import { Button, IconButton } from '@renderer/ui/md3'
 import type { KanbanLabelColor, ProjectKanban } from '@shared/types'
 import {
   autoLabelColor,
@@ -61,11 +63,13 @@ export function LabelPicker({
     return (
       <div className="label-picker" onMouseDown={(e) => e.stopPropagation()}>
         <div className="label-picker__edithead">
-          <button className="label-picker__back" title="Back" onClick={() => setEditing(null)}>
+          <IconButton size="dense" className="label-picker__back" title="Back" aria-label="Back" onClick={() => setEditing(null)}>
             ‹
-          </button>
-          <input
+          </IconButton>
+          <Input
             className="label-picker__renameinput"
+            vocabularyMode="factual"
+            aria-label="Label name"
             autoFocus
             value={editLabel.name}
             style={{ background: sw.bg, color: sw.fg }}
@@ -75,7 +79,7 @@ export function LabelPicker({
             }}
           />
         </div>
-        <button
+        <Button variant="text" size="small" danger
           className="label-picker__delete"
           onClick={() => {
             onChange(deleteLabel(board, editLabel.id))
@@ -83,7 +87,7 @@ export function LabelPicker({
           }}
         >
           🗑 Delete
-        </button>
+        </Button>
         <div className="label-picker__colhead">Colors</div>
         <div className="label-picker__colors">
           {LABEL_COLOR_OPTIONS.map((opt) => (
@@ -110,15 +114,17 @@ export function LabelPicker({
           return (
             <span key={l.id} className="kanban-label-chip" style={{ background: s.bg, color: s.fg }}>
               {l.name || 'Label'}
-              <button className="kanban-label-chip__x" title="Remove" onClick={() => toggle(l.id)}>
+              <IconButton size="dense" className="kanban-label-chip__x" title="Remove" aria-label="Remove" onClick={() => toggle(l.id)}>
                 ×
-              </button>
+              </IconButton>
             </span>
           )
         })}
-        <input
+        <Input
           ref={inputRef}
           className="label-picker__search"
+          vocabularyMode="factual"
+          aria-label="Search or create a label"
           autoFocus
           value={query}
           spellCheck={false}
@@ -142,13 +148,13 @@ export function LabelPicker({
                 </span>
                 {assignedIds.has(l.id) && <span className="label-picker__rowcheck">✓</span>}
               </button>
-              <button
+              <IconButton size="dense"
                 className="label-picker__more"
-                title="Edit label"
+                title="Edit label" aria-label="Edit label"
                 onClick={() => setEditing(l.id)}
               >
                 ⋯
-              </button>
+              </IconButton>
             </div>
           )
         })}
@@ -163,7 +169,7 @@ export function LabelPicker({
               <span className="label-picker__swatch" style={{ background: labelSwatch(createColor).bg }} />
               <span className="label-picker__caret">▾</span>
             </button>
-            <button className="label-picker__create" onClick={create}>
+            <Button variant="tonal" size="small" vocabularyMode="factual" className="label-picker__create" onClick={create}>
               Create{' '}
               <span
                 className="kanban-label-chip"
@@ -171,7 +177,7 @@ export function LabelPicker({
               >
                 {query.trim()}
               </span>
-            </button>
+            </Button>
             {colorMenuOpen && (
               <div className="label-picker__createcolors">
                 {LABEL_COLOR_OPTIONS.map((opt) => (

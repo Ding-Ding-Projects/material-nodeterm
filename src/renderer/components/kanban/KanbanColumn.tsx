@@ -1,4 +1,6 @@
 import { memo, useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { Input } from '@renderer/ui/Input'
+import { Button, IconButton } from '@renderer/ui/md3'
 import type { KanbanColumn as KanbanColumnT } from '@shared/types'
 import { NODE_COLORS } from '../../state/workspace'
 import { SessionCard } from './SessionCard'
@@ -164,8 +166,10 @@ export const KanbanColumn = memo(function KanbanColumn({
           <span className="kanban-col__dot kanban-col__dot--ungrouped" />
         )}
         {column && editingTitle ? (
-          <input
+          <Input
             className="kanban-col__rename"
+            vocabularyMode="factual"
+            aria-label="Column title"
             autoFocus
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -189,13 +193,13 @@ export const KanbanColumn = memo(function KanbanColumn({
         )}
         <span className="kanban-col__count">{displayCount ?? cards.length + githubCards.length}</span>
         {column && (
-          <button
+          <IconButton size="dense"
             className="kanban-col__close"
-            title="Delete column (cards return to Ungrouped)"
+            title="Delete column (cards return to Ungrouped)" aria-label="Delete column (cards return to Ungrouped)"
             onClick={() => onDelete?.(column.id)}
           >
             ✕
-          </button>
+          </IconButton>
         )}
       </div>
       {column && swatchesOpen && (
@@ -243,9 +247,9 @@ export const KanbanColumn = memo(function KanbanColumn({
           />
         ))}
         {hasMoreGitHub && (
-          <button className="kanban-github-more" onClick={() => onLoadMoreGitHub?.(colId)}>
+          <Button variant="text" size="small" className="kanban-github-more" onClick={() => onLoadMoreGitHub?.(colId)}>
             Show more issues
-          </button>
+          </Button>
         )}
       </div>
       <div className="kanban-col__footer">
@@ -318,7 +322,7 @@ export const KanbanColumn = memo(function KanbanColumn({
             })}
           </div>
         )}
-        <button
+        <Button variant="tonal" size="small"
           ref={newMenuButtonRef}
           className="kanban-col__new"
           aria-expanded={newMenuOpen}
@@ -329,7 +333,7 @@ export const KanbanColumn = memo(function KanbanColumn({
           }}
         >
           + New session
-        </button>
+        </Button>
       </div>
     </div>
   )

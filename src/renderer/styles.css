@@ -8786,26 +8786,12 @@ button.group-node__setup:disabled {
   border-radius: 7px;
   background: rgba(var(--tint-rgb), 0.04);
 }
-.kanban-source-filter__button {
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: rgba(var(--tint-rgb), 0.55);
-  padding: 3px 8px;
-  font-size: 11px;
-  cursor: pointer;
-}
 
 .kanban-github-status {
   color: rgba(var(--tint-rgb), 0.5);
   font-size: 11px;
 }
 
-.kanban-github-retry {
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
 .kanban-github-retry:hover {
   text-decoration: underline;
 }
@@ -8961,16 +8947,6 @@ button.group-node__setup:disabled {
   color: rgba(var(--tint-rgb), 0.72);
   font-size: 10px;
 }
-.kanban-github-more {
-  width: 100%;
-  border: 1px dashed rgba(var(--tint-rgb), 0.14);
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(var(--tint-rgb), 0.52);
-  padding: 6px;
-  font-size: 11px;
-  cursor: pointer;
-}
 
 .github-issue-modal {
   width: min(680px, calc(100vw - 32px));
@@ -9001,13 +8977,6 @@ button.group-node__setup:disabled {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-}
-.github-issue-modal__close {
-  border: 0;
-  background: transparent;
-  color: rgba(var(--tint-rgb), 0.55);
-  font-size: 24px;
-  cursor: pointer;
 }
 .github-issue-modal__actions {
   display: flex;
@@ -9050,9 +9019,6 @@ button.group-node__setup:disabled {
   .kanban-header__name {
     max-width: 84px;
   }
-  .kanban-source-filter__button {
-    padding-inline: 6px;
-  }
   .kanban-board {
     padding-inline: 10px;
   }
@@ -9086,21 +9052,6 @@ button.group-node__setup:disabled {
 
 /* Eco: the agent CLI was exited to reclaim RAM. Quiet — the session is fine. */
 
-.kanban-add-col {
-  align-self: flex-start;
-  flex: 0 0 auto;
-  background: rgba(var(--tint-rgb), 0.04);
-  border: 1px dashed rgba(var(--tint-rgb), 0.15);
-  border-radius: 10px;
-  color: rgba(var(--tint-rgb), 0.5);
-  font-size: 12px;
-  padding: 10px 16px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.kanban-add-col {
-  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-}
 
 /* ---- Kanban column pill: half-pill flush against a session node's top edge (rendered as a
    sibling of the overflow:hidden node root, so it can poke above the border). ---- */
@@ -9447,16 +9398,6 @@ button.group-node__setup:disabled {
   font-size: 12px;
   padding: 2px 8px;
 }
-.kanban-label-chip__x {
-  background: none;
-  border: none;
-  color: inherit;
-  opacity: 0.65;
-  cursor: pointer;
-  padding: 0 0 0 1px;
-  font-size: 12px;
-  line-height: 1;
-}
 .kanban-label-chip__x:hover {
   opacity: 1;
 }
@@ -9485,19 +9426,6 @@ button.group-node__setup:disabled {
      `.term-node__find`); this one was missed because it replaced the old `.node-tags` row, which
      had one. */
   background: var(--panel);
-}
-.term-node__labeladd {
-  background: rgba(var(--tint-rgb), 0.06);
-  border: 1px solid rgba(var(--tint-rgb), 0.1);
-  border-radius: 4px;
-  color: rgba(var(--tint-rgb), 0.6);
-  font-size: 10.5px;
-  padding: 1px 6px;
-  cursor: pointer;
-}
-.term-node__labeladd:hover {
-  background: rgba(var(--tint-rgb), 0.12);
-  color: var(--text-strong);
 }
 .kanban-meta__row--labels {
   position: relative;
@@ -9633,15 +9561,6 @@ button.group-node__setup:disabled {
   border: 1px solid rgba(var(--tint-rgb), 0.1);
   cursor: text;
 }
-.label-picker__search {
-  flex: 1;
-  min-width: 80px;
-  background: none;
-  border: none;
-  outline: none;
-  color: var(--text-strong);
-  font-size: 13px;
-}
 .label-picker__hint {
   font-size: 10px;
   text-transform: uppercase;
@@ -9678,29 +9597,7 @@ button.group-node__setup:disabled {
   color: var(--accent);
   font-size: 12px;
 }
-.label-picker__more {
-  background: none;
-  border: none;
-  color: rgba(var(--tint-rgb), 0.55);
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 5px;
-  font-size: 15px;
-}
 
-.label-picker__create {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  color: rgba(var(--tint-rgb), 0.75);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 5px;
-  font-size: 12.5px;
-  text-align: left;
-}
 /* Sibling-reorder drop zones for group rows in the sessions tree (a thin accent rule marks
    where the dragged frame would land). */
 .ss-subgroup__reorder-zone,
@@ -9816,36 +9713,6 @@ button.group-node__setup:disabled {
   align-items: center;
   gap: 6px;
 }
-.label-picker__back {
-  background: none;
-  border: none;
-  color: rgba(var(--tint-rgb), 0.7);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 0 4px;
-}
-.label-picker__renameinput {
-  flex: 1;
-  border: none;
-  outline: none;
-  border-radius: 5px;
-  padding: 4px 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.label-picker__delete {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  color: rgba(var(--tint-rgb), 0.8);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 5px;
-  font-size: 12.5px;
-  text-align: left;
-}
 
 .label-picker__colhead {
   font-size: 10px;
@@ -9888,15 +9755,6 @@ button.group-node__setup:disabled {
   position: relative;
   margin-left: 12px;
 }
-.kanban-filter-btn {
-  background: rgba(var(--tint-rgb), 0.07);
-  border: 1px solid rgba(var(--tint-rgb), 0.12);
-  border-radius: 6px;
-  color: rgba(var(--tint-rgb), 0.75);
-  font-size: 12px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
 
 .kanban-filter-menu {
   position: absolute;
@@ -9931,17 +9789,6 @@ button.group-node__setup:disabled {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-}
-.kanban-filter-clear {
-  margin-top: 4px;
-  background: none;
-  border: none;
-  border-top: 1px solid rgba(var(--tint-rgb), 0.08);
-  color: rgba(var(--tint-rgb), 0.6);
-  cursor: pointer;
-  padding: 6px;
-  font-size: 12px;
-  text-align: left;
 }
 
 .kanban-meta {
@@ -10023,23 +9870,6 @@ button.group-node__setup:disabled {
   text-align: left;
 }
 
-.kanban-meta__due {
-  background: rgba(var(--tint-rgb), 0.06);
-  border: 1px solid rgba(var(--tint-rgb), 0.15);
-  border-radius: 6px;
-  color: rgba(var(--tint-rgb), 0.88);
-  font-size: 12.5px;
-  padding: 4px 8px;
-  outline: none;
-  color-scheme: dark;
-}
-.kanban-meta__clear {
-  background: none;
-  border: none;
-  color: rgba(var(--tint-rgb), 0.4);
-  cursor: pointer;
-  font-size: 11px;
-}
 
 .kanban-due {
   font-size: 10px;
@@ -10078,17 +9908,6 @@ button.group-node__setup:disabled {
   margin-left: 6px;
 }
 
-.kanban-prio {
-  background: rgba(var(--tint-rgb), 0.05);
-  border: 1px solid rgba(var(--tint-rgb), 0.15);
-  border-radius: 6px;
-  color: rgba(var(--tint-rgb), 0.65);
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 3px 9px;
-  cursor: pointer;
-  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
-}
 
 .kanban-prio-chip {
   letter-spacing: 0.04em;

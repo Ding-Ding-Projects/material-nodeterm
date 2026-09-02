@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '@renderer/ui/md3'
 import type { KanbanLabel, ProjectKanban } from '@shared/types'
 import type { NodeIcon } from '@shared/node-icon'
 import { AGENT_CONFIG, BUILTIN_AGENT_IDS, type AgentId } from '@shared/agents/config'
@@ -744,12 +745,12 @@ export const KanbanView = memo(function KanbanView({
           <span className="kanban-github-status">Loading GitHub issues…</span>
         )}
         {board.github && github?.error && (
-          <button
+          <Button variant="text" size="small" vocabularyMode="factual"
             className="kanban-github-status kanban-github-status--error kanban-github-retry"
             onClick={() => setGitHubRetry((value) => value + 1)}
           >
             GitHub issues unavailable · Retry
-          </button>
+          </Button>
         )}
         {board.github && githubReadOnly && (
           <span className="kanban-github-status kanban-github-status--error">
@@ -758,13 +759,13 @@ export const KanbanView = memo(function KanbanView({
         )}
         {(paletteLabels.length > 0 || githubLabels.length > 0 || activeFilter.length > 0) && (
           <div className="kanban-header__filter">
-            <button
+            <Button variant="tonal" size="small" vocabularyMode="factual"
               className={`kanban-filter-btn${activeFilter.length ? ' kanban-filter-btn--on' : ''}`}
               title="Filter by label"
               onClick={() => setFilterOpen((v) => !v)}
             >
               Filter{activeFilter.length ? ` · ${activeFilter.length}` : ''}
-            </button>
+            </Button>
             {filterOpen && (
               <>
                 <div className="label-picker__scrim" onMouseDown={() => setFilterOpen(false)} />
@@ -814,9 +815,9 @@ export const KanbanView = memo(function KanbanView({
                     )
                   })}
                   {activeFilter.length > 0 && (
-                    <button className="kanban-filter-clear" onClick={() => setLabelFilter([])}>
+                    <Button variant="text" size="small" className="kanban-filter-clear" onClick={() => setLabelFilter([])}>
                       Clear filter
-                    </button>
+                    </Button>
                   )}
                 </div>
               </>
@@ -891,12 +892,12 @@ export const KanbanView = memo(function KanbanView({
               onLoadMoreGitHub={() => void loadMoreGitHub(api.githubIssues, projectId, col.id)}
             />
           ))}
-          <button
+          <Button variant="outlined" size="small"
             className="kanban-add-col"
             onClick={() => commit(addColumn(board, 'New column', nextColumnColor(board)))}
           >
             + Add column
-          </button>
+          </Button>
         </div>
       </div>
       {cardMenu && byId.has(cardMenu.nodeId) && (

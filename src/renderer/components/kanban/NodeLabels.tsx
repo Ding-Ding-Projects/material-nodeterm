@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Button } from '@renderer/ui/md3'
 import type { ProjectKanban } from '@shared/types'
 import { useProjects } from '../../state/projects'
 import { markWorkspaceDirty } from '../../state/workspaceDirty'
@@ -31,13 +32,13 @@ export function NodeLabels({ nodeId }: { nodeId: string }): React.JSX.Element {
   return (
     <div className="term-node__labelrow nodrag">
       <LabelChips labels={labels} size="sm" />
-      <button
+      <Button variant="text" size="small" vocabularyMode="factual"
         className="term-node__labeladd"
         title="Add label"
         onClick={() => setOpen((v) => !v)}
       >
         + Label
-      </button>
+      </Button>
       {open && (
         <>
           <div className="label-picker__scrim" onMouseDown={() => setOpen(false)} />

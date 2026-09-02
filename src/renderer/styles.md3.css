@@ -3624,19 +3624,6 @@ button.term-node__title-text:focus-visible {
   border-radius: 999px;
   background: transparent;
 }
-.kanban-source-filter__button {
-  border-radius: 999px;
-  color: var(--md-on-surface-variant);
-  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
-    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.kanban-source-filter__button:hover {
-  color: var(--md-on-surface);
-}
-.kanban-source-filter__button.is-active {
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-}
 
 .kanban-github-status {
   color: var(--md-on-surface-variant);
@@ -3645,25 +3632,6 @@ button.term-node__title-text:focus-visible {
   color: var(--md-error);
 }
 
-/* Label filter chip + its popover menu. */
-.kanban-filter-btn {
-  background: transparent;
-  border: 1px solid var(--md-outline);
-  border-radius: 8px;
-  color: var(--md-on-surface-variant);
-  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
-    border-color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
-    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.kanban-filter-btn:hover {
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface);
-}
-.kanban-filter-btn--on {
-  border-color: var(--md-primary);
-  background: var(--md-secondary-container);
-  color: var(--md-on-secondary-container);
-}
 .kanban-filter-menu {
   background: var(--md-surface-container-high);
   border: none;
@@ -3675,13 +3643,6 @@ button.term-node__title-text:focus-visible {
 }
 .kanban-filter-group {
   color: var(--md-on-surface-variant);
-}
-.kanban-filter-clear {
-  border-top-color: var(--md-outline-variant);
-  color: var(--md-on-surface-variant);
-}
-.kanban-filter-clear:hover {
-  color: var(--md-on-surface);
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -3720,29 +3681,6 @@ button.term-node__title-text:focus-visible {
   color: var(--md-on-surface-variant);
   font-size: 12px;
 }
-.kanban-col__close {
-  color: var(--md-on-surface-variant);
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 0;
-}
-.kanban-col__close:hover {
-  color: var(--md-error);
-}
-.kanban-col__rename {
-  background: var(--md-surface-container-highest);
-  border-color: var(--md-primary);
-  border-radius: 8px;
-  color: var(--md-on-surface);
-  flex: 1;
-  min-width: 0;
-  border: 1px solid var(--accent);
-  font-size: 12px;
-  padding: 2px 6px;
-  outline: none;
-}
 .kanban-col__swatch {
   border-color: var(--md-outline-variant);
   width: 14px;
@@ -3756,38 +3694,10 @@ button.term-node__title-text:focus-visible {
   background: var(--md-outline);
 }
 
-.kanban-add-col {
-  background: transparent;
-  border: 1px dashed var(--md-outline);
-  border-radius: 12px;
-  color: var(--md-on-surface-variant);
-}
-.kanban-add-col:hover {
-  color: var(--md-on-surface);
-  border-color: var(--md-primary);
-  background: color-mix(in srgb, var(--md-primary) 8%, transparent);
-}
 
 /* ---------------------------------------------------------------------------------------------
    "+ New session" column footer menu
    --------------------------------------------------------------------------------------------- */
-.kanban-col__new {
-  background: transparent;
-  border: 1px dashed var(--md-outline-variant);
-  border-radius: 8px;
-  color: var(--md-on-surface-variant);
-  width: 100%;
-  font-size: 11px;
-  padding: 6px 8px;
-  cursor: pointer;
-  text-align: left;
-  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-}
-.kanban-col__new:hover {
-  color: var(--md-on-surface);
-  border-color: var(--md-primary);
-  background: color-mix(in srgb, var(--md-primary) 8%, transparent);
-}
 .kanban-col__newmenu {
   background: var(--md-surface-container-high);
   border: none;
@@ -4136,20 +4046,8 @@ button.term-node__title-text:focus-visible {
 .kanban-meta__check {
   color: var(--md-success);
 }
-.kanban-meta__due {
-  background: var(--md-surface-container-highest);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: 8px;
-  color: var(--md-on-surface);
-  /* The base rule hardcodes `color-scheme: dark`, so the native picker mismatches the light
-     theme. Follow the live theme instead — same fix as everywhere else that reads a token. */
-  color-scheme: dark;
-}
 :root[data-theme='light'] .kanban-meta__due {
   color-scheme: light;
-}
-.kanban-meta__clear {
-  color: var(--md-on-surface-variant);
 }
 .kanban-meta__clear:hover {
   color: var(--md-error);
@@ -4162,20 +4060,6 @@ button.term-node__title-text:focus-visible {
 .kanban-due--overdue {
   background: var(--md-error-container);
   color: var(--md-on-error-container);
-}
-.kanban-prio {
-  background: transparent;
-  border: 1px solid var(--md-outline-variant);
-  color: var(--md-on-surface-variant);
-  border-radius: 8px;
-  transition: border-color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
-    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
-    background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-}
-.kanban-prio:hover {
-  border-color: var(--md-outline);
-  color: var(--md-on-surface);
-  background: var(--md-surface-container-highest);
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -4195,9 +4079,6 @@ button.term-node__title-text:focus-visible {
   border: 1px solid var(--md-outline-variant);
   border-radius: 8px;
 }
-.label-picker__search {
-  color: var(--md-on-surface);
-}
 .label-picker__hint {
   color: var(--md-on-surface-variant);
 }
@@ -4207,18 +4088,9 @@ button.term-node__title-text:focus-visible {
 .label-picker__rowcheck {
   color: var(--md-primary);
 }
-.label-picker__more {
-  color: var(--md-on-surface-variant);
-}
 .label-picker__more:hover {
   background: var(--md-surface-container-highest);
   color: var(--md-on-surface);
-}
-.label-picker__create {
-  color: var(--md-on-surface);
-}
-.label-picker__create:hover {
-  background: var(--md-surface-container-highest);
 }
 .label-picker__createcolor {
   background: var(--md-surface-container-highest);
@@ -4236,17 +4108,6 @@ button.term-node__title-text:focus-visible {
   border: none;
   border-radius: 12px;
   box-shadow: none;
-}
-.label-picker__back {
-  color: var(--md-on-surface-variant);
-}
-.label-picker__renameinput {
-  /* Its background/colour are set inline from the label's own swatch (data, not chrome) — this
-     only harmonises the corner radius with the rest of the popover. */
-  border-radius: 8px;
-}
-.label-picker__delete {
-  color: var(--md-on-surface);
 }
 .label-picker__delete:hover {
   background: var(--md-error-container);
@@ -4311,18 +4172,6 @@ button.term-node__title-text:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.kanban-modal__rename {
-  background: var(--md-surface-container-highest);
-  border-color: var(--md-primary);
-  border-radius: 8px;
-  color: var(--md-on-surface);
-  flex: 1;
-  min-width: 0;
-  border: 1px solid var(--accent);
-  font-size: 13px;
-  padding: 3px 8px;
-  outline: none;
-}
 .kanban-modal__column {
   background: var(--md-surface-container-highest);
   border: none;
@@ -4333,21 +4182,6 @@ button.term-node__title-text:focus-visible {
   letter-spacing: 0.04em;
   padding: 2px 6px;
   margin-right: auto;
-}
-.kanban-modal__action {
-  background: transparent;
-  border-radius: 999px;
-  color: var(--md-on-surface-variant);
-  transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1)),
-    color var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
-  border: none;
-  font-size: 13px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-.kanban-modal__action:hover {
-  background: var(--md-surface-container-highest);
-  color: var(--md-on-surface);
 }
 .kanban-modal__action[aria-pressed='true'] {
   background: var(--md-primary);
@@ -4501,11 +4335,6 @@ button.term-node__title-text:focus-visible {
   background: var(--md-surface-container-highest);
   color: var(--md-on-surface-variant);
 }
-.kanban-github-more {
-  border: 1px dashed var(--md-outline);
-  border-radius: 8px;
-  color: var(--md-on-surface-variant);
-}
 .kanban-github-more:hover {
   border-color: var(--md-primary);
   color: var(--md-on-surface);
@@ -4524,9 +4353,6 @@ button.term-node__title-text:focus-visible {
   color: var(--md-on-surface);
 }
 .github-issue-modal__eyebrow {
-  color: var(--md-on-surface-variant);
-}
-.github-issue-modal__close {
   color: var(--md-on-surface-variant);
 }
 .github-issue-modal__actions {

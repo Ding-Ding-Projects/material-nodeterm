@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { IconButton } from '@renderer/ui/md3'
 import type { GitHubIssueCardView } from '@shared/github-issues'
 import type { KanbanColumn } from '@shared/types'
 import { useSession } from '../../session/session'
@@ -67,7 +68,7 @@ export function GitHubIssueSummaryModal({
             <div className="github-issue-modal__eyebrow">GitHub issue #{issue.number}</div>
             <h2 id="github-issue-modal-title">{issue.title}</h2>
           </div>
-          <button ref={close} className="github-issue-modal__close" onClick={onClose} aria-label="Close">×</button>
+          <IconButton size="dense" ref={close} className="github-issue-modal__close" onClick={onClose} aria-label="Close">×</IconButton>
         </header>
         <div className="github-issue-modal__actions">
           <label>

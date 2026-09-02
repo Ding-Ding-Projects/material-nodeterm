@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Input } from '@renderer/ui/Input'
 import { createPortal } from 'react-dom'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from '../dialog-stack'
 import { IconChat, IconMic, IconSearch } from '../icons'
@@ -30,7 +31,7 @@ import { ModalTerminal } from './ModalTerminal'
 import { BrowserSurface } from '../../nodes/BrowserSurface'
 import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
-import { TextArea } from '@renderer/ui/md3'
+import { IconButton, TextArea } from '@renderer/ui/md3'
 import { BrowserDrivingIndicator } from '../../nodes/BrowserDrivingChip'
 import { NoteMarkdown } from '../NoteMarkdown'
 import { relativeTime } from '../../lib/relativeTime'
@@ -315,8 +316,10 @@ export function CardModal({
             </button>
           )}
           {editingTitle ? (
-            <input
+            <Input
               className="kanban-modal__rename"
+              vocabularyMode="factual"
+              aria-label="Card title"
               autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -359,17 +362,17 @@ export function CardModal({
                 for time blindness. The MOMENTUM note deliberately does not follow it here; see
                 docs/adhd-modes.md. */}
               <AdhdElapsedChip nodeId={session.id} />
-              <button
+              <IconButton size="dense"
                 className="kanban-modal__action"
-                title="Search this terminal"
+                title="Search this terminal" aria-label="Search this terminal"
                 aria-pressed={searchOpen}
                 onClick={() => setSearchOpen((v) => !v)}
               >
                 <IconSearch />
-              </button>
-              <button
+              </IconButton>
+              <IconButton size="dense"
                 className="kanban-modal__action"
-                title="Dictate into this terminal"
+                title="Dictate into this terminal" aria-label="Dictate into this terminal"
                 onClick={() =>
                   window.dispatchEvent(
                     new CustomEvent('nodeterm:dictate', {
@@ -379,39 +382,39 @@ export function CardModal({
                 }
               >
                 <IconMic />
-              </button>
-              <button
+              </IconButton>
+              <IconButton size="dense"
                 className="kanban-modal__action"
-                title="Name with AI (from terminal output)"
+                title="Name with AI (from terminal output)" aria-label="Name with AI (from terminal output)"
                 disabled={naming}
                 onClick={nameWithAi}
               >
                 {naming ? '…' : '✦'}
-              </button>
+              </IconButton>
             </>
           )}
-          <button
+          <IconButton size="dense"
             className="kanban-modal__action"
-            title={panelOpen ? 'Hide comments & activity' : 'Show comments & activity'}
+            title={panelOpen ? 'Hide comments & activity' : 'Show comments & activity'} aria-label={panelOpen ? 'Hide comments & activity' : 'Show comments & activity'}
             aria-pressed={panelOpen}
             onClick={togglePanel}
           >
             <IconChat />
-          </button>
-          <button
+          </IconButton>
+          <IconButton size="dense"
             className="kanban-modal__action"
-            title={maximized ? 'Restore size' : 'Maximize'}
+            title={maximized ? 'Restore size' : 'Maximize'} aria-label={maximized ? 'Restore size' : 'Maximize'}
             aria-pressed={maximized}
             onClick={() => setMaximized(!maximized)}
           >
             {maximized ? '❐' : '⤢'}
-          </button>
-          <button className="kanban-modal__action" title="Open on canvas" onClick={onOpenCanvas}>
+          </IconButton>
+          <IconButton size="dense" className="kanban-modal__action" title="Open on canvas" aria-label="Open on canvas" onClick={onOpenCanvas}>
             ↗
-          </button>
-          <button className="kanban-modal__action" title="Close" onClick={onClose}>
+          </IconButton>
+          <IconButton size="dense" className="kanban-modal__action" title="Close" aria-label="Close" onClick={onClose}>
             ✕
-          </button>
+          </IconButton>
         </div>
         <CardMetaBar nodeId={session.id} board={board} onChange={onChangeBoard} />
         <div className="kanban-modal__body">
@@ -419,8 +422,9 @@ export function CardModal({
           <div className="kanban-modal__main">
             {session.kind === 'sticky' ? (
               editingNote ? (
-                <textarea
+                <TextArea
                   className="kanban-modal__sticky"
+                  vocabularyMode="factual"
                   value={session.text ?? ''}
                   placeholder="Write a note…"
                   autoFocus
