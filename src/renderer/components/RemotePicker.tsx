@@ -5,6 +5,8 @@ import type { SshServer } from '@shared/ssh'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
+import { Button } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 interface RemotePickerProps {
   x: number
@@ -38,7 +40,7 @@ export function RemotePicker({ x, y, onPick, onManage, onClose }: RemotePickerPr
       <div className="ctx-menu" role="menu" aria-label={vocab('Remote servers')} style={{ top: y, left: x }} onClick={(e) => e.stopPropagation()}>
         <div className="menu-filter" onMouseDown={(e) => e.stopPropagation()}>
           <div className="menu-filter__row">
-            <input
+            <Input vocabularyMode="factual"
               ref={inputRef}
               className="menu-filter__input"
               value={search.value}
@@ -59,7 +61,7 @@ export function RemotePicker({ x, y, onPick, onManage, onClose }: RemotePickerPr
           <span className="sr-only" role="status" aria-live="polite">{visible.length} {vocab('results')}</span>
         </div>
         {servers.length === 0 ? (
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             role="menuitem"
             className="ctx-item"
             onClick={() => {
@@ -68,13 +70,13 @@ export function RemotePicker({ x, y, onPick, onManage, onClose }: RemotePickerPr
             }}
           >
             {vocab('Add SSH server…')}
-          </button>
+          </Button>
           ) : visible.length === 0 ? (
             <div className="ctx-item" role="status">{vocab('No remote servers match this filter.')}</div>
           ) : (
             <>
             {visible.map((s) => (
-              <button
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 key={s.id}
                 role="menuitem"
                 className="ctx-item"
@@ -85,10 +87,10 @@ export function RemotePicker({ x, y, onPick, onManage, onClose }: RemotePickerPr
                 }}
               >
                 {s.label}
-              </button>
+              </Button>
             ))}
             <div className="ctx-sep" />
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               role="menuitem"
               className="ctx-item"
               onClick={() => {
@@ -97,7 +99,7 @@ export function RemotePicker({ x, y, onPick, onManage, onClose }: RemotePickerPr
               }}
             >
               {vocab('Manage SSH servers…')}
-            </button>
+            </Button>
           </>
         )}
       </div>

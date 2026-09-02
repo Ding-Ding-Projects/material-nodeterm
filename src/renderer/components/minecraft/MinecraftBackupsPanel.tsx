@@ -3,6 +3,7 @@ import type { MinecraftBackupSummary } from '@shared/minecraft'
 import { useSession } from '../../session/session'
 import { openDestructiveGate } from '../../state/destructiveGate'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 /** Create/restore both refuse while the server is running — copying or replacing world files a
  *  live process still has open cannot be trusted. Same reason `writeProperties` refuses while
@@ -93,7 +94,7 @@ export function MinecraftBackupsPanel({ nodeId, phase }: { nodeId: string; phase
         deletes or thins out old backups automatically, so remove ones you no longer want by hand.
       </p>
       <div className="mc-row">
-        <button
+        <Button variant="filled" size="small" vocabularyMode="factual"
           type="button"
           className="mc-button mc-button--primary nodrag"
           disabled={busy || live}
@@ -101,7 +102,7 @@ export function MinecraftBackupsPanel({ nodeId, phase }: { nodeId: string; phase
           onClick={() => void handleCreate()}
         >
           Back up the world now
-        </button>
+        </Button>
       </div>
       {live && <p className="mc-note--warn">{disabledReason}</p>}
 
@@ -116,7 +117,7 @@ export function MinecraftBackupsPanel({ nodeId, phase }: { nodeId: string; phase
                 {b.auto ? ' (automatic, made before a restore overwrote it)' : ''}
               </span>
               <span className="mc-path">{formatBytes(b.sizeBytes)}</span>
-              <button
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 type="button"
                 className="mc-link nodrag"
                 disabled={busy || live}
@@ -124,24 +125,24 @@ export function MinecraftBackupsPanel({ nodeId, phase }: { nodeId: string; phase
                 onClick={(e) => requestRestore(b, e)}
               >
                 Restore
-              </button>
-              <button
+              </Button>
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 type="button"
                 className="mc-link mc-link--danger nodrag"
                 disabled={busy}
                 onClick={(e) => requestDelete(b, e)}
               >
                 Delete
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
 
       <div className="mc-row">
-        <button type="button" className="mc-button nodrag" onClick={load}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" className="mc-button nodrag" onClick={load}>
           Refresh
-        </button>
+        </Button>
       </div>
     </div>
   )

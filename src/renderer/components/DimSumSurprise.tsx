@@ -7,6 +7,7 @@ import { dimSumLabel, type DimSumDish } from '../lib/dimsum/catalog'
 import { rollDimSumForLaunch } from '../lib/dimsum/roll'
 import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 /** How long after the app looks settled we decide (and, separately, re-check right before
  *  revealing) whether to show the surprise. Long enough that the first-run tour, the mobile-
@@ -102,7 +103,7 @@ export function DimSumSurprise() {
         <div className="dimsum-toast__eyebrow">{vocab('A little dim sum surprise')}</div>
         <div className="dimsum-toast__name">{dimSumLabel(dish)}</div>
       </div>
-      <button
+      <Button variant="outlined" size="small" vocabularyMode="factual"
         type="button"
         className="dimsum-toast__close"
         aria-label={vocab('Dismiss')}
@@ -112,7 +113,7 @@ export function DimSumSurprise() {
         }}
       >
         ×
-      </button>
+      </Button>
     </div>
   )
 }

@@ -194,9 +194,9 @@ export function NotificationCenter({
       <div className="notif-center" data-easter-surface="notifications" onClick={(e) => e.stopPropagation()}>
         <div className="notif-center__head">
           <h2>{vocab('Notifications')}</h2>
-          <button className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>
             ×
-          </button>
+          </Button>
         </div>
         <div className="notif-center__search">
           <SearchField

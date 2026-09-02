@@ -6,6 +6,7 @@ import { isBrowserRuntime } from '../bridge/runtime'
 import { commandKeys, dictationBinding } from '../lib/keybindingOverrides'
 import { useSettings } from '../state/settings'
 import { isMacPlatform } from '@shared/platform-utils'
+import { Button } from '@renderer/ui/md3'
 
 // Justified isMacPlatform survivor: the desktop app is Windows-only, but the Server Edition
 // serves this panel to a browser tab that can run on a real Mac, where `matchesShortcut` keys
@@ -155,9 +156,9 @@ export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
       <div className="shortcuts" onClick={(e) => e.stopPropagation()}>
         <div className="shortcuts__head">
           <h2>Keyboard shortcuts</h2>
-          <button className="drawer__close" onClick={onClose}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="drawer__close" onClick={onClose}>
             ×
-          </button>
+          </Button>
         </div>
         <div className="shortcuts__body">
           {SECTIONS.map((s) => (
@@ -183,7 +184,7 @@ export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
           ))}
         </div>
         <div className="shortcuts__footer">
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             className="toylock-btn--link"
             onClick={() => {
               onClose()
@@ -191,7 +192,7 @@ export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
             }}
           >
             Need help? Open Support Tickets…
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

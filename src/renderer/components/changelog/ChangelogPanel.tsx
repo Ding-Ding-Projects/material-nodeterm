@@ -42,6 +42,8 @@ import {
 import { ReleaseCard } from './ReleaseCard'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
+import { Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 export function changelogExportOutcomeSegments(kind: 'exported' | 'failed', count: number) {
   return [fact(String(count)), copy(` ${kind}`)]
@@ -161,7 +163,7 @@ export function ChangelogPanel(): JSX.Element {
         <div className="md3-changelog__dates">
           <label className="md3-history-date-field">
             {vocab('From')}
-            <input
+            <Input vocabularyMode="factual"
               type="date"
               value={fromInput}
               onChange={(e) => {
@@ -173,7 +175,7 @@ export function ChangelogPanel(): JSX.Element {
           </label>
           <label className="md3-history-date-field">
             {vocab('To')}
-            <input
+            <Input vocabularyMode="factual"
               type="date"
               value={toInput}
               onChange={(e) => {
@@ -186,19 +188,19 @@ export function ChangelogPanel(): JSX.Element {
         </div>
         <div className="md3-history-presets" role="group" aria-label={vocab('Date range presets')}>
           {PRESETS.map((p) => (
-            <button
+            <Chip vocabularyMode="factual" selected={activePreset === p}
               key={p}
-              type="button"
+             
               className={`md3-history-preset${activePreset === p ? ' md3-history-preset--active' : ''}`}
               aria-pressed={activePreset === p}
               onClick={() => applyPreset(p)}
             >
               {vocab(DATE_RANGE_PRESET_LABELS[p])}
-            </button>
+            </Chip>
           ))}
         </div>
         <div className="md3-history-search">
-          <input
+          <Input vocabularyMode="factual"
             ref={searchInputRef}
             type="text"
             className="md3-history-search__input"

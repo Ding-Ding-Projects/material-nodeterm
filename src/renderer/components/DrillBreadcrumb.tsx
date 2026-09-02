@@ -1,5 +1,6 @@
 import type { DrillContext } from '../state/workspace'
 import { useProjects } from '../state/projects'
+import { Button } from '@renderer/ui/md3'
 
 /**
  * Canvas-level navigation chrome for group and linked-project drills. The drilled node set no
@@ -26,14 +27,14 @@ export function DrillBreadcrumb({
           Opened <strong>{title}</strong> as a canvas
         </span>
       </div>
-      <button
+      <Button variant="outlined" size="small" vocabularyMode="factual"
         className="announce-banner__close"
         type="button"
         title="Return to canvas"
         onClick={onExit}
       >
         ← back
-      </button>
+      </Button>
     </div>
   )
 }

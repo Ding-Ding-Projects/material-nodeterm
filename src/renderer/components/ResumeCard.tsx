@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { NavStop, Project } from '@shared/types'
 import { relativeTime } from '../lib/relativeTime'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 /** How many stops the card offers. Small on purpose: this is "where was I?", not the whole trail. */
 const RESUME_CARD_COUNT = 3
@@ -58,18 +59,18 @@ export function ResumeCard({ project, nodes, onOpen }: ResumeCardProps): JSX.Ele
     <div className="resume-card" data-canvas-chrome>
       <div className="resume-card__header">
         <span className="resume-card__title">{vocab('Resume where you left off')}</span>
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           className="resume-card__close"
           title={vocab('Dismiss')}
           aria-label={vocab('Dismiss')}
           onClick={() => setDismissed(true)}
         >
           ✕
-        </button>
+        </Button>
       </div>
       <div className="resume-card__rows">
         {rows.map((stop) => (
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             // Keyed by OCCURRENCE (`at` is unique per stop), not by node: a node id is not unique
             // in a history, and the de-dupe above is a behavior rule, not a key guarantee.
             key={`${stop.nodeId}:${stop.at}`}
@@ -79,7 +80,7 @@ export function ResumeCard({ project, nodes, onOpen }: ResumeCardProps): JSX.Ele
           >
             <span className="resume-card__note">{stop.note}</span>
             <span className="resume-card__time">{relativeTime(stop.at, Date.now())}</span>
-          </button>
+          </Button>
         ))}
       </div>
     </div>

@@ -39,6 +39,7 @@ import { troubleshootSteps } from './troubleshoot'
 import { Button, IconButton, Progress, SearchField, Tabs, TextArea } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
+import { Chip } from '@renderer/ui/md3'
 
 /** How often the panel re-asks for the catalog while the core reports a refresh in flight. The
  *  catalog rides an argument-less request/response channel (see core/ollama/register-ipc.ts), so
@@ -511,7 +512,7 @@ function OllamaManagerPanelForApi({
             <>
               <div className="om-tabs" role="tablist">
                 {(['health', 'models', 'store', 'chat'] as Tab[]).map((t) => (
-                  <button
+                  <Chip vocabularyMode="factual" selected={tab === t}
                     key={t}
                     role="tab"
                     aria-selected={tab === t}
@@ -519,7 +520,7 @@ function OllamaManagerPanelForApi({
                     onClick={() => setTab(t)}
                   >
                     {vocab(t === 'health' ? 'Health' : t === 'models' ? 'Installed' : t === 'store' ? 'Model store' : 'Chat')}
-                  </button>
+                  </Chip>
                 ))}
               </div>
               <Tabs
@@ -759,14 +760,14 @@ function ModelsTab({
           {models.map((m) => (
             <li key={m.name} className="om-model">
               <div className="om-model__row">
-                <button
+                <Button variant="outlined" size="small" vocabularyMode="factual"
                   className="om-model__name"
                   style={{ background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer', color: 'inherit' }}
                   onClick={() => setExpanded((e) => (e === m.name ? null : m.name))}
                   aria-expanded={expanded === m.name}
                 >
                   {m.name}
-                </button>
+                </Button>
                 <span className="om-model__meta">
                   {formatBytes(m.sizeBytes)}
                   {m.details.parameter_size && ` · ${m.details.parameter_size}`}
@@ -1307,13 +1308,13 @@ function ChatTab({
       {sessions.length > 0 && (
         <div className="om-chat__sessions">
           {sessions.map((s) => (
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               key={s.id}
               className={`om-chat__session${active?.id === s.id ? ' om-chat__session--active' : ''}`}
               onClick={() => void handleSelect(s.id)}
             >
               {s.title} ({s.messageCount})
-            </button>
+            </Button>
           ))}
         </div>
       )}

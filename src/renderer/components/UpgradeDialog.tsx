@@ -3,6 +3,7 @@ import { useEntitlement } from '../state/entitlement'
 import { useUpgradeGate } from '../state/upgradeGate'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { Button } from '@renderer/ui/md3'
 
 /**
  * Pro upgrade prompt shown when a free user triggers a gated feature. Closes automatically
@@ -24,12 +25,12 @@ export function UpgradeDialog() {
           {vocab('browser — Pro unlocks here automatically.')}
         </p>
         <div className="confirm__actions">
-          <button className="confirm__btn" onClick={hide} aria-label={vocab('Maybe later')}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" onClick={hide} aria-label={vocab('Maybe later')}>
             {vocab('Maybe later')}
-          </button>
-          <button className="confirm__btn primary" autoFocus onClick={() => void upgrade()} aria-label={mapOwnedSentence(vocab, [copy('Upgrade to Pro — '), fact('$10/mo')])}>
+          </Button>
+          <Button variant="filled" size="small" vocabularyMode="factual" className="confirm__btn primary" autoFocus onClick={() => void upgrade()} aria-label={mapOwnedSentence(vocab, [copy('Upgrade to Pro — '), fact('$10/mo')])}>
             {vocab('Upgrade to Pro')} — $10/mo
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

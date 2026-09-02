@@ -239,7 +239,7 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
               </p>
             ) : (
               visibleServers.map((s) => (
-                <button
+                <Button size="small" vocabularyMode="factual"
                   key={s.id}
                   style={ROW_STYLE}
                   title={`${s.user}@${s.host}`}
@@ -259,7 +259,7 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
                   <span style={{ opacity: 0.6, fontSize: 12 }}>
                     {s.user}@{s.host}
                   </span>
-                </button>
+                </Button>
               ))
             )}
           </div>
@@ -412,13 +412,13 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
             </p>
           ) : (
             dirs.map((d) => (
-              <button
+              <Button size="small" vocabularyMode="factual"
                 key={d}
                 style={{ ...ROW_STYLE, border: 'none', borderRadius: 0, background: 'transparent' }}
                 onClick={() => void list(`${path.replace(/\/+$/, '')}/${d}`)}
               >
                 <span>📁 {d}</span>
-              </button>
+              </Button>
             ))
           )}
         </div>

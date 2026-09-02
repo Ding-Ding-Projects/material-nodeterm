@@ -11,6 +11,7 @@ import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { openDestructiveGate } from '../../state/destructiveGate'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
+import { Chip } from '@renderer/ui/md3'
 
 const HTTP_PORTS = [8929, 8930, 8931, 8932] as const
 const SSH_PORTS = [2224, 2225, 2226, 2227] as const
@@ -114,14 +115,14 @@ export function GitLabHostingPanel({ nodeId, config, onConfigChange }: GitLabHos
         </div>
         {contextSearch.error ? <p className="gitlab-hosting-panel__error" role="alert">{contextSearch.error}</p> : null}
         <div className="gitlab-hosting-panel__choices" role="listbox" aria-label="Discovered Docker contexts">
-          {visibleContexts.map((item) => <button key={item.name} type="button" role="option" aria-selected={item.name === context} disabled={!item.available || busy} title={item.available ? item.endpointLabel : item.reason} className={item.name === context ? 'selected' : ''} onClick={() => void refresh(item.name)}>{item.name}<small>{item.kind}</small></button>)}
+          {visibleContexts.map((item) => <Chip vocabularyMode="factual" selected={item.name === context} key={item.name} role="option" aria-selected={item.name === context} disabled={!item.available || busy} title={item.available ? item.endpointLabel : item.reason} className={item.name === context ? 'selected' : ''} onClick={() => void refresh(item.name)}>{item.name}<small>{item.kind}</small></Chip>)}
         </div>
       </section>
 
       <section className="gitlab-hosting-panel__section" aria-label="GitLab edition and image">
         <h4>Edition and pinned image</h4>
         <div className="gitlab-hosting-panel__choices" role="group" aria-label="GitLab edition">
-          {GITLAB_HOSTING_IMAGES.map((candidate) => <button key={candidate.edition} type="button" className={candidate.edition === config.edition ? 'selected' : ''} onClick={() => onConfigChange({ ...config, edition: candidate.edition, image: candidate.ref })}>{candidate.label}</button>)}
+          {GITLAB_HOSTING_IMAGES.map((candidate) => <Button size="small" vocabularyMode="factual" key={candidate.edition} type="button" className={candidate.edition === config.edition ? 'selected' : ''} onClick={() => onConfigChange({ ...config, edition: candidate.edition, image: candidate.ref })}>{candidate.label}</Button>)}
         </div>
         <p className="gitlab-hosting-panel__note">{image.ref}</p>
         <p className="gitlab-hosting-panel__note">The image digest is pinned and the binding is loopback-only. No arbitrary image, command, or public port is accepted.</p>
@@ -130,8 +131,8 @@ export function GitLabHostingPanel({ nodeId, config, onConfigChange }: GitLabHos
       <section className="gitlab-hosting-panel__section" aria-label="Private binding ports">
         <h4>Private binding</h4>
         <p className="gitlab-hosting-panel__note">Only this computer can reach the published ports. Choose a free guided port pair.</p>
-        <div className="gitlab-hosting-panel__port-row"><span>HTTP</span>{HTTP_PORTS.map((port) => <button key={port} type="button" className={config.httpPort === port ? 'selected' : ''} onClick={() => onConfigChange({ ...config, httpPort: port })}>{port}</button>)}</div>
-        <div className="gitlab-hosting-panel__port-row"><span>SSH</span>{SSH_PORTS.map((port) => <button key={port} type="button" className={config.sshPort === port ? 'selected' : ''} onClick={() => onConfigChange({ ...config, sshPort: port })}>{port}</button>)}</div>
+        <div className="gitlab-hosting-panel__port-row"><span>HTTP</span>{HTTP_PORTS.map((port) => <Button size="small" vocabularyMode="factual" key={port} type="button" className={config.httpPort === port ? 'selected' : ''} onClick={() => onConfigChange({ ...config, httpPort: port })}>{port}</Button>)}</div>
+        <div className="gitlab-hosting-panel__port-row"><span>SSH</span>{SSH_PORTS.map((port) => <Button size="small" vocabularyMode="factual" key={port} type="button" className={config.sshPort === port ? 'selected' : ''} onClick={() => onConfigChange({ ...config, sshPort: port })}>{port}</Button>)}</div>
       </section>
 
       <section className="gitlab-hosting-panel__section" aria-label="Managed volumes">
@@ -155,7 +156,7 @@ export function GitLabHostingPanel({ nodeId, config, onConfigChange }: GitLabHos
         <h4>Backups</h4>
         <div className="gitlab-hosting-panel__search"><Input ref={backupSearchRef} type="search" value={backupSearch.value} onChange={(event) => backupSearch.setValue(event.target.value)} placeholder="Search backup files" aria-label="Search GitLab backups" /><AnchoredRegexBuilder search={backupSearch} fieldRef={backupSearchRef} label="Regex builder for GitLab backup search" /></div>
         {backupSearch.error ? <p className="gitlab-hosting-panel__error" role="alert">{backupSearch.error}</p> : null}
-        <div className="gitlab-hosting-panel__backup-list" role="listbox" aria-label="GitLab backups">{visibleBackups.map((backup) => <button key={backup.id} type="button" role="option" aria-selected={selectedBackup === backup.id} className={selectedBackup === backup.id ? 'selected' : ''} onClick={() => setSelectedBackup(backup.id)}><strong>{backup.filename}</strong><small>{formatBytes(backup.sizeBytes)}{backup.createdAt ? ` · ${new Date(backup.createdAt).toLocaleString()}` : ''}</small></button>)}</div>
+        <div className="gitlab-hosting-panel__backup-list" role="listbox" aria-label="GitLab backups">{visibleBackups.map((backup) => <Chip vocabularyMode="factual" selected={selectedBackup === backup.id} key={backup.id} role="option" aria-selected={selectedBackup === backup.id} className={selectedBackup === backup.id ? 'selected' : ''} onClick={() => setSelectedBackup(backup.id)}><strong>{backup.filename}</strong><small>{formatBytes(backup.sizeBytes)}{backup.createdAt ? ` · ${new Date(backup.createdAt).toLocaleString()}` : ''}</small></Chip>)}</div>
         {!visibleBackups.length ? <p className="gitlab-hosting-panel__note">No backups match this search. Backups appear after a completed backup operation.</p> : null}
       </section>
 
@@ -163,7 +164,7 @@ export function GitLabHostingPanel({ nodeId, config, onConfigChange }: GitLabHos
         <h4>Initial credential handoff</h4>
         <p className="gitlab-hosting-panel__note">GitLab publishes the initial root credential inside the container. It is fetched once into this UI, never logged, persisted, exported, or included in progress output.</p>
         <Button disabled={!status?.ready || !!credential} onClick={async () => { try { setCredential(await manager.handoffInitialCredential(context, nodeId)) } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) } }}>Hand off initial credential</Button>
-        {credential ? <div className="gitlab-hosting-panel__credential" role="status"><strong>{credential.username}</strong><input type="password" readOnly value={credential.password} aria-label="Initial root password, shown once" /><p>Shown once for this session. Expires {new Date(credential.expiresAt).toLocaleTimeString()}.</p><Button onClick={() => setCredential(null)}>Hide credential</Button></div> : null}
+        {credential ? <div className="gitlab-hosting-panel__credential" role="status"><strong>{credential.username}</strong><Input vocabularyMode="factual" type="password" readOnly value={credential.password} aria-label="Initial root password, shown once" /><p>Shown once for this session. Expires {new Date(credential.expiresAt).toLocaleTimeString()}.</p><Button onClick={() => setCredential(null)}>Hide credential</Button></div> : null}
       </section>
 
       {error ? <p className="gitlab-hosting-panel__error" role="alert">{error}</p> : null}

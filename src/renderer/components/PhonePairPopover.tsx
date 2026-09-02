@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ServerDeploymentStage } from '@shared/types'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 type DeploymentState = 'starting' | 'ready' | 'docker-restart-required' | 'failed'
 
@@ -49,7 +50,7 @@ function CopyButton({ value, label }: { value: string; label: string }): React.J
     }
   }
   return (
-    <button
+    <Button variant="outlined" size="small" vocabularyMode="factual"
       type="button"
       className="phone-pair__copy"
       onClick={() => void copy()}
@@ -57,7 +58,7 @@ function CopyButton({ value, label }: { value: string; label: string }): React.J
     >
       <span aria-hidden="true">{copied ? '✓' : '⧉'}</span>
       <span className="sr-only">{copied ? `${visibleLabel} ${vocab('copied')}` : `${vocab('Copy')} ${visibleLabel.toLowerCase()}`}</span>
-    </button>
+    </Button>
   )
 }
 
@@ -150,9 +151,9 @@ export function PhonePairPopover({
               </div>
             ) : null}
             <div className="phone-pair__hint">{vocab("Enter the current six-digit access code in the site's password field. It changes every 30 seconds.")}</div>
-            <button className="phone-pair__btn" onClick={() => void window.nodeTerminal.shell.openExternal(url)}>
+            <Button variant="outlined" size="small" vocabularyMode="factual" className="phone-pair__btn" onClick={() => void window.nodeTerminal.shell.openExternal(url)}>
               {vocab('Open Server Edition')}
-            </button>
+            </Button>
             <div className="phone-pair__row">
               <div className="phone-pair__hint">{url}</div>
               <CopyButton value={url} label="Server address" />
@@ -161,17 +162,17 @@ export function PhonePairPopover({
         ) : (
           <>
             <div className="phone-pair__warn">{error === 'Server Edition could not be started.' ? vocab(error) : error}</div>
-            <button className="phone-pair__btn" onClick={() => void start()}>
+            <Button variant="outlined" size="small" vocabularyMode="factual" className="phone-pair__btn" onClick={() => void start()}>
               {state === 'docker-restart-required' ? vocab('Check Docker and continue') : vocab('Try deployment again')}
-            </button>
+            </Button>
           </>
         )}
 
         <div className="phone-pair__divider" />
         <div className="phone-pair__hint">{vocab('No Pro plan, paid seat, subscription, or purchase is required.')}</div>
-        <button className="phone-pair__link phone-pair__footer" onClick={onOpenSettings}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" className="phone-pair__link phone-pair__footer" onClick={onOpenSettings}>
           {vocab('All device settings…')}
-        </button>
+        </Button>
       </div>
     </>,
     document.body

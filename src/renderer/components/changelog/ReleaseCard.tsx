@@ -5,6 +5,7 @@ import type { ChangelogRelease } from '@shared/changelog'
 import { renderMarkdown } from '../../lib/markdown'
 import { Checkbox } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 /**
  * A small, deterministic color class per category — cycled by NAME (a stable hash), not by
@@ -56,7 +57,7 @@ export function ReleaseCard({ release, selected, onToggleSelect }: ReleaseCardPr
         {dateLabel && <span className="md3-changelog-date">{dateLabel}</span>}
         <div className="md3-changelog-commits">
           {release.commits.map((c) => (
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               key={c.sha}
               type="button"
               className="md3-changelog-commit"
@@ -64,7 +65,7 @@ export function ReleaseCard({ release, selected, onToggleSelect }: ReleaseCardPr
               onClick={() => window.nodeTerminal.shell.openExternal(c.url)}
             >
               {c.label.slice(0, 8)}
-            </button>
+            </Button>
           ))}
           {release.commits.length === 0 && (
             <span className="md3-changelog-commit md3-changelog-commit--none" title={vocab('No commit link recorded for this release')}>

@@ -7,6 +7,7 @@ import { openDestructiveGate } from '../../state/destructiveGate'
 import { useI18n } from '../../lib/i18n'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
+import { Checkbox } from '@renderer/ui/md3'
 
 function requestId(): string {
   return `cdk-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
@@ -208,7 +209,7 @@ export function CdkManagerPanel({ api = window.nodeTerminal, awsBinding, onInten
         </ul> : null}
         {review.dependencyNames.length ? <p>{copy('dependencies', 'Declared dependencies')}: {review.dependencyNames.join(', ')}</p> : null}
         {!review.reviewed ? <>
-          <label className="cdk-manager__check"><input type="checkbox" checked={trustAcknowledged} onChange={(event) => setTrustAcknowledged(event.target.checked)} /> {copy('trustAck', 'I reviewed the app command and allow this local project code to run.')}</label>
+          <label className="cdk-manager__check"><Checkbox vocabularyMode="factual" checked={trustAcknowledged} onChange={(event) => setTrustAcknowledged(event.target.checked)} /> {copy('trustAck', 'I reviewed the app command and allow this local project code to run.')}</label>
           <Button disabled={!trustAcknowledged || !!busy} onClick={approve}>{busy === 'trust' ? copy('approving', 'Approving…') : copy('approve', 'Approve trust review')}</Button>
         </> : <p className="cdk-manager__approved" role="status">{copy('approved', 'Trust approved for this app session.')}</p>}
       </section> : null}
@@ -224,7 +225,7 @@ export function CdkManagerPanel({ api = window.nodeTerminal, awsBinding, onInten
           {stackSearch.error ? <p className="cdk-manager__error" role="alert">{stackSearch.error}</p> : null}
           <p className="cdk-manager__count" role="status">{visibleStacks.length} {copy('stacksShown', 'stacks shown')} · {selectedStacks.length ? `${selectedStacks.length} ${copy('selected', 'selected')}` : copy('allSelected', 'all synthesized stacks selected')}</p>
           <div className="cdk-manager__stacks" role="group" aria-label={copy('stackList', 'Synthesized stacks')}>
-            {visibleStacks.map((stack) => <label key={stack}><input type="checkbox" checked={selectedStacks.length === 0 || selectedStacks.includes(stack)} onChange={(event) => setSelectedStacks((current) => {
+            {visibleStacks.map((stack) => <label key={stack}><Checkbox vocabularyMode="factual" checked={selectedStacks.length === 0 || selectedStacks.includes(stack)} onChange={(event) => setSelectedStacks((current) => {
               const next = current.length === 0 ? stacks : current
               return event.target.checked ? [...new Set([...next, stack])] : next.filter((item) => item !== stack)
             })} /> {stack}</label>)}
@@ -237,7 +238,7 @@ export function CdkManagerPanel({ api = window.nodeTerminal, awsBinding, onInten
         <div className="cdk-manager__card-header"><h4 id="cdk-diff-heading">{copy('diffHeading', 'Infrastructure diff review')}</h4><span>{diff.requiresConfirmation ? copy('destructiveChanges', 'Removal or replacement changes found') : copy('noDestructiveChanges', 'No removal or replacement parsed')}</span></div>
         <p>{copy('diffHelp', 'Read the complete CDK diff. Deployment is unavailable until you acknowledge this exact review.')}</p>
         <pre className="cdk-manager__output" tabIndex={0} aria-label={copy('diffOutput', 'CDK diff output')}>{diff.text || copy('emptyDiff', 'CDK returned an empty diff.')}</pre>
-        <label className="cdk-manager__check"><input type="checkbox" checked={diffAcknowledged} onChange={(event) => setDiffAcknowledged(event.target.checked)} /> {copy('diffAck', 'I reviewed this exact diff and its affected stacks.')}</label>
+        <label className="cdk-manager__check"><Checkbox vocabularyMode="factual" checked={diffAcknowledged} onChange={(event) => setDiffAcknowledged(event.target.checked)} /> {copy('diffAck', 'I reviewed this exact diff and its affected stacks.')}</label>
         <Button disabled={!diffAcknowledged || !!busy} onClick={deploy}>{busy === 'deploy' ? copy('deploying', 'Deploying…') : copy('deploy', 'Deploy reviewed diff')}</Button>
       </section> : null}
 

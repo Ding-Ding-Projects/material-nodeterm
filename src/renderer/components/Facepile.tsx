@@ -2,6 +2,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useProjects } from '../state/projects'
 import { useActiveSessionPresence } from '../session/session'
 import { faceClickTarget, facepileEntries, type FacepileFocus } from '../lib/facepile'
+import { Button } from '@renderer/ui/md3'
 
 /**
  * Who is connected, top-right, in their colors. THE ONE SURFACE THAT SHOWS OFF-PROJECT PEERS:
@@ -61,7 +62,7 @@ export function Facepile({
   return (
     <div className="presence-facepile">
       {entries.map((e) => (
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           key={e.clientId}
           type="button"
           className={`presence-face${e.away ? ' presence-face--away' : ''}`}
@@ -92,7 +93,7 @@ export function Facepile({
           {e.away && e.projectName ? (
             <span className="presence-face__where">{e.projectName}</span>
           ) : null}
-        </button>
+        </Button>
       ))}
     </div>
   )

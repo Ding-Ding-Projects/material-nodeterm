@@ -6,6 +6,8 @@ import { useDialogStack } from '../dialog-stack'
 import { IconGroup } from '../icons'
 import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '@renderer/lib/personalVocabulary/ownedCopy'
+import { Button, Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 export interface GroupPickerOption {
   id: string
@@ -98,7 +100,7 @@ export function GroupPickerDialog({ count, groups, onPick, onCancel }: GroupPick
         </div>
         <div className="menu-filter group-picker__search">
           <div className="menu-filter__row">
-            <input
+            <Input vocabularyMode="factual"
               ref={inputRef}
               className="menu-filter__input"
               value={search.value}
@@ -124,9 +126,9 @@ export function GroupPickerDialog({ count, groups, onPick, onCancel }: GroupPick
             </div>
           ) : (
             filtered.map((g, idx) => (
-              <button
+              <Chip vocabularyMode="factual" selected={idx === activeIndex}
                 key={g.id}
-                type="button"
+               
                 data-idx={idx}
                 role="option"
                 aria-selected={idx === activeIndex}
@@ -141,14 +143,14 @@ export function GroupPickerDialog({ count, groups, onPick, onCancel }: GroupPick
                 <span className="group-picker__count">
                   {mapOwnedSentence(vocab, [fact(String(g.memberCount)), copy(g.memberCount === 1 ? ' node' : ' nodes')])}
                 </span>
-              </button>
+              </Chip>
             ))
           )}
         </div>
         <div className="group-picker__footer">
-          <button type="button" className="group-picker__cancel" onClick={onCancel}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="group-picker__cancel" onClick={onCancel}>
             {vocab('Cancel')}
-          </button>
+          </Button>
         </div>
       </div>
     </>,

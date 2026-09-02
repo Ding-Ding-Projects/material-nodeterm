@@ -19,6 +19,8 @@ import type { LadderAnswer } from '@shared/unlock-ladder-types'
 import { activeSessionApi } from '../session/session'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 export interface ArchiveUnlockRequest {
   /** The file being opened. Shown so the user knows WHICH protected file is asking. */
@@ -174,14 +176,14 @@ function ArchiveUnlockDialog({
                 onDone={() => setLadderOpen(false)}
               />
             ) : request.ladderAvailable ? (
-              <button className="confirm__btn" onClick={() => setLadderOpen(true)}>
+              <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" onClick={() => setLadderOpen(true)}>
                 {vocab('Play your way out of the wait')}
-              </button>
+              </Button>
             ) : null}
           </>
         ) : (
           <>
-            <input
+            <Input vocabularyMode="factual"
               className="confirm__input"
               type="password"
               autoComplete="off"
@@ -210,13 +212,13 @@ function ArchiveUnlockDialog({
         )}
 
         <div className="confirm__actions">
-          <button className="confirm__btn" onClick={onCancel}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" onClick={onCancel}>
             {vocab('Cancel')}
-          </button>
+          </Button>
           {!locked && (
-            <button className="confirm__btn primary" onClick={() => onSubmit(value)}>
+            <Button variant="filled" size="small" vocabularyMode="factual" className="confirm__btn primary" onClick={() => onSubmit(value)}>
               {vocab('Open')}
-            </button>
+            </Button>
           )}
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { MinecraftServerStatus } from '@shared/minecraft'
 import { useSession } from '../session/session'
+import { Button } from '@renderer/ui/md3'
 
 // A running Minecraft server's connect address, shown over the canvas the same way TmuxBanner and
 // PtyPressureBanner are: its own component subscribing for itself, so Canvas.tsx (already a hot
@@ -41,7 +42,7 @@ function AddressChip({ label, address }: { label: string; address: string }): Re
   }
 
   return (
-    <button
+    <Button variant="outlined" size="small" vocabularyMode="factual"
       type="button"
       className="mc-connect-chip nodrag"
       onClick={() => void copy()}
@@ -53,7 +54,7 @@ function AddressChip({ label, address }: { label: string; address: string }): Re
         {copied ? '✓' : '⧉'}
       </span>
       <span className="sr-only">{copied ? 'Copied' : `Copy ${address} to clipboard`}</span>
-    </button>
+    </Button>
   )
 }
 

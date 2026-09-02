@@ -5,6 +5,7 @@ import type { GitFileChange } from '@shared/types'
 import { GitHistoryRow } from './GitHistoryRow'
 import { GitHistoryCommitFiles, type GitHistoryCommitFilesState } from './GitHistoryCommitFiles'
 import { MaterialSymbol } from '../MaterialSymbol'
+import { Button } from '@renderer/ui/md3'
 
 export function GitHistoryPanel({
   result,
@@ -79,7 +80,7 @@ export function GitHistoryPanel({
   return (
     <section className="scm-section md3-git-history">
       <div className="scm-history__head">
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           className="md3-git-history__toggle"
           onClick={() => setCollapsed((c) => !c)}
           style={{ flex: 1, textAlign: 'left' }}
@@ -91,15 +92,15 @@ export function GitHistoryPanel({
             size={15}
           />
           COMMITS {result && <span className="scm-history__count">{count}{result.hasMore ? '+' : ''}</span>}
-        </button>
-        <button
+        </Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           className="md3-git-history__refresh"
           title="Refresh commits"
           aria-label="Refresh commits"
           onClick={onRefresh}
         >
           <MaterialSymbol name="refresh" size={16} className={loading ? 'md3-spin' : undefined} />
-        </button>
+        </Button>
       </div>
       {!collapsed && error && !result && <div className="scm-history__msg md3-history-error">{error}</div>}
       {!collapsed && !result && !error && <div className="scm-history__msg">Loading graph…</div>}

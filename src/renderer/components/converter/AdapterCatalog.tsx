@@ -10,6 +10,7 @@ import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyT
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
+import { Button, Chip } from '@renderer/ui/md3'
 
 export interface AdapterCatalogProps {
   catalog: ConverterAdapterDescriptor[]
@@ -82,11 +83,11 @@ function AdapterCategory({
   const bundledCount = rows.filter((row) => row.available).length
   return (
     <section className="cv-cat">
-      <button className="cv-cat__head" aria-expanded={open} onClick={onToggle}>
+      <Button variant="outlined" size="small" vocabularyMode="factual" className="cv-cat__head" aria-expanded={open} onClick={onToggle}>
         <span className="cv-cat__chevron" aria-hidden>{open ? '▾' : '▸'}</span>
         <span className="cv-cat__label">{categoryLabel}</span>
         <span className="cv-cat__count">{mapOwnedSentence(vocab, [fact(`${bundledCount}/${rows.length}`), copy(' available')])}</span>
-      </button>
+      </Button>
       {open && (
         <div className="cv-cat__body">
           <div className="cv-cat__search-wrap">
@@ -112,7 +113,7 @@ function AdapterCategory({
               const isSelected = selectedId === row.id
               return (
                 <li key={row.id}>
-                  <button
+                  <Chip vocabularyMode="factual" selected={isSelected}
                     className={`cv-row${row.available ? '' : ' cv-row--disabled'}${isSelected ? ' cv-row--selected' : ''}${isSuggested ? ' cv-row--suggested' : ''}`}
                     disabled={!row.available}
                     aria-pressed={isSelected}
@@ -127,7 +128,7 @@ function AdapterCategory({
                     {row.lossy && row.available && <span className="cv-row__badge cv-row__badge--lossy">{vocab('lossy')}</span>}
                     {isSuggested && row.available && <span className="cv-row__badge cv-row__badge--suggested">{vocab('detected')}</span>}
                     {!row.available && <span className="cv-row__reason">{row.unavailableReason}</span>}
-                  </button>
+                  </Chip>
                 </li>
               )
             })}

@@ -16,6 +16,8 @@ import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 import { openDestructiveGate } from '../../state/destructiveGate'
 import { useI18n } from '../../lib/i18n'
+import { Chip } from '@renderer/ui/md3'
+import { Select } from '@renderer/ui/Select'
 
 const OPERATIONS: readonly { id: NextcloudManagedOperation; label: string; description: string }[] = [
   { id: 'deploy', label: 'Deploy managed Nextcloud', description: 'Create the PostgreSQL, Redis, and web services on a private bridge.' },
@@ -199,10 +201,10 @@ export function NextcloudManagedPanel({ nodeId, intent, binding, onIntentChange,
 
       <label className="service-node__field" htmlFor={`${nodeId}-nextcloud-context`}>
         <span className="service-node__field-label">{copy('context', 'Docker context')}</span>
-        <select id={`${nodeId}-nextcloud-context`} className="service-node__input nodrag" value={context} disabled={busy} onChange={(event) => setContext(event.target.value)}>
+        <Select vocabularyMode="factual" id={`${nodeId}-nextcloud-context`} className="service-node__input nodrag" value={context} disabled={busy} onChange={(event) => setContext(event.target.value)}>
           <option value="">{copy('chooseContext', 'Choose a verified context')}</option>
           {contexts.map((item) => <option key={item.name} value={item.name} disabled={!item.available}>{item.name} · {item.endpointLabel}</option>)}
-        </select>
+        </Select>
       </label>
 
       <label className="service-node__field" htmlFor={`${nodeId}-nextcloud-project`}>
@@ -232,11 +234,11 @@ export function NextcloudManagedPanel({ nodeId, intent, binding, onIntentChange,
 
       <section aria-label="Managed operations">
         <div className="docker-manager__search"><Input ref={operationSearchRef} type="search" value={operationSearch.value} onChange={(event) => operationSearch.setValue(event.target.value)} placeholder={copy('searchOperations', 'Search managed operations')} /><AnchoredRegexBuilder search={operationSearch} fieldRef={operationSearchRef} label={copy('regexOperations', 'Regex builder for managed operation search')} /></div>
-        <div className="docker-manager__pills" role="listbox" aria-label={copy('operations', 'Managed operation choices')}>{visibleOperations.map((item) => <button key={item.id} role="option" aria-selected={operation === item.id} className={operation === item.id ? 'selected' : ''} disabled={busy} title={item.description} onClick={() => setOperation(item.id)}>{copy(`operation.${item.id}`, item.label)}</button>)}</div>
+        <div className="docker-manager__pills" role="listbox" aria-label={copy('operations', 'Managed operation choices')}>{visibleOperations.map((item) => <Chip vocabularyMode="factual" selected={operation === item.id} key={item.id} role="option" aria-selected={operation === item.id} className={operation === item.id ? 'selected' : ''} disabled={busy} title={item.description} onClick={() => setOperation(item.id)}>{copy(`operation.${item.id}`, item.label)}</Chip>)}</div>
         <p className="service-node__note">{copy('sequence', 'Sequence')}: {NEXTCLOUD_MANAGED_OPERATION_STEPS[chosenOperation.id].join(' → ')}. {copy('sequenceHint', 'Every step is fixed by the profile and can be cancelled while the host reports progress.')}</p>
         {(operation === 'restore' || operation === 'rollback') && <>
           <div className="docker-manager__search"><Input ref={backupSearchRef} type="search" value={backupSearch.value} onChange={(event) => backupSearch.setValue(event.target.value)} placeholder={copy('searchSnapshots', 'Search verified snapshots')} /><AnchoredRegexBuilder search={backupSearch} fieldRef={backupSearchRef} label={copy('regexSnapshots', 'Regex builder for snapshot search')} /></div>
-          <div className="docker-manager__pills" role="listbox" aria-label={copy('snapshots', 'Verified snapshots')}>{visibleSnapshots.map((item) => <button key={item} role="option" aria-selected={snapshotId === item} className={snapshotId === item ? 'selected' : ''} onClick={() => setSnapshotId(item)}>{item}</button>)}</div>
+          <div className="docker-manager__pills" role="listbox" aria-label={copy('snapshots', 'Verified snapshots')}>{visibleSnapshots.map((item) => <Chip vocabularyMode="factual" selected={snapshotId === item} key={item} role="option" aria-selected={snapshotId === item} className={snapshotId === item ? 'selected' : ''} onClick={() => setSnapshotId(item)}>{item}</Chip>)}</div>
           {!visibleSnapshots.length && <p className="service-node__note">{copy('noSnapshots', 'No verified snapshots are available yet. Create a backup first.')}</p>}
         </>}
         <Button disabled={busy || !context || !dataDirectory || !backupDirectory || ((operation === 'restore' || operation === 'rollback') && !snapshotId)} title={busy ? copy('busy', 'An operation is already running.') : (!context || !dataDirectory || !backupDirectory) ? copy('missingBinding', 'Choose a Docker context and both local folders first.') : ((operation === 'restore' || operation === 'rollback') && !snapshotId) ? copy('missingSnapshot', 'Choose a verified snapshot first.') : chosenOperation.description} onClick={() => requestOperation(operation)}>{busy ? copy('working', 'Working…') : chosenOperation.label}</Button>

@@ -13,6 +13,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import type { DirEntry } from '../../shared/types'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { formatHostMessage, hostText, type HostMessagePart } from '../lib/personalVocabulary/hostMessage'
+import { Button } from '@renderer/ui/md3'
 
 export type PickerMode = 'folder' | 'file'
 
@@ -119,14 +120,14 @@ function DirectoryPicker({ mode, startDir, list, onDone }: PickerProps): React.R
         aria-label={vocab(mode === 'folder' ? 'Choose a folder' : 'Choose a file')}
       >
         <div className="dir-picker__head">
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             className="dir-picker__up"
             onClick={() => parent && setDir(parent)}
             disabled={parent === null}
             title={vocab('Up one level')}
           >
             ↑
-          </button>
+          </Button>
           <span className="dir-picker__path" title={dir}>
             {dir}
           </span>
@@ -143,25 +144,25 @@ function DirectoryPicker({ mode, startDir, list, onDone }: PickerProps): React.R
           {!loading &&
             !error &&
             rows.map((row) => (
-              <button
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 key={row.path}
                 className={`dir-picker__row${row.dir ? ' is-dir' : ''}`}
                 onClick={() => openRow(row)}
               >
                 <span className="dir-picker__icon" aria-hidden="true">{row.dir ? '📁' : '📄'}</span>
                 <span className="dir-picker__name">{row.name}</span>
-              </button>
+              </Button>
             ))}
         </div>
 
         <div className="confirm__actions">
-          <button className="confirm__btn" onClick={() => onDone(null)}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" onClick={() => onDone(null)}>
             {vocab('Cancel')}
-          </button>
+          </Button>
           {mode === 'folder' && (
-            <button className="confirm__btn primary" onClick={() => onDone(stripTrailingSlash(dir))}>
+            <Button variant="filled" size="small" vocabularyMode="factual" className="confirm__btn primary" onClick={() => onDone(stripTrailingSlash(dir))}>
               {vocab('Use this folder')}
-            </button>
+            </Button>
           )}
         </div>
       </div>

@@ -4,6 +4,8 @@ import { useSession } from '../../session/session'
 import { Checkbox } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 /** True while the server is running — server.properties is only read at startup, so editing it
  *  live would silently do nothing until a restart. The manager itself refuses the write for the
@@ -63,7 +65,7 @@ function FieldControl({
     return (
       <label className="service-node__field" htmlFor={id}>
         <span className="service-node__field-label">{spec.label}</span>
-        <input
+        <Input vocabularyMode="factual"
           id={id}
           type="number"
           className="service-node__input nodrag"
@@ -79,7 +81,7 @@ function FieldControl({
   return (
     <label className="service-node__field" htmlFor={id}>
       <span className="service-node__field-label">{spec.label}</span>
-      <input
+      <Input vocabularyMode="factual"
         id={id}
         type="text"
         className="service-node__input nodrag"
@@ -175,17 +177,17 @@ export function MinecraftPropertiesEditor({ nodeId, phase }: { nodeId: string; p
         ))}
       </div>
       <div className="mc-row">
-        <button
+        <Button variant="filled" size="small" vocabularyMode="factual"
           type="button"
           className="mc-button mc-button--primary nodrag"
           disabled={!dirty || saving || live}
           onClick={() => void handleSave()}
         >
           Save server.properties
-        </button>
-        <button type="button" className="mc-button nodrag" disabled={saving} onClick={load}>
+        </Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual" className="mc-button nodrag" disabled={saving} onClick={load}>
           Reload
-        </button>
+        </Button>
         {savedAt !== null && <span className="mc-note--saved">Saved.</span>}
       </div>
       <p className="service-node__note">

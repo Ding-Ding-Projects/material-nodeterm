@@ -14,6 +14,8 @@ import {
 } from '@shared/aws-identity'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
+import { Button, Checkbox, Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 const EMPTY_DISCOVERY: AwsIdentityDiscovery = {
   state: 'unavailable',
@@ -58,7 +60,7 @@ function SearchableChoice({
         <span>{filtered.length} shown</span>
       </div>
       <div className="aws-identity__search-row">
-        <input
+        <Input vocabularyMode="factual"
           ref={inputRef}
           className="aws-identity__input nodrag"
           value={search.value}
@@ -72,16 +74,16 @@ function SearchableChoice({
       <div className="aws-identity__choices" role="listbox" aria-label={label}>
         {filtered.length === 0 && <p className="aws-identity__empty">{empty}</p>}
         {filtered.map((value) => (
-          <button
+          <Chip vocabularyMode="factual" selected={selected === value}
             key={value}
-            type="button"
+           
             role="option"
             aria-selected={selected === value}
             className={selected === value ? 'is-selected' : ''}
             onClick={() => onPick(value)}
           >
             {render?.(value) ?? value}
-          </button>
+          </Chip>
         ))}
       </div>
     </section>
@@ -237,9 +239,9 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
           <h3>AWS identity</h3>
           <p>Profiles and non-secret settings stay on this computer. Credentials and sessions remain in AWS local stores.</p>
         </div>
-        <button type="button" disabled={loading} title={loading ? 'A profile scan is already running.' : undefined} onClick={() => void refresh()}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" disabled={loading} title={loading ? 'A profile scan is already running.' : undefined} onClick={() => void refresh()}>
           {loading ? 'Scanning…' : 'Rescan profiles'}
-        </button>
+        </Button>
       </header>
 
       {discovery.reason && <p className={`aws-identity__notice is-${discovery.state}`}>{discovery.reason}</p>}
@@ -306,8 +308,7 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
             <fieldset className="aws-identity__requirements">
               <legend>Portable identity requirements</legend>
               <label title={plan.profile?.mfaConfigured ? undefined : 'Enable MFA in the selected profile before requiring it here.'}>
-                <input
-                  type="checkbox"
+                <Checkbox vocabularyMode="factual"
                   checked={intent?.requireMfa ?? plan.mfaRequired}
                   disabled={!plan.profile?.mfaConfigured}
                   onChange={(event) => updateIntent({ requireMfa: event.target.checked })}
@@ -315,8 +316,7 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
                 Require MFA when the profile asks for it
               </label>
               <label title={plan.profile?.roleConfigured ? undefined : 'Choose a profile with role_arn before requiring role assumption.'}>
-                <input
-                  type="checkbox"
+                <Checkbox vocabularyMode="factual"
                   checked={intent?.requireRole ?? !!plan.roleArgs}
                   disabled={!plan.profile?.roleConfigured}
                   onChange={(event) => updateIntent({ requireRole: event.target.checked })}
@@ -325,39 +325,39 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
               </label>
             </fieldset>
             <div className="aws-identity__actions" aria-label="AWS identity actions">
-              <button
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 type="button"
                 disabled={operation?.state === 'queued' || operation?.state === 'running' || plan.state !== 'ready'}
                 title={plan.state !== 'ready' ? (plan.reason ?? 'Choose a valid AWS profile first.') : 'Verify the selected profile without returning session credentials.'}
                 onClick={() => void startAction('verify')}
               >
                 Verify identity
-              </button>
+              </Button>
               {plan.signInArgs && (
-                <button
+                <Button variant="outlined" size="small" vocabularyMode="factual"
                   type="button"
                   disabled={operation?.state === 'queued' || operation?.state === 'running'}
                   title="Run the fixed AWS IAM Identity Center sign-in action. Session data stays in AWS local storage."
                   onClick={() => void startAction('sso-login')}
                 >
                   Sign in with IAM Identity Center
-                </button>
+                </Button>
               )}
               {plan.roleArgs && (
-                <button
+                <Button variant="outlined" size="small" vocabularyMode="factual"
                   type="button"
                   disabled={operation?.state === 'queued' || operation?.state === 'running'}
                   title="Verify the selected role profile through caller identity. Temporary credentials are never returned."
                   onClick={() => void startAction('assume-role')}
                 >
                   Verify assumed role
-                </button>
+                </Button>
               )}
               {operation && (
                 <div className={`aws-identity__operation is-${operation.state}`} role="status" aria-live="polite">
                   <span>{operation.message}</span>
                   {(operation.state === 'queued' || operation.state === 'running') && (
-                    <button type="button" onClick={() => void window.nodeTerminal.awsIdentity.cancel(operation.operationId)}>Cancel</button>
+                    <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void window.nodeTerminal.awsIdentity.cancel(operation.operationId)}>Cancel</Button>
                   )}
                   {operation.identity && (
                     <small>
@@ -385,7 +385,7 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
             <div className="aws-identity__endpoint-row">
               <label>
                 <span>Endpoint URL for {endpointService}</span>
-                <input
+                <Input vocabularyMode="factual"
                   className="aws-identity__input nodrag"
                   value={endpointDraft}
                   onChange={(event) => {
@@ -396,13 +396,13 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
                   aria-invalid={endpointError !== null}
                 />
               </label>
-              <button type="button" disabled={endpointDraft.trim().length === 0} title={endpointDraft.trim().length === 0 ? 'Enter an endpoint URL first.' : undefined} onClick={addEndpoint}>
+              <Button variant="outlined" size="small" vocabularyMode="factual" disabled={endpointDraft.trim().length === 0} title={endpointDraft.trim().length === 0 ? 'Enter an endpoint URL first.' : undefined} onClick={addEndpoint}>
                 Save endpoint
-              </button>
+              </Button>
             </div>
             {endpointError && <p className="aws-identity__error">{endpointError}</p>}
             <div className="aws-identity__search-row">
-              <input
+              <Input vocabularyMode="factual"
                 ref={endpointSearchRef}
                 className="aws-identity__input nodrag"
                 value={endpointSearch.value}
@@ -418,9 +418,9 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
               {visibleEndpoints.map((endpoint) => (
                 <div key={endpoint.service}>
                   <span><strong>{endpoint.service}</strong><small>{endpoint.url}</small></span>
-                  <button type="button" onClick={() => saveBinding({ ...binding, endpoints: binding.endpoints.filter((candidate) => candidate.service !== endpoint.service), verifiedAt: Date.now() })}>
+                  <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => saveBinding({ ...binding, endpoints: binding.endpoints.filter((candidate) => candidate.service !== endpoint.service), verifiedAt: Date.now() })}>
                     Remove
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -436,9 +436,9 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
             )}
           </section>
 
-          <button type="button" className="aws-identity__unbind" onClick={() => onChange(undefined, intent)}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="aws-identity__unbind" onClick={() => onChange(undefined, intent)}>
             Leave unbound on this computer
-          </button>
+          </Button>
         </>
       )}
     </div>

@@ -12,6 +12,7 @@ import { FORMAT_INFO, formatsForKind } from '@shared/export'
 import { Select } from '@renderer/ui/Select'
 import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '@renderer/lib/personalVocabulary/ownedCopy'
+import { Button } from '@renderer/ui/md3'
 
 export interface ExportMenuProps {
   kind: ExportKind
@@ -70,14 +71,14 @@ export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element
 
   return (
     <div className="export-menu md3-export-menu">
-      <button
+      <Button variant="outlined" size="small" vocabularyMode="factual"
         type="button"
         className="export-menu__toggle"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
         {vocab('Export…')}
-      </button>
+      </Button>
       {open && (
         <div
           className="export-menu__panel"
@@ -125,18 +126,18 @@ export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element
           </div>
 
           <div className="export-menu__buttons">
-            <button type="button" className="export-menu__save" disabled={saving} onClick={() => void save()}>
+            <Button variant="outlined" size="small" vocabularyMode="factual" className="export-menu__save" disabled={saving} onClick={() => void save()}>
               {saving ? vocab('Saving…') : vocab('Save')}
-            </button>
+            </Button>
             {saveState.status === 'saved' && saveState.path && (
-              <button
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 type="button"
                 className="export-menu__open-vscode"
                 disabled={opening}
                 onClick={() => void openInVsCode(saveState.path!)}
               >
                 {opening ? vocab('Opening…') : vocab('Open in Visual Studio Code')}
-              </button>
+              </Button>
             )}
           </div>
 

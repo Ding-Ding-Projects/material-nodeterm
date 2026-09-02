@@ -8,6 +8,7 @@ import { useActiveSessionApi } from '../session/session'
 import type { PortableBindingState } from '../../shared/types'
 import type { PortableBindingAction } from '../../shared/types'
 import type { ProviderAccountSummary, ProviderDescriptor, ProviderResourceSummary } from '../../shared/provider-services'
+import { Chip } from '@renderer/ui/md3'
 
 const bindingActionLabel = (action: PortableBindingAction): string => ({
   configure: 'Configure this node',
@@ -128,9 +129,9 @@ export function PortableBindingWizard({ nodeId, featureId, displayLabel, anchorR
       {search.error && <p role="alert">{search.error}</p>}
       <div className="md3-portable-binding-actions" role="listbox" aria-label="Binding choices">
         {visible.map((state) => (
-          <button
+          <Chip vocabularyMode="factual" selected={state.action === selected}
             key={state.action}
-            type="button"
+           
             role="option"
             aria-selected={state.action === selected}
             disabled={!state.enabled || busy}
@@ -139,7 +140,7 @@ export function PortableBindingWizard({ nodeId, featureId, displayLabel, anchorR
           >
             <span>{bindingActionLabel(state.action)}</span>
             {!state.enabled && <small>{state.reason}</small>}
-          </button>
+          </Chip>
         ))}
       </div>
       {isProviderBinding && (
@@ -151,12 +152,12 @@ export function PortableBindingWizard({ nodeId, featureId, displayLabel, anchorR
           </div>
           {accountSearch.error && <p role="alert">{accountSearch.error}</p>}
           <div role="listbox" aria-label="Connected provider accounts" className="md3-portable-binding-actions">
-            {visibleAccounts.map((account) => <button key={account.id} type="button" role="option" aria-selected={accountId === account.id} disabled={busy || account.state !== 'connected'} title={account.reason ?? account.displayName} onClick={() => setAccountId(account.id)}><span>{account.providerLabel}: {account.displayName}</span>{account.state !== 'connected' && <small>{account.reason ?? 'This account needs attention.'}</small>}</button>)}
+            {visibleAccounts.map((account) => <Chip vocabularyMode="factual" selected={accountId === account.id} key={account.id} role="option" aria-selected={accountId === account.id} disabled={busy || account.state !== 'connected'} title={account.reason ?? account.displayName} onClick={() => setAccountId(account.id)}><span>{account.providerLabel}: {account.displayName}</span>{account.state !== 'connected' && <small>{account.reason ?? 'This account needs attention.'}</small>}</Chip>)}
             {visibleAccounts.length === 0 && <p>No connected account matches. Choose an available provider below.</p>}
           </div>
           <h3>Connect a provider</h3>
           <div role="list" className="md3-portable-binding-actions">
-            {providers.map((provider) => <button key={provider.id} type="button" disabled={busy || provider.availability !== 'available'} title={provider.reason ?? `Connect ${provider.label}`} onClick={() => void connectProvider(provider)}><span>{provider.label}</span>{provider.reason && <small>{provider.reason}</small>}</button>)}
+            {providers.map((provider) => <Button size="small" vocabularyMode="factual" key={provider.id} type="button" disabled={busy || provider.availability !== 'available'} title={provider.reason ?? `Connect ${provider.label}`} onClick={() => void connectProvider(provider)}><span>{provider.label}</span>{provider.reason && <small>{provider.reason}</small>}</Button>)}
           </div>
           <h3>Verified local resource</h3>
           <div className="md3-search-row">
@@ -165,7 +166,7 @@ export function PortableBindingWizard({ nodeId, featureId, displayLabel, anchorR
           </div>
           {resourceSearch.error && <p role="alert">{resourceSearch.error}</p>}
           <div role="listbox" aria-label="Verified provider resources" className="md3-portable-binding-actions">
-            {visibleResources.map((resource) => <button key={resource.id} type="button" role="option" aria-selected={resourceId === resource.id} disabled={busy || !resource.available} title={resource.reason ?? resource.label} onClick={() => setResourceId(resource.id)}><span>{resource.label}</span><small>{resource.kind}{resource.reason ? `: ${resource.reason}` : ''}</small></button>)}
+            {visibleResources.map((resource) => <Chip vocabularyMode="factual" selected={resourceId === resource.id} key={resource.id} role="option" aria-selected={resourceId === resource.id} disabled={busy || !resource.available} title={resource.reason ?? resource.label} onClick={() => setResourceId(resource.id)}><span>{resource.label}</span><small>{resource.kind}{resource.reason ? `: ${resource.reason}` : ''}</small></Chip>)}
             {accountId && visibleResources.length === 0 && <p>The selected adapter reported no compatible resources.</p>}
           </div>
           <p>Credential values, OAuth state, provider sessions, and machine identity stay in private application data. Only opaque account and resource references enter the local binding.</p>

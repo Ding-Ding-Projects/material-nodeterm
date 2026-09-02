@@ -12,6 +12,7 @@ import {
   counterScale,
   type KeyTarget
 } from '../lib/presenceKeys'
+import { Input } from '@renderer/ui/Input'
 
 // A sent chat line lingers this long after Enter, then clears itself.
 const CHAT_LINGER_MS = 5000
@@ -233,7 +234,7 @@ export function PresenceLayer(): JSX.Element | null {
       </ViewportPortal>
 
       {chat !== null && anchor && (
-        <input
+        <Input vocabularyMode="factual"
           className="presence-chat-input nodrag nowheel"
           autoFocus
           value={chat}

@@ -13,6 +13,8 @@ import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 import { useI18n } from '../../lib/i18n'
+import { Chip } from '@renderer/ui/md3'
+import { Select } from '@renderer/ui/Select'
 
 type AioTab = 'overview' | 'backups' | 'recovery'
 
@@ -100,7 +102,7 @@ export function NextcloudAioPanel({
       </section>
 
       <div className="nextcloud-aio-panel__tabs" role="tablist" aria-label={copy('tabs', 'Nextcloud AIO sections')}>
-        {TABS.map((item) => <button key={item.id} role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)}>{copy(item.id, item.label)}</button>)}
+        {TABS.map((item) => <Chip vocabularyMode="factual" selected={tab === item.id} key={item.id} role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)}>{copy(item.id, item.label)}</Chip>)}
       </div>
 
       <div className="nextcloud-aio-panel__toolbar">
@@ -112,7 +114,7 @@ export function NextcloudAioPanel({
       </div>
 
       <div className="nextcloud-aio-panel__contexts" role="listbox" aria-label={copy('contexts', 'Available Docker contexts')}>
-        {visibleContexts.map((item) => <button key={item.name} role="option" aria-selected={context === item.name} disabled={!item.available || busy} title={item.available ? item.endpointLabel : item.reason} onClick={() => void refresh(item.name)}>{item.name}<small>{item.endpointLabel}</small></button>)}
+        {visibleContexts.map((item) => <Chip vocabularyMode="factual" selected={context === item.name} key={item.name} role="option" aria-selected={context === item.name} disabled={!item.available || busy} title={item.available ? item.endpointLabel : item.reason} onClick={() => void refresh(item.name)}>{item.name}<small>{item.endpointLabel}</small></Chip>)}
         {!visibleContexts.length && <p>{copy('noContexts', 'No available Docker context matches this search. Start Docker or choose another search.')}</p>}
       </div>
       {search.error ? <p role="alert">{search.error}</p> : null}
@@ -120,9 +122,9 @@ export function NextcloudAioPanel({
 
       {tab === 'overview' && <section aria-label={copy('configure', 'Configure Nextcloud AIO')}>
         <label>{copy('binding', 'Local binding')}
-          <select value={draft.bindingMode} onChange={(event) => setDraftValue({ bindingMode: event.target.value as NextcloudAioConfig['bindingMode'] })}>
+          <Select vocabularyMode="factual" value={draft.bindingMode} onChange={(event) => setDraftValue({ bindingMode: event.target.value as NextcloudAioConfig['bindingMode'] })}>
             <option value="loopback">Loopback only</option><option value="private-network">Private network</option>
-          </select>
+          </Select>
         </label>
         <label>{copy('port', 'Local port')} <Input type="number" min={1024} max={65535} value={draft.port} onChange={(event) => setDraftValue({ port: Number(event.target.value) })} /></label>
         <p>{copy('portHint', 'Loopback keeps the service on this computer. Private network exposes it only on the selected private binding. Port must be between 1024 and 65535.')}</p>

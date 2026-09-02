@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { PtyPressure } from '@shared/types'
 import { isMacPlatform } from '../../shared/platform-utils'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 // The warning that was missing on 2026-08-11: the machine filled up its pty devices
 // (`kern.tty.ptmx_max`) and the first thing anyone learned about it was terminals refusing to
@@ -147,22 +148,22 @@ export function PtyPressureBanner({
         </span>
       </div>
       {isMac && (
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           className="announce-banner__btn"
           title={vocab('Raises this Mac’s pty-device limit (kern.tty.ptmx_max) now and after every restart. macOS will ask for your password.')}
           disabled={busy}
           onClick={fix}
         >
           {busy ? vocab('Fixing…') : vocab('Fix automatically…')}
-        </button>
+        </Button>
       )}
-      <button
+      <Button variant="outlined" size="small" vocabularyMode="factual"
         className="announce-banner__close"
         title={vocab('Dismiss')}
         onClick={() => setDismissed({ level: reading.level, seq: state!.seq })}
       >
         ✕
-      </button>
+      </Button>
     </div>
   )
 }

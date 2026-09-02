@@ -39,6 +39,7 @@ import {
 } from '../terminal/terminal-config'
 import type { CanvasWidgetLiveState } from '../../shared/types'
 import '@xterm/xterm/css/xterm.css'
+import { Button, Chip } from '@renderer/ui/md3'
 
 function widgetNodeIdFromLocation(): string | null {
   const params = new URLSearchParams(window.location.search)
@@ -217,26 +218,26 @@ export default function WidgetApp(): React.JSX.Element {
     <div className="widget-app">
       <div className="widget-app__titlebar">
         <span className="widget-app__drag" />
-        <button
-          type="button"
+        <Chip vocabularyMode="factual" selected={alwaysOnTop}
+         
           className="widget-app__btn"
           aria-label={vocab(alwaysOnTop ? 'Turn off always on top' : 'Keep this widget on top')}
           aria-pressed={alwaysOnTop}
           onClick={toggleAlwaysOnTop}
         >
           {alwaysOnTop ? '📌' : '📍'}
-        </button>
-        <button
+        </Chip>
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           type="button"
           className="widget-app__btn"
           aria-label={vocab('Back to canvas')}
           onClick={backToCanvas}
         >
           ⤢
-        </button>
-        <button type="button" className="widget-app__btn" aria-label={vocab('Close widget')} onClick={close}>
+        </Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual" className="widget-app__btn" aria-label={vocab('Close widget')} onClick={close}>
           ×
-        </button>
+        </Button>
       </div>
       {error ? <div className="widget-app__error">{error}</div> : null}
       <div ref={hostRef} className="widget-app__term" />

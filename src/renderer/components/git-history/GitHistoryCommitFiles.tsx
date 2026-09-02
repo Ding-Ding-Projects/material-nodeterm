@@ -1,6 +1,7 @@
 import type { GitFileChange } from '@shared/types'
 import { formatGitHistoryTimestamp } from './git-history-format'
 import { gitStatusBadgeClass } from '../../lib/gitStatusBadge'
+import { Button } from '@renderer/ui/md3'
 
 export type GitHistoryCommitFilesState =
   | { status: 'loading' }
@@ -32,7 +33,7 @@ export function GitHistoryCommitFiles({
           const name = entry.path.split('/').pop() || entry.path
           const dir = entry.path.includes('/') ? entry.path.slice(0, entry.path.lastIndexOf('/')) : ''
           return (
-            <button key={entry.path} type="button" className="scm-history__file" title={entry.path} onClick={() => onOpenFile(entry)}>
+            <Button variant="outlined" size="small" vocabularyMode="factual" key={entry.path} type="button" className="scm-history__file" title={entry.path} onClick={() => onOpenFile(entry)}>
               <span className={`md3-status-badge md3-status-badge--tiny ${gitStatusBadgeClass(entry.status)}`}>
                 {entry.status}
               </span>
@@ -40,7 +41,7 @@ export function GitHistoryCommitFiles({
                 {name}
                 {dir && <span className="scm-history__file-dir">{dir}</span>}
               </span>
-            </button>
+            </Button>
           )
         })}
     </div>

@@ -7,6 +7,8 @@ import { useSessionNaming } from '../state/sessionNaming'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { ContextMeter } from './ContextMeter'
 import { contextSourceKey } from '../state/contextWindow'
+import { Button } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 export interface SessionRowProps {
   row: SessionRowVM
@@ -110,7 +112,7 @@ export function SessionRow({
             <ProjectGlyph color={row.color} name="" variant="dot" className="ss-mark" />
           )}
           {editing ? (
-            <input
+            <Input vocabularyMode="factual"
               className="ss-title-input"
               autoFocus
               value={draft}
@@ -140,15 +142,15 @@ export function SessionRow({
               {row.loop.kind} · {row.loop.count}
             </span>
           )}
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             className="ss-row__ai"
             title={vocab('Name with AI (from terminal output)')}
             disabled={naming}
             onClick={aiName}
           >
             {naming ? '…' : '✦'}
-          </button>
-          <button
+          </Button>
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             className="ss-row__close"
             title={vocab('Close session')}
             onClick={(e) => {
@@ -157,7 +159,7 @@ export function SessionRow({
             }}
           >
             ×
-          </button>
+          </Button>
         </div>
         {row.isAgent && (
           <div className="ss-row__contextline" data-session-context="contained">

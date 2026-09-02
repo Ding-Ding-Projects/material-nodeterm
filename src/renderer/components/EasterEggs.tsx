@@ -6,6 +6,7 @@ import { useSchoolMode } from '../state/schoolMode'
 import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { normalizeFunnyLevel } from '@shared/i18n'
+import { Button } from '@renderer/ui/md3'
 
 const STORAGE_KEY = 'nodeterm.easter-eggs.v1'
 const LABELS = {
@@ -149,10 +150,10 @@ export function EasterEggs(): React.JSX.Element | null {
                 <h2 id="easter-eggs-title">{vocab(labels.cabinet)}</h2>
                 <p>{vocab(labels.description)}</p>
               </div>
-              <button type="button" onClick={() => setOpen(false)} aria-label={vocab(labels.close)}>×</button>
+              <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => setOpen(false)} aria-label={vocab(labels.close)}>×</Button>
             </header>
             <div className="easter-eggs__actions">
-              <button type="button" onClick={() => { setDiscovered(new Set()); saveDiscoveries(new Set()) }}>{vocab(labels.reset)}</button>
+              <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => { setDiscovered(new Set()); saveDiscoveries(new Set()) }}>{vocab(labels.reset)}</Button>
             </div>
             <p className="easter-eggs__count" role="status">{discovered.size} {vocab(labels.found)}</p>
             <ul className="easter-eggs__list" aria-label={vocab(labels.cabinet)}>

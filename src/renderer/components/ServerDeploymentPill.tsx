@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Button } from '@renderer/ui/md3'
 
 /** Bottom-left, always-visible while a Server Edition deployment is up: the address someone types
  *  into another device's browser, with a copy action. Shares the usage/system-resource pills'
@@ -55,7 +56,7 @@ export function ServerDeploymentPill({ overBoard = false }: { overBoard?: boolea
 
   return (
     <div className={`server-deploy-indicator${overBoard ? ' server-deploy-indicator--board' : ''}`}>
-      <button
+      <Button variant="outlined" size="small" vocabularyMode="factual"
         type="button"
         className="server-deploy-pill"
         onClick={() => void copy()}
@@ -65,7 +66,7 @@ export function ServerDeploymentPill({ overBoard = false }: { overBoard?: boolea
         <span className="server-deploy-pill__detail">{url}</span>
         <span className="server-deploy-pill__copy" aria-hidden="true">{copied ? '✓' : '⧉'}</span>
         <span className="sr-only">{copied ? 'Copied' : `Copy ${url} to clipboard`}</span>
-      </button>
+      </Button>
     </div>
   )
 }

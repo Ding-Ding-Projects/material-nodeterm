@@ -2,6 +2,7 @@ import { MaterialSymbol } from './MaterialSymbol'
 import { useSettings } from '../state/settings'
 import { formatElapsed, momentumNudge, normalizeAdhdModes, snoozeUntil, SNOOZE_MINUTES } from '../lib/adhdModes'
 import { nodeActivity, useActivityTick } from '../lib/nodeActivity'
+import { Button } from '@renderer/ui/md3'
 
 /**
  * The two ADHD modes that render ON a node rather than in a settings page: TIME AWARENESS and
@@ -104,7 +105,7 @@ export function AdhdMomentumNote({ nodeId }: { nodeId: string }): React.JSX.Elem
   return (
     <div className="adhd-momentum nodrag" role="status">
       <span>{decision.text}</span>
-      <button
+      <Button variant="outlined" size="small" vocabularyMode="factual"
         type="button"
         className="adhd-momentum__dismiss"
         title={`Stay quiet for ${SNOOZE_MINUTES} minutes`}
@@ -113,7 +114,7 @@ export function AdhdMomentumNote({ nodeId }: { nodeId: string }): React.JSX.Elem
         }
       >
         Not now
-      </button>
+      </Button>
     </div>
   )
 }

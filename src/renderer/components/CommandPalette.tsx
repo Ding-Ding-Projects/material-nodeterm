@@ -9,6 +9,7 @@ import { useVocabularyCommands } from '../lib/personalVocabulary/useVocabularySu
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { useSchoolMode } from '../state/schoolMode'
 import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
+import { Button } from '@renderer/ui/md3'
 
 /** These settings rows are an optional capability and must not exist in the palette while School
  * mode is on or while its shared record has not been resolved. Keep the IDs exact: they are
@@ -286,10 +287,10 @@ export function CommandPalette({
 }
 
 /**
- * One palette row. A row WITHOUT a `control` stays a `<button>` (unchanged historical markup —
+ * One palette row. A row WITHOUT a `control` stays a `<Button variant="outlined" size="small" vocabularyMode="factual">` (unchanged historical markup —
  * every existing command keeps its exact click/keyboard behavior). A row WITH one renders as a
  * `role="option"` container instead, because the live control (a real switch) is itself an
- * interactive element and HTML forbids nesting one inside a `<button>`. Enter/click on the row
+ * interactive element and HTML forbids nesting one inside a `<Button variant="outlined" size="small" vocabularyMode="factual">`. Enter/click on the row
  * still runs the row's default action (for a toggle command that IS the toggle, so the row and
  * its inline control can never disagree about what happened); clicking the control directly
  * stops propagation so it fires exactly once.
@@ -381,7 +382,7 @@ function PaletteRow({
           {body}
         </div>
       ) : (
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           className={`palette__item${active ? ' active' : ''}`}
           aria-disabled={c.disabled || undefined}
           title={c.disabled ? c.note ?? c.hint : undefined}
@@ -389,7 +390,7 @@ function PaletteRow({
           onClick={c.disabled ? undefined : onRun}
         >
           {body}
-        </button>
+        </Button>
       )}
     </div>
   )

@@ -16,6 +16,7 @@ import {
   wslCopyKeyForFallback,
   wslStageCopyKey
 } from './wslCopy'
+import { Chip } from '@renderer/ui/md3'
 
 interface WslCreateDialogProps {
   catalogue: WslCatalogueEntry[]
@@ -277,9 +278,9 @@ export function WslCreateDialog({
             </div>
           ) : (
             filtered.map((c) => (
-              <button
+              <Chip vocabularyMode="factual" selected={catalogueId === c.id}
                 key={c.id}
-                type="button"
+               
                 role="option"
                 aria-selected={catalogueId === c.id}
                 aria-disabled={operationActive || undefined}
@@ -288,7 +289,7 @@ export function WslCreateDialog({
                 onClick={() => setCatalogueId(c.id)}
               >
                 {c.label}
-              </button>
+              </Chip>
             ))
           )}
         </div>

@@ -12,6 +12,7 @@ import {
   useContextWindow
 } from '../state/contextWindow'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 type Copy = (key: string, fallback: string, params?: Record<string, string>) => string
 
@@ -123,7 +124,7 @@ export function ContextMeter({ sessionId, agentId, sourceKey }: ContextMeterProp
           </p>
         </section>
       )}
-      <button
+      <Button variant="outlined" size="small" vocabularyMode="factual"
         type="button"
         className="ctx-pill"
         title={title}
@@ -150,7 +151,7 @@ export function ContextMeter({ sessionId, agentId, sourceKey }: ContextMeterProp
           />
         </span>
         <span className="ctx-pill__num">{percent === null ? statusText(status, vocab) : `${Math.round(percent)}%`}</span>
-      </button>
+      </Button>
     </div>
   )
 }

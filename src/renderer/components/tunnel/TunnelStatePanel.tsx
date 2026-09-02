@@ -190,14 +190,14 @@ export function TunnelStatePanel({ intent, live, onRetry, onCancel }: TunnelStat
       {facets.length === 0 ? <p className="tunnel-state-panel__message" role="status">{vocab('No tunnel checks match this search.')}</p> : null}
 
       <div className="tunnel-state-panel__portable">
-        <button
+        <Button size="small" vocabularyMode="factual"
           type="button"
           className="tunnel-state-panel__portable-toggle"
           aria-expanded={showPortableDetails}
           onClick={() => setShowPortableDetails((open) => !open)}
         >
           {showPortableDetails ? vocab('Hide portable intent') : vocab('Show portable intent')}
-        </button>
+        </Button>
         {showPortableDetails ? (
           <dl className="tunnel-state-panel__portable-details">
             <div><dt>{vocab('Route')}</dt><dd>{intent.routeMode}</dd></div>

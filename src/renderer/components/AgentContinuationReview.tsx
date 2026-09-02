@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { AgentContinuationPreview, AgentContinuationResult } from '@shared/agent-continuation'
 import type { AgentContinuationApi } from '@shared/agent-continuation'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 interface AgentContinuationReviewProps {
   nodeId: string
@@ -67,15 +68,15 @@ export function AgentContinuationReview({ nodeId, api, enabled = true }: AgentCo
       <p className="agent-continuation-review__preview">{packet.preview}</p>
       <p className="agent-continuation-review__warning">{packet.warning}</p>
       <div className="agent-continuation-review__actions">
-        <button type="button" disabled={busy} onClick={() => void api.ack(nodeId)}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" disabled={busy} onClick={() => void api.ack(nodeId)}>
           {vocab('Mark reviewed')}
-        </button>
-        <button type="button" disabled={busy} onClick={runContinue}>
+        </Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual" disabled={busy} onClick={runContinue}>
           {busy ? vocab('Continuing') : vocab('Review and continue')}
-        </button>
-        <button type="button" disabled={busy} onClick={runDiscard}>
+        </Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual" disabled={busy} onClick={runDiscard}>
           {vocab('Discard recovered state')}
-        </button>
+        </Button>
       </div>
       {result && !result.ok && (
         <p className="agent-continuation-review__result" role="status">

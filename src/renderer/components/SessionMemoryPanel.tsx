@@ -35,6 +35,7 @@ import { BulkActionBar, type BulkAction } from './BulkActionBar'
 import { ExportMenu } from './ExportMenu'
 import { Checkbox } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 export interface SessionMemoryPanelProps {
   /** Travel to the node behind a row. Canvas passes `travelToNode`, so a CLOSED project's tab is
@@ -255,7 +256,7 @@ export function SessionMemoryPanel({
               // fire a second, redundant toggle on some browsers' checkbox semantics.
               onChange={() => {}}
             />
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               className="sessmem-row__main md3-sessmem-row__main"
               // Nothing to travel to. The guard inside is not redundant: `disabled` is the DOM's
               // answer and this is the code's.
@@ -278,7 +279,7 @@ export function SessionMemoryPanel({
               )}
               <span className="sessmem-row__cmd md3-sessmem-row__cmd">{v.row.command}</span>
               <span className="sessmem-row__mb md3-sessmem-row__mb">{formatMb(v.row.totalMb)}</span>
-            </button>
+            </Button>
             <IconButton
               size="dense"
               className="sessmem-row__kill md3-sessmem-row__kill"

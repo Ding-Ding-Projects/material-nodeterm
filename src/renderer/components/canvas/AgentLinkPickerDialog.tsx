@@ -7,6 +7,8 @@ import { AgentIcon } from '../../lib/agentIcons'
 import { MaterialSymbol } from '../MaterialSymbol'
 import type { AgentId } from '@shared/agents/config'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
+import { Button, Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 export interface AgentLinkPickerOption {
   id: string
@@ -213,7 +215,7 @@ export function AgentLinkPickerDialog({
         </div>
         <div className="menu-filter agent-link-picker__search">
           <div className="menu-filter__row">
-            <input
+            <Input vocabularyMode="factual"
               ref={inputRef}
               className="menu-filter__input"
               value={search.value}
@@ -249,9 +251,9 @@ export function AgentLinkPickerDialog({
             </div>
           ) : (
             filtered.map((target, index) => (
-              <button
+              <Chip vocabularyMode="factual" selected={index === activeIndex}
                 key={target.id}
-                type="button"
+               
                 data-idx={index}
                 id={`agent-link-target-${index}`}
                 tabIndex={index === activeIndex ? 0 : -1}
@@ -273,14 +275,14 @@ export function AgentLinkPickerDialog({
                 </span>
                 <span className="agent-link-picker__agent">{target.agentLabel}</span>
                 <MaterialSymbol name="link" size={16} />
-              </button>
+              </Chip>
             ))
           )}
         </div>
         <div className="agent-link-picker__footer">
-          <button type="button" className="agent-link-picker__cancel" onClick={onCancel}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="agent-link-picker__cancel" onClick={onCancel}>
             {cancelLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </>,

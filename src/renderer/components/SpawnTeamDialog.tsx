@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { Button, Checkbox, TextArea } from '@renderer/ui/md3'
 
 interface SpawnTeamDialogProps {
   /** False on SSH projects / non-repos — the toggle renders disabled with `worktreeNote` beside it. */
@@ -49,7 +50,7 @@ export function SpawnTeamDialog({
         <p className="confirm__msg">
           {vocab('Spawn a team — describe the task, and a conductor agent will split it into workstreams and open the team on the canvas.')}
         </p>
-        <textarea
+        <TextArea vocabularyMode="factual"
           ref={inputRef}
           className="confirm__input confirm__textarea"
           value={task}
@@ -69,8 +70,7 @@ export function SpawnTeamDialog({
           }}
         />
         <label className="confirm__option">
-          <input
-            type="checkbox"
+          <Checkbox vocabularyMode="factual"
             checked={worktreesAvailable && worktrees}
             disabled={!worktreesAvailable}
             onChange={(e) => setWorktrees(e.target.checked)}
@@ -79,12 +79,12 @@ export function SpawnTeamDialog({
           {!worktreesAvailable && worktreeNote ? mapOwnedSentence(vocab, [copy(' — '), fact(worktreeNote)]) : ''}
         </label>
         <div className="confirm__actions">
-          <button className="confirm__btn" onClick={onCancel}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" onClick={onCancel}>
             {vocab('Cancel')}
-          </button>
-          <button className="confirm__btn primary" disabled={!canSubmit} onClick={submit}>
+          </Button>
+          <Button variant="filled" size="small" vocabularyMode="factual" className="confirm__btn primary" disabled={!canSubmit} onClick={submit}>
             {vocab('Spawn team')}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

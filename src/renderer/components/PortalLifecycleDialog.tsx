@@ -20,6 +20,7 @@ import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { UniverseDoorEntryPanel } from './canvas/UniverseDoorEntryPanel'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { Select } from '@renderer/ui/Select'
 
 export interface PortalLifecycleDialogProps {
   open: boolean
@@ -174,9 +175,9 @@ export function PortalLifecycleDialog({
       <section aria-label={vocab('Create portal')} className="portal-lifecycle-dialog__create">
         <label>
           {vocab('Containing canvas')}
-          <select value={selectedParent} onChange={(event) => setSelectedParent(event.target.value)} aria-label={vocab('Containing canvas')}>
+          <Select vocabularyMode="factual" value={selectedParent} onChange={(event) => setSelectedParent(event.target.value)} aria-label={vocab('Containing canvas')}>
             {projection.canvases.map((canvas) => <option key={canvas.id} value={canvas.id}>{canvas.title} ({canvas.id})</option>)}
-          </select>
+          </Select>
         </label>
         <TextField label="Portal title" aria-label="Portal title" value={title} onChange={(event) => setTitle(event.target.value)} />
         <TextField label="New child canvas id" aria-label="New child canvas id" value={childId} onChange={(event) => setChildId(event.target.value)} supportText="Use a new visible identifier; credentials, paths, and runtime state never enter the projection." />

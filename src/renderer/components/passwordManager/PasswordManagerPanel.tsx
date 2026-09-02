@@ -621,7 +621,7 @@ function ManagerCard({
   return (
     <li className="pwm-manager-card">
       <div className="pwm-manager-card__head">
-        <button className="pwm-manager-card__toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+        <Button size="small" vocabularyMode="factual" className="pwm-manager-card__toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
           <MaterialSymbol name={expanded ? 'lock_open' : 'vpn_key'} size={18} aria-hidden="true" />
           {renaming ? (
             <Input
@@ -645,7 +645,7 @@ function ManagerCard({
             {manager.credentialCount} credential{manager.credentialCount === 1 ? '' : 's'}
             {boundGroupTitle ? ` · bound to "${boundGroupTitle}"` : ''}
           </span>
-        </button>
+        </Button>
         <div className="pwm-row-actions">
           {!renaming && (
             <Button variant="default"
@@ -1073,7 +1073,7 @@ function ManagerGroupSection({
 
   return (
     <section className="pwm-manager-group">
-      <button
+      <Button size="small" vocabularyMode="factual"
         className="pwm-manager-group__head"
         onClick={() => setCollapsed((v) => !v)}
         aria-expanded={open}
@@ -1084,7 +1084,7 @@ function ManagerGroupSection({
         <span className="pwm-hint">
           {managers.length} manager{managers.length === 1 ? '' : 's'} · {count} credential{count === 1 ? '' : 's'}
         </span>
-      </button>
+      </Button>
       {open && (
         <ul className="pwm-manager-list">
           {managers.map((m) => (
@@ -1278,9 +1278,9 @@ function PasswordManagerPanelInner({
                 Lock
               </Button>
             )}
-            <button className="drawer__close" onClick={onClose} aria-label="Close">
+            <Button size="small" vocabularyMode="factual" className="drawer__close" onClick={onClose} aria-label="Close">
               <MaterialSymbol name="close" size={18} />
-            </button>
+            </Button>
           </div>
         </div>
         <div className="drawer__body pwm-body">{body}</div>

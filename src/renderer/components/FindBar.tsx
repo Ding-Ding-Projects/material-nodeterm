@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react'
 import type { SearchMode } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 /** Identical shape to SearchSnippet in useTerminalSearch.ts (imported by the consumer). */
 export interface FindBarSnippet {
@@ -56,7 +58,7 @@ export function FindBar({
   return (
     <div className="term-node__find nodrag nowheel" onMouseDown={(e) => e.stopPropagation()}>
       <div className="term-node__find-row">
-        <input
+        <Input vocabularyMode="factual"
           ref={inputRef}
           className="term-node__find-input"
           placeholder={vocab(mode === 'regex' ? 'Find (regex)…' : 'Find…')}
@@ -89,7 +91,7 @@ export function FindBar({
           />
         )}
         <span className="term-node__find-count">{matchCount ? `${matchIndex} / ${matchCount}` : '0 / 0'}</span>
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           type="button"
           className="term-node__find-btn"
           title={vocab('Previous (Shift+Enter)')}
@@ -98,8 +100,8 @@ export function FindBar({
           disabled={!matchCount}
         >
           ↑
-        </button>
-        <button
+        </Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           type="button"
           className="term-node__find-btn"
           title={vocab('Next (Enter)')}
@@ -108,8 +110,8 @@ export function FindBar({
           disabled={!matchCount}
         >
           ↓
-        </button>
-        <button
+        </Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           type="button"
           className="term-node__find-btn"
           title={vocab('Close (Esc)')}
@@ -117,7 +119,7 @@ export function FindBar({
           onClick={onClose}
         >
           ✕
-        </button>
+        </Button>
       </div>
       {error && <div className="term-node__find-error">{error}</div>}
       {current && (

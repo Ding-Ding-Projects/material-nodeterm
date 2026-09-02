@@ -19,6 +19,7 @@ import {
   type CloudflareTunnelWizardApi,
   type TunnelChoice
 } from '@shared/cloudflare-tunnel-wizard'
+import { Chip } from '@renderer/ui/md3'
 
 interface ChoicePickerProps<T extends TunnelChoice> {
   id: string
@@ -55,9 +56,9 @@ function ChoicePicker<T extends TunnelChoice>({ id, label, items, value, disable
         {visible.length === 0 ? <p role="status">No {label.toLocaleLowerCase()} match this search.</p> : visible.map((item) => {
           const unavailable = item.state === 'unavailable'
           return (
-            <button
+            <Chip vocabularyMode="factual" selected={item.id === value}
               key={item.id}
-              type="button"
+             
               role="option"
               aria-selected={item.id === value}
               aria-disabled={unavailable}
@@ -68,7 +69,7 @@ function ChoicePicker<T extends TunnelChoice>({ id, label, items, value, disable
               <span>{item.label}</span>
               {item.detail ? <small>{item.detail}</small> : null}
               {unavailable && item.reason ? <small>{item.reason}</small> : null}
-            </button>
+            </Chip>
           )
         })}
       </div>

@@ -13,6 +13,8 @@ import { validateCloudflareTunnelIntent } from '@shared/cloudflare-tunnel-handof
 import { AnchoredPopover } from '../ui/AnchoredPopover'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { Button, Checkbox, Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 interface Props {
   nodeId: string
@@ -156,50 +158,50 @@ export function CloudflareTunnelHandoffPanel({ nodeId, serviceId, intent, api, o
 
     <div className="service-node__picker">
       <label>Local origin
-        <button ref={originAnchor} type="button" aria-haspopup="listbox" aria-expanded={originOpen} disabled={busy || !origins.length} title={!origins.length ? 'No local origins were discovered.' : 'Choose a verified local origin.'} onClick={() => setOriginOpen(true)}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" ref={originAnchor} type="button" aria-haspopup="listbox" aria-expanded={originOpen} disabled={busy || !origins.length} title={!origins.length ? 'No local origins were discovered.' : 'Choose a verified local origin.'} onClick={() => setOriginOpen(true)}>
           {selectedOrigin ? `${selectedOrigin.label} · ${selectedOrigin.endpoint}${selectedOrigin.healthPath}` : 'Choose a local origin'}
-        </button>
+        </Button>
       </label>
-      <div className="service-node__search-row"><input ref={originSearchRef} value={originSearch.value} onChange={(event) => originSearch.setValue(event.target.value)} placeholder="Filter local origins" aria-label="Filter local origins" /><AnchoredRegexBuilder search={originSearch} fieldRef={originSearchRef} label="Regex for local origin search" /></div>
+      <div className="service-node__search-row"><Input vocabularyMode="factual" ref={originSearchRef} value={originSearch.value} onChange={(event) => originSearch.setValue(event.target.value)} placeholder="Filter local origins" aria-label="Filter local origins" /><AnchoredRegexBuilder search={originSearch} fieldRef={originSearchRef} label="Regex for local origin search" /></div>
       <AnchoredPopover anchorRef={originAnchor} open={originOpen} onClose={() => setOriginOpen(false)} width={420} className="service-node__option-popover">
-        <div role="listbox" aria-label="Local origin choices">{visibleOrigins.length ? visibleOrigins.map((origin) => <button key={origin.id} type="button" role="option" aria-selected={origin.id === originId} onClick={() => chooseOrigin(origin)}><strong>{origin.label}</strong><span>{origin.endpoint}{origin.healthPath}</span></button>) : <p>No matching local origins. Clear the filter or refresh the hosted service.</p>}</div>
+        <div role="listbox" aria-label="Local origin choices">{visibleOrigins.length ? visibleOrigins.map((origin) => <Chip vocabularyMode="factual" selected={origin.id === originId} key={origin.id} role="option" aria-selected={origin.id === originId} onClick={() => chooseOrigin(origin)}><strong>{origin.label}</strong><span>{origin.endpoint}{origin.healthPath}</span></Chip>) : <p>No matching local origins. Clear the filter or refresh the hosted service.</p>}</div>
       </AnchoredPopover>
     </div>
 
     <div className="service-node__actions">
-      <button type="button" onClick={() => void verifyHealth()} disabled={busy || !selectedOrigin} title={!selectedOrigin ? 'Choose a local origin first.' : 'Verify the local health endpoint before any external change.'}>Verify local health</button>
-      {progress && <button type="button" onClick={cancel} disabled={!busy}>Cancel handoff</button>}
+      <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void verifyHealth()} disabled={busy || !selectedOrigin} title={!selectedOrigin ? 'Choose a local origin first.' : 'Verify the local health endpoint before any external change.'}>Verify local health</Button>
+      {progress && <Button variant="outlined" size="small" vocabularyMode="factual" onClick={cancel} disabled={!busy}>Cancel handoff</Button>}
     </div>
 
     <div className="service-node__picker">
       <label>Cloudflare account
-        <button ref={accountAnchor} type="button" aria-haspopup="listbox" aria-expanded={accountOpen} disabled={busy || !accounts.length} title={!accounts.length ? 'No Cloudflare accounts are configured on this computer.' : 'Choose an available Cloudflare account.'} onClick={() => setAccountOpen(true)}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" ref={accountAnchor} type="button" aria-haspopup="listbox" aria-expanded={accountOpen} disabled={busy || !accounts.length} title={!accounts.length ? 'No Cloudflare accounts are configured on this computer.' : 'Choose an available Cloudflare account.'} onClick={() => setAccountOpen(true)}>
           {selectedAccount ? selectedAccount.label : 'Choose a Cloudflare account'}
-        </button>
+        </Button>
       </label>
-      <div className="service-node__search-row"><input ref={accountSearchRef} value={accountSearch.value} onChange={(event) => accountSearch.setValue(event.target.value)} placeholder="Filter Cloudflare accounts" aria-label="Filter Cloudflare accounts" /><AnchoredRegexBuilder search={accountSearch} fieldRef={accountSearchRef} label="Regex for Cloudflare account search" /></div>
+      <div className="service-node__search-row"><Input vocabularyMode="factual" ref={accountSearchRef} value={accountSearch.value} onChange={(event) => accountSearch.setValue(event.target.value)} placeholder="Filter Cloudflare accounts" aria-label="Filter Cloudflare accounts" /><AnchoredRegexBuilder search={accountSearch} fieldRef={accountSearchRef} label="Regex for Cloudflare account search" /></div>
       <AnchoredPopover anchorRef={accountAnchor} open={accountOpen} onClose={() => setAccountOpen(false)} width={420} className="service-node__option-popover">
-        <div role="listbox" aria-label="Cloudflare account choices">{visibleAccounts.length ? visibleAccounts.map((account) => <button key={account.id} type="button" role="option" aria-selected={account.id === accountId} disabled={!account.available} title={account.reason ?? 'Use this Cloudflare account.'} onClick={() => { setAccountId(account.id); setAccountOpen(false) }}><strong>{account.label}</strong><span>{account.available ? 'Available' : account.reason}</span></button>) : <p>No matching Cloudflare accounts. Clear the filter or configure an account.</p>}</div>
+        <div role="listbox" aria-label="Cloudflare account choices">{visibleAccounts.length ? visibleAccounts.map((account) => <Chip vocabularyMode="factual" selected={account.id === accountId} key={account.id} role="option" aria-selected={account.id === accountId} disabled={!account.available} title={account.reason ?? 'Use this Cloudflare account.'} onClick={() => { setAccountId(account.id); setAccountOpen(false) }}><strong>{account.label}</strong><span>{account.available ? 'Available' : account.reason}</span></Chip>) : <p>No matching Cloudflare accounts. Clear the filter or configure an account.</p>}</div>
       </AnchoredPopover>
     </div>
 
     <div className="service-node__picker">
       <label>Cloudflare zone
-        <button ref={zoneAnchor} type="button" aria-haspopup="listbox" aria-expanded={zoneOpen} disabled={busy || !accountId || !zones.length} title={!accountId ? 'Choose a Cloudflare account first.' : !zones.length ? 'No zones were discovered for this account.' : 'Choose an available Cloudflare zone.'} onClick={() => setZoneOpen(true)}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" ref={zoneAnchor} type="button" aria-haspopup="listbox" aria-expanded={zoneOpen} disabled={busy || !accountId || !zones.length} title={!accountId ? 'Choose a Cloudflare account first.' : !zones.length ? 'No zones were discovered for this account.' : 'Choose an available Cloudflare zone.'} onClick={() => setZoneOpen(true)}>
           {selectedZone ? selectedZone.name : 'Choose a Cloudflare zone'}
-        </button>
+        </Button>
       </label>
-      <div className="service-node__search-row"><input ref={zoneSearchRef} value={zoneSearch.value} onChange={(event) => zoneSearch.setValue(event.target.value)} placeholder="Filter Cloudflare zones" aria-label="Filter Cloudflare zones" /><AnchoredRegexBuilder search={zoneSearch} fieldRef={zoneSearchRef} label="Regex for Cloudflare zone search" /></div>
+      <div className="service-node__search-row"><Input vocabularyMode="factual" ref={zoneSearchRef} value={zoneSearch.value} onChange={(event) => zoneSearch.setValue(event.target.value)} placeholder="Filter Cloudflare zones" aria-label="Filter Cloudflare zones" /><AnchoredRegexBuilder search={zoneSearch} fieldRef={zoneSearchRef} label="Regex for Cloudflare zone search" /></div>
       <AnchoredPopover anchorRef={zoneAnchor} open={zoneOpen} onClose={() => setZoneOpen(false)} width={420} className="service-node__option-popover">
-        <div role="listbox" aria-label="Cloudflare zone choices">{visibleZones.length ? visibleZones.map((zone) => <button key={zone.id} type="button" role="option" aria-selected={zone.id === zoneId} disabled={!zone.available} title={zone.reason ?? 'Use this Cloudflare zone.'} onClick={() => { setZoneId(zone.id); setZoneOpen(false) }}><strong>{zone.name}</strong><span>{zone.available ? 'Available' : zone.reason}</span></button>) : <p>No matching zones. Choose another account or clear the filter.</p>}</div>
+        <div role="listbox" aria-label="Cloudflare zone choices">{visibleZones.length ? visibleZones.map((zone) => <Chip vocabularyMode="factual" selected={zone.id === zoneId} key={zone.id} role="option" aria-selected={zone.id === zoneId} disabled={!zone.available} title={zone.reason ?? 'Use this Cloudflare zone.'} onClick={() => { setZoneId(zone.id); setZoneOpen(false) }}><strong>{zone.name}</strong><span>{zone.available ? 'Available' : zone.reason}</span></Chip>) : <p>No matching zones. Choose another account or clear the filter.</p>}</div>
       </AnchoredPopover>
     </div>
 
-    <label className="service-node__field">Hostname hint<input value={intent.hostnameHint} onChange={(event) => onIntentChange({ ...intent, serviceId, originId, hostnameHint: event.target.value })} placeholder="app.example.com" spellCheck={false} /></label>
-    <label className="service-node__field">Path prefix<input value={intent.pathPrefix} onChange={(event) => onIntentChange({ ...intent, serviceId, originId, pathPrefix: event.target.value })} placeholder="/" spellCheck={false} /></label>
+    <label className="service-node__field">Hostname hint<Input vocabularyMode="factual" value={intent.hostnameHint} onChange={(event) => onIntentChange({ ...intent, serviceId, originId, hostnameHint: event.target.value })} placeholder="app.example.com" spellCheck={false} /></label>
+    <label className="service-node__field">Path prefix<Input vocabularyMode="factual" value={intent.pathPrefix} onChange={(event) => onIntentChange({ ...intent, serviceId, originId, pathPrefix: event.target.value })} placeholder="/" spellCheck={false} /></label>
     {intentError && <p className="service-node__error" role="alert">{intentError}</p>}
-    <label className="service-node__check"><input type="checkbox" checked={confirmation} onChange={(event) => setConfirmation(event.target.checked)} /> I reviewed the healthy local origin and explicitly confirm external exposure.</label>
-    <button type="button" onClick={() => void startHandoff()} disabled={busy || !!intentError || health?.state !== 'healthy' || !selectedAccount || !selectedZone || !confirmation || !capabilities?.available || !capabilities.canCreateTunnel || !capabilities.canStartConnector || !capabilities.canVerifyExternal} title={intentError ?? (health?.state !== 'healthy' ? 'Verify a healthy local origin first.' : !confirmation ? 'Confirm external exposure first.' : capabilities && !capabilities.available ? capabilities.reason ?? 'The Cloudflare Tunnel adapter is unavailable.' : 'Create and verify the Cloudflare Tunnel handoff.')}>Create and verify Tunnel route</button>
+    <label className="service-node__check"><Checkbox vocabularyMode="factual" checked={confirmation} onChange={(event) => setConfirmation(event.target.checked)} /> I reviewed the healthy local origin and explicitly confirm external exposure.</label>
+    <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void startHandoff()} disabled={busy || !!intentError || health?.state !== 'healthy' || !selectedAccount || !selectedZone || !confirmation || !capabilities?.available || !capabilities.canCreateTunnel || !capabilities.canStartConnector || !capabilities.canVerifyExternal} title={intentError ?? (health?.state !== 'healthy' ? 'Verify a healthy local origin first.' : !confirmation ? 'Confirm external exposure first.' : capabilities && !capabilities.available ? capabilities.reason ?? 'The Cloudflare Tunnel adapter is unavailable.' : 'Create and verify the Cloudflare Tunnel handoff.')}>Create and verify Tunnel route</Button>
     <p className="service-node__note">The project carries only service and routing intent. Cloudflare account, zone, tunnel, connector, credential, endpoint, process, and host details stay on this computer. Import never starts a tunnel or contacts Cloudflare.</p>
   </section>
 }

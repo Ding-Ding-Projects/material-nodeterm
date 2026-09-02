@@ -18,6 +18,8 @@ import { MinecraftPlayersPanel } from './MinecraftPlayersPanel'
 import { MinecraftBackupsPanel } from './MinecraftBackupsPanel'
 import { Checkbox, Progress } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
+import { Button, Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 const CONSOLE_CAP = 400
 
@@ -248,9 +250,9 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
       <div className="service-node__field">
         <span className="service-node__field-label">Server folder</span>
         <div className="mc-row">
-          <button type="button" className="mc-button nodrag" onClick={() => void pickDirectory()}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="mc-button nodrag" onClick={() => void pickDirectory()}>
             Choose folder…
-          </button>
+          </Button>
           <span className="mc-path" title={selectedDir || undefined}>
             {selectedDir || 'No folder chosen yet'}
           </span>
@@ -258,7 +260,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
       </div>
       <JavaLine status={status} />
       <div className="mc-row">
-        <button
+        <Button variant="filled" size="small" vocabularyMode="factual"
           type="button"
           className="mc-button mc-button--primary nodrag"
           disabled={busy || !selectedVersion || !selectedDir}
@@ -266,9 +268,9 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
           onClick={() => void handleCreate()}
         >
           {configured ? 'Reinstall server' : 'Create server'}
-        </button>
+        </Button>
         {configured && (
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             type="button"
             className="mc-button nodrag"
             disabled={busy}
@@ -276,7 +278,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
             onClick={() => setShowInstallForm(false)}
           >
             Cancel
-          </button>
+          </Button>
         )}
       </div>
       <p className="service-node__note">
@@ -321,18 +323,18 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
             Mojang requires accepting the End User License Agreement before a server can run.
             nodeterm has not accepted it for you — only you can.
           </p>
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             type="button"
             className="mc-link nodrag"
             onClick={() => window.nodeTerminal.shell.openExternal('https://www.minecraft.net/en-us/eula')}
           >
             Read the Minecraft EULA ↗
-          </button>
+          </Button>
           <label className="mc-checkbox nodrag">
             <Checkbox checked={eulaChecked} onChange={(e) => setEulaChecked(e.target.checked)} />
             I have read and accept the Minecraft EULA
           </label>
-          <button
+          <Button variant="filled" size="small" vocabularyMode="factual"
             type="button"
             className="mc-button mc-button--primary nodrag"
             disabled={busy || !eulaChecked}
@@ -340,7 +342,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
             onClick={() => void handleAcceptEula()}
           >
             Accept and continue
-          </button>
+          </Button>
         </>
       )}
 
@@ -351,7 +353,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
           </p>
           <JavaLine status={status} />
           <div className="mc-row">
-            <button
+            <Button variant="filled" size="small" vocabularyMode="factual"
               type="button"
               className="mc-button mc-button--primary nodrag"
               disabled={busy || !status.javaOk}
@@ -359,8 +361,8 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
               onClick={() => void handleStart()}
             >
               Start server
-            </button>
-            <button
+            </Button>
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               type="button"
               className="mc-button nodrag"
               disabled={busy}
@@ -368,11 +370,11 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
               onClick={() => setShowInstallForm(true)}
             >
               Install a different version
-            </button>
+            </Button>
           </div>
-          <button type="button" className="mc-link mc-link--danger nodrag" onClick={requestDelete}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="mc-link mc-link--danger nodrag" onClick={requestDelete}>
             Delete this server…
-          </button>
+          </Button>
         </>
       )}
 
@@ -398,7 +400,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
               void handleSendCommand()
             }}
           >
-            <input
+            <Input vocabularyMode="factual"
               className="service-node__input nodrag"
               value={commandDraft}
               disabled={status.phase !== 'running'}
@@ -407,16 +409,16 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
               placeholder="Type a server command…"
               aria-label="Server console command"
             />
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               type="submit"
               className="mc-button nodrag"
               disabled={status.phase !== 'running' || !commandDraft.trim()}
               title={sendCommandDisabledReason({ phase: status.phase, commandDraft }) ?? undefined}
             >
               Send
-            </button>
+            </Button>
           </form>
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             type="button"
             className="mc-button nodrag"
             disabled={status.phase !== 'running'}
@@ -424,40 +426,40 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
             onClick={requestStop}
           >
             Stop server
-          </button>
+          </Button>
         </>
       )}
 
       {configured && !showInstallForm && (
         <div className="mc-mgmt">
           <div className="mc-mgmt__tabs" role="tablist" aria-label="Server management">
-            <button
-              type="button"
+            <Chip vocabularyMode="factual" selected={mgmtTab === 'properties'}
+             
               role="tab"
               aria-selected={mgmtTab === 'properties'}
               className={`mc-mgmt__tab nodrag${mgmtTab === 'properties' ? ' mc-mgmt__tab--active' : ''}`}
               onClick={() => setMgmtTab((cur) => (cur === 'properties' ? null : 'properties'))}
             >
               server.properties
-            </button>
-            <button
-              type="button"
+            </Chip>
+            <Chip vocabularyMode="factual" selected={mgmtTab === 'players'}
+             
               role="tab"
               aria-selected={mgmtTab === 'players'}
               className={`mc-mgmt__tab nodrag${mgmtTab === 'players' ? ' mc-mgmt__tab--active' : ''}`}
               onClick={() => setMgmtTab((cur) => (cur === 'players' ? null : 'players'))}
             >
               Players
-            </button>
-            <button
-              type="button"
+            </Chip>
+            <Chip vocabularyMode="factual" selected={mgmtTab === 'backups'}
+             
               role="tab"
               aria-selected={mgmtTab === 'backups'}
               className={`mc-mgmt__tab nodrag${mgmtTab === 'backups' ? ' mc-mgmt__tab--active' : ''}`}
               onClick={() => setMgmtTab((cur) => (cur === 'backups' ? null : 'backups'))}
             >
               Backups
-            </button>
+            </Chip>
           </div>
           {mgmtTab === 'properties' && (
             <div role="tabpanel" aria-label="server.properties editor">

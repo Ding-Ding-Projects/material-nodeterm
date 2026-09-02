@@ -265,7 +265,7 @@ export function DocsBrowser({ initialPath }: { initialPath?: string } = {}): JSX
               <div className="md3-docs__section" key={section.label}>
                 <div className="md3-docs__section-label">{vocab(section.label)}</div>
                 {visible.map((a) => (
-                  <button
+                  <Button variant="outlined" size="small" vocabularyMode="factual"
                     key={a.path}
                     type="button"
                     className={`md3-docs__nav-item${
@@ -275,7 +275,7 @@ export function DocsBrowser({ initialPath }: { initialPath?: string } = {}): JSX
                     onClick={() => openArticle(a.path, null, true)}
                   >
                     {a.title}
-                  </button>
+                  </Button>
                 ))}
               </div>
             )
@@ -371,7 +371,7 @@ function DocsResults({
         {mapOwnedSentence(vocab, docsArticleCountSegments(results.length, `article${results.length === 1 ? '' : 's'} match`))}
       </div>
       {results.map((hit) => (
-        <button key={hit.path} type="button" className="md3-docs__result" onClick={() => onOpen(hit)}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" key={hit.path} type="button" className="md3-docs__result" onClick={() => onOpen(hit)}>
           <div className="md3-docs__result-head">
             <span className="md3-docs__result-title">{hit.title}</span>
             <span className="md3-docs__result-section">{hit.section}</span>
@@ -391,7 +391,7 @@ function DocsResults({
           {hit.snippets.length === 0 && (
             <div className="md3-docs__snippet md3-docs__snippet--title">{vocab('Title match')}</div>
           )}
-        </button>
+        </Button>
       ))}
     </div>
   )

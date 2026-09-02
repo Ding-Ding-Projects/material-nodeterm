@@ -1,5 +1,6 @@
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { MaterialSymbol } from './MaterialSymbol'
+import { Button } from '@renderer/ui/md3'
 
 /** Non-blocking strip shown when the active project's .nodeterm file changed on disk
  *  while there are unsaved local edits. Reload = take the disk version; Keep mine =
@@ -25,12 +26,12 @@ export function ConflictBar({
     <div className="conflict-bar md3-conflict-bar">
       <MaterialSymbol className="md3-conflict-bar__icon" name="warning" size={18} fill />
       <span>{vocab('Project file changed on disk (git pull or another machine).')}</span>
-      <button className="md3-conflict-bar__btn" onClick={onReload}>
+      <Button variant="outlined" size="small" vocabularyMode="factual" className="md3-conflict-bar__btn" onClick={onReload}>
         {vocab('Reload from disk')}
-      </button>
-      <button className="md3-conflict-bar__btn md3-conflict-bar__btn--primary" onClick={onKeepMine}>
+      </Button>
+      <Button variant="filled" size="small" vocabularyMode="factual" className="md3-conflict-bar__btn md3-conflict-bar__btn--primary" onClick={onKeepMine}>
         {vocab('Keep my version')}
-      </button>
+      </Button>
     </div>
   )
 }

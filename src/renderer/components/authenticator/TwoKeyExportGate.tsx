@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { MaterialSymbol } from '../MaterialSymbol'
 import { Slider } from '@renderer/ui/md3'
 import { Checkbox } from '@renderer/ui/md3'
+import { Button } from '@renderer/ui/md3'
 
 export function TwoKeyExportGate({
   count,
@@ -68,9 +69,9 @@ export function TwoKeyExportGate({
         </span>
       </div>
       <div className="toylock-wizard__actions">
-        <button className="toylock-btn" onClick={onCancel}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" className="toylock-btn" onClick={onCancel}>
           Emergency exit
-        </button>
+        </Button>
       </div>
     </div>
   )

@@ -574,7 +574,7 @@ function FileConverterPanelForApi({
               {error}
             </p>
           )}
-          <input
+          <Input vocabularyMode="factual"
             ref={fileInputRef}
             type="file"
             multiple

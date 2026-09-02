@@ -3,6 +3,7 @@ import type { Announcement } from '@shared/types'
 import { useI18n } from '@renderer/lib/i18n'
 import { shouldShowAnnouncement } from '@renderer/lib/announcementPolicy'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 // Polls the remote announcements feed (via the main process) and shows the newest
 // item the user hasn't dismissed. Dismissed ids are remembered in localStorage so a
@@ -79,20 +80,20 @@ export function AnnouncementBanner(): JSX.Element | null {
         {current.body && <span className="announce-banner__body">{current.body}</span>}
       </div>
       {current.url && (
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           className="announce-banner__btn"
           onClick={() => window.open(current.url, '_blank', 'noopener')}
         >
           {vocab(ts('announce.learnMore', 'Learn more'))}
-        </button>
+        </Button>
       )}
-      <button
+      <Button variant="outlined" size="small" vocabularyMode="factual"
         className="announce-banner__close"
         title={vocab(ts('announce.dismiss', 'Dismiss'))}
         onClick={dismiss}
       >
         ✕
-      </button>
+      </Button>
     </div>
   )
 }

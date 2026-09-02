@@ -3,6 +3,7 @@ import type { GitHistoryItem, GitHistoryItemRef } from '@shared/git-history'
 import type { GitHistoryItemViewModel } from '@shared/git-history-graph'
 import { dedupeRemoteTrackingRefs } from '@shared/git-history-ref-display'
 import { GitHistoryGraphSvg, graphColor } from './GitHistoryGraphSvg'
+import { Button } from '@renderer/ui/md3'
 
 function Chevron({ collapsed }: { collapsed: boolean }) {
   return (
@@ -65,7 +66,7 @@ export function GitHistoryRow({
   }
 
   return (
-    <button
+    <Button variant="outlined" size="small" vocabularyMode="factual"
       type="button"
       className="scm-history__row"
       title={tooltip}
@@ -74,6 +75,6 @@ export function GitHistoryRow({
       onContextMenu={(e) => onContextMenu?.(item, e)}
     >
       {content}
-    </button>
+    </Button>
   )
 }

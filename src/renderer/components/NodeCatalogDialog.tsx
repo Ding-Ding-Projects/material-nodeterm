@@ -23,6 +23,7 @@ import { useSchoolMode } from '../state/schoolMode'
 import { applyVocabulary } from '../lib/personalVocabulary/apply'
 import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
 import type { NamedTerminalProfile } from '@shared/types'
+import { Button } from '@renderer/ui/md3'
 
 export interface NodeCatalogDialogProps {
   open: boolean
@@ -248,7 +249,7 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
                 aria-disabled={disabled}
                 onMouseEnter={() => setActive(index)}
               >
-                <button
+                <Button variant="outlined" size="small" vocabularyMode="factual"
                   type="button"
                   className="node-catalog-dialog__row-main"
                   disabled={disabled}
@@ -268,10 +269,10 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
                   )}</span>
                   <span className="node-catalog-dialog__row-description"><span>{descriptionValue.primary}</span>{descriptionValue.secondary && <span className="node-catalog-dialog__row-secondary">{descriptionValue.secondary}</span>}</span>
                   {disabled && <span className="node-catalog-dialog__row-reason">{localize(state.reason ?? '')}</span>}
-                </button>
-                <button className="node-catalog-dialog__docs" type="button" onClick={() => onOpenDocumentation(entry.documentationPath)} aria-label={`${profileText(label.id, label.fallback)} ${docsLabel}`}>
+                </Button>
+                <Button variant="outlined" size="small" vocabularyMode="factual" className="node-catalog-dialog__docs" type="button" onClick={() => onOpenDocumentation(entry.documentationPath)} aria-label={`${profileText(label.id, label.fallback)} ${docsLabel}`}>
                   {docsLabel}
-                </button>
+                </Button>
               </div>
             )
           })

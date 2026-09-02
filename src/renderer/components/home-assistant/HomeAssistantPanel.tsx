@@ -7,6 +7,8 @@ import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { AnchoredPopover } from '../../ui/AnchoredPopover'
 import { Radio } from '../../ui/md3'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
+import { Button, Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 interface Props {
   nodeId: string
@@ -133,7 +135,7 @@ export function HomeAssistantPanel({ nodeId, boundEndpoint, onBind, intent = DEF
 
     <div className="ha-client__picker">
       <label>Instance
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           ref={instancePickerRef}
           type="button"
           className="ha-client__picker-button"
@@ -145,37 +147,37 @@ export function HomeAssistantPanel({ nodeId, boundEndpoint, onBind, intent = DEF
           title={!filteredInstances.length ? 'No matching Home Assistant instances.' : 'Open the Home Assistant instance picker.'}
         >
           {selected ? `${selected.displayName} · ${selected.baseUrl}${selected.hasToken ? '' : ' · token required'}` : 'Choose a Home Assistant instance'}
-        </button>
+        </Button>
       </label>
       <div className="ha-client__search-row">
-        <input ref={instanceSearchRef} value={instanceSearch.value} onChange={(event) => instanceSearch.setValue(event.target.value)} placeholder="Filter instances" aria-label="Filter Home Assistant instances" />
+        <Input vocabularyMode="factual" ref={instanceSearchRef} value={instanceSearch.value} onChange={(event) => instanceSearch.setValue(event.target.value)} placeholder="Filter instances" aria-label="Filter Home Assistant instances" />
         <AnchoredRegexBuilder search={instanceSearch} fieldRef={instanceSearchRef} label="Regex for Home Assistant instances" />
       </div>
       <AnchoredPopover anchorRef={instancePickerRef as RefObject<HTMLElement>} open={instancePickerOpen} onClose={() => setInstancePickerOpen(false)} width={420} className="ha-client__option-popover">
         <div className="ha-client__option-list" role="listbox" aria-label="Home Assistant instance choices">
           {!filteredInstances.length && <p className="ha-client__empty">No matching instances. Clear the filter or add an instance.</p>}
-          {filteredInstances.map((instance) => <button key={instance.id} type="button" role="option" aria-selected={instance.id === selectedId} onClick={() => { selectInstance(instance.id); setInstancePickerOpen(false) }}>
+          {filteredInstances.map((instance) => <Chip vocabularyMode="factual" selected={instance.id === selectedId} key={instance.id} role="option" aria-selected={instance.id === selectedId} onClick={() => { selectInstance(instance.id); setInstancePickerOpen(false) }}>
             <strong>{instance.displayName}</strong><span>{instance.baseUrl}{instance.hasToken ? '' : ' · token required'}</span>
-          </button>)}
+          </Chip>)}
         </div>
       </AnchoredPopover>
       <p id={`${nodeId}-ha-instance-help`} className="service-node__note">Instance addresses and access tokens stay on this computer. A project opened elsewhere shows an explicit unbound state until you configure or rebind it.</p>
     </div>
 
     <div className="ha-client__actions">
-      <button type="button" onClick={() => { if (selected) { onBind(selected.baseUrl); setMessage(`${selected.displayName} is now bound to this node on this computer.`) } }} disabled={!selected || boundEndpoint === selected.baseUrl || !!busyOperation} title={!selected ? 'Select an instance first.' : boundEndpoint === selected.baseUrl ? 'This instance is already bound.' : 'Bind this machine-local instance to the node.'}>Bind selected</button>
-      <button type="button" onClick={() => setEditing((value) => !value)} disabled={!!busyOperation}>{editing ? 'Cancel configure' : 'Add instance…'}</button>
-      <button type="button" onClick={(event) => selected && remove(selected, event.currentTarget)} disabled={!selected || !!busyOperation} title={!selected ? 'Select an instance before removing it.' : 'Opens the two-key confirmation flow.'}>Remove…</button>
+      <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => { if (selected) { onBind(selected.baseUrl); setMessage(`${selected.displayName} is now bound to this node on this computer.`) } }} disabled={!selected || boundEndpoint === selected.baseUrl || !!busyOperation} title={!selected ? 'Select an instance first.' : boundEndpoint === selected.baseUrl ? 'This instance is already bound.' : 'Bind this machine-local instance to the node.'}>Bind selected</Button>
+      <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => setEditing((value) => !value)} disabled={!!busyOperation}>{editing ? 'Cancel configure' : 'Add instance…'}</Button>
+      <Button variant="outlined" size="small" vocabularyMode="factual" onClick={(event) => selected && remove(selected, event.currentTarget)} disabled={!selected || !!busyOperation} title={!selected ? 'Select an instance before removing it.' : 'Opens the two-key confirmation flow.'}>Remove…</Button>
     </div>
 
     {editing && <div className="ha-client__form" role="region" aria-label="Configure Home Assistant instance">
       <h3>Add Home Assistant instance</h3>
-      <label>Display name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} autoFocus maxLength={120} placeholder="Living room" /></label>
-      <label>Base address<input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://homeassistant.example.com" spellCheck={false} /></label>
-      <label>Long-lived access token<input type="password" value={token} onChange={(event) => setToken(event.target.value)} autoComplete="off" placeholder="Stored securely on this computer" /></label>
+      <label>Display name<Input vocabularyMode="factual" value={displayName} onChange={(event) => setDisplayName(event.target.value)} autoFocus maxLength={120} placeholder="Living room" /></label>
+      <label>Base address<Input vocabularyMode="factual" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://homeassistant.example.com" spellCheck={false} /></label>
+      <label>Long-lived access token<Input vocabularyMode="factual" type="password" value={token} onChange={(event) => setToken(event.target.value)} autoComplete="off" placeholder="Stored securely on this computer" /></label>
       <p className="service-node__note">Use HTTPS. Plain HTTP is accepted only for localhost. The token crosses the privileged boundary once, is stored through the existing credential seam, and is never returned.</p>
       {formError && <p className="ha-client__error" role="alert">{formError}</p>}
-      <button type="button" onClick={() => void save()} disabled={!displayName.trim() || !baseUrl.trim() || !token}>Save and bind</button>
+      <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void save()} disabled={!displayName.trim() || !baseUrl.trim() || !token}>Save and bind</Button>
     </div>}
 
     <div className="ha-client__discovery">
@@ -185,27 +187,27 @@ export function HomeAssistantPanel({ nodeId, boundEndpoint, onBind, intent = DEF
         <label><Radio name={`${nodeId}-ha-transport`} checked={transport === 'websocket'} onChange={() => setTransport('websocket')} /> WebSocket snapshot</label>
       </fieldset>
       <div className="ha-client__actions">
-        <button type="button" onClick={() => void discover()} disabled={!selected || !selected.hasToken || !!busyOperation} title={!selected ? 'Select an instance first.' : !selected.hasToken ? 'Store an access token for this instance first.' : 'Discover current entities.'}>Discover entities</button>
-        <button type="button" onClick={() => busyOperation && void api.cancel(busyOperation)} disabled={!busyOperation}>Cancel discovery</button>
-        <button type="button" onClick={() => void discover()} disabled={!selected || !selected.hasToken || !!busyOperation}>Retry</button>
+        <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void discover()} disabled={!selected || !selected.hasToken || !!busyOperation} title={!selected ? 'Select an instance first.' : !selected.hasToken ? 'Store an access token for this instance first.' : 'Discover current entities.'}>Discover entities</Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => busyOperation && void api.cancel(busyOperation)} disabled={!busyOperation}>Cancel discovery</Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void discover()} disabled={!selected || !selected.hasToken || !!busyOperation}>Retry</Button>
       </div>
     </div>
 
     <div className="ha-client__filters">
       <label>Domain
-        <button ref={domainPickerRef} type="button" className="ha-client__picker-button" aria-haspopup="listbox" aria-expanded={domainPickerOpen} onClick={() => setDomainPickerOpen(true)} title="Open the Home Assistant domain picker.">
+        <Button variant="outlined" size="small" vocabularyMode="factual" ref={domainPickerRef} type="button" className="ha-client__picker-button" aria-haspopup="listbox" aria-expanded={domainPickerOpen} onClick={() => setDomainPickerOpen(true)} title="Open the Home Assistant domain picker.">
           {domain === 'all' ? 'All domains' : domain}
-        </button>
+        </Button>
       </label>
-      <div className="ha-client__search-row"><input ref={domainSearchRef} value={domainSearch.value} onChange={(event) => domainSearch.setValue(event.target.value)} placeholder="Filter domains" aria-label="Filter Home Assistant domains" /><AnchoredRegexBuilder search={domainSearch} fieldRef={domainSearchRef} label="Regex for Home Assistant domains" /></div>
+      <div className="ha-client__search-row"><Input vocabularyMode="factual" ref={domainSearchRef} value={domainSearch.value} onChange={(event) => domainSearch.setValue(event.target.value)} placeholder="Filter domains" aria-label="Filter Home Assistant domains" /><AnchoredRegexBuilder search={domainSearch} fieldRef={domainSearchRef} label="Regex for Home Assistant domains" /></div>
       <AnchoredPopover anchorRef={domainPickerRef as RefObject<HTMLElement>} open={domainPickerOpen} onClose={() => setDomainPickerOpen(false)} width={280} className="ha-client__option-popover">
         <div className="ha-client__option-list" role="listbox" aria-label="Home Assistant domain choices">
-          <button type="button" role="option" aria-selected={domain === 'all'} onClick={() => { setDomain('all'); setDomainPickerOpen(false) }}>All domains</button>
+          <Chip vocabularyMode="factual" selected={domain === 'all'} role="option" aria-selected={domain === 'all'} onClick={() => { setDomain('all'); setDomainPickerOpen(false) }}>All domains</Chip>
           {!filteredDomains.length && <p className="ha-client__empty">No matching domains. Clear the filter or run discovery.</p>}
-          {filteredDomains.map((item) => <button key={item} type="button" role="option" aria-selected={item === domain} onClick={() => { setDomain(item); setDomainPickerOpen(false) }}>{item}</button>)}
+          {filteredDomains.map((item) => <Chip vocabularyMode="factual" selected={item === domain} key={item} role="option" aria-selected={item === domain} onClick={() => { setDomain(item); setDomainPickerOpen(false) }}>{item}</Chip>)}
         </div>
       </AnchoredPopover>
-      <div className="ha-client__search-row"><input ref={entitySearchRef} value={entitySearch.value} onChange={(event) => entitySearch.setValue(event.target.value)} placeholder="Search entities" aria-label="Search Home Assistant entities" /><AnchoredRegexBuilder search={entitySearch} fieldRef={entitySearchRef} label="Regex for Home Assistant entities" /></div>
+      <div className="ha-client__search-row"><Input vocabularyMode="factual" ref={entitySearchRef} value={entitySearch.value} onChange={(event) => entitySearch.setValue(event.target.value)} placeholder="Search entities" aria-label="Search Home Assistant entities" /><AnchoredRegexBuilder search={entitySearch} fieldRef={entitySearchRef} label="Regex for Home Assistant entities" /></div>
     </div>
     <div className="ha-client__entities" role="list" aria-label="Discovered Home Assistant entities">
       {!visibleEntities.length ? <p className="ha-client__empty">No discovered entities match these filters. Run discovery or change the filters.</p> : visibleEntities.map((entity) => <article key={entity.entityId} role="listitem" className="ha-client__entity"><div><strong>{entity.friendlyName}</strong><code>{entity.entityId}</code></div><span>{entity.state}{entity.unitOfMeasurement ? ` ${entity.unitOfMeasurement}` : ''}</span></article>)}

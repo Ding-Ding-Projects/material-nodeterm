@@ -61,7 +61,7 @@ export function PresenceNamePrompt(): JSX.Element | null {
       />
       <div className="presence-prompt__colors">
         {PRESENCE_COLORS.map((c) => (
-          <button
+          <Button variant="outlined" size="small" vocabularyMode="factual"
             key={c}
             className={`presence-prompt__swatch${c === color ? ' presence-prompt__swatch--on' : ''}`}
             style={{ background: c }}

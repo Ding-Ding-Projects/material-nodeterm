@@ -3,6 +3,8 @@ import type { MinecraftBannedPlayerEntry, MinecraftPlayerEntry, MinecraftPlayerL
 import { useSession } from '../../session/session'
 import { openDestructiveGate } from '../../state/destructiveGate'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { Button } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 /** Every mutation here is a real vanilla console command sent through the same `sendCommand` the
  *  console tab already uses — never a direct edit of whitelist.json/ops.json/banned-players.json,
@@ -42,14 +44,14 @@ function ListSection({
             <li key={e.uuid} className="mc-players__row">
               <span className="mc-players__name">{e.name}</span>
               {renderExtra?.(e)}
-              <button
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 type="button"
                 className="mc-link mc-link--danger nodrag"
                 disabled={disabled}
                 onClick={() => onRemove(e.name)}
               >
                 {removeLabel}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -160,7 +162,7 @@ export function MinecraftPlayersPanel({ nodeId, phase }: { nodeId: string; phase
       <div className="mc-players__actions">
         <label className="service-node__field" htmlFor={`${nodeId}-mc-player-name`}>
           <span className="service-node__field-label">Player name</span>
-          <input
+          <Input vocabularyMode="factual"
             id={`${nodeId}-mc-player-name`}
             type="text"
             className="service-node__input nodrag"
@@ -171,20 +173,20 @@ export function MinecraftPlayersPanel({ nodeId, phase }: { nodeId: string; phase
           />
         </label>
         <div className="mc-row">
-          <button type="button" className="mc-button nodrag" disabled={!running || !nameDraft.trim()} onClick={handleWhitelistAdd}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="mc-button nodrag" disabled={!running || !nameDraft.trim()} onClick={handleWhitelistAdd}>
             Whitelist
-          </button>
-          <button type="button" className="mc-button nodrag" disabled={!running || !nameDraft.trim()} onClick={() => handleOp(true)}>
+          </Button>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="mc-button nodrag" disabled={!running || !nameDraft.trim()} onClick={() => handleOp(true)}>
             Make op
-          </button>
-          <button type="button" className="mc-button nodrag" disabled={!running || !nameDraft.trim()} onClick={() => handleOp(false)}>
+          </Button>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="mc-button nodrag" disabled={!running || !nameDraft.trim()} onClick={() => handleOp(false)}>
             Remove op
-          </button>
+          </Button>
         </div>
         <label className="service-node__field" htmlFor={`${nodeId}-mc-kick-reason`}>
           <span className="service-node__field-label">Kick reason (optional)</span>
           <div className="mc-row">
-            <input
+            <Input vocabularyMode="factual"
               id={`${nodeId}-mc-kick-reason`}
               type="text"
               className="service-node__input nodrag"
@@ -192,15 +194,15 @@ export function MinecraftPlayersPanel({ nodeId, phase }: { nodeId: string; phase
               disabled={!running}
               onChange={(e) => setKickDraft(e.target.value)}
             />
-            <button type="button" className="mc-button nodrag" disabled={!running || !nameDraft.trim()} onClick={requestKick}>
+            <Button variant="outlined" size="small" vocabularyMode="factual" className="mc-button nodrag" disabled={!running || !nameDraft.trim()} onClick={requestKick}>
               Kick
-            </button>
+            </Button>
           </div>
         </label>
         <label className="service-node__field" htmlFor={`${nodeId}-mc-ban-reason`}>
           <span className="service-node__field-label">Ban reason (optional)</span>
           <div className="mc-row">
-            <input
+            <Input vocabularyMode="factual"
               id={`${nodeId}-mc-ban-reason`}
               type="text"
               className="service-node__input nodrag"
@@ -208,14 +210,14 @@ export function MinecraftPlayersPanel({ nodeId, phase }: { nodeId: string; phase
               disabled={!running}
               onChange={(e) => setBanDraft(e.target.value)}
             />
-            <button
+            <Button variant="outlined" size="small" vocabularyMode="factual"
               type="button"
               className="mc-button mc-link--danger nodrag"
               disabled={!running || !nameDraft.trim()}
               onClick={requestBan}
             >
               Ban…
-            </button>
+            </Button>
           </div>
         </label>
       </div>
@@ -246,14 +248,14 @@ export function MinecraftPlayersPanel({ nodeId, phase }: { nodeId: string; phase
               <li key={b.uuid} className="mc-players__row">
                 <span className="mc-players__name">{b.name}</span>
                 {b.reason && <span className="mc-path">{b.reason}</span>}
-                <button
+                <Button variant="outlined" size="small" vocabularyMode="factual"
                   type="button"
                   className="mc-link nodrag"
                   disabled={!running}
                   onClick={(e) => requestPardon(b.name, e)}
                 >
                   Pardon
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -261,9 +263,9 @@ export function MinecraftPlayersPanel({ nodeId, phase }: { nodeId: string; phase
       </section>
 
       <div className="mc-row">
-        <button type="button" className="mc-button nodrag" onClick={load}>
+        <Button variant="outlined" size="small" vocabularyMode="factual" className="mc-button nodrag" onClick={load}>
           Refresh lists
-        </button>
+        </Button>
       </div>
     </div>
   )

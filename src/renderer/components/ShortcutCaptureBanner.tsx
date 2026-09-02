@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { CommandId } from '@shared/keybindings'
 import { shortcutCaptureCopy } from './shortcutCaptureCopy'
+import { Button } from '@renderer/ui/md3'
 
 // The one time the app explains itself: a chord the user pressed inside a focused terminal ran an
 // APP command instead of reaching the shell. `noteTerminalCapture` decides WHEN that is worth
@@ -55,7 +56,7 @@ export function ShortcutCaptureBanner({
         <span className="announce-banner__title">{copy.title}</span>
         <span className="announce-banner__body">{copy.body}</span>
       </div>
-      <button
+      <Button variant="outlined" size="small" vocabularyMode="factual"
         className="announce-banner__btn"
         onClick={() => {
           setCurrent(null)
@@ -63,10 +64,10 @@ export function ShortcutCaptureBanner({
         }}
       >
         Open Shortcuts
-      </button>
-      <button className="announce-banner__close" title="Dismiss" onClick={() => setCurrent(null)}>
+      </Button>
+      <Button variant="outlined" size="small" vocabularyMode="factual" className="announce-banner__close" title="Dismiss" onClick={() => setCurrent(null)}>
         ✕
-      </button>
+      </Button>
     </div>
   )
 }

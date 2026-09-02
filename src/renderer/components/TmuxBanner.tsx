@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { TmuxStatus } from '@shared/types'
 import { localSession } from '../session/localSession'
+import { Button } from '@renderer/ui/md3'
 
 // "tmux not found" strip: without tmux the app silently degrades to a plain shell — terminals
 // don't survive restarts and the mobile companion can't attach — and nothing used to say so
@@ -161,16 +162,16 @@ export function TmuxBanner({
         <span className="announce-banner__body">{body}</span>
       </div>
       {phase === 'installing' && installerNodeId && (
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           className="announce-banner__btn"
           title="Show installer terminal"
           onClick={() => onShowInstallerTerminal?.(installerNodeId)}
         >
           Show installer terminal
-        </button>
+        </Button>
       )}
       {showInstall && (
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           className="announce-banner__btn"
           title={status.installCommand!}
           onClick={() => {
@@ -188,11 +189,11 @@ export function TmuxBanner({
           }}
         >
           {phase === 'failed' ? 'Retry' : (status.installLabel ?? 'Install tmux')}
-        </button>
+        </Button>
       )}
-      <button className="announce-banner__close" title="Dismiss" onClick={() => setDismissed(true)}>
+      <Button variant="outlined" size="small" vocabularyMode="factual" className="announce-banner__close" title="Dismiss" onClick={() => setDismissed(true)}>
         ✕
-      </button>
+      </Button>
     </div>
   )
 }

@@ -296,7 +296,8 @@ describe('shell and session vocabulary boundaries', () => {
   })
 
   it('maps DictationOverlay warning copy through the session provider boundary', () => {
-    const warning = 'Dictation is off — choose a Whisper model in Settings → Speech.×'
+    // The close control is an icon button now, so the warning line's text ends at the sentence.
+    const warning = 'Dictation is off — choose a Whisper model in Settings → Speech.'
     usePersonalVocabulary.setState({ entries: { 'Dictation is off — choose a Whisper model in Settings → Speech.': 'Dictation unavailable' }, status: 'loaded', entryCount: 1 })
     mount(
       <SessionContext.Provider value={{ id: 'test', source: 'local', label: 'test', api: {} as any, status: 'connected' }}>

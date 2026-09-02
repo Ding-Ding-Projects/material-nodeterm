@@ -5,6 +5,8 @@ import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { AnchoredPopover } from '../ui/AnchoredPopover'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { Button, Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 interface AwsUniverseNavigatorProps {
   onNavigate: (canvasId: string) => void
@@ -77,7 +79,7 @@ export function AwsUniverseNavigator({ onNavigate, onCreate, open: controlledOpe
   return (
     <>
       {!hideTrigger && (
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           ref={anchorRef}
           type="button"
           className="aws-universe-nav__trigger"
@@ -89,7 +91,7 @@ export function AwsUniverseNavigator({ onNavigate, onCreate, open: controlledOpe
           <span aria-hidden="true">◎</span>
           <span className="aws-universe-nav__path">{activePath.map((item) => item.title).join(' / ')}</span>
           <span className="aws-universe-nav__scope">{ts('awsUniverse.scope', 'AWS-only scope')}</span>
-        </button>
+        </Button>
       )}
       <AnchoredPopover anchorRef={anchorRef} open={open} onClose={() => setOpen(false)} width={460} className="aws-universe-nav__popover" zIndex={92}>
         <div className="aws-universe-nav__header">
@@ -97,14 +99,14 @@ export function AwsUniverseNavigator({ onNavigate, onCreate, open: controlledOpe
             <h2>{ts('awsUniverse.title', 'AWS Universe')}</h2>
             <p>{ts('awsUniverse.description', 'An AWS-only canvas. Provider credentials and runtime bindings stay on this computer.')}</p>
           </div>
-          <button type="button" onClick={() => setCreateOpen((value) => !value)} aria-expanded={createOpen}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => setCreateOpen((value) => !value)} aria-expanded={createOpen}>
             {createOpen ? ts('dialog.confirm.cancel', 'Cancel') : ts('awsUniverse.new', 'New AWS Universe')}
-          </button>
+          </Button>
         </div>
         <div className="aws-universe-nav__search">
           <label htmlFor="aws-universe-search">{ts('awsUniverse.search.label', 'Search AWS Universes')}</label>
           <div className="aws-universe-nav__search-control">
-            <input
+            <Input vocabularyMode="factual"
               ref={searchRef}
               id="aws-universe-search"
               type="search"
@@ -119,17 +121,17 @@ export function AwsUniverseNavigator({ onNavigate, onCreate, open: controlledOpe
         {createOpen && (
           <section className="aws-universe-nav__create" aria-label={ts('awsUniverse.new', 'New AWS Universe')}>
             <label htmlFor="aws-universe-title">{ts('awsUniverse.name', 'Universe name')}</label>
-            <input id="aws-universe-title" value={title} maxLength={160} onChange={(event) => setTitle(event.target.value)} />
+            <Input vocabularyMode="factual" id="aws-universe-title" value={title} maxLength={160} onChange={(event) => setTitle(event.target.value)} />
             <p>{ts('awsUniverse.preview', 'Creates one AWS-only child canvas with one permanent scoped Shop.')}</p>
             {createDisabledReason && <p className="aws-universe-nav__error" role="status">{createDisabledReason}</p>}
-            <button type="button" disabled={!!createDisabledReason} title={createDisabledReason ?? undefined} onClick={submit}>{ts('awsUniverse.create', 'Create and open')}</button>
+            <Button variant="outlined" size="small" vocabularyMode="factual" disabled={!!createDisabledReason} title={createDisabledReason ?? undefined} onClick={submit}>{ts('awsUniverse.create', 'Create and open')}</Button>
           </section>
         )}
         <div className="aws-universe-nav__list" role="listbox" aria-label={ts('awsUniverse.search.label', 'AWS Universes')}>
           {visible.length === 0 ? <p>{ts('awsUniverse.empty', 'No AWS Universe instances match this search.')}</p> : visible.map((row) => (
-            <button
+            <Chip vocabularyMode="factual" selected={row.id === activeId}
               key={row.id}
-              type="button"
+             
               role="option"
               aria-selected={row.id === activeId}
               className={row.id === activeId ? 'is-active' : ''}
@@ -137,7 +139,7 @@ export function AwsUniverseNavigator({ onNavigate, onCreate, open: controlledOpe
             >
               <span>{row.title}</span>
               <span>{row.id}</span>
-            </button>
+            </Chip>
           ))}
         </div>
         {message && <p className="aws-universe-nav__message" role="status">{message}</p>}

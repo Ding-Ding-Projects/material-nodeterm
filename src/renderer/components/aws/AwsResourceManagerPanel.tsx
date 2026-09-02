@@ -13,6 +13,9 @@ import {
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { openDestructiveGate } from '../../state/destructiveGate'
+import { Button, Checkbox } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
+import { Select } from '@renderer/ui/Select'
 
 interface AwsResourceManagerPanelProps {
   nodeId: string
@@ -129,33 +132,33 @@ export function AwsResourceManagerPanel({ nodeId, data }: AwsResourceManagerPane
     <div className="service-node__body aws-manager-panel" role="region" aria-label="AWS resource managers">
       <div className="aws-manager-panel__section">
         <label className="service-node__field">Manager
-          <div className="aws-manager-panel__search"><input ref={managerSearchRef} value={managerSearch.value} onChange={(event) => managerSearch.setValue(event.target.value)} placeholder="Search managers" aria-label="Search AWS managers" /><AnchoredRegexBuilder search={managerSearch} fieldRef={managerSearchRef} label="Regex for AWS manager search" /></div>
-          <select value={intent.manager} onChange={(event) => chooseManager(event.target.value as AwsResourceManagerId)} aria-label="AWS manager">
+          <div className="aws-manager-panel__search"><Input vocabularyMode="factual" ref={managerSearchRef} value={managerSearch.value} onChange={(event) => managerSearch.setValue(event.target.value)} placeholder="Search managers" aria-label="Search AWS managers" /><AnchoredRegexBuilder search={managerSearch} fieldRef={managerSearchRef} label="Regex for AWS manager search" /></div>
+          <Select vocabularyMode="factual" value={intent.manager} onChange={(event) => chooseManager(event.target.value as AwsResourceManagerId)} aria-label="AWS manager">
             {visibleManagers.map((entry) => <option key={entry.id} value={entry.id}>{managerLabel(entry)}</option>)}
-          </select>
+          </Select>
         </label>
         <p className="service-node__note">{definition?.description ?? 'Loading the guided AWS manager catalog.'}</p>
       </div>
       <div className="aws-manager-panel__section">
         <label className="service-node__field">Operation
-          <div className="aws-manager-panel__search"><input ref={operationSearchRef} value={operationSearch.value} onChange={(event) => operationSearch.setValue(event.target.value)} placeholder="Search operations" aria-label="Search AWS operations" /><AnchoredRegexBuilder search={operationSearch} fieldRef={operationSearchRef} label="Regex for AWS operation search" /></div>
-          <select value={operation?.id ?? ''} onChange={(event) => chooseOperation(event.target.value)} aria-label="AWS operation">
+          <div className="aws-manager-panel__search"><Input vocabularyMode="factual" ref={operationSearchRef} value={operationSearch.value} onChange={(event) => operationSearch.setValue(event.target.value)} placeholder="Search operations" aria-label="Search AWS operations" /><AnchoredRegexBuilder search={operationSearch} fieldRef={operationSearchRef} label="Regex for AWS operation search" /></div>
+          <Select vocabularyMode="factual" value={operation?.id ?? ''} onChange={(event) => chooseOperation(event.target.value)} aria-label="AWS operation">
             {visibleOperations.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
-          </select>
+          </Select>
         </label>
         <p className="service-node__note">{operation?.description ?? 'Choose an operation from the verified catalog.'}</p>
       </div>
       {operation && operation.fields.length > 0 && <div className="aws-manager-panel__fields">{operation.fields.map((field) => {
         const value = fieldValue(intent, field)
-        if (field.kind === 'boolean') return <label className="service-node__check" key={field.id}><input type="checkbox" checked={value === true} onChange={(event) => setField(field, event.target.checked)} /> {field.label}</label>
-        if (field.kind === 'choice') return <label className="service-node__field" key={field.id}>{field.label}<select value={String(value)} onChange={(event) => setField(field, event.target.value)} aria-label={field.label}>{field.options?.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><span className="service-node__note">{field.description}</span></label>
-        return <label className="service-node__field" key={field.id}>{field.label}<input className="service-node__input nodrag" type={field.kind === 'number' ? 'number' : field.kind === 'date' ? 'date' : 'text'} value={String(value)} min={field.minimum} max={field.maximum} step={field.step} pattern={field.pattern} onChange={(event) => setField(field, field.kind === 'number' ? Number(event.target.value) : event.target.value)} aria-label={field.label} /><span className="service-node__note">{field.description}</span></label>
+        if (field.kind === 'boolean') return <label className="service-node__check" key={field.id}><Checkbox vocabularyMode="factual" checked={value === true} onChange={(event) => setField(field, event.target.checked)} /> {field.label}</label>
+        if (field.kind === 'choice') return <label className="service-node__field" key={field.id}>{field.label}<Select vocabularyMode="factual" value={String(value)} onChange={(event) => setField(field, event.target.value)} aria-label={field.label}>{field.options?.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Select><span className="service-node__note">{field.description}</span></label>
+        return <label className="service-node__field" key={field.id}>{field.label}<Input vocabularyMode="factual" className="service-node__input nodrag" type={field.kind === 'number' ? 'number' : field.kind === 'date' ? 'date' : 'text'} value={String(value)} min={field.minimum} max={field.maximum} step={field.step} pattern={field.pattern} onChange={(event) => setField(field, field.kind === 'number' ? Number(event.target.value) : event.target.value)} aria-label={field.label} /><span className="service-node__note">{field.description}</span></label>
       })}</div>}
       <div className="aws-manager-panel__section">
-        <div className="aws-manager-panel__search"><input ref={resourceSearchRef} value={resourceSearch.value} onChange={(event) => resourceSearch.setValue(event.target.value)} placeholder="Search resources" aria-label="Search AWS resources" /><AnchoredRegexBuilder search={resourceSearch} fieldRef={resourceSearchRef} label="Regex for AWS resource search" /><button type="button" onClick={() => void refreshResources()}>Refresh</button></div>
-        {visibleResources.length > 0 ? <ul className="aws-manager-panel__resources">{visibleResources.map((resource) => <li key={resource.id}><label><input type="checkbox" checked={selected.has(resource.id)} onChange={(event) => setSelected((current) => { const next = new Set(current); if (event.target.checked) next.add(resource.id); else next.delete(resource.id); return next })} /> <span>{resource.label}</span> <small>{resource.kind} · {resource.status}</small></label></li>)}</ul> : <p className="service-node__note">No verified AWS resources are loaded yet. Refresh to query the configured adapter.</p>}
+        <div className="aws-manager-panel__search"><Input vocabularyMode="factual" ref={resourceSearchRef} value={resourceSearch.value} onChange={(event) => resourceSearch.setValue(event.target.value)} placeholder="Search resources" aria-label="Search AWS resources" /><AnchoredRegexBuilder search={resourceSearch} fieldRef={resourceSearchRef} label="Regex for AWS resource search" /><Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void refreshResources()}>Refresh</Button></div>
+        {visibleResources.length > 0 ? <ul className="aws-manager-panel__resources">{visibleResources.map((resource) => <li key={resource.id}><label><Checkbox vocabularyMode="factual" checked={selected.has(resource.id)} onChange={(event) => setSelected((current) => { const next = new Set(current); if (event.target.checked) next.add(resource.id); else next.delete(resource.id); return next })} /> <span>{resource.label}</span> <small>{resource.kind} · {resource.status}</small></label></li>)}</ul> : <p className="service-node__note">No verified AWS resources are loaded yet. Refresh to query the configured adapter.</p>}
       </div>
-      <div className="aws-manager-panel__actions"><button type="button" disabled={!available.available || selected.size === 0 || !operation} onClick={(event) => runOperation(event)} title={!available.available ? available.nextAction : undefined}>Run selected operation</button>{progress && <><button type="button" onClick={() => void refreshProgress()}>Refresh progress</button>{progress.canCancel && <button type="button" onClick={() => void window.nodeTerminal.awsManagers.cancel(progress.jobId).then(setProgress).catch((reason) => setError(String(reason)))}>Cancel</button>}{progress.canRetry && <button type="button" onClick={() => void window.nodeTerminal.awsManagers.retry(progress.jobId).then(setProgress).catch((reason) => setError(String(reason)))}>Retry</button>}</>}</div>
+      <div className="aws-manager-panel__actions"><Button variant="outlined" size="small" vocabularyMode="factual" disabled={!available.available || selected.size === 0 || !operation} onClick={(event) => runOperation(event)} title={!available.available ? available.nextAction : undefined}>Run selected operation</Button>{progress && <><Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void refreshProgress()}>Refresh progress</Button>{progress.canCancel && <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void window.nodeTerminal.awsManagers.cancel(progress.jobId).then(setProgress).catch((reason) => setError(String(reason)))}>Cancel</Button>}{progress.canRetry && <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => void window.nodeTerminal.awsManagers.retry(progress.jobId).then(setProgress).catch((reason) => setError(String(reason)))}>Retry</Button>}</>}</div>
       {!available.available && <p className="service-node__note" role="status">{available.reason ?? 'AWS manager adapter is not available.'} {available.nextAction ?? 'Refresh after configuring the adapter.'}</p>}
       {progress && <p className="service-node__note" role="status">{progress.stage}: {progress.completed}/{progress.total}. {progress.message}</p>}
       {error && <p className="service-node__note" role="alert">{error}</p>}

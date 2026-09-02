@@ -16,6 +16,8 @@ import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
+import { Checkbox, TextArea } from '@renderer/ui/md3'
+import { Select } from '@renderer/ui/Select'
 
 export interface AwsOperationWizardProps {
   definition: AwsWizardDefinition
@@ -176,7 +178,7 @@ function FieldEditor({ field, value, onChange, disabled = false }: FieldEditorPr
       <label className="aws-wizard__field aws-wizard__scalar">
         <span>{label}</span>
         {field.documentation && <small id={descriptionId}>{field.documentation}</small>}
-        <textarea
+        <TextArea vocabularyMode="factual"
           className="aws-wizard__document"
           value={JSON.stringify(value ?? null, null, 2)}
           aria-describedby={descriptionId}
@@ -199,10 +201,10 @@ function FieldEditor({ field, value, onChange, disabled = false }: FieldEditorPr
           <AnchoredRegexBuilder search={enumSearch} fieldRef={enumSearchRef} label={vocab(`Regex for ${field.name} choices`)} />
         </div>
         {enumSearch.error && <p role="alert">{enumSearch.error}</p>}
-        <select value={typeof current === 'string' ? current : ''} aria-describedby={descriptionId} onChange={(event) => onChange(event.target.value)}>
+        <Select vocabularyMode="factual" value={typeof current === 'string' ? current : ''} aria-describedby={descriptionId} onChange={(event) => onChange(event.target.value)}>
           <option value="">{vocab('Choose a modeled value')}</option>
           {visibleOptions.map((option) => <option value={option} key={option}>{option}</option>)}
-        </select>
+        </Select>
       </fieldset>
     )
   }
@@ -210,7 +212,7 @@ function FieldEditor({ field, value, onChange, disabled = false }: FieldEditorPr
   if (field.kind === 'boolean') {
     return (
       <label className="aws-wizard__switch">
-        <input type="checkbox" checked={value === true} disabled={disabled} aria-describedby={descriptionId} onChange={(event) => onChange(event.target.checked)} />
+        <Checkbox vocabularyMode="factual" checked={value === true} disabled={disabled} aria-describedby={descriptionId} onChange={(event) => onChange(event.target.checked)} />
         <span>{label}</span>
         {field.documentation && <small id={descriptionId}>{field.documentation}</small>}
       </label>
@@ -336,7 +338,7 @@ export function AwsOperationWizard({ definition, initialValue, onSubmit, onCance
           <div className="aws-wizard__tabs" role="tablist" aria-label={vocab('Advanced format')}>
             {(['json', 'yaml'] as const).map((format) => <Button key={format} type="button" role="tab" aria-selected={advancedFormat === format} variant={advancedFormat === format ? 'primary' : 'default'} onClick={() => setAdvancedFormat(format)}>{format.toUpperCase()}</Button>)}
           </div>
-          <textarea className="aws-wizard__advanced-editor" value={advancedFormat === 'json' ? jsonText : yamlText} aria-label={vocab(`Advanced ${advancedFormat} editor`)} onChange={(event) => updateAdvanced(event.target.value, advancedFormat)} />
+          <TextArea vocabularyMode="factual" className="aws-wizard__advanced-editor" value={advancedFormat === 'json' ? jsonText : yamlText} aria-label={vocab(`Advanced ${advancedFormat} editor`)} onChange={(event) => updateAdvanced(event.target.value, advancedFormat)} />
           {advancedError && <p role="alert">{advancedError}</p>}
           {issuesText(advancedIssues)}
         </section>

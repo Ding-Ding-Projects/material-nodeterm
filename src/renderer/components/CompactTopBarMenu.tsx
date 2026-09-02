@@ -4,6 +4,7 @@ import { AnchoredPopover } from '../ui/AnchoredPopover'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { Button } from '@renderer/ui/md3'
 
 /** One action exposed by the compact top-bar overflow surface. */
 export interface CompactTopBarMenuItem {
@@ -49,7 +50,7 @@ export function CompactTopBarMenu({ items, label = 'More', className, triggerRef
 
   return (
     <>
-      <button
+      <Button variant="outlined" size="small" vocabularyMode="factual"
         ref={triggerRef}
         type="button"
         className={`md3-icon-btn md3-compact-more${className ? ` ${className}` : ''}`}
@@ -61,7 +62,7 @@ export function CompactTopBarMenu({ items, label = 'More', className, triggerRef
       >
         <span aria-hidden="true">⋯</span>
         <span className="md3-compact-more__text">{vocab('topBar.more.label', label)}</span>
-      </button>
+      </Button>
       <AnchoredPopover
         anchorRef={triggerRef}
         open={open}
@@ -112,7 +113,7 @@ export function CompactTopBarMenu({ items, label = 'More', className, triggerRef
               ? vocab(`${item.id}.disabledReason`, item.disabledReason)
               : undefined
             return (
-              <button
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 key={item.id}
                 type="button"
                 disabled={item.disabled}
@@ -129,7 +130,7 @@ export function CompactTopBarMenu({ items, label = 'More', className, triggerRef
                 {item.disabled && visibleReason ? (
                   <small className="md3-compact-more__reason">{visibleReason}</small>
                 ) : null}
-              </button>
+              </Button>
             )
           })}
         </div>

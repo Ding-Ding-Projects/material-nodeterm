@@ -6,6 +6,7 @@ import { useSessionMemory } from '../state/sessionMemory'
 import { usageScopeKey } from '../lib/usageScope'
 import { SessionMemoryPanel } from './SessionMemoryPanel'
 import { IconResource } from './icons'
+import { Button } from '@renderer/ui/md3'
 
 /** `formatBytes` speaks bytes; every number in this feature is MB. */
 const MB = 1024 * 1024
@@ -131,7 +132,7 @@ export function SystemResourcePill({
           onClose={() => setOpen(false)}
         />
       )}
-      <button
+      <Button variant="outlined" size="small" vocabularyMode="factual"
         className="sysres-pill"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
@@ -146,7 +147,7 @@ export function SystemResourcePill({
           <IconResource />
         </span>
         {body}
-      </button>
+      </Button>
     </div>
   )
 }
