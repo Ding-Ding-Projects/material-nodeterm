@@ -16,6 +16,7 @@ import {
   type UpdateDownloadedStatus,
   type UpdateManualStatus
 } from '@renderer/lib/update-card-state'
+import { Button, IconButton } from '@renderer/ui/md3'
 
 // The full updater lifecycle as one status union, driving a fixed bottom-right card.
 // `checking` is only ever shown for a user-initiated manual check; automatic checks stay
@@ -154,14 +155,14 @@ export function UpdateCard(): JSX.Element | null {
             ? '!'
             : '…'
     return (
-      <button
+      <Button variant="tonal" size="small" vocabularyMode="factual"
         className="update-card update-card--pill"
         title={text('update.title.manual', 'Update available')}
         onClick={() => setMinimized(false)}
       >
         <span className="update-card__dot" />
         {label}
-      </button>
+      </Button>
     )
   }
 
@@ -201,22 +202,22 @@ export function UpdateCard(): JSX.Element | null {
       <div className="update-card__head">
         <span className="update-card__title">{title}</span>
         {canMinimize && (
-          <button
+          <IconButton size="compact" vocabularyMode="factual" aria-label={text('update.minimize', 'Minimize')}
             className="update-card__icon"
             title={text('update.minimize', 'Minimize')}
             onClick={() => setMinimized(true)}
           >
             —
-          </button>
+          </IconButton>
         )}
         {canDismiss && (
-          <button
+          <IconButton size="compact" vocabularyMode="factual" aria-label={text('announce.dismiss', 'Dismiss')}
             className="update-card__icon"
             title={text('announce.dismiss', 'Dismiss')}
             onClick={dismiss}
           >
             ✕
-          </button>
+          </IconButton>
         )}
       </div>
 
@@ -229,9 +230,9 @@ export function UpdateCard(): JSX.Element | null {
       {status.kind === 'available' && (
         <>
           <p className="update-card__body">{localizedUpdateBody(status.kind, status.version)}</p>
-          <button className="update-card__link" onClick={openReleases}>
+          <Button variant="text" size="small" vocabularyMode="factual" className="update-card__link" onClick={openReleases}>
             {text('update.releaseNotes', 'Release notes')}
-          </button>
+          </Button>
           <div className="update-card__bar">
             <div
               className={`update-card__bar-fill${
@@ -257,9 +258,9 @@ export function UpdateCard(): JSX.Element | null {
       {status.kind === 'manual' && (
         <>
           <p className="update-card__body">{localizedUpdateBody(status.kind, status.version)}</p>
-          <button className="update-card__btn" onClick={openReleases}>
+          <Button variant="filled" size="small" vocabularyMode="factual" className="update-card__btn" onClick={openReleases}>
             {text('update.download', 'Download')}
-          </button>
+          </Button>
         </>
       )}
 
@@ -269,15 +270,18 @@ export function UpdateCard(): JSX.Element | null {
           {status.error && (
             <p className="update-card__error" role="alert">{status.error}</p>
           )}
-          <button className="update-card__link" onClick={openReleases}>
+          <Button variant="text" size="small" vocabularyMode="factual" className="update-card__link" onClick={openReleases}>
             {text('update.releaseNotes', 'Release notes')}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="filled"
+            size="small"
+            vocabularyMode="factual"
             className="update-card__btn"
             onClick={() => window.nodeTerminal.updates.restart()}
           >
             {text('update.restart', 'Restart to update')}
-          </button>
+          </Button>
         </>
       )}
 
@@ -304,18 +308,18 @@ export function UpdateCard(): JSX.Element | null {
           {status.error && (
             <p className="update-card__error" role="alert">{status.error}</p>
           )}
-          <button className="update-card__btn" onClick={() => window.nodeTerminal.updates.check()}>
+          <Button variant="filled" size="small" vocabularyMode="factual" className="update-card__btn" onClick={() => window.nodeTerminal.updates.check()}>
             {text('update.updateNow', 'Update now')}
-          </button>
+          </Button>
         </>
       )}
 
       {status.kind === 'error' && (
         <>
           <p className="update-card__body">{status.message}</p>
-          <button className="update-card__link" onClick={openReleases}>
+          <Button variant="text" size="small" vocabularyMode="factual" className="update-card__link" onClick={openReleases}>
             {text('update.downloadManually', 'Download manually')}
-          </button>
+          </Button>
         </>
       )}
     </div>

@@ -26,6 +26,7 @@ import {
 } from '@shared/usage-limits'
 import { systemAccountDisplay } from '../state/workspace'
 import { recordClaudeUsage } from '../lib/usageAccountRotation'
+import { Button, Chip, IconButton } from '@renderer/ui/md3'
 
 /** Grace period before a hover-opened popover closes, so the pointer can cross the pill's own
  *  gap (or clip a corner en route elsewhere) without the panel flickering shut. */
@@ -97,8 +98,8 @@ function AccountUsageBlock({
       {u && u.limits.length === 0 && <span className="usage-popover__empty">No usage data.</span>}
       {!u && <span className="usage-popover__empty usage-pill__pulse">···</span>}
       {selectable && (
-        <button
-          type="button"
+        <Chip vocabularyMode="factual" selected={selected}
+         
           className="usage-account__select"
           role="radio"
           aria-checked={selected}
@@ -106,7 +107,7 @@ function AccountUsageBlock({
           onClick={() => onSelect(accountId)}
         >
           Use for new sessions
-        </button>
+        </Chip>
       )}
     </div>
   )
@@ -157,8 +158,8 @@ function RemoteUsageBlock({
         </span>
       )}
       {selectable && (
-        <button
-          type="button"
+        <Chip vocabularyMode="factual" selected={selected}
+         
           className="usage-account__select"
           role="radio"
           aria-checked={selected}
@@ -166,7 +167,7 @@ function RemoteUsageBlock({
           onClick={() => onSelect(accountId)}
         >
           Use for new sessions
-        </button>
+        </Chip>
       )}
     </div>
   )
@@ -514,7 +515,7 @@ export function UsageIndicator({
       {/* The SSH pill is visually identical to the local one — same labels, same bar — so the
           title is what answers "whose numbers are these?" without opening the popover. The trigger
           comes first so Tab enters an open popover before the refresh button. */}
-      <button
+      <Button variant="text" size="small" vocabularyMode="factual"
         ref={pillRef}
         className="usage-pill"
         onClick={() => setOpen((v) => !v)}
@@ -523,7 +524,7 @@ export function UsageIndicator({
       >
         <span className="usage-pill__icon">✦</span>
         {pillBody}
-      </button>
+      </Button>
       {open && (
         <div
           className="usage-popover"
@@ -633,8 +634,8 @@ export function UsageIndicator({
             <ProviderBlock key={providerRowKey(p)} u={p} mode={percentMode} identity={providerIdentity(p)} />
           ))}
           {scope.kind === 'local' && !hidden.has('claude') && (
-            <button
-              type="button"
+            <Button variant="outlined" size="small" vocabularyMode="factual"
+             
               className="usage-popover__switch"
               title={
                 'Opens a terminal running \`claude /login\` for the system account (~/.claude). ' +
@@ -647,18 +648,16 @@ export function UsageIndicator({
               }}
             >
               ⇄ Switch account…
-            </button>
+            </Button>
           )}
         </div>
       )}
-      <button
+      <IconButton size="compact" icon="refresh" vocabularyMode="factual" aria-label="Refresh usage"
         className={`usage-refresh${fetching ? ' spin' : ''}`}
         onClick={refresh}
         disabled={refreshing}
         title="Refresh usage"
-      >
-        ⟳
-      </button>
+       />
     </div>
   )
 }

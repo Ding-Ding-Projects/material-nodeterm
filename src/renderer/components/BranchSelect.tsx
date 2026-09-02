@@ -1,6 +1,8 @@
 import { useState, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { MaterialSymbol } from './MaterialSymbol'
+import { Button, ListRow } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 interface Props {
   value: string
@@ -45,10 +47,10 @@ export function BranchSelect({
 
   return (
     <>
-      <button type="button" className="bind-select md3-branch-select" onClick={open}>
+      <Button variant="outlined" size="small" vocabularyMode="factual" className="bind-select md3-branch-select" onClick={open}>
         <span className={value ? 'bind-select__val' : 'bind-select__ph'}>{value || placeholder}</span>
         <MaterialSymbol className="bind-select__chev" name="arrow_drop_down" size={18} />
-      </button>
+      </Button>
       {menu &&
         createPortal(
           <>
@@ -60,18 +62,14 @@ export function BranchSelect({
               style={{ top: menu.top, left: menu.left, minWidth: menu.width, zIndex: 80 }}
             >
               {options.map((b) => (
-                <button type="button" key={b} onClick={() => pick(b)}>
-                  <span className="tab-menu__check">
-                    {b === value && <MaterialSymbol name="check" size={14} />}
-                  </span>
-                  {b}
-                </button>
+                <ListRow key={b} vocabularyMode="factual" role="menuitemradio" aria-checked={b === value} icon={b === value ? <MaterialSymbol name="check" size={14} /> : <span className="tab-menu__check" />} label={b} onClick={() => pick(b)} />
               ))}
               {allowCustom && (
                 <>
                   <div className="ctx-sep" />
-                  <input
+                  <Input
                     className="tab__edit"
+                    vocabularyMode="factual"
                     placeholder={customPlaceholder ?? 'type a ref…'}
                     value={custom}
                     spellCheck={false}

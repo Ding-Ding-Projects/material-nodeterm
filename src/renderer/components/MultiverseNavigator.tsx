@@ -5,6 +5,8 @@ import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { AnchoredPopover } from '../ui/AnchoredPopover'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { Button, Chip } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 export interface PendingDoorConstruction {
   parentCanvasId: string
@@ -99,9 +101,9 @@ export function MultiverseNavigator({ onNavigate, onCreate, onBeginDoorConstruct
   return (
     <>
       {!hideTrigger && (
-        <button
+        <Button variant="text" size="small" vocabularyMode="factual"
           ref={anchorRef}
-          type="button"
+         
           className="multiverse-nav__trigger"
           aria-haspopup="dialog"
           aria-expanded={open}
@@ -113,7 +115,7 @@ export function MultiverseNavigator({ onNavigate, onCreate, onBeginDoorConstruct
             {activePath.map((item) => item.title).join(' / ') || active.title}
           </span>
           <span className="multiverse-nav__depth">{ts('multiverse.depth', 'Depth {depth}', { depth: String(active.depth) })}</span>
-        </button>
+        </Button>
       )}
       <AnchoredPopover anchorRef={anchorRef} open={open} onClose={() => setOpen(false)} width={460} className="multiverse-nav__popover" zIndex={92}>
         <div className="multiverse-nav__header">
@@ -121,14 +123,14 @@ export function MultiverseNavigator({ onNavigate, onCreate, onBeginDoorConstruct
             <h2>{ts('multiverse.title', 'Canvas hierarchy')}</h2>
             <p>{ts('multiverse.description', 'Open a scoped child canvas or create one beneath a parent. Hierarchy stops at depth 8.')}</p>
           </div>
-          <button type="button" onClick={() => setCreateOpen((value) => !value)} aria-expanded={createOpen}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => setCreateOpen((value) => !value)} aria-expanded={createOpen}>
             {createOpen ? ts('multiverse.cancelCreate', 'Cancel') : ts('multiverse.newChild', 'New child canvas')}
-          </button>
+          </Button>
         </div>
         <div className="multiverse-nav__search">
           <label htmlFor="multiverse-canvas-search">{ts('multiverse.search.label', 'Search canvases')}</label>
           <div className="multiverse-nav__search-control">
-            <input
+            <Input vocabularyMode="factual"
               ref={searchRef}
               id="multiverse-canvas-search"
               type="search"
@@ -144,7 +146,7 @@ export function MultiverseNavigator({ onNavigate, onCreate, onBeginDoorConstruct
           <section className="multiverse-nav__create" aria-label={ts('multiverse.create.aria', 'Create child canvas')}>
             <label htmlFor="multiverse-parent-search">{ts('multiverse.parent', 'Parent canvas')}</label>
             <div className="multiverse-nav__search-control">
-              <input
+              <Input vocabularyMode="factual"
                 ref={parentSearchRef}
                 id="multiverse-parent-search"
                 type="search"
@@ -161,9 +163,9 @@ export function MultiverseNavigator({ onNavigate, onCreate, onBeginDoorConstruct
                   ? ts('multiverse.parentDepthDisabled', '{parent} is already at depth 8 and cannot contain another child.', { parent: row.title })
                   : undefined
                 return (
-                  <button
+                  <Chip vocabularyMode="factual" selected={row.id === parentCanvasId}
                     key={row.id}
-                    type="button"
+                   
                     role="option"
                     aria-selected={row.id === parentCanvasId}
                     aria-disabled={disabledReason ? 'true' : undefined}
@@ -173,22 +175,22 @@ export function MultiverseNavigator({ onNavigate, onCreate, onBeginDoorConstruct
                   >
                     <span>{'  '.repeat(row.depth)}{row.title}</span>
                     <span>{disabledReason ?? ts('multiverse.depth', 'Depth {depth}', { depth: String(row.depth) })}</span>
-                  </button>
+                  </Chip>
                 )
               })}
             </div>
             <label htmlFor="multiverse-title">{ts('multiverse.name', 'Canvas name')}</label>
-            <input id="multiverse-title" value={title} maxLength={160} onChange={(event) => setTitle(event.target.value)} />
+            <Input vocabularyMode="factual" id="multiverse-title" value={title} maxLength={160} onChange={(event) => setTitle(event.target.value)} />
             <p>{ts('multiverse.createPreview', 'This creates depth {depth} beneath {parent}, with one permanent scoped Shop.', { depth: String(nextDepth), parent: parent.title })}</p>
             {createDisabledReason && <p className="multiverse-nav__error" role="status">{createDisabledReason}</p>}
-            <button type="button" disabled={!!createDisabledReason} title={createDisabledReason ?? undefined} onClick={submit}>{ts('multiverse.create', 'Create and open')}</button>
+            <Button variant="outlined" size="small" vocabularyMode="factual" disabled={!!createDisabledReason} title={createDisabledReason ?? undefined} onClick={submit}>{ts('multiverse.create', 'Create and open')}</Button>
           </section>
         )}
         <div className="multiverse-nav__list" role="listbox" aria-label={ts('multiverse.list.aria', 'Project canvases')}>
           {visible.length === 0 ? <p>{ts('multiverse.empty', 'No canvases match this search.')}</p> : visible.map((row) => (
-            <button
+            <Chip vocabularyMode="factual" selected={row.id === activeId}
               key={row.id}
-              type="button"
+             
               role="option"
               aria-selected={row.id === activeId}
               className={row.id === activeId ? 'is-active' : ''}
@@ -197,7 +199,7 @@ export function MultiverseNavigator({ onNavigate, onCreate, onBeginDoorConstruct
             >
               <span>{row.title}</span>
               <span>{ts('multiverse.depth', 'Depth {depth}', { depth: String(row.depth) })}</span>
-            </button>
+            </Chip>
           ))}
         </div>
         {message && <p className="multiverse-nav__message" role="status">{message}</p>}

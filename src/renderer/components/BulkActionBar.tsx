@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { BulkActionPreview } from './BulkActionPreview'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { Button } from '@renderer/ui/md3'
 
 export interface BulkAction<T> {
   id: string
@@ -103,21 +104,21 @@ export function BulkActionBar<T>({
   return (
     <div className="bulk-bar" role="toolbar" aria-label={vocab('Bulk actions')}>
       <div className="bulk-bar__selection">
-        <button
+        <Button variant="outlined" size="small" vocabularyMode="factual"
           type="button"
           className="bulk-bar__select-all"
           onClick={onSelectAll}
           disabled={visible.length === 0}
         >
           {mapOwnedSentence(vocab, [copy('Select all ('), fact(String(visible.length)), copy(' matching)')])}
-        </button>
-        <button type="button" className="bulk-bar__invert" onClick={onInvert} disabled={visible.length === 0}>
+        </Button>
+        <Button variant="outlined" size="small" vocabularyMode="factual" className="bulk-bar__invert" onClick={onInvert} disabled={visible.length === 0}>
           {vocab('Invert')}
-        </button>
+        </Button>
         {count > 0 && (
-          <button type="button" className="bulk-bar__clear" onClick={onClear}>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="bulk-bar__clear" onClick={onClear}>
             {vocab('Clear')}
-          </button>
+          </Button>
         )}
         <span className="bulk-bar__count" aria-live="polite">
           {mapOwnedSentence(vocab, [fact(String(count)), copy(' selected')])}
@@ -128,9 +129,10 @@ export function BulkActionBar<T>({
           {actions.map((action) => {
             const reason = action.disabledReason?.(selectedItems) ?? null
             return (
-              <button
+              <Button variant="outlined" size="small" vocabularyMode="factual"
                 key={action.id}
                 type="button"
+                danger={action.destructive}
                 className={`bulk-bar__action${action.destructive ? ' bulk-bar__action--danger' : ''}`}
                 disabled={!!reason || running}
                 title={reason ?? undefined}
@@ -138,7 +140,7 @@ export function BulkActionBar<T>({
                 onClick={() => startAction(action)}
               >
                 {vocab(action.label)}
-              </button>
+              </Button>
             )
           })}
         </div>

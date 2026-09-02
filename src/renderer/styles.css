@@ -982,27 +982,6 @@ body,
   font-size: 12px;
 }
 
-.dictation__close {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.dictation__close:hover {
-  background: var(--panel-header);
-  color: var(--text);
-}
-
 .dictation__body {
   display: flex;
   align-items: center;
@@ -1162,18 +1141,6 @@ body,
   border: 1px solid rgba(255, 69, 58, 0.35);
 }
 
-.dictation__error-action {
-  flex-shrink: 0;
-  background: transparent;
-  border: none;
-  color: #0a84ff;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
-}
-
 .dictation__actions {
   display: flex;
   justify-content: flex-end;
@@ -1270,22 +1237,13 @@ body,
   flex: 1 1 auto;
 }
 
-.dictation__pause {
+.md3-icon-btn.dictation__pause {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--danger);
-  border: none;
-  border-radius: 50%;
-  color: #fff;
-  cursor: pointer;
+  background: var(--md-error);
+  color: var(--md-on-error);
 }
-
-.dictation__pause:hover {
-  background: #ff5f55;
+.md3-icon-btn.dictation__pause:hover {
+  background: color-mix(in srgb, var(--md-error) 88%, var(--md-on-error) 12%);
 }
 
 /* ---- Terminal node ---- */
@@ -3493,43 +3451,10 @@ body,
   font-weight: 600;
 }
 
-.update-card__icon {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  color: rgba(var(--tint-rgb), 0.6);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.update-card__icon:hover {
-  background: rgba(var(--tint-rgb), 0.08);
-}
-
 .update-card__body {
   margin: 0;
   font-size: 13.5px;
   color: rgba(var(--tint-rgb), 0.75);
-}
-
-.update-card__link {
-  align-self: flex-start;
-  padding: 0;
-  background: none;
-  border: none;
-  color: rgba(var(--tint-rgb), 0.7);
-  font-size: 13px;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.update-card__link:hover {
-  color: var(--text);
 }
 
 .update-card__bar {
@@ -3577,31 +3502,11 @@ body,
   color: rgba(var(--tint-rgb), 0.6);
 }
 
-.update-card__btn {
-  align-self: flex-start;
-  padding: 6px 14px;
-  background: var(--accent);
-  border: none;
-  border-radius: 8px;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.update-card__btn:hover {
-  background: var(--accent-hover);
-}
-
-.update-card--pill {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
+.mdx-btn.update-card--pill {
+  height: auto;
   width: auto;
+  gap: 8px;
   padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .update-card__dot {
@@ -4543,17 +4448,8 @@ body,
 
 /* Per-row download button. Hidden until the row is hovered/selected (and always reachable by
    keyboard focus) so the tree stays a tree — the context menu carries the same action. */
-.ex-dl {
+.md3-icon-btn.ex-dl {
   margin-left: auto;
-  flex-shrink: 0;
-  padding: 0 4px;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
   opacity: 0;
 }
 
@@ -4566,11 +4462,6 @@ body,
 .ex-dl.done,
 .ex-dl.error {
   opacity: 1;
-}
-
-.ex-dl:hover:not(:disabled) {
-  color: var(--text);
-  background: color-mix(in srgb, var(--text) 12%, transparent);
 }
 
 .ex-dl.running {
@@ -4819,19 +4710,9 @@ body,
 
 /* Custom-dropdown trigger (BranchSelect) — matches `.bind-field input` so it reads as the same kind
  * of field, with a chevron and a muted placeholder. The popover reuses the app's `.tab-menu`. */
-.bind-select {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+.mdx-btn.bind-select {
   width: 100%;
-  background: var(--panel-header);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 13px;
-  padding: 7px 10px;
-  cursor: pointer;
+  justify-content: space-between;
   text-align: left;
 }
 
@@ -5777,16 +5658,6 @@ button.group-node__setup:disabled {
   flex: 1;
 }
 
-.ss-adoptable__bind {
-  flex: 0 0 auto;
-  min-height: 28px;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--md-surface-dim);
-  color: var(--text);
-  cursor: pointer;
-}
 /* "Use for new sessions" affordance + current-default chip on an account row (issue #142).
    Same chip grammar as __host above; the button reads as quiet text until hovered so the
    readout stays a readout. */
@@ -5822,24 +5693,6 @@ button.group-node__setup:disabled {
 /* Popover-footer action (issue #420): opens the system-scoped `claude /login` terminal. A quiet
    full-width row, styled with the same tint/accent tokens as `.usage-account__use` so it reads
    in both themes. */
-.usage-popover__switch {
-  display: block;
-  width: 100%;
-  margin-top: 10px;
-  padding: 5px 8px;
-  border: none;
-  border-radius: 6px;
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  text-align: left;
-  color: rgba(var(--tint-rgb), 0.55);
-  background: rgba(var(--tint-rgb), 0.06);
-  cursor: pointer;
-}
-.usage-popover__switch:hover {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
 
 /* Selected outline for ephemeral subagent/loop nodes. */
 .react-flow__node.selected .subagent-node,
@@ -6563,7 +6416,6 @@ button.group-node__setup:disabled {
     padding 140ms ease,
     gap 140ms ease;
 }
-.usage-pill:hover { background: rgba(44, 44, 46, 0.95); }
 .usage-pill__icon { color: #d97757; font-size: 13px; }
 .usage-pill__rows {
   display: inline-flex;
@@ -6719,21 +6571,6 @@ button.group-node__setup:disabled {
 .server-deploy-pill__copy {
   color: rgba(var(--tint-rgb), 0.6);
 }
-.usage-refresh {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 12px;
-  background: rgba(var(--card-rgb), 0.92);
-  border: 1px solid rgba(var(--tint-rgb), 0.08);
-  color: rgba(var(--tint-rgb), 0.7);
-  font-size: 13px;
-  cursor: pointer;
-}
-.usage-refresh:hover { color: var(--text-strong); }
-.usage-refresh:disabled { opacity: 0.4; cursor: default; }
 .usage-refresh.spin { animation: usage-spin 0.9s linear infinite; }
 @keyframes usage-spin { to { transform: rotate(360deg); } }
 
@@ -6785,24 +6622,6 @@ button.group-node__setup:disabled {
   margin-bottom: 4px;
 }
 /* Usage account selection is a real radio action, not a label-only affordance. */
-.usage-account__select {
-  margin-top: 10px;
-  padding: 5px 8px;
-  border: 1px solid rgba(var(--tint-rgb), 0.18);
-  border-radius: 6px;
-  background: rgba(var(--tint-rgb), 0.05);
-  color: inherit;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.usage-account__select:hover {
-  background: rgba(var(--tint-rgb), 0.1);
-}
-.usage-account__select:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
 /* Host chip on a remote (SSH) account row — the same email can be signed in on several
    machines, so the row has to say WHERE these numbers came from. */
 .usage-account__host {
@@ -7281,7 +7100,6 @@ button.group-node__setup:disabled {
 .ss-mark { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; }
 .ss-title { font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ss-title.is-unread { font-weight: 600; }
-.ss-title-input { font-size: 12.5px; background: var(--panel); color: var(--text); border: 1px solid var(--accent); border-radius: 4px; padding: 1px 4px; }
 .ss-chip { font-size: 10px; color: var(--text); opacity: 0.7; background: var(--panel-header); border-radius: 4px; padding: 0 5px; max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 0 auto; }
 .ss-loop { font-size: 9.5px; color: var(--caution); border: 1px solid rgba(255, 214, 10, 0.4); border-radius: 4px; padding: 0 4px; flex: 0 0 auto; }
 .ss-meta { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--muted); min-width: 0; }
@@ -7316,11 +7134,8 @@ button.group-node__setup:disabled {
 .sessions-sidebar__title { font-size: 12.5px; font-weight: 600; color: var(--text); }
 .sessions-sidebar__count { font-size: 10.5px; color: var(--muted); }
 .sessions-sidebar__head-actions { margin-left: auto; display: flex; gap: 4px; }
-.sessions-sidebar__head-actions button { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; color: var(--text); cursor: pointer; border-radius: 6px; }
-.sessions-sidebar__head-actions button:hover { background: var(--panel-header); }
-.sessions-sidebar__head-actions button.is-on { color: var(--accent); }
 .sessions-sidebar__search { margin: 8px 10px 4px; }
-.sessions-sidebar__search input { width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 8px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 7px; }
+.sessions-sidebar__search .mdx-input { width: 100%; }
 .sessions-sidebar__body { overflow-y: auto; padding: 4px 6px 8px; }
 .sessions-sidebar__empty { padding: 18px 12px; text-align: center; font-size: 12px; color: var(--muted); }
 
@@ -7346,24 +7161,6 @@ button.group-node__setup:disabled {
 }
 /* The chevron is the ONLY collapse toggle on an inactive project row (the row itself switches),
    so it is a real button with a clickable box around the 9px glyph, not the glyph alone. */
-.ss-group__chev {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  margin: -3px -2px -3px -3px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  font-size: 9px;
-  line-height: 1;
-  color: var(--muted);
-  cursor: pointer;
-}
-.ss-group__chev:hover { background: rgba(var(--tint-rgb), 0.12); color: var(--text); }
 .ss-group__dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .ss-group__name { font-size: 12px; font-weight: 600; color: var(--text); }
 .ss-group.is-active .ss-group__name { color: var(--accent); }
@@ -7393,9 +7190,9 @@ button.group-node__setup:disabled {
     animation: none;
   }
 }
-.ss-group__add { margin-left: auto; opacity: 0; border: none; background: transparent; color: var(--text); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; }
+.md3-icon-btn.ss-group__add { margin-left: auto; opacity: 0; }
+.md3-icon-btn.ss-group__add:hover, .md3-icon-btn.ss-group__add:focus-visible { opacity: 1; }
 .ss-group__head:hover .ss-group__add { opacity: 0.7; }
-.ss-group__add:hover { opacity: 1 !important; color: var(--accent); }
 .ss-group__empty { padding: 4px 8px 6px 22px; font-size: 11px; color: var(--muted); }
 
 /* Canvas-group sub-section inside a project */
@@ -7418,10 +7215,9 @@ button.group-node__setup:disabled {
    rename target must be only as wide as the name itself. */
 .ss-subgroup__name { flex: 0 1 auto; min-width: 0; font-size: 11.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ss-subgroup__head .ss-group__count { margin-left: auto; }
-.ss-subgroup__ai { opacity: 0; border: none; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px; flex: 0 0 auto; }
+.md3-icon-btn.ss-subgroup__ai { opacity: 0; }
+.md3-icon-btn.ss-subgroup__ai:hover, .md3-icon-btn.ss-subgroup__ai:focus-visible, .md3-icon-btn.ss-subgroup__ai:disabled { opacity: 1; }
 .ss-subgroup__head:hover .ss-subgroup__ai { opacity: 0.6; }
-.ss-subgroup__ai:hover { opacity: 1 !important; color: var(--accent); }
-.ss-subgroup__ai:disabled { opacity: 0.6; cursor: default; color: var(--accent); }
 .ss-ungrouped { margin: 2px 0 0 15px; border: 1px solid transparent; border-radius: 6px; }
 .ss-ungrouped__label { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 4px 6px 2px 8px; }
 /* Drop-target highlight while dragging a session onto a group / project header */
@@ -9160,7 +8956,6 @@ button.group-node__setup:disabled {
 .ss-mark { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; }
 .ss-title { font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ss-title.is-unread { font-weight: 600; }
-.ss-title-input { font-size: 12.5px; background: var(--panel); color: var(--text); border: 1px solid var(--accent); border-radius: 4px; padding: 1px 4px; }
 .ss-chip { font-size: 10px; color: var(--text); opacity: 0.7; background: var(--panel-header); border-radius: 4px; padding: 0 5px; max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 0 auto; }
 .ss-loop { font-size: 9.5px; color: var(--caution); border: 1px solid rgba(255, 214, 10, 0.4); border-radius: 4px; padding: 0 4px; flex: 0 0 auto; }
 .ss-meta { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--muted); min-width: 0; }
@@ -9209,37 +9004,9 @@ button.group-node__setup:disabled {
 /* Grouping tabs: text with a 2px accent underline on the active tab, sitting on the hairline that
    separates the header from the list (see the "Metin sekmesi" design). */
 .ss-tabs { display: flex; gap: 18px; padding: 0 12px; border-bottom: 1px solid var(--border); }
-.ss-tab {
-  position: relative;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--muted);
-  padding: 4px 1px 8px;
-  margin-bottom: -1px; /* overlap the container border so the underline lands on the hairline */
-  transition: color 120ms ease;
-}
-.ss-tab:hover { color: var(--text); }
-.ss-tab.is-active { color: var(--text); }
-.ss-tab.is-active::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: var(--accent);
-  border-radius: 1px;
-}
-.ss-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .sessions-sidebar__head-actions { margin-left: auto; display: flex; gap: 4px; }
-.sessions-sidebar__head-actions button { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; color: var(--text); cursor: pointer; border-radius: 6px; }
-.sessions-sidebar__head-actions button:hover { background: var(--panel-header); }
-.sessions-sidebar__head-actions button.is-on { color: var(--accent); }
 .sessions-sidebar__search { margin: 8px 10px 4px; }
-.sessions-sidebar__search input { width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 8px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 7px; }
+.sessions-sidebar__search .mdx-input { width: 100%; }
 .sessions-sidebar__body { overflow-y: auto; padding: 4px 6px 8px; }
 .sessions-sidebar__empty { padding: 18px 12px; text-align: center; font-size: 12px; color: var(--muted); }
 
@@ -9315,10 +9082,9 @@ button.group-node__setup:disabled {
    rename target must be only as wide as the name itself. */
 .ss-subgroup__name { flex: 0 1 auto; min-width: 0; font-size: 11.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ss-subgroup__head .ss-group__count { margin-left: auto; }
-.ss-subgroup__ai { opacity: 0; border: none; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px; flex: 0 0 auto; }
+.md3-icon-btn.ss-subgroup__ai { opacity: 0; }
+.md3-icon-btn.ss-subgroup__ai:hover, .md3-icon-btn.ss-subgroup__ai:focus-visible, .md3-icon-btn.ss-subgroup__ai:disabled { opacity: 1; }
 .ss-subgroup__head:hover .ss-subgroup__ai { opacity: 0.6; }
-.ss-subgroup__ai:hover { opacity: 1 !important; color: var(--accent); }
-.ss-subgroup__ai:disabled { opacity: 0.6; cursor: default; color: var(--accent); }
 .ss-ungrouped { margin: 2px 0 0 15px; border: 1px solid transparent; border-radius: 6px; }
 .ss-ungrouped__label { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 4px 6px 2px 8px; }
 /* Drop-target highlight while dragging a session onto a group / project header */
@@ -12481,22 +12247,6 @@ button.group-node__setup:disabled {
   gap: 6px;
   flex-wrap: wrap;
 }
-.bulk-bar__select-all,
-.bulk-bar__invert,
-.bulk-bar__clear {
-  padding: 3px 8px;
-  border: 1px solid rgba(var(--tint-rgb), 0.15);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-strong);
-  font-size: 11px;
-  cursor: pointer;
-}
-.bulk-bar__select-all:disabled,
-.bulk-bar__invert:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
 
 .bulk-bar__count {
   font-size: 11px;
@@ -12508,17 +12258,6 @@ button.group-node__setup:disabled {
   gap: 6px;
   flex-wrap: wrap;
 }
-.bulk-bar__action {
-  padding: 3px 10px;
-  border: 1px solid rgba(var(--tint-rgb), 0.18);
-  border-radius: 6px;
-  background: rgba(var(--tint-rgb), 0.06);
-  color: var(--text-strong);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.bulk-bar__action:disabled { opacity: 0.4; cursor: default; }
 
 .bulk-preview__list {
   margin: 6px 0;

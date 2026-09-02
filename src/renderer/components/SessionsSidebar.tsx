@@ -32,6 +32,8 @@ import { useSession } from '../session/session'
 import { useWorktrees } from '../state/worktrees'
 import type { WorktreeEntry } from '@shared/worktree'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Button, Chip, IconButton } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 
 export interface SessionsSidebarProps {
   open: boolean
@@ -375,8 +377,8 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
           }}
           {...dropProps(projectId, bucket.id)}
         >
-          <button
-            type="button"
+          <IconButton size="compact" icon={collapsed ? 'chevron_right' : 'arrow_drop_down'} vocabularyMode="factual"
+           
             className="ss-group__chev"
             aria-label={collapsed ? `${vocab('Expand')} ${bucket.title}` : `${vocab('Collapse')} ${bucket.title}`}
             aria-expanded={!collapsed}
@@ -385,13 +387,12 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
               e.stopPropagation()
               toggleCollapse(collapseKey, collapsed)
             }}
-          >
-            {collapsed ? '▶' : '▼'}
-          </button>
+           />
           <span className="ss-subgroup__dot" style={{ background: bucket.color }} />
           {editGroup?.id === bucket.id ? (
-            <input
-              className="ss-title-input"
+            <Input
+              className="mdx-input--bare ss-title-input"
+              vocabularyMode="factual"
               style={{ flex: 1, minWidth: 0 }}
               autoFocus
               value={editGroup.draft}
@@ -421,7 +422,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
           )}
           <span className="ss-group__count">{groupSessionCount(bucket)}</span>
           {members.length > 0 && (
-            <button
+            <IconButton size="compact" icon="auto_awesome" vocabularyMode="factual" aria-label={vocab('Name group with AI')}
               className="ss-subgroup__ai"
               title={vocab("Name group with AI (from all descendant sessions' output)")}
               disabled={!!namingById[bucket.id]}
@@ -435,9 +436,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
                   projectCwd
                 )
               }}
-            >
-              {namingById[bucket.id] ? '…' : '✦'}
-            </button>
+             />
           )}
         </div>
         {!collapsed && (
@@ -517,8 +516,8 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
           <IconBranch /> {row.entry.branch ?? 'detached'}
         </span>
         <span className="ss-adoptable__path">{row.entry.path}</span>
-        <button
-          type="button"
+        <Button variant="outlined" size="small" vocabularyMode="factual"
+         
           className="ss-adoptable__bind"
           disabled={detached || !props.onBindWorktree}
           title={detached ? 'Detached HEAD' : 'Bind this worktree to a new group'}
@@ -528,7 +527,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
           }}
         >
           Bind
-        </button>
+        </Button>
       </div>
     )
   }
@@ -565,8 +564,8 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
             {...dropProps(group.projectId, null)}
             {...(dragProj ? projDropProps(group.projectId) : {})}
           >
-            <button
-              type="button"
+            <IconButton size="compact" icon={collapsed ? 'chevron_right' : 'arrow_drop_down'} vocabularyMode="factual"
+             
               className="ss-group__chev"
               title={collapsed ? vocab('Expand') : vocab('Collapse')}
               aria-label={collapsed ? `${vocab('Expand')} ${group.projectName}` : `${vocab('Collapse')} ${group.projectName}`}
@@ -575,9 +574,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
                 event.stopPropagation()
                 toggleCollapse(collapseKey, collapsed)
               }}
-            >
-              {collapsed ? '▶' : '▼'}
-            </button>
+             />
             <ProjectGlyph icon={group.projectIcon} color={group.projectColor} name={group.projectName} variant="monogram" className="ss-group__monogram" />
             <span className="ss-group__name">{group.projectName}</span>
             {branches[group.projectId] && <span className="ss-group__branch">⎇ {branches[group.projectId]}</span>}
@@ -585,10 +582,10 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
             {signals.unread > 0 && <span className="ss-group__sig ss-group__sig--unread"><IconCircleCheck />{signals.unread}</span>}
             {signals.working > 0 && <span className="ss-group__sig ss-group__sig--working"><span className="ss-group__sig-spin" />{signals.working}</span>}
             <span className="ss-group__count">{sessionGroupCount(group)}</span>
-            <button className="ss-group__add" title="Add a node to this project" onClick={(event) => {
+            <IconButton size="compact" icon="add" vocabularyMode="factual" aria-label="Add a node to this project" className="ss-group__add" title="Add a node to this project" onClick={(event) => {
               event.stopPropagation()
               props.onAddToProject(group.projectId, { clientX: event.clientX, clientY: event.clientY })
-            }}>+</button>
+            }} />
           </div>
         )}
         {!collapsed && (
@@ -621,42 +618,43 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
         <span className="sessions-sidebar__title">{vocab('Sessions')}</span>
         <span className="sessions-sidebar__count">{total}</span>
         <div className="sessions-sidebar__head-actions">
-          <button
+          <IconButton size="dense" active={pinned} vocabularyMode="factual" aria-label={pinned ? vocab('Unpin') : vocab('Pin')}
             className={pinned ? 'is-on' : ''}
             title={pinned ? vocab('Unpin') : vocab('Pin')}
             onClick={props.onTogglePin}
           >
             <IconPin />
-          </button>
-          <button title={vocab('Close')} onClick={props.onClose}>
-            ×
-          </button>
+          </IconButton>
+          <IconButton size="dense" icon="close" vocabularyMode="factual" title={vocab('Close')} aria-label={vocab('Close')} onClick={props.onClose} />
         </div>
       </div>
 
       {/* Grouping tabs: plain text with a 2px accent underline on the active one, sitting on the
           hairline that separates the header from the list — quieter than a pill toggle. */}
       <div className="ss-tabs" role="tablist" aria-label="Group sessions by">
-        <button
+        <Chip vocabularyMode="factual" selected={grouping === 'project'}
           role="tab"
           aria-selected={grouping === 'project'}
           className={`ss-tab${grouping === 'project' ? ' is-active' : ''}`}
           onClick={() => updateSettings({ sidebarGrouping: 'project' })}
         >
           Project
-        </button>
-        <button
+        </Chip>
+        <Chip vocabularyMode="factual" selected={grouping === 'status'}
           role="tab"
           aria-selected={grouping === 'status'}
           className={`ss-tab${grouping === 'status' ? ' is-active' : ''}`}
           onClick={() => updateSettings({ sidebarGrouping: 'status' })}
         >
           Status
-        </button>
+        </Chip>
       </div>
 
       <div className="sessions-sidebar__search">
-        <input
+        <Input
+          type="search"
+          vocabularyMode="factual"
+          aria-label={vocab('Filter sessions')}
           placeholder={vocab('Filter sessions…')}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
@@ -709,8 +707,8 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
             return (
               <div key={repo.key} className="ss-repo">
                 <div className="ss-repo__head" title={repo.repoRoot ?? undefined} onClick={() => toggleCollapse(repo.key, collapsed)}>
-                  <button
-                    type="button"
+                  <IconButton size="compact" icon={collapsed ? 'chevron_right' : 'arrow_drop_down'} vocabularyMode="factual"
+                   
                     className="ss-group__chev"
                     title={collapsed ? vocab('Expand') : vocab('Collapse')}
                     aria-label={collapsed ? `${vocab('Expand')} ${repo.repoName}` : `${vocab('Collapse')} ${repo.repoName}`}
@@ -719,9 +717,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
                       event.stopPropagation()
                       toggleCollapse(repo.key, collapsed)
                     }}
-                  >
-                    {collapsed ? '▶' : '▼'}
-                  </button>
+                   />
                   <span className="ss-repo__name">{repo.repoName}</span>
                   {repo.projects.length > 1 && <span className="ss-repo__count">{repo.projects.length}</span>}
                   {signals.attention > 0 && <span className="ss-group__sig ss-group__sig--attention"><IconBellFilled />{signals.attention}</span>}

@@ -42,6 +42,7 @@ import { LockWizard } from './toylocks/LockWizard'
 import { UnlockPrompt } from './toylocks/UnlockPrompt'
 import { ConfirmDialog } from './ConfirmDialog'
 import { PortableBindingWizardPopover } from './PortableBindingWizard'
+import { Button } from '@renderer/ui/md3'
 
 export function unreadCountSegments(count: number, suffix = ' unread') {
   return [fact(String(count)), copy(suffix)]
@@ -384,7 +385,7 @@ export function ProjectSwitcher({
       )}
 
       <div className="md3-switcher" data-easter-surface="project-switcher">
-        <button
+        <Button variant="text" vocabularyMode="factual"
           ref={switcherBtnRef}
           className="md3-switcher__trigger"
           data-appearance-id={appearanceId('tab', activeProject?.id ?? 'none')}
@@ -427,7 +428,7 @@ export function ProjectSwitcher({
               {activeUnread}
             </span>
           )}
-        </button>
+        </Button>
 
         {activeProject && (
           <IconButton
@@ -656,8 +657,8 @@ export function ProjectSwitcher({
 
                     {expanded && (
                       <div className="md3-switcher-actions" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => startRename(p.id, p.name)}>{vocab('Rename')}</button>
-                        <button
+                        <Button variant="text" size="small" vocabularyMode="factual" onClick={() => startRename(p.id, p.name)}>{vocab('Rename')}</Button>
+                        <Button variant="text" size="small" vocabularyMode="factual"
                           onClick={() => {
                             closeMenu()
                             setIconMenu({ projectId: p.id })
@@ -667,8 +668,8 @@ export function ProjectSwitcher({
                             <ProjectGlyph icon={p.icon} color={p.color} name={p.name} size={12} />
                           </span>
                           {vocab('Icon…')}
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="text" size="small" vocabularyMode="factual"
                           onClick={() => {
                             const anchor = rowElRef.current[p.id]
                             closeMenu()
@@ -678,8 +679,8 @@ export function ProjectSwitcher({
                           }}
                         >
                           {vocab(EDIT_TAB_APPEARANCE_ACTION.label)}
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="text" size="small" vocabularyMode="factual"
                           onClick={() => {
                             const anchor = rowElRef.current[p.id]
                             const r = anchor?.getBoundingClientRect()
@@ -701,16 +702,16 @@ export function ProjectSwitcher({
                             />
                           </span>
                           {vocab('Tab colour…')}
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="text" size="small" vocabularyMode="factual"
                           onClick={() => {
                             onSetFolder(p.id)
                             closeMenu()
                           }}
                         >
                           {vocab('Set folder…')}
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="text" size="small" vocabularyMode="factual"
                           disabled={archiveBusy()}
                           onClick={() => {
                             closeMenu()
@@ -718,8 +719,8 @@ export function ProjectSwitcher({
                           }}
                         >
                           {vocab(SAVE_PROJECT_ARCHIVE_ACTION.label)}
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="text" size="small" vocabularyMode="factual"
                           disabled={archiveBusy()}
                           onClick={() => {
                             closeMenu()
@@ -727,8 +728,8 @@ export function ProjectSwitcher({
                           }}
                         >
                           {vocab(SAVE_PROJECT_ARCHIVE_WITH_MEDIA_ACTION.label)}
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="text" size="small" vocabularyMode="factual"
                           disabled={archiveBusy()}
                           onClick={() => {
                             closeMenu()
@@ -736,8 +737,8 @@ export function ProjectSwitcher({
                           }}
                         >
                           {vocab(OPEN_PROJECT_ARCHIVE_ACTION.label)}
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="text" size="small" vocabularyMode="factual"
                           onClick={() => {
                             portableBindingAnchorRef.current = rowElRef.current[p.id]
                             setPortableBindingProjectId(p.id)
@@ -745,27 +746,27 @@ export function ProjectSwitcher({
                           }}
                         >
                           Configure local binding…
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="text" size="small" vocabularyMode="factual"
                           onClick={() => {
                             onRemoteAccess()
                             closeMenu()
                           }}
                         >
                           {vocab('Docker host…')}
-                        </button>
+                        </Button>
                         {expandedAccounts.length > 0 && p.id === expandedId && (
                           <>
-                            <button
+                            <Button variant="text" size="small" vocabularyMode="factual"
                               className={`tab-menu__group${acctOpen ? ' open' : ''}`}
                               onClick={() => setAcctOpen((v) => !v)}
                             >
                               {vocab('Default Claude account')}
                               <span className="tab-menu__caret">▸</span>
-                            </button>
+                            </Button>
                             {acctOpen && (
                               <div className="tab-menu__sub">
-                                <button
+                                <Button variant="text" size="small" vocabularyMode="factual"
                                   onClick={() => {
                                     onSetDefaultAccount(p.id, undefined)
                                     closeMenu()
@@ -775,9 +776,9 @@ export function ProjectSwitcher({
                                     account={systemPresentation}
                                     selected={!p.defaultAccountId}
                                   />
-                                </button>
+                                </Button>
                                 {expandedAccounts.map((a) => (
-                                  <button
+                                  <Button variant="text" size="small" vocabularyMode="factual"
                                     key={a.id}
                                     onClick={() => {
                                       onSetDefaultAccount(p.id, a.id)
@@ -793,28 +794,28 @@ export function ProjectSwitcher({
                                       })}
                                       selected={p.defaultAccountId === a.id}
                                     />
-                                  </button>
+                                  </Button>
                                 ))}
                                 {expandedAccountsHint && (
-                                  <button disabled title={expandedAccountsHint}>
+                                  <Button variant="text" size="small" vocabularyMode="factual" disabled title={expandedAccountsHint}>
                                     <span className="tab-menu__check" />
                                     {vocab('No accounts on this host yet')}
-                                  </button>
+                                  </Button>
                                 )}
                               </div>
                             )}
                           </>
                         )}
-                        <button
+                        <Button variant="text" size="small" vocabularyMode="factual"
                           className={`tab-menu__group${modeOpen ? ' open' : ''}`}
                           onClick={() => setModeOpen((v) => !v)}
                         >
                               {vocab('Default permission mode')}
                           <span className="tab-menu__caret">▸</span>
-                        </button>
+                        </Button>
                         {modeOpen && (
                           <div className="tab-menu__sub">
-                            <button
+                            <Button variant="text" size="small" vocabularyMode="factual"
                               // On an SSH project the global Auto only applies once the REMOTE CLI
                               // is confirmed — surface why it may currently do nothing.
                               title={
@@ -830,9 +831,9 @@ export function ProjectSwitcher({
                               </span>
                               {vocab('Use global')} ({vocab(PERMISSION_MODE_LABELS[globalMode])})
                               {globalMode === 'auto' && expandedAutoHint ? ' ⚠︎' : ''}
-                            </button>
+                            </Button>
                             {ALL_PERMISSION_MODES.map((m) => (
-                              <button
+                              <Button variant="text" size="small" vocabularyMode="factual"
                                 key={m}
                                 // A project override is written to <cwd>/.nodeterm/project.json,
                                 // which is git-shared and mirrored to SSH servers — spell out for
@@ -858,21 +859,21 @@ export function ProjectSwitcher({
                                 {m === 'bypassPermissions' || (m === 'auto' && expandedAutoHint)
                                   ? `${vocab(PERMISSION_MODE_LABELS[m])} ⚠︎`
                                   : vocab(PERMISSION_MODE_LABELS[m])}
-                              </button>
+                              </Button>
                             ))}
                           </div>
                         )}
                         {p.ssh ? (
-                          <button disabled title={vocab('Splitting a project into parts is local-only — not available for SSH projects yet.') }>
+                          <Button variant="text" size="small" vocabularyMode="factual" disabled title={vocab('Splitting a project into parts is local-only — not available for SSH projects yet.') }>
                             {vocab('Project storage: not available (SSH)')}
-                          </button>
+                          </Button>
                         ) : !p.cwd ? (
-                          <button disabled title={vocab('This canvas has no folder on disk yet, so there is no project.json to split.') }>
+                          <Button variant="text" size="small" vocabularyMode="factual" disabled title={vocab('This canvas has no folder on disk yet, so there is no project.json to split.') }>
                             {vocab('Project storage: no folder yet')}
-                          </button>
+                          </Button>
                         ) : (
                           <>
-                            <button
+                            <Button variant="text" size="small" vocabularyMode="factual"
                               className={`tab-menu__group${storageOpen ? ' open' : ''}`}
                               onClick={() => {
                                 setStorageOpen((v) => !v)
@@ -881,10 +882,10 @@ export function ProjectSwitcher({
                             >
                               {vocab('Project storage')}
                               <span className="tab-menu__caret">▸</span>
-                            </button>
+                            </Button>
                             {storageOpen && p.id === expandedId && (
                               <div className="tab-menu__sub">
-                                <button disabled>
+                                <Button variant="text" size="small" vocabularyMode="factual" disabled>
                                   {partsStatus[p.id] === undefined
                                     ? vocab('Checking…')
                                     : partsStatus[p.id] === 'error'
@@ -892,30 +893,30 @@ export function ProjectSwitcher({
                                       : partsStatus[p.id]
                                         ? vocab('Currently stored as parts + a manifest')
                                         : vocab('Currently a single project.json')}
-                                </button>
+                                </Button>
                                 {partsStatus[p.id] === true && (
-                                  <button
+                                  <Button variant="text" size="small" vocabularyMode="factual"
                                     onClick={() =>
                                       setStorageConfirm({ projectId: p.id, cwd: p.cwd!, action: 'join' })
                                     }
                                   >
                                     {vocab('Join back into a single file…')}
-                                  </button>
+                                  </Button>
                                 )}
                                 {partsStatus[p.id] === false && (
-                                  <button
+                                  <Button variant="text" size="small" vocabularyMode="factual"
                                     onClick={() =>
                                       setStorageConfirm({ projectId: p.id, cwd: p.cwd!, action: 'split' })
                                     }
                                   >
                                     {vocab('Split into')} {partSizeValue} {partSizeUnit} {vocab('parts…')}
-                                  </button>
+                                  </Button>
                                 )}
                               </div>
                             )}
                           </>
                         )}
-                        <button
+                        <Button variant="text" size="small" vocabularyMode="factual"
                           onClick={() => {
                             const lock = lockForProject(p.id)
                             const anchor = rowElRef.current[p.id]
@@ -927,8 +928,8 @@ export function ProjectSwitcher({
                           }}
                         >
                           {vocab(lockForProject(p.id) ? 'Manage lock…' : 'Lock this tab…')}
-                        </button>
-                        <button
+                        </Button>
+                        <Button variant="text" size="small" vocabularyMode="factual"
                           className="danger"
                           onClick={() => {
                             onCloseProject(p.id)
@@ -936,16 +937,16 @@ export function ProjectSwitcher({
                           }}
                         >
                           {vocab('Close project')}
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </div>
                 )
               })}
             </div>
-            <button className="md3-switcher-menu__add" onClick={onOpenWelcome}>
+            <Button variant="tonal" size="small" vocabularyMode="factual" className="md3-switcher-menu__add" onClick={onOpenWelcome}>
               <span aria-hidden>+</span> {vocab('New project')}
-            </button>
+            </Button>
           </div>,
           document.body
         )}

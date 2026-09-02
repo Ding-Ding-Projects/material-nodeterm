@@ -20,6 +20,7 @@ import { useSession } from '../session/session'
 import { useSettings } from '../state/settings'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { hasSpeechModel } from '@shared/speech'
+import { Button, IconButton } from '@renderer/ui/md3'
 
 export interface DictationTarget {
   kind: 'terminal'
@@ -295,13 +296,11 @@ export function DictationOverlay({ target, stopSignal, onClose, onOpenLicense }:
     <div className="dictation__error">
       <span>{visibleError}</span>
       {error !== null && isProGateError(error) && (
-        <button type="button" className="dictation__error-action" onClick={onOpenLicense}>
+        <Button variant="text" size="small" vocabularyMode="factual" className="dictation__error-action" onClick={onOpenLicense}>
           {vocab('See nodeterm Pro')}
-        </button>
+        </Button>
       )}
-      <button type="button" className="dictation__close" title={vocab('Dismiss')} onClick={handleClose}>
-        ×
-      </button>
+      <IconButton size="compact" icon="close" vocabularyMode="factual" className="dictation__close" title={vocab('Dismiss')} aria-label={vocab('Dismiss')} onClick={handleClose} />
     </div>
   )
 
@@ -315,9 +314,7 @@ export function DictationOverlay({ target, stopSignal, onClose, onOpenLicense }:
               : 'Select a terminal node first.'
           )}
         </span>
-        <button type="button" className="dictation__close" title={vocab('Dismiss')} onClick={handleClose}>
-          ×
-        </button>
+        <IconButton size="compact" icon="close" vocabularyMode="factual" className="dictation__close" title={vocab('Dismiss')} aria-label={vocab('Dismiss')} onClick={handleClose} />
       </div>,
       document.body
     )
@@ -340,14 +337,14 @@ export function DictationOverlay({ target, stopSignal, onClose, onOpenLicense }:
             <span className="dictation__label">{vocab('Dictating...')}</span>
             <span className="dictation__elapsed">{formatElapsed(elapsedMs)}</span>
             <span className="dictation__spacer" />
-            <button
-              type="button"
+            <IconButton size="standard" vocabularyMode="factual" aria-label={vocab('Stop recording — transcribes & inserts')}
+             
               className="dictation__pause"
               onClick={() => void stopRecording()}
               title={vocab('Stop recording — transcribes & inserts')}
             >
               <PauseIcon />
-            </button>
+            </IconButton>
           </div>
         )}
 

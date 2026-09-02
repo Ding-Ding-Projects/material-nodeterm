@@ -291,7 +291,7 @@ function TreeEntry({
         <EntryIcon dir={entry.dir} open={open} name={entry.name} />
         <span className="ex-name">{entry.name}</span>
         {onDownload && (
-          <button
+          <IconButton size="compact" vocabularyMode="factual"
             className={`ex-dl${dl ? ` ${dl}` : ''}`}
             title={dl ? vocab(DL_TITLE[dl]) : entry.dir ? `${vocab('Download')} ${entry.name} ${vocab('folder')}` : `${vocab('Download')} ${entry.name}`}
             aria-label={vocab('Download')}
@@ -314,7 +314,7 @@ function TreeEntry({
                 fill={dl === 'done' || dl === 'error'}
               />
             )}
-          </button>
+          </IconButton>
         )}
       </div>
       {entry.dir &&
