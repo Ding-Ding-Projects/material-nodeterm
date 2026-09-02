@@ -6,7 +6,7 @@ import { scanJson } from './jsonScan'
  *
  * Shape:
  *   {
- *     "version": 1,
+ *     "schemaVersion": 1,
  *     "entries": { "<term the app would otherwise show>": "<replacement text>", ... }
  *   }
  *
@@ -17,8 +17,10 @@ import { scanJson } from './jsonScan'
  * Only the versioned entries payload is accepted. Documentation exports and alternate shapes are
  * rejected instead of being partially interpreted:
  *
- * VERSION HANDLING. A version must be present and exactly VOCAB_SCHEMA_VERSION. Future, older,
- * and missing versions are refused rather than guessed at.
+ * VERSION HANDLING. `schemaVersion` must be present and exactly VOCAB_SCHEMA_VERSION. Future,
+ * older, missing, and legacy `version` upload fields are refused rather than guessed at. The
+ * internal cache envelope intentionally keeps its historical `version` field below so existing
+ * valid cached users remain readable.
  */
 export const VOCAB_SCHEMA_VERSION = 1
 /** Hard file-size ceiling, checked on the raw bytes before any parsing. */
@@ -32,17 +34,21 @@ export const VOCAB_MAX_FILE_BYTES = 256 * 1024
  * actually bound the work, and both are unchanged. This stays finite so a pathological document
  * still cannot recurse without limit.
  */
-export const VOCAB_MAX_DEPTH = 12
+export const VOCAB_MAX_DEPTH = 3
 export const VOCAB_MAX_NODES = 20_000
-export const VOCAB_MAX_ENTRIES = 2000
-export const VOCAB_MAX_KEY_LENGTH = 200
-export const VOCAB_MAX_VALUE_LENGTH = 500
+export const VOCAB_MAX_ENTRIES = 4096
+export const VOCAB_MAX_KEY_LENGTH = 160
+export const VOCAB_MAX_VALUE_LENGTH = 1000
 
 /** `Object.prototype` pollution vectors — rejected at both object levels even though the scanner
  *  and returned dictionary have null prototypes, because the file is untrusted input and this is
  *  a cheap, unconditional guarantee that survives future refactors. */
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/
+// Keep the canonical untrusted-text refusal set in step with the shared identity boundary:
+// C0/C1 controls, bidi overrides/isolates, zero-width marks, and BOM are all disallowed. They can
+// break a one-line copy surface or make a replacement inspect differently from what it renders.
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/u
 
 export interface PersonalVocabularyEntries {
   [term: string]: string
@@ -137,10 +143,10 @@ export function validateVocabularyValue(root: unknown): VocabValidationResult {
   // Accept exactly one versioned upload shape. Companion documents and terms lists are not
   // substitution files, and silently skipping malformed rows makes a rejected upload look
   // partially successful.
-  if (!Object.hasOwn(rootObj, 'version') || rootObj.version !== VOCAB_SCHEMA_VERSION) {
+  if (!Object.hasOwn(rootObj, 'schemaVersion') || rootObj.schemaVersion !== VOCAB_SCHEMA_VERSION) {
     return { ok: false, error: 'unsupported or missing schema version (expected exactly ' + VOCAB_SCHEMA_VERSION + ')' }
   }
-  const unknownUploadFields = Object.keys(rootObj).filter((key) => key !== 'version' && key !== 'entries')
+  const unknownUploadFields = Object.keys(rootObj).filter((key) => key !== 'schemaVersion' && key !== 'entries')
   if (unknownUploadFields.length > 0) {
     return { ok: false, error: 'unknown top-level field "' + unknownUploadFields[0] + '"' }
   }
