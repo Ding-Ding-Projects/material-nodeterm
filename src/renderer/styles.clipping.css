@@ -120,9 +120,17 @@
   flex-shrink: 0;
 }
 .md3-switcher-menu,
-.md3-fab-menu,
 .md3-theme-menu {
   width: min(100%, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  box-sizing: border-box;
+}
+/* The FAB menu carries its own 280px design width. `width: min(100%, …)` is not a clipping guard,
+   it is a width, and it resolved against whatever box the menu sat in — 88px inside the nav rail
+   (the sliver of icons), then the full viewport once the menu became fixed. Bound it with
+   `max-width` only and leave the design width alone; the theme menu has no intrinsic width and
+   still wants the `width` line. */
+.md3-fab-menu {
   max-width: calc(100vw - 24px);
   box-sizing: border-box;
 }

@@ -5278,48 +5278,6 @@ export function TerminalNode({
     <>
       {/* Sibling of the root: .term-node is overflow:hidden and would clip the half-pill. */}
       <ColumnPill nodeId={id} />
-      <div
-        className={`term-node${selected ? ' selected' : ''}${collapsed ? ' collapsed' : ''}${
-          isUnread ? ' unread' : ''
-        }${status?.state === 'working' ? ' working' : ''}${
-          status?.state === 'waiting' || status?.state === 'blocked' ? ' attention' : ''
-        }${glyphMounted ? ' term-node--glyphgrid' : ''}${focused ? ' term-node--focused' : ''}`}
-        ref={rootRef}
-        style={{ borderTopColor: data.color }}
-        onMouseEnter={() => (hoveredRef.current = true)}
-        onMouseLeave={() => (hoveredRef.current = false)}
-      >
-        <NodeResizer
-          minWidth={260}
-          minHeight={160}
-          isVisible={selected && !collapsed}
-          color="var(--md-primary)"
-        />
-        {/* Invisible source handle so edges to subagent/loop nodes can attach. */}
-        <Handle
-          id="flow-out"
-          type="source"
-          position={Position.Bottom}
-          isConnectable={false}
-          style={{ opacity: 0, pointerEvents: 'none', bottom: 0 }}
-        />
-        {/* Invisible target handle so a rope from an agent node that opened this can attach. */}
-        <Handle
-          id="flow-in"
-          type="target"
-          position={Position.Top}
-          isConnectable={false}
-          style={{ opacity: 0, pointerEvents: 'none', top: 0 }}
-        />
-        {/* Link handles (all terminal nodes): drag right→left to link. Between two context-capable
-  // Whatever the markdown toggle is bound to; '' when the user unbound it, in which case the
-  // markdown view's hint names the action instead of promising a chord that never fires.
-  const mdChip = chipFor('node.toggleMarkdown')
-
-  return (
-    <>
-    {/* Sibling of the root: .term-node is overflow:hidden and would clip the half-pill. */}
-    <ColumnPill nodeId={id} />
     <div
       className={`term-node${selected ? ' selected' : ''}${collapsed ? ' collapsed' : ''}${
         isUnread ? ' unread' : ''
@@ -5336,7 +5294,7 @@ export function TerminalNode({
       onDragLeave={onAgentCollaborationDragLeave}
       onDrop={onAgentCollaborationDrop}
     >
-      <NodeResizer minWidth={NODE_MIN_SIZES.terminal.width} minHeight={NODE_MIN_SIZES.terminal.height} isVisible={selected && !collapsed} color="#0a84ff" />
+      <NodeResizer minWidth={NODE_MIN_SIZES.terminal.width} minHeight={NODE_MIN_SIZES.terminal.height} isVisible={selected && !collapsed} color="var(--md-primary)" />
       {/* Invisible source handle so edges to subagent/loop nodes can attach. */}
       <Handle
         id="flow-out"
@@ -5863,6 +5821,61 @@ export function TerminalNode({
               </IconButton>
             </Tooltip>
           )}
+          {fanoutCapable && !isHidden('hide-fanout', hiddenHeaderButtons) && (
+            <Tooltip label={hideFanout ? 'Show subagent/loop cards' : 'Hide subagent/loop cards'}>
+              <IconButton
+                size="compact"
+                className="term-node__hide-fanout nodrag"
+                title={hideFanout ? 'Show subagent/loop cards' : 'Hide subagent/loop cards'}
+                aria-label={hideFanout ? 'Show subagent/loop cards' : 'Hide subagent/loop cards'}
+                active={hideFanout}
+                aria-pressed={hideFanout}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  updateNodeData(id, { hideFanout: !hideFanout })
+                }}
+              >
+                {hideFanout ? <IconEyeOff /> : <IconEye />}
+              </IconButton>
+            </Tooltip>
+          )}
+          {fanoutCapable &&
+            !hideFanout &&
+            fanoutCount >= 2 &&
+            !isHidden('tidy-fanout', hiddenHeaderButtons) && (
+              <Tooltip label="Tidy subagent cards into a grid">
+                <IconButton
+                  size="compact"
+                  className="term-node__tidy-fanout nodrag"
+                  icon="grid_view"
+                  title="Tidy subagent cards into a grid"
+                  aria-label="Tidy subagent cards into a grid"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    useAgentNodes.getState().tidyFanout(id)
+                  }}
+                />
+              </Tooltip>
+            )}
+          {!isHidden('maximize', hiddenHeaderButtons) && (
+            <Tooltip label="Focus this node alone (F11 to return)">
+              <IconButton
+                size="compact"
+                className="term-node__focus nodrag"
+                title="Focus this node alone (F11 to return)"
+                aria-label="Focus this node alone"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  focusNode(id)
+                }}
+              >
+                <IconFocus />
+              </IconButton>
+            </Tooltip>
+          )}
+          {!collapsed && !isHidden('maximize', hiddenHeaderButtons) && (
+            <MaximizeButton id={id} maximized={!!data.premaxRect} />
+          )}
           <IconButton
             size="compact"
             className="term-node__close"
@@ -5874,73 +5887,6 @@ export function TerminalNode({
             onClick={() => deleteElements({ nodes: [{ id }] })}
           />
         </div>
-        {fanoutCapable && !isHidden('hide-fanout', hiddenHeaderButtons) && (
-          <Tooltip label={hideFanout ? 'Show subagent/loop cards' : 'Hide subagent/loop cards'}>
-            <IconButton
-              size="compact"
-              className="term-node__hide-fanout nodrag"
-              title={hideFanout ? 'Show subagent/loop cards' : 'Hide subagent/loop cards'}
-              aria-label={hideFanout ? 'Show subagent/loop cards' : 'Hide subagent/loop cards'}
-              active={hideFanout}
-              aria-pressed={hideFanout}
-              onClick={(e) => {
-                e.stopPropagation()
-                updateNodeData(id, { hideFanout: !hideFanout })
-              }}
-            >
-              {hideFanout ? <IconEyeOff /> : <IconEye />}
-            </IconButton>
-          </Tooltip>
-        )}
-        {fanoutCapable &&
-          !hideFanout &&
-          fanoutCount >= 2 &&
-          !isHidden('tidy-fanout', hiddenHeaderButtons) && (
-            <Tooltip label="Tidy subagent cards into a grid">
-              <IconButton
-                size="compact"
-                className="term-node__tidy-fanout nodrag"
-                icon="grid_view"
-                title="Tidy subagent cards into a grid"
-                aria-label="Tidy subagent cards into a grid"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  useAgentNodes.getState().tidyFanout(id)
-                }}
-              />
-            </Tooltip>
-          )}
-        {!isHidden('maximize', hiddenHeaderButtons) && (
-          <Tooltip label="Focus this node alone (F11 to return)">
-            <IconButton
-              size="compact"
-              className="term-node__focus nodrag"
-              title="Focus this node alone (F11 to return)"
-              aria-label="Focus this node alone"
-              onClick={(e) => {
-                e.stopPropagation()
-                focusNode(id)
-              }}
-            >
-              <IconFocus />
-            </IconButton>
-          </Tooltip>
-        )}
-        {!collapsed && !isHidden('maximize', hiddenHeaderButtons) && (
-          <MaximizeButton id={id} maximized={!!data.premaxRect} />
-        )}
-        <IconButton
-          size="compact"
-          className="term-node__close"
-          icon="close"
-          aria-label="Close (ends the session)"
-          title="Close (ends the session)"
-          onClick={() => {
-            transport.destroy(id)
-            deleteElements({ nodes: [{ id }] })
-          }}
-        />
-      </div>
 
         {searchOpen && !collapsed && (
           <FindBar

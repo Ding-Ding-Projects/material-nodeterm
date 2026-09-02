@@ -158,8 +158,18 @@
 :root[data-platform='win'] .md3-app-bar {
   padding: 0 146px 0 20px;
 }
-.md3-app-bar button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch),
-.md3-app-bar input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider),
+/* Hit-testing, NOT styling. Every interactive control inside the drag region has to opt out, the
+   Material primitives included. The `:not(.mdx-*)` / `:not(.md3-*)` guards that shield legacy
+   STYLING rules from migrated components must never be copied onto this rule: excluding a migrated
+   control here leaves it inside `-webkit-app-region: drag`, which makes it silently unclickable
+   rather than merely unstyled. That is exactly how the whole top app bar went dead. */
+.md3-app-bar button,
+.md3-app-bar input,
+.md3-app-bar select,
+.md3-app-bar textarea,
+.md3-app-bar a[href],
+.md3-app-bar [role='button'],
+.md3-app-bar [tabindex]:not([tabindex='-1']),
 .md3-switcher-menu,
 .md3-fab-menu {
   -webkit-app-region: no-drag;
@@ -1008,9 +1018,13 @@
 }
 
 .md3-fab-menu {
-  position: absolute;
-  left: calc(100% + 10px);
-  top: 0;
+  /* FIXED, not absolute. As a child of `.md3-nav-rail` (z-index 28) this menu was both trapped in
+     the rail's stacking context and clipped by the rail's own 88px column, so it rendered as a
+     sliver of icons with the sessions sidebar painted over it. The rail is a fixed-width left
+     column below a fixed-height app bar, so both anchors are deterministic. */
+  position: fixed;
+  left: calc(var(--nav-rail-w) + 10px);
+  top: calc(var(--app-bar-h) + 10px);
   width: 280px;
   max-height: 70vh;
   overflow-y: auto;
@@ -1018,7 +1032,7 @@
   color: var(--md-on-surface);
   border-radius: var(--md-shape-lg);
   padding: 10px;
-  z-index: 40;
+  z-index: 29; /* above the sessions sidebar (12), below the app bar (30) */
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -7775,6 +7789,9 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 }
 .onb-model__size {
   color: var(--md-on-surface-variant);
+  /* The row renders the name and this size span on ONE line, and neither carried a separator, so
+     they read as `Tiny75 MB` and `No dictationnothing downloads`. */
+  margin-left: 6px;
 }
 .onb-model__ok {
   color: var(--md-success);
@@ -11851,6 +11868,25 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   border: 0;
   text-align: left;
   cursor: pointer;
+}
+/* The catalog row is a `ListRow`. The primitive clamps its `__sub` to one ellipsised line, which
+   is right for a menu item and wrong for a card carrying an availability line, a bilingual
+   description and a disabled reason. Relax it here only. */
+.node-catalog-dialog__row-main {
+  align-items: flex-start;
+  padding: 11px 13px;
+  border-radius: 13px;
+}
+.node-catalog-dialog__row-main .mdx-row__body {
+  min-width: 0;
+}
+.node-catalog-dialog__row-main .mdx-row__sub {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 .node-catalog-dialog__row-main:disabled {
   cursor: not-allowed;

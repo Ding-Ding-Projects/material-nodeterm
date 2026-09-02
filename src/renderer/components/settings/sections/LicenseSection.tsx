@@ -45,7 +45,10 @@ const ROWS = {
       'pro',
       'premium',
       'trial',
-      'scam',
+'support',
+'donate',
+'author',
+'upstream',
       'refund'
     ]
   },
@@ -184,10 +187,10 @@ export function LicenseSection({ isActive }: { isActive: boolean }): React.JSX.E
             <SettingsText>Every capability is available to everyone who runs the app. There is no purchase, no licence, no subscription, no trial that runs out, and no feature held back until you pay. You will never be asked for a card, and nothing here will stop working.</SettingsText>
           </p>
           <p className="text-[13px] font-medium" style={{ color: '#ff9f0a' }}>
-            <SettingsText>If anyone asks you to pay for nodeterm, it is not real.</SettingsText>
+            <SettingsText>Support the author of nodeterm.</SettingsText>
           </p>
           <p className="text-[12px] text-muted">
-            <SettingsText>That includes any website, email, message, pop-up, app store listing, or person offering a “licence key”, “Pro upgrade”, subscription or activation for this app — none of it comes from us, and paying it gets you nothing you do not already have. Do not send anyone money or card details for this software.</SettingsText>
+            <SettingsText>This fork exists because the original is worth building on. It has no payment surface of any kind — no checkout, no licence key, no subscription — so nothing you pay for nodeterm reaches this fork. If you want the Pro tier, buy it from the original project; every penny of it goes to the author who wrote nodeterm, and none of it comes here. This app will never ask you for a card, so if something inside THIS window ever does, it did not come from us.</SettingsText>
           </p>
         </div>
       </SearchableRow>

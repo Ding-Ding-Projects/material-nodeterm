@@ -54,11 +54,13 @@ was generated once from the tree and may only shrink: a migrated file must be re
 (the guard fails on a stale entry too), and a new file starts clean.
 `src/renderer/ui/md3/rawControls.guard.test.ts` pins the guard and the allowlist to the tree.
 
-The allowlist holds four files on purpose: `AppErrorBoundary.tsx` (a crash surface must render
+The allowlist holds three files on purpose: `AppErrorBoundary.tsx` (a crash surface must render
 with no dependency that can itself fail, so it keeps two raw buttons wearing the `mdx-btn`
-classes), `ContextMenu.tsx` and `ExplorerPanel.tsx` (their `.ctx-item` rows are the radius-owner
-pinned menu recipe and wait for a `ListRow`-based rewrite of the keyboard model), and the legacy
-`Dock.tsx`. Everything else renders through the primitives.
+classes), and `ContextMenu.tsx` and `ExplorerPanel.tsx` (their `.ctx-item` rows are the
+radius-owner pinned menu recipe and wait for a `ListRow`-based rewrite of the keyboard model).
+The legacy `Dock.tsx` left the allowlist when the duplicated bottom dock was deleted — the nav
+rail FAB, the `.md3-canvas-actions` pill and the merged zoom `Controls` already owned every one
+of its actions. Everything else renders through the primitives.
 
 Two cascade rules make a migrated surface actually look like the primitive:
 

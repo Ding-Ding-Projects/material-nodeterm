@@ -19,6 +19,10 @@ type AccountMenuPresentation = {
   accountSelected?: boolean
 }
 
+/** Stable identity for "no flyout is open", so the flyout's filter hooks do not see a fresh array
+ *  every render and reset their bookkeeping on each keystroke. */
+const EMPTY_MENU_CHILDREN: MenuItem[] = []
+
 export type MenuItem =
   | ({
       type?: 'item'
@@ -230,7 +234,10 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
         FLYOUT_MARGIN,
         Math.min(naturalLeft, window.innerWidth - measured.width - FLYOUT_MARGIN),
       )
-      const top = Math.max(FLYOUT_MARGIN, raw.top - next.shiftY)
+      // Same guard as `useMenuFlip`: a flyout lifted to fit the viewport must stop at the top app
+      // bar's bottom edge, not at the window's, or it paints over the bar and its drag region.
+      const barBottom = document.querySelector('.md3-app-bar')?.getBoundingClientRect().bottom ?? 0
+      const top = Math.max(Math.max(FLYOUT_MARGIN, barBottom + FLYOUT_MARGIN), raw.top - next.shiftY)
       setFlyoutPosition((cur) => (cur.top === top && cur.left === left ? cur : { top, left }))
     }
     measure()
@@ -253,10 +260,15 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
   useEffect(() => {
     if (openSub == null || keyboardOpenedSub.current !== openSub) return
     keyboardOpenedSub.current = null
-    document
-      .getElementById(`${menuId}-submenu-${openSub}`)
-      ?.querySelector<HTMLElement>('[role="menuitem"]')
-      ?.focus()
+    const flyout = document.getElementById(`${menuId}-submenu-${openSub}`)
+    // Prefer the flyout's own filter field when it has one: a long submenu is exactly where a
+    // keyboard user wants to type, and landing on the first row instead makes the field look
+    // decorative. Disabled rows stay focusable by design, so the first row remains a valid
+    // fallback — it may be the row explaining why an unavailable profile cannot be launched.
+    const target =
+      flyout?.querySelector<HTMLElement>('input') ??
+      flyout?.querySelector<HTMLElement>('[role="menuitem"]')
+    target?.focus()
   }, [menuId, openSub])
 
   const filterable = isFilterableMenu(visibleItems)
@@ -303,6 +315,51 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
   })
 
   const openSubmenu = openSub == null ? undefined : visibleItems[openSub]
+  // The flyout owns its OWN filter state — query, pattern, flags, mode — and its own anchored
+  // regex builder. It never shares the root menu's: two fields on one state is precisely the
+  // "whichever menu was opened last" bug the regex-builder rule refuses. A submenu list grows
+  // with every installed shell and WSL distribution, so it needs filtering exactly as much as the
+  // menu that opened it.
+  const subChildren = openSubmenu?.type === 'submenu' ? openSubmenu.children : EMPTY_MENU_CHILDREN
+  const subSearch = useRegexSearchField()
+  const subFilterable = isFilterableMenu(subChildren)
+  const subRowVisible = subFilterable
+    ? menuRowVisibility(subChildren, subSearch.test, subSearch.active)
+    : []
+  const subFilterItems: MenuFilterItem[] = []
+  if (subFilterable) {
+    subChildren.forEach((child, j) => {
+      if (!subRowVisible[j]) return
+      // A flyout renders no nested submenu or colour strip (see the render below), so the only
+      // keyboard-activatable rows are plain items.
+      if (child.type === 'item' || !child.type) {
+        subFilterItems.push({ id: String(j), label: child.label, disabled: child.disabled })
+      }
+    })
+  }
+  const closeFlyout = (): void => {
+    setOpenSub(null)
+    flyoutPointerInside.current = false
+    cancelFlyoutClose()
+    document.getElementById(`${menuId}-submenu-trigger-${openSub}`)?.focus()
+  }
+  const subFilter = useMenuFilter(subFilterItems, subSearch, {
+    onActivate: (fi) => {
+      const child = subChildren[Number(fi.id)]
+      if (!child || (child.type && child.type !== 'item') || child.disabled) return
+      child.onClick()
+      onClose()
+    },
+    onEmptyEscape: closeFlyout
+  })
+  // Reset when the flyout closes or a different one opens, or the next flyout wears the previous
+  // one's query — the same staleness `flyoutFit` is reset for above.
+  const subSearchReset = subSearch.reset
+  useEffect(() => {
+    subSearchReset()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSub])
+
   const flyoutPortal = openSubmenu?.type === 'submenu'
     ? createPortal(
         <div
@@ -336,7 +393,19 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
             document.getElementById(`${menuId}-submenu-trigger-${openSub}`)?.focus()
           }}
         >
+          {subFilterable && (
+            <FilterableMenuHeader
+              filter={subFilter}
+              placeholder="Filter…"
+              regexLabel="Regex — this submenu"
+              zIndex={(zIndex ?? 46) + 3}
+            />
+          )}
+          {subFilterable && subFilter.filtered.length === 0 && (
+            <div className="ctx-empty">No matches</div>
+          )}
           {openSubmenu.children.map((child, j) => {
+            if (subFilterable && !subRowVisible[j]) return null
             if (child.type === 'separator')
               return <div key={j} className="ctx-sep" role="separator" />
             if (child.type === 'label')
