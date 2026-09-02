@@ -10,6 +10,7 @@ import { Button } from '../ui/Button'
 import { Select } from '../ui/Select'
 import { Input } from '../ui/Input'
 import { Checkbox } from '../ui/md3/Checkbox'
+import { Button as Md3Button } from '@renderer/ui/md3'
 
 const PROXY_KINDS: Array<{ value: DebugBrowserProxyKind; label: string }> = [
   { value: 'direct', label: 'Direct connection' },
@@ -107,9 +108,11 @@ export function BrowserDebugSessionPicker({ profiles, selectedId, targetUrl = ''
 
   return (
     <>
-      <button
+      <Md3Button
         ref={anchorRef}
-        type="button"
+        variant="text"
+        size="small"
+        vocabularyMode="factual"
         className="browser-profile-trigger"
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -119,7 +122,7 @@ export function BrowserDebugSessionPicker({ profiles, selectedId, targetUrl = ''
       >
         <span aria-hidden="true">◌</span>
         <span>{current?.name ?? vocab('Debug browser')}</span>
-      </button>
+      </Md3Button>
       <AnchoredPopover anchorRef={anchorRef} open={open} onClose={() => setOpen(false)} width={440}>
         <section className="md3-popover-card" role="dialog" aria-label={vocab('Debugging browser session setup')}>
           <h3>{vocab('Isolated debugging browser')}</h3>

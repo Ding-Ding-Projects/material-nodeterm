@@ -27,6 +27,7 @@ import { useActiveSessionApi } from '../session/session'
 import { openDestructiveGate } from '../state/destructiveGate'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
+import { ListRow } from '@renderer/ui/md3'
 
 function newOperationId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `aws-operation-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
@@ -312,8 +313,8 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
           ) : (
             result.entries.map((entry) => (
               <li key={entry.id} className="shop-node__entry-item">
-                <button
-                  type="button"
+                <ListRow
+                  vocabularyMode="factual"
                   className={`shop-node__entry${chosen === entry.id ? ' selected' : ''} nodrag`}
                   disabled={entry.available === false}
                   aria-pressed={chosen === entry.id}
@@ -323,11 +324,14 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
                    title={entry.available === false
                      ? entryUnavailableCopy(entry)
                      : ts(entry.descriptionKey, 'Catalog entry details')}
-                >
-                  <span className="shop-node__entry-label">{ts(entry.labelKey, 'Catalog entry')}</span>
-                  <span className="shop-node__entry-kind">{entry.nodeKind}</span>
-                   {entry.available === false && <span id={`${id}-entry-${entry.id}-note`} className="shop-node__entry-disabled">{entryUnavailableCopy(entry)}</span>}
-                </button>
+                  label={<span className="shop-node__entry-label">{ts(entry.labelKey, 'Catalog entry')}</span>}
+                  sub={
+                    <>
+                      <span className="shop-node__entry-kind">{entry.nodeKind}</span>
+                      {entry.available === false && <span id={`${id}-entry-${entry.id}-note`} className="shop-node__entry-disabled">{entryUnavailableCopy(entry)}</span>}
+                    </>
+                  }
+                />
               </li>
             ))
           )}

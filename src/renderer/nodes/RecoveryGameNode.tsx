@@ -224,8 +224,9 @@ export default function RecoveryGameNode({ id, data, selected }: NodeProps<Canva
                 snapshot.coreActivated && x === RECOVERY_CORE.x && y === RECOVERY_CORE.y ? 'is-activated' : ''
               ].filter(Boolean).join(' ')
               return (
-                <button
-                  type="button"
+                <IconButton
+                  size="compact"
+                  vocabularyMode="factual"
                   role="gridcell"
                   aria-rowindex={y + 1}
                   aria-colindex={x + 1}
@@ -241,7 +242,7 @@ export default function RecoveryGameNode({ id, data, selected }: NodeProps<Canva
                   <span aria-hidden="true">
                     {isPlayer ? '●' : key ? (keyOnline ? '◆' : '◇') : kind === 'hazard' ? '×' : kind === 'core' ? '◎' : kind === 'start' ? '⌂' : ''}
                   </span>
-                </button>
+                </IconButton>
               )
             })
           )}

@@ -17,6 +17,7 @@ import { BrowserDrivingIndicator } from './BrowserDrivingChip'
 import { useWebviewKeepAlive } from '../state/webviewKeepAlive'
 import { Button, IconButton } from '@renderer/ui/md3'
 import { MaterialSymbol } from '../components/MaterialSymbol'
+import { Chip } from '@renderer/ui/md3'
 
 /** Debounce for persisting a tab's live URL/title while the user navigates — matches the SSH
  *  mirror's 5s write-throttle intent (this repo's established pattern for "don't rewrite the
@@ -264,10 +265,11 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
 
       <div className="browser-node__tabs nodrag" role="tablist" aria-label={vocab('Browser tabs')}>
         {tabs.map((tab) => (
-            <button
+            <Chip
               key={tab.id}
-              type="button"
               role="tab"
+              vocabularyMode="factual"
+              selected={tab.id === activeTabId}
               aria-selected={tab.id === activeTabId}
               className={`browser-node__tab${tab.id === activeTabId ? ' browser-node__tab--active' : ''}`}
               title={tab.url || tab.title || vocab('New Tab')}
@@ -289,7 +291,7 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
               >
                 ×
               </span>
-            </button>
+            </Chip>
         ))}
         <IconButton
           size="compact"

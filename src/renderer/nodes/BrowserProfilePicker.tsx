@@ -13,6 +13,7 @@ import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { normalizeBrowserProfileName } from '@shared/browser-portal'
 import { Input } from '../ui/Input'
+import { Button } from '@renderer/ui/md3'
 
 /** Same palette used by `groupSelectedNodes`/`createTerminalNode` for new-object color defaults —
  *  a browser profile is just another named, colored object on the project. */
@@ -159,9 +160,11 @@ export function BrowserProfilePicker({
 
   return (
     <>
-      <button
+      <Button
         ref={anchorRef}
-        type="button"
+        variant="text"
+        size="small"
+        vocabularyMode="factual"
         className="browser-profile-trigger"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -170,7 +173,7 @@ export function BrowserProfilePicker({
       >
         <MaterialSymbol name="account_circle" size={16} />
         <span className="browser-profile-trigger__label">{label}</span>
-      </button>
+      </Button>
       <AnchoredPopover anchorRef={anchorRef} open={open} onClose={() => setOpen(false)} width={260}>
         <Menu role="menu" aria-label={vocab('Browser profile')}>
           <div className="menu-filter" onMouseDown={(e) => e.stopPropagation()}>

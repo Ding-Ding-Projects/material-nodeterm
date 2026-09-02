@@ -3232,8 +3232,6 @@ body,
 .gallery-node__thumbs { display: flex; gap: 6px; flex: 0 0 36px; align-items: center; padding: 4px 8px; overflow-x: auto; background: var(--md-surface-container); }
 .gallery-node__thumbs span { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: var(--md-on-surface-variant); background: var(--md-surface-container-highest); }
 .gallery-node__thumbs span.is-active { outline: 2px solid var(--md-primary); color: var(--md-on-primary-container); }
-.gallery-node__thumbs button { border: 0; cursor: pointer; font: inherit; }
-.gallery-node__thumbs button.is-active { outline: 2px solid var(--md-primary); color: var(--md-on-primary-container); }
 .gallery-node__add { display: inline-flex; align-items: center; min-height: 28px; padding: 0 8px; border-radius: 8px; background: var(--md-primary-container); color: var(--md-on-primary-container); cursor: pointer; }
 .gallery-node__add input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .gallery-node__remove { min-height: 28px; border: 0; border-radius: 8px; padding: 0 8px; background: var(--md-error-container); color: var(--md-on-error-container); cursor: pointer; }
@@ -7556,37 +7554,18 @@ button.group-node__setup:disabled {
   align-items: center;
   gap: 28px;
 }
-.startpage__searchbar {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 10px 16px;
-}
 
-.startpage__search-icon {
-  color: var(--muted);
-  font-size: 16px;
-}
-.startpage__search {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text);
-  font-size: 14px;
-}
 .startpage__grid {
   width: 100%;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
-.startpage__tile {
+.mdx-btn.startpage__tile {
   display: flex;
+  height: auto;
+  min-height: 0;
+  border-radius: var(--md-shape-medium);
   flex-direction: column;
   align-items: center;
   gap: 8px;
@@ -7627,18 +7606,6 @@ button.group-node__setup:disabled {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 8px;
-}
-.startpage__recent-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 7px 8px;
-  border-radius: 8px;
-  text-align: left;
 }
 
 .startpage__recent-name {

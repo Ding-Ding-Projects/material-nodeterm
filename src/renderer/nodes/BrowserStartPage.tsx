@@ -6,6 +6,8 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 import { mapAroundExactFacts } from './nodeVocabulary'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
+import { SearchField, ListRow } from '@renderer/ui/md3'
+import { Button } from '@renderer/ui/md3'
 
 function hostLabel(url: string): string {
   try {
@@ -30,34 +32,35 @@ export function BrowserStartPage({ onNavigate }: { onNavigate: (url: string) => 
   return (
     <div className="startpage nodrag nowheel">
       <div className="startpage__inner">
-        <div className="startpage__searchbar">
-          <span className="startpage__search-icon">⌕</span>
-          <input
-            ref={searchRef}
-            className="startpage__search"
-            spellCheck={false}
+        <SearchField
+          ref={searchRef}
+          className="startpage__searchbar"
+          inputClassName="startpage__search"
+          vocabularyMode="factual"
+          spellCheck={false}
             value={search.value}
             placeholder={mapAroundExactFacts('Search Google or type a URL', ['Google'], vocab)}
             aria-label={vocab('Search Google or type a URL')}
             onChange={(e) => search.setValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submit()
-            }}
-          />
-          <AnchoredRegexBuilder search={search} fieldRef={searchRef} label={vocab('Regex — browser start page')} />
-        </div>
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit()
+          }}
+          trailingSlot={<AnchoredRegexBuilder search={search} fieldRef={searchRef} label={vocab('Regex — browser start page')} />}
+        />
 
         <div className="startpage__grid">
           {visibleShortcuts.map((s) => (
-            <button
+            <Button
               key={s.url}
+              variant="text"
+              vocabularyMode="factual"
               className="startpage__tile"
               title={s.label}
               onClick={() => onNavigate(s.url)}
             >
               <SiteIcon url={s.url} label={s.label} />
               <span className="startpage__tile-label">{s.label}</span>
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -65,15 +68,15 @@ export function BrowserStartPage({ onNavigate }: { onNavigate: (url: string) => 
           <div className="startpage__recent">
             <div className="startpage__recent-title">{vocab('Recent')}</div>
             {visibleRecent.map((e) => (
-              <button
+              <ListRow
                 key={`${e.url}-${e.ts}`}
                 className="startpage__recent-item"
+                vocabularyMode="factual"
+                icon={<SiteIcon url={e.url} size={22} />}
+                label={<span className="startpage__recent-name">{e.title}</span>}
+                sub={<span className="startpage__recent-host">{hostLabel(e.url)}</span>}
                 onClick={() => onNavigate(e.url)}
-              >
-                <SiteIcon url={e.url} size={22} />
-                <span className="startpage__recent-name">{e.title}</span>
-                <span className="startpage__recent-host">{hostLabel(e.url)}</span>
-              </button>
+              />
             ))}
           </div>
         )}

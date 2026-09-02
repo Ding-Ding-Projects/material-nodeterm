@@ -10,6 +10,7 @@ import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { IconButton } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
+import { Chip } from '@renderer/ui/md3'
 
 const SECTION_LABELS: Record<WindowsDiagnosticSection, string> = {
   drives: 'Drives and storage',
@@ -90,7 +91,7 @@ export default function WindowsDiagnosticsNode({ id, data, selected }: NodeProps
           {WINDOWS_DIAGNOSTIC_SECTIONS.map((section) => {
             const current = snapshot?.sections[section]
             const count = current?.state === 'available' ? current.rows.length : 0
-            return <button key={section} type="button" role="tab" aria-selected={activeSection === section} aria-controls={`${id}-${section}`} className={activeSection === section ? 'is-active' : ''} onClick={() => { setActiveSection(section); search.setValue('') }}>{sectionLabel(section, vocab)} <span aria-label={`${count} ${vocab('rows')}`}>({count})</span></button>
+            return <Chip vocabularyMode="factual" selected={activeSection === section} key={section} role="tab" aria-selected={activeSection === section} aria-controls={`${id}-${section}`} className={activeSection === section ? 'is-active' : ''} onClick={() => { setActiveSection(section); search.setValue('') }}>{sectionLabel(section, vocab)} <span aria-label={`${count} ${vocab('rows')}`}>({count})</span></Chip>
           })}
         </div>
         <div className="windows-diagnostics-node__search">
