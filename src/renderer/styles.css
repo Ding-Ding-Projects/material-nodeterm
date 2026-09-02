@@ -432,8 +432,12 @@ body,
 }
 
 /* Interactive elements inside the bar must not drag the window. */
-.tabbar button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch),
-.tabbar input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider),
+.tabbar button,
+.tabbar input,
+.tabbar select,
+.tabbar textarea,
+.tabbar a[href],
+.tabbar [role='button'],
 .tab,
 .tabbar__tabs {
   -webkit-app-region: no-drag;
@@ -9394,6 +9398,15 @@ button.group-node__setup:disabled {
   font-size: 12.5px;
   cursor: pointer;
   padding: 6px 10px;
+}
+
+/* Deen No paints its native caption buttons as an OVERLAY over the top-right corner, `APP_BAR_HEIGHT`
+   tall and ~146px wide (see the `titleBarOverlay` note in the window-chrome section). Onboarding has
+   no app bar to reserve that room, so `top: 40px; right: 24px` put Skip setup underneath the native
+   buttons, where it could be seen and never clicked. Drop it clear of the strip on Windows only —
+   macOS keeps its traffic lights on the opposite corner. */
+:root[data-platform='win'] .mdx-btn.onb-skip {
+  top: calc(var(--app-bar-h) + 10px);
 }
 
 /* ---- step 0: cover ---- */

@@ -24,6 +24,7 @@ import { applyVocabulary } from '../lib/personalVocabulary/apply'
 import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
 import type { NamedTerminalProfile } from '@shared/types'
 import { Button } from '@renderer/ui/md3'
+import { ListRow } from '../ui/md3/ListRow'
 
 export interface NodeCatalogDialogProps {
   open: boolean
@@ -249,9 +250,15 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
                 aria-disabled={disabled}
                 onMouseEnter={() => setActive(index)}
               >
-                <Button variant="outlined" size="small" vocabularyMode="factual"
-                  type="button"
+                {/* A catalog row is a Material LIST ITEM, not a pill button: it stacks a title, an
+                    availability line, a bilingual description and a disabled reason. `mdx-btn--small`
+                    is a hard `height: 32px` with `line-height: 1` and `white-space: nowrap`, so four
+                    stacked lines overflowed it and collided with the neighbouring rows. `ListRow` is
+                    the design system's list item and grows with its content; the catalog only relaxes
+                    its one-line `__sub` clamp (see styles.md3.css). */}
+                <ListRow
                   className="node-catalog-dialog__row-main"
+                  vocabularyMode="factual"
                   disabled={disabled}
                   draggable={!disabled && entry.id === 'authenticator'}
                   onDragStart={(event) => {
@@ -261,15 +268,18 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
                   }}
                   onClick={() => create(entry)}
                   title={localize(state.reason ?? '')}
-                >
-                  <span className="node-catalog-dialog__row-title"><span>{labelValue.primary}</span>{labelValue.secondary && <span className="node-catalog-dialog__row-secondary">{labelValue.secondary}</span>}</span>
-                  <span className="node-catalog-dialog__row-mode">{profileText(
-                    entry.availabilityMode === 'configure-later' ? 'nodeCatalog.mode.configureLater' : 'nodeCatalog.mode.required',
-                    entry.availabilityMode === 'configure-later' ? 'Configure later' : 'Ready when required capabilities are available'
-                  )}</span>
-                  <span className="node-catalog-dialog__row-description"><span>{descriptionValue.primary}</span>{descriptionValue.secondary && <span className="node-catalog-dialog__row-secondary">{descriptionValue.secondary}</span>}</span>
-                  {disabled && <span className="node-catalog-dialog__row-reason">{localize(state.reason ?? '')}</span>}
-                </Button>
+                  label={<span className="node-catalog-dialog__row-title"><span>{labelValue.primary}</span>{labelValue.secondary && <span className="node-catalog-dialog__row-secondary">{labelValue.secondary}</span>}</span>}
+                  sub={
+                    <>
+                      <span className="node-catalog-dialog__row-mode">{profileText(
+                        entry.availabilityMode === 'configure-later' ? 'nodeCatalog.mode.configureLater' : 'nodeCatalog.mode.required',
+                        entry.availabilityMode === 'configure-later' ? 'Configure later' : 'Ready when required capabilities are available'
+                      )}</span>
+                      <span className="node-catalog-dialog__row-description"><span>{descriptionValue.primary}</span>{descriptionValue.secondary && <span className="node-catalog-dialog__row-secondary">{descriptionValue.secondary}</span>}</span>
+                      {disabled && <span className="node-catalog-dialog__row-reason">{localize(state.reason ?? '')}</span>}
+                    </>
+                  }
+                />
                 <Button variant="outlined" size="small" vocabularyMode="factual" className="node-catalog-dialog__docs" type="button" onClick={() => onOpenDocumentation(entry.documentationPath)} aria-label={`${profileText(label.id, label.fallback)} ${docsLabel}`}>
                   {docsLabel}
                 </Button>

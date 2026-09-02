@@ -1,6 +1,5 @@
 [
   "src/renderer/components/AppErrorBoundary.tsx",
   "src/renderer/components/ContextMenu.tsx",
-  "src/renderer/components/Dock.tsx",
   "src/renderer/components/ExplorerPanel.tsx"
 ]

@@ -829,7 +829,6 @@ import {
 import { codexAccountSelectable } from './codex-account-switch'
 import { resolveNewCodexNodeAccount, planCodexAccountSwitch } from './codex-account-ops'
 import type { CodexAccount } from '@shared/codex-account'
-import { Dock } from '../components/Dock'
 import type { SavedCanvasLayout } from '@shared/types'
 import type { SchedulePlacementTarget } from '@shared/scheduled-settings'
 import { setFocusNodeHandler } from '../nodes/focus-handler'
@@ -18284,7 +18283,7 @@ export function Canvas() {
         >
           <span className="cluster-search__icon">⌕</span>
             <span className="cluster-search__placeholder">Search everything…</span>
-          <span className="kbd">{hintLabel('⌘K')}</span>
+          <span className="kbd">{paletteChip}</span>
         </Button>
         <div className="md3-app-bar__cluster">
           {/* Mounted here unconditionally (the cluster always renders): the facepile is null
@@ -18827,76 +18826,6 @@ export function Canvas() {
           />
         )
       })()}
-      <div className="controls-cluster">
-        {/* First in the cluster so the "who's connected" faces sit to the LEFT of the toolbar on the
-            SAME row (flex, no hardcoded width) instead of colliding with it / hiding under the tab
-            bar. Mounted here unconditionally (the cluster always renders): the facepile is null with
-            no peers — taking no space — but must stay mounted to prune the presence face cache
-            (state/presence.ts → selectFaces). */}
-        <Facepile onJump={travelToNode} onSwitchProject={travelToProject} />
-        <Button variant="text" vocabularyMode="factual"
-          className="cluster-search"
-          title="Command palette"
-          onClick={() => setPaletteOpen(true)}
-        >
-          <span className="cluster-search__icon">⌕</span>
-          {paletteChip && <span className="kbd">{paletteChip}</span>}
-        </Button>
-        <IconButton size="dense" title={commandTooltip('Explorer', 'panel.explorer')} aria-label={commandTooltip('Explorer', 'panel.explorer')} onClick={() => showExplorer('toggle')}>
-          <IconExplorer />
-        </IconButton>
-        <IconButton size="dense" title={commandTooltip('Source Control', 'panel.sourceControl')} aria-label={commandTooltip('Source Control', 'panel.sourceControl')} onClick={() => setScOpen(true)}>
-          <IconBranch />
-        </IconButton>
-        <IconButton size="standard" vocabularyMode="factual" aria-label="Pair phone"
-          title="Pair phone"
-          onClick={(e) => {
-            const r = e.currentTarget.getBoundingClientRect()
-            setPhonePairAnchor((cur) => (cur ? null : { right: r.right, bottom: r.bottom }))
-          }}
-        >
-          <IconPhone />
-        </IconButton>
-        <IconButton size="dense"
-          title={commandTooltip('Settings', 'app.settings')} aria-label={commandTooltip('Settings', 'app.settings')}
-          onClick={() => {
-            setSettingsSection(undefined)
-            setSettingsOpen(true)
-          }}
-        >
-          <IconGear />
-        </IconButton>
-        <IconButton size="standard" vocabularyMode="factual" aria-label="Help"
-          title="Help"
-          onClick={(e) => {
-            const r = e.currentTarget.getBoundingClientRect()
-            setMenu({
-              // Right-align the ~220px menu under the button; never off-screen left.
-              x: Math.max(8, r.right - 220),
-              y: r.bottom + 6,
-              items: [
-                { label: 'Keyboard shortcuts', hint: chipFor('app.shortcutsPanel') || undefined, onClick: () => setShortcutsOpen(true) },
-                { label: 'Report a bug…', onClick: () => setBugReportOpen(true) },
-                {
-                  label: 'Documentation',
-                  onClick: () => window.nodeTerminal.shell.openExternal(`${REPO_URL}#readme`)
-                },
-                {
-                  label: 'GitHub repository',
-                  onClick: () => window.nodeTerminal.shell.openExternal(REPO_URL)
-                },
-                { type: 'separator' },
-                {
-                  type: 'label',
-                  label: `nodeterm${appVersion ? ` v${appVersion}` : ''} · ${describeOs(navigator.userAgent)}`
-                }
-              ]
-            })
-          }}
-        >
-          ?
-        </IconButton>
-      </div>
 
       <div
         className={`flow-wrap${drawTool.tool ? ' canvas-draw-active' : ''}${explorerFolderDropActive ? ' explorer-folder-drop-target' : ''}`}
@@ -18971,9 +18900,7 @@ export function Canvas() {
           <div className="empty-canvas-hint" aria-hidden>
             <div>Right-click to add a terminal or agent</div>
             <div>
-              <span className="kbd">{hintLabel('⌘K')}</span> command palette ·{' '}
-              <span className="kbd">+</span> in the dock below
-              {paletteChip && <><span className="kbd">{paletteChip}</span> command palette · </>}<span className="kbd">+</span> in the dock below
+              {paletteChip && <><span className="kbd">{paletteChip}</span> command palette · </>}<span className="kbd">+</span> on the left rail
             </div>
           </div>
         )}
@@ -19933,49 +19860,6 @@ export function Canvas() {
           beside `.flow-wrap`), undo/redo/save moved to the `.md3-canvas-actions` pill and the
           zoom/fit controls merged into React Flow's own `<Controls>` (both inside `.flow-wrap`,
           near the CanvasPills below), and dictate moved to the top app bar. */}
-      <Dock
-        dirty={dirty}
-        zoomPct={zoomPct}
-        canUndo={pastRef.current.length > 0}
-        canRedo={futureRef.current.length > 0}
-        // Enabled state must agree with what a click will DO: stepBreadcrumb skips deleted stops
-        // and answers null when every stop in that direction is dead, so a raw index comparison
-        // renders an enabled arrow that does nothing. Cheap at the 20-entry cap, and it stays
-        // honest as nodes are deleted (Canvas re-renders on both bumpNav and nodes).
-        canGoBack={
-          !!stepBreadcrumb(navRef.current, 'back', (id) =>
-            nodesRef.current.some((n) => n.id === id)
-          )
-        }
-        canGoForward={
-          !!stepBreadcrumb(navRef.current, 'forward', (id) =>
-            nodesRef.current.some((n) => n.id === id)
-          )
-        }
-        onUndo={undo}
-        onRedo={redo}
-        onGoBack={goBack}
-        onGoForward={goForward}
-        onAddTerminal={addTerminal}
-        onAddSticky={addSticky}
-        onSpawnTeam={() => setSpawnTeamDialog({})}
-        onAddDino={addDino}
-        onAddFiles={() => addFiles()}
-        onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
-        onOpenFile={() => void openFileDialog()}
-        onAddRemote={() => openRemotePicker({ x: window.innerWidth / 2, y: window.innerHeight / 2 })}
-        onConnectRemote={() => void connectRemote()}
-        onAddBrowser={() => addBrowser()}
-        onAddWeb={() => void addWebView()}
-        onNewFile={() => void newProjectFile()}
-        onAddWorktree={() => openWorktreeDialog(null)}
-        onSave={persist}
-        onFitView={fitAll}
-        onZoomIn={() => zoomIn({ duration: 150 })}
-        onZoomOut={() => zoomOut({ duration: 150 })}
-        onDictate={toggleDictation}
-        dictateActive={dictationOpen}
-      />
 
       {/* Focus mode surface (issue #78). ALWAYS mounted so the reparent target exists before the
           commit that moves a node into it, and OUTSIDE <ReactFlow> on purpose — the flow wrapper
