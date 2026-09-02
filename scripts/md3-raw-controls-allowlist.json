@@ -76,7 +76,6 @@
   "src/renderer/components/color/ColorField.tsx",
   "src/renderer/components/color/ColorPicker.tsx",
   "src/renderer/components/converter/AdapterCatalog.tsx",
-  "src/renderer/components/converter/AdvancedPipelinePanel.tsx",
   "src/renderer/components/converter/FileConverterPanel.tsx",
   "src/renderer/components/docker/DockerHostManagerPanel.tsx",
   "src/renderer/components/git-history/GitHistoryCommitFiles.tsx",

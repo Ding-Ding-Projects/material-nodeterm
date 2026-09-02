@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { Input } from '@renderer/ui/Input'
 import { createPortal } from 'react-dom'
 import {
   CONVERTER_CATALOG,
@@ -23,7 +24,7 @@ import { AdapterCatalog } from './AdapterCatalog'
 import { AdvancedPipelinePanel } from './AdvancedPipelinePanel'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
-import { Checkbox, Progress } from '@renderer/ui/md3'
+import { Button, Checkbox, IconButton, Progress } from '@renderer/ui/md3'
 
 export function detectionSummarySegments(note: string, confidence: 'high' | 'medium' | 'low') {
   return [copy('Detection: '), fact(note), copy(' (confidence: '), fact(confidence), copy(')')]
@@ -164,22 +165,22 @@ function QueueRow({
           {item.confirmReasons?.includes('overwrite') && (
             <div className="cv-confirm__row">
               <span>{vocab('Destination file already exists.')}</span>
-              <button className="sc-btn" onClick={() => onResolve(item.id, { overwrite: true })}>
+              <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={() => onResolve(item.id, { overwrite: true })}>
                 {vocab('Overwrite')}
-              </button>
+              </Button>
             </div>
           )}
           {item.confirmReasons?.includes('lossy') && (
             <div className="cv-confirm__row">
               <span>{vocab('This conversion can lose information — see the catalog row for details.')}</span>
-              <button className="sc-btn" onClick={() => onResolve(item.id, { lossyAcknowledged: true })}>
+              <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={() => onResolve(item.id, { lossyAcknowledged: true })}>
                 {vocab('Convert anyway')}
-              </button>
+              </Button>
             </div>
           )}
-          <button className="cv-item__link" onClick={() => onCancel(item.id)}>
+          <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => onCancel(item.id)}>
             {vocab('Skip this file')}
-          </button>
+          </Button>
         </div>
       )}
       {item.error && <p className="cv-item__error">{item.error}</p>}
@@ -193,29 +194,29 @@ function QueueRow({
       )}
       <div className="cv-item__actions">
         {(item.status === 'queued' || item.status === 'running' || item.status === 'paused') && (
-          <button className="cv-item__link" onClick={() => onCancel(item.id)}>
+          <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => onCancel(item.id)}>
             {vocab('Cancel')}
-          </button>
+          </Button>
         )}
         {(item.status === 'failed' || item.status === 'cancelled') && (
-          <button className="cv-item__link" onClick={() => onRetry(item.id)}>
+          <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => onRetry(item.id)}>
             {vocab('Retry')}
-          </button>
+          </Button>
         )}
         {item.status === 'done' && !isBrowserRuntime() && (
-          <button className="cv-item__link" onClick={() => onReveal(item.destPath)}>
+          <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => onReveal(item.destPath)}>
             {vocab('Reveal')}
-          </button>
+          </Button>
         )}
         {item.status === 'done' && (
-          <button className="cv-item__link" onClick={() => onOpenInEditor(item.destPath)}>
+          <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => onOpenInEditor(item.destPath)}>
             {vocab('Open in Visual Studio Code')}
-          </button>
+          </Button>
         )}
         {(item.status === 'done' || item.status === 'failed' || item.status === 'cancelled') && (
-          <button className="cv-item__link" onClick={() => onRemove(item.id)}>
+          <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => onRemove(item.id)}>
             {vocab('Remove')}
-          </button>
+          </Button>
         )}
       </div>
     </li>
@@ -563,9 +564,9 @@ function FileConverterPanelForApi({
       <aside className="drawer converter" data-easter-surface="converter" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={vocab('File converter')}>
         <div className="drawer__head">
           <h2>{vocab('File converter')}</h2>
-          <button className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>
+          <IconButton size="dense" className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>
             <MaterialSymbol name="close" size={18} />
-          </button>
+          </IconButton>
         </div>
         <div className="drawer__body cv-body">
           {error && (
@@ -584,12 +585,12 @@ function FileConverterPanelForApi({
           <section>
             <h3>{vocab('1. Choose files')}</h3>
             <div className="cv-actions">
-              <button className="sc-btn" onClick={() => void handlePickFiles()}>
+              <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={() => void handlePickFiles()}>
                 {vocab('Add files…')}
-              </button>
-              <button className="sc-btn" onClick={() => void handlePickFolder()}>
+              </Button>
+              <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={() => void handlePickFolder()}>
                 {vocab('Add folder…')}
-              </button>
+              </Button>
             </div>
             {pending.length === 0 && (
               <p className="cv-empty-note">
@@ -607,13 +608,13 @@ function FileConverterPanelForApi({
                         : vocab('inspecting…')}
                       {f.detection ? ` · ${formatBytes(f.detection.sizeBytes)}` : ''}
                     </span>
-                    <button
+                    <Button variant="text" size="small" vocabularyMode="factual"
                       className="cv-item__link"
                       aria-label={vocab('Remove selected file')}
                       onClick={() => setPending((prev) => prev.filter((p) => p.path !== f.path))}
                     >
                       ×
-                    </button>
+                    </Button>
                   </li>
                 ))}
               </ul>
@@ -674,9 +675,9 @@ function FileConverterPanelForApi({
           <section>
             <h3>{vocab('3. Destination')}</h3>
             <div className="cv-actions">
-              <button className="sc-btn" onClick={() => void handleChooseDest()}>
+              <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={() => void handleChooseDest()}>
                 {vocab(destDir ? 'Change folder…' : 'Choose folder…')}
-              </button>
+              </Button>
               {destDir && <span className="cv-destdir" title={destDir}>{destDir}</span>}
             </div>
             {preflight && (
@@ -689,24 +690,24 @@ function FileConverterPanelForApi({
                 {preflight.sufficient === false && vocab(' This may not be enough free space.')}
               </p>
             )}
-            <button
+            <Button size="small" vocabularyMode="factual"
               className="sc-btn primary"
               disabled={pending.length === 0 || !selectedAdapter || !destDir}
               onClick={() => void handleAddToQueue()}
             >
               {mapOwnedSentence(vocab, [copy('Add '), fact(pending.length ? String(pending.length) : ''), copy(` file${pending.length === 1 ? '' : 's'} to queue`)])}
-            </button>
+            </Button>
           </section>
 
           <section>
             <h3>{vocab('4. Queue')}</h3>
             <div className="cv-queue-controls">
-              <button className="sc-btn" onClick={toggleRunning} disabled={queue.length === 0}>
+              <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={toggleRunning} disabled={queue.length === 0}>
                 {vocab(summary.running ? 'Pause' : 'Start')}
-              </button>
+              </Button>
               <label className="cv-concurrency">
                 {vocab('Parallel:')}
-                <input
+                <Input
                   type="number"
                   min={1}
                   max={6}
@@ -716,18 +717,18 @@ function FileConverterPanelForApi({
                   }
                 />
               </label>
-              <button
+              <Button variant="text" size="small" vocabularyMode="factual"
                 className="cv-item__link"
                 onClick={() => runConverterAction(api, () => api.converter.cancelAll())}
               >
                 {vocab('Cancel all')}
-              </button>
-              <button
+              </Button>
+              <Button variant="text" size="small" vocabularyMode="factual"
                 className="cv-item__link"
                 onClick={() => runConverterAction(api, () => api.converter.clearFinished())}
               >
                 {vocab('Clear finished')}
-              </button>
+              </Button>
               {summary.scanning && <span className="cv-scanning">{vocab('Scanning folder…')}</span>}
             </div>
             <p className="cv-summary-counts">

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Button } from '@renderer/ui/md3'
+import { Select } from '@renderer/ui/Select'
 import type { NodeTerminalApi } from '@shared/types'
 import type { AdvancedPipelineDescriptor, AdvancedPipelineQueueItem } from '@shared/converter'
 import { isBrowserRuntime } from '../../bridge/runtime'
@@ -67,29 +69,29 @@ export function AdvancedPipelinePanel({ api }: { api: NodeTerminalApi }) {
     {notice && <p className="cv-item__error" role="status">{notice}</p>}
     <label>
       Pipeline
-      <select value={selected} onChange={(event) => setSelected(event.target.value)} aria-label="Advanced pipeline">
+      <Select value={selected} onChange={(event) => setSelected(event.target.value)} aria-label="Advanced pipeline">
         <option value="" disabled>Choose a pipeline</option>
         {catalog.map((row) => <option key={row.id} value={row.id} disabled={!row.available}>{row.label}{row.available ? '' : ` — ${row.unavailableReason ?? 'Unavailable'}`}</option>)}
-      </select>
+      </Select>
     </label>
     {selectedDescriptor?.lossy && <p className="cv-lossy">{selectedDescriptor.disclosure.join(' ')}</p>}
     <div className="cv-actions">
-      <button className="sc-btn" onClick={() => void pickInput()}>Choose input…</button>
+      <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={() => void pickInput()}>Choose input…</Button>
       <span className="cv-destdir" title={input}>{input || 'No input selected'}</span>
     </div>
     <div className="cv-actions">
-      <button className="sc-btn" onClick={() => void pickDestination()}>Choose output folder…</button>
+      <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={() => void pickDestination()}>Choose output folder…</Button>
       <span className="cv-destdir" title={destination}>{destination || 'No output folder selected'}</span>
     </div>
-    <button className="sc-btn primary" onClick={() => void enqueue()} disabled={!selectedDescriptor?.available || !input || !destination}>Queue advanced pipeline</button>
+    <Button size="small" vocabularyMode="factual" className="sc-btn primary" onClick={() => void enqueue()} disabled={!selectedDescriptor?.available || !input || !destination}>Queue advanced pipeline</Button>
     {items.length === 0 ? <p className="cv-empty-note">No advanced pipeline jobs yet.</p> : <ul className="cv-items" aria-label="Advanced pipeline queue">
       {items.map((item) => <li className={`cv-item cv-item--${item.status}`} key={item.id}>
         <div className="cv-item__row"><span className="cv-item__name">{item.pipelineId}</span><span className="cv-item__status">{item.status}</span></div>
         {item.progress && <div className="cv-progress" role="progressbar" aria-valuemin={0} aria-valuemax={item.progress.totalBytes || 1} aria-valuenow={item.progress.completedBytes} aria-label={item.progress.message}><div className="cv-progress__bar" style={{ width: `${item.progress.totalBytes ? Math.min(100, item.progress.completedBytes / item.progress.totalBytes * 100) : 0}%` }} /></div>}
         {item.result?.outputs.map((output) => <p className="cv-item__dest" key={output.path}>{output.path} · {formatBytes(output.bytes)} · {output.sha256.slice(0, 12)}</p>)}
         {item.error && <p className="cv-item__error">{item.error}</p>}
-        {(item.status === 'running' || item.status === 'queued') && <button className="cv-item__link" onClick={() => void advanced.cancel(item.id)}>Cancel</button>}
-        {(item.status === 'failed' || item.status === 'cancelled') && <button className="cv-item__link" onClick={() => void advanced.retry(item.id)}>Retry</button>}
+        {(item.status === 'running' || item.status === 'queued') && <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => void advanced.cancel(item.id)}>Cancel</Button>}
+        {(item.status === 'failed' || item.status === 'cancelled') && <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => void advanced.retry(item.id)}>Retry</Button>}
       </li>)}
     </ul>}
   </section>

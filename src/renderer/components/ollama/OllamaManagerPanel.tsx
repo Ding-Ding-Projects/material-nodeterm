@@ -36,7 +36,8 @@ import {
   type CatalogView
 } from './catalogView'
 import { troubleshootSteps } from './troubleshoot'
-import { Progress, Tabs, TextArea } from '@renderer/ui/md3'
+import { Button, IconButton, Progress, SearchField, Tabs, TextArea } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
 
 /** How often the panel re-asks for the catalog while the core reports a refresh in flight. The
@@ -487,9 +488,9 @@ function OllamaManagerPanelForApi({
       <aside className="drawer ollama" data-easter-surface="ollama" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={vocab('Ollama manager')}>
         <div className="drawer__head">
           <h2>{vocab('Ollama manager')}</h2>
-          <button className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>
+          <IconButton size="dense" className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>
             <MaterialSymbol name="close" size={18} />
-          </button>
+          </IconButton>
         </div>
         <div className="drawer__body om-body">
           {accessError ? (
@@ -501,9 +502,9 @@ function OllamaManagerPanelForApi({
                 </p>
               )}
               {accessError.code !== E_UNSUPPORTED && (
-                <button className="sc-btn" onClick={() => void refreshStatus()} disabled={checking}>
+                <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={() => void refreshStatus()} disabled={checking}>
                   {vocab('Retry')}
-                </button>
+                </Button>
               )}
             </section>
           ) : (
@@ -671,9 +672,9 @@ function HealthTab({
                       ? <>{vocab('Could not reach Ollama at')} {status.endpoint}</>
                       : <>{vocab('Ollama answered but reported a problem:')} {status.detail ?? vocab('unknown error')}</>}
         </span>
-        <button className="sc-btn" onClick={onRefresh} disabled={checking}>
+        <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={onRefresh} disabled={checking}>
           {vocab('Retry')}
-        </button>
+        </Button>
       </div>
 
       {hardware && (
@@ -698,9 +699,9 @@ function HealthTab({
               </li>
             ))}
           </ol>
-          <button className="sc-btn" onClick={onRefresh}>
+          <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={onRefresh}>
             {vocab("I've done this — check again")}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -747,9 +748,9 @@ function ModelsTab({
   return (
     <section>
       <div className="om-actions">
-        <button className="sc-btn" onClick={onRefresh}>
+        <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={onRefresh}>
           {vocab('Refresh')}
-        </button>
+        </Button>
       </div>
       {models.length === 0 ? (
         <p className="om-empty-note">{vocab('No models installed yet — pull one from the Model store tab.')}</p>
@@ -772,9 +773,9 @@ function ModelsTab({
                   {m.details.quantization_level && ` · ${m.details.quantization_level}`}
                 </span>
                 <FitBadge fit={fitMap[m.name]} />
-                <button className="cv-item__link" onClick={() => onDelete(m.name)}>
+                <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => onDelete(m.name)}>
                   {vocab('Delete')}
-                </button>
+                </Button>
               </div>
               {expanded === m.name && <FitDetail fit={fitMap[m.name]} />}
             </li>
@@ -947,18 +948,18 @@ function StoreTab({
             ))}
             {catalog.refreshError && <p>{vocab('Last refresh error:')} {catalog.refreshError}</p>}
             {catalogError && <p>{vocab('The most recent reload failed:')} {catalogError}. {vocab('Showing the last list that loaded.')}</p>}
-            <button className="sc-btn" onClick={onReloadCatalog}>
+            <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={onReloadCatalog}>
               {vocab('Reload catalog')}
-            </button>
+            </Button>
           </div>
         )}
         <div className="om-actions">
-          <input
-            type="search"
+          <SearchField
+            dense
             className="om-search"
             style={{ marginBottom: 0, flex: 1 }}
-            placeholder={vocab('Search every model and tag…')}
-            aria-label={vocab('Search the model catalog')}
+            placeholder="Search every model and tag…"
+            aria-label="Search the model catalog"
             value={storeQuery}
             onChange={(e) => setStoreQuery(e.target.value)}
           />
@@ -1027,9 +1028,9 @@ function StoreTab({
                     : vocab('no published date')}
                 </span>
                 <FitBadge fit={fitMap[row.ref]} />
-                <button className="sc-btn" disabled={status?.health !== 'ok'} onClick={() => onAddToCart(row.ref)}>
+                <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" disabled={status?.health !== 'ok'} onClick={() => onAddToCart(row.ref)}>
                   {vocab('Add to cart')}
-                </button>
+                </Button>
               </div>
               {row.tag === null && (
                 <p className="om-empty-note">
@@ -1043,34 +1044,35 @@ function StoreTab({
         </ul>
         {page.pageCount > 1 && (
           <div className="om-actions">
-            <button className="sc-btn" disabled={page.page <= 1} onClick={() => setStorePage((p) => p - 1)}>
+            <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" disabled={page.page <= 1} onClick={() => setStorePage((p) => p - 1)}>
               {vocab('Previous')}
-            </button>
+            </Button>
             <span className="om-model__meta">
               {vocab('Page')} {page.page} {vocab('of')} {page.pageCount}
             </span>
-            <button
+            <Button size="small" vocabularyMode="factual" variant="outlined"
               className="sc-btn"
               disabled={page.page >= page.pageCount}
               onClick={() => setStorePage((p) => p + 1)}
             >
               {vocab('Next')}
-            </button>
+            </Button>
           </div>
         )}
         <div className="om-actions" style={{ marginTop: 10 }}>
-          <input
+          <Input
             type="text"
             className="om-search"
+            vocabularyMode="factual"
             style={{ marginBottom: 0, flex: 1 }}
             placeholder={vocab('Exact model reference, e.g. llama3.2:1b')}
             aria-label={vocab('Model reference')}
             value={customRef}
             onChange={(e) => setCustomRef(e.target.value)}
           />
-          <button className="sc-btn" disabled={status?.health !== 'ok' || !customRef.trim()} onClick={onAddCustomRef}>
+          <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" disabled={status?.health !== 'ok' || !customRef.trim()} onClick={onAddCustomRef}>
             {vocab('Add')}
-          </button>
+          </Button>
         </div>
       </section>
 
@@ -1081,7 +1083,7 @@ function StoreTab({
           {cartEstimate.unknownCount > 0 && ` (+${cartEstimate.unknownCount} ${vocab('of unknown size')})`}.
         </p>
         <div className="cv-queue-controls">
-          <button
+          <Button size="small" vocabularyMode="factual" variant="outlined"
             className="sc-btn"
             disabled={cart.length === 0}
             onClick={() =>
@@ -1089,10 +1091,10 @@ function StoreTab({
             }
           >
             {vocab(cartSummary.running ? 'Pause' : 'Start')}
-          </button>
+          </Button>
           <label className="cv-concurrency">
             {vocab('Parallel:')}
-            <input
+            <Input
               type="number"
               min={1}
               max={3}
@@ -1134,19 +1136,19 @@ function StoreTab({
                   {item.error && <p className="cv-item__error">{item.error}</p>}
                   <div className="cv-item__actions">
                     {(item.status === 'queued' || item.status === 'running') && (
-                      <button className="cv-item__link" onClick={() => void ollama.pullCancelItem(item.id)}>
+                      <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => void ollama.pullCancelItem(item.id)}>
                         {vocab('Cancel')}
-                      </button>
+                      </Button>
                     )}
                     {(item.status === 'failed' || item.status === 'cancelled') && (
-                      <button className="cv-item__link" onClick={() => void ollama.pullRetryItem(item.id)}>
+                      <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => void ollama.pullRetryItem(item.id)}>
                         {vocab('Retry')}
-                      </button>
+                      </Button>
                     )}
                     {item.status !== 'running' && item.status !== 'queued' && (
-                      <button className="cv-item__link" onClick={() => void ollama.pullRemoveItem(item.id)}>
+                      <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => void ollama.pullRemoveItem(item.id)}>
                         {vocab('Remove')}
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </li>
@@ -1285,20 +1287,20 @@ function ChatTab({
   return (
     <section className="om-chat">
       <div className="om-actions">
-        <button className="sc-btn" onClick={() => void handleNewChat()}>
+        <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={() => void handleNewChat()}>
           {vocab('New chat')}
-        </button>
+        </Button>
         {active && (
           <>
-            <button className="sc-btn" onClick={() => void handleRename()}>
+            <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={() => void handleRename()}>
               {vocab('Rename')}
-            </button>
-            <button className="sc-btn" onClick={() => void handleExport()}>
+            </Button>
+            <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={() => void handleExport()}>
               {vocab('Export (Markdown)')}
-            </button>
-            <button className="cv-item__link" onClick={() => setDeleteConfirm(true)}>
+            </Button>
+            <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => setDeleteConfirm(true)}>
               {vocab('Delete')}
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -1342,7 +1344,7 @@ function ChatTab({
           <div className="om-chat__params">
             <label>
               {vocab('Temperature:')}{' '}
-              <input
+              <Input
                 type="number"
                 step={0.1}
                 min={0}
@@ -1355,7 +1357,7 @@ function ChatTab({
             </label>
             <label>
               {vocab('Top-p:')}{' '}
-              <input
+              <Input
                 type="number"
                 step={0.05}
                 min={0}
@@ -1366,7 +1368,7 @@ function ChatTab({
             </label>
             <label>
               {vocab('Context:')}{' '}
-              <input
+              <Input
                 type="number"
                 step={512}
                 min={512}
@@ -1403,13 +1405,13 @@ function ChatTab({
           </div>
 
           <div className="om-actions">
-            <button className="cv-item__link" disabled title={attachmentReason}>
+            <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" disabled title={attachmentReason}>
               {vocab('Attach image')} ({vocab('disabled')} — {attachmentReason})
-            </button>
+            </Button>
             {!capabilities && (
-              <button className="cv-item__link" onClick={() => void handleVerifyCapabilities()} disabled={verifyingCaps}>
+              <Button variant="text" size="small" vocabularyMode="factual" className="cv-item__link" onClick={() => void handleVerifyCapabilities()} disabled={verifyingCaps}>
                 {vocab(verifyingCaps ? 'Verifying…' : 'Verify model capabilities')}
-              </button>
+              </Button>
             )}
           </div>
 
@@ -1426,13 +1428,13 @@ function ChatTab({
               }}
             />
             {streaming ? (
-              <button className="sc-btn" onClick={() => void ollama.chatStop(active.id)}>
+              <Button size="small" vocabularyMode="factual" variant="outlined" className="sc-btn" onClick={() => void ollama.chatStop(active.id)}>
                 {vocab('Stop')}
-              </button>
+              </Button>
             ) : (
-              <button className="sc-btn primary" onClick={() => void handleSend()} disabled={!composer.trim()}>
+              <Button size="small" vocabularyMode="factual" className="sc-btn primary" onClick={() => void handleSend()} disabled={!composer.trim()}>
                 {vocab('Send')}
-              </button>
+              </Button>
             )}
           </div>
         </>

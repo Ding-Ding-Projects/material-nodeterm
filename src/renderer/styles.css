@@ -12521,18 +12521,6 @@ button.group-node__setup:disabled {
   padding: 8px 10px 10px;
 }
 
-.cv-cat__search {
-  width: 100%;
-  background: var(--md-surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  padding: 5px 8px;
-  font-size: 12px;
-  outline: none;
-  margin-bottom: 6px;
-  box-sizing: border-box;
-}
 
 .cv-rows {
   list-style: none;
@@ -12646,15 +12634,6 @@ button.group-node__setup:disabled {
   gap: 6px;
   font-size: 12px;
   color: var(--muted);
-}
-.cv-concurrency input {
-  width: 48px;
-  background: var(--md-surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  padding: 4px 6px;
-  font-size: 12px;
 }
 
 .cv-scanning {

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { SearchField } from '@renderer/ui/md3'
 import {
   CONVERTER_CATEGORY_LABELS,
   CONVERTER_CATEGORY_ORDER,
@@ -89,16 +90,19 @@ function AdapterCategory({
       {open && (
         <div className="cv-cat__body">
           <div className="cv-cat__search-wrap">
-            <input
+            <SearchField
               ref={searchInputRef}
-              type="search"
+              dense
               className="cv-cat__search"
+              vocabularyMode="factual"
               placeholder={vocab(`Search ${CONVERTER_CATEGORY_LABELS[category].toLowerCase()}…`)}
               aria-label={vocab(`Search ${CONVERTER_CATEGORY_LABELS[category]} conversions`)}
               value={search.value}
               onChange={(e) => search.setValue(e.target.value)}
+              trailingSlot={
+                <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label={`${categoryLabel} regex search`} />
+              }
             />
-            <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label={`${categoryLabel} regex search`} />
           </div>
           {search.error && <p className="cv-empty-note" role="alert">{search.error}</p>}
           {visible.length === 0 && <p className="cv-empty-note">{mapOwnedSentence(vocab, [copy('No conversions match "'), fact(search.value), copy('".')])}</p>}
