@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { SearchField } from '@renderer/ui/md3'
 import { AGENT_CONFIG, BUILTIN_AGENT_IDS, type AgentId } from '@shared/agents/config'
 import { AgentIcon } from '../lib/agentIcons'
 import { useSettings } from '../state/settings'
@@ -126,17 +127,19 @@ export function FabMenu({
             }
           >
             <div className="menu-filter" onMouseDown={(e) => e.stopPropagation()}>
-              <div className="menu-filter__row">
-                <input
-                  ref={menuInputRef}
-                  className="menu-filter__input"
-                  value={menuSearch.value}
-                  placeholder={menuSearch.mode === 'regex' ? vocab('Filter new nodes… (regex)') : vocab('Filter new nodes…')}
-                  aria-label={vocab('Filter new nodes')}
-                  onChange={(e) => menuSearch.setValue(e.target.value)}
-                />
-                <AnchoredRegexBuilder search={menuSearch} fieldRef={menuInputRef} label={vocab('Regex — new nodes')} zIndex={90} />
-              </div>
+              <SearchField
+                ref={menuInputRef}
+                dense
+                className="menu-filter__row"
+                vocabularyMode="factual"
+                value={menuSearch.value}
+                placeholder={menuSearch.mode === 'regex' ? vocab('Filter new nodes… (regex)') : vocab('Filter new nodes…')}
+                aria-label={vocab('Filter new nodes')}
+                onChange={(e) => menuSearch.setValue(e.target.value)}
+                trailingSlot={
+                  <AnchoredRegexBuilder search={menuSearch} fieldRef={menuInputRef} label={vocab('Regex — new nodes')} zIndex={90} />
+                }
+              />
               {menuSearch.error && <div className="menu-filter__error">{menuSearch.error}</div>}
             </div>
             {profileMenuOpen ? (

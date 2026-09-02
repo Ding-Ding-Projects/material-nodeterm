@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Button, IconButton } from '../ui/md3'
 import { useShallow } from 'zustand/react/shallow'
 import { playSfx, primeSfx } from '@renderer/lib/sfx'
 import { narrate, suppressNarratorTrack } from '@renderer/lib/narrator'
@@ -18309,22 +18310,27 @@ export function Canvas() {
             )}
           </button>
           {window.nodeTerminal.pairing.supported ? (
-            <button
-              className="md3-icon-btn"
-              title="Pair phone"
+            <IconButton size="standard"
+              title="Pair phone" aria-label="Pair phone"
               onClick={(e) => {
                 const r = e.currentTarget.getBoundingClientRect()
                 setPhonePairAnchor((cur) => (cur ? null : { right: r.right, bottom: r.bottom }))
               }}
             >
               <IconPhone />
-            </button>
+            </IconButton>
           ) : null}
           {/* Dictation moved here from the old bottom dock — on-device Whisper, hold-to-talk by
               default (⌘⌥ per settings.speech.shortcut). */}
-          <button
-            className={`md3-icon-btn${dictationOpen ? ' is-active' : ''}`}
+          <IconButton
+            size="standard"
+            active={dictationOpen}
             title={
+              isHoldChord(settings.speech.shortcut)
+                ? `Dictate (hold ${formatShortcut(settings.speech.shortcut, isMac)})`
+                : `Dictate (${formatShortcut(settings.speech.shortcut, isMac)})`
+            }
+            aria-label={
               isHoldChord(settings.speech.shortcut)
                 ? `Dictate (hold ${formatShortcut(settings.speech.shortcut, isMac)})`
                 : `Dictate (${formatShortcut(settings.speech.shortcut, isMac)})`
@@ -18332,17 +18338,16 @@ export function Canvas() {
             onClick={toggleDictation}
           >
             <IconMic />
-          </button>
-          <button
-            className="md3-icon-btn"
-            title="Help"
+          </IconButton>
+          <IconButton size="standard"
+            title="Help" aria-label="Help"
             onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect()
               openHelpMenuAt(r)
             }}
           >
             ?
-          </button>
+          </IconButton>
         </div>
       </TopAppBar>
       {pendingMultiverseDoor && (
@@ -18366,9 +18371,9 @@ export function Canvas() {
                 Focused on <strong>{nodeFocusSession.fullFlow.find((node) => node.id === nodeFocusSession.nodeId)?.data.title ?? nodeFocusSession.nodeId}</strong> · press F11 or Escape to return
               </span>
             </div>
-            <button className="announce-banner__close" title="Return to canvas" onClick={exitNodeCanvas}>
+            <IconButton size="dense" className="announce-banner__close" title="Return to canvas" aria-label="Return to canvas" onClick={exitNodeCanvas}>
               ← back
-            </button>
+            </IconButton>
           </div>
         )}
         <MinecraftConnectBanner minecraftNodeIds={minecraftNodeIds} />
@@ -18392,13 +18397,13 @@ export function Canvas() {
             <div className="announce-banner__content">
               <span className="announce-banner__body">{migrationNote}</span>
             </div>
-            <button
+            <IconButton size="dense"
               className="announce-banner__close"
-              title="Dismiss"
+              title="Dismiss" aria-label="Dismiss"
               onClick={() => setMigrationNote(null)}
             >
               ✕
-            </button>
+            </IconButton>
           </div>
         )}
         {syncNote && (
@@ -18407,13 +18412,13 @@ export function Canvas() {
             <div className="announce-banner__content">
               <span className="announce-banner__body">{syncNote}</span>
             </div>
-            <button
+            <IconButton size="dense"
               className="announce-banner__close"
-              title="Dismiss"
+              title="Dismiss" aria-label="Dismiss"
               onClick={() => setSyncNote(null)}
             >
               ✕
-            </button>
+            </IconButton>
           </div>
         )}
         {copyError && (
@@ -18422,13 +18427,13 @@ export function Canvas() {
             <div className="announce-banner__content">
               <span className="announce-banner__body">{copyError}</span>
             </div>
-            <button
+            <IconButton size="dense"
               className="announce-banner__close"
-              title="Dismiss"
+              title="Dismiss" aria-label="Dismiss"
               onClick={() => setCopyError(null)}
             >
               ✕
-            </button>
+            </IconButton>
           </div>
         )}
         {notice && (
@@ -18441,13 +18446,13 @@ export function Canvas() {
             <div className="announce-banner__content">
               <span className="announce-banner__body">{notice.text}</span>
             </div>
-            <button
+            <IconButton size="dense"
               className="announce-banner__close"
-              title="Dismiss"
+              title="Dismiss" aria-label="Dismiss"
               onClick={() => setNotice(null)}
             >
               ✕
-            </button>
+            </IconButton>
           </div>
         )}
         {conflict && (
@@ -18526,12 +18531,12 @@ export function Canvas() {
                     remotely. Hidden while an attempt is already in flight (connecting/reconnecting)
                     so it can't queue a second one on top. */}
                 {isError && (
-                  <button
+                  <Button variant="tonal" size="small"
                     className="ssh-banner__retry"
                     onClick={() => sshReconnectorRef.current?.retryNow(activeProjectId)}
                   >
                     Reconnect
-                  </button>
+                  </Button>
                 )}
               </div>
             )
@@ -18611,9 +18616,9 @@ export function Canvas() {
         onMouseEnter={openSessionsPeek}
         onMouseLeave={closeSessionsPeekSoon}
       >
-        <button title={commandTooltip('Sessions', 'panel.sessions')} onClick={onSessionsIconClick}>
+        <IconButton size="dense" title={commandTooltip('Sessions', 'panel.sessions')} aria-label={commandTooltip('Sessions', 'panel.sessions')} onClick={onSessionsIconClick}>
           <IconSessions />
-        </button>
+        </IconButton>
       </div>
 
       {/* The old floating `.controls-cluster` is gone — the search bar, facepile, notifications,
@@ -18840,12 +18845,12 @@ export function Canvas() {
           <span className="cluster-search__icon">⌕</span>
           {paletteChip && <span className="kbd">{paletteChip}</span>}
         </button>
-        <button title={commandTooltip('Explorer', 'panel.explorer')} onClick={() => showExplorer('toggle')}>
+        <IconButton size="dense" title={commandTooltip('Explorer', 'panel.explorer')} aria-label={commandTooltip('Explorer', 'panel.explorer')} onClick={() => showExplorer('toggle')}>
           <IconExplorer />
-        </button>
-        <button title={commandTooltip('Source Control', 'panel.sourceControl')} onClick={() => setScOpen(true)}>
+        </IconButton>
+        <IconButton size="dense" title={commandTooltip('Source Control', 'panel.sourceControl')} aria-label={commandTooltip('Source Control', 'panel.sourceControl')} onClick={() => setScOpen(true)}>
           <IconBranch />
-        </button>
+        </IconButton>
         <button
           title="Pair phone"
           onClick={(e) => {
@@ -18855,15 +18860,15 @@ export function Canvas() {
         >
           <IconPhone />
         </button>
-        <button
-          title={commandTooltip('Settings', 'app.settings')}
+        <IconButton size="dense"
+          title={commandTooltip('Settings', 'app.settings')} aria-label={commandTooltip('Settings', 'app.settings')}
           onClick={() => {
             setSettingsSection(undefined)
             setSettingsOpen(true)
           }}
         >
           <IconGear />
-        </button>
+        </IconButton>
         <button
           title="Help"
           onClick={(e) => {
@@ -19130,22 +19135,22 @@ export function Canvas() {
         {/* Undo/redo/save, moved here from the old bottom dock — stacked above the merged zoom
             Controls row so the two bottom-left clusters don't collide. */}
         <div className="md3-canvas-actions" data-canvas-chrome>
-          <button title={hintLabel('Undo (⌘Z)')} disabled={pastRef.current.length === 0} onClick={undo}>
+          <IconButton size="dense" title={hintLabel('Undo (⌘Z)')} aria-label={hintLabel('Undo (⌘Z)')} disabled={pastRef.current.length === 0} onClick={undo}>
             <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 7L4 12l5 5M4 12h11a5 5 0 0 1 0 10h-2" />
             </svg>
-          </button>
-          <button title={hintLabel('Redo (⌘⇧Z)')} disabled={futureRef.current.length === 0} onClick={redo}>
+          </IconButton>
+          <IconButton size="dense" title={hintLabel('Redo (⌘⇧Z)')} aria-label={hintLabel('Redo (⌘⇧Z)')} disabled={futureRef.current.length === 0} onClick={redo}>
             <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               <path d="M15 7l5 5-5 5M20 12H9a5 5 0 0 0 0 10h2" />
             </svg>
-          </button>
+          </IconButton>
           <span className="md3-canvas-actions__sep" />
           {/* Breadcrumb trail camera back/forward. Enabled state derives from stepBreadcrumb
               itself (not a raw index comparison): it skips deleted stops, so a click is never
               enabled when it would do nothing. */}
-          <button
-            title={hintLabel('Go back (⌘[)')}
+          <IconButton size="dense"
+            title={hintLabel('Go back (⌘[)')} aria-label={hintLabel('Go back (⌘[)')}
             disabled={
               !stepBreadcrumb(navRef.current, 'back', (id) => nodesRef.current.some((n) => n.id === id))
             }
@@ -19154,9 +19159,9 @@ export function Canvas() {
             <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5M11 6l-6 6 6 6" />
             </svg>
-          </button>
-          <button
-            title={hintLabel('Go forward (⌘])')}
+          </IconButton>
+          <IconButton size="dense"
+            title={hintLabel('Go forward (⌘])')} aria-label={hintLabel('Go forward (⌘])')}
             disabled={
               !stepBreadcrumb(navRef.current, 'forward', (id) => nodesRef.current.some((n) => n.id === id))
             }
@@ -19165,12 +19170,12 @@ export function Canvas() {
             <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M13 6l6 6-6 6" />
             </svg>
-          </button>
+          </IconButton>
           <span className="md3-canvas-actions__sep" />
-          <button title="Save" onClick={persist}>
+          <IconButton size="dense" title="Save" aria-label="Save" onClick={persist}>
             <IconSave />
             <span className={`md3-canvas-actions__dirty${dirty ? ' dirty' : ''}`} />
-          </button>
+          </IconButton>
         </div>
         {/* ADHD 'one thing at a time': the person's own next action, kept visible so it survives a
             context switch. Written by them and never inferred — a guess here would be the app
@@ -19982,9 +19987,9 @@ export function Canvas() {
           above it. Esc is deliberately NOT an exit key — it must reach the CLI in the pane. */}
       <div id={FOCUS_SURFACE_ID} className={`focus-surface${focusedId ? ' is-active' : ''}`}>
         {focusedId && (
-          <button className="focus-exit" title="Exit focus (⌘⇧F)" onClick={toggleFocusMode}>
+          <Button variant="tonal" size="small" className="focus-exit" title="Exit focus (⌘⇧F)" onClick={toggleFocusMode}>
             Exit focus
-          </button>
+          </Button>
         )}
       </div>
     </div>

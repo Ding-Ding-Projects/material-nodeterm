@@ -9,8 +9,10 @@ export interface SearchFieldProps extends Omit<InputHTMLAttributes<HTMLInputElem
   trailingSlot?: ReactNode
   /** 40px instead of 44px — inside a toolbar row that is already dense. */
   dense?: boolean
-  /** Wrapper className. The pill is the field; the input has no class escape hatch. */
+  /** Wrapper className — the pill is the field. */
   className?: string
+  /** Extra class on the native input, for the few tests and scripts that address it by class. */
+  inputClassName?: string
   vocabularyMode?: VocabularyTextMode
 }
 
@@ -21,7 +23,7 @@ export interface SearchFieldProps extends Omit<InputHTMLAttributes<HTMLInputElem
  * is `min-height`/`flex: 0 0 auto` and not the `height`/`flex-basis` pair its predecessors used.
  */
 export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(function SearchField(
-  { leadingIcon, trailingSlot, dense = false, className, vocabularyMode = 'authored', ...rest },
+  { leadingIcon, trailingSlot, dense = false, className, inputClassName, vocabularyMode = 'authored', ...rest },
   ref
 ) {
   const vocab = useVocabularyMapper()
@@ -33,7 +35,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
       <input
         ref={ref}
         type="search"
-        className="mdx-search__input"
+        className={cn('mdx-search__input', inputClassName)}
         spellCheck={false}
         {...rest}
         aria-label={mapped(rest['aria-label'])}

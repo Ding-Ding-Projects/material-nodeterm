@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { SearchField } from '@renderer/ui/md3'
 import { AnchoredPopover } from '../ui/AnchoredPopover'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
@@ -78,12 +79,12 @@ export function CompactTopBarMenu({ items, label = 'More', className, triggerRef
         <div className="md3-compact-more__search">
           <label htmlFor="compact-top-bar-search">{vocab('topBar.more.search', 'Search actions')}</label>
           <div className="md3-compact-more__search-control">
-            <input
+            <SearchField
+              dense
+              vocabularyMode="factual"
               ref={inputRef}
               id="compact-top-bar-search"
-              type="search"
               value={search.value}
-              spellCheck={false}
               aria-controls="compact-top-bar-actions"
               onChange={(event) => search.setValue(event.target.value)}
               onKeyDown={(event) => {

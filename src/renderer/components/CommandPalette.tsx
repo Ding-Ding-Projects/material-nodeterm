@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { IconButton, SearchField } from '@renderer/ui/md3'
 import { createPortal } from 'react-dom'
 import { rankQuickOpenFiles, type QuickOpenIndexedFile } from '../lib/quickOpenSearch'
 import { IconEditor } from './icons'
@@ -199,14 +200,16 @@ export function CommandPalette({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="palette__header-row">
-          <input
+          <SearchField
             ref={inputRef}
-            className="palette__input"
+            className="palette__search"
+            inputClassName="palette__input"
+            vocabularyMode="factual"
             autoFocus
-            spellCheck={false}
             placeholder={
               vocab(field.mode === 'regex' ? 'Type a regex pattern…' : 'Type a command or name…')
             }
+            aria-label={vocab('Command palette search')}
             value={field.value}
             onChange={(e) => {
               setQuery(e.target.value)
@@ -234,16 +237,21 @@ export function CommandPalette({
                 onClose()
               }
             }}
+            trailingSlot={
+              <AnchoredRegexBuilder search={field} fieldRef={inputRef} label="Regex — command palette" />
+            }
           />
-          <AnchoredRegexBuilder search={field} fieldRef={inputRef} label="Regex — command palette" />
           {/* Size is a user choice, persisted (localStorage) — default is the bounded card. */}
-          <button
+          <IconButton
+            size="dense"
             className="palette__size-toggle"
+            vocabularyMode="factual"
             title={vocab(size === 'card' ? 'Expand to full window' : 'Collapse to bounded card')}
+            aria-label={vocab(size === 'card' ? 'Expand to full window' : 'Collapse to bounded card')}
             onClick={toggleSize}
           >
             {size === 'card' ? '⤢' : '⤡'}
-          </button>
+          </IconButton>
         </div>
         {field.error && <div className="palette__error">{field.error}</div>}
         <div className="palette__list">

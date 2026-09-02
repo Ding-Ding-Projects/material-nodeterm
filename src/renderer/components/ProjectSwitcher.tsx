@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Input } from '@renderer/ui/Input'
+import { IconButton } from '@renderer/ui/md3'
 import { createPortal } from 'react-dom'
 import { useProjects } from '../state/projects'
 import { useViewMode, viewFor } from '../state/viewMode'
@@ -428,13 +430,16 @@ export function ProjectSwitcher({
         </button>
 
         {activeProject && (
-          <button
+          <IconButton
+            size="dense"
             className="tab__board-toggle"
+            vocabularyMode="factual"
             title={vocab(kanbanActive ? 'Canvas view (⌘⇧B)' : 'Kanban view (⌘⇧B)')}
+            aria-label={vocab(kanbanActive ? 'Canvas view' : 'Kanban view')}
             onClick={() => useViewMode.getState().toggle(activeProject.id)}
           >
             {kanbanActive ? <IconCanvasView /> : <IconKanban />}
-          </button>
+          </IconButton>
         )}
 
         {otherUnread > 0 && (
@@ -455,15 +460,16 @@ export function ProjectSwitcher({
           </span>
         )}
 
-        <button
+        <IconButton
+          size="dense"
           className="md3-switcher__caret"
-          aria-label={vocab('Switch project')}
+          aria-label="Switch project"
           aria-haspopup="menu"
           aria-expanded={switcherOpen}
           onClick={() => (switcherOpen ? closeMenu() : openSwitcher())}
         >
           <span aria-hidden>▾</span>
-        </button>
+        </IconButton>
       </div>
 
       {switcherOpen &&
@@ -607,8 +613,10 @@ export function ProjectSwitcher({
                         </span>
                       )}
                       {editingId === p.id ? (
-                        <input
+                        <Input
                           className="tab__edit"
+                          vocabularyMode="factual"
+                          aria-label={vocab('Project name')}
                           value={draft}
                           autoFocus
                           spellCheck={false}
@@ -632,16 +640,18 @@ export function ProjectSwitcher({
                         </span>
                       )}
 
-                      <button
+                      <IconButton
+                        size="dense"
                         className="md3-switcher-row__more"
-                        title={vocab('Project options')}
+                        title="Project options"
+                        aria-label="Project options"
                         onClick={(e) => {
                           e.stopPropagation()
                           toggleActions(p.id)
                         }}
                       >
                         ⋮
-                      </button>
+                      </IconButton>
                     </div>
 
                     {expanded && (
