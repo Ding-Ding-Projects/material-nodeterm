@@ -3735,11 +3735,6 @@ body,
 }
 
 /* Search button shows the ⌘K shortcut so its purpose is obvious */
-.mdx-btn.cluster-search {
-  width: auto !important;
-  gap: 7px;
-  padding: 0 10px;
-}
 
 .cluster-search__icon {
   font-size: 15px;

@@ -250,13 +250,6 @@ interface KnownFullyCoveredException {
  */
 const KNOWN_FULLY_COVERED_EXCEPTIONS: KnownFullyCoveredException[] = [
   {
-    selector: '.cluster-search',
-    reason:
-      "base's width: auto is !important, defeating the more specific .controls-cluster > button " +
-      "(0,1,1 vs .cluster-search's 0,1,0) regardless of load order; md3's un-!important width: 340px " +
-      'would lose that fight and the docked search bar would shrink to a 34px icon button.'
-  },
-  {
     selector: '.destgate-overlay--anchored',
     reason:
       "The anchored destructive-confirmation scrim uses a deliberately lighter legacy alpha so the " +
