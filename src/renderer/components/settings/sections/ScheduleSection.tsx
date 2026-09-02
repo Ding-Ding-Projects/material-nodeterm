@@ -32,7 +32,7 @@ import { Switch } from '@renderer/ui/Switch'
 import { ThemeSelect } from '../ThemeSelect'
 import { uuid } from '@renderer/lib/uuid'
 import { cn } from '@renderer/ui/cn'
-import { Checkbox } from '@renderer/ui/md3'
+import { Checkbox, SearchField } from '@renderer/ui/md3'
 import { AnchoredRegexBuilder } from '../../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '@renderer/lib/regex/useRegexSearchField'
 import { APP_CHROME_TARGETS } from '@renderer/lib/appearance/registry'
@@ -702,16 +702,20 @@ function EffectsEditor({
       <div className="flex items-end gap-2">
         <label className="min-w-0 flex-1 text-[12px] font-medium text-muted">
           <SettingsText>Find projects, canvases, layouts, presets, or appearance targets</SettingsText>
-          <input
+          <SearchField
             ref={searchRef}
+            dense
+            vocabularyMode="factual"
             value={search.value}
             onChange={(event) => search.setValue(event.target.value)}
-            className="mt-1 w-full rounded-xl border border-outline/50 bg-surface px-3 py-2 text-[13px] text-text"
+            className="mt-1"
             placeholder={vocab('Plain text search')}
             aria-label={vocab('Search scheduled effect targets')}
+            trailingSlot={
+              <AnchoredRegexBuilder search={search} fieldRef={searchRef} label="Regex builder for scheduled effect targets" />
+            }
           />
         </label>
-        <AnchoredRegexBuilder search={search} fieldRef={searchRef} label="Regex builder for scheduled effect targets" />
       </div>
       {search.error ? <p className="text-[11px] text-[color:var(--warn)]" role="alert"><SettingsText segments={[{ kind: 'fact', value: search.error }]} /></p> : null}
       <p className="text-[11px] leading-snug text-muted-2">

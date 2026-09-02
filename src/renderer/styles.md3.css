@@ -5929,6 +5929,11 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   z-index: 54;
 }
 
+.converter-node .menu-filter__input:focus {
+  outline: none;
+  border-color: var(--md-primary);
+}
+
 /* ---- MD3: Bulk action bar + preview (BulkActionBar, BulkActionPreview) ---- */
 
 .bulk-bar {
@@ -6791,37 +6796,6 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 /* Docked search pill (recipe: "Search: docked bar 44px pill surface-container-high"). The Input
    atom keeps its own component contract; this just gives it the pill housing and repaints its
    text so it reads as one continuous field rather than a bare box floating on the pill. */
-.md3-settings-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 0 6px 0 14px;
-  border-radius: var(--md-shape-full);
-  background: var(--md-surface-container-high);
-}
-.md3-settings-search__icon {
-  flex: none;
-  color: var(--md-on-surface-variant);
-}
-.md3-settings-search input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  border: none;
-  background: transparent;
-  color: var(--md-on-surface);
-  font-size: 13.5px;
-  padding: 0;
-}
-.md3-settings-search input::placeholder {
-  color: var(--md-on-surface-variant);
-}
-.md3-settings-search input:focus {
-  outline: none;
-  border: none;
-}
-
 .md3-settings-sidebar__group-title {
   padding: 0 14px 6px;
   font-size: 11.5px;

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Button } from '@renderer/ui/md3'
 import { Github, Image as ImageIcon, RotateCcw, Shapes, Smile } from 'lucide-react'
 import {
   LUCIDE_ICON_IDS,
@@ -185,9 +186,7 @@ export function ProjectIconPicker({
             {currentIconLabel(icon)}
           </div>
         </div>
-        <button
-          type="button"
-          className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1 text-[13px] text-muted transition-colors hover:text-text disabled:opacity-40"
+        <Button variant="outlined" size="small"
           onClick={() => {
             setUploadError(undefined)
             onIcon(undefined)
@@ -197,7 +196,7 @@ export function ProjectIconPicker({
         >
           <RotateCcw className="size-3.5" />
           Reset
-        </button>
+        </Button>
       </div>
 
       {/* Colour swatches — the accent for this project's tab and monogram. Rounded squares (Orca). */}
@@ -260,14 +259,12 @@ export function ProjectIconPicker({
         <div role="tabpanel">
           {tab === 'avatar' ? (
             <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[color:var(--accent)] px-3 py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
+              <Button size="small" className="w-full"
                 onClick={() => void onUseGithubAvatar()}
               >
                 <Github className="size-4" />
                 Use GitHub avatar
-              </button>
+              </Button>
               <p className="text-[12px] leading-relaxed text-muted">
                 Uses the avatar of the GitHub owner this project&apos;s remote points to, shared with
                 the repo like the name and colour. It refreshes each time you open this panel.
@@ -316,14 +313,12 @@ export function ProjectIconPicker({
 
           {tab === 'upload' ? (
             <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                className="flex w-fit items-center gap-2 rounded-lg border border-white/15 px-3 py-1.5 text-[13px] text-text transition-colors hover:bg-white/10"
+              <Button variant="outlined" size="small"
                 onClick={() => void onUpload()}
               >
                 <ImageIcon className="size-4" />
                 Choose image…
-              </button>
+              </Button>
               <p className="text-[12px] leading-relaxed text-muted">
                 The image is resized and re-encoded as a small PNG, then shared with the repo like the
                 name and colour.

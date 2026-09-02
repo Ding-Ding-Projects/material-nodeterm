@@ -3,6 +3,7 @@
 // call, no telemetry. Registration supports pasting an `otpauth://totp/...` URI or typing the
 // secret in by hand; camera/QR-photo scanning is a known, documented gap (see the doc).
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Input } from '@renderer/ui/Input'
 import type { AuthenticatorCode, AuthenticatorEntry, OtpAlgorithm } from '@shared/authenticator'
 import { OTP_ALGORITHMS } from '@shared/otp'
 import { ConfirmDialog } from '../../ConfirmDialog'
@@ -19,7 +20,7 @@ import { SettingsSection } from '../SettingsSection'
 import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { Select } from '@renderer/ui/Select'
-import { Radio } from '@renderer/ui/md3'
+import { Button, Radio, SearchField } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { saveBlobDownload } from '../../../lib/exportSave'
 
@@ -85,8 +86,9 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
         </label>
       </div>
       {mode === 'uri' ? (
-        <input
+        <Input
           type="text"
+          vocabularyMode="factual"
           className="toylock-input"
           placeholder={vocab('otpauth://totp/Issuer:you@example.com?secret=…')}
           value={uri}
@@ -94,9 +96,9 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
         />
       ) : (
         <div className="toylock-manual-grid">
-          <input type="text" className="toylock-input" placeholder={vocab('Issuer (e.g. GitHub)')} value={issuer} onChange={(e) => setIssuer(e.target.value)} />
-          <input type="text" className="toylock-input" placeholder={vocab('Account (e.g. you@example.com)')} value={account} onChange={(e) => setAccount(e.target.value)} />
-          <input type="text" className="toylock-input" placeholder={vocab('Secret (base32)')} value={secret} onChange={(e) => setSecret(e.target.value)} />
+          <Input type="text" vocabularyMode="factual" className="toylock-input" placeholder={vocab('Issuer (e.g. GitHub)')} value={issuer} onChange={(e) => setIssuer(e.target.value)} />
+          <Input type="text" vocabularyMode="factual" className="toylock-input" placeholder={vocab('Account (e.g. you@example.com)')} value={account} onChange={(e) => setAccount(e.target.value)} />
+          <Input type="text" vocabularyMode="factual" className="toylock-input" placeholder={vocab('Secret (base32)')} value={secret} onChange={(e) => setSecret(e.target.value)} />
           <Select className="toylock-select" value={algorithm} onChange={(e) => setAlgorithm(e.target.value as OtpAlgorithm)}>
             {OTP_ALGORITHMS.map((a) => (
               <option key={a} value={a}>
@@ -111,7 +113,7 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
               </option>
             ))}
           </Select>
-          <input
+          <Input
             type="number"
             className="toylock-number"
             min={1}
@@ -122,9 +124,9 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
         </div>
       )}
       {error && <div className="toylock-error"><SettingsText segments={[{ kind: 'fact', value: error }]} /></div>}
-      <button className="toylock-btn toylock-btn--primary" disabled={busy} onClick={() => void submit()}>
+      <Button size="small" disabled={busy} onClick={() => void submit()}>
         <SettingsText>{busy ? 'Adding…' : 'Add'}</SettingsText>
-      </button>
+      </Button>
     </div>
   )
 }
@@ -264,8 +266,8 @@ function EntryRow({
       <div className="toylock-auth-row__id">
         {renaming ? (
           <div className="toylock-manual-grid toylock-manual-grid--2col">
-            <input className="toylock-input" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder={vocab('Issuer')} />
-            <input className="toylock-input" value={account} onChange={(e) => setAccount(e.target.value)} placeholder={vocab('Account')} />
+            <Input vocabularyMode="factual" className="toylock-input" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder={vocab('Issuer')} />
+            <Input vocabularyMode="factual" className="toylock-input" value={account} onChange={(e) => setAccount(e.target.value)} placeholder={vocab('Account')} />
           </div>
         ) : (
           <>
@@ -306,28 +308,27 @@ function EntryRow({
       <div className="toylock-auth-row__actions">
         {renaming ? (
           <>
-            <button className="toylock-btn toylock-btn--sm" onClick={() => void saveRename()}>
+            <Button size="small" variant="outlined" onClick={() => void saveRename()}>
               <SettingsText>Save</SettingsText>
-            </button>
-            <button className="toylock-btn toylock-btn--sm" onClick={() => setRenaming(false)}>
+            </Button>
+            <Button size="small" variant="outlined" onClick={() => setRenaming(false)}>
               <SettingsText>Cancel</SettingsText>
-            </button>
+            </Button>
           </>
         ) : (
           <>
-            <button className="toylock-btn toylock-btn--sm" onClick={() => setRenaming(true)}>
+            <Button size="small" variant="outlined" onClick={() => setRenaming(true)}>
               <SettingsText>Rename</SettingsText>
-            </button>
-            <button className="toylock-btn toylock-btn--sm" onClick={() => void reveal()}>
+            </Button>
+            <Button size="small" variant="outlined" onClick={() => void reveal()}>
               <SettingsText>Reveal secret</SettingsText>
-            </button>
-            <button
-              className="toylock-btn toylock-btn--sm"
+            </Button>
+            <Button size="small" variant="outlined"
               disabled={removing}
               onClick={() => requestRemoval(entry)}
             >
               <SettingsText>{removing ? 'Removing…' : 'Remove'}</SettingsText>
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -340,9 +341,9 @@ function EntryRow({
             { kind: 'fact', value: entry.account }
           ]} /></span>
           <code className="toylock-secret-text">{revealed.secretBase32.replace(/(.{4})/g, '$1 ').trim()}</code>
-          <button className="toylock-btn toylock-btn--sm" onClick={() => setRevealed(null)}>
+          <Button size="small" variant="outlined" onClick={() => setRevealed(null)}>
             <SettingsText>Hide</SettingsText>
-          </button>
+          </Button>
         </div>
       )}
       {confirmRemove && (
@@ -447,8 +448,9 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
             </div>
           )}
           <AddEntryForm onAdded={(e) => setEntries((cur) => [...cur, e])} />
-          <input
-            type="text"
+          <SearchField
+            dense
+            vocabularyMode="factual"
             placeholder={vocab('Filter entries…')}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -481,9 +483,9 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
                 <SettingsText>Ordinary exports (backups, sharing) never include these secrets. This is the ONE deliberate action that writes them out, in the clear, behind a real two-key gate.</SettingsText>
               </p>
               {!showExportGate ? (
-                <button className="toylock-btn" onClick={() => setShowExportGate(true)}>
+                <Button size="small" variant="outlined" onClick={() => setShowExportGate(true)}>
                   <SettingsText>Export all secrets…</SettingsText>
-                </button>
+                </Button>
               ) : (
                 <TwoKeyExportGate
                   count={entries.length}

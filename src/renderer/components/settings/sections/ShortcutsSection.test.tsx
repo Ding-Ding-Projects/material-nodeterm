@@ -240,9 +240,11 @@ describe('ShortcutsSection rows', () => {
       button('canvas.undo', 'Reset Undo')!
     ]
     for (const el of controls) {
-      expect(el.className).toContain('border-0')
-      expect(el.className).toContain('bg-transparent')
-      expect(el.className).toContain('p-0')
+      // Either the MD3 IconButton primitive (its sheet strips the native chrome) or the
+      // recorder's own Tailwind reset — never a browser-default button.
+      const primitive = el.className.includes('md3-icon-btn')
+      const reset = ['border-0', 'bg-transparent', 'p-0'].every((c) => el.className.includes(c))
+      expect(primitive || reset, el.className).toBe(true)
     }
   })
 

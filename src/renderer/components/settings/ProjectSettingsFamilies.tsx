@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { TextArea } from '@renderer/ui/md3'
 import type {
   ProjectLocalSettings,
   ProjectSettingsDoc,
@@ -254,8 +255,9 @@ function StringField({
       htmlFor={id}
       control={
         multiline ? (
-          <textarea
+          <TextArea
             id={id}
+            vocabularyMode="factual"
             value={draft}
             aria-label={ariaLabel}
             disabled={disabled}
@@ -318,8 +320,9 @@ function EnvField({
       note={note}
       htmlFor={id}
       control={
-        <textarea
+        <TextArea
           id={id}
+          vocabularyMode="factual"
           value={draft}
           aria-label={ariaLabel}
           disabled={disabled}

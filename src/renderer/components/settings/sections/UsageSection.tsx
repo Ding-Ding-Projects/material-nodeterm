@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Input } from '@renderer/ui/Input'
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
@@ -137,9 +138,10 @@ function CookieProviderRow({
       control={
         <div className="max-w-xl space-y-1.5">
           <div className="flex items-center gap-2">
-            <input
+            <Input
               type="password"
-              className="input w-64"
+              vocabularyMode="factual"
+              className="w-64"
               placeholder={stored ? vocab('•••••••• stored') : vocab(placeholder)}
               value={value}
               onChange={(e) => setValue(e.target.value)}

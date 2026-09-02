@@ -1,4 +1,5 @@
 import { useSettings } from '../../../state/settings'
+import { Input } from '@renderer/ui/Input'
 import { useI18n } from '@renderer/lib/i18n'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
@@ -200,7 +201,8 @@ export function AdhdModesSection({ isActive }: { isActive: boolean }): React.JSX
           <FieldRow
             label={t('settings.adhdModes.oneThingText.label', 'Right now I am').primary}
             control={
-              <input
+              <Input
+                vocabularyMode="factual"
                 className="adhd-text"
                 type="text"
                 value={modes.oneThingText}
@@ -235,7 +237,7 @@ export function AdhdModesSection({ isActive }: { isActive: boolean }): React.JSX
           <FieldRow
             label={t('settings.adhdModes.momentumMinutes.label', 'After how long').primary}
             control={
-              <input
+              <Input
                 className="adhd-number"
                 type="number"
                 min={MOMENTUM_MIN_MINUTES}

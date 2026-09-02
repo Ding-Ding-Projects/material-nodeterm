@@ -9,7 +9,7 @@ import { SettingsSection } from '../SettingsSection'
 import { SettingsText } from '../SettingsText'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SearchableRow } from '../SearchableRow'
-import { TextArea } from '@renderer/ui/md3'
+import { Button, SearchField, TextArea } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
 
 const ROW = {
@@ -75,9 +75,9 @@ function TicketRow({ ticket }: { ticket: SupportTicket }): React.JSX.Element {
       <p className="toylock-hint">{CANNED_RESPONSE[ticket.status]}</p>
 
       {ticket.status !== 'resolved' ? (
-        <button className="toylock-btn toylock-btn--sm" onClick={() => advance(ticket.id)}>
+        <Button size="small" variant="outlined" onClick={() => advance(ticket.id)}>
           <SettingsText>Check for updates</SettingsText>
-        </button>
+        </Button>
       ) : (
         <div className="toylock-resolution">
           <p className="toylock-recovery__how">
@@ -85,13 +85,13 @@ function TicketRow({ ticket }: { ticket: SupportTicket }): React.JSX.Element {
           </p>
           <div className="toylock-recovery__path-row">
             <code className="toylock-recovery__path">{dir ?? '…'}</code>
-            <button className="toylock-btn toylock-btn--sm" onClick={copyPath} disabled={!dir}>
+            <Button size="small" variant="outlined" onClick={copyPath} disabled={!dir}>
               <SettingsText>Copy path</SettingsText>
-            </button>
+            </Button>
             {canOpenFolder && (
-              <button className="toylock-btn toylock-btn--sm toylock-btn--primary" onClick={openFolder} disabled={!dir}>
+              <Button size="small" onClick={openFolder} disabled={!dir}>
                 <SettingsText>Open folder</SettingsText>
-              </button>
+              </Button>
             )}
           </div>
           {!canOpenFolder && (
@@ -104,9 +104,9 @@ function TicketRow({ ticket }: { ticket: SupportTicket }): React.JSX.Element {
           </p>
         </div>
       )}
-      <button className="toylock-btn--link" onClick={() => remove(ticket.id)}>
+      <Button variant="text" size="small" onClick={() => remove(ticket.id)}>
         <SettingsText>Close ticket</SettingsText>
-      </button>
+      </Button>
     </li>
   )
 }
@@ -178,14 +178,15 @@ export function SupportTicketsSection({ isActive }: { isActive: boolean }): Reac
               <option value="high"><SettingsText>High</SettingsText></option>
               <option value="critical-but-not-really"><SettingsText>Critical (nobody will honour this)</SettingsText></option>
             </Select>
-            <button className="toylock-btn toylock-btn--primary" onClick={submit}>
+            <Button size="small" onClick={submit}>
               <SettingsText>Submit ticket</SettingsText>
-            </button>
+            </Button>
           </div>
 
           <div className="flex items-center gap-2">
-            <input
-              type="text"
+            <SearchField
+              dense
+              vocabularyMode="factual"
               placeholder={vocab('Filter tickets…')}
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -193,9 +194,9 @@ export function SupportTicketsSection({ isActive }: { isActive: boolean }): Reac
               aria-label={vocab('Filter support tickets')}
             />
             {tickets.length > 0 && (
-              <button className="toylock-btn toylock-btn--sm" onClick={exportAll}>
+              <Button size="small" variant="outlined" onClick={exportAll}>
                 <SettingsText>Copy all as text</SettingsText>
-              </button>
+              </Button>
             )}
           </div>
 

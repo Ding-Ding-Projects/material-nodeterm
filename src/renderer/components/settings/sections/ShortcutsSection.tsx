@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { IconButton } from '@renderer/ui/md3'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import {
   findShortcutConflicts,
@@ -560,26 +561,22 @@ export function ShortcutsSection({ isActive }: { isActive: boolean }): React.JSX
               ) : null}
               {bound ? (
                 <Tooltip label="Disable shortcut">
-                  <button
-                    type="button"
-                    className={ICON_BUTTON}
+                  <IconButton size="dense"
                     aria-label={`Disable ${def.title}`}
                     onClick={() => write(def.id, [])}
                   >
                     <IconDisableSlash />
-                  </button>
+                  </IconButton>
                 </Tooltip>
               ) : null}
               {status.modified ? (
                 <Tooltip label="Reset to default">
-                  <button
-                    type="button"
-                    className={ICON_BUTTON}
+                  <IconButton size="dense"
                     aria-label={`Reset ${def.title}`}
                     onClick={() => write(def.id, null)}
                   >
                     <IconResetArrow />
-                  </button>
+                  </IconButton>
                 </Tooltip>
               ) : null}
             </div>

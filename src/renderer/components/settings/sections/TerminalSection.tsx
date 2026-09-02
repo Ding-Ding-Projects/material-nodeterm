@@ -1,4 +1,5 @@
 import { useSettings } from '../../../state/settings'
+import { Button } from '@renderer/ui/md3'
 import { SettingsSection } from '../SettingsSection'
 import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
@@ -286,13 +287,11 @@ export function TerminalSection({ isActive }: { isActive: boolean }): React.JSX.
                 spellCheck={false}
                 className="font-mono"
               />
-              <button
-                type="button"
-                className="md3-text-button"
+              <Button variant="text" size="small"
                 onClick={() => update({ terminalWordSeparators: DEFAULT_WORD_SEPARATORS })}
               >
                 Reset
-              </button>
+              </Button>
             </span>
           }
         />

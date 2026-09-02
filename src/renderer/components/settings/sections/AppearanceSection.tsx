@@ -26,7 +26,7 @@ import { isBrowserRuntime } from '@renderer/bridge/runtime'
 import { UI_SCALE_CHOICES, resolveUiScale, uiScaleLabel } from '@shared/ui-scale'
 import { SectionReset } from '../SectionReset'
 import { APPEARANCE_RESET_KEYS } from '@renderer/lib/settingsReset'
-import { Slider } from '@renderer/ui/md3'
+import { Button as Md3Button, Slider } from '@renderer/ui/md3'
 
 const ROWS = {
   appTheme: {
@@ -257,13 +257,11 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
         <div className="flex items-center justify-between gap-4 py-2.5">
           <span className="text-[13px] text-text"><SettingsText>Accent</SettingsText></span>
           {accentLocked ? (
-            <button
-              type="button"
-              className="toylock-btn toylock-btn--sm"
-              onClick={(e) => setUnlockAnchor({ x: e.clientX, y: e.clientY })}
+            <Md3Button size="small" variant="outlined"
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => setUnlockAnchor({ x: e.clientX, y: e.clientY })}
             >
               🔒 Locked — click to unlock
-            </button>
+            </Md3Button>
           ) : (
             <div className="md3-accent-swatches">
               {NODE_COLORS.map((c) => (

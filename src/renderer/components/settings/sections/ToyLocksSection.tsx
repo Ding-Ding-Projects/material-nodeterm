@@ -10,7 +10,7 @@ import { SettingsSection } from '../SettingsSection'
 import { SettingsText } from '../SettingsText'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SearchableRow } from '../SearchableRow'
-import { Checkbox } from '@renderer/ui/md3'
+import { Button, Checkbox, SearchField } from '@renderer/ui/md3'
 
 const ROW = {
   title: 'Toy locks',
@@ -110,21 +110,21 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
             </p>
           )}
           <div className="flex items-center gap-2">
-            <input
-              type="text"
+            <SearchField
+              dense
+              vocabularyMode="factual"
               placeholder={vocab('Filter locks…')}
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="min-w-0 flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-[13px] text-text placeholder:text-muted"
+              className="min-w-0 flex-1"
               aria-label="Filter toy locks"
             />
             {selected.size > 0 && (
-              <button
-                className="shrink-0 rounded-lg border border-[color:var(--warn)] px-3 py-1.5 text-[13px] text-[color:var(--warn)]"
+              <Button variant="outlined" size="small" danger
                 onClick={() => setRemoveBulk(true)}
               >
                 Remove {selected.size} selected
-              </button>
+              </Button>
             )}
           </div>
 
@@ -160,12 +160,11 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
                       ]} />
                     </div>
                   </div>
-                  <button
-                    className="shrink-0 rounded-lg border border-border px-2.5 py-1 text-[12px] text-text hover:border-[color:var(--warn)] hover:text-[color:var(--warn)]"
+                  <Button variant="outlined" size="small" danger
                     onClick={() => setRemoveOne(r)}
                   >
                     Remove
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>

@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { cn } from '@renderer/ui/cn'
-import { Input } from '@renderer/ui/Input'
+import { SearchField } from '@renderer/ui/md3/SearchField'
 import { useI18n } from '@renderer/lib/i18n'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import type { RegexSearchFieldState } from '../../lib/regex/useRegexSearchField'
@@ -74,39 +74,42 @@ export function SettingsSidebar({
       </div>
 
       <div className="px-4 pb-4">
-        <div className="md3-settings-search">
-          <svg
-            aria-hidden="true"
-            className="md3-settings-search__icon"
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          >
-            <circle cx="7" cy="7" r="4.6" />
-            <path d="M10.5 10.5 14 14" />
-          </svg>
-          <Input
-            ref={inputRef}
-            value={search.value}
-            onChange={(e) => search.setValue(e.target.value)}
-            placeholder={
-              search.mode === 'regex'
-                ? ts('settings.nav.searchRegex', 'Search settings (regex)')
-                : ts('settings.nav.search', 'Search settings')
-            }
-            vocabularyMode="factual"
-            aria-label={ts('settings.nav.search', 'Search settings')}
-          />
-          <AnchoredRegexBuilder
-            search={search}
-            fieldRef={inputRef}
-            label={ts('settings.nav.regexBuilder', 'Regex — settings search')}
-          />
-        </div>
+        <SearchField
+          ref={inputRef}
+          className="md3-settings-search"
+          leadingIcon={
+            <svg
+              aria-hidden="true"
+              className="md3-settings-search__icon"
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            >
+              <circle cx="7" cy="7" r="4.6" />
+              <path d="M10.5 10.5 14 14" />
+            </svg>
+          }
+          value={search.value}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => search.setValue(e.target.value)}
+          placeholder={
+            search.mode === 'regex'
+              ? ts('settings.nav.searchRegex', 'Search settings (regex)')
+              : ts('settings.nav.search', 'Search settings')
+          }
+          vocabularyMode="factual"
+          aria-label={ts('settings.nav.search', 'Search settings')}
+          trailingSlot={
+            <AnchoredRegexBuilder
+              search={search}
+              fieldRef={inputRef}
+              label={ts('settings.nav.regexBuilder', 'Regex — settings search')}
+            />
+          }
+        />
         {search.error && <p className="mt-1 px-1 text-[11px] leading-snug text-danger">{search.error}</p>}
       </div>
 

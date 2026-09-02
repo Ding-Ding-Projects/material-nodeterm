@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { TextArea } from '@renderer/ui/md3'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
@@ -177,7 +178,7 @@ export function PlannerSection({ isActive }: { isActive: boolean }): React.JSX.E
             {draft.recurrence.kind === 'interval' ? <FieldRow label="Interval in minutes" control={<Input vocabularyMode="factual" type="number" min={1} max={1000000} value={draft.recurrence.everyMinutes} onChange={(event) => setDraft({ ...draft, recurrence: { kind: 'interval', everyMinutes: Number(event.target.value) } })} className="w-32" aria-label={vocab('Interval in minutes')} />} /> : null}
             {draft.recurrence.kind === 'weekly' ? <FieldRow label="Weekdays" control={<div className="flex flex-wrap gap-2">{(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const).map((label, day) => <label key={label} className="inline-flex items-center gap-1 text-sm"><input type="checkbox" checked={weeklyDays.includes(day as PlannerWeekday)} onChange={(event) => { const days = event.target.checked ? [...weeklyDays, day as PlannerWeekday] : weeklyDays.filter((value) => value !== day); setDraft({ ...draft, recurrence: { kind: 'weekly', days: Array.from(new Set(days)).sort((a, b) => a - b) as PlannerWeekday[] } }) }} /> <SettingsText>{label}</SettingsText></label>)}</div>} /> : null}
             <FieldRow label="Optional end time" description="An end earlier than the start describes a cross-midnight planning window." control={<Input vocabularyMode="factual" type="time" value={draft.endTime ?? ''} onChange={(event) => setDraft({ ...draft, endTime: event.target.value || undefined })} className="w-full" aria-label={vocab('Optional end time')} />} />
-            <FieldRow label="Notification body" control={<textarea value={draft.notification.body} onChange={(event) => setDraft({ ...draft, notification: { ...draft.notification, body: event.target.value } })} className="min-h-20 w-full rounded-xl border border-outline/50 bg-surface px-3 py-2" aria-label={vocab('Notification body')} />} />
+            <FieldRow label="Notification body" control={<TextArea vocabularyMode="factual" value={draft.notification.body} onChange={(event) => setDraft({ ...draft, notification: { ...draft.notification, body: event.target.value } })} className="min-h-20 w-full" aria-label={vocab('Notification body')} />} />
             <Button onClick={addSchedule}><SettingsText>Add schedule</SettingsText></Button>
           </div>
           <div className="space-y-3" aria-live="polite">
