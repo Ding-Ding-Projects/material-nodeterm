@@ -54,6 +54,27 @@ was generated once from the tree and may only shrink: a migrated file must be re
 (the guard fails on a stale entry too), and a new file starts clean.
 `src/renderer/ui/md3/rawControls.guard.test.ts` pins the guard and the allowlist to the tree.
 
+The allowlist holds four files on purpose: `AppErrorBoundary.tsx` (a crash surface must render
+with no dependency that can itself fail, so it keeps two raw buttons wearing the `mdx-btn`
+classes), `ContextMenu.tsx` and `ExplorerPanel.tsx` (their `.ctx-item` rows are the radius-owner
+pinned menu recipe and wait for a `ListRow`-based rewrite of the keyboard model), and the legacy
+`Dock.tsx`. Everything else renders through the primitives.
+
+Two cascade rules make a migrated surface actually look like the primitive:
+
+- **A surface that keeps a shape of its own re-keys its rule onto the primitive class.** The
+  welcome cards, Kids tiles and PIN keys, the switcher trigger, the kanban half-pill and the nav
+  rail items are written as `.mdx-btn.md3-welcome__card { … }`, not `.md3-welcome__card { … }`: a
+  single class ties with the primitive's own class and loses on load order, while the compound
+  selector outranks it. Add `height: auto; min-height: 0;` when the shape is taller or shorter than
+  the primitive's pill.
+- **A descendant element selector must not reach a primitive.** Every `.panel button`,
+  `.panel input`, `.panel select` and `.panel textarea` rule in both stylesheets carries
+  `:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row)…` guards (the neutralization
+  sweep of 2026-09). A bare element token outranks a primitive's class by specificity, so without
+  the guard the old recipe silently paints over the primitive. Write new descendant rules with the
+  same guards, or better, against the primitive class (`.panel .mdx-btn { … }`).
+
 | Component | Recipe | Notes |
 | --- | --- | --- |
 | `Button` | 40px pill; `filled` / `tonal` / `outlined` / `text`, plus a `danger` colour overlay | New CSS (`.mdx-btn*`) |

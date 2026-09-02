@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- Finish the app-wide move onto the Material 3 primitives. Every node kind (terminal, sticky,
+  group frame, annotation, editor, files, browser, and the thirty-odd service, hosting, game and
+  utility nodes), the welcome screen, onboarding, Kids mode, the project switcher, sessions
+  sidebar, FAB menu, nav rail, kanban board, settings sections, toy locks, dialogs, panels and
+  the app-bar cluster now render their buttons, inputs, selects, checkboxes, ranges and textareas
+  through `Button`, `IconButton`, `Chip`, `ListRow`, `Input`, `Select`, `Checkbox`, `Slider` and
+  `TextArea`. `IconButton` gains a 32 px `compact` size for node headers and card heads, `Input` a
+  bare modifier for inline titles, and colour pickers a swatch child. The bespoke per-feature
+  control recipes are deleted from both stylesheets; where a surface keeps a shape of its own
+  (welcome cards, Kids tiles, PIN keys, the switcher trigger, the kanban half-pill) the rule is
+  re-keyed onto the primitive class so it outranks the primitive instead of losing to it, and
+  every remaining `.panel button` / `.panel input` descendant rule carries `:not()` guards for the
+  primitive classes so it can no longer paint over them. The raw-control allowlist shrinks from
+  192 files to 4 (the error boundary, the two `.ctx-item` menus and the legacy dock, each kept on
+  purpose). The sticky note also lost a duplicate always-visible textarea that sat above its
+  markdown view, and the dead `TabBar.tsx` is removed.
+
+  全 app 搬晒上 Material 3 primitives：所有 node 種類、歡迎畫面、onboarding、Kids mode、project
+  switcher、sessions sidebar、FAB 選單、nav rail、kanban、設定、toy lock、dialog、panel 同 app bar
+  嘅掣、輸入框、下拉、checkbox、滑桿、textarea 全部改用 `Button`、`IconButton`、`Chip`、`ListRow`、
+  `Input`、`Select`、`Checkbox`、`Slider`、`TextArea`。`IconButton` 加咗 32px `compact` 尺寸，`Input`
+  加咗 bare 款畀 inline 標題。各功能自己嘅掣樣式已經刪走；要保留自己形狀嘅（歡迎卡、Kids 磚、PIN
+  掣、switcher trigger、kanban 半粒 pill）就改用 primitive class 做 key，令佢壓得住 primitive；
+  剩低嘅 `.panel button` 之類 descendant 規則全部加咗 `:not()` 守住 primitive class。原生 control
+  allowlist 由 192 個檔跌到 4 個（error boundary、兩個 `.ctx-item` 選單、舊 dock，全部刻意留低）。
+  Sticky note 頂部多出嚟嗰個 textarea 已經移除，死咗嘅 `TabBar.tsx` 亦已刪走。
+
 - Put the Notifications panel and the Node Catalog on the shared Material 3 primitives. The
   Notifications search sat inside a 220 px oval because a row-shaped search recipe carried a
   `flex-basis` that its column parent applied to the main axis; it is now the new `SearchField`

@@ -2761,6 +2761,13 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   COLUMN parent grew into the 220 px Notifications oval), `ChipRow` (never `max-height`-capped; the
   132 px cap clipped the Node Catalog's third row of 44 px chips) and `Snackbar` (bottom-left, with
   `--mdx-snackbar-inset` so a full-height dialog lifts it off its own footer). The
+  Two cascade facts the migration cost a lane each to learn: a surface that keeps its own shape
+  must re-key its rule onto the primitive class (`.mdx-btn.md3-welcome__card`, never a lone
+  `.md3-welcome__card` — same specificity, loses on load order), and every `.panel button` /
+  `.panel input` descendant rule carries `:not(.mdx-btn)…` guards because a bare element token
+  outranks a primitive's single class and silently repaints it (`docs/md3-primitives.md`). The
+  allowlist ends at four deliberate files — the error boundary, the two `.ctx-item` menus, the
+  legacy dock — and is not expected to grow. The
   `styles.theme.test.ts` dangling-token guard scans `styles.md3.css` and `primitives.css` too; it
   found five `--md-typescale-*` references that had never been defined.
 - **The existing Kids-mode-default documentation and landing site keeps its current visual style.**

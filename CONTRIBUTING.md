@@ -134,7 +134,10 @@ need it too, and wire it in the same change.
   primitive barrel instead of a bare `<button>`/`<input>`/`<select>`/`<textarea>`; that is what
   keeps a panel on the tokens, the state layers and the focus rings. `npm run check:md3-controls`
   enforces it against a shrink-only allowlist — a file you migrate comes OFF the list in the same
-  change. See `docs/md3-primitives.md`.
+  change. See `docs/md3-primitives.md`. When a surface keeps a shape of its own, write its rule
+  as `.mdx-btn.my-surface { … }` (the compound outranks the primitive; a lone class ties and loses
+  on load order), and never write a bare `.panel button { … }` — it outranks the primitive and
+  repaints it; guard it with `:not(.mdx-btn)…` or target `.panel .mdx-btn`.
 
 - **Anything path-shaped: read `docs/windows-support.md` first.** Windows is the delivery target
   and most of this was written on macOS, so the recurring defect is code that is genuinely correct
