@@ -17,6 +17,7 @@ import { useSettings } from '../../state/settings'
 import { Switch } from '@renderer/ui/Switch'
 import { AgentIcon } from '../../lib/agentIcons'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../../lib/personalVocabulary/agentLabel'
 import { mapNativeNotification } from '../../lib/personalVocabulary/hostMessage'
 import {
   OnbBrandMark,
@@ -173,6 +174,7 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
     ? (settings.defaultAgent as BuiltinAgentId)
     : 'claude'
   const agent = AGENT_CONFIG[agentId]
+  const displayAgentLabel = mapBuiltinAgentLabel(vocab, agentId, agent.label)
   // The registry's dictation chord. `''` (the user unbound it) falls back to the DEFAULT chord
   // with the copy unchanged: the tour TEACHES the feature, and a fresh install — the only place
   // this flow runs on its own — cannot have it disabled. Telling a first-run user "dictation is
@@ -220,7 +222,7 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
               </svg>
               <span>
                 AI agents are first-class nodes —{' '}
-                {BUILTIN_AGENT_IDS.map((id) => AGENT_CONFIG[id].label).join(', ')}
+                  {BUILTIN_AGENT_IDS.map((id) => vocab(AGENT_CONFIG[id].label)).join(', ')}
               </span>
             </div>
             <div className="onb-prop">
@@ -239,12 +241,12 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
       ) : (
         <div className="onb-card">
           <div className="onb-scene">
-            {stepId === 'agents' && <SceneAgents agentId={agentId} label={agent.label} color={agent.color} />}
+            {stepId === 'agents' && <SceneAgents agentId={agentId} label={displayAgentLabel} color={agent.color} />}
             {stepId === 'dictation' && <SceneDictation keys={dictKeys.map((k) => keyLabel(k, isMac))} hold={dictHold} />}
             {stepId === 'kanban' && <SceneKanban pulseKey={kanbanPulse} />}
             {stepId === 'notify' && <SceneNotify />}
             {stepId === 'keepawake' && (
-              <SceneKeepAwake agentId={agentId} label={agent.label} color={agent.color} />
+              <SceneKeepAwake agentId={agentId} label={displayAgentLabel} color={agent.color} />
             )}
             {stepId === 'notch' && <SceneNotch />}
             {stepId === 'phone' && <ScenePhone />}
@@ -274,7 +276,7 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
                       onClick={() => update({ defaultAgent: id })}
                     >
                       <AgentIcon agentId={id} />
-                      {AGENT_CONFIG[id].label}
+                      {vocab(AGENT_CONFIG[id].label)}
                     </Chip>
                   ))}
                 </div>
