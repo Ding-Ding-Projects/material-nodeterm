@@ -16920,7 +16920,13 @@ export function Canvas() {
   const kioskPwaApps: readonly KioskPwaAppCandidate[] = []
   const [portalLifecycleOpen, setPortalLifecycleOpen] = useState(false)
   const choosePortableMedia = useCallback(async (project: Project): Promise<PortableMediaExportPlan | null> => {
-    const selected = await window.nodeTerminal.dialog.selectFiles()
+    // This picker is raised BY a save ("Save project as one file with media…"), so it must say so.
+    // Left bare it opened as the OS default — captioned "Open", confirmed with "Open" — and read as
+    // the app answering a save with the wrong dialog.
+    const selected = await window.nodeTerminal.dialog.selectFiles({
+      title: 'Choose media files to pack into the project file',
+      buttonLabel: 'Pack these'
+    })
     if (!selected || selected.length === 0) return null
     const prepared = await api.workspace.portableMedia.prepare({ projectId: project.id, sourcePaths: selected, ...(project.cwd ? { projectRoot: project.cwd } : {}) })
     if (!prepared.ok) {

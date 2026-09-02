@@ -11,6 +11,7 @@ import {
   writeFile as fsWriteFile
 } from 'fs/promises'
 import { existsSync, statSync, openSync, fstatSync, readFileSync, closeSync } from 'fs'
+import { pickerLabels } from './native-picker-options'
 import { renameAtomic, tempNameFor } from '../core/fs-atomic'
 import { homedir, hostname } from 'os'
 import { randomUUID } from 'crypto'
@@ -2660,21 +2661,23 @@ app.whenReady().then(async () => {
       archiveUnlock.verify(resolve(input.path), input.answer)
   )
 
-  ipcMain.handle(IPC.dialogSelectFolder, async () => {
-    const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
+  ipcMain.handle(IPC.dialogSelectFolder, async (_event, options?: unknown) => {
+    // A folder picker has nothing to filter, so `filters` is deliberately dropped here.
+    const { filters: _ignored, ...labels } = pickerLabels(options)
+    const result = await dialog.showOpenDialog({ ...labels, properties: ['openDirectory', 'createDirectory'] })
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
   })
 
-  ipcMain.handle(IPC.dialogSelectFile, async () => {
-    const result = await dialog.showOpenDialog({ properties: ['openFile'] })
+  ipcMain.handle(IPC.dialogSelectFile, async (_event, options?: unknown) => {
+    const result = await dialog.showOpenDialog({ ...pickerLabels(options), properties: ['openFile'] })
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
   })
 
   // Multi-file picker for the converter's "Add files…" — dialog:select-file above only ever
   // returns one path. Electron-only: the Server Edition has no native file dialog and uses a plain
   // <input type="file" multiple> instead (see FileConverterPanel.tsx).
-  ipcMain.handle(IPC.dialogSelectFiles, async () => {
-    const result = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] })
+  ipcMain.handle(IPC.dialogSelectFiles, async (_event, options?: unknown) => {
+    const result = await dialog.showOpenDialog({ ...pickerLabels(options), properties: ['openFile', 'multiSelections'] })
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths
   })
 
