@@ -432,8 +432,8 @@ body,
 }
 
 /* Interactive elements inside the bar must not drag the window. */
-.tabbar button,
-.tabbar input,
+.tabbar button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch),
+.tabbar input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider),
 .tab,
 .tabbar__tabs {
   -webkit-app-region: no-drag;
@@ -659,7 +659,7 @@ body,
   box-shadow: 0 12px 36px rgba(0, 0, 0, calc(0.55 * var(--shadow-k)));
 }
 
-.tab-menu button {
+.tab-menu button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   display: flex;
   align-items: center;
   padding: 8px 10px;
@@ -672,20 +672,20 @@ body,
   cursor: pointer;
 }
 
-.tab-menu button:hover:not(:disabled) {
+.tab-menu button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):hover:not(:disabled) {
   background: var(--panel-header);
 }
 
-.tab-menu button.danger {
+.tab-menu button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch).danger {
   color: var(--danger);
 }
 
-.tab-menu button:disabled {
+.tab-menu button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):disabled {
   color: var(--muted);
   cursor: not-allowed;
 }
 
-.tab-menu button.danger:hover:not(:disabled) {
+.tab-menu button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch).danger:hover:not(:disabled) {
   background: rgba(247, 118, 142, 0.15);
 }
 
@@ -712,7 +712,7 @@ body,
 }
 /* The pinned filter input of a quick-pick menu: full menu width (overrides .tab__edit's
    fixed 120px, which is sized for inline tab renames). */
-.tab-menu__sub button {
+.tab-menu__sub button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   padding-left: 8px;
 }
 .tab-menu__check {
@@ -843,7 +843,7 @@ body,
   box-shadow: 0 12px 36px rgba(0, 0, 0, calc(0.55 * var(--shadow-k)));
 }
 
-.dock-menu button {
+.dock-menu button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -857,18 +857,18 @@ body,
   cursor: pointer;
 }
 
-.dock-menu button:hover:not(:disabled) {
+.dock-menu button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):hover:not(:disabled) {
   background: var(--panel-header);
 }
 
 /* Inert hint rows (e.g. "No accounts on this host yet" in an SSH project). */
-.dock-menu button:disabled,
-.dock-menu button[aria-disabled='true'] {
+.dock-menu button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):disabled,
+.dock-menu button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch)[aria-disabled='true'] {
   color: var(--md-on-surface-variant);
   cursor: not-allowed;
 }
 
-.dock-menu button[aria-disabled='true']:hover {
+.dock-menu button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch)[aria-disabled='true']:hover {
   background: transparent;
 }
 
@@ -918,7 +918,7 @@ body,
   border-radius: 12px;
   box-shadow: 0 12px 36px rgba(0, 0, 0, calc(0.55 * var(--shadow-k)));
 }
-.dock-menu__sub button {
+.dock-menu__sub button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -931,7 +931,7 @@ body,
   text-align: left;
   cursor: pointer;
 }
-.dock-menu__sub button:hover:not(:disabled) {
+.dock-menu__sub button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):hover:not(:disabled) {
   background: var(--panel-header);
 }
 .dock-menu__sub-label {
@@ -2193,7 +2193,7 @@ body,
   border-radius: 10px;
 }
 
-.node-tag button {
+.node-tag button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   background: transparent;
   border: none;
   color: var(--muted);
@@ -2203,7 +2203,7 @@ body,
   padding: 0 1px;
 }
 
-.node-tag button:hover {
+.node-tag button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):hover {
   color: var(--danger);
 }
 
@@ -2248,7 +2248,7 @@ body,
   padding: 8px;
 }
 
-.color-popover button {
+.color-popover button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   width: 18px;
   height: 18px;
   border-radius: 50%;
@@ -2630,7 +2630,7 @@ body,
   padding: 6px 8px;
 }
 
-.ctx-colors button {
+.ctx-colors button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   width: 18px;
   height: 18px;
   border-radius: 50%;
@@ -2917,7 +2917,7 @@ body,
   color: var(--text);
 }
 
-.regex-builder__flag input {
+.regex-builder__flag input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider) {
   cursor: pointer;
 }
 
@@ -3686,7 +3686,7 @@ body,
   color: var(--text);
 }
 
-.conflict-bar button {
+.conflict-bar button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   flex: none;
   padding: 2px 10px;
   background: transparent;
@@ -3698,13 +3698,13 @@ body,
   cursor: pointer;
 }
 
-.conflict-bar button:hover {
+.conflict-bar button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):hover {
   background: rgba(255, 159, 10, 0.18);
 }
 
 /* Direct children only — the presence facepile's face buttons are nested inside .presence-facepile
    and must keep their own round, peer-colored styling, not the toolbar button chrome. */
-.controls-cluster > button {
+.controls-cluster > button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   width: 34px;
   height: 34px;
   display: inline-flex;
@@ -3719,17 +3719,17 @@ body,
   box-shadow: 0 6px 20px rgba(0, 0, 0, calc(0.3 * var(--shadow-k)));
 }
 
-.controls-cluster > button:hover {
+.controls-cluster > button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):hover {
   background: var(--panel-header);
 }
 
 /* Icons read as 15px glyphs before — too small/ambiguous (field report). 18px for every
    SVG in the cluster (Explorer, Source Control, Phone, Gear) keeps the 34px buttons. */
-.controls-cluster > button svg {
+.controls-cluster > button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) svg {
   width: 18px;
   height: 18px;
 }
-.sessions-icon-cluster > button svg {
+.sessions-icon-cluster > button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) svg {
   width: 18px;
   height: 18px;
 }
@@ -3777,7 +3777,7 @@ body,
    app restart. `.explorer-overlay` above is already non-blocking in both states (drag-and-drop
    between the tree and the canvas needs that); the pin only changes whether the × clears the
    preference or just hides the drawer for this session. */
-.ex-head-actions button.is-on {
+.ex-head-actions button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch).is-on {
   color: var(--accent);
 }
 
@@ -3889,8 +3889,8 @@ body,
   font-size: 13px;
 }
 
-.set-row input[type='text'],
-.set-row input[type='number'] {
+.set-row input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider)[type='text'],
+.set-row input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider)[type='number'] {
   background: var(--md-surface);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -3901,11 +3901,11 @@ body,
   outline: none;
 }
 
-.set-row input[type='number'] {
+.set-row input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider)[type='number'] {
   width: 80px;
 }
 
-.set-row select {
+.set-row select:not(.mdx-select) {
   background: var(--md-surface);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -3914,7 +3914,7 @@ body,
   font-size: 12px;
   outline: none;
 }
-.ex-head-actions button.is-on {
+.ex-head-actions button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch).is-on {
   color: var(--accent);
 }
 
@@ -3957,7 +3957,7 @@ body,
   gap: 5px;
 }
 
-.set-swatches button {
+.set-swatches button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   width: 18px;
   height: 18px;
   border-radius: 50%;
@@ -3965,7 +3965,7 @@ body,
   cursor: pointer;
 }
 
-.set-swatches button.active {
+.set-swatches button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch).active {
   outline: 2px solid var(--text);
   outline-offset: 1px;
 }
@@ -4095,7 +4095,7 @@ body,
   margin-left: 2px;
 }
 
-.scm-section-head button {
+.scm-section-head button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   background: transparent;
   border: none;
   color: var(--accent-text);
@@ -4104,7 +4104,7 @@ body,
   font-family: inherit;
 }
 
-.scm-section-head button:hover {
+.scm-section-head button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):hover {
   text-decoration: underline;
 }
 
@@ -4689,7 +4689,7 @@ body,
   color: var(--muted);
 }
 
-.bind-field input {
+.bind-field input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider) {
   background: var(--panel-header);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -4698,7 +4698,7 @@ body,
   padding: 7px 10px;
 }
 
-.bind-field input:focus {
+.bind-field input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider):focus {
   outline: none;
   border-color: var(--accent);
 }
@@ -5786,7 +5786,7 @@ button.group-node__setup:disabled {
   font-size: 11px;
 }
 
-.annotation-node__thickness-control input[type='range'] {
+.annotation-node__thickness-control input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider)[type='range'] {
   width: 62px;
   accent-color: var(--accent);
 }
@@ -6927,17 +6927,17 @@ button.group-node__setup:disabled {
    chrome (the light pills in the settings sidebar). Reset ONLY `appearance`
    here, in plain CSS so it is served in dev and prod alike — no
    background/border/color, so Tailwind utilities keep full control. */
-.nt-settings button,
-.nt-settings input,
-.nt-settings select,
-.nt-settings textarea {
+.nt-settings button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch),
+.nt-settings input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider),
+.nt-settings select:not(.mdx-select),
+.nt-settings textarea:not(.mdx-textarea) {
   -webkit-appearance: none;
   appearance: none;
 }
-.nt-settings select::-ms-expand {
+.nt-settings select:not(.mdx-select)::-ms-expand {
   display: none;
 }
-.nt-settings textarea {
+.nt-settings textarea:not(.mdx-textarea) {
   resize: vertical;
 }
 .agents-row-label {
@@ -7607,7 +7607,7 @@ button.group-node__setup:disabled {
   display: flex;
   gap: 6px;
 }
-.chat-node__permission-actions button {
+.chat-node__permission-actions button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   flex: 0 0 auto;
   padding: 4px 10px;
   font-size: 12px;
@@ -7617,7 +7617,7 @@ button.group-node__setup:disabled {
   color: var(--text-strong);
   cursor: pointer;
 }
-.chat-node__permission-actions button:hover {
+.chat-node__permission-actions button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):hover {
   background: rgba(var(--tint-rgb), 0.12);
 }
 .chat-node__queue {
@@ -7638,7 +7638,7 @@ button.group-node__setup:disabled {
   background: rgba(var(--tint-rgb), 0.08);
   color: rgba(var(--tint-rgb), 0.7);
 }
-.chat-node__queue-item button {
+.chat-node__queue-item button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   border: none;
   background: transparent;
   color: inherit;
@@ -7648,7 +7648,7 @@ button.group-node__setup:disabled {
   padding: 0;
   opacity: 0.7;
 }
-.chat-node__queue-item button:hover {
+.chat-node__queue-item button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):hover {
   opacity: 1;
 }
 .chat-node__compose {
@@ -7744,7 +7744,7 @@ button.group-node__setup:disabled {
   height: 100%;
   object-fit: cover;
 }
-.chat-node__attach-chip button {
+.chat-node__attach-chip button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   position: absolute;
   top: 1px;
   right: 1px;
@@ -7759,7 +7759,7 @@ button.group-node__setup:disabled {
   color: #fff;
   cursor: pointer;
 }
-.chat-node__attach-chip button:hover {
+.chat-node__attach-chip button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):hover {
   background: rgba(255, 69, 58, 0.85);
 }
 .chat-node__attach-note {
@@ -8433,7 +8433,7 @@ button.group-node__setup:disabled {
   font-size: 9px;
   font-weight: 700;
 }
-.github-issue-move select {
+.github-issue-move select:not(.mdx-select) {
   max-width: 84px;
   height: 23px;
   border: 1px solid rgba(var(--tint-rgb), 0.12);
@@ -9310,7 +9310,7 @@ button.group-node__setup:disabled {
   display: flex;
   flex-direction: column;
 }
-.kanban-meta__picker > button {
+.kanban-meta__picker > button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -10666,7 +10666,7 @@ button.group-node__setup:disabled {
   border-radius: 10px; /* no exact --md-shape step (8/12) — left as its own authored radius */
 }
 
-.notif-center__row input[type='checkbox'] {
+.notif-center__row input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider)[type='checkbox'] {
   margin-top: 3px;
   flex: none;
 }
@@ -11159,7 +11159,7 @@ button.group-node__setup:disabled {
   color: var(--muted);
   text-align: center;
 }
-.color-picker__channel input {
+.color-picker__channel input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider) {
   width: 100%;
   height: 26px;
   padding: 0 4px;
@@ -12181,7 +12181,7 @@ button.group-node__setup:disabled {
   display: flex;
   gap: 6px;
 }
-.om-chat__composer textarea {
+.om-chat__composer textarea:not(.mdx-textarea) {
   flex: 1;
   resize: vertical;
   min-height: 40px;
@@ -12202,7 +12202,7 @@ button.group-node__setup:disabled {
   color: var(--muted);
   margin-bottom: 6px;
 }
-.om-chat__params input {
+.om-chat__params input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider) {
   width: 60px;
   background: var(--md-surface);
   border: 1px solid var(--border);
@@ -12363,7 +12363,7 @@ button.group-node__setup:disabled {
   font-size: 11px;
   color: rgba(var(--tint-rgb), 0.6);
 }
-.local-history__dates input[type='date'] {
+.local-history__dates input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider)[type='date'] {
   padding: 3px 6px;
   border-radius: 6px;
   border: 1px solid rgba(var(--tint-rgb), 0.15);
@@ -13093,7 +13093,7 @@ body.focus-mode .dock:hover {
   gap: 6px;
 }
 
-.color-popover__swatches button {
+.color-popover__swatches button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   /* 28px keeps the pointer target usable without making the grid taller than the fields below it;
    * the row controls beneath are full-width and carry the larger targets. */
   width: 28px;
@@ -13103,7 +13103,7 @@ body.focus-mode .dock:hover {
   cursor: pointer;
 }
 
-.color-popover__swatches button[aria-pressed='true'] {
+.color-popover__swatches button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch)[aria-pressed='true'] {
   outline: 2px solid var(--md-primary, #0a84ff);
   outline-offset: 2px;
 }
@@ -13175,7 +13175,7 @@ body.focus-mode .dock:hover {
 
 /* Focus must stay visible on every control in here — a colour picker is exactly the surface where
  * a keyboard user loses their place if the ring is styled away. */
-.color-popover--infinite :is(button, input):focus-visible {
+.color-popover--infinite :is(button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch), input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider)):focus-visible {
   outline: 2px solid var(--md-primary, #0a84ff);
   outline-offset: 2px;
 }
@@ -13256,7 +13256,7 @@ body.focus-mode .dock:hover {
   line-height: 1.45;
 }
 
-.service-node :is(button, input):focus-visible {
+.service-node :is(button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch), input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider)):focus-visible {
   outline: 2px solid var(--md-primary, #0a84ff);
   outline-offset: 2px;
 }
@@ -13368,8 +13368,8 @@ body.focus-mode .dock:hover {
   font-size: 12px;
 }
 
-.ha-client input,
-.ha-client select,
+.ha-client input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider),
+.ha-client select:not(.mdx-select),
 .ha-client__picker-button {
   min-height: 40px;
   min-width: 0;
@@ -13388,14 +13388,14 @@ body.focus-mode .dock:hover {
   white-space: nowrap;
 }
 
-.ha-client input:focus-visible,
-.ha-client select:focus-visible,
-.ha-client button:focus-visible {
+.ha-client input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider):focus-visible,
+.ha-client select:not(.mdx-select):focus-visible,
+.ha-client button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):focus-visible {
   outline: 3px solid var(--md-sys-color-primary);
   outline-offset: 2px;
 }
 
-.ha-client button {
+.ha-client button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   min-height: 40px;
   border: 0;
   border-radius: 20px;
@@ -13404,7 +13404,7 @@ body.focus-mode .dock:hover {
   padding: 0 16px;
 }
 
-.ha-client button:disabled {
+.ha-client button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch):disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -13450,7 +13450,7 @@ body.focus-mode .dock:hover {
   padding: 4px;
 }
 
-.ha-client__option-list button {
+.ha-client__option-list button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   display: grid;
   min-height: 48px;
   gap: 2px;
@@ -13460,18 +13460,18 @@ body.focus-mode .dock:hover {
   text-align: left;
 }
 
-.ha-client__option-list button[aria-selected='true'] {
+.ha-client__option-list button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch)[aria-selected='true'] {
   background: var(--md-sys-color-secondary-container);
 }
 
-.ha-client__option-list button span {
+.ha-client__option-list button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) span {
   overflow: hidden;
   color: var(--md-sys-color-on-surface-variant);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ha-client__search-row input {
+.ha-client__search-row input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider) {
   flex: 1 1 180px;
 }
 
@@ -13488,7 +13488,7 @@ body.focus-mode .dock:hover {
   gap: 8px;
 }
 
-.ha-client__discovery fieldset input {
+.ha-client__discovery fieldset input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider) {
   min-height: auto;
 }
 
@@ -14205,12 +14205,12 @@ body.focus-mode .dock:hover {
   align-items: center;
   gap: 6px;
 }
-.aws-manager-panel__search input {
+.aws-manager-panel__search input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider) {
   min-width: 0;
   flex: 1;
 }
-.aws-manager-panel__search button,
-.aws-manager-panel__actions button {
+.aws-manager-panel__search button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch),
+.aws-manager-panel__actions button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch) {
   min-height: 36px;
 }
 .aws-manager-panel__resources {
@@ -14361,7 +14361,7 @@ body.focus-mode .dock:hover {
 .md3-remote-oauth-notice p {
   margin: 0;
 }
-.md3-remote-oauth-notice input {
+.md3-remote-oauth-notice input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider) {
   min-width: 0;
 }
 /* Repository graph node: bounded, progressive list rendering keeps large snapshots responsive. */

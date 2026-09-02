@@ -577,7 +577,10 @@ function ownsRadiusToken(css, selector, token) {
     const candidate = css.lastIndexOf(selector, start - 1)
     if (candidate < 0) return false
     const next = css[candidate + selector.length] ?? ''
-    if (!/[A-Za-z0-9_-]/.test(next)) {
+    // `:not(.mdx-row)` inside a neutralized descendant selector names the class without owning a
+    // block; only a real occurrence of the selector can be the radius owner.
+    const negated = css.slice(Math.max(0, candidate - 5), candidate) === ':not('
+    if (!negated && !/[A-Za-z0-9_-]/.test(next)) {
       start = candidate
       break
     }
