@@ -4,6 +4,7 @@ import {
   PROJECT_ICON_MAX_BYTES,
   type ProjectIconPickResult
 } from '@shared/project-icon'
+import { nativeCopyStore } from './native-copy-store'
 
 /**
  * Project-icon upload, main side. The renderer must never trust a user-chosen file straight onto
@@ -72,9 +73,9 @@ export async function pickProjectIcon(parentWindow?: unknown): Promise<ProjectIc
   const win =
     parentWindow instanceof BrowserWindow && !parentWindow.isDestroyed() ? parentWindow : null
   const opts: Electron.OpenDialogOptions = {
-    title: 'Choose a project icon',
+    title: nativeCopyStore.get('icon.picker.title', 'Choose a project icon'),
     properties: ['openFile'],
-    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }]
+    filters: [{ name: nativeCopyStore.get('icon.picker.filter', 'Images'), extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }]
   }
   const result = win
     ? await dialog.showOpenDialog(win, opts)

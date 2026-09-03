@@ -21,6 +21,7 @@ import type { WhisperModelInfo } from './speech'
 import type { ProjectKanbanGitHub } from './github-issues'
 import type { ProjectIcon } from './project-icon'
 import type { ShortcutMap } from './shortcuts'
+import type { NativeCopyProjection, NativeCopyReplaceResponse } from './native-copy-projection'
 import { DEFAULT_SHORTCUTS } from './shortcuts'
 import { DEFAULT_FUNNY_LEVEL, type FunnyLevel, type LanguageMode } from './i18n/types'
 import type { PortableDoorConstructionV3 } from './door-construction'
@@ -4901,6 +4902,13 @@ export interface ShortcutsApi {
   setTerminalFocused(focused: boolean): void
 }
 
+/** Electron-only projection for stable host-owned copy. Server Edition omits this namespace. */
+export interface NativeCopyApi {
+  getEpoch(): Promise<number>
+  replace(projection: NativeCopyProjection): Promise<NativeCopyReplaceResponse>
+  reset(): void
+}
+
 export interface NodeTerminalApi {
   pty: PtyApi
   /** Desktop-only Windows profile detection; absent on Server Edition and mobile bridges. */
@@ -5035,6 +5043,8 @@ export interface NodeTerminalApi {
   /** "Escape to widget" — one node's session in its own always-on-top-configurable window. */
   canvasWidget: CanvasWidgetApi
   shortcuts: ShortcutsApi
+  /** Optional because browser and relay renderers have no native application menu. */
+  nativeCopy?: NativeCopyApi
   /** Fires when the user presses Cmd/Ctrl+M (toggle markdown view). Returns unsubscribe. */
   onMarkdownToggle(listener: () => void): () => void
   /** Fires when the user presses Cmd/Ctrl+W (close selected node). Returns unsubscribe. */
