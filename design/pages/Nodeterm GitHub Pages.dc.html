@@ -1108,12 +1108,12 @@ class Component extends DCLogic {
     ]
     if (k === 'search' || k === 'header') return [
       { icon: '🧩', label: 'Build a pattern for the big search', hint: '.*', run: () => this.openRx('global', 'the big search') },
-      { icon: '🧹', label: 'Clear the big search', hint: '', run: () => this.setState({ qGlobal: '', menuOpen: false }) },
+      { icon: '🧼', label: 'Clear the big search', hint: '', run: () => this.setState({ qGlobal: '', menuOpen: false }) },
       { icon: '🔤', label: s.rxOn.global ? 'Treat it as plain words again' : 'Treat what I typed as a pattern', hint: '', run: () => this.setState((st) => ({ rxOn: Object.assign({}, st.rxOn, { global: !st.rxOn.global }), menuOpen: false })) },
       { icon: '📋', label: 'Copy what I searched for', hint: '', run: () => { this.copy(s.qGlobal); this.setState({ menuOpen: false }) } },
     ].concat(base)
     if (k === 'rail') return [
-      { icon: '🧹', label: 'Clear the room filter', hint: '', run: () => this.setState({ qNav: '', menuOpen: false }) },
+      { icon: '🧼', label: 'Clear the room filter', hint: '', run: () => this.setState({ qNav: '', menuOpen: false }) },
       { icon: '🧩', label: 'Build a pattern for the room filter', hint: '.*', run: () => this.openRx('nav', 'the room finder') },
       { icon: '📚', label: 'Open the guide book', hint: '', run: this.go('docs') },
     ].concat(base)
@@ -1984,7 +1984,7 @@ class Component extends DCLogic {
       theme: 'day', lang: 'en', funnyEn: 2, funnyYue: 3, emoji: true, bigText: false, sound: false, accent: '#ffd93d', nick: '', logo: '', preset: 'playground',
       school: false, schoolPin: '', narrate: false, voice: '', rate: 3, vocab: '', schedOn: false, schedTime: '19:00', schedTheme: 'night',
     }, () => this.applyTheme())
-    this.toast('🧹', 'All clear', 'Everything is back to how it started.')
+    this.toast('🧼', 'All clear', 'Everything is back to how it started.')
   }
 }
 </script>
