@@ -12,6 +12,7 @@ import type { KidsTileKind } from './KidsHome'
 import { IconTerminal } from '@renderer/components/icons'
 import { narrateKidsScreen } from './narration'
 import { Button, IconButton } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
 
 /** Fixed node ids: the whole point is that "Type things" always reattaches the SAME tmux/session
  *  host session (see PtyManager) — a fresh random id every visit would cold-start a new shell
@@ -70,6 +71,7 @@ function KidsActivityCanvasInner({
   const sessionStart = useRef<number>(Date.now())
   const logActivity = useKidsActivity((s) => s.logActivity)
   const addSticker = useKidsActivity((s) => s.addSticker)
+  const vocab = useVocabularyMapper()
 
   const centerOn = (n: CanvasNode) => {
     void instance.setCenter(n.position.x + (n.width ?? 640) / 2, n.position.y + (n.height ?? 440) / 2, {
@@ -81,7 +83,7 @@ function KidsActivityCanvasInner({
   useEffect(() => {
     visited.current.add(active)
     logActivity(active, TILE_LOG[active].what, TILE_LOG[active].detail)
-    narrateKidsScreen(`${TILE_TITLE[active]}.`)
+    narrateKidsScreen(vocab(`${TILE_TITLE[active]}.`))
 
     if (opened.current.has(active)) {
       const existing = nodes.find((n) => n.id === NODE_ID[active])
@@ -125,39 +127,41 @@ function KidsActivityCanvasInner({
     onBack()
   }
 
+  const activeTitle = vocab(TILE_TITLE[active])
+
   return (
     <div className="md3-kids-activity">
       <div className="md3-kids-activity__bar">
         <Button variant="outlined" vocabularyMode="factual" className="md3-kids-backbtn" onClick={handleBack}>
           <IconBackArrow />
-          Back to Beep
+          {vocab('Back to Beep')}
         </Button>
-        <div className="md3-kids-activity__title">{TILE_TITLE[active]}</div>
-        <div className="md3-kids-activity__switch" role="tablist" aria-label="Switch activity">
-          <IconButton size="dense" vocabularyMode="factual" aria-label="Talk to Beep" active={active === 'beep'}
+        <div className="md3-kids-activity__title">{activeTitle}</div>
+        <div className="md3-kids-activity__switch" role="tablist" aria-label={vocab('Switch activity')}>
+          <IconButton size="dense" vocabularyMode="factual" aria-label={vocab('Talk to Beep')} active={active === 'beep'}
             role="tab"
             aria-selected={active === 'beep'}
             className={'md3-kids-switchbtn' + (active === 'beep' ? ' md3-kids-switchbtn--active' : '')}
             onClick={() => setActiveState('beep')}
-            title="Talk to Beep"
+            title={vocab('Talk to Beep')}
           >
             <IconBeep size={18} />
           </IconButton>
-          <IconButton size="dense" vocabularyMode="factual" aria-label="Type things" active={active === 'terminal'}
+          <IconButton size="dense" vocabularyMode="factual" aria-label={vocab('Type things')} active={active === 'terminal'}
             role="tab"
             aria-selected={active === 'terminal'}
             className={'md3-kids-switchbtn' + (active === 'terminal' ? ' md3-kids-switchbtn--active' : '')}
             onClick={() => setActiveState('terminal')}
-            title="Type things"
+            title={vocab('Type things')}
           >
             <IconTerminal />
           </IconButton>
-          <IconButton size="dense" vocabularyMode="factual" aria-label="Draw" active={active === 'draw'}
+          <IconButton size="dense" vocabularyMode="factual" aria-label={vocab('Draw')} active={active === 'draw'}
             role="tab"
             aria-selected={active === 'draw'}
             className={'md3-kids-switchbtn' + (active === 'draw' ? ' md3-kids-switchbtn--active' : '')}
             onClick={() => setActiveState('draw')}
-            title="Draw"
+            title={vocab('Draw')}
           >
             <IconBrush size={18} />
           </IconButton>

@@ -6,6 +6,7 @@ import { useKidsActivity } from '@renderer/state/kidsActivity'
 import { IconBeep, IconBook, IconBrush, IconSparkle, IconSpeaker, IconSun } from './icons'
 import { narrateKidsScreen } from './narration'
 import { Button, IconButton } from '@renderer/ui/md3'
+import { useVocabularyMapper, useVocabularyTemplate } from '@renderer/lib/personalVocabulary/useVocabularyText'
 
 export type KidsTileKind = 'beep' | 'terminal' | 'draw'
 
@@ -47,79 +48,87 @@ export function KidsHome({
   onOpenActivity: (kind: KidsTileKind) => void
   onOpenStickers: () => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const stickers = useKidsActivity((s) => s.stickers)
   const allowRealTerminal = useKidsActivity((s) => s.allowRealTerminal)
   const dailyLimitMinutes = useKidsActivity((s) => s.dailyLimitMinutes)
   const minutesToday = useKidsActivity((s) => s.minutesToday())
 
   useEffect(() => {
-    narrateKidsScreen(`Hi! I'm Beep. What do you want to do?`)
+    narrateKidsScreen(vocab(`Hi! I'm Beep. What do you want to do?`))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const g = greeting()
+  const greetingLabel = vocab(g.label)
   const minutesLeft = dailyLimitMinutes != null ? Math.max(0, dailyLimitMinutes - minutesToday) : null
+  const minutesLeftLabel = useVocabularyTemplate('{minutes} min left today', {
+    minutes: String(minutesLeft ?? 0)
+  })
+  const stickerCountLabel = useVocabularyTemplate('You have {count} stickers', {
+    count: String(stickers)
+  })
 
   const tiles: TileSpec[] = useMemo(
     () => [
-      { kind: 'beep', title: 'Talk to Beep', sub: 'Ask me anything', icon: <IconBeep size={40} />, variant: 'primary' },
+      { kind: 'beep', title: vocab('Talk to Beep'), sub: vocab('Ask me anything'), icon: <IconBeep size={40} />, variant: 'primary' },
       {
         kind: 'terminal',
-        title: 'Type things',
-        sub: allowRealTerminal ? 'A real computer' : 'Turned off for now',
+        title: vocab('Type things'),
+        sub: allowRealTerminal ? vocab('A real computer') : vocab('Turned off for now'),
         icon: <IconTerminal />,
         variant: 'success',
         disabled: !allowRealTerminal,
-        disabledReason: 'A grown-up turned this off on the grown-up screen.'
+        disabledReason: vocab('A grown-up turned this off on the grown-up screen.')
       },
-      { kind: 'draw', title: 'Draw', sub: 'Make something', icon: <IconBrush size={40} />, variant: 'warning' },
+      { kind: 'draw', title: vocab('Draw'), sub: vocab('Make something'), icon: <IconBrush size={40} />, variant: 'warning' },
       {
         kind: 'story',
-        title: 'Story time',
-        sub: 'More coming soon',
+        title: vocab('Story time'),
+        sub: vocab('More coming soon'),
         icon: <IconBook size={40} />,
         variant: 'tertiary',
         disabled: true,
-        disabledReason: 'Story time is not built yet — this tile is a placeholder, not a bug.'
+        disabledReason: vocab('Story time is not built yet — this tile is a placeholder, not a bug.')
       },
       {
         kind: 'sounds',
-        title: 'Sounds',
-        sub: 'More coming soon',
+        title: vocab('Sounds'),
+        sub: vocab('More coming soon'),
         icon: <IconSpeaker size={40} />,
         variant: 'secondary',
         disabled: true,
-        disabledReason: 'Sounds is not built yet — this tile is a placeholder, not a bug.'
+        disabledReason: vocab('Sounds is not built yet — this tile is a placeholder, not a bug.')
       },
-      { kind: 'stickers', title: 'My stickers', sub: `You have ${stickers}`, icon: <IconSparkle size={40} />, variant: 'neutral' }
+      { kind: 'stickers', title: vocab('My stickers'), sub: stickerCountLabel ?? `You have ${stickers} stickers`, icon: <IconSparkle size={40} />, variant: 'neutral' }
     ],
-    [allowRealTerminal, stickers]
+    [allowRealTerminal, stickerCountLabel, stickers, vocab]
   )
 
   return (
-    <div className="md3-kids-screen md3-kids-home" data-screen-label="Kids home">
+    <div className="md3-kids-screen md3-kids-home" data-screen-label={vocab('Kids home')}>
       <div className="md3-kids-home__strip">
         <span className="md3-kids-chip">
           {g.icon}
-          {g.label}
+          {greetingLabel}
         </span>
         {minutesLeft != null ? (
           <span className="md3-kids-chip">
             <IconSparkle size={18} />
-            {minutesLeft} min left today
+            {minutesLeftLabel}
           </span>
         ) : null}
         <span className="md3-kids-chip">
           <IconSparkle size={18} />
-          {stickers} sticker{stickers === 1 ? '' : 's'}
+          {stickers} {vocab(stickers === 1 ? 'sticker' : 'stickers')}
         </span>
         <div className="md3-kids-home__spacer" />
         <IconButton size="standard" vocabularyMode="factual"
           type="button"
           className="md3-kids-iconbtn"
           onClick={onOpenGate}
-          aria-label="Grown-up gate"
-          title="Grown-up gate"
+          aria-label={vocab('Grown-up gate')}
+          title={vocab('Grown-up gate')}
         >
           <IconLock />
         </IconButton>
@@ -129,8 +138,8 @@ export function KidsHome({
         <div className="md3-kids-home__avatar-bubble">
           <IconBeep size={60} />
         </div>
-        <div className="md3-kids-home__hi">Hi! I&apos;m Beep.</div>
-        <div className="md3-kids-home__ask">What do you want to do?</div>
+        <div className="md3-kids-home__hi">{vocab("Hi! I'm Beep.")}</div>
+        <div className="md3-kids-home__ask">{vocab('What do you want to do?')}</div>
       </div>
 
       <div className="md3-kids-tiles">
@@ -154,15 +163,15 @@ export function KidsHome({
             <span className="md3-kids-tile__title">{t.title}</span>
             <span className="md3-kids-tile__sub">{t.sub}</span>
             {t.disabled && !allowRealTerminal && t.kind === 'terminal' ? (
-              <span className="md3-kids-tile__badge">Off</span>
+              <span className="md3-kids-tile__badge">{vocab('Off')}</span>
             ) : t.disabled ? (
-              <span className="md3-kids-tile__badge">Soon</span>
+              <span className="md3-kids-tile__badge">{vocab('Soon')}</span>
             ) : null}
           </Button>
         ))}
       </div>
 
-      <p className="md3-kids-disclosure">{KIDS_DISCLOSURE}</p>
+      <p className="md3-kids-disclosure">{vocab(KIDS_DISCLOSURE)}</p>
       <p className="md3-kids-home__hint">{modeName}</p>
     </div>
   )
