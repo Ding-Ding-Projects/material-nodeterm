@@ -12,7 +12,7 @@ issues at the owner's direction. Verification that ran, per surface:
 | Blank-screen startup recovery | `DUPLICATE_HANDLER` classification with channel-name redaction and status-1 exit; 51 lifecycle plus window tests green |
 | VeraCrypt (#210) | `service.test.ts` and `VeraCryptNode.test.tsx` green against `main`; runtime captures not run |
 | Repository graph (#213) | `repository-graph-service.test.ts` and `RepositoryGraphNode.test.ts` green; runtime captures not run |
-| Continuation (#198) | `agent-continuation.test.ts` (9) and `AgentContinuationReview.test.tsx` green; the stale `feat/agent-recovery-context` jer was recorded superseded, not merged |
+| Continuation (#198) | `agent-continuation.test.ts` (9) and `AgentContinuationReview.test.tsx` green; the stale `feat/agent-recovery-context` branch was recorded superseded, not merged |
 
 Type checks pass on `tsconfig.node.json` and `tsconfig.web.json`. All repository guard scripts
 (vocabulary lock, material audit, design parity, WSL copy, changelog, docs bundle, feature
@@ -22,7 +22,7 @@ claimed. The remaining known coverage gap: `ConverterNode.tsx` and `XProjectNode
 authored copy with no vocabulary mapping and the coverage checker's hand-written inventory does
 not enumerate `src/renderer/nodes/*.tsx`, so an unmapped node file passes silently.
 
-Branch state after cleanup: every local jer except `feat/windows-only-yum-tong-20260828` is an
+Branch state after cleanup: every local branch except `feat/windows-only-yum-tong-20260828` is an
 ancestor of `main` (real merges for content main lacked, ours-strategy records for
 patch-equivalent or superseded tips). The 75-lane program's preservation branches
 (`feat/program-*`, `feat/*-reconciliation`, and related lanes on the hosted remote) hold unique
