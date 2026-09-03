@@ -1,6 +1,8 @@
 import { useProjects } from '../state/projects'
 import { useDrivingLease } from '../state/browserLease'
 import { Button } from '@renderer/ui/md3'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * The "…is driving" chip (S8 PR 6 of #112, @Corvin): shown on a browser node header (and in the
@@ -21,22 +23,27 @@ export function BrowserDrivingChip({
   ownerTitle: string
   onStop: () => void
 }): React.JSX.Element {
+  const map = useVocabularyMapper()
+  const label = mapOwnedSentence(map, [fact(ownerTitle), copy(' is driving')])
+  const stopLabel = map('Stop')
+  const stopTitle = map('Stop agent control of this browser node')
   return (
     <span className="term-node__status term-node__status--driven nodrag" role="status">
       <span className="term-node__status-dot" />
-      <span className="browser-driving__label">{ownerTitle} is driving</span>
+      <span className="browser-driving__label">{label}</span>
       <Button
         variant="tonal"
         size="small"
         danger
         className="browser-driving__stop"
-        title="Stop agent control of this browser node"
+        vocabularyMode="factual"
+        title={stopTitle}
         onClick={(e) => {
           e.stopPropagation()
           onStop()
         }}
       >
-        Stop
+        {stopLabel}
       </Button>
     </span>
   )

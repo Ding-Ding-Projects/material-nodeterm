@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 interface SshPassphrasePromptProps {
   identityFile: string
@@ -15,8 +17,8 @@ interface SshPassphrasePromptProps {
 
 /** Basename of a local identity file path, for the prompt message. */
 function baseName(p: string): string {
-  const trimmed = p.replace(/\/+$/, '')
-  return trimmed.split('/').filter(Boolean).pop() || trimmed
+  const trimmed = p.replace(/[\\/]+$/, '')
+  return trimmed.split(/[\\/]/).filter(Boolean).pop() || trimmed
 }
 
 /**
@@ -27,6 +29,8 @@ function baseName(p: string): string {
  */
 export function SshPassphrasePrompt({ identityFile, retry, target, onSubmit, onCancel }: SshPassphrasePromptProps) {
   const [value, setValue] = useState('')
+  const map = useVocabularyMapper()
+  const identityName = baseName(identityFile)
 
   const submit = useCallback(() => {
     if (!value) return
@@ -39,15 +43,26 @@ export function SshPassphrasePrompt({ identityFile, retry, target, onSubmit, onC
   // twice on a single Escape. Same contract as InputDialog.
   useDialogStack()
 
+  const heading = map(retry ? "That passphrase didn't work" : 'Passphrase required')
+  const detail = retry
+    ? mapOwnedSentence(map, [copy('Try again for '), fact(identityName), copy('.')])
+    : mapOwnedSentence(map, [fact(identityName), copy(' is passphrase-protected.')])
+  const targetDetail = target
+    ? mapOwnedSentence(map, [copy(' Unlocking for '), fact(target), copy('.')])
+    : ''
+  const inputLabel = mapOwnedSentence(map, [copy('Passphrase for '), fact(identityName)])
+  const cancelLabel = map('Cancel')
+  const unlockLabel = map('Unlock')
+
   return createPortal(
     <div className="confirm-overlay" onClick={onCancel}>
       <div className="confirm" style={{ width: 380 }} onClick={(e) => e.stopPropagation()}>
         <p className="confirm__msg" style={{ fontWeight: 600 }}>
-          {retry ? "That passphrase didn't work" : 'Passphrase required'}
+          {heading}
         </p>
         <p className="confirm__msg" style={{ opacity: 0.8 }}>
-          {retry ? `Try again for ${baseName(identityFile)}.` : `${baseName(identityFile)} is passphrase-protected.`}
-          {target ? ` Unlocking for ${target}.` : ''}
+          {detail}
+          {targetDetail}
         </p>
         <Input
           autoFocus
@@ -56,7 +71,8 @@ export function SshPassphrasePrompt({ identityFile, retry, target, onSubmit, onC
           spellCheck={false}
           // Named so a password manager can offer the right entry, and so the field is not
           // mistaken for a login form: this unlocks a local key file, it is not a server credential.
-          aria-label={`Passphrase for ${baseName(identityFile)}`}
+          vocabularyMode="factual"
+          aria-label={inputLabel}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
@@ -73,9 +89,9 @@ export function SshPassphrasePrompt({ identityFile, retry, target, onSubmit, onC
           className="my-2 mb-3.5 w-full"
         />
         <div className="confirm__actions">
-          <Button onClick={onCancel}>Cancel</Button>
-          <Button variant="primary" onClick={submit} disabled={!value}>
-            Unlock
+          <Button vocabularyMode="factual" onClick={onCancel}>{cancelLabel}</Button>
+          <Button vocabularyMode="factual" variant="primary" onClick={submit} disabled={!value}>
+            {unlockLabel}
           </Button>
         </div>
       </div>
