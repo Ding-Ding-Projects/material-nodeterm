@@ -15,7 +15,7 @@ import { portableKioskPwaIntent } from '@shared/kiosk-pwa'
 import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import { BrowserDrivingIndicator } from './BrowserDrivingChip'
 import { useWebviewKeepAlive } from '../state/webviewKeepAlive'
-import { Button, IconButton } from '@renderer/ui/md3'
+import { Button, IconButton, Tablist } from '@renderer/ui/md3'
 import { MaterialSymbol } from '../components/MaterialSymbol'
 import { Chip } from '@renderer/ui/md3'
 
@@ -263,7 +263,7 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
         />
       </div>
 
-      <div className="browser-node__tabs nodrag" role="tablist" aria-label={vocab('Browser tabs')}>
+      <Tablist className="browser-node__tabs nodrag" ariaLabel={vocab('Browser tabs')}>
         {tabs.map((tab) => (
             <Chip
               key={tab.id}
@@ -301,7 +301,7 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
           aria-label="New tab"
           onClick={newTab}
         />
-      </div>
+      </Tablist>
 
       <div className="editor-node__body">
         {!ghost && activeTab && (

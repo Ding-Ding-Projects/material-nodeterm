@@ -11,7 +11,7 @@ import { IconBackArrow, IconBeep, IconBrush } from './icons'
 import type { KidsTileKind } from './KidsHome'
 import { IconTerminal } from '@renderer/components/icons'
 import { narrateKidsScreen } from './narration'
-import { Button, IconButton } from '@renderer/ui/md3'
+import { Button, IconButton, Tablist } from '@renderer/ui/md3'
 
 /** Fixed node ids: the whole point is that "Type things" always reattaches the SAME tmux/session
  *  host session (see PtyManager) — a fresh random id every visit would cold-start a new shell
@@ -133,7 +133,7 @@ function KidsActivityCanvasInner({
           Back to Beep
         </Button>
         <div className="md3-kids-activity__title">{TILE_TITLE[active]}</div>
-        <div className="md3-kids-activity__switch" role="tablist" aria-label="Switch activity">
+        <Tablist className="md3-kids-activity__switch" ariaLabel="Switch activity">
           <IconButton size="dense" vocabularyMode="factual" aria-label="Talk to Beep" active={active === 'beep'}
             role="tab"
             aria-selected={active === 'beep'}
@@ -161,7 +161,7 @@ function KidsActivityCanvasInner({
           >
             <IconBrush size={18} />
           </IconButton>
-        </div>
+        </Tablist>
       </div>
       <div className="md3-kids-activity__canvas">
         <ReactFlow

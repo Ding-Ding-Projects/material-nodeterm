@@ -20,7 +20,7 @@ import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { MaterialSymbol } from '../components/MaterialSymbol'
 import { AdapterCatalog } from '../components/converter/AdapterCatalog'
 import type { CanvasNode } from '../state/workspace'
-import { Button, Checkbox, Chip, IconButton } from '@renderer/ui/md3'
+import { Button, Checkbox, IconButton, Tabs } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 
 interface PickedFile {
@@ -271,10 +271,25 @@ export default function ConverterNode({ id, data, selected }: NodeProps<CanvasNo
       </div>
       <div className="converter-node__body nodrag nowheel">
         <Input vocabularyMode="factual" ref={inputRef} type="file" multiple hidden onChange={(event) => void onFileInput(event)} />
-        <div className="converter-node__tabs" role="tablist" aria-label="Converter views">
-          <Chip vocabularyMode="factual" selected={view === 'convert'} role="tab" aria-selected={view === 'convert'} onClick={() => setView('convert')}>Convert</Chip>
-          <Chip vocabularyMode="factual" selected={view === 'queue'} role="tab" aria-selected={view === 'queue'} onClick={() => setView('queue')}>Queue ({summary.total})</Chip>
-        </div>
+        {/* Was a hand-rolled `role="tablist"` of chips: it announced itself as ARIA tabs and then
+            ignored the arrow keys that role promises, so a keyboard or screen-reader user was told
+            these were tabs and found they could not traverse them. Tabs owns the roving tabIndex,
+            aria-orientation and Arrow/Home/End contract. `factual` keeps the labels unmapped exactly
+            as the chips had them, so this stays a keyboard fix and nothing else. */}
+        <Tabs
+          items={[
+            { id: 'convert', label: 'Convert' },
+            { id: 'queue', label: `Queue (${summary.total})` }
+          ]}
+          value={view}
+          onChange={(id) => setView(id === 'queue' ? 'queue' : 'convert')}
+          ariaLabel="Converter views"
+          className="converter-node__tabs"
+          tabClassName="mdx-chip"
+          activeTabClassName="mdx-chip--selected"
+          idPrefix="converter-view"
+          vocabularyMode="factual"
+        />
         {error && <p className="cv-item__error" role="alert">{error}</p>}
         {view === 'convert' ? (
           <>
