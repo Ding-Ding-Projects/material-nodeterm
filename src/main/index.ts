@@ -426,6 +426,7 @@ import { stopOwnedCodexRelayProcess } from './codex-relay-lifecycle'
 import { TriggerArmStore } from '../core/trigger-arm-store'
 import { TriggerScheduler, type TriggerDeliveryResult } from '../core/trigger-scheduler'
 import { registerTriggerIpc, triggerIpcNotify } from '../core/trigger-ipc'
+import { nativeCopyStore } from './native-copy-store'
 
 // Fail before Electron initializes any persistent service. mirror-publication loads node:sqlite
 // lazily so an incompatible embedded runtime reaches this clear diagnostic instead of an import
@@ -522,10 +523,10 @@ const alarmPlannerRuntime = new AlarmPlannerRuntime(
       const win = getMainWindow()
       if (win && !win.isDestroyed() && win.isFocused()) return
       if (!Notification.isSupported()) return
-      const title = event.alarm.title || 'Alarm Clock'
+      const title = event.alarm.title || nativeCopyStore.get('alarm.title', 'Alarm Clock')
       const body = event.kind === 'missed'
-        ? `${title} was missed while the app or computer was unavailable.`
-        : `${title} is due now. This app cannot wake a powered-off computer.`
+        ? `${title} ${nativeCopyStore.get('alarm.missed.suffix', 'was missed while the app or computer was unavailable.')}`
+        : `${title} ${nativeCopyStore.get('alarm.due.suffix', 'is due now. This app cannot wake a powered-off computer.')}`
       const notification = new Notification({ title, body })
       notification.on('click', () => {
         const current = getMainWindow()
@@ -887,13 +888,12 @@ function confirmQuit(parentWin: BrowserWindow | null): Promise<boolean> {
   quitConfirmationPending = true
   const opts = {
     type: 'question' as const,
-    buttons: ['Cancel', 'Quit'],
+    buttons: [nativeCopyStore.get('quit.cancel', 'Cancel'), nativeCopyStore.get('quit.confirm', 'Quit')],
     defaultId: 0,
     cancelId: 0,
-    title: 'Quit nodeterm?',
-    message: 'Quit nodeterm?',
-    detail:
-      "One or more terminals here aren't using a persistent session, so quitting will end whatever is running in them right now. Terminals using tmux or the session host will still be here next time you open nodeterm."
+    title: nativeCopyStore.get('quit.title', 'Quit nodeterm?'),
+    message: nativeCopyStore.get('quit.message', 'Quit nodeterm?'),
+    detail: `${nativeCopyStore.get('quit.detail.prefix', "One or more terminals here aren't using a persistent session, so quitting will end whatever is running in them right now. ")}${nativeCopyStore.get('quit.detail.suffix', 'Terminals using tmux or the session host will still be here next time you open nodeterm.')}`
   }
   const p =
     parentWin && !parentWin.isDestroyed() ? dialog.showMessageBox(parentWin, opts) : dialog.showMessageBox(opts)
@@ -979,6 +979,8 @@ if (process.platform !== 'win32' && typeof process.setFdLimit === 'function') {
 function buildAppMenu(win: BrowserWindow): void {
   const isMac = process.platform === 'darwin'
   const s = settingsStore.get()
+  const copy = (slot: Parameters<typeof nativeCopyStore.get>[0], fallback: string): string =>
+    nativeCopyStore.get(slot, fallback)
   const send = (channel: string): void => {
     if (!win.isDestroyed()) win.webContents.send(channel)
   }
@@ -989,7 +991,7 @@ function buildAppMenu(win: BrowserWindow): void {
   // stand-down is the only way it can reach a focused terminal.
   const settingsItem: Electron.MenuItemConstructorOptions = {
     id: MENU_ITEM_ID_SETTINGS,
-    label: isMac ? 'Settings…' : 'Settings',
+    label: copy('menu.settings', isMac ? 'Settings…' : 'Settings'),
     accelerator: 'CmdOrCtrl+,',
     click: () => send(IPC.appOpenSettings)
   }
@@ -1013,7 +1015,7 @@ function buildAppMenu(win: BrowserWindow): void {
     { role: 'toggleDevTools' },
     { type: 'separator' },
     {
-      label: 'Snap to Grid',
+      label: copy('menu.snapToGrid', 'Snap to Grid'),
       type: 'checkbox',
       checked: s.autoAlignGrid === true,
       click: () => send(IPC.appToggleAutoAlign)
@@ -1023,7 +1025,7 @@ function buildAppMenu(win: BrowserWindow): void {
       // renderer sees it, so labelling this item "⌘0" would show a shortcut that does something
       // else. The item stays click-only; the renderer's own Shift+1 chord is the keyboard route to
       // Fit View.
-      label: 'Fit View',
+      label: copy('menu.fitView', 'Fit View'),
       click: () => send(IPC.appFitView)
     },
     {
@@ -1032,7 +1034,7 @@ function buildAppMenu(win: BrowserWindow): void {
       // (`view.kanbanToggle`) the menu happens to own above the page; suspending the item is what
       // lets a terminal-first user's ⌘⇧B reach the shell like every other chord.
       id: MENU_ITEM_ID_KANBAN,
-      label: 'Toggle Kanban Board',
+      label: copy('menu.toggleKanban', 'Toggle Kanban Board'),
       accelerator: 'CmdOrCtrl+Shift+B',
       click: () => send(IPC.appToggleKanban)
     },
@@ -1043,7 +1045,9 @@ function buildAppMenu(win: BrowserWindow): void {
   const template: Electron.MenuItemConstructorOptions[] = isMac
     ? [
         {
-          label: app.name,
+          // The visible menu title follows the renderer's display projection. Electron's
+          // underlying app.name remains the stable identity used by packaging and diagnostics.
+          label: copy('app.displayName', app.name),
           submenu: [
             { role: 'about' },
             { type: 'separator' },
@@ -1055,11 +1059,11 @@ function buildAppMenu(win: BrowserWindow): void {
             { role: 'hideOthers' },
             { role: 'unhide' },
             { type: 'separator' },
-            { role: 'quit' }
+            { role: 'quit', label: copy('menu.quit', 'Quit') }
           ]
         },
         {
-          label: 'Edit',
+          label: copy('menu.edit', 'Edit'),
           submenu: [
             { role: 'undo' },
             { role: 'redo' },
@@ -1072,9 +1076,9 @@ function buildAppMenu(win: BrowserWindow): void {
             { role: 'selectAll' }
           ]
         },
-        { label: 'View', submenu: viewSubmenu },
+        { label: copy('menu.view', 'View'), submenu: viewSubmenu },
         {
-          label: 'Window',
+          label: copy('menu.window', 'Window'),
           // `id` on minimize: `syncMenuForStandDown` disables it while EITHER stand-down is in
           // effect — a terminal focused under terminal-first, or an armed shortcut recorder — so
           // ⌘M falls through to the terminal, or to the recorder, instead of minimizing the
@@ -1089,9 +1093,9 @@ function buildAppMenu(win: BrowserWindow): void {
         }
       ]
     : [
-        { label: 'File', submenu: [{ role: 'quit' }] },
+        { label: copy('menu.file', 'File'), submenu: [{ role: 'quit', label: copy('menu.quit', 'Quit') }] },
         {
-          label: 'Edit',
+          label: copy('menu.edit', 'Edit'),
           submenu: [
             { role: 'undo' },
             { role: 'redo' },
@@ -1103,13 +1107,13 @@ function buildAppMenu(win: BrowserWindow): void {
             { role: 'selectAll' }
           ]
         },
-        { label: 'View', submenu: viewSubmenu },
-        { label: 'Settings', submenu: [settingsItem] },
+        { label: copy('menu.view', 'View'), submenu: viewSubmenu },
+        { label: copy('menu.settings', 'Settings'), submenu: [settingsItem] },
         // Both ids matter off-mac: `{role:'close'}` owns Ctrl+W here, which is readline's kill-word
         // in a terminal — a stand-down that left it enabled would CLOSE the window on a keystroke
         // a terminal-first user meant for their shell.
         {
-          label: 'Window',
+          label: copy('menu.window', 'Window'),
           submenu: [
             { role: 'minimize', id: MENU_ITEM_ID_MINIMIZE },
             { role: 'close', id: MENU_ITEM_ID_CLOSE }
@@ -1268,6 +1272,7 @@ function createWindow(): BrowserWindow {
 
   // Register as the live main window (send-time resolution via getMainWindow/sendToMain).
   setMainWindow(win)
+  nativeCopyStore.attach(win.webContents.id)
   const startupHealth = createStartupHealthTracker()
   startupHealth.record('window-created')
 
@@ -1290,6 +1295,7 @@ function createWindow(): BrowserWindow {
     }
   })
   win.on('closed', () => {
+    nativeCopyStore.detach(presenceId)
     presenceHub.leave(presenceId)
     // This webContents is a pty SUBSCRIBER (co-attach: one pty, N subscribers, keyed by the
     // webContents id). A destroyed window sends no `pty:kill`, so without this it would stay
@@ -1348,6 +1354,8 @@ function createWindow(): BrowserWindow {
     startupHealth.record('responsive')
   })
   win.webContents.on('render-process-gone', (_event, details) => {
+    nativeCopyStore.reset()
+    buildAppMenu(win)
     startupHealth.record('renderer-gone')
     console.warn('[startup] renderer process ended.')
     ptyManager.dropClient(presenceId)
@@ -1463,7 +1471,15 @@ function createWindow(): BrowserWindow {
   // with the recorder still armed and the terminal still focused, and a subframe is not this page
   // at all.
   win.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame) {
+      nativeCopyStore.reset()
+      buildAppMenu(win)
+    }
     if (navigationClearsRecording(details)) clearRendererKeyState()
+  })
+  win.webContents.once('destroyed', () => {
+    nativeCopyStore.detach(presenceId)
+    buildAppMenu(win)
   })
 
   // Open external links in the system browser — only safe schemes (no file://, no custom
@@ -1805,9 +1821,9 @@ app.whenReady().then(async () => {
       let chosen = opts?.path
       if (!chosen) {
         const result = await dialog.showOpenDialog({
-          title: 'Open a project file',
+          title: nativeCopyStore.get('archive.picker.title', 'Open a project file'),
           properties: ['openFile'],
-          filters: [{ name: 'nodeterm project file', extensions: ['nodeterm-project'] }]
+          filters: [{ name: nativeCopyStore.get('archive.picker.filter', 'nodeterm project file'), extensions: ['nodeterm-project'] }]
         })
         if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true }
         chosen = result.filePaths[0]
@@ -1846,8 +1862,8 @@ app.whenReady().then(async () => {
         // The file carries the repository and working files — they need a place on disk. Only an
         // EMPTY folder is accepted (the service enforces it), so import can never overwrite.
         const dest = await dialog.showOpenDialog({
-          title: `Choose an EMPTY folder for ${inspection.projectName ?? 'the imported project'}`,
-          buttonLabel: 'Import here',
+          title: `${nativeCopyStore.get('archive.destination.prefix', 'Choose an EMPTY folder for ')}${inspection.projectName ?? nativeCopyStore.get('archive.destination.fallback', 'the imported project')}`,
+          buttonLabel: nativeCopyStore.get('archive.destination.button', 'Import here'),
           properties: ['openDirectory', 'createDirectory']
         })
         if (dest.canceled || !dest.filePaths[0]) return { ok: false, canceled: true }
@@ -2303,6 +2319,31 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.appOpenNotificationSettings, () => {
     if (process.platform !== 'darwin') return
     void shell.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings.extension')
+  })
+
+  // Native copy is an Electron-only, in-memory projection. Every request is bound to the current
+  // main window and its current navigation epoch; guest webContents and stale renderers cannot
+  // replace or clear native chrome text. No value is logged, persisted, exported, or relayed.
+  const nativeCopySenderIsCurrent = (event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent): boolean =>
+    getMainWindow()?.webContents.id === event.sender.id && nativeCopyStore.owns(event.sender.id)
+  ipcMain.handle(IPC.nativeCopyGetEpoch, (event) => {
+    if (!nativeCopySenderIsCurrent(event)) throw new Error('native copy is unavailable for this renderer')
+    return nativeCopyStore.epoch()
+  })
+  ipcMain.handle(IPC.nativeCopyReplace, (event, projection: unknown) => {
+    if (!nativeCopySenderIsCurrent(event)) return { ok: false, reason: 'native copy sender is not the main window', epoch: nativeCopyStore.epoch() }
+    const result = nativeCopyStore.replace(event.sender.id, projection)
+    if (result.ok) {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      if (win && !win.isDestroyed()) buildAppMenu(win)
+    }
+    return result
+  })
+  ipcMain.on(IPC.nativeCopyReset, (event) => {
+    if (!nativeCopySenderIsCurrent(event)) return
+    nativeCopyStore.reset()
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (win && !win.isDestroyed()) buildAppMenu(win)
   })
 
   ipcMain.handle(IPC.announcementsFetch, async () => (await fetchCheck()).messages)

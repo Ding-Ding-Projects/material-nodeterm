@@ -34,6 +34,8 @@ import { applyAccentTokens } from './lib/accentTokens'
 import { adhdCssVars, anyAdhdModeOn, normalizeAdhdModes } from './lib/adhdModes'
 import { RemoteOAuthCallbackNotice } from './components/RemoteOAuthCallbackNotice'
 import { EasterEggs } from './components/EasterEggs'
+import { useVocabularyMapper } from './lib/personalVocabulary/useVocabularyText'
+import { nativeCopyProjection } from './lib/personalVocabulary/nativeCopy'
 
 export default function App() {
   // Apply the terminal-rendering setting to the two GPU coordinators, live. 'auto' is
@@ -150,6 +152,39 @@ export default function App() {
   useEffect(() => {
     document.title = resolveAppDisplayName(appDisplayName)
   }, [appDisplayName])
+
+  // Native host copy is a post-hydration projection. The host accepts one complete epoch-bound
+  // replacement, so an invalid upload keeps the last accepted projection and a clear or School
+  // transition sends the original wording again. Browser bridges omit `nativeCopy` entirely.
+  const nativeCopyMap = useVocabularyMapper()
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
+  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const vocabularyStatus = usePersonalVocabulary((s) => s.status)
+  useEffect(() => {
+    const nativeCopy = window.nodeTerminal.nativeCopy
+    if (!nativeCopy || !schoolModeHydrated || vocabularyStatus === 'reading' || !settingsHydrated) return
+    let cancelled = false
+    const sync = async (): Promise<void> => {
+      try {
+        // Clear and School mode invalidate the host copy before rebuilding it, so an old mapped
+        // value cannot remain visible during a renderer or IPC scheduling gap. Invalid uploads do
+        // not enter this path and therefore retain the last valid projection.
+        if (schoolModeEnabled || vocabularyStatus === 'no-file') nativeCopy.reset()
+        const epoch = await nativeCopy.getEpoch()
+        if (cancelled) return
+        const projection = nativeCopyProjection(epoch, nativeCopyMap, { appDisplayName })
+        if (cancelled) return
+        await nativeCopy.replace(projection)
+      } catch {
+        // Native host loss is expected during renderer replacement. The next hydrated render
+        // obtains a fresh epoch and retries; no fallback copy is invented here.
+      }
+    }
+    void sync()
+    return () => {
+      cancelled = true
+    }
+  }, [appDisplayName, nativeCopyMap, schoolModeEnabled, schoolModeHydrated, settingsHydrated, vocabularyStatus])
 
   // Kids-mode routing — and it MUST fail closed. `hydrated` starts false on every cold start
   // (see state/kidsMode.ts), and `enabled` starts false right alongside it as a placeholder, not

@@ -30,4 +30,3 @@ describe('NativeCopyStore', () => {
     expect(store.replace(1, emptyNativeCopyProjection(third))).toMatchObject({ ok: false })
   })
 })
-

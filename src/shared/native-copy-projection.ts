@@ -7,6 +7,7 @@ export const NATIVE_COPY_PROTOCOL = 1 as const
 
 /** Every slot is named once so additions cannot accidentally widen the native text boundary. */
 export const NATIVE_COPY_SLOTS = [
+  'app.displayName',
   'menu.file',
   'menu.edit',
   'menu.view',
@@ -24,13 +25,19 @@ export const NATIVE_COPY_SLOTS = [
   'quit.detail.suffix',
   'update.available',
   'update.ready',
+  'update.ready.suffix',
+  'update.ready.fallback',
   'update.restart',
   'update.later',
   'alarm.title',
-  'alarm.body',
+  'alarm.missed.suffix',
+  'alarm.due.suffix',
   'archive.picker.title',
   'archive.picker.button',
   'archive.picker.filter',
+  'archive.destination.prefix',
+  'archive.destination.fallback',
+  'archive.destination.button',
   'icon.picker.title',
   'icon.picker.button',
   'icon.picker.filter',
@@ -48,12 +55,15 @@ export interface NativeCopyEntry {
   slot: NativeCopySlot
   segments: NativeSegment[]
 }
-
 export interface NativeCopyProjection {
   protocol: typeof NATIVE_COPY_PROTOCOL
   epoch: number
   entries: NativeCopyEntry[]
 }
+
+export type NativeCopyReplaceResponse =
+  | { ok: true; epoch: number }
+  | { ok: false; reason: string; epoch: number }
 
 export const NATIVE_COPY_MAX_ENTRIES = NATIVE_COPY_SLOTS.length
 export const NATIVE_COPY_MAX_SEGMENTS = 8
@@ -143,4 +153,3 @@ export function emptyNativeCopyProjection(epoch: number): NativeCopyProjection {
     entries: NATIVE_COPY_SLOTS.map((slot) => ({ slot, segments: [{ kind: 'fact', value: '' }] }))
   }
 }
-

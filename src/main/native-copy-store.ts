@@ -75,4 +75,3 @@ export class NativeCopyStore {
 }
 
 export const nativeCopyStore = new NativeCopyStore()
-

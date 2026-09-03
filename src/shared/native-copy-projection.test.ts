@@ -43,4 +43,3 @@ describe('native copy projection protocol', () => {
     ])).toBe('Open C:\\work\\repo now')
   })
 })
-

@@ -19,6 +19,7 @@ import {
   toUpdateAvailablePayload
 } from '../shared/update-platform'
 import { getMainWindow, sendToMain } from './main-window'
+import { nativeCopyStore } from './native-copy-store'
 import { retainUntilDismissed } from './notifications'
 import {
   createInstallGate,
@@ -40,10 +41,10 @@ function notifyUpdateReady(version?: string): void {
   // Resolve the window at event time. A close→dock-reopen can replace it while downloading.
   if (getMainWindow()?.isFocused() || !Notification.isSupported()) return
   const notification = new Notification({
-    title: 'Update ready',
+    title: nativeCopyStore.get('update.ready', 'Update ready'),
     body: version
-      ? `nodeterm ${version} is ready to install.`
-      : 'A nodeterm update is ready to install.'
+      ? `nodeterm ${version} ${nativeCopyStore.get('update.ready.suffix', 'is ready to install.')}`
+      : nativeCopyStore.get('update.ready.fallback', 'An update is ready to install.')
   })
   notification.on('click', () => {
     const window = getMainWindow()
