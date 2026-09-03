@@ -7,6 +7,7 @@ import { useKidsMode } from '@renderer/state/kidsMode'
 import { PinPad } from './PinPad'
 import { narrateKidsScreen } from './narration'
 import { Button } from '@renderer/ui/md3'
+import { useVocabularyMapper, useVocabularyTemplate } from '@renderer/lib/personalVocabulary/useVocabularyText'
 
 /**
  * The parent gate — "Just a moment, this part is for a grown-up. Enter the PIN."
@@ -37,6 +38,7 @@ export function KidsGate({
   onVerified: (pin: string) => void
   onBackToKids: () => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [busy, setBusy] = useState(false)
   const [errorToken, setErrorToken] = useState<number | undefined>(undefined)
   const [message, setMessage] = useState<string | null>(null)
@@ -46,8 +48,8 @@ export function KidsGate({
   useEffect(() => {
     narrateKidsScreen(
       variant === 'timesUp'
-        ? "Time's up for today. A grown-up can enter the PIN to continue."
-        : 'Just a moment. This part is for a grown-up. Enter the PIN.'
+        ? vocab("Time's up for today. A grown-up can enter the PIN to continue.")
+        : vocab('Just a moment. This part is for a grown-up. Enter the PIN.')
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variant])
@@ -65,7 +67,7 @@ export function KidsGate({
       return
     }
     await useKidsMode.getState().refreshCredentialState()
-    setMessage("That's not right — try again.")
+    setMessage(vocab("That's not right — try again."))
     setErrorToken(Date.now())
   }
 
@@ -73,10 +75,10 @@ export function KidsGate({
     const target = event.currentTarget
     const rect = target.getBoundingClientRect()
     openDestructiveGate({
-      title: 'Reset the Kids mode PIN',
-      description: 'Remove only the Kids mode PIN and turn Kids mode off. School mode, toy locks, projects, sessions, and other settings stay unchanged.',
-      affected: ['Kids mode PIN', 'Kids mode enabled state'],
-      confirmLabel: 'Reset Kids mode PIN',
+      title: vocab('Reset the Kids mode PIN'),
+      description: vocab('Remove only the Kids mode PIN and turn Kids mode off. School mode, toy locks, projects, sessions, and other settings stay unchanged.'),
+      affected: [vocab('Kids mode PIN'), vocab('Kids mode enabled state')],
+      confirmLabel: vocab('Reset Kids mode PIN'),
       anchor: { x: rect.left, y: rect.bottom },
       restoreFocusEl: target,
       onConfirm: () => {
@@ -87,36 +89,38 @@ export function KidsGate({
     })
   }
 
+  const timesUpSubtitle = useVocabularyTemplate('{name}\'s time for today is up. A grown-up can enter the PIN to keep going.', { name: modeName })
+
   return (
-    <div className="md3-kids-screen md3-kids-gate" data-screen-label="Parent gate">
+    <div className="md3-kids-screen md3-kids-gate" data-screen-label={vocab('Parent gate')}>
       <div className="md3-kids-gate__icon">
         <IconLock />
       </div>
       <div className="md3-kids-gate__copy">
         <div className="md3-kids-gate__title">
-          {variant === 'timesUp' ? 'All done for today' : 'Just a moment'}
+          {variant === 'timesUp' ? vocab('All done for today') : vocab('Just a moment')}
         </div>
         <div className="md3-kids-gate__subtitle">
           {variant === 'timesUp'
-            ? `${modeName}'s time for today is up. A grown-up can enter the PIN to keep going.`
-            : 'This part is for a grown-up. Enter the PIN.'}
+            ? timesUpSubtitle
+            : vocab('This part is for a grown-up. Enter the PIN.')}
         </div>
       </div>
       {credentialState === 'loading' ? (
-        <div className="md3-kids-gate__status" role="status">Checking the shared PIN state…</div>
+        <div className="md3-kids-gate__status" role="status">{vocab('Checking the shared PIN state…')}</div>
       ) : credentialState === 'unavailable' ? (
-        <div className="md3-kids-gate__status" role="alert">The shared PIN cannot be checked. Kids mode stays locked.</div>
+        <div className="md3-kids-gate__status" role="alert">{vocab('The shared PIN cannot be checked. Kids mode stays locked.')}</div>
       ) : credentialState === 'present' ? (
         <PinPad
           length={4}
           onComplete={attempt}
           errorToken={errorToken}
           disabled={busy}
-          ariaLabel="Grown-up PIN"
+          ariaLabel={vocab('Grown-up PIN')}
         />
       ) : (
         <Button variant="filled" vocabularyMode="factual" className="md3-kids-filled-btn" onClick={() => void attempt('')}>
-          Continue to grown-up controls
+          {vocab('Continue to grown-up controls')}
         </Button>
       )}
       <div className="md3-kids-gate__status" role="status" aria-live="polite">
@@ -124,11 +128,11 @@ export function KidsGate({
       </div>
       {variant === 'casual' ? (
         <Button variant="text" vocabularyMode="factual" className="md3-kids-textbtn" onClick={onBackToKids}>
-          Back to Beep
+          {vocab('Back to Beep')}
         </Button>
       ) : null}
       <Button variant="text" vocabularyMode="factual" className="md3-kids-textbtn" onClick={requestReset}>
-        I never set this PIN
+        {vocab('I never set this PIN')}
       </Button>
     </div>
   )

@@ -8,6 +8,7 @@ import { IconBackArrow, IconClock, IconCode, IconHourglass, IconSparkle } from '
 import { Md3Switch } from './Md3Switch'
 import { narrateKidsScreen } from './narration'
 import { Button } from '@renderer/ui/md3'
+import { useVocabularyMapper, useVocabularyTemplate } from '@renderer/lib/personalVocabulary/useVocabularyText'
 
 /**
  * The grown-up screen — stats, today's activity, and the switches that actually change what the
@@ -25,6 +26,7 @@ export function KidsParent({
   verifiedPin: string
   onBackToKids: () => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const stickers = useKidsActivity((s) => s.stickers)
   const minutesToday = useKidsActivity((s) => s.minutesToday())
   const dailyLimitMinutes = useKidsActivity((s) => s.dailyLimitMinutes)
@@ -47,8 +49,21 @@ export function KidsParent({
   const [exiting, setExiting] = useState(false)
   const [exitError, setExitError] = useState<string | null>(null)
 
+  const terminalHint = useVocabularyTemplate('Turns the "Type things" tile on or off on the {name} home screen.', { name: modeName })
+  const permissionHint = useVocabularyTemplate(
+    'Off makes Beep ask before every single step. On lets Beep propose a whole plan at once. This uses the same permission-mode setting as Settings → Agents, so it applies to every agent on this machine while {name} is on.',
+    { name: modeName }
+  )
+  const dailyLimitOnHint = useVocabularyTemplate('On — ends the session at {minutes} minutes and returns to the PIN screen.', {
+    minutes: String(dailyLimitMinutes ?? 0)
+  })
+  const lockLabel = useVocabularyTemplate('Lock {name} on launch', { name: modeName })
+  const lockHint = useVocabularyTemplate('On — the app opens straight to the PIN screen; a grown-up unlocks it before {name} home shows. Off — {name} home opens right away, same as now.', {
+    name: modeName
+  })
+
   useEffect(() => {
-    narrateKidsScreen('The grown-up screen. Time, activity, and what Beep is allowed to do.')
+    narrateKidsScreen(vocab('The grown-up screen. Time, activity, and what Beep is allowed to do.'))
   }, [])
 
   const exitToDeveloperMode = async () => {
@@ -62,27 +77,27 @@ export function KidsParent({
   }
 
   const stats = [
-    { label: 'Time today', value: `${minutesToday} min`, icon: <IconClock /> },
-    { label: 'Daily limit', value: dailyLimitMinutes != null ? `${dailyLimitMinutes} min` : 'Off', icon: <IconHourglass /> },
-    { label: 'Stickers earned', value: String(stickers), icon: <IconSparkle /> },
-    { label: 'Sessions today', value: String(sessionsToday), icon: <IconClock /> }
+    { label: vocab('Time today'), value: `${minutesToday} min`, icon: <IconClock /> },
+    { label: vocab('Daily limit'), value: dailyLimitMinutes != null ? `${dailyLimitMinutes} min` : vocab('Off'), icon: <IconHourglass /> },
+    { label: vocab('Stickers earned'), value: String(stickers), icon: <IconSparkle /> },
+    { label: vocab('Sessions today'), value: String(sessionsToday), icon: <IconClock /> }
   ]
 
   return (
-    <div className="md3-kids-screen md3-kids-parent" data-screen-label="Parent screen">
+    <div className="md3-kids-screen md3-kids-parent" data-screen-label={vocab('Parent screen')}>
       <div className="md3-kids-parent__bar">
         <div>
-          <div className="md3-kids-parent__title">Grown-up screen</div>
-          <div className="md3-kids-parent__subtitle">Time, activity and what Beep is allowed to do.</div>
+          <div className="md3-kids-parent__title">{vocab('Grown-up screen')}</div>
+          <div className="md3-kids-parent__subtitle">{vocab('Time, activity and what Beep is allowed to do.')}</div>
         </div>
         <div className="md3-kids-home__spacer" />
         <Button variant="outlined" vocabularyMode="factual" className="md3-kids-outlined-btn" onClick={onBackToKids}>
           <IconBackArrow size={16} />
-          Back to kids
+          {vocab('Back to kids')}
         </Button>
         <Button variant="filled" vocabularyMode="factual" className="md3-kids-filled-btn" onClick={exitToDeveloperMode} disabled={exiting}>
           <IconCode />
-          {exiting ? 'Exiting…' : 'Exit to developer mode'}
+          {exiting ? vocab('Exiting…') : vocab('Exit to developer mode')}
         </Button>
       </div>
 
@@ -102,9 +117,9 @@ export function KidsParent({
 
       <div className="md3-kids-parent__cols">
         <div className="md3-kids-parent__panel">
-          <div className="md3-kids-parent__panel-title">Today&apos;s activity</div>
+          <div className="md3-kids-parent__panel-title">{vocab("Today's activity")}</div>
           {todayEntries.length === 0 ? (
-            <div className="md3-kids-parent__empty">Nothing yet today.</div>
+            <div className="md3-kids-parent__empty">{vocab('Nothing yet today.')}</div>
           ) : (
             todayEntries.map((a) => (
               <div key={a.id} className="md3-kids-activity-row">
@@ -124,76 +139,72 @@ export function KidsParent({
         </div>
 
         <div className="md3-kids-parent__panel">
-          <div className="md3-kids-parent__panel-title">Permissions</div>
+          <div className="md3-kids-parent__panel-title">{vocab('Permissions')}</div>
 
           <div className="md3-kids-perm-row">
             <div className="md3-kids-perm-row__text">
-              <div className="md3-kids-perm-row__label">Allow the real terminal</div>
-              <div className="md3-kids-perm-row__hint">Turns the &quot;Type things&quot; tile on or off on the {modeName} home screen.</div>
+              <div className="md3-kids-perm-row__label">{vocab('Allow the real terminal')}</div>
+              <div className="md3-kids-perm-row__hint">{terminalHint}</div>
             </div>
             <Md3Switch
               checked={allowRealTerminal}
               onChange={setAllowRealTerminal}
-              ariaLabel="Allow the real terminal"
+              ariaLabel={vocab('Allow the real terminal')}
             />
           </div>
 
           <div className="md3-kids-perm-row">
             <div className="md3-kids-perm-row__text">
-              <div className="md3-kids-perm-row__label">Allow Beep to answer freely</div>
+              <div className="md3-kids-perm-row__label">{vocab('Allow Beep to answer freely')}</div>
               <div className="md3-kids-perm-row__hint">
-                Off makes Beep ask before every single step. On lets Beep propose a whole plan at once. This
-                uses the same permission-mode setting as Settings → Agents, so it applies to every agent on
-                this machine while {modeName} is on.
+                {permissionHint}
               </div>
             </div>
             <Md3Switch
               checked={permissionMode === 'plan'}
               onChange={setKidsAllowedPermissionMode}
-              ariaLabel="Allow Beep to answer freely"
+              ariaLabel={vocab('Allow Beep to answer freely')}
             />
           </div>
 
           <div className="md3-kids-perm-row">
             <div className="md3-kids-perm-row__text">
-              <div className="md3-kids-perm-row__label">Read every screen aloud</div>
+              <div className="md3-kids-perm-row__label">{vocab('Read every screen aloud')}</div>
               <div className="md3-kids-perm-row__hint">
-                The narrator speaks each screen&apos;s label on entry. This is the same narrator Settings →
-                Speech controls app-wide.
+                {vocab("The narrator speaks each screen's label on entry. This is the same narrator Settings → Speech controls app-wide.")}
               </div>
             </div>
             <Md3Switch
               checked={narratorEnabled}
               onChange={(v) => updateSettings({ narratorEnabled: v })}
-              ariaLabel="Read every screen aloud"
+              ariaLabel={vocab('Read every screen aloud')}
             />
           </div>
 
           <div className="md3-kids-perm-row">
             <div className="md3-kids-perm-row__text">
-              <div className="md3-kids-perm-row__label">Daily time limit</div>
+              <div className="md3-kids-perm-row__label">{vocab('Daily time limit')}</div>
               <div className="md3-kids-perm-row__hint">
                 {dailyLimitMinutes != null
-                  ? `On — ends the session at ${dailyLimitMinutes} minutes and returns to the PIN screen.`
-                  : 'Off — no limit.'}
+                  ? dailyLimitOnHint
+                  : vocab('Off — no limit.')}
               </div>
             </div>
             <Md3Switch
               checked={dailyLimitMinutes != null}
               onChange={setDailyLimitEnabled}
-              ariaLabel="Daily time limit"
+              ariaLabel={vocab('Daily time limit')}
             />
           </div>
 
           <div className="md3-kids-perm-row">
             <div className="md3-kids-perm-row__text">
-              <div className="md3-kids-perm-row__label">Lock {modeName} on launch</div>
+              <div className="md3-kids-perm-row__label">{lockLabel}</div>
               <div className="md3-kids-perm-row__hint">
-                On — the app opens straight to the PIN screen; a grown-up unlocks it before {modeName} home
-                shows. Off — {modeName} home opens right away, same as now.
+                {lockHint}
               </div>
             </div>
-            <Md3Switch checked={lockOnLaunch} onChange={setLockOnLaunch} ariaLabel="Lock kids mode on launch" />
+            <Md3Switch checked={lockOnLaunch} onChange={setLockOnLaunch} ariaLabel={vocab('Lock kids mode on launch')} />
           </div>
         </div>
       </div>

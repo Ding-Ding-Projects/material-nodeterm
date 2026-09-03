@@ -162,7 +162,7 @@ export function EnableKidsModeDialogHost(): React.JSX.Element | null {
           onComplete={onVerifyExisting}
           errorToken={errorToken}
           disabled={busy}
-          ariaLabel="Verify the existing grown-up PIN"
+          ariaLabel={vocab('Verify the existing grown-up PIN')}
         /> : credentialState === 'absent' ? <PinPad
           // `key` is load-bearing, not tidiness. PinPad holds the typed digits in its OWN state and
           // `push()` early-returns once that reaches `length`. Without a key React reuses one instance
