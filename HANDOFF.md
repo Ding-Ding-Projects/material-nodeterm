@@ -1,5 +1,104 @@
 # Handoff
 
+## 2026-09-03, the clipping floor, the tab-strip keyboard contract, and what the suite actually says
+
+Two commits landed on `main`. Both fix a class of defect rather than one instance, and both carry a
+guard that was watched failing before it was trusted.
+
+### What changed
+
+| Commit | Scope |
+| --- | --- |
+| `824d60f4` | A declared minimum window size, and a capture tuple for the clipping matrix. |
+| `eea9f124` | One shared ARIA tabs keyboard contract, adopted by all 21 hand-rolled strips. |
+
+**The window had no minimum at all.** `src/main/index.ts` opened at `width: 1400` with no
+`minWidth`/`minHeight`, and no document named a minimum client area, so the window shrank until
+something truncated and no rule said that was wrong. There was no size at which "nothing clips" was
+a checkable claim. `MIN_WINDOW_WIDTH`/`MIN_WINDOW_HEIGHT` (640x540) now live in `src/shared`, are
+enforced on the window, and sit deliberately *inside* the narrow tier the stylesheet already
+designs for -- a minimum above `max-width: 720px` would have left every rule in that tier
+unreachable: present, passing its own guard, and never rendered by any window the app permits.
+
+**The capture harness could not have found a clipping defect.** `scripts/capture-shots.mjs` pinned
+every one of its 24 surfaces to `1600x1000` at `deviceScaleFactor: 1`, in one theme and one
+language. It only ever photographed the comfortable case. It now takes a viewport/scale/theme/
+language tuple, reads the minimum *from source* rather than restating it (a second copy would
+eventually disagree, and a capture proving a width the app never permits reads as evidence), and
+refuses `--attach` for the theme and language axes because that profile is not ours to rewrite.
+See `docs/clipping-matrix.md`.
+
+**Twenty-one tab strips announced themselves as ARIA tabs and ignored every key the role promises.**
+A compliant `Tabs` component already existed and none of them used it. `useTablistKeys` and the
+`Tablist` container now supply Arrow/Home/End, a roving tab stop and `aria-orientation` from one
+implementation, and a scanning guard refuses any `role="tablist"` outside those two owners. The
+guard found **18 files**, not the 7 a source review reported -- the review had only looked at node
+components, so `SessionsSidebar`, the appearance editor, the colour picker and the icon picker were
+all missed.
+
+Two poke guys fell out of that sweep:
+
+- **The Ollama panel rendered its tab strip twice.** A dead hand-rolled chip strip sat directly
+  above a correct `<Tabs>` with the same class and the same four items, left behind by an
+  unfinished conversion.
+- **That strip had no accessible name at all**, which is why the adoption refused it rather than
+  inventing one.
+
+### The full suite, and what its red actually means
+
+`13,144 passed, 60 failed across 6 files`. **None of the 60 were caused by these commits**, and each
+was re-run in isolation before being attributed:
+
+| Files | Verdict |
+| --- | --- |
+| `primitives-wired.test.ts`, `browser-control-route.test.ts` | **Contention.** Failed at exactly the 30,000 ms ceiling in the full run; both pass in 1.3 s in isolation. |
+| `src/core/build-bat.test.ts` (48 tests) | **Environmental, and the guard working.** `build.bat:41` refuses to run as Administrator and this session was elevated. Not a code defect. |
+| `site/app/core/input-dialog.test.js`, `runtime-safety.test.js` (10 tests) | **Real, pre-existing, and still open.** See below. |
+
+### Open: the Day Teet Hui copy-ownership migration is unfinished
+
+Ten tests fail on `main` today, and they failed before these commits -- proved by restoring `site/`
+from `origin/main` and re-running. They are not flaky and they are not contention.
+
+The "owned parts" model (`authoredPart`/`factPart`, so authored copy maps through the personal
+vocabulary while paths, ids and secrets stay byte-exact) was designed, given an in-app input dialog
+in `site/app/core/input-dialog.js`, and given tests. `site/app/core/engine.js` was never migrated to
+it:
+
+- `toggleLock(store, id, promptFn)` still takes a prompt function, and all three callers pass
+  `window.prompt.bind(window)`. A **native browser prompt** on a surface that is supposed to be
+  Material, vocabulary-mapped and accessible. The tests call `toggleLock(store, target)` with no
+  prompt at all and expect the in-app dialog.
+- `notify`/`toast` carry a single `titleKind`/`bodyKind` for the whole field. The tests expect
+  mixed `titleParts`/`bodyParts`, which nothing produces.
+
+This was deliberately **not** half-migrated in this pass: it spans dialogs, toasts, notifications,
+narration, School mode and the confirmation gate together, and converting some of them would leave
+that surface in a state neither model describes. It is recorded here at full size rather than
+started and abandoned.
+
+**Nobody noticed because no workflow runs tests.** `ci.yml` runs `npm run build` only and
+`release.yml` states in its own notes that nothing gates the release, so a red suite on `main` has
+no signal anywhere.
+
+### Not run, stated rather than claimed
+
+- **The clipping matrix itself has not been run.** `build.bat` refuses to run as Administrator and
+  this session was elevated, so no artifact was built and no capture was taken. The machinery,
+  its documentation and its tests landed; the evidence has not. Running it needs a non-elevated
+  shell. Every clipping claim in `ROADMAP.md` therefore remains as unverified as it was.
+- No packaged-app interaction, no captures, no release.
+
+### Branch state, measured rather than repeated
+
+The 2026-09-01 entry above says "every local branch except `feat/windows-only-yum-tong-20260828` is
+an ancestor of `main`". That is not true of the hui today: **92** `origin/*` branches are not
+ancestors of `origin/main`, and one of them, `origin/fix/settings-exact-boundaries`, shares **no
+merge base with `main` at all** -- an orphan snapshot rather than a lane. The lane-preservation
+branches (`feat/program-*`, `feat/*-reconciliation`) genuinely hold work absent from `main` and were
+left alone.
+
+
 ## 2026-09-01, vocabulary integration, lifecycle repairs, and full closeout
 
 This pass integrated every recoverable unmerged lane into `main` and closed the repository's open
