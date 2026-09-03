@@ -127,7 +127,7 @@ function wipe() {
   )
   store.persist()
   applyTheme(store.state)
-  toastX('🧹', 'All clear', 'Everything is back to how it started.')
+  toastX('🧼', 'All clear', 'Everything is back to how it started.')
 }
 
 const deps = { enterDoor, goRoom, toggleTheme, copy: (t) => copyToClipboard(store, t), speak, togglePick, removeRows, wipe, sections: SECTIONS, features: FEATURES, docs: DOCS, coverage: COVERAGE }
