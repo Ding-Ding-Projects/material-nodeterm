@@ -9400,7 +9400,7 @@ button.group-node__setup:disabled {
   padding: 6px 10px;
 }
 
-/* Deen No paints its native caption buttons as an OVERLAY over the top-right corner, `APP_BAR_HEIGHT`
+/* Windows paints its native caption buttons as an OVERLAY over the top-right corner, `APP_BAR_HEIGHT`
    tall and ~146px wide (see the `titleBarOverlay` note in the window-chrome section). Onboarding has
    no app bar to reserve that room, so `top: 40px; right: 24px` put Skip setup underneath the native
    buttons, where it could be seen and never clicked. Drop it clear of the strip on Windows only —

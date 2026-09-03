@@ -96,8 +96,8 @@ describe('HUD vocabulary and accessible controls', () => {
       'Show fewer': 'Show less',
       'Remove from HUD': 'Hide from pill',
       Go: 'Open',
-      subagent: 'pig',
-      subagents: 'pigs',
+      subagent: 'worker',
+      subagents: 'workers',
       m: 'min',
       '% left': '% left'
     })
