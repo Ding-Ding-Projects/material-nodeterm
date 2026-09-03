@@ -24,25 +24,43 @@ function cacheJson(entries, savedAt = Date.now()) {
 }
 
 test('accepts the shared versioned JSON shape', () => {
-  const result = validateVocabularyJson('{"version":1,"entries":{"terminal":"shell box"}}')
+  const result = validateVocabularyJson('{"schemaVersion":1,"entries":{"terminal":"shell box"}}')
   assert.equal(result.ok, true)
   assert.equal(result.entryCount, 1)
 })
 
 test('rejects duplicate keys before parsing can discard one', () => {
-  const result = validateVocabularyJson('{"version":1,"entries":{"terminal":"a","terminal":"b"}}')
+  const result = validateVocabularyJson('{"schemaVersion":1,"entries":{"terminal":"a","terminal":"b"}}')
   assert.equal(result.ok, false)
   assert.match(result.reason, /duplicate key/)
 })
 
 test('rejects empty entries and the former free-text format', () => {
-  assert.equal(validateVocabularyJson('{"version":1,"entries":{}}').ok, false)
+  assert.equal(validateVocabularyJson('{"schemaVersion":1,"entries":{}}').ok, false)
   assert.equal(validateVocabularyJson('terminal=shell box').ok, false)
 })
 
 test('rejects escaped control characters that could affect a terminal marker', () => {
-  assert.equal(validateVocabularyJson('{"version":1,"entries":{"terminal":"line\\u001b[31m"}}').ok, false)
-  assert.equal(validateVocabularyJson('{"version":1,"entries":{"term\\nkey":"safe"}}').ok, false)
+  assert.equal(validateVocabularyJson('{"schemaVersion":1,"entries":{"terminal":"line\\u001b[31m"}}').ok, false)
+  assert.equal(validateVocabularyJson('{"schemaVersion":1,"entries":{"term\\nkey":"safe"}}').ok, false)
+  assert.equal(validateVocabularyJson('{"schemaVersion":1,"entries":{"term":"line\\u0085"}}').ok, false)
+  assert.equal(validateVocabularyJson('{"schemaVersion":1,"entries":{"term":"bidi\\u202evalue"}}').ok, false)
+})
+
+test('rejects legacy version uploads generically and enforces the portable bounds', () => {
+  const legacy = validateVocabularyJson('{"version":1,"entries":{"terminal":"shell box"}}')
+  assert.equal(legacy.ok, false)
+  assert.match(legacy.reason, /schema version/)
+  assert.equal(validateVocabularyJson('{"schemaVersion":1,"entries":{"terminal":"shell box"}}').ok, true)
+  assert.equal(validateVocabularyJson('{"schemaVersion":1,"entries":{"k":{"nested":"value"}}}').ok, false)
+  assert.equal(validateVocabularyJson(`{"schemaVersion":1,"entries":{"${'k'.repeat(160)}":"${'v'.repeat(1000)}"}}`).ok, true)
+  assert.equal(validateVocabularyJson(`{"schemaVersion":1,"entries":{"${'k'.repeat(161)}":"ok"}}`).ok, false)
+  assert.equal(validateVocabularyJson(`{"schemaVersion":1,"entries":{"key":"${'v'.repeat(1001)}"}}`).ok, false)
+
+  const entries = Object.fromEntries(Array.from({ length: 4096 }, (_, i) => [`key-${i}`, 'value']))
+  assert.equal(validateVocabularyJson(JSON.stringify({ schemaVersion: 1, entries })).ok, true)
+  const tooMany = Object.fromEntries(Array.from({ length: 4097 }, (_, i) => [`key-${i}`, 'value']))
+  assert.equal(validateVocabularyJson(JSON.stringify({ schemaVersion: 1, entries: tooMany })).ok, false)
 })
 
 test('validates cache metadata independently and checks its count', () => {
@@ -194,7 +212,7 @@ test('rejected replacement preserves the active memory and cache and exposes sto
     const h = { save, toast: () => {} }
     assert.equal(typeof binding, 'function')
     const previousCache = storage.getItem('nodeterm-playground.vocabulary.v1')
-    binding(store.state, '', '{"version":1,"entries":{"terminal":"new box"},"entryCount":2,"savedAt":1}', h)
+    binding(store.state, '', '{"schemaVersion":1,"entries":{"terminal":"new box"},"entryCount":2,"savedAt":1}', h)
     assert.equal(store.state.vocabEntries.terminal, 'shell box')
     assert.equal(storage.getItem('nodeterm-playground.vocabulary.v1'), previousCache)
     store.state.view = 'room'
@@ -206,7 +224,7 @@ test('rejected replacement preserves the active memory and cache and exposes sto
       setItem() { throw new Error('quota exceeded') },
       removeItem: storage.removeItem
     }
-    binding(store.state, '', '{"version":1,"entries":{"terminal":"new box"}}', h)
+    binding(store.state, '', '{"schemaVersion":1,"entries":{"terminal":"new box"}}', h)
     assert.equal(store.state.vocabEntries.terminal, 'new box')
     assert.match(store.state.vocabError, /storage could not save/)
     assert.match(render(store), /storage could not save/)
@@ -252,7 +270,7 @@ test('delegated file change resets the picker, reports size/read errors, and rer
     assert.equal(unreadable.value, '')
     assert.deepEqual(events, [['too-large', 999999], ['read-error']])
 
-    const valid = { files: [{ size: 40, text: async () => '{"version":1,"entries":{"terminal":"shell box"}}' }], value: 'valid.json' }
+    const valid = { files: [{ size: 40, text: async () => '{"schemaVersion":1,"entries":{"terminal":"shell box"}}' }], value: 'valid.json' }
     assert.equal(await handleVocabularyFileChange(valid, {
       onTooLarge: () => events.push(['too-large-valid']),
       onText: (text) => binding(store.state, '', text, h),

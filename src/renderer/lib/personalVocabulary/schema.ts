@@ -144,7 +144,10 @@ export function validateVocabularyValue(root: unknown): VocabValidationResult {
   // substitution files, and silently skipping malformed rows makes a rejected upload look
   // partially successful.
   if (!Object.hasOwn(rootObj, 'schemaVersion') || rootObj.schemaVersion !== VOCAB_SCHEMA_VERSION) {
-    return { ok: false, error: 'unsupported or missing schema version (expected exactly ' + VOCAB_SCHEMA_VERSION + ')' }
+    return {
+      ok: false,
+      error: 'unsupported or missing schema version (expected exactly ' + VOCAB_SCHEMA_VERSION + '; select a file with "schemaVersion": ' + VOCAB_SCHEMA_VERSION + ')'
+    }
   }
   const unknownUploadFields = Object.keys(rootObj).filter((key) => key !== 'schemaVersion' && key !== 'entries')
   if (unknownUploadFields.length > 0) {

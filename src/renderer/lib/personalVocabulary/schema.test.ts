@@ -29,7 +29,7 @@ describe('personal vocabulary object ownership', () => {
     if (!result.ok) expect(result.error).toMatch(/top-level key .* is not allowed/)
   })
 
-  it('requires version and entries to be own properties of a decoded value', () => {
+  it('requires schemaVersion and entries to be own properties of a decoded value', () => {
     const inheritedBoth = Object.create({ schemaVersion: 1, entries: {} }) as Record<string, unknown>
     const inheritedEntries = Object.assign(Object.create({ entries: {} }), { schemaVersion: 1 }) as Record<
       string,
@@ -50,14 +50,14 @@ describe('personal vocabulary object ownership', () => {
 
   it('returns a null-prototype dictionary containing only validated own entries', () => {
     const result = validateVocabularyPayload(
-      '{"schemaVersion":1,"entries":{"飲茶 🫖":"yum cha","quote\\\"key":"kept"}}'
+      '{"schemaVersion":1,"entries":{"source phrase":"replacement phrase","quote\\\"key":"kept"}}'
     )
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(Object.getPrototypeOf(result.entries)).toBeNull()
-    expect(Object.keys(result.entries)).toEqual(['飲茶 🫖', 'quote"key'])
-    expect(result.entries['飲茶 🫖']).toBe('yum cha')
+    expect(Object.keys(result.entries)).toEqual(['source phrase', 'quote"key'])
+    expect(result.entries['source phrase']).toBe('replacement phrase')
   })
 
   it('rejects an empty entries object instead of treating the presence of the field as usable data', () => {

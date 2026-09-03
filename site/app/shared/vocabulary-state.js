@@ -106,7 +106,7 @@ export function validateVocabularyJson(text) {
   if (!root || typeof root !== 'object' || Array.isArray(root)) return { ok: false, reason: 'the top level must be a JSON object' }
   const keys = Object.keys(root)
   if (keys.some((key) => UNSAFE_KEYS.has(key))) return { ok: false, reason: 'an unsafe top-level key was found' }
-  if (!Object.hasOwn(root, 'schemaVersion') || root.schemaVersion !== VOCAB_SCHEMA_VERSION) return { ok: false, reason: `schema version must be exactly ${VOCAB_SCHEMA_VERSION}` }
+  if (!Object.hasOwn(root, 'schemaVersion') || root.schemaVersion !== VOCAB_SCHEMA_VERSION) return { ok: false, reason: `schema version must be exactly ${VOCAB_SCHEMA_VERSION}; select a file with "schemaVersion": ${VOCAB_SCHEMA_VERSION}` }
   if (keys.some((key) => key !== 'schemaVersion' && key !== 'entries')) return { ok: false, reason: 'unknown top-level field' }
   return validateEntries(root.entries)
 }
