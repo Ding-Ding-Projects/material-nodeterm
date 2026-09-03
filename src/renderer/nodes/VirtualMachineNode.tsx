@@ -95,7 +95,7 @@ export default function VirtualMachineNode({ id, data, selected }: NodeProps<Can
   const visibleModeOptions = modeOptions.filter((option) => option.value === config.mode || modeSearch.test(option.label))
   const readiness = useMemo(() => {
     if (!tools) return vocab('Checking bundled QEMU…')
-    if (!tools.available) return tools.reason ?? vocab('Bundled QEMU is unavailable.')
+    if (!tools.available) return tools.reason ? vocab(tools.reason) : vocab('Bundled QEMU is unavailable.')
     if (!local.isoPath) return vocab('Choose a Linux ISO to continue.')
     if (config.mode === 'persistent-install' && !local.diskPath) return vocab('Persistent install mode needs a disk image.')
     return vocab('Ready. Network is off unless you explicitly enable it.')
@@ -125,7 +125,7 @@ export default function VirtualMachineNode({ id, data, selected }: NodeProps<Can
         </div>
         <div className="virtual-machine-node__row"><span>{ts('virtualMachine.network', 'Enable user-mode network')}</span><Switch checked={config.networkEnabled} onChange={(value) => patchConfig({ networkEnabled: value })} ariaLabel={ts('virtualMachine.network', 'Enable user-mode network')} /></div>
         <div className="virtual-machine-node__row"><span>{ts('virtualMachine.whpx', 'Prefer WHPX acceleration')}</span><Switch checked={config.whpxPreferred} onChange={(value) => patchConfig({ whpxPreferred: value })} ariaLabel={ts('virtualMachine.whpx', 'Prefer WHPX acceleration')} /></div>
-        <p className={`virtual-machine-node__status${error || status?.error ? ' is-error' : ''}`} role={error || status?.error ? 'alert' : 'status'}>{error || status?.error || status?.message || readiness}</p>
+        <p className={`virtual-machine-node__status${error || status?.error ? ' is-error' : ''}`} role={error || status?.error ? 'alert' : 'status'}>{error || status?.error || (status?.message ? vocab(status.message) : readiness)}</p>
         <p className="virtual-machine-node__hint">{readiness} {tools?.available ? <><span>{vocab('Tools: bundled')}</span> QEMU{tools.whpxAvailable ? <span>{vocab(', WHPX available.')}</span> : '.'}</> : ''}</p>
         {status?.isoSha256Actual && <p className="virtual-machine-node__hint"><span>{vocab('ISO SHA-256 actual:')}</span> <code>{status.isoSha256Actual}</code>{status.isoSha256Expected ? <><span>{vocab(', expected')}</span> {status.isoSha256Expected}</> : ''}</p>}
         {status?.diskPath && <p className="virtual-machine-node__hint"><span>{vocab('Disk format:')}</span> {status.diskFormat}; <span>{vocab('free space:')}</span> {status.diskFreeBytes === null ? vocab('unavailable') : `${(status.diskFreeBytes / (1024 ** 3)).toFixed(1)} GiB`}</p>}

@@ -165,6 +165,27 @@ describe('HomeAssistantSensorNode personal vocabulary boundary', () => {
     }))
   })
 
+  it('maps the service-owned binding explanation while keeping the sensor state facts intact', async () => {
+    await settle()
+    mocks.mapText = (text) => text.replace('Configure or adopt', 'Set up or adopt')
+    leaveUnbound.mockResolvedValue({
+      nodeId: 'sensor-node-1',
+      state: 'unbound',
+      instanceLabel: null,
+      credentialStored: false,
+      lastSuccessfulAt: null,
+      reason: 'Configure or adopt a Home Assistant instance on this computer.'
+    })
+    openDestructiveGate.mockImplementation((options: { onConfirm: () => void }) => options.onConfirm())
+    const leave = [...host.querySelectorAll('button')].find((button) => button.textContent === 'Leave Unbound…')
+    expect(leave).toBeTruthy()
+    act(() => leave?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await settle()
+
+    expect(host.textContent).toContain('Set up or adopt a Home Assistant instance on this computer.')
+    expect(host.textContent).not.toContain('Configure or adopt a Home Assistant instance on this computer.')
+  })
+
   it('passes mapped destructive copy and exact binding facts to the gate', async () => {
     await settle()
     const leave = [...host.querySelectorAll('button')].find((button) => button.textContent === 'Leave Unbound…')
