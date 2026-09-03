@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "id": "personal-vocabulary-settings-before",
+      "sourceCommit": "723267618433854ce23b7a42a8a7ad59668f27ce",
+      "buildCommand": "npm run build:app",
+      "captureMethod": "Lowlevel hidden Windows desktop plus CDP single-target isolation",
+      "path": "docs/assets/shots/app-settings-personal-vocabulary-before.png",
+      "sha256": "5fda5fac5bad168965093b5df663c0065b2071d74fdaee0d696a88bc49d147b9",
+      "window": {
+        "width": 1416,
+        "height": 908,
+        "dpi": 96
+      },
+      "state": "No personal-vocabulary file loaded",
+      "privacy": "No uploaded payload, replacement entry, private source path, filename metadata, terminal content, account data, or user-authored project content is visible."
+    }
+  ]
+}
