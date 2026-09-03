@@ -8,7 +8,7 @@ import { useVocabularyMapper } from './useVocabularyText'
  * Custom agent labels, account names, node titles, and every other caller-owned value are
  * deliberately passed through unchanged. Agent ids remain identifiers and are never translated.
  */
-export function mapBuiltinAgentLabel(
+export function mapBuiltInAgentDisplay(
   map: (text: string) => string,
   agentId: AgentId | string | undefined,
   fallback?: string
@@ -20,11 +20,16 @@ export function mapBuiltinAgentLabel(
 }
 
 /** Hook form for display sinks that receive an agent id rather than a pre-resolved label. */
-export function useBuiltinAgentLabel(): (agentId: AgentId | string | undefined, fallback?: string) => string {
+export function useBuiltInAgentDisplay(): (agentId: AgentId | string | undefined, fallback?: string) => string {
   const map = useVocabularyMapper()
   return useCallback(
-    (agentId: AgentId | string | undefined, fallback?: string) => mapBuiltinAgentLabel(map, agentId, fallback),
+    (agentId: AgentId | string | undefined, fallback?: string) => mapBuiltInAgentDisplay(map, agentId, fallback),
     [map]
   )
 }
 
+/** Existing hook name retained for renderer call sites that use the label terminology. */
+export const useBuiltinAgentLabel = useBuiltInAgentDisplay
+
+/** Backward-compatible name for existing renderer sinks. */
+export const mapBuiltinAgentLabel = mapBuiltInAgentDisplay

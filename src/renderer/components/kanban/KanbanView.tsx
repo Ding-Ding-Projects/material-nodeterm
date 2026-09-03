@@ -65,6 +65,8 @@ import {
   type KanbanTerminalProfilePresentation
 } from './terminal-profile-ui'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../../lib/personalVocabulary/agentLabel'
 
 /** One session node shown as a board card — derived LIVE from the canvas nodes; the board
  *  itself stores only column assignments. */
@@ -187,6 +189,7 @@ export const KanbanView = memo(function KanbanView({
 }: KanbanViewProps) {
   const { api, source: sessionSource } = useSession()
   const profileText = useLocalizedVocabularyText()
+  const mapVocabulary = useVocabularyMapper()
   const dragRef = useRef<Drag>(null)
   // One card modal at a time; a deleted node closes it via the byId.has render guard.
   const [modalNodeId, setModalNodeId] = useState<string | null>(null)
@@ -389,7 +392,7 @@ export const KanbanView = memo(function KanbanView({
     () => [
       ...BUILTIN_AGENT_IDS.map((id) => ({
         key: id,
-        label: AGENT_CONFIG[id].label,
+        label: mapBuiltinAgentLabel(mapVocabulary, id, AGENT_CONFIG[id].label),
         choice: { kind: 'agent', agentId: id } as KanbanCreateChoice,
         icon: <IconAgent />
       })),
@@ -469,7 +472,8 @@ export const KanbanView = memo(function KanbanView({
       terminalProfilesLoading,
       terminalProfilesDisplayError,
       terminalProfilesInitialized,
-      profileText
+      profileText,
+      mapVocabulary
     ]
   )
   const byId = useMemo(() => new Map(sessions.map((s) => [s.id, s])), [sessions])

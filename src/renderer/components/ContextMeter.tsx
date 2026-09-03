@@ -12,6 +12,8 @@ import {
   useContextWindow
 } from '../state/contextWindow'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../lib/personalVocabulary/agentLabel'
 import { Button } from '@renderer/ui/md3'
 
 type Copy = (key: string, fallback: string, params?: Record<string, string>) => string
@@ -78,6 +80,7 @@ export function ContextMeter({ sessionId, agentId, sourceKey }: ContextMeterProp
   const level: 'healthy' | 'warning' | 'critical' | ContextWindowUsage['status'] =
     percent === null ? status : percent > 85 ? 'critical' : percent >= 60 ? 'warning' : 'healthy'
   const vocab = useLocalizedVocabularyText()
+  const mapVocabulary = useVocabularyMapper()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const label = useMemo(
@@ -88,7 +91,10 @@ export function ContextMeter({ sessionId, agentId, sourceKey }: ContextMeterProp
   const title = `${vocab('contextWindow.title', 'Context window')}: ${label}`
   const fill = percent === null ? 0 : percent
   const color = percent === null ? 'var(--md-outline)' : contextFillColor(percent)
-  const source = usage?.provider ?? agentId ?? vocab('contextWindow.provider.unknown', 'agent')
+  const sourceRaw = usage?.provider ?? agentId
+  const source = sourceRaw
+    ? mapBuiltinAgentLabel(mapVocabulary, sourceRaw, sourceRaw)
+    : vocab('contextWindow.provider.unknown', 'agent')
   const resolvedSourceKey = sourceKey ?? contextSourceKey(agentId)
 
   useEffect(() => {

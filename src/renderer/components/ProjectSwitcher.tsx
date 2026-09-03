@@ -13,6 +13,7 @@ import { useSystemAccount } from '../state/systemAccount'
 import { sessionCount, sessionForProject, useProjectSession } from '../session/session'
 import { tabClickAction } from '../session/relay-tab'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltInAgentDisplay } from '../lib/personalVocabulary/agentLabel'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 import { useMenuFlip } from '../ui/useMenuFlip'
 import { IconCanvasView, IconKanban } from './icons'
@@ -138,6 +139,7 @@ export function ProjectSwitcher({
   archiveBusy
 }: ProjectSwitcherProps) {
   const vocab = useVocabularyMapper()
+  const claudeLabel = mapBuiltInAgentDisplay(vocab, 'claude')
   // Select the raw array and filter in a memo, a `.filter()` inside the selector returns a fresh
   // array every store snapshot, which would re-render on EVERY projects change.
   const allProjects = useProjects((s) => s.projects)
@@ -761,7 +763,7 @@ export function ProjectSwitcher({
                               className={`tab-menu__group${acctOpen ? ' open' : ''}`}
                               onClick={() => setAcctOpen((v) => !v)}
                             >
-                              {vocab('Default Claude account')}
+                              {mapOwnedSentence(vocab, [copy('Default '), fact(claudeLabel), copy(' account')])}
                               <span className="tab-menu__caret">▸</span>
                             </Button>
                             {acctOpen && (

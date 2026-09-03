@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { mapBuiltinAgentLabel } from '../lib/personalVocabulary/agentLabel'
 
 interface Props {
   onEnable: () => void
@@ -16,6 +17,7 @@ export function NotifyConsentDialog({ onEnable, onDismiss }: Props) {
   // and both window listeners used to fire on one Enter (see ./dialog-stack).
   const isTop = useDialogStack()
   const vocab = useVocabularyMapper()
+  const agentLabel = mapBuiltinAgentLabel(vocab, 'claude')
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!isTop()) return
@@ -40,14 +42,14 @@ export function NotifyConsentDialog({ onEnable, onDismiss }: Props) {
             <path d="M13.7 21a2 2 0 0 1-3.4 0" />
           </svg>
         </div>
-        <h2 className="consent-title">{mapOwnedSentence(vocab, [copy('Get notified when '), fact('Claude'), copy(' finishes')])}</h2>
+        <h2 className="consent-title">{mapOwnedSentence(vocab, [copy('Get notified when '), fact(agentLabel), copy(' finishes')])}</h2>
         <p className="consent-desc">
           {mapOwnedSentence(vocab, [
             fact('nodeterm'),
             copy(" can ping you when "),
-            fact('Claude Code'),
+            fact(agentLabel),
             copy(" turn finishes while the app is in the background — so you don't have to babysit a running session. You can change this any time in "),
-            fact('Settings'),
+            copy('Settings'),
             copy('.')
           ])}
         </p>
