@@ -267,8 +267,7 @@ export function UsageSection({ isActive }: { isActive: boolean }): React.JSX.Ele
           {USAGE_PROVIDER_IDS.map((id) => (
             <FieldRow
               key={id}
-              label={labelFor(id)}
-              labelSegments={[{ kind: 'fact', value: labelFor(id) }, { kind: 'copy', value: ' usage' }]}
+              label={`${labelFor(id)} usage`}
               description={PROVIDER_BLURBS[id] ?? ''}
               control={
                 <Switch

@@ -17,6 +17,8 @@ import { Select } from '@renderer/ui/Select'
 import { uuid } from '@renderer/lib/uuid'
 import { assembleLaunchCommand } from '@shared/agents/launch'
 import { agentEnvSnapshot } from '@renderer/lib/agentEnv'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../../../lib/personalVocabulary/agentLabel'
 
 const ROWS = {
   custom: {
@@ -85,6 +87,8 @@ function AgentCard({
   onRemove: (id: string) => void
 }): React.JSX.Element {
   const base = agent.baseAgent ? AGENT_CONFIG[agent.baseAgent] : undefined
+  const mapVocabulary = useVocabularyMapper()
+  const baseLabel = mapBuiltinAgentLabel(mapVocabulary, agent.baseAgent, base?.label)
   const setEnvEntry = (key: string, value: string) => {
     const env = { ...(agent.env ?? {}) }
     if (value === '' && key !== '') delete env[key]
@@ -122,9 +126,10 @@ function AgentCard({
         label="Base harness"
         description={
           base
-            ? `Inherits ${base.label}'s hooks, resume, permission modes, and canvas control.`
+            ? `Inherits {baseLabel}'s hooks, resume, permission modes, and canvas control.`
             : 'Optional: inherit a built-in harness’s integrations. Blank = a standalone CLI.'
         }
+        descriptionParams={base ? { baseLabel } : undefined}
         control={
           <Select
             value={agent.baseAgent ?? ''}
@@ -137,7 +142,7 @@ function AgentCard({
             <option value="">None (standalone CLI)</option>
             {BUILTIN_AGENT_IDS.map((id) => (
               <option key={id} value={id}>
-                {AGENT_CONFIG[id].label}
+                {mapVocabulary(AGENT_CONFIG[id].label)}
               </option>
             ))}
           </Select>
@@ -173,9 +178,10 @@ function AgentCard({
         label="Prompt injection"
         description={
           base
-            ? `Inherited from ${base.label} — the prompt grammar is a property of the harness, not a preference (claude takes a positional, never --prompt).`
+            ? `Inherited from {baseLabel} — the prompt grammar is a property of the harness, not a preference (claude takes a positional, never --prompt).`
             : 'How an initial prompt is passed to the CLI.'
         }
+        descriptionParams={base ? { baseLabel } : undefined}
         control={
           <Select
             // Show the RESOLVED mode: when a base harness is set, its grammar wins over any stale

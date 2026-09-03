@@ -43,6 +43,8 @@ import { SettingsSection } from '../SettingsSection'
 import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../../../lib/personalVocabulary/agentLabel'
 
 const ROWS = {
   agents: {
@@ -250,6 +252,7 @@ function identityValue(choice: IdentityChoice): boolean | undefined {
 }
 
 export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const mapVocabulary = useVocabularyMapper()
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
   // Per-project capability rows act on the ACTIVE project. Subscribed (not getState()) so an
@@ -335,7 +338,7 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
             return (
               <div key={row.id} className="flex items-center gap-3 py-1.5">
                 <AgentIcon agentId={row.id} size={18} />
-                <span className="flex-1 text-[13px] text-text">{row.label}</span>
+                <span className="flex-1 text-[13px] text-text">{mapBuiltinAgentLabel(mapVocabulary, row.id, row.label)}</span>
                 {/* Custom agents included — a user living on their own CLI aliases must be able
                     to make one the default (⌘⇧C / Add menu) instead of a disabled claude. */}
                 <Button
@@ -375,12 +378,12 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
           {BUILTIN_AGENT_IDS.map((id: BuiltinAgentId) => (
             <div key={id} className="flex items-center gap-3 py-1">
               <AgentIcon agentId={id} size={18} />
-              <span className="w-28 text-[13px] text-text">{AGENT_CONFIG[id].label}</span>
+              <span className="w-28 text-[13px] text-text">{mapVocabulary(AGENT_CONFIG[id].label)}</span>
               <Input
                 className="w-72"
                 placeholder={AGENT_CONFIG[id].launchCmd}
                 vocabularyMode="factual"
-                aria-label={`${AGENT_CONFIG[id].label} launch command`}
+                aria-label={`${mapVocabulary(AGENT_CONFIG[id].label)} launch command`}
                 value={settings.agentLaunchCommands[id] ?? ''}
                 onChange={(e) => {
                   // A cleared field DELETES its key rather than storing '' — absent is the one

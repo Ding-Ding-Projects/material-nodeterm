@@ -42,6 +42,7 @@ import { Input } from '@renderer/ui/Input'
 import { cn } from '@renderer/ui/cn'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { Chip } from '@renderer/ui/md3'
+import { mapBuiltinAgentLabel } from '../../../lib/personalVocabulary/agentLabel'
 
 const ROWS = {
   accounts: {
@@ -146,14 +147,16 @@ function ProviderSection({
   onAdd: () => void
   children: React.ReactNode
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
+  const displayProvider = mapBuiltinAgentLabel(vocab, provider.toLowerCase(), provider)
   return (
     <section className="border-t border-border first:border-t-0">
       <header className="flex items-center justify-between gap-3 bg-fill-weak/15 px-3 py-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-          {provider}
+          {displayProvider}
         </span>
         <Button variant="primary" disabled={disabled || adding} onClick={onAdd}>
-          {adding ? <AddingLabel where={provider} /> : addLabel}
+          {adding ? <AddingLabel where={displayProvider} /> : addLabel}
         </Button>
       </header>
       <div className="divide-y divide-border border-t border-border">{children}</div>

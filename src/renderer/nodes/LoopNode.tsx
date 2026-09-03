@@ -6,6 +6,7 @@ import { useAgentNodes } from '../state/agentNodes'
 import { applyLoopDismiss } from '../lib/loopCard'
 import { useSession } from '../session/session'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../lib/personalVocabulary/agentLabel'
 import { IconButton } from '@renderer/ui/md3'
 
 /**
@@ -26,7 +27,7 @@ export function LoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
   // The surrounding controls and empty-state copy below remain vocabulary-mappable.
   const kind = typeof data.loopKind === 'string' && data.loopKind ? data.loopKind : 'loop'
   const kindLabel = `${kind.charAt(0).toUpperCase()}${kind.slice(1)}`
-  const label = `Claude ${kindLabel}`
+  const label = `${mapBuiltinAgentLabel(vocab, 'claude')} ${kindLabel}`
   const expanded = !!data.ephExpanded
   const bodyRef = useRef<HTMLDivElement>(null)
   const toggle = () => useAgentNodes.getState().toggleExpanded(id)

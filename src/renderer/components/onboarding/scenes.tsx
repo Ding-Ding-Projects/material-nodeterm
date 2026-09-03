@@ -4,6 +4,8 @@ import { AgentIcon } from '../../lib/agentIcons'
 import { IconTerminal, IconNote, IconEditor } from '../icons'
 import { AgentMascot } from '../../nodes/AgentMascot'
 import { ListRow } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../../lib/personalVocabulary/agentLabel'
 
 /**
  * Animated scenes for the first-run setup tour (OnboardingFlow). All motion is CSS-only
@@ -78,6 +80,8 @@ export function OnbGhostCanvas() {
  *  the RUNNING badge, `.onb-node__status`) — both follow the currently selected default
  *  agent. */
 export function SceneAgents({ agentId, label, color }: { agentId: AgentId; label: string; color: string }) {
+  const vocab = useVocabularyMapper()
+  const displayLabel = mapBuiltinAgentLabel(vocab, agentId, label)
   return (
     <div className="onb-scene-canvas" aria-hidden="true">
       {/* click ripple where the cursor right-clicks */}
@@ -86,7 +90,7 @@ export function SceneAgents({ agentId, label, color }: { agentId: AgentId; label
           scene) — .onb-menu/.onb-menu__item/.onb-menu__icon, never the live .ctx-* classes */}
       <div className="onb-menu">
         <ListRow className="onb-menu__item" tabIndex={-1} aria-hidden="true" vocabularyMode="factual" icon={<IconTerminal />} label={<>New terminal</>} />
-        <ListRow className="onb-menu__item onb-menu__hl" tabIndex={-1} aria-hidden="true" vocabularyMode="factual" icon={<AgentIcon agentId={agentId} />} label={<>New {label}</>} />
+        <ListRow className="onb-menu__item onb-menu__hl" tabIndex={-1} aria-hidden="true" vocabularyMode="factual" icon={<AgentIcon agentId={agentId} />} label={<>New {displayLabel}</>} />
         <ListRow className="onb-menu__item" tabIndex={-1} aria-hidden="true" vocabularyMode="factual" icon={<IconNote />} label={<>New sticky note</>} />
         <ListRow className="onb-menu__item" tabIndex={-1} aria-hidden="true" vocabularyMode="factual" icon={<IconEditor />} label={<>Open file…</>} />
       </div>
@@ -95,7 +99,7 @@ export function SceneAgents({ agentId, label, color }: { agentId: AgentId; label
         <div className="onb-node__head">
           <span className="onb-node__color" style={{ background: color }} />
           <AgentIcon agentId={agentId} size={13} />
-          <span className="onb-node__title">{label}</span>
+          <span className="onb-node__title">{displayLabel}</span>
           <span className="onb-node__status onb-node__status--busy" style={{ marginLeft: 'auto' }}>
             <span className="onb-node__status-dot" />
             RUNNING
@@ -291,6 +295,8 @@ export function SceneNotify() {
  *  loop — so every animation here is one styles.css already freezes under
  *  `prefers-reduced-motion`, and no new keyframes were needed. */
 export function SceneKeepAwake({ agentId, label, color }: { agentId: AgentId; label: string; color: string }) {
+  const vocab = useVocabularyMapper()
+  const displayLabel = mapBuiltinAgentLabel(vocab, agentId, label)
   return (
     <div
       className="onb-scene-canvas"
@@ -327,7 +333,7 @@ export function SceneKeepAwake({ agentId, label, color }: { agentId: AgentId; la
         <div className="onb-node__head">
           <span className="onb-node__color" style={{ background: color }} />
           <AgentIcon agentId={agentId} size={13} />
-          <span className="onb-node__title">{label}</span>
+          <span className="onb-node__title">{displayLabel}</span>
            <span className="onb-node__status onb-node__status--busy" style={{ marginLeft: 'auto' }}>
              <span className="onb-node__status-dot" />
             RUNNING

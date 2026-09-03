@@ -238,6 +238,7 @@ import {
 import { sameTerminalCoState } from '../terminal/co-state-equality'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../lib/personalVocabulary/agentLabel'
 import {
   mapAroundExactFacts,
   pendingLaunchErrorOwnership,
@@ -1724,7 +1725,11 @@ export function TerminalNode({
   // READ leg: adopt the agent's own session name into the title. A superset of canRenameNode —
   // gemini names its own sessions but has no rename command, so it polls and never pushes.
   const canReadTitleNode = !!agentHarnessId && canReadTitle(agentHarnessId)
-  const agentLabel = (agentHarnessId ? agentConfig(agentHarnessId) : undefined)?.label ?? 'Agent'
+  const agentLabel = mapBuiltinAgentLabel(
+    vocab,
+    agentHarnessId,
+    (agentHarnessId ? agentConfig(agentHarnessId) : undefined)?.label ?? 'Agent'
+  )
 
   // The whole-node drop gesture is deliberately an explicit collaboration affordance, not a
   // second way to move a terminal. The Canvas validates both endpoints in the active project and
@@ -5322,9 +5327,9 @@ export function TerminalNode({
           data-tip={
             mapAroundExactFacts(
               contextLinkCapable
-                ? "Link out — drag to another Claude node so they can read each other's context"
+                ? `Link out — drag to another ${agentLabel} node so they can read each other's context`
                 : 'Link out — drag to a sticky note to attach it as context',
-              ['Claude'],
+              [agentLabel],
               vocab
             )
           }
@@ -5337,9 +5342,9 @@ export function TerminalNode({
           data-tip={
             mapAroundExactFacts(
               contextLinkCapable
-                ? 'Link in — drop a link here to share context with this Claude session'
+                ? `Link in — drop a link here to share context with this ${agentLabel} session`
                 : 'Link in — drop a sticky note link here to attach it as context',
-              ['Claude'],
+              [agentLabel],
               vocab
             )
           }

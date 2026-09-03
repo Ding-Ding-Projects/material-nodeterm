@@ -15,6 +15,7 @@ import { percentText } from '../lib/usageFormat'
 import codexPet from '../assets/pet-codex.webp'
 import { mapLocalVocabularyText, setHostVocabularySchoolState } from '../lib/personalVocabulary/hostMessage'
 import { copy, fact, mapOwnedSentence, type DisplaySegment } from '../lib/personalVocabulary/ownedCopy'
+import { mapBuiltInAgentDisplay } from '../lib/personalVocabulary/agentLabel'
 
 // Local mirror of the preload's HUD contract (src/preload/hud.ts) — kept self-contained so this
 // renderer entry has no cross-project (main/preload) type dependency.
@@ -314,7 +315,11 @@ function buildRow(row: HudRow): HTMLElement {
   el.className = 'hud-row'
   el.setAttribute('role', 'button')
   el.tabIndex = 0
-  el.setAttribute('aria-label', `${row.title} — ${stateLabel(row.state)}`)
+  const agentLabel = mapBuiltInAgentDisplay(mapLocalVocabularyText, row.agentId, '')
+  el.setAttribute(
+    'aria-label',
+    agentLabel ? `${row.title} — ${agentLabel} — ${stateLabel(row.state)}` : `${row.title} — ${stateLabel(row.state)}`
+  )
   const focusRow = (): void => {
     window.hud.focusNode(row.nodeId)
     setExpanded(false)

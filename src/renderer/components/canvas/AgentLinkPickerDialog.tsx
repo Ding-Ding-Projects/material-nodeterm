@@ -9,6 +9,8 @@ import type { AgentId } from '@shared/agents/config'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 import { Button, Chip } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../../lib/personalVocabulary/agentLabel'
 
 export interface AgentLinkPickerOption {
   id: string
@@ -40,6 +42,7 @@ export function AgentLinkPickerDialog({
   onCancel
 }: AgentLinkPickerDialogProps): React.JSX.Element {
   const profileText = useLocalizedVocabularyText()
+  const vocab = useVocabularyMapper()
   const search = useRegexSearchField({ mode: 'text' })
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -119,8 +122,8 @@ export function AgentLinkPickerDialog({
   }, [anchorEl])
 
   const filtered = useMemo(
-    () => targets.filter((target) => search.test(`${target.title} ${target.agentLabel}`)),
-    [targets, search]
+    () => targets.filter((target) => search.test(`${target.title} ${mapBuiltinAgentLabel(vocab, target.agentId, target.agentLabel)}`)),
+    [targets, search, vocab]
   )
 
   useEffect(() => {
@@ -259,6 +262,7 @@ export function AgentLinkPickerDialog({
                 tabIndex={index === activeIndex ? 0 : -1}
                 role="option"
                 aria-selected={index === activeIndex}
+                aria-label={`${target.title || profileText('agentLink.dialog.untitled', 'Untitled agent')}, ${mapBuiltinAgentLabel(vocab, target.agentId, target.agentLabel)}`}
                 className={`agent-link-picker__option${index === activeIndex ? ' is-active' : ''}`}
                 onMouseEnter={() => setActiveIndex(index)}
                 onFocus={() => setActiveIndex(index)}
@@ -273,7 +277,7 @@ export function AgentLinkPickerDialog({
                 <span className="agent-link-picker__name">
                   {target.title || profileText('agentLink.dialog.untitled', 'Untitled agent')}
                 </span>
-                <span className="agent-link-picker__agent">{target.agentLabel}</span>
+                <span className="agent-link-picker__agent">{mapBuiltinAgentLabel(vocab, target.agentId, target.agentLabel)}</span>
                 <MaterialSymbol name="link" size={16} />
               </Chip>
             ))
