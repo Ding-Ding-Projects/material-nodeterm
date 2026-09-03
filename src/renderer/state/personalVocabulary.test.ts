@@ -40,7 +40,7 @@ describe('personal vocabulary cache validation', () => {
     const savedAt = Date.now()
     localStorage.setItem(
       CACHE_KEY,
-      JSON.stringify({ version: 1, entries: { '飲茶 🫖': 'yum cha' }, entryCount: 1, savedAt })
+      JSON.stringify({ version: 1, entries: { 'source phrase': 'replacement phrase' }, entryCount: 1, savedAt })
     )
 
     usePersonalVocabulary.getState().hydrate()
@@ -48,7 +48,7 @@ describe('personal vocabulary cache validation', () => {
     const state = usePersonalVocabulary.getState()
     expect(state).toMatchObject({ status: 'loaded', entryCount: 1, loadedAt: savedAt })
     expect(Object.getPrototypeOf(state.entries)).toBeNull()
-    expect(state.entries['飲茶 🫖']).toBe('yum cha')
+    expect(state.entries['source phrase']).toBe('replacement phrase')
   })
 
   it('rejects a cache whose entryCount was edited independently of its entries', () => {
@@ -64,11 +64,11 @@ describe('personal vocabulary cache validation', () => {
 
   it('keeps the prior memory and cache when a replacement upload is rejected', () => {
     const first = usePersonalVocabulary.getState().upload(
-      '{"version":1,"entries":{"terminal":"shell box"}}'
+      '{"schemaVersion":1,"entries":{"terminal":"shell box"}}'
     )
     expect(first).toEqual({ ok: true, entryCount: 1 })
     const second = usePersonalVocabulary.getState().upload(
-      '{"version":1,"entries":{"terminal":42}}'
+      '{"schemaVersion":1,"entries":{"terminal":42}}'
     )
     expect(second.ok).toBe(false)
     expect(usePersonalVocabulary.getState().entries.terminal).toBe('shell box')
@@ -78,13 +78,29 @@ describe('personal vocabulary cache validation', () => {
     })
   })
 
+  it('rejects the legacy upload spelling without disturbing a valid cache', () => {
+    expect(usePersonalVocabulary.getState().upload(
+      '{"schemaVersion":1,"entries":{"terminal":"shell box"}}'
+    )).toEqual({ ok: true, entryCount: 1 })
+    const previousCache = localStorage.getItem(CACHE_KEY)
+
+    const legacy = usePersonalVocabulary.getState().upload(
+      '{"version":1,"entries":{"terminal":"legacy box"}}'
+    )
+
+    expect(legacy.ok).toBe(false)
+    if (!legacy.ok) expect(legacy.error).toMatch(/schema version/)
+    expect(usePersonalVocabulary.getState().entries.terminal).toBe('shell box')
+    expect(localStorage.getItem(CACHE_KEY)).toBe(previousCache)
+  })
+
   it('keeps the accepted upload in memory when browser storage is blocked', () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('storage blocked')
     })
     try {
       const result = usePersonalVocabulary.getState().upload(
-        '{"version":1,"entries":{"terminal":"shell box"}}'
+        '{"schemaVersion":1,"entries":{"terminal":"shell box"}}'
       )
       expect(result).toEqual({ ok: true, entryCount: 1 })
       expect(usePersonalVocabulary.getState()).toMatchObject({ status: 'loaded', entryCount: 1 })
@@ -115,7 +131,7 @@ describe('personal vocabulary cache validation', () => {
     ['unsupported', JSON.stringify({ version: 99, entries: { terminal: 'shell box' }, entryCount: 1, savedAt: Date.now() })]
   ] as const)('clears the prior live dictionary and invalid storage for a %s cache', (_kind, raw) => {
     expect(usePersonalVocabulary.getState().upload(
-      '{"version":1,"entries":{"terminal":"shell box"}}'
+      '{"schemaVersion":1,"entries":{"terminal":"shell box"}}'
     )).toEqual({ ok: true, entryCount: 1 })
 
     if (raw === null) localStorage.removeItem(CACHE_KEY)

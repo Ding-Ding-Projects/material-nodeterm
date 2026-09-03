@@ -59,6 +59,12 @@ The School mode policy still suppresses the mapper until its shared record has b
 No file loaded means the shipped wording is returned unchanged. A rejected, malformed, stale, or
 cleared file never applies partially.
 
+The portable upload contract is exact: `schemaVersion: 1` plus `entries`, measured at 256 KiB of
+UTF-8 bytes, with scanner depth 3, at most 4,096 entries, keys of 1–160 characters, and string
+values up to 1,000 characters. The internal local cache keeps its historical `version: 1`
+envelope so valid cached users continue to hydrate. A newly selected file using the old `version: 1`
+upload spelling is rejected with a generic migration hint to choose `schemaVersion: 1`.
+
 ## Verification boundary
 
 `scripts/personal-vocabulary-producer-manifest.mjs` carries the canonical hand-written rows for

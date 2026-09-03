@@ -74,7 +74,8 @@ that bridge. Focused cross-boundary tests require authored fields to map and fac
 byte-identical.
 
 The upload shape and the persisted-cache shape are intentionally separate. An upload accepts only
-`version` and `entries`. The cache additionally requires `entryCount` and `savedAt`, rejects unknown
+`schemaVersion` and `entries`. The cache intentionally preserves its existing internal `version: 1`
+envelope and additionally requires `entryCount` and `savedAt`, rejects unknown
 fields, and checks that the count equals the validated entries before the age policy is applied.
 This prevents persistence metadata from accidentally widening the upload contract and prevents a
 hand-edited count from masquerading as a loaded dictionary. Non-React entrypoints such as the
@@ -86,7 +87,7 @@ runtime facts remain unchanged.
 
 ```json
 {
-  "version": 1,
+  "schemaVersion": 1,
   "entries": {
     "term the app would otherwise show": "your replacement text",
     "another term": "another replacement"
@@ -100,11 +101,11 @@ One documented shape, enforced completely — a rejected file **never applies pa
 | --- | --- | --- |
 | File size | 256 KB (measured in actual UTF-8 bytes, not JS string length) | `VOCAB_MAX_FILE_BYTES` |
 | Schema version | must be exactly `1` | `VOCAB_SCHEMA_VERSION` |
-| Max JSON nesting depth | 12 (upload and persisted-cache envelopes) | `VOCAB_MAX_DEPTH` |
+| Max JSON nesting depth | 3 (portable upload and persisted-cache envelopes) | `VOCAB_MAX_DEPTH` |
 | Max JSON nodes visited | 20,000 | `VOCAB_MAX_NODES` |
-| Max entries | 2,000 | `VOCAB_MAX_ENTRIES` |
-| Max key length | 200 characters | `VOCAB_MAX_KEY_LENGTH` |
-| Max value length | 500 characters | `VOCAB_MAX_VALUE_LENGTH` |
+| Max entries | 4,096 | `VOCAB_MAX_ENTRIES` |
+| Key length | 1–160 characters | `VOCAB_MAX_KEY_LENGTH` |
+| Value length | 0–1,000 characters | `VOCAB_MAX_VALUE_LENGTH` |
 
 All defined in `src/renderer/lib/personalVocabulary/schema.ts` — the numbers above and the code
 cannot drift, because the docs table is copied from the same constants the validator uses.
@@ -113,7 +114,7 @@ Rejected outright, with no partial application:
 
 - malformed JSON,
 - a value that is not a JSON object at the top level, or an `entries` that is not a flat object,
-- an unknown/missing/wrong `version`,
+- an unknown/missing/wrong `schemaVersion` (the historical `version: 1` upload spelling is rejected; select a file with `schemaVersion: 1`),
 - **duplicate keys** — caught by a real hand-written recursive-descent JSON scanner
   (`jsonScan.ts`), *not* `JSON.parse`. `JSON.parse` silently keeps only the **last** of a
   duplicate key before any application code ever sees the object, so duplicate-key rejection is
