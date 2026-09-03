@@ -34,7 +34,7 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { openDestructiveGate } from '../state/destructiveGate'
 import { CdkManagerPanel } from '../components/aws/CdkManagerPanel'
-import { Button, Checkbox, Chip, IconButton, TextArea } from '@renderer/ui/md3'
+import { Button, Checkbox, Chip, IconButton, Tablist, TextArea } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
 
@@ -282,14 +282,14 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
       </div>
       <div className="aws-resource-node__body nodrag nowheel">
         <div className="aws-resource-node__runtime" role="status">{note}</div>
-        <div className="aws-resource-node__modes" role="tablist" aria-label={vocab('AWS manager mode')}>
+        <Tablist className="aws-resource-node__modes" ariaLabel={vocab('AWS manager mode')}>
           <Chip vocabularyMode="factual" selected={mode === 'resource-explorer'} role="tab" aria-selected={mode === 'resource-explorer'} onClick={() => { setMode('resource-explorer'); persistIntent('resource-explorer') }}>{vocab('Resource Explorer')}</Chip>
           <Chip vocabularyMode="factual" selected={mode === 'cloud-control'} role="tab" aria-selected={mode === 'cloud-control'} onClick={() => { setMode('cloud-control'); persistIntent('cloud-control') }}>{vocab('Cloud Control')}</Chip>
           <Chip vocabularyMode="factual" selected={mode === 'core-services'} role="tab" aria-selected={mode === 'core-services'} onClick={() => { setMode('core-services'); setCoreService('s3'); setOperation(AWS_CORE_OPERATIONS.s3[0]); setCoreInput({}); persistIntent('core-services', { coreService: 's3', coreOperation: AWS_CORE_OPERATIONS.s3[0], coreInput: {} }) }}>{vocab('Core services')}</Chip>
           <Chip vocabularyMode="factual" selected={mode === 'cloudformation'} role="tab" aria-selected={mode === 'cloudformation'} onClick={() => { setMode('cloudformation'); setOperation(CLOUDFORMATION_OPERATIONS[0]); persistIntent('cloudformation') }}>{vocab('CloudFormation')}</Chip>
           <Chip vocabularyMode="factual" selected={mode === 'cdk'} role="tab" aria-selected={mode === 'cdk'} onClick={() => { setMode('cdk'); persistIntent('cdk') }}>{vocab('CDK')}</Chip>
           <Chip vocabularyMode="factual" selected={mode === 'platform-managers'} role="tab" aria-selected={mode === 'platform-managers'} onClick={() => { setMode('platform-managers'); setPlatformService('ecr'); setOperation(AWS_PLATFORM_OPERATIONS[0]); setCoreInput({}); persistIntent('platform-managers', { platformService: 'ecr', platformOperation: AWS_PLATFORM_OPERATIONS[0], platformInput: {} }) }}>{vocab('Containers, data and cost')}</Chip>
-        </div>
+        </Tablist>
         <section className="aws-resource-node__binding" aria-label={vocab('Local AWS binding')}>
           <div className="aws-resource-node__binding-grid">
             <label>{vocab('Profile')}
@@ -314,12 +314,12 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
           awsBinding={binding ? { profileName: binding.profileName, region: binding.region } : null}
           onIntentChange={(intent) => updateNodeData(id, { awsManagerIntent: { ...AWS_MANAGER_DEFAULT_INTENT, ...nodeIntent, mode: 'cdk', cdk: intent } })}
         /> : <>
-        {mode === 'core-services' && <div className="aws-resource-node__operations" role="tablist" aria-label={vocab('AWS core services')}>
+        {mode === 'core-services' && <Tablist className="aws-resource-node__operations" ariaLabel={vocab('AWS core services')}>
           {AWS_CORE_SERVICES.map((item) => <Chip vocabularyMode="factual" selected={coreService === item} key={item} role="tab" aria-selected={coreService === item} className={coreService === item ? 'is-selected' : ''} onClick={() => { setCoreService(item); const next = AWS_CORE_OPERATIONS[item][0]; setOperation(next); setCoreInput({}); setPreview(null); persistIntent('core-services', { coreService: item, coreOperation: next, coreInput: {} }) }}>{vocab(CORE_SERVICE_LABELS[item])}</Chip>)}
-        </div>}
-        {mode === 'platform-managers' && <div className="aws-resource-node__operations" role="tablist" aria-label={vocab('AWS platform managers')}>
+        </Tablist>}
+        {mode === 'platform-managers' && <Tablist className="aws-resource-node__operations" ariaLabel={vocab('AWS platform managers')}>
           {AWS_PLATFORM_SERVICES.map((item) => <Chip vocabularyMode="factual" selected={platformService === item} key={item} role="tab" aria-selected={platformService === item} className={platformService === item ? 'is-selected' : ''} onClick={() => { setPlatformService(item); const next = AWS_PLATFORM_OPERATIONS.find((candidate) => candidate.startsWith(`${item}-`))!; setOperation(next); setCoreInput({}); setPreview(null); persistIntent('platform-managers', { platformService: item, platformOperation: next, platformInput: {} }) }}>{vocab(item.toUpperCase())}</Chip>)}
-        </div>}
+        </Tablist>}
         {mode === 'cloudformation' && <section className="aws-resource-node__inputs" aria-label={vocab('CloudFormation change-set inputs')}>
           <label>{vocab('Template file')}
             <div className="aws-resource-node__path-row"><Input vocabularyMode="factual" value={templatePath} onChange={(event) => setTemplatePath(event.target.value)} placeholder={vocab('Choose a local YAML or JSON template')} /><Button variant="outlined" size="small" vocabularyMode="factual" onClick={async () => { const picked = await api.dialog.selectFile(); if (picked) setTemplatePath(picked) }}>{vocab('Browse')}</Button></div>
@@ -333,9 +333,9 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
           <Button variant="outlined" size="small" vocabularyMode="factual" onClick={() => setCfParameters((current) => [...current, { key: '', value: '' }])}>{vocab('Add parameter')}</Button>
           <div className="aws-resource-node__operations" role="group" aria-label={vocab('CloudFormation capabilities')}>{CLOUDFORMATION_CAPABILITIES.map((capability) => <Chip vocabularyMode="factual" selected={cfCapabilities.includes(capability)} key={capability} aria-pressed={cfCapabilities.includes(capability)} className={cfCapabilities.includes(capability) ? 'is-selected' : ''} onClick={() => setCfCapabilities((current) => current.includes(capability) ? current.filter((item) => item !== capability) : [...current, capability])}>{vocab(capability)}</Chip>)}</div>
         </section>}
-        <div className="aws-resource-node__operations" role="tablist" aria-label={vocab('AWS operations')}>
+        <Tablist className="aws-resource-node__operations" ariaLabel={vocab('AWS operations')}>
           {operations.map((item) => <Chip vocabularyMode="factual" selected={operation === item} key={item} role="tab" aria-selected={operation === item} className={operation === item ? 'is-selected' : ''} onClick={() => { setOperation(item); setPreview(null); setError(null); if (mode === 'core-services') { setCoreInput({}); persistIntent('core-services', { coreOperation: item as AwsCoreOperation, coreInput: {} }) } }}>{vocab(OPERATION_LABELS[item] ?? AWS_CORE_OPERATION_LABELS[item as AwsCoreOperation])}</Chip>)}
-        </div>
+        </Tablist>
         <section className="aws-resource-node__inputs" aria-label={fieldLabel(operation, vocab)}>
           {mode === 'core-services' && <>
             {['s3-list-objects', 's3-create-bucket', 's3-delete-bucket'].includes(operation) && <label>{vocab('Bucket name')}<Input vocabularyMode="factual" value={String(coreInput.bucket ?? '')} onChange={(event) => { const next = { ...coreInput, bucket: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreOperation: operation as AwsCoreOperation, coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} placeholder={vocab('Choose a bucket name')} /></label>}

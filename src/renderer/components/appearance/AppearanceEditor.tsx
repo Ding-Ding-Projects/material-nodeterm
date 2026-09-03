@@ -36,7 +36,7 @@ import { UI_FONT_CATALOG } from '@renderer/lib/appearance/uiFontDetect'
 import { APPEARANCE_BLEND_MODES } from '@shared/types'
 import type { AppearanceBlendMode, AppearancePreset, AppearanceTextStyle, ElementAppearanceEntry } from '@shared/types'
 import { saveBlobDownload } from '@renderer/lib/exportSave'
-import { Slider } from '@renderer/ui/md3'
+import { Slider, Tablist } from '@renderer/ui/md3'
 import { Chip } from '@renderer/ui/md3'
 
 type Tab = 'font' | 'color' | 'layout' | 'presets'
@@ -165,7 +165,7 @@ export function AppearanceEditorHost(): React.JSX.Element | null {
         {vocab('The quick brown fox — Aa Bb Cc 123')}
       </div>
 
-      <div className="appearance-editor__tabs" role="tablist" aria-label={vocab('Appearance property group')}>
+      <Tablist className="appearance-editor__tabs" ariaLabel={vocab('Appearance property group')}>
         {(
           [
             { id: 'font', label: 'Font' },
@@ -185,7 +185,7 @@ export function AppearanceEditorHost(): React.JSX.Element | null {
             {vocab(t.label)}
           </Chip>
         ))}
-      </div>
+      </Tablist>
 
       <div className="appearance-editor__body">
         {tab === 'font' && (

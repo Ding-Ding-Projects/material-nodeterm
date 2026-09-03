@@ -8,7 +8,7 @@ import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
-import { IconButton } from '@renderer/ui/md3'
+import { IconButton, Tablist } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 import { Chip } from '@renderer/ui/md3'
 
@@ -87,13 +87,13 @@ export default function WindowsDiagnosticsNode({ id, data, selected }: NodeProps
       <div className="windows-diagnostics-node__body nodrag nowheel">
         <p className={`windows-diagnostics-node__status${error || snapshot?.source === 'unavailable' ? ' is-error' : ''}`} role={error || snapshot?.source === 'unavailable' ? 'alert' : 'status'}>{statusText}</p>
         <p className="windows-diagnostics-node__hint">{vocab('Read-only host facts. This node never starts, stops, enables, disables, edits, or deletes host resources.')}</p>
-        <div className="windows-diagnostics-node__tabs" role="tablist" aria-label={vocab('Windows diagnostics sections')}>
+        <Tablist className="windows-diagnostics-node__tabs" ariaLabel={vocab('Windows diagnostics sections')}>
           {WINDOWS_DIAGNOSTIC_SECTIONS.map((section) => {
             const current = snapshot?.sections[section]
             const count = current?.state === 'available' ? current.rows.length : 0
             return <Chip vocabularyMode="factual" selected={activeSection === section} key={section} role="tab" aria-selected={activeSection === section} aria-controls={`${id}-${section}`} className={activeSection === section ? 'is-active' : ''} onClick={() => { setActiveSection(section); search.setValue('') }}>{sectionLabel(section, vocab)} <span aria-label={`${count} ${vocab('rows')}`}>({count})</span></Chip>
           })}
-        </div>
+        </Tablist>
         <div className="windows-diagnostics-node__search">
           <Input ref={searchRef} type="search" vocabularyMode="factual" value={search.value} onChange={(event) => search.setValue(event.target.value)} placeholder={search.mode === 'regex' ? vocab('Filter this section with regex') : vocab('Filter this section')} aria-label={`${vocab('Search')} ${sectionLabel(activeSection, vocab)}`} />
           <AnchoredRegexBuilder search={search} fieldRef={searchRef} label={`${vocab('Regex for')} ${sectionLabel(activeSection, vocab)}`} />

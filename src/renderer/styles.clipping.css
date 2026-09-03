@@ -500,7 +500,7 @@
   outline-offset: 2px;
 }
 
-@media (max-width: 719px) {
+@media (max-width: 720px) {
   .md3-app-bar {
     gap: 8px;
     padding-inline: 8px;
@@ -540,7 +540,7 @@
   }
 }
 
-@media (min-width: 720px) and (max-width: 1279px) {
+@media (min-width: 721px) and (max-width: 1279px) {
   .md3-app-bar__compact {
     gap: 8px;
   }

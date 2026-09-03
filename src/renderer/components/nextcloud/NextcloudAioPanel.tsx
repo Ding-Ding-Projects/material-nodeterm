@@ -13,7 +13,7 @@ import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 import { useI18n } from '../../lib/i18n'
-import { Chip } from '@renderer/ui/md3'
+import { Chip, Tablist } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
 
 type AioTab = 'overview' | 'backups' | 'recovery'
@@ -101,9 +101,9 @@ export function NextcloudAioPanel({
         <p><a href={NEXTCLOUD_AIO_SOURCE} target="_blank" rel="noreferrer">{copy('source', 'Review the pinned official source')}</a> · <code>{NEXTCLOUD_AIO_IMAGE}</code></p>
       </section>
 
-      <div className="nextcloud-aio-panel__tabs" role="tablist" aria-label={copy('tabs', 'Nextcloud AIO sections')}>
+      <Tablist className="nextcloud-aio-panel__tabs" ariaLabel={copy('tabs', 'Nextcloud AIO sections')}>
         {TABS.map((item) => <Chip vocabularyMode="factual" selected={tab === item.id} key={item.id} role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)}>{copy(item.id, item.label)}</Chip>)}
-      </div>
+      </Tablist>
 
       <div className="nextcloud-aio-panel__toolbar">
         <div className="nextcloud-aio-panel__search">

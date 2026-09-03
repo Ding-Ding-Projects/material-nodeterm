@@ -510,19 +510,6 @@ function OllamaManagerPanelForApi({
             </section>
           ) : (
             <>
-              <div className="om-tabs" role="tablist">
-                {(['health', 'models', 'store', 'chat'] as Tab[]).map((t) => (
-                  <Chip vocabularyMode="factual" selected={tab === t}
-                    key={t}
-                    role="tab"
-                    aria-selected={tab === t}
-                    className={`om-tab${tab === t ? ' om-tab--active' : ''}`}
-                    onClick={() => setTab(t)}
-                  >
-                    {vocab(t === 'health' ? 'Health' : t === 'models' ? 'Installed' : t === 'store' ? 'Model store' : 'Chat')}
-                  </Chip>
-                ))}
-              </div>
               <Tabs
                 items={[
                   { id: 'health', label: 'Health' },

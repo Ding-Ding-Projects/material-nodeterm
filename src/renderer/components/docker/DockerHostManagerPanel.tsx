@@ -13,7 +13,7 @@ import { openDestructiveGate } from '../../state/destructiveGate'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
 import { useI18n } from '../../lib/i18n'
-import { Checkbox, Chip } from '@renderer/ui/md3'
+import { Checkbox, Chip, Tablist } from '@renderer/ui/md3'
 
 const TABS: Array<{ id: DockerHostResourceKind | 'exec'; label: string; key: string }> = [
   { id: 'containers', label: 'Containers', key: 'containers' }, { id: 'images', label: 'Images', key: 'images' },
@@ -114,9 +114,9 @@ export function DockerHostManagerPanel(): React.JSX.Element {
         </div>
       </div>
 
-      <div className="docker-manager__tabs" role="tablist" aria-label={copy('resources', 'Docker resources')}>
+      <Tablist className="docker-manager__tabs" ariaLabel={copy('resources', 'Docker resources')}>
         {TABS.map((item) => <Chip vocabularyMode="factual" selected={tab === item.id} key={item.id} role="tab" aria-selected={tab === item.id} onClick={() => { setTab(item.id); search.reset() }}>{copy(item.key, item.label)}</Chip>)}
-      </div>
+      </Tablist>
 
       <div className="docker-manager__toolbar">
         <div className="docker-manager__search">

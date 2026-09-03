@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button } from '@renderer/ui/md3'
+import { Button, Tablist } from '@renderer/ui/md3'
 import { Github, Image as ImageIcon, RotateCcw, Shapes, Smile } from 'lucide-react'
 import {
   LUCIDE_ICON_IDS,
@@ -227,11 +227,7 @@ export function ProjectIconPicker({
 
       {/* Tabs — underline (line) style with a per-source glyph. */}
       <div className="flex flex-col gap-3">
-        <div
-          className="flex items-center gap-1 border-b border-white/10"
-          role="tablist"
-          aria-label="Icon source"
-        >
+        <Tablist className="flex items-center gap-1 border-b border-white/10" ariaLabel="Icon source">
           {TABS.map((t) => {
             const Icon = t.icon
             const selected = tab === t.id
@@ -256,7 +252,7 @@ export function ProjectIconPicker({
               </Chip>
             )
           })}
-        </div>
+        </Tablist>
 
         {/* Panel */}
         <div role="tabpanel">

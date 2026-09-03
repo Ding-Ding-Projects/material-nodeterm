@@ -10676,7 +10676,7 @@ button.group-node__setup:disabled {
   align-items: flex-start;
   gap: 10px;
   padding: 10px;
-  border-radius: 10px; /* no exact --md-shape step (8/12) — left as its own authored radius */
+  border-radius: var(--md-shape-section); /* styles.md3.css declares the same selector later and therefore wins; this used to sit here as a bespoke 10px, which meant the value visible at this definition site was not the value that rendered -- a trap for whoever edits it next */
 }
 
 .notif-center__row input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider)[type='checkbox'] {

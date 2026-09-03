@@ -16,7 +16,7 @@ import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
-import { Checkbox, TextArea } from '@renderer/ui/md3'
+import { Checkbox, Tablist, TextArea } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
 
 export interface AwsOperationWizardProps {
@@ -335,9 +335,9 @@ export function AwsOperationWizard({ definition, initialValue, onSubmit, onCance
           {!visibleChildren.length && <p>{vocab('No operation fields match this search.')}</p>}
         </div>
         <section className="aws-wizard__advanced" aria-label={vocab('Advanced synchronized editor')}>
-          <div className="aws-wizard__tabs" role="tablist" aria-label={vocab('Advanced format')}>
+          <Tablist className="aws-wizard__tabs" ariaLabel={vocab('Advanced format')}>
             {(['json', 'yaml'] as const).map((format) => <Button key={format} type="button" role="tab" aria-selected={advancedFormat === format} variant={advancedFormat === format ? 'primary' : 'default'} onClick={() => setAdvancedFormat(format)}>{format.toUpperCase()}</Button>)}
-          </div>
+          </Tablist>
           <TextArea vocabularyMode="factual" className="aws-wizard__advanced-editor" value={advancedFormat === 'json' ? jsonText : yamlText} aria-label={vocab(`Advanced ${advancedFormat} editor`)} onChange={(event) => updateAdvanced(event.target.value, advancedFormat)} />
           {advancedError && <p role="alert">{advancedError}</p>}
           {issuesText(advancedIssues)}

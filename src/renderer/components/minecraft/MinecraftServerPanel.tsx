@@ -16,7 +16,7 @@ import {
 import { MinecraftPropertiesEditor } from './MinecraftPropertiesEditor'
 import { MinecraftPlayersPanel } from './MinecraftPlayersPanel'
 import { MinecraftBackupsPanel } from './MinecraftBackupsPanel'
-import { Checkbox, Progress } from '@renderer/ui/md3'
+import { Checkbox, Progress, Tablist } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
 import { Button, Chip } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
@@ -432,7 +432,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
 
       {configured && !showInstallForm && (
         <div className="mc-mgmt">
-          <div className="mc-mgmt__tabs" role="tablist" aria-label="Server management">
+          <Tablist className="mc-mgmt__tabs" ariaLabel="Server management">
             <Chip vocabularyMode="factual" selected={mgmtTab === 'properties'}
              
               role="tab"
@@ -460,7 +460,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
             >
               Backups
             </Chip>
-          </div>
+          </Tablist>
           {mgmtTab === 'properties' && (
             <div role="tabpanel" aria-label="server.properties editor">
               <MinecraftPropertiesEditor nodeId={nodeId} phase={status.phase} />

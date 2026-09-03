@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { notify } from '../lib/adhdNotify'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
-import { Button, Checkbox, Chip, IconButton } from '@renderer/ui/md3'
+import { Button, Checkbox, Chip, IconButton, Tablist } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 
 export default function TimerNode({ id, data, selected }: NodeProps<CanvasNode>) {
@@ -75,9 +75,9 @@ export default function TimerNode({ id, data, selected }: NodeProps<CanvasNode>)
     <NodeResizer minWidth={320} minHeight={300} isVisible={selected} color="var(--md-primary)" />
     <Handle type="target" position={Position.Left} />
     <div className="timer-node__header"><span aria-hidden="true">◷</span><Input className="mdx-input--bare timer-node__title nodrag" vocabularyMode="factual" aria-label={vocab('Timer title')} value={timer.title} onChange={(e) => updateNodeData(id, { title: e.target.value })} /><IconButton size="compact" className="term-node__close" icon="close" vocabularyMode="factual" title={vocab('Delete timer')} aria-label={vocab('Delete timer')} onClick={() => deleteElements({ nodes: [{ id }] })} /></div>
-    <div className="timer-node__modes nodrag" role="tablist" aria-label={vocab('Timer mode')}>
+    <Tablist className="timer-node__modes nodrag" ariaLabel={vocab('Timer mode')}>
       {(['countdown', 'stopwatch', 'interval'] as TimerMode[]).map((mode) => <Chip key={mode} role="tab" vocabularyMode="factual" selected={timer.timerMode === mode} aria-selected={timer.timerMode === mode} aria-label={vocab(mode === 'countdown' ? 'Countdown' : mode === 'stopwatch' ? 'Stopwatch' : 'Work / rest')} onClick={() => setMode(mode)}>{vocab(mode === 'countdown' ? 'Countdown' : mode === 'stopwatch' ? 'Stopwatch' : 'Work / rest')}</Chip>)}
-    </div>
+    </Tablist>
     <output className="timer-node__display" aria-live="polite" aria-label={mapOwnedSentence(vocab, [fact(String(timer.title)), copy(' '), fact(timer.paused ? 'paused' : timer.running ? 'running' : 'ready'), copy(' '), fact(formatTimerMs(display))])}>{formatTimerMs(display)}</output>
     {timer.timerMode !== 'stopwatch' && <label className="timer-node__duration nodrag">{vocab('Duration')} <Input vocabularyMode="factual" type="number" min={1} value={Math.round(timer.durationMs / 1000)} aria-label={vocab('Duration seconds')} onChange={(e) => { const durationMs = clampTimerDuration(Number(e.target.value) * 1000); updateNodeData(id, { durationMs, remainingMs: durationMs }) }} /> {vocab('seconds')}</label>}
     <label className="timer-node__repeat nodrag">{vocab('Repeat')} <Input vocabularyMode="factual" type="number" min={0} max={999} value={timer.repeatCount} aria-label={vocab('Repeat count')} onChange={(e) => updateNodeData(id, { repeatCount: Math.max(0, Math.min(999, Number(e.target.value) || 0)) })} /> {vocab('times')}</label>
