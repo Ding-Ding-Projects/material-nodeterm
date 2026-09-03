@@ -1,26 +1,46 @@
-import { useEffect } from 'react'
-import { createPortal } from 'react-dom'
-import { isHoldChord, shortcutKeyParts } from '@shared/shortcut'
-import type { CommandId } from '@shared/keybindings'
-import { isBrowserRuntime } from '../bridge/runtime'
-import { commandKeys, dictationBinding } from '../lib/keybindingOverrides'
-import { useSettings } from '../state/settings'
-import { isMacPlatform } from '@shared/platform-utils'
-import { Button } from '@renderer/ui/md3'
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
+import { isHoldChord, shortcutKeyParts } from "@shared/shortcut";
+import type { CommandId } from "@shared/keybindings";
+import { isBrowserRuntime } from "../bridge/runtime";
+import { commandKeys, dictationBinding } from "../lib/keybindingOverrides";
+import { useSettings } from "../state/settings";
+import { isMacPlatform } from "@shared/platform-utils";
+import { Button } from "@renderer/ui/md3";
+import { useVocabularyMapper } from "../lib/personalVocabulary/useVocabularyText";
 
 // Justified isMacPlatform survivor: the desktop app is Windows-only, but the Server Edition
 // serves this panel to a browser tab that can run on a real Mac, where `matchesShortcut` keys
 // off metaKey — the registry rows below must render the ⌘ badges that actually match there,
 // or the panel documents chords that do nothing as written.
-const isMac = isMacPlatform()
+const isMac = isMacPlatform();
 
 export interface ShortcutsPanelProps {
-  onClose: () => void
+  onClose: () => void;
 }
 
-interface Row {
-  keys: string[]
-  label: string
+export interface ShortcutRow {
+  keys: string[];
+  label: string;
+}
+
+export interface ShortcutSection {
+  title: string;
+  rows: ShortcutRow[];
+}
+
+/** Map authored labels while preserving every executable shortcut token exactly. */
+export function mapShortcutSections<T extends string | undefined | null>(
+  sections: ShortcutSection[],
+  map: <V extends string | undefined | null>(text: V) => V,
+): ShortcutSection[] {
+  return sections.map((section) => ({
+    title: map(section.title) ?? section.title,
+    rows: section.rows.map((row) => ({
+      keys: [...row.keys],
+      label: map(row.label) ?? row.label,
+    })),
+  }));
 }
 
 /** Registry rows derive their keys from the effective binding, so a remap in settings.json
@@ -36,94 +56,99 @@ interface Row {
  *  DROPS off the panel when the user unbinds it, exactly like every `cmd()` row above. It keeps
  *  its own builder because it is the one row whose LABEL depends on the chord's shape: a
  *  modifier-only chord is hold-to-talk, which "Dictate (hold)" spells out. */
-function buildSections(dictationChord: string): { title: string; rows: Row[] }[] {
-  const primary = isMac ? '⌘' : 'Ctrl'
-  const shift = isMac ? '⇧' : 'Shift'
-  const cmd = (id: CommandId, label: string): Row[] => {
-    const keys = commandKeys(id)
-    return keys.length ? [{ keys, label }] : []
-  }
-  const dictate = (): Row[] =>
-    dictationChord === ''
+export function buildSections(dictationChord: string): ShortcutSection[] {
+  const primary = isMac ? "⌘" : "Ctrl";
+  const shift = isMac ? "⇧" : "Shift";
+  const cmd = (id: CommandId, label: string): ShortcutRow[] => {
+    const keys = commandKeys(id);
+    return keys.length ? [{ keys, label }] : [];
+  };
+  const dictate = (): ShortcutRow[] =>
+    dictationChord === ""
       ? []
       : [
           {
             keys: shortcutKeyParts(dictationChord, isMac),
-            label: isHoldChord(dictationChord) ? 'Dictate (hold)' : 'Dictate'
-          }
-        ]
+            label: isHoldChord(dictationChord) ? "Dictate (hold)" : "Dictate",
+          },
+        ];
   return [
     {
-      title: 'General',
+      title: "General",
       rows: [
-        ...cmd('app.commandPalette', 'Command palette'),
-        ...cmd('app.settings', 'Settings'),
-        ...cmd('app.shortcutsPanel', 'Shortcuts panel'),
-        ...cmd('app.reopenLastClosed', 'Reopen last closed'),
-        ...cmd('panel.explorer', 'Toggle explorer'),
+        ...cmd("app.commandPalette", "Command palette"),
+        ...cmd("app.settings", "Settings"),
+        ...cmd("app.shortcutsPanel", "Shortcuts panel"),
+        ...cmd("app.reopenLastClosed", "Reopen last closed"),
+        ...cmd("panel.explorer", "Toggle explorer"),
         // `panel.sourceControl` used to be listed here AND in the Source Control section below —
         // one command, two rows, both showing the same chord. The section row ("Open Source
         // Control") is the one that belongs, so the General duplicate is gone.
-        ...cmd('view.kanbanToggle', 'Toggle view mode'),
-        ...cmd('panel.sessions', 'Pin sessions sidebar'),
+        ...cmd("view.kanbanToggle", "Toggle view mode"),
+        ...cmd("panel.sessions", "Pin sessions sidebar"),
         // Desktop only: browsers own Cmd/Ctrl+1-9 for tab switching and a page cannot take it
         // back, so listing it in the Server Edition would promise a shortcut that never fires.
-        ...(isBrowserRuntime() ? [] : [{ keys: [primary, '1-9'], label: 'Jump to project' }]),
+        ...(isBrowserRuntime()
+          ? []
+          : [{ keys: [primary, "1-9"], label: "Jump to project" }]),
         ...dictate(),
-        ...cmd('canvas.undo', 'Undo'),
-        ...cmd('canvas.redo', 'Redo'),
-        ...cmd('canvas.goBack', 'Go back'),
-        ...cmd('canvas.goForward', 'Go forward')
-      ]
+        ...cmd("canvas.undo", "Undo"),
+        ...cmd("canvas.redo", "Redo"),
+        ...cmd("canvas.goBack", "Go back"),
+        ...cmd("canvas.goForward", "Go forward"),
+      ],
     },
     {
-      title: 'Canvas',
+      title: "Canvas",
       rows: [
-        ...cmd('node.newTerminal', 'New terminal'),
-        ...cmd('node.newAgent', 'New agent'),
-        ...cmd('node.close', 'Close selected node'),
-        ...cmd('canvas.deleteSelection', 'Delete selection'),
+        ...cmd("node.newTerminal", "New terminal"),
+        ...cmd("node.newAgent", "New agent"),
+        ...cmd("node.close", "Close selected node"),
+        ...cmd("canvas.deleteSelection", "Delete selection"),
         // One row per direction rather than a single collapsed "⌘ ← → ↑ ↓": each is its own
         // command, so a user who remapped or unbound only ⌘↑ must see exactly that.
-        ...cmd('node.focusLeft', 'Focus the node to the left'),
-        ...cmd('node.focusRight', 'Focus the node to the right'),
-        ...cmd('node.focusUp', 'Focus the node above'),
-        ...cmd('node.focusDown', 'Focus the node below'),
-        { keys: ['Right-click'], label: 'Actions menu (empty space or node)' },
-        { keys: ['Left-drag'], label: 'Box-select (touch to select)' },
-        { keys: ['Middle / Right-drag'], label: 'Pan the canvas' },
-        { keys: ['Double-click'], label: 'Center & focus a node' },
-        ...cmd('view.focusMode', 'Toggle focus mode'),
-        { keys: [primary, 'wheel'], label: 'Zoom in / out' },
+        ...cmd("node.focusLeft", "Focus the node to the left"),
+        ...cmd("node.focusRight", "Focus the node to the right"),
+        ...cmd("node.focusUp", "Focus the node above"),
+        ...cmd("node.focusDown", "Focus the node below"),
+        { keys: ["Right-click"], label: "Actions menu (empty space or node)" },
+        { keys: ["Left-drag"], label: "Box-select (touch to select)" },
+        { keys: ["Middle / Right-drag"], label: "Pan the canvas" },
+        { keys: ["Double-click"], label: "Center & focus a node" },
+        ...cmd("view.focusMode", "Toggle focus mode"),
+        { keys: [primary, "wheel"], label: "Zoom in / out" },
         // Advertised on BOTH surfaces, unlike "Jump to project" above. ⌘1-9 is dropped there
         // because the browser RESERVES it (tab switching, un-preventable) for something unrelated;
         // ⌘0 is neither — it is not in the reserved set, so the page gets the keydown, and even
         // where a browser insists on handling it too it means the same thing we do ("actual size")
         // instead of fighting us. Shift+1 is nobody else's key on any surface.
-        { keys: [primary, '0'], label: 'Zoom to 100%' },
-        { keys: [shift, '1'], label: 'Fit view' },
-        ...cmd('canvas.tidy', 'Tidy canvas')
-      ]
+        { keys: [primary, "0"], label: "Zoom to 100%" },
+        { keys: [shift, "1"], label: "Fit view" },
+        ...cmd("canvas.tidy", "Tidy canvas"),
+      ],
     },
     {
-      title: 'Terminal',
+      title: "Terminal",
       rows: [
-        { keys: ['Hover ~0.6s'], label: 'Enter the terminal (type/select)' },
-        { keys: ['Quick drag'], label: 'Move the terminal (before it focuses)' },
-        ...cmd('node.toggleMarkdown', 'Toggle markdown view'),
-        ...cmd('terminal.find', 'Find in terminal'),
-        { keys: [primary, 'C'], label: 'Copy selection (markdown view)' },
-        { keys: ['✦'], label: 'Name the terminal with AI' }
-      ]
+        { keys: ["Hover ~0.6s"], label: "Enter the terminal (type/select)" },
+        {
+          keys: ["Quick drag"],
+          label: "Move the terminal (before it focuses)",
+        },
+        ...cmd("node.toggleMarkdown", "Toggle markdown view"),
+        ...cmd("terminal.find", "Find in terminal"),
+        { keys: [primary, "C"], label: "Copy selection (markdown view)" },
+        { keys: ["✦"], label: "Name the terminal with AI" },
+      ],
     },
     {
-      title: 'Source Control',
+      title: "Source Control",
       rows: [
-        ...cmd('panel.sourceControl', 'Open Source Control'),
-        ...cmd('scm.commit', 'Commit staged changes')
-      ]
-    }
-  ]
+        ...cmd("panel.sourceControl", "Open Source Control"),
+        ...cmd("scm.commit", "Commit staged changes"),
+      ],
+    },
+  ];
 }
 
 /**
@@ -134,29 +159,35 @@ function buildSections(dictationChord: string): { title: string; rows: Row[] }[]
  */
 export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
   // A string selector, so an unrelated settings write cannot re-render the panel.
-  const dictationChord = useSettings(() => dictationBinding())
+  const dictationChord = useSettings(() => dictationBinding());
   // Every OTHER row reads the registry through a plain `commandKeys()` call, which is not a
   // subscription — so a panel left open while a chord is remapped (Settings in another window,
   // or an outside edit to settings.json the store watcher picks up) kept showing the old key
   // unless the remap happened to be dictation's. Subscribing to the overrides object itself is
   // what makes the whole panel re-render; the value is unused on purpose.
-  useSettings((s) => s.settings.keybindings)
-  const SECTIONS = buildSections(dictationChord)
+  useSettings((s) => s.settings.keybindings);
+  const vocab = useVocabularyMapper();
+  const SECTIONS = mapShortcutSections(buildSections(dictationChord), vocab);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   return createPortal(
     <div className="sc-overlay" onClick={onClose}>
       <div className="shortcuts" onClick={(e) => e.stopPropagation()}>
         <div className="shortcuts__head">
-          <h2>Keyboard shortcuts</h2>
-          <Button variant="outlined" size="small" vocabularyMode="factual" className="drawer__close" onClick={onClose}>
+          <h2>{vocab("Keyboard shortcuts")}</h2>
+          <Button
+            variant="outlined"
+            size="small"
+            className="drawer__close"
+            onClick={onClose}
+          >
             ×
           </Button>
         </div>
@@ -184,11 +215,17 @@ export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
           ))}
         </div>
         <div className="shortcuts__footer">
-          <Button variant="outlined" size="small" vocabularyMode="factual"
+          <Button
+            variant="outlined"
+            size="small"
             className="toylock-btn--link"
             onClick={() => {
-              onClose()
-              window.dispatchEvent(new CustomEvent('nodeterm:open-settings', { detail: { section: 'support' } }))
+              onClose();
+              window.dispatchEvent(
+                new CustomEvent("nodeterm:open-settings", {
+                  detail: { section: "support" },
+                }),
+              );
             }}
           >
             Need help? Open Support Tickets…
@@ -196,6 +233,6 @@ export function ShortcutsPanel({ onClose }: ShortcutsPanelProps) {
         </div>
       </div>
     </div>,
-    document.body
-  )
+    document.body,
+  );
 }
