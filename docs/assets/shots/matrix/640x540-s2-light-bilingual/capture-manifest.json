@@ -1,0 +1,157 @@
+{
+  "commit": "38df2d9c2bf2ef90a1dc0de8a2d8ba72dfae735e",
+  "capturedAt": "2026-09-03T20:27:13.685Z",
+  "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, at the tuple below",
+  "tuple": {
+    "label": "640x540-s2-light-bilingual",
+    "viewport": {
+      "width": 640,
+      "height": 540
+    },
+    "deviceScaleFactor": 2,
+    "theme": "light",
+    "languageMode": "bilingual"
+  },
+  "captured": [
+    {
+      "id": "app-01-launch",
+      "title": "App at launch",
+      "bytes": 105510,
+      "hadOpener": false
+    },
+    {
+      "id": "app-02-settings",
+      "title": "Settings",
+      "bytes": 84820,
+      "hadOpener": true
+    },
+    {
+      "id": "app-03-palette",
+      "title": "Command palette",
+      "bytes": 105502,
+      "hadOpener": true
+    },
+    {
+      "id": "app-04-canvas",
+      "title": "Canvas",
+      "bytes": 105510,
+      "hadOpener": false
+    },
+    {
+      "id": "app-05-kanban",
+      "title": "Kanban board",
+      "bytes": 71310,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-kids-mode",
+      "title": "Settings — Kids mode",
+      "bytes": 75403,
+      "hadOpener": true
+    },
+    {
+      "id": "app-06-history",
+      "title": "History — session memory, settings history, changelog",
+      "bytes": 101969,
+      "hadOpener": true
+    },
+    {
+      "id": "app-status-surface",
+      "title": "Status surface",
+      "bytes": 134952,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-docker-host",
+      "title": "Settings — Docker host",
+      "bytes": 109510,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-narrator",
+      "title": "Settings — Narrator",
+      "bytes": 108134,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-schedule",
+      "title": "Settings — Schedule",
+      "bytes": 110158,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-app-identity",
+      "title": "Settings — App name & logo",
+      "bytes": 108406,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-appearance-editor",
+      "title": "Settings — Appearance editor",
+      "bytes": 108819,
+      "hadOpener": true
+    },
+    {
+      "id": "app-adhd-modes",
+      "title": "Settings — ADHD modes",
+      "bytes": 108361,
+      "hadOpener": true
+    },
+    {
+      "id": "app-windows-terminal-profile-availability",
+      "title": "Windows terminal profiles — detected availability",
+      "bytes": 115799,
+      "hadOpener": true
+    },
+    {
+      "id": "app-kids-home",
+      "title": "Kids mode — Home",
+      "bytes": 103909,
+      "hadOpener": true
+    },
+    {
+      "id": "app-kids-gate",
+      "title": "Kids mode — the grown-up gate",
+      "bytes": 69641,
+      "hadOpener": true
+    },
+    {
+      "id": "app-kids-parent",
+      "title": "Kids mode — the grown-up screen",
+      "bytes": 100377,
+      "hadOpener": true
+    }
+  ],
+  "skipped": [
+    {
+      "id": "app-adhd-momentum-note",
+      "why": "the momentum window has a real 5-minute floor that cannot be shortened from outside the app; run with NT_SHOTS_SLOW=1 to capture it (adds several real minutes to the run)"
+    },
+    {
+      "id": "app-windows-terminal-profile-node",
+      "why": "the spawned Windows session host outlives the app by design and holds the disposable capture sandbox open"
+    },
+    {
+      "id": "app-agent-running",
+      "why": "needs a real agent CLI session"
+    },
+    {
+      "id": "app-ssh-project",
+      "why": "needs a reachable host and credentials"
+    }
+  ],
+  "failures": [
+    {
+      "id": "app-settings-language",
+      "why": "opener step \"Language\" was not found"
+    },
+    {
+      "id": "app-windows-terminal-profiles",
+      "why": "scripted opener did not reach its surface (returned false)"
+    },
+    {
+      "id": "app-adhd-elapsed-chip",
+      "why": "scripted opener did not reach its surface (returned false)"
+    }
+  ]
+}

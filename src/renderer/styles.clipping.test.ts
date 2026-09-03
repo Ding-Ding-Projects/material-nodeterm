@@ -28,14 +28,27 @@ describe('new node surfaces participate in the clipping sweep', () => {
   })
 
   it('keeps narrow notification messages readable instead of wrapping every character vertically', () => {
-    expect(CSS).toContain('  .top-banners {\n    width: calc(100vw - 16px);')
+    expect(CSS).toMatch(/\.top-banners \{[^}]*left: calc\(var\(--nav-rail-w\) \+ 8px\)/s)
     expect(CSS).toContain('  .announce-banner {\n    width: 100%;\n    max-width: none;')
     expect(CSS).toContain('  .announce-banner__content {\n    flex: 1 1 160px;')
   })
 
   it('keeps narrow app bars and the sessions card within a reachable viewport', () => {
     expect(CSS).toContain('  .md3-app-bar,\n  .tabbar {\n    overflow-x: auto;')
-    expect(CSS).toContain('  .sessions-sidebar {\n    left: 8px;\n    width: calc(100vw - 16px);')
+    expect(CSS).toMatch(/\.sessions-sidebar \{[^}]*left: calc\(var\(--nav-rail-w\) \+ 8px\)/s)
+  })
+
+  it('reserves the rail column in every narrow overlay, not just the toast stack', () => {
+    // The rail is a real navigation target and the content column starts after it, so an overlay
+    // sized against 100vw is wider than the space it actually has. Exactly one of these reserved
+    // the rail and the others did not, which clipped the banner mid-word at the minimum viewport.
+    // Written as literals rather than a built pattern: a constructed regex loses a backslash on
+    // the way through a shell and would then match nothing while still reading as a check.
+    expect(CSS).toMatch(/\.top-banners \{[^}]*var\(--nav-rail-w\)/s)
+    expect(CSS).toMatch(/\.sessions-sidebar \{[^}]*var\(--nav-rail-w\)/s)
+    expect(CSS).toMatch(/\.toast-stack \{[^}]*var\(--nav-rail-w\)/s)
+    // A fixed-position editor sized on 100vw spans the rail too.
+    expect(CSS).toMatch(/\.appearance-editor \{[^}]*width: calc\(100vw - var\(--nav-rail-w\)/s)
   })
 
   it('keeps the separated session context button at a 44px interaction target', () => {

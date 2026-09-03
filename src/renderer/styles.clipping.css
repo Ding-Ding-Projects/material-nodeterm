@@ -233,8 +233,15 @@
    * pixel wide and wrapping every character vertically. Give the strip a real viewport width so
    * the message gets a usable column, while keeping the actions reachable. */
   .top-banners {
-    width: calc(100vw - 16px);
-    max-width: calc(100vw - 16px);
+    /* Pinned rather than centred at this width. The base rule centres on the whole window
+     * (left:50% + translateX(-50%)), so a viewport-width strip puts its left edge at 8px --
+     * underneath the rail, which clipped the message mid-word. Reserve the rail column the way
+     * .toast-stack below already does, and let left/right decide the width. */
+    left: calc(var(--nav-rail-w) + 8px);
+    right: 8px;
+    transform: none;
+    width: auto;
+    max-width: none;
     overflow: visible;
   }
   .announce-banner {
@@ -263,9 +270,13 @@
   /* The sessions card is anchored beside the rail on desktop. On a narrow viewport that anchor
    * leaves too little content width, so keep the card inside the viewport with a bounded width. */
   .sessions-sidebar {
-    left: 8px;
-    width: calc(100vw - 16px);
-    max-width: calc(100vw - 16px);
+    /* The base rule is already rail-aware (styles.md3.css: left: calc(var(--nav-rail-w) + 14px));
+     * this narrow override used to reset it to a bare 8px, putting the card under the rail at the
+     * one width where there is least room to lose. */
+    left: calc(var(--nav-rail-w) + 8px);
+    right: 8px;
+    width: auto;
+    max-width: none;
   }
 
   /* Toasts sit above the canvas, but the rail remains a real navigation target. Reserve the rail
@@ -312,8 +323,10 @@
     justify-content: flex-start;
   }
   .appearance-editor {
-    width: calc(100vw - 24px);
-    max-width: calc(100vw - 24px);
+    /* position: fixed, so 100vw spans the rail too. Reserve it, or the editor is wider than the
+     * column it sits in. */
+    width: calc(100vw - var(--nav-rail-w) - 24px);
+    max-width: calc(100vw - var(--nav-rail-w) - 24px);
   }
   .appearance-editor__row {
     align-items: flex-start;
