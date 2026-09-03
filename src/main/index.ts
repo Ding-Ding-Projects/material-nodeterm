@@ -97,6 +97,7 @@ import {
   type AgentContinuationService
 } from '../core/agent-continuation'
 import { describeSettingsChange } from '../shared/settings-diff'
+import { MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH } from '../shared/window-minimum'
 import type { NotifyPayload, RemoteLoginHelp, Settings } from '../shared/types'
 import {
   registerBrowserGuestRequest,
@@ -1243,6 +1244,15 @@ function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
+    // The floor the layout is actually verified against. Without a declared minimum there is no
+    // width to test clipping at, so every narrow-width fix was an assertion about a size nobody
+    // could name: the window shrank until something truncated and no rule said that was wrong.
+    // 640x540 sits inside the narrow tier the stylesheet already designs for (`max-width: 720px`,
+    // `max-height: 640px` in styles.clipping.css), so that tier stays reachable and gets exercised
+    // rather than being dead code under a minimum that skipped past it. Documented in
+    // docs/window-minimum-size.md; asserted by src/main/window-minimum.test.ts.
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
     show: false,
     backgroundColor: '#1e1e1e',
     // NT_MULTI instances are throwaway dev sandboxes: label the window so a second instance is
