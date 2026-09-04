@@ -759,6 +759,7 @@ function FileConverterPanelForApi({
               </ul>
             )}
           </section>
+          <AdvancedPipelinePanel api={api} />
         </div>
       </aside>
     </div>,

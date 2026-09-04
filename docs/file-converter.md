@@ -14,6 +14,9 @@ src/shared/converter.ts        pure types + the declarative CONVERTER_CATALOG (e
 src/core/converter/
   detect.ts                    bounded byte-signature + content sniffing (never reads more than
                                 CONVERTER_SNIFF_BYTES = 64 KiB of a file)
+  advanced-pipelines.ts        bounded image, ZIP, PDF, OCR and JSON Lines pipelines; verified
+                                argv runner for optional bundled native tools
+  advanced-queue.ts             durable multi-output queue with pause/resume/cancel/retry
   structured-codec.ts          hand-rolled JSON/YAML/TOML/XML/CSV/TSV parse+serialize
   text-codec.ts                line-ending + text-encoding + Markdown→HTML adapters
   binary-codec.ts              base64/hex encode-decode + gzip/brotli (Node's own zlib)
@@ -94,7 +97,8 @@ failure rather than a button that silently does nothing.
 
 Everything else is listed **disabled**, with the exact missing dependency named in
 `unavailableReason` — the catalog never hides a format it can't yet convert. For this pass, the
-genuinely bundled adapters are the ones expressible in pure JS/Node with zero new dependencies:
+genuinely bundled adapters include the existing zero-new-dependency codecs plus the verified
+production `sharp` image codec and the in-process PDF and JSON Lines readers:
 
 - **Structured Data / Spreadsheets** — the full mesh among JSON, YAML, TOML, XML, CSV and TSV (30
   directed pairs), through hand-rolled parsers/serializers in `structured-codec.ts`. These are

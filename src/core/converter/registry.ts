@@ -4,6 +4,7 @@
 // catalog and the registry must never drift, or the UI would offer a conversion the engine can't run.
 
 import { CONVERTER_CATALOG, type ConverterKind } from '../../shared/converter'
+import { convertAdvancedBuffer, pdfInfoFromBuffer } from './advanced-pipelines'
 import {
   anyToBase64,
   anyToBrotli,
@@ -126,6 +127,13 @@ function withWarnings(
 
 function nonEmpty(output: Buffer): string | null {
   return output.length === 0 ? 'Produced empty output' : null
+}
+
+function advanced(id: string, options: Record<string, unknown> = {}): ConverterAdapter {
+  return {
+    convert: async (input) => convertAdvancedBuffer(id, input, options),
+    validate: (output) => output.length === 0 ? 'Produced empty output' : null
+  }
 }
 
 const REGISTRY: Record<string, ConverterAdapter> = {}

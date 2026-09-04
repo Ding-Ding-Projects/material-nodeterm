@@ -818,6 +818,7 @@ export const CONVERTER_CATALOG: ConverterAdapterDescriptor[] = [
   ...AUDIO_ROWS,
   ...VIDEO_ROWS,
   ...ARCHIVE_ROWS,
+  ...ADVANCED_ARCHIVE_AND_OCR_ROWS,
   ...buildStructuredMesh(),
   ...STRUCTURED_PIPELINE_ROWS,
   ...CODE_TEXT_ROWS,
