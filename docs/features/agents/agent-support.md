@@ -44,6 +44,10 @@ and a manually recoloured node is never rewritten. Claude and Codex account list
 independently, so matching ids in the two lists cannot cross-colour nodes. nodeterm never handles
 or stores your credentials itself; the agent CLI's own login flow does, scoped to that directory.
 
+When several local Claude accounts are configured, the optional [Claude account rotation](./claude-account-rotation.md)
+policy can choose the best headroom for a **new** default session after the selected account reaches
+its usage threshold. Explicit account choices stay pinned and live sessions are never interrupted.
+
 **Context links** let two agent-capable nodes read each other's conversation transcript on
 demand by drawing a connection between them on the canvas. Reading remains pull-based, while an
 authenticated linked agent may send the fixed `notify --node <id>` inbox-check signal when shared

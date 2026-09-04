@@ -2191,6 +2191,21 @@ export interface ClaudeAccount {
   createdAt: number
 }
 
+/**
+ * Automatic account selection for NEW Claude nodes. The policy never changes an existing node or
+ * a live CLI process. `hysteresisPercent` keeps a high account from being selected again until it
+ * has recovered below the lower boundary, while `cooldownMinutes` prevents rapid launch churn.
+ */
+export interface ClaudeAccountRotationSettings {
+  enabled: boolean
+  /** Rotate when the selected account's most urgent usage limit reaches this percentage. */
+  thresholdPercent: number
+  /** Re-arm a source after it falls this many points below the threshold. */
+  hysteresisPercent: number
+  /** Minimum time between rotations from the same source account. */
+  cooldownMinutes: number
+}
+
 /** A managed Codex/ChatGPT login with its own CODEX_HOME and one shared app-server. */
 export interface CodexAccount {
   id: string
@@ -3066,6 +3081,12 @@ export const DEFAULT_SETTINGS: Settings = {
   modelGateway: { baseUrl: '', apiKey: '' },
   agentLaunchCommands: {},
   claudeAccounts: [],
+  claudeAccountRotation: {
+    enabled: false,
+    thresholdPercent: 90,
+    hysteresisPercent: 5,
+    cooldownMinutes: 30
+  },
   codexAccounts: [],
   systemAccountLabel: '',
   systemCodexAccountLabel: '',

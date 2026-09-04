@@ -405,6 +405,10 @@ import {
 } from '../lib/keybindingOverrides'
 import { UsageIndicator } from '../components/UsageIndicator'
 import { SystemResourcePill } from '../components/SystemResourcePill'
+import {
+  normalizeClaudeAccountRotation,
+  resolveClaudeAccountForLaunch
+} from '../lib/claudeAccountRotation'
 import { ServerDeploymentPill } from '../components/ServerDeploymentPill'
 import { MinecraftConnectBanner } from '../components/MinecraftConnectBanner'
 import { PresenceLayer } from '../components/PresenceLayer'
@@ -5863,10 +5867,10 @@ export function Canvas() {
   /** Open a Claude node seeded with a commit-explanation prompt, rooted in the panel's scope so
    *  the `git show` it is told to run inspects the checkout the commit was read from. */
   const explainCommit = useCallback(
-    (prompt: string, scopeCwd?: string) => {
+    async (prompt: string, scopeCwd?: string): Promise<void> => {
       const project = useProjects.getState().getProject(activeProjectId)
       const cwd = scmCwd(scopeCwd)
-      const account = resolveNewNodeAccount(
+      const selectedAccount = resolveNewNodeAccount(
         undefined,
         project,
         useSettings.getState().settings.claudeAccounts
@@ -6659,7 +6663,7 @@ export function Canvas() {
   )
 
   const openAgentAtExplorerFolder = useCallback(
-    (drop: { nodeId: string; projectId: string; path: string }): void => {
+    async (drop: { nodeId: string; projectId: string; path: string }): Promise<void> => {
       const projects = useProjects.getState()
       if (projects.activeProjectId !== drop.projectId) {
         notify({
@@ -6687,10 +6691,44 @@ export function Canvas() {
 
       const launchPlan = activeAgentLaunchPlan('explorer-drop-agent', agentId)
       const settings = useSettings.getState().settings
-      const accountId =
+      let accountId =
         agentId === 'claude'
           ? resolveNewNodeAccount(undefined, project, settings.claudeAccounts)
           : undefined
+      if (agentId === 'claude') {
+        const decision = await resolveClaudeAccountForLaunch({
+          selectedAccountId: accountId,
+          projectDefaultAccountId: project.defaultAccountId,
+          accounts: settings.claudeAccounts,
+          systemLabel: settings.systemAccountLabel,
+          projectId: project.id,
+          projectIsRemote: !!project.ssh,
+          settings: normalizeClaudeAccountRotation(settings.claudeAccountRotation),
+          fetchUsage: (id) => window.nodeTerminal.usage.fetch(id)
+        })
+        accountId = decision.accountId
+        if (decision.reason === 'rotated') {
+          notify({
+            kind: 'info',
+            title: 'Claude account rotated for this new session',
+            body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`
+          })
+        } else if (decision.reason === 'no-alternative') {
+          notify({
+            kind: 'warning',
+            title: 'No lower-usage Claude account is available',
+            body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`
+          })
+        }
+      }
+      if (useProjects.getState().activeProjectId !== drop.projectId) {
+        notify({
+          kind: 'warning',
+          title: 'Agent drop cancelled',
+          body: 'The active project changed while account usage was being checked. No node was created.'
+        })
+        return
+      }
       setNodes((current) => {
         const liveSource = current.find((node) => node.id === drop.nodeId)
         if (!liveSource || createdAgentId(liveSource.data) !== agentId) return current
@@ -13024,7 +13062,7 @@ export function Canvas() {
   // NOT through the board's pruned commit path: the fresh node isn't in the derived session
   // list until the next render, and a pruned commit would strip the assignment right back off.
   const createNodeInColumn = useCallback(
-    (choice: KanbanCreateChoice, columnId: string | null) => {
+    async (choice: KanbanCreateChoice, columnId: string | null): Promise<void> => {
       const project = useProjects.getState().getProject(activeProjectId)
       if (
         choice.kind === 'terminal' &&
@@ -14719,7 +14757,7 @@ export function Canvas() {
               })
               return
             }
-            const account =
+            let account =
               agentId === 'codex'
                 ? args.account
                   ? requestedAccount
@@ -14729,6 +14767,37 @@ export function Canvas() {
                     project,
                     settings.claudeAccounts
                   )
+            if (agentId === 'claude' && !args.resume) {
+              const decision = await resolveClaudeAccountForLaunch({
+                explicitAccountId: src.data.accountId as string | undefined,
+                selectedAccountId: resolveNewNodeAccount(
+                  src.data.accountId as string | undefined,
+                  project,
+                  settings.claudeAccounts
+                ),
+                projectDefaultAccountId: project?.defaultAccountId,
+                accounts: settings.claudeAccounts,
+                systemLabel: settings.systemAccountLabel,
+                projectId: project?.id,
+                projectIsRemote: !!project?.ssh,
+                settings: normalizeClaudeAccountRotation(settings.claudeAccountRotation),
+                fetchUsage: (id) => window.nodeTerminal.usage.fetch(id)
+              })
+              account = decision.accountId
+              if (decision.reason === 'rotated') {
+                notify({
+                  kind: 'info',
+                  title: 'Claude account rotated for this new session',
+                  body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`
+                })
+              } else if (decision.reason === 'no-alternative') {
+                notify({
+                  kind: 'warning',
+                  title: 'No lower-usage Claude account is available',
+                  body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`
+                })
+              }
+            }
             const after = resolveAfter()
             if (after === null) return // bad --after, already replied
             const requestedCwd = args.cwd || groupCwd || srcCwd
@@ -17807,6 +17876,7 @@ export function Canvas() {
     // docs/command-palette.md. ----
     const s = useSettings.getState().settings
     const update = useSettings.getState().update
+    const rotation = normalizeClaudeAccountRotation(s.claudeAccountRotation)
     cmds.push(
       {
         id: 'open-settings',
@@ -17850,6 +17920,48 @@ export function Canvas() {
             }
           ]
         : []),
+      {
+        id: 'setting-claude-account-rotation',
+        label: 'Automatic Claude account rotation',
+        section: 'Settings',
+        icon: <IconGear />,
+        control: {
+          type: 'toggle',
+          checked: rotation.enabled,
+          ariaLabel: 'Automatic Claude account rotation',
+          onToggle: (v) => update({ claudeAccountRotation: { ...rotation, enabled: v } })
+        },
+        run: () => update({ claudeAccountRotation: { ...rotation, enabled: !rotation.enabled } }),
+        onSecondary: () => openSettingsTo('usage', 'Automatic Claude account rotation'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
+        id: 'setting-claude-account-rotation-threshold',
+        label: 'Claude rotation usage threshold',
+        section: 'Settings',
+        icon: <IconGear />,
+        run: () => openSettingsTo('usage', 'Rotate at usage'),
+        onSecondary: () => openSettingsTo('usage', 'Rotate at usage'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
+        id: 'setting-claude-account-rotation-recovery',
+        label: 'Claude rotation recovery margin',
+        section: 'Settings',
+        icon: <IconGear />,
+        run: () => openSettingsTo('usage', 'Recovery margin'),
+        onSecondary: () => openSettingsTo('usage', 'Recovery margin'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
+        id: 'setting-claude-account-rotation-cooldown',
+        label: 'Claude rotation cooldown',
+        section: 'Settings',
+        icon: <IconGear />,
+        run: () => openSettingsTo('usage', 'Rotation cooldown'),
+        onSecondary: () => openSettingsTo('usage', 'Rotation cooldown'),
+        secondaryLabel: 'Open in Settings'
+      },
       {
         id: 'setting-notify-done',
         label: 'Notify when a turn finishes in the background',
