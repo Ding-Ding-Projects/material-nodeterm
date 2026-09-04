@@ -266,6 +266,9 @@ export interface NodeData {
   /** Browser-only: which of the project's browserProfiles this node's webview session uses.
    *  Undefined = the app's default (unpartitioned) session — see @shared/browser-profiles. */
   browserProfileId?: string
+  /** Browser Portal safe intent only. Local profile metadata stays in browser storage. */
+  browserPortalPresetId?: string
+  browserPortalUrl?: string
   /** Browser-only: the node's open tabs (git-shared project content — see `CanvasNodeState`). */
   browserTabs?: BrowserTab[]
   /** Browser-only: which `browserTabs[].id` is currently shown. Undefined = the first tab. */
@@ -1538,6 +1541,27 @@ export function createKioskNode(
       ...(safeUrl ? { url: safeUrl } : {}),
       kioskMode: 'bounded',
       kioskProfileLabel: 'Private kiosk profile'
+    }
+  }
+}
+
+/** Creates a Browser Portal node with an isolated, node-owned local session. */
+export function createBrowserPortalNode(
+  index: number,
+  center?: { x: number; y: number }
+): CanvasNode {
+  return {
+    id: nextId('browser-portal'),
+    type: 'browser-portal',
+    position: placeAt(center, index, BROWSER_PORTAL_SIZE.width, BROWSER_PORTAL_SIZE.height),
+    width: BROWSER_PORTAL_SIZE.width,
+    height: BROWSER_PORTAL_SIZE.height,
+    style: { width: BROWSER_PORTAL_SIZE.width, height: BROWSER_PORTAL_SIZE.height },
+    data: {
+      title: 'Browser Portal',
+      color: '#64d2ff',
+      group: null,
+      browserPortalPresetId: 'blank'
     }
   }
 }
@@ -3392,6 +3416,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         fileMissing: n.fileMissing,
         url: n.url,
         browserProfileId: n.browserProfileId,
+        browserPortalPresetId: n.browserPortalPresetId,
+        browserPortalUrl: n.browserPortalUrl,
         browserTabs,
         browserActiveTabId,
         kioskPwaIntent: n.kioskPwaIntent,
@@ -3565,6 +3591,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         fileMissing: n.data.fileMissing,
         url: n.data.url,
         browserProfileId: n.data.browserProfileId,
+        browserPortalPresetId: n.data.browserPortalPresetId,
+        browserPortalUrl: n.data.browserPortalUrl,
         browserTabs: n.data.browserTabs,
         browserActiveTabId: n.data.browserActiveTabId,
         kioskPwaIntent: n.data.kioskPwaIntent,

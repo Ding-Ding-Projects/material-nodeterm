@@ -450,6 +450,9 @@ are recorded below. Do not treat the source candidate as a published release.
 - [ ] **#367** — Codex workspace sandbox blocks the local context-link and canvas-control shims.
 - [ ] **#128** — New project blocks existing ones.
 - [ ] **#313** — Limited account management while using the browser (Server Edition).
+- [ ] **#63 / Program 52** — Browser Portal with isolated local profiles and safe HTTP(S) lifecycle.
+      Implementation is present; ultra-speed delivery intentionally leaves tests, builds, packaging,
+      runtime interaction, accessibility, security review, and captures pending.
 - [ ] Known guard weaknesses recorded in `HANDOFF.md`, not yet fixed in this pass:
   - `check-site-contract.mjs:252`'s `voiceschanged` needle points at a comment, not the real
     subscription (`site/app/main.js:440`).

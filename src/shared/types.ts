@@ -885,6 +885,10 @@ export interface CanvasNodeState {
    * onto the new partition when it changes.
    */
   browserProfileId?: string
+  /** browser-portal-only: safe display intent; local profile metadata and session storage never
+   * enter the shared project file. */
+  browserPortalPresetId?: string
+  browserPortalUrl?: string
   /**
    * browser-only: the node's open tabs. Project content (git-shared) — a tab's URL/title are not
    * secrets; cookies/localStorage stay in the Electron partition (`browserProfileId`) and are

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { searchOrUrl } from './browserUrl'
+import { normalizeAddress, searchOrUrl } from './browserUrl'
 import { BrowserStartPage } from './BrowserStartPage'
 import { useBrowserHistory } from '../state/browserHistory'
 import { useDiscardWhenHidden, webviewAudible } from './useDiscardWhenHidden'
@@ -106,12 +106,15 @@ export function BrowserSurface({
     const onStart = (): void => {
       loadingRef.current = true
       setLoading(true)
+      failedRef.current = false
+      onLifecycleChange?.('loading')
     }
     const onStop = (): void => {
       loadingRef.current = false
       setLoading(false)
       setCanBack(wv.canGoBack())
       setCanFwd(wv.canGoForward())
+      onLifecycleChange?.(failedRef.current ? 'error' : 'ready')
     }
     const onNav = (e: Event): void => {
       const u = (e as unknown as { url: string }).url
@@ -137,6 +140,7 @@ export function BrowserSurface({
       setAddress(safeUrl)
       locationRef.current = safeUrl
       setFailed('')
+      failedRef.current = false
       if (echo) return
       // A genuine navigation re-opens the title gate below: the first title of the NEW page always
       // records, however it compares to the old page's.
@@ -144,6 +148,15 @@ export function BrowserSurface({
       onUrlChange(safeUrl)
       lastUrlRef.current = safeUrl
       useBrowserHistory.getState().record(safeUrl, safeUrl)
+    }
+    const onWillNavigate = (e: Event): void => {
+      if (!strictHttpUrl) return
+      const candidate = (e as unknown as { url?: string }).url ?? ''
+      if (validateBrowserPortalUrl(candidate)) return
+      e.preventDefault()
+      setFailed('Navigation was blocked because Browser Portal accepts only HTTP(S) URLs.')
+      failedRef.current = true
+      onLifecycleChange?.('error')
     }
     const onNavInPage = (e: Event): void => {
       const u = (e as unknown as { url: string }).url
@@ -179,6 +192,7 @@ export function BrowserSurface({
     wv.addEventListener('did-start-loading', onStart)
     wv.addEventListener('did-stop-loading', onStop)
     wv.addEventListener('did-navigate', onNav)
+    wv.addEventListener('will-navigate', onWillNavigate)
     wv.addEventListener('did-navigate-in-page', onNavInPage)
     wv.addEventListener('page-title-updated', onTitle)
     wv.addEventListener('did-fail-load', onFail)
@@ -186,6 +200,7 @@ export function BrowserSurface({
       wv.removeEventListener('did-start-loading', onStart)
       wv.removeEventListener('did-stop-loading', onStop)
       wv.removeEventListener('did-navigate', onNav)
+      wv.removeEventListener('will-navigate', onWillNavigate)
       wv.removeEventListener('did-navigate-in-page', onNavInPage)
       wv.removeEventListener('page-title-updated', onTitle)
       wv.removeEventListener('did-fail-load', onFail)
@@ -225,6 +240,7 @@ export function BrowserSurface({
     onDiscard: () => {
       setDiscarded(true)
       setSrc('')
+      onLifecycleChange?.('suspended')
       // A failure banner belongs to the page we just released; the restore re-navigates and will
       // raise its own if the load fails again.
       setFailed('')
@@ -239,6 +255,7 @@ export function BrowserSurface({
       restoringNavRef.current = back
       setSrc(back)
       setAddress(back)
+      onLifecycleChange?.('loading')
     }
   })
 
@@ -337,7 +354,7 @@ export function BrowserSurface({
             style={{ width: '100%', height: '100%' }}
           />
         )}
-        {!src && !discarded && (
+        {!src && !discarded && !strictHttpUrl && (
           <BrowserStartPage
             onNavigate={(u) => {
               // A navigation with an initiator: whatever it navigates to is not a restore echo.
