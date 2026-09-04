@@ -622,7 +622,9 @@ intentionally unchecked because this task publishes the plan only.
       paginators, waiters, input and output shapes, and input skeletons. Tests, builds, runtime
       interaction, and packaged verification remain unrun under issue #42's lane boundary.
 - [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,
-      skeleton, input, and output described by the installed CLI models.
+      skeleton, input, and output described by the installed CLI models. The documentation index
+      panel is implemented in `src/renderer/components/aws/AwsCliDocsIndexPanel.tsx`; typed
+      operation execution remains a later lane.
 - [ ] Add AWS identity, SSO, role, MFA, Resource Explorer, Cloud Control, S3, EC2, IAM, STS,
       Lambda, CloudWatch, Logs, CloudFormation, CDK, container, database, networking, and cost tools.
 - [ ] CDK manager source and AWS Shop mounting are implemented in issue #48, including folder
