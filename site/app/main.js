@@ -10,9 +10,18 @@ import { createStore, makeMatcher } from './core/store.js'
 import { withFocusPreserved } from './core/dom.js'
 import { render } from './core/render.js'
 import {
+  authoredPart,
+  cancelInputDialog,
+  factPart,
+  openSecretCheckDialog,
+  ownedText,
+  setInputDialogValue,
+  submitInputDialog,
+} from './core/input-dialog.js'
+import {
   applyTheme, toast, notify, log, save, undoEntry, removeHistoryEntries, toggleLock, unlockPanel,
   openMenu, closeMenu, menuDefs, openRx, closeRx, rxToggleMode, rxInsertToken, rxApply, rxPlain,
-  buildPaletteTargets, askConfirm, confirmCancel, confirmRun, askInput, inputCancel, inputRun, refreshCodes, copyToClipboard, download,
+  buildPaletteTargets, askConfirm, confirmCancel, confirmRun, refreshCodes, copyToClipboard, download,
   getRoom, allSettingsCards, registerListRoom, fmtWhen,
 } from './core/engine.js'
 import { registerFeatures } from './features/index.js'
@@ -20,6 +29,7 @@ import { handleVocabularyFileChange } from './features/vocabulary.js'
 import { SECTIONS, FEATURES, DOCS, COVERAGE, RX_TOKENS, DISHES } from './shared/data.js'
 import { DIM_SUM_TOAST_OWNERSHIP } from './features/dimsum.js'
 import { listVoices, findVoice } from './shared/narrator-state.js'
+import { shapeCopy } from './shared/i18n.js'
 import { createBulkList } from './shared/bulkList.js'
 import { VOCAB_MAX_FILE_BYTES } from './shared/vocabulary-state.js'
 
@@ -35,7 +45,7 @@ store.dataTables = { SECTIONS, FEATURES, DOCS, COVERAGE, RX_TOKENS, DISHES }
 function speak(text) {
   if (!store.state.narrate) return
   try {
-    const u = new SpeechSynthesisUtterance(String(text))
+    const u = new SpeechSynthesisUtterance(ownedText(store.state, text, shapeCopy))
     u.rate = 0.6 + store.state.rate * 0.2
     const v = findVoice(store.state.voice)
     if (v) u.voice = v
@@ -55,23 +65,26 @@ function enterDoor(id) {
   if (s.locks[key] && !s.unlocked[key]) {
     store.setState({ knock: id }, { persist: false })
     setTimeout(() => store.setState({ knock: null }, { persist: false }), 700)
-    const pass = window.prompt('This door is locked. What is its password?\n\n(Toy lock — a speed bump, not real safety.)')
-    if (pass === null) return
-    import('./shared/crypto.js').then(({ sha256Hex }) =>
-      sha256Hex(pass).then((h) => {
-        if (h === s.locks[key]) {
-          store.setState((st) => ({ unlocked: Object.assign({}, st.unlocked, { [key]: true }) }), { persist: false })
-          toastX('🔓', 'Click!', 'The door opened. It stays open for this visit.')
-          enterDoor(id)
-        } else {
-          toastX('❌', 'Not that one', 'Every door has its very own password.')
-        }
-      }),
-    )
+    openSecretCheckDialog(store, {
+      id: 'door-unlock-' + id,
+      kind: 'password',
+      maxLength: 256,
+      title: 'This door is locked',
+      body: 'Enter its password. This toy lock is a speed bump rather than real safety.',
+      label: 'Door password',
+      submitLabel: 'Open the door',
+      expectedHash: () => store.state.locks[key],
+      onAccepted: () => {
+        store.setState((st) => ({ unlocked: Object.assign({}, st.unlocked, { [key]: true }) }), { persist: false })
+        toastX('🔓', 'Click!', 'The door opened. It stays open for this visit.')
+        enterDoor(id)
+      },
+      onRejected: () => toastX('❌', 'Not that one', 'Every door has its very own password.'),
+    })
     return
   }
   store.setState({ opening: id }, { persist: false })
-  speak('Opening the ' + id + ' room')
+  speak([authoredPart('Opening the '), factPart(id), authoredPart(' room')])
   setTimeout(() => store.setState({ view: 'room', sec: id, opening: null, qSec: '', picked: {} }, { persist: false }), 620)
 }
 function goRoom(id) {
@@ -83,7 +96,9 @@ function leaveRoom() {
 }
 function toggleTheme() {
   const t = store.state.theme === 'night' ? 'day' : 'night'
-  save(store, { theme: t }, 'Switched to ' + t + ' colours')
+  save(store, { theme: t }, 'Switched to ' + t + ' colours', {
+    titleParts: [authoredPart('Switched to '), factPart(t), authoredPart(' colours')],
+  })
   applyTheme(store.state)
   toastX(t === 'night' ? '🌙' : '☀️', t === 'night' ? 'Night time' : 'Day time', 'The whole playground changed colour.')
 }
@@ -103,7 +118,9 @@ function removeRows(ids) {
   const room = getRoom(store.state.sec)
   if (room && room.kind === 'list' && typeof room.remove === 'function') {
     room.remove(store, ids)
-    toastX('🗑', 'Done', ids.length + ' thing(s) removed.')
+    toastX('🗑', 'Done', ids.length + ' thing(s) removed.', '', {
+      bodyParts: [factPart(ids.length), authoredPart(' thing(s) removed.')],
+    })
   } else {
     store.setState({ picked: {} }, { persist: false })
     toastX('🙂', 'Nothing to remove', 'This list is built into the page, so it stays exactly where it is.')
@@ -127,7 +144,7 @@ function wipe() {
   )
   store.persist()
   applyTheme(store.state)
-  toastX('🧼', 'All clear', 'Everything is back to how it started.')
+  toastX('🧹', 'All clear', 'Everything is back to how it started.')
 }
 
 const deps = { enterDoor, goRoom, toggleTheme, copy: (t) => copyToClipboard(store, t), speak, togglePick, removeRows, wipe, sections: SECTIONS, features: FEATURES, docs: DOCS, coverage: COVERAGE }
@@ -188,7 +205,7 @@ root.addEventListener('click', (e) => {
       leaveRoom()
       return
     case 'lock-room':
-      toggleLock(store, 'room:' + store.state.sec, window.prompt.bind(window))
+      toggleLock(store, 'room:' + store.state.sec)
       return
     case 'reset-all':
       askConfirm(store, 'Start completely fresh?', 'This clears every setting, message, log entry, saved code and toy lock this page put in your browser. It cannot be undone.', 'fresh', wipe)
@@ -214,7 +231,10 @@ root.addEventListener('click', (e) => {
       }
       const room = getRoom(store.state.sec)
       const removeWarning = room?.removeWarning || 'This removal is permanent and cannot be put back.'
-      askConfirm(store, 'Throw ' + pickedIds.length + ' thing(s) away?', 'Here is exactly what will go. Nothing happens until you type the word. ' + removeWarning, 'bye', () => removeRows(pickedIds))
+      askConfirm(store, 'Throw ' + pickedIds.length + ' thing(s) away?', 'Here is exactly what will go. Nothing happens until you type the word. ' + removeWarning, 'bye', () => removeRows(pickedIds), {
+        titleParts: [authoredPart('Throw '), factPart(pickedIds.length), authoredPart(' thing(s) away?')],
+        bodyParts: [authoredPart('Here is exactly what will go. Nothing happens until you type the word. '), authoredPart(removeWarning)],
+      })
       return
     }
     case 'panel-action': {
@@ -271,17 +291,17 @@ root.addEventListener('click', (e) => {
     case 'confirm-run':
       confirmRun(store)
       return
-    case 'input-cancel':
-      if (e.target === el) inputCancel(store)
+    case 'input-dialog-cancel':
+      cancelInputDialog(store)
       return
-    case 'input-run':
-      inputRun(store)
+    case 'input-dialog-submit':
+      void submitInputDialog(store)
       return
     case 'dismiss-toast':
       store.setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }), { persist: false })
       return
     case 'toggle-lock':
-      toggleLock(store, id, window.prompt.bind(window))
+      toggleLock(store, id)
       return
     case 'unlock-panel':
       unlockPanel(store, id)
@@ -319,12 +339,23 @@ root.addEventListener('contextmenu', (e) => {
       /* keep as string */
     }
   }
-  openMenu(store, e.clientX, e.clientY, el.dataset.menuKind, el.dataset.menuLabel, extra || null)
+  let labelParts
+  if (el.dataset.menuLabelParts) {
+    try {
+      labelParts = JSON.parse(el.dataset.menuLabelParts)
+    } catch (_err) {
+      labelParts = undefined
+    }
+  }
+  if (!labelParts) labelParts = [factPart(el.dataset.menuLabel || '')]
+  openMenu(store, e.clientX, e.clientY, el.dataset.menuKind, el.dataset.menuLabel, extra || null, labelParts)
 })
 
 root.addEventListener('input', (e) => {
   const t = e.target
-  if (t.dataset && t.dataset.bindRx) {
+  if (t.dataset && t.dataset.bindInputDialog) {
+    setInputDialogValue(store, t.value)
+  } else if (t.dataset && t.dataset.bindRx) {
     const key = store.state.rxTarget ? store.state.rxTarget.key : 'global'
     const field = t.dataset.bindRx === 'pattern' ? 'rxPat' : 'rxFlags'
     const cap = t.dataset.bindRx === 'pattern' ? 200 : 6
@@ -360,9 +391,9 @@ root.addEventListener('keydown', (e) => {
     const first = (store.paletteItemsCache || []).filter((p) => makeMatcher(store.state, 'palette', store.state.paletteQuery)(p.label + ' ' + p.hint))[0]
     if (first) first.run()
   }
-  if (e.key === 'Enter' && e.target.dataset && e.target.dataset.bind === 'inputDialogValue' && !store.state.inputDialog?.multiline) {
+  if (e.key === 'Enter' && e.target.dataset && e.target.dataset.bindInputDialog && store.state.inputDialog?.kind !== 'json') {
     e.preventDefault()
-    inputRun(store)
+    void submitInputDialog(store)
   }
 })
 
@@ -371,7 +402,10 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault()
     store.setState({ paletteOpen: true, paletteQuery: '' }, { persist: false })
   }
-  if (e.key === 'Escape') store.setState({ paletteOpen: false, menuOpen: false, rxOpen: false }, { persist: false })
+  if (e.key === 'Escape') {
+    if (store.state.inputDialog) cancelInputDialog(store)
+    else store.setState({ paletteOpen: false, menuOpen: false, rxOpen: false }, { persist: false })
+  }
 })
 
 // ---------------------------------------------------------------------
@@ -389,11 +423,11 @@ export function registerBinding(name, fn) {
 }
 function runFeatureAction(name, id, el) {
   const fn = featureActions.get(name)
-  if (fn) fn(store, id, el, { toast: toastX, notify: (t, b, tag, ownership) => notify(store, t, b, tag, ownership), save: (p, n) => save(store, p, n), speak, applyTheme: () => applyTheme(store.state), askConfirm: (t, b, w, r) => askConfirm(store, t, b, w, r), askInput: (options, run) => askInput(store, options, run) })
+  if (fn) fn(store, id, el, { toast: toastX, notify: (t, b, tag, ownership) => notify(store, t, b, tag, ownership), save: (p, n, ownership) => save(store, p, n, ownership), speak, applyTheme: () => applyTheme(store.state), askConfirm: (t, b, w, r, ownership) => askConfirm(store, t, b, w, r, ownership) })
 }
 function runFeatureBind(name, id, value) {
   const fn = featureBindings.get(name)
-  if (fn) fn(store, id, value, { save: (p, n) => save(store, p, n), applyTheme: () => applyTheme(store.state) })
+  if (fn) fn(store, id, value, { save: (p, n, ownership) => save(store, p, n, ownership), applyTheme: () => applyTheme(store.state) })
 }
 
 // Feature modules import { registerAction, registerBinding } from this
@@ -411,7 +445,7 @@ function registerCoreRooms() {
   // app/core/engine.js#notify/#log. Both rooms are still registered
   // through the same list-room contract every feature room uses.
   registerListRoom('notes', {
-    getRows: (s) => s.notes.map((n) => ({ id: n.id, title: n.title, body: n.body, titleKind: n.titleKind || 'authored', bodyKind: n.bodyKind || 'authored', tag: n.tag, meta: fmtWhen(n.when), right: '' })),
+    getRows: (s) => s.notes.map((n) => ({ id: n.id, title: n.title, body: n.body, titleKind: n.titleKind || 'authored', bodyKind: n.bodyKind || 'authored', titleParts: n.titleParts, bodyParts: n.bodyParts, tag: n.tag, meta: fmtWhen(n.when), right: '' })),
     emptyText: 'No messages. Lovely and quiet. 🌤',
     remove: (store2, ids) => {
       const set = new Set(ids)
@@ -423,7 +457,7 @@ function registerCoreRooms() {
     ],
   })
   registerListRoom('history', {
-    getRows: (s) => s.history.map((h) => ({ id: h.id, title: h.title, body: h.body, tag: h.tag, meta: fmtWhen(h.when), right: '', canUndo: !!h.undo })),
+    getRows: (s) => s.history.map((h) => ({ id: h.id, title: h.title, body: h.body, titleParts: h.titleParts, bodyParts: h.bodyParts, tag: h.tag, meta: fmtWhen(h.when), right: '', canUndo: !!h.undo })),
     emptyText: 'Nothing logged yet.',
     remove: (store2, ids) => {
       removeHistoryEntries(store2, ids)
@@ -437,7 +471,7 @@ function registerCoreRooms() {
 
 async function boot() {
   registerCoreRooms()
-  registerFeatures({ store, deps: { toast: toastX, notify: (t, b, tag, ownership) => notify(store, t, b, tag, ownership), save: (p, n) => save(store, p, n), speak, applyTheme: () => applyTheme(store.state), download: (n, t) => download(store, n, t), copy: (t) => copyToClipboard(store, t), askConfirm: (t, b, w, r) => askConfirm(store, t, b, w, r), refreshCodes: () => refreshCodes(store), log: (t, b) => log(store, t, b), undoEntry: (id) => undoEntry(store, id) }, registerAction, registerBinding })
+  registerFeatures({ store, deps: { toast: toastX, notify: (t, b, tag, ownership) => notify(store, t, b, tag, ownership), save: (p, n, ownership) => save(store, p, n, ownership), speak, applyTheme: () => applyTheme(store.state), download: (n, t) => download(store, n, t), copy: (t) => copyToClipboard(store, t), askConfirm: (t, b, w, r, ownership) => askConfirm(store, t, b, w, r, ownership), refreshCodes: () => refreshCodes(store), log: (t, b, ownership) => log(store, t, b, ownership), undoEntry: (id) => undoEntry(store, id) }, registerAction, registerBinding })
 
   applyTheme(store.state)
   store.state.dishIdx = Math.floor(Math.random() * DISHES.length)

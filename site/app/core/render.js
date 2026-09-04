@@ -12,6 +12,7 @@ import { getRoom, allSettingsCards, computeRx, fmtWhen } from './engine.js'
 import { SECTIONS, FEATURES, DOCS, COVERAGE, REPO_URL, REPO_RELEASES, UPSTREAM_URL, WINDOWS_SETUP_URL } from '../shared/data.js'
 import { shapeVoice, shapeTitle, shapeCopy, effLang } from '../shared/i18n.js'
 import { guardPanel } from '../shared/lockGate.js'
+import { inputDialogReady, normalizeOwnedParts, ownedText } from './input-dialog.js'
 
 function doorColor(i) {
   const colors = ['var(--red)', 'var(--orange)', 'var(--yellow)', 'var(--green)', 'var(--blue)', 'var(--purple)', 'var(--pink)']
@@ -27,6 +28,12 @@ function badgeFor(state, id) {
 }
 function copy(state, text) { return esc(shapeCopy(state, text)) }
 function copyAttr(state, text) { return attr(shapeCopy(state, text)) }
+function ownedCopy(state, parts, fallback = '', defaultKind = 'authored') {
+  return esc(ownedText(state, parts ?? fallback, shapeCopy, defaultKind))
+}
+function rawOwnedText(parts, fallback = '', defaultKind = 'authored') {
+  return ownedText({}, parts ?? fallback, (_state, text) => text, defaultKind)
+}
 // Provider, command, brand, legal and version facts deliberately bypass the personal
 // vocabulary mapper. Keeping this boundary named in the template makes it reviewable and
 // prevents a future convenience refactor from translating a value that must remain exact.
@@ -309,10 +316,18 @@ function renderHomeRoom(store) {
 
 function rowItem(state, row) {
   const picked = !!state.picked[row.id]
-  const title = row.titleKind === 'fact' ? fact(row.title) : row.titleKind === 'authored' ? copy(state, row.title) : esc(row.title)
-  const body = row.bodyKind === 'fact' ? fact(row.body) : row.bodyKind === 'authored' ? copy(state, row.body) : esc(row.body)
-  const name = row.title + (picked ? ', picked' : '') + (row.tag ? ', ' + row.tag : '') + (row.body ? '. ' + row.body : '')
-  const btn = `<button type="button" class="row-item" aria-pressed="${picked}" aria-label="${factAttr(name)}" data-action="toggle-pick" data-id="${factAttr(row.id)}" data-menu-kind="row" data-menu-label="${factAttr(row.title)}" data-menu-extra='${factAttr(JSON.stringify({ id: row.id, title: row.title, body: row.body, url: row.url || '', canUndo: !!row.canUndo }))}'>
+  const titleKind = row.titleKind === 'fact' ? 'fact' : 'authored'
+  const bodyKind = row.bodyKind === 'fact' ? 'fact' : 'authored'
+  const titleParts = normalizeOwnedParts(row.titleParts ?? row.title ?? '', titleKind)
+  const bodyParts = normalizeOwnedParts(row.bodyParts ?? row.body ?? '', bodyKind)
+  const title = ownedCopy(state, titleParts)
+  const body = ownedCopy(state, bodyParts)
+  const nameParts = titleParts
+    .concat(picked ? [{ kind: 'authored', text: ', picked' }] : [])
+    .concat(row.tag ? [{ kind: 'authored', text: ', ' }, { kind: 'fact', text: row.tag }] : [])
+    .concat(row.body ? [{ kind: 'authored', text: '. ' }] : [], row.body ? bodyParts : [])
+  const menuPayload = { id: row.id, title: row.title, body: row.body, titleKind, bodyKind, titleParts, bodyParts, url: row.url || '', canUndo: !!row.canUndo }
+  const btn = `<button type="button" class="row-item" aria-pressed="${picked}" aria-label="${factAttr(ownedText(state, nameParts, shapeCopy))}" data-action="toggle-pick" data-id="${factAttr(row.id)}" data-menu-kind="row" data-menu-label="${factAttr(rawOwnedText(titleParts))}" data-menu-label-parts="${factAttr(JSON.stringify(titleParts))}" data-menu-extra='${factAttr(JSON.stringify(menuPayload))}'>
     <span class="row-item__check ${picked ? 'is-picked' : ''}" aria-hidden="true">${picked ? '✔' : ''}</span>
     ${row.img ? `<img src="${attr(row.img)}" alt="" width="44" height="44" aria-hidden="true" style="flex:0 0 auto;border:3px solid var(--line);border-radius:12px;background:var(--paper2)" />` : ''}
     <span class="row-item__body" aria-hidden="true">
@@ -352,8 +367,8 @@ function renderListRoom(store, room) {
   const gm = makeMatcher(s, 'global', s.qGlobal)
   const sm = makeMatcher(s, 'sec', s.qSec)
   const searchable = (r) => {
-    const title = r.titleKind === 'authored' ? shapeCopy(s, r.title) : r.title
-    const body = r.bodyKind === 'authored' ? shapeCopy(s, r.body) : r.body
+    const title = ownedText(s, r.titleParts ?? r.title ?? '', shapeCopy, r.titleKind === 'fact' ? 'fact' : 'authored')
+    const body = ownedText(s, r.bodyParts ?? r.body ?? '', shapeCopy, r.bodyKind === 'fact' ? 'fact' : 'authored')
     return { title, body }
   }
   const rows = rawRows.filter((r) => {
@@ -398,7 +413,7 @@ function renderListRoom(store, room) {
 function ctlHtml(cardId, ctl, state) {
   const label = `<label>${copy(state, ctl.label)}</label>`
   if (ctl.isSelect) {
-    return `<div class="ctl-row">${label}<select data-bind-select="${attr(ctl.action)}" data-id="${attr(cardId)}" aria-label="${copyAttr(state, ctl.label)}">${(ctl.options || []).map((o) => `<option value="${attr(o.id)}" ${o.id === ctl.value ? 'selected' : ''}>${copy(state, o.label)}</option>`).join('')}</select></div>`
+    return `<div class="ctl-row">${label}<select data-bind-select="${attr(ctl.action)}" data-id="${attr(cardId)}" aria-label="${copyAttr(state, ctl.label)}">${(ctl.options || []).map((o) => `<option value="${attr(o.id)}" ${o.id === ctl.value ? 'selected' : ''}>${ownedCopy(state, o.labelParts, o.label, o.labelKind === 'fact' ? 'fact' : 'authored')}</option>`).join('')}</select></div>`
   }
   if (ctl.isRange) {
     const bind = ctl.commitOnChange ? 'data-bind-range-change' : 'data-bind-range'
@@ -464,17 +479,17 @@ function renderMenu(store) {
   const s = store.state
   if (!s.menuOpen) return ''
   const mm = makeMatcher(s, 'menu', s.menuQuery)
-  const items = (store.menuItemsCache || []).filter((m) => mm(shapeCopy(s, m.label) + ' ' + shapeCopy(s, m.hint || '')))
+  const items = (store.menuItemsCache || []).filter((m) => mm(ownedText(s, m.labelParts ?? m.label, shapeCopy) + ' ' + ownedText(s, m.hintParts ?? (m.hint || ''), shapeCopy)))
   return `<div class="menu-scrim" data-action="close-menu"></div>
   <div class="menu-panel" role="menu" style="left:${s.menuX}px;top:${s.menuY}px;max-height:calc(100dvh - ${s.menuY}px - 8px)" data-stop-menu-close="1">
-    <div class="menu-panel__title">${copy(s, 'Menu for ')}${s.menuLabel ? esc(s.menuLabel) : copy(s, 'this')}</div>
+    <div class="menu-panel__title">${copy(s, 'Menu for ')}${s.menuLabel ? ownedCopy(s, s.menuLabelParts, s.menuLabel) : copy(s, 'this')}</div>
     <div class="menu-panel__search">
       <span aria-hidden="true" style="padding:0 4px 0 10px">🔍</span>
       <input data-bind="menuQuery" data-focus-id="menuQuery" value="${attr(s.menuQuery)}" placeholder="${copyAttr(s, 'Filter this menu…')}" aria-label="${copyAttr(s, 'Filter this right-click menu')}" />
       <button type="button" class="rx-btn ${s.rxOn.menu ? 'is-on' : ''}" style="height:34px" data-action="open-rx" data-id="menu" data-arg="this menu filter" title="${copyAttr(s, 'Regex builder for this menu filter')}" aria-label="${copyAttr(s, 'Regex builder for this menu filter')}">.*</button>
     </div>
     <div class="menu-panel__list">
-      ${items.length ? items.map((m, i) => `<button type="button" role="menuitem" class="menu-item" data-action="run-menu-item" data-id="${i}"><span class="menu-item__icon" aria-hidden="true">${m.icon}</span><span class="menu-item__label">${copy(s, m.label)}</span><span class="menu-item__hint">${copy(s, m.hint || '')}</span></button>`).join('') : `<div style="padding:14px;text-align:center;color:var(--faint);font-size:12px">${copy(s, 'Nothing in this menu matches.')}</div>`}
+      ${items.length ? items.map((m, i) => `<button type="button" role="menuitem" class="menu-item" data-action="run-menu-item" data-id="${i}"><span class="menu-item__icon" aria-hidden="true">${m.icon}</span><span class="menu-item__label">${ownedCopy(s, m.labelParts, m.label)}</span><span class="menu-item__hint">${ownedCopy(s, m.hintParts, m.hint || '')}</span></button>`).join('') : `<div style="padding:14px;text-align:center;color:var(--faint);font-size:12px">${copy(s, 'Nothing in this menu matches.')}</div>`}
     </div>
   </div>`
 }
@@ -545,8 +560,8 @@ function renderConfirm(store) {
   const ready = s.confirmTyped.trim().toLowerCase() === s.confirm.word.toLowerCase()
   return `<div class="dialog-scrim is-center">
     <div class="confirm-dialog" role="alertdialog" aria-label="${copyAttr(s, 'Are you sure?')}" data-stop-menu-close="1">
-      <h3>🛑 ${esc(s.confirm.title)}</h3>
-      <p>${esc(s.confirm.body)}</p>
+      <h3>🛑 ${ownedCopy(s, s.confirm.titleParts, s.confirm.title)}</h3>
+      <p>${ownedCopy(s, s.confirm.bodyParts, s.confirm.body)}</p>
       <pre class="confirm-preview">${esc(store.confirmPreviewCache || '')}</pre>
       <label>${copy(s, 'Type')} <strong class="confirm-word">${esc(s.confirm.word)}</strong> ${copy(s, 'to unlock the button')}</label>
       <input data-bind="confirmTyped" data-focus-id="confirmTyped" value="${attr(s.confirmTyped)}" aria-label="${copyAttr(s, 'Confirmation word')}" />
@@ -560,19 +575,26 @@ function renderConfirm(store) {
 
 function renderInputDialog(store) {
   const s = store.state
-  const d = s.inputDialog
-  if (!d) return ''
-  const control = d.multiline
-    ? `<textarea data-bind="inputDialogValue" data-focus-id="inputDialogValue" aria-label="${copyAttr(s, d.message || 'Input')}" rows="7">${esc(s.inputDialogValue || '')}</textarea>`
-    : `<input type="${attr(d.type || 'text')}" data-bind="inputDialogValue" data-focus-id="inputDialogValue" value="${attr(s.inputDialogValue || '')}" aria-label="${copyAttr(s, d.message || 'Input')}" />`
-  return `<div class="dialog-scrim is-center" data-action="input-cancel">
-    <div class="confirm-dialog input-dialog" role="dialog" aria-modal="true" aria-label="${copyAttr(s, d.title)}" data-stop-menu-close="1">
-      <h3>✍️ ${copy(s, d.title)}</h3>
-      <p>${copy(s, d.message)}</p>
-      ${control}
+  const dialog = s.inputDialog
+  if (!dialog) return ''
+  const value = String(s.inputDialogValue ?? '').slice(0, dialog.maxLength)
+  const ready = inputDialogReady(s)
+  const inputId = 'site-input-' + dialog.id.replace(/[^A-Za-z0-9_-]/g, '-')
+  const descriptionId = inputId + '-description'
+  const common = `data-bind-input-dialog="1" data-focus-id="inputDialog" id="${factAttr(inputId)}" maxlength="${dialog.maxLength}" aria-label="${factAttr(ownedText(s, dialog.labelParts, shapeCopy))}" aria-describedby="${factAttr(descriptionId)}" placeholder="${factAttr(ownedText(s, dialog.placeholderParts, shapeCopy))}"`
+  const field = dialog.kind === 'json'
+    ? `<textarea class="rx-sample" ${common} spellcheck="false">${fact(value)}</textarea>`
+    : `<input ${common} type="${dialog.kind === 'password' || dialog.kind === 'pin' ? 'password' : 'text'}" value="${factAttr(value)}" ${dialog.kind === 'pin' ? 'inputmode="numeric" autocomplete="current-password"' : dialog.kind === 'password' ? 'autocomplete="current-password"' : 'autocomplete="off"'} />`
+  return `<div class="dialog-scrim is-center">
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="${factAttr(inputId)}-title" aria-describedby="${factAttr(descriptionId)}" data-stop-menu-close="1" style="max-width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto">
+      <h3 id="${factAttr(inputId)}-title">${ownedCopy(s, dialog.titleParts)}</h3>
+      <p id="${factAttr(descriptionId)}">${ownedCopy(s, dialog.bodyParts)}</p>
+      <label for="${factAttr(inputId)}">${ownedCopy(s, dialog.labelParts)}</label>
+      ${field}
+      ${dialog.kind === 'json' || dialog.kind === 'text' ? `<div class="list-meta" aria-live="polite">${fact(value.length)} / ${fact(dialog.maxLength)}</div>` : ''}
       <div class="confirm-actions">
-        <button type="button" class="btn-plain" data-action="input-cancel">${copy(s, 'Cancel')}</button>
-        <button type="button" class="confirm-run is-ready" data-action="input-run">${copy(s, 'Continue')}</button>
+        <button type="button" class="btn-plain" data-action="input-dialog-cancel">${ownedCopy(s, dialog.cancelParts)}</button>
+        <button type="button" class="confirm-run ${ready ? 'is-ready' : ''}" data-action="input-dialog-submit" aria-disabled="${!ready}">${ownedCopy(s, dialog.submitParts)}</button>
       </div>
     </div>
   </div>`
@@ -588,9 +610,9 @@ function renderToasts(store) {
       <div class="toast__row">
         <span class="toast__icon" aria-hidden="true">${t.icon}</span>
         <div style="flex:1;min-width:0">
-          <div class="toast__title">${t.titleKind === 'fact' ? fact(t.title) : copy(s, t.title)}</div>
-          <div class="toast__body">${t.bodyKind === 'fact' ? fact(t.body) : copy(s, t.body)}</div>
-          ${t.sub ? `<div class="toast__sub">${t.subKind === 'fact' ? fact(t.sub) : copy(s, t.sub)}</div>` : ''}
+          <div class="toast__title">${ownedCopy(s, t.titleParts, t.title, t.titleKind === 'fact' ? 'fact' : 'authored')}</div>
+          <div class="toast__body">${ownedCopy(s, t.bodyParts, t.body, t.bodyKind === 'fact' ? 'fact' : 'authored')}</div>
+          ${t.sub ? `<div class="toast__sub">${ownedCopy(s, t.subParts, t.sub, t.subKind === 'fact' ? 'fact' : 'authored')}</div>` : ''}
         </div>
         <button type="button" class="toast__close" data-action="dismiss-toast" data-id="${attr(t.id)}" aria-label="${copyAttr(s, 'Close this message')}">✕</button>
       </div>

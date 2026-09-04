@@ -8,17 +8,22 @@
 // uploaded anywhere.
 
 import { registerSettingsCard } from '../core/engine.js'
+import { authoredPart, factPart, openInputDialog } from '../core/input-dialog.js'
 import { SWATCHES, PRESETS } from '../shared/data.js'
 
 export function registerAppearance(store, deps, registerAction, registerBinding) {
   registerBinding('appearance-theme', (s, id, value, h) => {
-    h.save({ theme: value }, 'Theme set to ' + value)
+    h.save({ theme: value }, 'Theme set to ' + value, {
+      titleParts: [authoredPart('Theme set to '), factPart(value)],
+    })
     h.applyTheme()
   })
   registerBinding('appearance-preset', (s, id, value, h) => {
     const p = PRESETS[value]
     if (!p) return
-    h.save({ preset: value, accent: p.accent, theme: p.theme }, 'Look set to ' + p.name)
+    h.save({ preset: value, accent: p.accent, theme: p.theme }, 'Look set to ' + p.name, {
+      titleParts: [authoredPart('Look set to '), factPart(p.name)],
+    })
     h.applyTheme()
   })
   registerAction('appearance-big-text', (s, id, el, h) => {
@@ -82,17 +87,25 @@ function exportLook(store, h) {
   h.download('nodeterm-look.json', JSON.stringify(blob, null, 2))
 }
 function importLook(store, h) {
-  h.askInput(
-    { title: 'Load a saved look', message: 'Paste a look file here (the JSON you saved earlier).', multiline: true },
-    (txt) => {
+  openInputDialog(store, {
+    id: 'appearance-import',
+    kind: 'json',
+    maxLength: 65536,
+    title: 'Load a saved look',
+    body: 'Paste the JSON from a look file you saved earlier. It stays in this field only while the dialog is open.',
+    label: 'Look JSON',
+    submitLabel: 'Load this look',
+    placeholder: '{"theme":"day"}',
+    onSubmit: (txt) => {
       try {
         const v = JSON.parse(txt)
-        h.save({ theme: v.theme === 'night' ? 'night' : 'day', accent: typeof v.accent === 'string' ? v.accent : store.state.accent, bigText: !!v.bigText }, 'Imported a look')
+        const theme = v.theme === 'night' ? 'night' : 'day'
+        h.save({ theme, accent: typeof v.accent === 'string' ? v.accent : store.state.accent, bigText: !!v.bigText }, 'Imported a look')
         h.applyTheme()
         h.toast('🎨', 'Look loaded', 'Your saved colours are back.')
       } catch (_err) {
-        h.toast('❌', 'That file did not parse', 'Nothing was changed — your old look is still here.')
+        h.toast('❌', 'That file did not parse', 'Nothing was changed. Your old look is still here.')
       }
     },
-  )
+  })
 }

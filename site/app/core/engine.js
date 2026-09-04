@@ -15,6 +15,12 @@
 
 import { sha256Hex, totp, totpSecondsLeft } from '../shared/crypto.js'
 import { REPO_URL } from '../shared/data.js'
+import {
+  authoredPart,
+  factPart,
+  normalizeOwnedParts,
+  openInputDialog,
+} from './input-dialog.js'
 
 function nowIso() {
   return new Date().toISOString()
@@ -104,10 +110,13 @@ export function toast(store, icon, title, body, sub, speakFn, ownership = {}) {
   if (!['authored', 'fact'].includes(titleKind) || !['authored', 'fact'].includes(bodyKind) || !['authored', 'fact'].includes(subKind)) {
     throw new TypeError('Toast copy ownership must be authored or fact.')
   }
+  const titleParts = normalizeOwnedParts(ownership.titleParts ?? title, titleKind)
+  const bodyParts = normalizeOwnedParts(ownership.bodyParts ?? body, bodyKind)
+  const subParts = normalizeOwnedParts(ownership.subParts ?? (sub || ''), subKind)
   store.setState((s) => ({ toasts: s.state ? s.state.toasts : s.toasts }))
-  store.setState((s) => ({ toasts: (s.toasts || []).concat([{ id, icon, title, body, sub: sub || '', titleKind, bodyKind, subKind }]).slice(-3) }))
+  store.setState((s) => ({ toasts: (s.toasts || []).concat([{ id, icon, title, body, sub: sub || '', titleKind, bodyKind, subKind, titleParts, bodyParts, subParts }]).slice(-3) }))
   blip(store.state, icon === '❌' ? 'bad' : 'ok')
-  if (typeof speakFn === 'function') speakFn(title + '. ' + body)
+  if (typeof speakFn === 'function') speakFn(titleParts.concat([authoredPart('. ')], bodyParts))
   setTimeout(() => {
     store.setState((s) => ({ toasts: (s.toasts || []).filter((t) => t.id !== id) }), { persist: false })
   }, 7000)
@@ -121,21 +130,23 @@ export function notify(store, title, body, tag, ownership = {}) {
   if (!['authored', 'fact'].includes(titleKind) || !['authored', 'fact'].includes(bodyKind)) {
     throw new TypeError('Notification copy ownership must be authored or fact.')
   }
+  const titleParts = normalizeOwnedParts(ownership.titleParts ?? title, titleKind)
+  const bodyParts = normalizeOwnedParts(ownership.bodyParts ?? body, bodyKind)
   store.setState((s) => ({
-    notes: [{ id: 'n' + Date.now() + Math.random().toString(36).slice(2, 5), title, body, titleKind, bodyKind, when: nowIso(), tag: tag || 'note' }].concat(s.notes).slice(0, 200),
+    notes: [{ id: 'n' + Date.now() + Math.random().toString(36).slice(2, 5), title, body, titleKind, bodyKind, titleParts, bodyParts, when: nowIso(), tag: tag || 'note' }].concat(s.notes).slice(0, 200),
   }))
 }
 
 // ---------------------------------------------------------------------
 // Time machine (local history log)
 // ---------------------------------------------------------------------
-export function log(store, title, body) {
+export function log(store, title, body, ownership = {}) {
   store.setState((s) => ({
-    history: [historyEntry(title, body)].concat(s.history).slice(0, 300),
+    history: [historyEntry(title, body, undefined, ownership)].concat(s.history).slice(0, 300),
   }))
 }
 
-function historyEntry(title, body, undo) {
+function historyEntry(title, body, undo, ownership = {}) {
   const entry = {
     id: 'h' + Date.now() + Math.random().toString(36).slice(2, 6),
     title,
@@ -143,6 +154,8 @@ function historyEntry(title, body, undo) {
     when: nowIso(),
     tag: 'change',
   }
+  if (ownership.titleParts) entry.titleParts = normalizeOwnedParts(ownership.titleParts)
+  if (ownership.bodyParts) entry.bodyParts = normalizeOwnedParts(ownership.bodyParts)
   // Record-only events (an export or conversion) have no prior settings state and must not grow a
   // fake Undo action. Old persisted rows naturally take this branch too.
   if (undo && Object.keys(undo).length) entry.undo = undo
@@ -176,7 +189,7 @@ export function undoEntry(store, id) {
 }
 
 // A patch-and-log helper mirroring the design's `this.save(patch, note)`.
-export function save(store, patch, note) {
+export function save(store, patch, note, ownership = {}) {
   if (!note) {
     store.setState(patch)
     return
@@ -192,7 +205,7 @@ export function save(store, patch, note) {
   // Two separate setState calls can strand a changed setting without its undo row if storage
   // becomes unavailable between them.
   store.setState((s) => Object.assign({}, patch, {
-    history: [historyEntry(note, body, undo)].concat(s.history).slice(0, 300),
+    history: [historyEntry(note, body, undo, ownership)].concat(s.history).slice(0, 300),
   }))
 }
 
@@ -223,7 +236,7 @@ export function fmtWhen(iso) {
 // ---------------------------------------------------------------------
 // Toy locks (cross-cutting: every settings card and every hallway door)
 // ---------------------------------------------------------------------
-export async function toggleLock(store, id, promptFn) {
+export function toggleLock(store, id) {
   const s = store.state
   if (s.locks[id]) {
     const locks = Object.assign({}, s.locks)
@@ -232,12 +245,25 @@ export async function toggleLock(store, id, promptFn) {
     toast(store, '🔓', 'Lock removed', 'That box is open to everyone again.')
     return
   }
-  const pass = promptFn('Pick a password for this box.\n\nThis is a toy lock — a speed bump, not real safety. If you forget it, the only way back in is “Start fresh”, which wipes everything this page saved.')
-  if (!pass) return
-  const hash = await sha256Hex(pass)
-  save(store, { locks: Object.assign({}, s.locks, { [id]: hash }) }, 'Toy lock added to ' + id)
-  notify(store, 'A box was locked', 'You put a toy lock on “' + id + '”. Each lock has its very own password.', 'lock')
-  toast(store, '🔒', 'Locked', 'That box now asks for its own password.')
+  openInputDialog(store, {
+    id: 'toy-lock-' + id,
+    kind: 'password',
+    maxLength: 256,
+    title: 'Pick a password for this box',
+    body: 'This is a toy lock, a speed bump rather than real safety. If you forget it, the only way back in is Start fresh, which wipes everything this page saved.',
+    label: 'New toy-lock password',
+    submitLabel: 'Put the lock on',
+    onSubmit: async (pass) => {
+      const hash = await sha256Hex(pass)
+      save(store, { locks: Object.assign({}, store.state.locks, { [id]: hash }) }, 'Toy lock added to ' + id, {
+        titleParts: [authoredPart('Toy lock added to '), factPart(id)],
+      })
+      notify(store, 'A box was locked', 'You put a toy lock on “' + id + '”. Each lock has its very own password.', 'lock', {
+        bodyParts: [authoredPart('You put a toy lock on “'), factPart(id), authoredPart('”. Each lock has its very own password.')],
+      })
+      toast(store, '🔒', 'Locked', 'That box now asks for its own password.')
+    },
+  })
 }
 export async function unlockPanel(store, id) {
   const hash = await sha256Hex(store.state.unlockVals[id] || '')
@@ -252,7 +278,7 @@ export async function unlockPanel(store, id) {
 // ---------------------------------------------------------------------
 // Right-click menu
 // ---------------------------------------------------------------------
-export function openMenu(store, clientX, clientY, kind, label, extra) {
+export function openMenu(store, clientX, clientY, kind, label, extra, labelParts) {
   const w = window.innerWidth || 900
   const h = window.innerHeight || 700
   store.setState(
@@ -269,6 +295,7 @@ export function openMenu(store, clientX, clientY, kind, label, extra) {
       menuY: Math.max(8, Math.min(clientY, Math.max(8, h - 140))),
       menuKind: kind,
       menuLabel: label || '',
+      menuLabelParts: normalizeOwnedParts(labelParts ?? label ?? ''),
       menuQuery: '',
       menuExtra: extra === undefined ? null : extra,
     },
@@ -292,14 +319,14 @@ export function menuDefs(store, deps) {
   if (kind === 'search' || kind === 'header') {
     return [
       { icon: '🧩', label: 'Build a pattern for the big search', hint: '.*', run: () => openRx(store, 'global', 'the big search') },
-      { icon: '🧼', label: 'Clear the big search', hint: '', run: () => store.setState({ qGlobal: '', menuOpen: false }, { persist: false }) },
+      { icon: '🧹', label: 'Clear the big search', hint: '', run: () => store.setState({ qGlobal: '', menuOpen: false }, { persist: false }) },
       { icon: '🔤', label: s.rxOn.global ? 'Treat it as plain words again' : 'Treat what I typed as a pattern', hint: '', run: () => store.setState((st) => ({ rxOn: Object.assign({}, st.rxOn, { global: !st.rxOn.global }), menuOpen: false }), { persist: false }) },
       { icon: '📋', label: 'Copy what I searched for', hint: '', run: () => { deps.copy(s.qGlobal); closeMenu(store) } },
     ].concat(base)
   }
   if (kind === 'rail') {
     return [
-      { icon: '🧼', label: 'Clear the room filter', hint: '', run: () => store.setState({ qNav: '', menuOpen: false }, { persist: false }) },
+      { icon: '🧹', label: 'Clear the room filter', hint: '', run: () => store.setState({ qNav: '', menuOpen: false }, { persist: false }) },
       { icon: '🧩', label: 'Build a pattern for the room filter', hint: '.*', run: () => openRx(store, 'nav', 'the room finder') },
       { icon: '📚', label: 'Open the guide book', hint: '', run: () => deps.goRoom('docs') },
     ].concat(base)
@@ -313,15 +340,18 @@ export function menuDefs(store, deps) {
     ].concat(base)
   }
   if (kind === 'card') {
+    const targetParts = normalizeOwnedParts(s.menuLabelParts ?? s.menuLabel)
     return [
-      { icon: '📚', label: 'Read about “' + s.menuLabel + '”', hint: '', run: () => store.setState({ sec: 'docs', qSec: s.menuLabel, view: 'room', menuOpen: false }, { persist: false }) },
+      { icon: '📚', label: 'Read about “' + s.menuLabel + '”', labelParts: [authoredPart('Read about “')].concat(targetParts, [authoredPart('”')]), hint: '', run: () => store.setState({ sec: 'docs', qSec: s.menuLabel, view: 'room', menuOpen: false }, { persist: false }) },
       { icon: '📋', label: 'Copy this card', hint: '', run: () => { deps.copy(s.menuLabel); closeMenu(store) } },
       { icon: '🔎', label: 'Search for it', hint: '', run: () => store.setState({ qGlobal: s.menuLabel, menuOpen: false }, { persist: false }) },
-      { icon: '🔊', label: 'Read it out loud', hint: '', run: () => { store.setState({ menuOpen: false, narrate: true }); deps.speak(s.menuLabel) } },
+      { icon: '🔊', label: 'Read it out loud', hint: '', run: () => { store.setState({ menuOpen: false, narrate: true }); deps.speak(targetParts) } },
     ].concat(base)
   }
   if (kind === 'row') {
     const row = s.menuExtra || {}
+    const rowTitleParts = normalizeOwnedParts(row.titleParts ?? row.title ?? '', row.titleKind === 'fact' ? 'fact' : 'authored')
+    const rowBodyParts = normalizeOwnedParts(row.bodyParts ?? row.body ?? '', row.bodyKind === 'fact' ? 'fact' : 'authored')
     const extras = []
     if (row.url) extras.push({ icon: '🌐', label: 'Open this on GitHub', hint: 'new tab', run: () => { try { window.open(row.url, '_blank', 'noopener') } catch (_err) {} closeMenu(store) } })
     if (s.sec === 'history' && row.canUndo) extras.push({ icon: '↩️', label: 'Put this saved change back', hint: '', run: () => { closeMenu(store); undoEntry(store, row.id) } })
@@ -333,21 +363,22 @@ export function menuDefs(store, deps) {
       .concat([
         { icon: '✅', label: 'Pick or unpick this one', hint: '', run: () => { deps.togglePick(row.id); closeMenu(store) } },
         { icon: '📋', label: 'Copy it', hint: '', run: () => { deps.copy((row.title || '') + ' — ' + (row.body || '')); closeMenu(store) } },
-        { icon: '🗑', label: 'Throw this one away', hint: 'asks first', run: () => { closeMenu(store); askConfirm(store, 'Throw one away?', 'This removes “' + (row.title || '') + '” from the list. ' + removeWarning, 'bye', () => deps.removeRows([row.id])) } },
-        { icon: '🔊', label: 'Read it out loud', hint: '', run: () => { store.setState({ menuOpen: false, narrate: true }); deps.speak((row.title || '') + '. ' + (row.body || '')) } },
+        { icon: '🗑', label: 'Throw this one away', hint: 'asks first', run: () => { closeMenu(store); askConfirm(store, 'Throw one away?', 'This removes “' + (row.title || '') + '” from the list. ' + removeWarning, 'bye', () => deps.removeRows([row.id]), { bodyParts: [authoredPart('This removes “')].concat(rowTitleParts, [authoredPart('” from the list. '), authoredPart(removeWarning)]) }) } },
+        { icon: '🔊', label: 'Read it out loud', hint: '', run: () => { store.setState({ menuOpen: false, narrate: true }); deps.speak(rowTitleParts.concat([authoredPart('. ')], rowBodyParts)) } },
         { icon: '📦', label: 'Take this list home', hint: '', run: () => deps.goRoom('export') },
       ])
       .concat(base)
   }
   if (kind === 'setting') {
     return [
-      { icon: '🔒', label: s.locks[s.menuExtra] ? 'Take the toy lock off' : 'Put a toy lock on this box', hint: '', run: () => { closeMenu(store); toggleLock(store, s.menuExtra, window.prompt.bind(window)) } },
+      { icon: '🔒', label: s.locks[s.menuExtra] ? 'Take the toy lock off' : 'Put a toy lock on this box', hint: '', run: () => { closeMenu(store); toggleLock(store, s.menuExtra) } },
       { icon: '↩️', label: 'See my recent changes', hint: '', run: () => deps.goRoom('history') },
       { icon: '📦', label: 'Save my settings to a file', hint: '', run: () => deps.goRoom('export') },
     ].concat(base)
   }
   if (kind === 'stat') {
-    return [{ icon: '🔎', label: 'Search for “' + s.menuLabel + '”', hint: '', run: () => store.setState({ qGlobal: s.menuLabel, menuOpen: false }, { persist: false }) }].concat(base)
+    const targetParts = normalizeOwnedParts(s.menuLabelParts ?? s.menuLabel)
+    return [{ icon: '🔎', label: 'Search for “' + s.menuLabel + '”', labelParts: [authoredPart('Search for “')].concat(targetParts, [authoredPart('”')]), hint: '', run: () => store.setState({ qGlobal: s.menuLabel, menuOpen: false }, { persist: false }) }].concat(base)
   }
   const extraFromProviders = menuExtraProviders.flatMap((fn) => fn(store, kind, s.menuExtra) || [])
   return extraFromProviders.concat(base)
@@ -437,29 +468,18 @@ export function buildPaletteTargets(store, deps) {
 // ---------------------------------------------------------------------
 // Confirm gate (type-the-word)
 // ---------------------------------------------------------------------
-// Owned text entry surface for feature flows that need a user decision. Native prompt() is
-// deliberately not used: it blocks the page, has no app styling, and cannot expose the same
-// keyboard/focus/accessibility contract as the rest of the site.
-export function askInput(store, { title, message, initial = '', type = 'text', multiline = false, allowEmpty = false }, run) {
-  store.setState({ inputDialog: { title: String(title || ''), message: String(message || ''), type, multiline: !!multiline, allowEmpty: !!allowEmpty, run }, inputDialogValue: String(initial || '') }, { persist: false })
-}
-export function inputCancel(store) {
-  store.setState({ inputDialog: null, inputDialogValue: '' }, { persist: false })
-}
-export function inputRun(store) {
-  const dialog = store.state.inputDialog
-  if (!dialog) return
-  const value = String(store.state.inputDialogValue || '')
-  if (!dialog.allowEmpty && !value.trim()) {
-    toast(store, '✋', 'A value is needed', 'Enter something before continuing.')
-    return
-  }
-  store.setState({ inputDialog: null, inputDialogValue: '' }, { persist: false })
-  if (typeof dialog.run === 'function') dialog.run(value)
-}
-
-export function askConfirm(store, title, body, word, run) {
-  store.setState({ confirm: { title, body, word: String(word || 'yes').slice(0, 24), run }, confirmTyped: '' }, { persist: false })
+export function askConfirm(store, title, body, word, run, ownership = {}) {
+  store.setState({
+    confirm: {
+      title,
+      body,
+      titleParts: normalizeOwnedParts(ownership.titleParts ?? title, ownership.titleKind || 'authored'),
+      bodyParts: normalizeOwnedParts(ownership.bodyParts ?? body, ownership.bodyKind || 'authored'),
+      word: String(word || 'yes').slice(0, 24),
+      run,
+    },
+    confirmTyped: '',
+  }, { persist: false })
 }
 export function confirmCancel(store) {
   store.setState({ confirm: null, confirmTyped: '' }, { persist: false })
@@ -468,7 +488,9 @@ export function confirmRun(store) {
   const s = store.state
   if (!s.confirm) return
   if (s.confirmTyped.trim().toLowerCase() !== s.confirm.word.toLowerCase()) {
-    toast(store, '✋', 'Not yet', 'Type “' + s.confirm.word + '” exactly, then press it again.')
+    toast(store, '✋', 'Not yet', 'Type “' + s.confirm.word + '” exactly, then press it again.', '', undefined, {
+      bodyParts: [authoredPart('Type “'), factPart(s.confirm.word), authoredPart('” exactly, then press it again.')],
+    })
     return
   }
   const run = s.confirm.run
@@ -508,9 +530,15 @@ export function download(store, filename, text) {
     a.download = filename
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 2000)
-    toast(store, '📦', 'Saved', filename + ' went to your downloads.')
-    log(store, 'Exported ' + filename)
-    notify(store, 'A file was saved', filename + ' was written from data that never left this page.', 'export')
+    toast(store, '📦', 'Saved', filename + ' went to your downloads.', '', undefined, {
+      bodyParts: [factPart(filename), authoredPart(' went to your downloads.')],
+    })
+    log(store, 'Exported ' + filename, '', {
+      titleParts: [authoredPart('Exported '), factPart(filename)],
+    })
+    notify(store, 'A file was saved', filename + ' was written from data that never left this page.', 'export', {
+      bodyParts: [factPart(filename), authoredPart(' was written from data that never left this page.')],
+    })
   } catch (_err) {
     toast(store, '😕', 'Could not save', 'Your browser blocked the download.')
   }

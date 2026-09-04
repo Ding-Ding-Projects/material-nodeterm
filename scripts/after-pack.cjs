@@ -64,7 +64,14 @@ exports.default = async function applyResourcesAndVerifyPackaging(context) {
   if (!files.includes(torrentPackage) || !files.includes(torrentEntry)) {
     throw new Error('Packaged WebTorrent runtime is missing package.json or index.js')
   }
-  const packageJson = JSON.parse(asar.extractFile(archive, torrentPackage.slice(1)).toString('utf8'))
+  // The SAME separator trap the listPackage comment above describes, in the other direction, and
+  // it is why every Windows release run failed here while Linux stayed green: asar's own
+  // `searchNodeFromDirectory` does `p.split(path.sep)`, so a POSIX lookup path on Windows
+  // splits into ONE segment, matches no directory node, and reports the file as absent from an
+  // archive that contains it. Normalizing the listing is not enough -- the path handed BACK to
+  // asar has to carry host separators too.
+  const torrentPackageHostPath = torrentPackage.slice(1).split('/').join(path.sep)
+  const packageJson = JSON.parse(asar.extractFile(archive, torrentPackageHostPath).toString('utf8'))
   if (packageJson.version !== '2.8.1') {
     throw new Error(`Packaged WebTorrent runtime version ${String(packageJson.version)} does not match 2.8.1`)
   }

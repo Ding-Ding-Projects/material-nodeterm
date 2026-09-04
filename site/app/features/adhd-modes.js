@@ -16,6 +16,7 @@
 // this browser's own local storage — nothing is recorded, counted or sent anywhere.
 
 import { registerSettingsCard } from '../core/engine.js'
+import { openInputDialog } from '../core/input-dialog.js'
 
 /** Applied to <html> so the page's own stylesheet can respond. Mirrors the app's `data-adhd-*`. */
 function applyToDocument(state) {
@@ -55,10 +56,20 @@ export function registerAdhdModes(store, deps, registerAction, registerBinding) 
   }
 
   registerAction('adhd-one-thing', (s, id, el, h) => {
-    h.askInput(
-      { title: 'One thing at a time', message: 'What is the one thing right now?', initial: s.state.adhdOneThingText || '', multiline: true },
-      (text) => h.save({ adhdOneThingText: String(text).slice(0, 200) }, 'ADHD modes'),
-    )
+    openInputDialog(s, {
+      id: 'adhd-one-thing',
+      kind: 'text',
+      maxLength: 200,
+      allowEmpty: true,
+      title: 'One thing at a time',
+      body: 'Write the one next action you want to keep in view. This is your text, so the page keeps it exactly as entered.',
+      label: 'What is the one thing right now?',
+      submitLabel: 'Keep this in view',
+      initialValue: s.state.adhdOneThingText || '',
+      onSubmit: (text) => {
+        h.save({ adhdOneThingText: text }, 'ADHD modes')
+      },
+    })
   })
 
   registerSettingsCard('adhd', {
