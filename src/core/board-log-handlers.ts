@@ -2,7 +2,7 @@ import type { CorePlatform } from './platform'
 import { BoardLogStore, type RemoteLogExec } from './board-log'
 import { IPC } from '../shared/ipc'
 import type { BoardLogEntry, BoardLogReadOpts, BoardLogReadResult } from '../shared/types'
-import type { BoardLogAttachmentUpload } from '../shared/board-log-attachments'
+import type { BoardLogAttachmentUpload, BoardLogAttachment } from '../shared/board-log-attachments'
 
 // Board-log RPC surface, registered ONCE for every shell (Electron main + Server Edition) through
 // CorePlatform — the same seam fs-handlers.ts uses, so the two can never drift. The pure log I/O is

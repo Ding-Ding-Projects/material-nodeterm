@@ -581,6 +581,7 @@ export function writeCodexThreadIdentity(
   const tmp = tempNameFor(file)
   mkdirSync(dir, { recursive: true, mode: 0o700 })
   let renamed = false
+  let quarantined: Array<{ source: string; quarantine: string }> = []
   try {
     writeFileSync(
       tmp,

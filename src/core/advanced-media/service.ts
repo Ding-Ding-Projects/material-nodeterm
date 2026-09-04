@@ -35,7 +35,7 @@ function formatForPath(path: string): AdvancedMediaFormat | null {
 }
 
 function descriptorFor(operation: AdvancedMediaOperationId, catalog: readonly AdvancedMediaAdapterDescriptor[]): AdvancedMediaAdapterDescriptor {
-  const descriptor = advancedMediaAdapterById(operation, catalog)
+  const descriptor = advancedMediaAdapterById(operation, catalog as AdvancedMediaAdapterDescriptor[])
   if (!descriptor) throw new Error(`Unknown advanced media operation: ${operation}`)
   if (!descriptor.available) throw new Error(descriptor.unavailableReason ?? `Operation ${operation} is unavailable.`)
   return descriptor

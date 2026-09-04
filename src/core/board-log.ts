@@ -2,9 +2,10 @@ import fs from 'fs'
 import path from 'path'
 import { createHash, randomUUID } from 'node:crypto'
 import { watch, type FSWatcher } from 'fs'
-import { BOARD_LOG_TEXT_MAX, type BoardLogEntry } from '@shared/types'
+import { BOARD_LOG_TEXT_MAX, type BoardLogEntry, type BoardLogReadState } from '@shared/types'
 import { BOARD_LOG_ATTACHMENT_LIMITS, validateBoardLogAttachmentUpload, validBoardLogAttachment, type BoardLogAttachment, type BoardLogAttachmentSession, type BoardLogAttachmentUpload } from '@shared/board-log-attachments'
 import { renameAtomicSync } from './fs-atomic'
+import { rejectDuplicateJsonKeys } from './portable-project-v3'
 
 // Re-exported so callers of this module (and its tests) can reach the cap alongside buildLine.
 export { BOARD_LOG_TEXT_MAX }
@@ -440,33 +441,6 @@ export class BoardLogStore {
     if (raw.length === 0) return { state: 'empty', data: '' }
     try { parsePortableBoardLog(raw); return { state: 'ok', data: Buffer.from(raw, 'utf8').toString('base64') } }
     catch (error) { return { state: 'malformed', error: error instanceof Error ? error.message : String(error) } }
-  }
-
-  async readAttachment(cwd: string, attachment: BoardLogAttachment): Promise<{ ok: true; dataBase64: string } | { ok: false; error: string }> {
-    if (!validBoardLogAttachment(attachment)) return { ok: false, error: 'Attachment metadata is invalid.' }
-    const targetPath = path.join(cwd, LOG_DIR, 'board-attachments', attachment.id + '.bin')
-    let target = ''
-    if (this.remote) {
-      target = this.remote.readAttachment ? await this.remote.readAttachment(this.remotePath(cwd).replace(/board-log\.jsonl$/, 'board-attachments/' + attachment.id + '.bin')) : ''
-    } else {
-      try {
-        const before = await fs.promises.lstat(targetPath)
-        if (!before.isFile() || before.isSymbolicLink()) return { ok: false, error: 'Attachment body is not a regular file.' }
-        const data = await fs.promises.readFile(targetPath)
-        const after = await fs.promises.lstat(targetPath)
-        if (before.ino !== after.ino || before.size !== after.size) return { ok: false, error: 'Attachment changed while it was being read.' }
-        target = data.toString('base64')
-      } catch {
-        return { ok: false, error: 'Attachment body is unavailable.' }
-      }
-    }
-    if (!target) return { ok: false, error: 'Attachment body is unavailable.' }
-    const data = Buffer.from(target, 'base64')
-    if (data.toString('base64').replace(/=+$/, '') !== target.replace(/=+$/, '') ||
-        data.byteLength !== attachment.bytes || createHash('sha256').update(data).digest('hex') !== attachment.sha256) {
-      return { ok: false, error: 'Attachment body failed its length or SHA-256 check.' }
-    }
-    return { ok: true, dataBase64: target }
   }
 
   /** Watch the log for changes; `cb` fires (debounced 250ms) on each change. Returns an unsub.

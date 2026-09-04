@@ -63,3 +63,116 @@ export function validatePortalDoorConstruction(value: unknown): PortalDoorConstr
   if (candidate.stage !== stage) return undefined
   return { stage, completed: [...completed], metadata: { schemaVersion: 1, targetCanvasId: metadata.targetCanvasId, doorId: metadata.doorId } }
 }
+
+// ---------------------------------------------------------------------------------------
+// Portal-door ENTRY credentials, recovered verbatim from 47aca7a5a.
+//
+// Two independent features were authored against this one filename and a merge kept only the
+// construction half while every consumer of the entry half survived. The two sets share no
+// exported name, so this is a union rather than a choice between them.
+//
+// The contract is deliberately separate from ToyLockRecord: a portal entry value controls
+// navigation into a child canvas and is a real vault-backed check, while a toy lock is an
+// optional presentation speed bump that participates in the unlock ladder.
+// ---------------------------------------------------------------------------------------
+export type PortalDoorEntryMode = 'numeric-code' | 'passphrase'
+export type PortalDoorEntryDuration = 'session' | 'minutes' | 'until-close'
+
+/** Portable, non-secret presence metadata. The secret and every local credential reference stay
+ * in the application-data vault keyed by `doorId`; this shape is safe for project.json. */
+export interface PortablePortalDoorEntry {
+  enabled: boolean
+  mode: PortalDoorEntryMode
+  duration: PortalDoorEntryDuration
+  durationMinutes?: number
+  lockedOnLaunch: boolean
+}
+
+/** Non-secret local metadata returned to the renderer. */
+export interface PortalDoorEntryRecord {
+  id: string
+  projectId: string
+  doorId: string
+  label: string
+  enabled: boolean
+  mode: PortalDoorEntryMode
+  duration: PortalDoorEntryDuration
+  durationMinutes?: number
+  lockedOnLaunch: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export interface PortalDoorConfigureInput {
+  projectId: string
+  doorId: string
+  label: string
+  enabled?: boolean
+  mode: PortalDoorEntryMode
+  /** The value is accepted only over the local app bridge and is sealed before persistence. */
+  secret: string
+  duration: PortalDoorEntryDuration
+  durationMinutes?: number
+  lockedOnLaunch: boolean
+}
+
+export interface PortalDoorVerifyInput {
+  projectId: string
+  doorId: string
+  value: string
+}
+
+export interface PortalDoorRelockInput {
+  projectId: string
+  doorId: string
+}
+
+export interface PortalDoorStatusInput {
+  projectId: string
+  doorId: string
+}
+
+export interface PortalDoorStatus {
+  configured: boolean
+  mode?: PortalDoorEntryMode
+  unlocked: boolean
+  /** Omitted for a session/until-close unlock or a locked door. */
+  unlockedUntil?: number
+}
+
+export interface PortalDoorVerifyResult {
+  ok: boolean
+  /** The service refuses to inspect the value while this wait is active. */
+  retryAfterMs?: number
+  /** Never reveals which part of a secret was wrong. */
+  reason?: string
+  unlockedUntil?: number
+}
+
+export type PortalDoorConfigureResult =
+  | { ok: true; record: PortalDoorEntryRecord }
+  | { ok: false; error: string }
+
+export type PortalDoorRemoveResult =
+  | { ok: true }
+  | { ok: false; error: 'not-found' | 'unsupported' }
+
+export interface PortalDoorApi {
+  list(projectId: string): Promise<PortalDoorEntryRecord[]>
+  configure(input: PortalDoorConfigureInput): Promise<PortalDoorConfigureResult>
+  remove(input: PortalDoorRelockInput): Promise<PortalDoorRemoveResult>
+  status(input: PortalDoorStatusInput): Promise<PortalDoorStatus>
+  verify(input: PortalDoorVerifyInput): Promise<PortalDoorVerifyResult>
+  relock(input: PortalDoorRelockInput): Promise<void>
+}
+
+export const PORTAL_DOOR_ENTRY_LABELS: Record<PortalDoorEntryMode, string> = {
+  'numeric-code': 'Numeric code',
+  passphrase: 'Passphrase'
+}
+
+export const PORTAL_DOOR_DURATION_LABELS: Record<PortalDoorEntryDuration, string> = {
+  session: 'While this portal is open',
+  minutes: 'For a number of minutes',
+  'until-close': 'Until the app closes'
+}

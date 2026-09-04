@@ -1557,6 +1557,24 @@ export interface NamedTerminalProfile {
   cwd: string
   /** Optional command sent once after the shell is ready. */
   startupCommand: string
+  // Two lanes authored this profile independently and a merge kept only the first shape.
+  // `settings-store` and the node-catalog picker read `cwd`/`startupCommand`; the Windows
+  // validator in core/windows-terminal-profiles.ts reads the four below. They are OPTIONAL so
+  // both consumer sets compile without changing what either does at run time — an existing
+  // profile simply has none of them. Which shape the feature should settle on is a real design
+  // question and is deliberately still open.
+  //
+  // Note what is NOT here: an executable path or argv. `shellProfileId` is the stable id form
+  // (`pwsh`, `cmd`, `git-bash`, `wsl:<distro>`) that the trusted core resolves immediately
+  // before spawn, which is the whole point of the Windows profile trust boundary.
+  /** Built-in detected profile id, such as `pwsh`, `cmd`, `git-bash`, or `wsl:<distro>`. */
+  shellProfileId?: string
+  /** Optional absolute directory on this machine. */
+  startDirectory?: string
+  /** Safe, non-secret environment overrides. Machine-local settings only. */
+  environment?: Record<string, string>
+  /** Optional local managed-account binding. */
+  accountId?: string
 }
 
 /** Optional desktop capability for detecting the Windows terminal profiles on this machine. */
