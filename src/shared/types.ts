@@ -403,9 +403,7 @@ export type NodeKind =
   | 'gallery'
   | 'wild-dim-sum'
   | 'video'
-  | 'photo'
   | 'audio'
-  | 'gallery'
   | 'web'
   | 'browser'
   /** A persisted canvas node showing one directory listing. */
@@ -420,6 +418,10 @@ export type NodeKind =
   // intentionally a distinct kind so the canvas can refuse deletion, duplication, grouping, and
   // cross-universe movement at every mutation boundary.
   | 'shop'
+  // The AWS Universe's own permanent catalog surface. A distinct kind from `shop` for the same
+  // reason `shop` is distinct from an ordinary node: every mutation boundary refuses to delete,
+  // duplicate, group or move it across universes.
+  | 'aws-shop'
   // AWS Universe portal. The portal is a safe project intent and never carries provider state.
   | 'aws-universe'
   // Guided Resource Explorer and Cloud Control manager. Only safe operation intent is portable.
