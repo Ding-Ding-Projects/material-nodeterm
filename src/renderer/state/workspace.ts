@@ -47,6 +47,9 @@ import { projectLaunchInfoNow } from './projectLaunchInfo'
 import { isAgentEnabled, launchableDefaultAgent } from './agentAvailability'
 import { codexSharedIdentity } from './codexIdentity'
 import { sshHostKey } from '@shared/ssh'
+import { AWS_SERVICE_NODE_KIND, AWS_SHOP_NODE_KIND, canCreateInUniverse, createAwsShopNode } from '@shared/aws-shop'
+import type { AwsCatalogEntry } from '@shared/aws-catalog'
+import { canCreateAwsCatalogEntry } from '@shared/aws-catalog'
 import { useSettings } from './settings'
 import { rotatedClaudeAccount } from '../lib/usageAccountRotation'
 import type { SessionSource } from '../session/session'
@@ -1913,6 +1916,60 @@ export function createRepositoryGraphNode(index: number, center?: { x: number; y
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
       repositoryGraphIntent: { version: 1, mode: 'combined', query: '', expandedNodeIds: [] }
+    }
+  }
+}
+
+/** Create a typed AWS blueprint node only after the AWS Shop scope check has passed. */
+export function createAwsServiceNode(
+  entry: AwsCatalogEntry,
+  universeId: string,
+  index: number,
+  center?: { x: number; y: number }
+): CanvasNode {
+  const catalogPermission = canCreateAwsCatalogEntry(entry.id)
+  if (!catalogPermission.ok) throw new Error(catalogPermission.reason)
+  const trustedEntry = catalogPermission.entry
+  const permission = canCreateInUniverse('aws-universe', entry.nodeKind)
+  if (!permission.ok) throw new Error(permission.reason)
+  const size = { width: 620, height: 460 }
+  return {
+    id: nextId('aws-service'),
+    type: AWS_SERVICE_NODE_KIND,
+    position: placeAt(center, index, size.width, size.height),
+    width: size.width,
+    height: size.height,
+    style: { width: size.width, height: size.height },
+    data: {
+      title: trustedEntry.label,
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      awsUniverseId: universeId,
+      awsCatalogEntryId: trustedEntry.id,
+      creationEventId: uuid(),
+      nonDeletable: false
+    }
+  }
+}
+
+/** React Flow shape for the deterministic Shop owned by an AWS Universe child canvas. */
+export function createAwsShopCanvasNode(universeId: string, index: number, center?: { x: number; y: number }): CanvasNode {
+  const state = createAwsShopNode(universeId, center ?? placeAt(undefined, index, 560, 420))
+  return {
+    id: state.id,
+    type: AWS_SHOP_NODE_KIND,
+    position: state.position,
+    width: state.size.width,
+    height: state.size.height,
+    style: { width: state.size.width, height: state.size.height },
+    data: {
+      title: state.title,
+      color: state.color,
+      group: null,
+      collapsed: false,
+      awsUniverseId: universeId,
+      nonDeletable: true,
+      creationEventId: state.id
     }
   }
 }

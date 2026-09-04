@@ -61,6 +61,7 @@ import type { PortableMediaExportPlan } from '../shared/portable-media'
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
 export * from './portable-canvas-projection'
+export * from './aws-universe'
 
 /** V1 JSON-text archives keep their historical cap. */
 const MAX_ARCHIVE_BYTES_V1 = 180 * 1024 * 1024

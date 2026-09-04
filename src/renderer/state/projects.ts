@@ -33,6 +33,7 @@ import { portableCanvasProjectionToProject, projectToPortableCanvasV3 } from '..
 import type { ProjectCapability } from '@shared/project-capabilities'
 import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
 import { markWorkspaceDirty } from './workspaceDirty'
+import { isNonDeletableCanvasNode } from '@shared/aws-shop'
 
 interface ProjectsState {
   projects: Project[]

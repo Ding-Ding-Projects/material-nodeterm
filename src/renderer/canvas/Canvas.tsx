@@ -1622,6 +1622,16 @@ export function Canvas() {
     setDocsOpen(false)
     setStatusOpen(false)
   }, [])
+  useEffect(() => {
+    const open = (event: Event) => {
+      const detail = (event as CustomEvent<{ universeId?: unknown }>).detail
+      if (typeof detail?.universeId !== 'string' || detail.universeId.length === 0) return
+      closeAllDrawers()
+      setAwsShopUniverseId(detail.universeId)
+    }
+    window.addEventListener('nodeterm:open-aws-shop', open)
+    return () => window.removeEventListener('nodeterm:open-aws-shop', open)
+  }, [closeAllDrawers])
   // Reveal-in-Explorer target (relative to the active project cwd). The nonce makes each reveal
   // distinct so revealing the same file twice still re-fires the Explorer effect.
   const [reveal, setReveal] = useState<{ path: string; nonce: number } | null>(null)
@@ -7229,8 +7239,13 @@ export function Canvas() {
       const requested = new Set(ids)
       const projectId = captured?.projectId ?? useProjects.getState().activeProjectId ?? ''
       const projectScope = captured?.scope ?? projectSessionScope(projectId)
-      const targets =
+      const rawTargets =
         captured?.targets ?? nodesRef.current.filter((node) => requested.has(node.id))
+      const protectedTargets = rawTargets.filter((node) => isNonDeletableCanvasNode({ kind: node.type, nonDeletable: node.data.nonDeletable }))
+      const targets = rawTargets.filter((node) => !protectedTargets.includes(node))
+      if (protectedTargets.length > 0) {
+        setNotice({ kind: 'info', text: 'The AWS Shop is permanent and cannot be deleted, duplicated, moved, grouped, or removed by undo.' })
+      }
       // Reopen history (Cmd+Shift+T): snapshot BEFORE anything is torn down, against the full
       // live tree (nodesRef.current) so a snapshotted child's parent chain is still walkable.
       // `opts?.record === false` is the one deliberate exception — a login node force-deleted
@@ -7813,8 +7828,12 @@ export function Canvas() {
   }, [])
   const groupSelection = useCallback(
     (ids: string[]) => {
+      const allowed = ids.filter((id) => {
+        const node = nodesRef.current.find((item) => item.id === id)
+        return !node || !isNonDeletableCanvasNode({ kind: node.type, nonDeletable: node.data.nonDeletable })
+      })
       const groupCount = nodesRef.current.filter((n) => n.type === 'group').length
-      setNodes((ns) => groupSelectedNodes(ns as CanvasNode[], ids, groupCount))
+      setNodes((ns) => groupSelectedNodes(ns as CanvasNode[], allowed, groupCount))
       markDirty()
     },
     [setNodes, markDirty]
@@ -7824,7 +7843,11 @@ export function Canvas() {
   // always makes a new one). Only subtree roots move — see addSelectionToGroup.
   const addToExistingGroup = useCallback(
     (ids: string[], groupId: string) => {
-      setNodes((nodes) => addSelectionToGroup(nodes as CanvasNode[], ids, groupId))
+      const allowed = ids.filter((id) => {
+        const node = nodesRef.current.find((item) => item.id === id)
+        return !node || !isNonDeletableCanvasNode({ kind: node.type, nonDeletable: node.data.nonDeletable })
+      })
+      setNodes((nodes) => addSelectionToGroup(nodes as CanvasNode[], allowed, groupId))
       markDirty()
     },
     [setNodes, markDirty]
@@ -7836,7 +7859,10 @@ export function Canvas() {
     (ids: string[]) => {
       setNodes((ns) => {
         let next = ns as CanvasNode[]
-        for (const nid of ids) next = reparentNode(next, nid, null)
+        for (const nid of ids) {
+          const node = next.find((item) => item.id === nid)
+          if (!node || !isNonDeletableCanvasNode({ kind: node.type, nonDeletable: node.data.nonDeletable })) next = reparentNode(next, nid, null)
+        }
         return next
       })
       markDirty()
@@ -8995,7 +9021,7 @@ export function Canvas() {
     (ids: string[], at?: { x: number; y: number }) => {
       const set = new Set(ids)
       setNodes((ns) => {
-        const sources = ns.filter((n) => set.has(n.id))
+        const sources = ns.filter((n) => set.has(n.id) && !isNonDeletableCanvasNode({ kind: n.type, nonDeletable: n.data.nonDeletable }))
         if (!sources.length) return ns
         if (sources.some((n) => n.type === 'shop' || n.data.nonDeletable === true)) {
           setNotice({ kind: 'error', text: 'The Shop is the one fixed catalog for its universe and cannot be duplicated.' })
@@ -16037,6 +16063,8 @@ export function Canvas() {
   // Sidebar drag-to-group: reparent a session into a canvas group (groupId) or out (null).
   const moveSessionToGroup = useCallback(
     (projectId: string, nodeId: string, groupId: string | null) => {
+      const selectedNode = nodesRef.current.find((node) => node.id === nodeId)
+      if (selectedNode && isNonDeletableCanvasNode({ kind: selectedNode.type, nonDeletable: selectedNode.data.nonDeletable })) return
       if (projectId === activeProjectId) {
         setNodes((ns) => reparentNode(ns, nodeId, groupId))
         markDirty()

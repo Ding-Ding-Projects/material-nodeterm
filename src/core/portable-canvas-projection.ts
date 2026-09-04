@@ -645,6 +645,7 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
   const roots = value.canvases.filter((canvas) => canvas.scope === 'root')
   if (roots.length !== 1 || roots[0].id !== value.rootCanvasId || roots[0].parentCanvasId !== undefined) throw new PortableProjectV3Error('manifest', 'Portable projection must contain exactly one parentless root canvas.')
   const canvasById = new Map(value.canvases.map((canvas) => [canvas.id, canvas]))
+  const nodeById = new Map(normalizedNodes.map((node) => [node.id, node]))
   for (const canvas of value.canvases) {
     if (canvas.scope !== 'root' && canvas.parentCanvasId === undefined) throw new PortableProjectV3Error('manifest', 'Child canvases require a parent canvas.')
     if (canvas.parentCanvasId !== undefined && (!canvasById.has(canvas.parentCanvasId) || canvas.parentCanvasId === canvas.id)) throw new PortableProjectV3Error('manifest', 'Portable canvas parent is missing or self-referential.')

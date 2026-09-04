@@ -4,6 +4,8 @@
 
 import { acceptNewInboundNode, carryLocalNodeExec, sanitizeInboundNode } from './node-exec'
 import { REF_MAX_LEN } from './presence'
+import { canCreateInUniverse, isAwsShopNode, isNonDeletableCanvasNode } from './aws-shop'
+import { canCreateAwsCatalogEntry } from './aws-catalog'
 import type { BridgeLink, CanvasEdgeKind, CanvasMutation, CanvasNodeState } from './types'
 
 /**
@@ -84,6 +86,9 @@ export function isCanvasMutation(value: unknown): value is CanvasMutation {
   if (m.op !== 'upsert') return false
   const node = m.node as { id?: unknown; creationEventId?: unknown; position?: { x?: unknown; y?: unknown } } | undefined
   if (!node || typeof node !== 'object') return false
+  // The Shop is created from the universe canvas, never by peer traffic. Rejecting it at the
+  // shared wire predicate keeps the reflector and every receiver from learning a mutable copy.
+  if ((node as { kind?: unknown }).kind === 'aws-shop') return false
   if (!isRefId(node.id)) return false
   if ('creationEventId' in node && node.creationEventId !== undefined && !isRefId(node.creationEventId)) return false
   const pos = node.position
@@ -196,7 +201,7 @@ export function createMutationGuard(): (m: CanvasMutation) => boolean {
 export function applyCanvasMutation(
   states: CanvasNodeState[],
   m: CanvasMutation,
-  options?: { defaultTerminalProfileId?: string }
+  options?: { defaultTerminalProfileId?: string; universeScope?: import('./aws-shop').UniverseCanvasScope; universeId?: string }
 ): CanvasNodeState[] {
   // An edge mutation addresses neither of these nodes. Returned UNCHANGED (by reference, so a
   // caller's `next === prev` short-circuit still fires) rather than trusted to be pre-filtered:
@@ -344,7 +349,7 @@ export function diffToMutations(
   }
   // removes: nodes present in prev but gone from next (in prev-array order).
   for (const node of a.nodes) {
-    if (!nextIds.has(node.id)) removes.push({ op: 'remove', id: node.id })
+    if (!nextIds.has(node.id) && !isNonDeletableCanvasNode(node)) removes.push({ op: 'remove', id: node.id })
   }
 
   const edgeUpserts: CanvasMutation[] = []

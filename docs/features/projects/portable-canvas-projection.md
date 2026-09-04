@@ -48,11 +48,18 @@ or provider side effects. Empty user content, such as a sticky note or browser-t
 identifiers and labels stay non-empty. Empty URLs are omitted, and per-element appearance records
 are not accepted in this lane.
 
+Child canvases are checked for their system-owned Shop. The root canvas cannot contain one, and each
+child canvas must contain exactly one deterministic Shop that remains ungrouped, top-level, and
+non-deletable. AWS Universe children additionally accept only AWS Shop and AWS blueprint nodes,
+with every blueprint bound to that canvas's id. `repairAwsUniverseImport` repairs missing or
+malformed Shops and removes non-AWS nodes in memory before staging an import, while returning a
+visible repair record and performing no external side effect.
+
 ## Verification status
 
 This implementation lane intentionally did not run tests, type checking, linting, security checks,
-builds, packaging, UI interaction, or captures. Export archive writing, atomic import, media,
-catalog, Shop creation, portals, provider adapters, and UI remain separate implementation lanes.
+builds, packaging, UI interaction, or captures. Archive writing, atomic import, media, portals,
+provider adapters, and AWS execution remain separate implementation lanes.
 
 ## Suggested articles
 

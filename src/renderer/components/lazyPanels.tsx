@@ -83,3 +83,6 @@ export const UniGetUiUniversePanel = withSuspense(
 export const PasswordManagerPanel = withSuspense(
   lazy(() => import('./passwordManager/PasswordManagerPanel').then((m) => ({ default: m.PasswordManagerPanel })))
 )
+export const AwsShopPanel = withSuspense(
+  lazy(() => import('./aws/AwsShopPanel').then((m) => ({ default: m.AwsShopPanel })))
+)
