@@ -129,7 +129,7 @@ const ANNOTATION_SIZE = { width: 240, height: 160 }
  * Service managers. Two shapes rather than six numbers, because the distinction that matters is how
  * much a surface has to SHOW, not which product it manages:
  *
- * - a console-and-list manager (Minecraft, Docker, Proxmox) needs room for output beside a list, so
+ * - a console-and-list manager (Minecraft, Docker, Proxmox, cloudflared) needs room for output beside a list, so
  *   it starts nearer a terminal's footprint;
  * - a summary manager (GitLab, Home Assistant, FreePBX) opens on counts and status rows and can
  *   start smaller without immediately needing a resize.
@@ -1729,7 +1729,7 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
 }
 
 /**
- * Creates a service-manager node.
+ * Creates a service-manager node, including the cloudflared connector runtime.
  *
  * ONE factory with six callers rather than six near-identical factories, because the only thing that
  * varies is the kind, its starting size and its default title — and this codebase's most repeated

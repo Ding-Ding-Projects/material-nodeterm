@@ -162,6 +162,9 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // has a scoped carrier for that master, even reads must not fall through to this viewer's
     // unrelated SSH connection (quick-open is the easy wrong-machine example).
     sshFs: stub.sshFs,
+    // Connector lifecycle is machine-local and must never resolve against the relay viewer's
+    // desktop, so the relay surface keeps the explicit unsupported stub.
+    cloudflared: stub.cloudflared,
 
     // pty is core-bound EXCEPT `onData` (gotcha 1): its output arrives on the LOCAL per-session
     // channel, so subscribe on the local preload, same shape as a local pty.

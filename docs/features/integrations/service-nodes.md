@@ -214,6 +214,11 @@ platform and every OS the same way the plain `ssh` command does, to whoever is c
 
 ## What does not work yet
 
+**Cloudflared is the connected exception.** Its dedicated connector panel runs the local
+`cloudflared` process, an explicitly consented Windows service, or a constrained Docker connector;
+see [Cloudflared connector runtimes](cloudflared-runtimes.md). The other manager kinds below remain
+address-only until their own integrations land.
+
 State this plainly, because CLAUDE.md's rule against decorative controls cuts both ways: it forbids
 a control that *looks* wired and is not, and it equally forbids a document that implies more than
 the control actually does.

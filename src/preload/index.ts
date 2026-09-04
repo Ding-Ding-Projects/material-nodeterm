@@ -132,6 +132,7 @@ const subscribeVeraCryptOperation = subscribe<[VeraCryptOperation]>(IPC.veracryp
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
 const subscribeRelayHostOpen = subscribe<[{ id: string; email?: string }]>(IPC.relayHostOpen)
 const subscribeRelayHostClosed = subscribe<[{ id: string }]>(IPC.relayHostClosed)
+const subscribeCloudflaredStatus = subscribe<[{ nodeId: string; status: CloudflaredRuntimeStatus }]>(IPC.cloudflaredStatusEvent)
 
 // Scheduled settings (docs/scheduled-settings.md): the resolved-schedule push can have more than
 // one subscriber at once (the Settings → Schedule panel AND the always-mounted apply-controller in

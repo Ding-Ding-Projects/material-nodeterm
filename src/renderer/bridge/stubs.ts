@@ -573,6 +573,19 @@ export function buildStubApi(): Omit<
       onOpen: noopUnsub,
       onClosed: noopUnsub
     },
+    // Cloudflared is machine-local process/service/Docker control. A browser or relay guest must
+    // never inherit the desktop's local implementation, so every member fails closed here.
+    cloudflared: {
+      status: () => U('cloudflared.status'),
+      setToken: () => U('cloudflared.setToken'),
+      clearToken: () => U('cloudflared.clearToken'),
+      start: () => U('cloudflared.start'),
+      stop: () => U('cloudflared.stop'),
+      uninstall: () => U('cloudflared.uninstall'),
+      reconcile: () => U('cloudflared.reconcile'),
+      installWindowsService: () => U('cloudflared.installWindowsService'),
+      onStatus: noopUnsub
+    },
     relayClient: {
       connect: U('relayClient.connect'),
       onSas: noopUnsub,
