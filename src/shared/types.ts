@@ -3,6 +3,7 @@ import type { ServiceConnection } from './node-exec'
 import type { DockerHostManagerApi } from './docker-host-manager'
 import type { NextcloudAioManagerApi } from './nextcloud-aio'
 import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
+import type { AwsWizardSpec } from './aws-wizard'
 // Types shared across the main, preload, and renderer processes.
 
 import { DEFAULT_WORKTREE_PATH_TEMPLATE } from './worktree'
@@ -421,6 +422,9 @@ export type NodeKind =
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
   // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
   | 'nsis'
+  // Offline AWS request wizard. The schema and values are safe intent only; it never executes a
+  // provider request, and machine-local file selections stay in the renderer overlay.
+  | 'aws-wizard'
   // The built-in authenticator, as a node. A VIEW of this machine's own TOTP generators: it
   // persists a title and a colour and nothing else, because an entry id names a credential in
   // this machine's OS vault while project.json is git-shared. See AuthenticatorNode.tsx.

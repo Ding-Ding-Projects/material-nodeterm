@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AWS wizard generator — nodeterm docs</title>
+    <meta name="description" content="Schema-driven offline AWS request planning with typed controls and synchronized JSON and YAML views." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+    <script>
+      ;(function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem('nodeterm-playground.v1') || '{}')
+          if (saved && saved.theme === 'night') document.documentElement.setAttribute('data-theme', 'night')
+          if (saved && saved.bigText) document.documentElement.style.fontSize = '19px'
+        } catch (_err) {
+          /* localStorage unavailable (private mode, etc.) -- falls back to the day palette */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">AWS tools</p>
+      <h1>AWS wizard generator</h1>
+      <p>The AWS wizard is a schema-driven canvas node for composing and reviewing an AWS request shape locally. It never executes a provider request.</p>
+
+      <h2>Typed controls</h2>
+      <p>A model schema becomes searchable enum choices, switches, bounded number controls, native date and time fields, local file pickers, repeatable lists and maps, and nested object editors. Every field has a description and inline validation. Add controls state their collection limit instead of silently doing nothing.</p>
+
+      <h2>Advanced views</h2>
+      <p>JSON and YAML are synchronized views over the same value object. Applying either format parses a bounded object and validates it against the same schema as the typed controls. The advanced editor is not an arbitrary command box and does not launch a shell.</p>
+
+      <h2>Portability and privacy</h2>
+      <p>The schema and safe request intent travel with the project. A selected local file path stays in the local browser or desktop state and is never written into the shared project projection. Importing a request performs no network call, deployment, provider mutation, process launch, or download.</p>
+
+      <h2>Failure recovery</h2>
+      <p>Malformed or oversized JSON/YAML, unknown keys, unsafe map keys, invalid dates, and out-of-range numbers remain visible as inline errors. The last accepted values stay in place until a valid replacement is applied.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+          <li><a href="./node-kinds.html">Node kinds</a></li>
+          <li><a href="./projects-and-tabs.html">Projects and tabs</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

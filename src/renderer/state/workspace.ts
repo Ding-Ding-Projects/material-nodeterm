@@ -18,6 +18,8 @@ import { DEFAULT_NEXTCLOUD_MANAGED_INTENT, type NextcloudManagedBinding, type Ne
 import { GITHUB_WORK_ITEM_NODE_SIZE, normalizeGitHubWorkItem } from '@shared/github-work-items'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
+import type { AwsWizardSpec } from '@shared/aws-wizard'
+import { defaultAwsWizardSpec } from '@shared/aws-wizard'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
 import {
   agentConfig,
@@ -2059,6 +2061,26 @@ export function createNsisNode(index: number, center?: { x: number; y: number })
       group: null,
       nsisSpec: defaultNsisSpec(),
       nsisLocalPaths: defaultNsisLocalPaths()
+    }
+  }
+}
+
+/** Creates a schema-driven AWS request wizard. It only builds a validated local request shape and
+ * never calls AWS or stores credentials. Paths selected by file controls remain machine-local. */
+export function createAwsWizardNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('aws-wizard'),
+    type: 'aws-wizard',
+    position: placeAt(center, index, AWS_WIZARD_SIZE.width, AWS_WIZARD_SIZE.height),
+    width: AWS_WIZARD_SIZE.width,
+    height: AWS_WIZARD_SIZE.height,
+    style: { width: AWS_WIZARD_SIZE.width, height: AWS_WIZARD_SIZE.height },
+    data: {
+      title: 'AWS request wizard',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      awsWizardSpec: defaultAwsWizardSpec(),
+      awsWizardFiles: {}
     }
   }
 }
