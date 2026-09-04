@@ -11,8 +11,9 @@ server.jar` process, with its console streamed live into the node.
 This runs the server **on the machine the shell is running on** — this desktop, or the Server
 Edition host — as an ordinary child process of that shell. It is **not** a wrapper around Docker
 and does not reach a remote host over SSH; that remains a separate, unbuilt idea for the
-`dockerhost`-style address field the other five service kinds (`dockerhost`, `proxmox`, `gitlab`,
-`homeassistant`, `freepbx`) still use unchanged (see `src/renderer/nodes/ServiceNode.tsx`). Nothing
+`dockerhost`-style address field the other four storage-only service kinds (`dockerhost`, `proxmox`,
+`gitlab`, `freepbx`) still use unchanged (see `src/renderer/nodes/ServiceNode.tsx`). The
+`homeassistant` node now uses its own multi-instance REST and WebSocket manager panel. Nothing
 in this feature reads or writes `ServiceConnection`/`serviceConnection.endpoint`.
 
 ## Architecture

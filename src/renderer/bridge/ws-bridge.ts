@@ -2,8 +2,8 @@
 //
 // Under Electron the preload already defines `window.nodeTerminal`; this module only runs when
 // it is absent (see main.tsx's bootstrap switch). It opens ONE WebSocket to `/ws`, speaks the
-// Task-1 RPC protocol (`parseRpcMessage` / `decodePtyData`), and rebuilds the three real
-// namespaces (`pty`, `workspace`, `settings`) over that socket. Every other namespace comes from
+// Task-1 RPC protocol (`parseRpcMessage` / `decodePtyData`), and rebuilds the core-bound
+// namespaces (`pty`, `workspace`, `settings`, `homeAssistant`) over that socket. Every other namespace comes from
 // `buildStubApi()` (Task 7) so the renderer boots without a full Electron preload.
 
 import {

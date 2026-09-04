@@ -1,6 +1,7 @@
 // Graceful non-terminal stub surface for the browser (Server Edition) build.
 //
 // The real namespaces (`pty`, `workspace`, `settings`, `schoolMode`, `scheduledSettings`,
+// `homeAssistant`,
 // `speech`, the fs/git/files/context group from `buildFilesApi`, and `dialog` from the in-app
 // `dialog-picker`) are provided by the ws-bridge; everything else here degrades benignly so the
 // renderer boots without a full Electron preload.
