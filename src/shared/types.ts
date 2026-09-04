@@ -5366,6 +5366,9 @@ export interface NodeTerminalApi {
   awsWizardModels: import('./aws-wizard').AwsWizardModelsApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Bundled AWS CLI v2 manager and Bedrock model inventory --
+   *  docs/features/integrations/aws-cli-manager.md. Machine-local; the relay tab refuses it. */
+  awsCli: import('./aws').AwsCliApi
   /** Local AWS identity manager — docs/aws-identity-manager.md. Credentials and provider cache
    *  remain machine-local and are never part of a portable project projection. Desktop-only for
    *  now; the browser and relay bridges omit it. */

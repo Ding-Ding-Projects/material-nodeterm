@@ -244,6 +244,9 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // Relay v1 has no remote-routed manager channel, so refuse rather than contacting the viewer.
     cloudflareZeroTrust: stub.cloudflareZeroTrust,
     ollama: stub.ollama,
+    // The AWS CLI manager installs an MSI and inspects an executable on ONE machine. A relay tab
+    // routing it would install on the VIEWER, not the host it joined, so it keeps the refusal.
+    awsCli: stub.awsCli,
     // AWS identity is machine-local to the host that owns the credentials. Relay tabs refuse it
     // rather than accidentally running profile, SSO-login or credential-process commands against
     // the viewer's machine. A mutually approved peer gets shell access to the SHARED PROJECT, not

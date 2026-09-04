@@ -113,6 +113,7 @@ const subscribeConverterSummary = subscribe<
 const subscribeConverterAdvancedItem = subscribe<[AdvancedPipelineQueueItem]>(IPC.converterAdvancedItem)
 const subscribeConverterAdvancedSummary = subscribe<[{ running: boolean; active: number; queued: number; total: number }]>(IPC.converterAdvancedSummary)
 const subscribeOllamaPullItem = subscribe<[PullQueueItem]>(IPC.ollamaPullItem)
+const subscribeAwsCliStatus = subscribe<[import('../shared/aws').AwsCliStatus]>(IPC.awsCliStatusEvent)
 const subscribeOllamaPullSummary = subscribe<[Pick<PullQueueState, 'running' | 'concurrency'>]>(
   IPC.ollamaPullSummary
 )
@@ -1481,6 +1482,15 @@ const api: NodeTerminalApi = {
     chatSend: (id, text) => ipcRenderer.invoke(IPC.ollamaChatSend, id, text),
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
+  },
+  awsCli: {
+    status: () => ipcRenderer.invoke(IPC.awsCliStatus),
+    ensure: () => ipcRenderer.invoke(IPC.awsCliEnsure),
+    repair: () => ipcRenderer.invoke(IPC.awsCliRepair),
+    cancel: () => ipcRenderer.invoke(IPC.awsCliCancel),
+    models: () => ipcRenderer.invoke(IPC.awsCliModels),
+    refreshModels: () => ipcRenderer.invoke(IPC.awsCliRefreshModels),
+    onStatus: (listener) => subscribeAwsCliStatus(listener)
   },
   awsProfileManager: {
     profiles: () => ipcRenderer.invoke(IPC.awsProfiles),

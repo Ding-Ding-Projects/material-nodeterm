@@ -1787,6 +1787,601 @@ const FEATURES = [
     ],
     docs: ['docs/features/appearance/material-3-audit.md'],
   },
+  // --- Rows added for feature docs that previously had no inventory entry. Every path and
+  // needle below was verified against the working tree before it was written here.
+  {
+    id: 'alert-sounds',
+    label: 'Custom alert sounds',
+    files: [
+      'src/renderer/lib/sfx.ts',
+      'src/renderer/components/settings/sections/NotificationsSection.tsx',
+    ],
+    contentChecks: [
+      ['src/renderer/lib/sfx.ts', 'export async function readAlertSoundFile'],
+      ['src/renderer/lib/sfx.ts', 'export function alertSoundPolicy'],
+      ['src/renderer/components/settings/sections/NotificationsSection.tsx', 'export function NotificationsSection'],
+    ],
+    docs: ['docs/alert-sounds.md'],
+  },
+  {
+    id: 'aws-identity-manager',
+    label: 'AWS identity manager (profiles, SSO, roles, MFA)',
+    files: [
+      'src/core/aws-identity.ts',
+      'src/renderer/components/aws/AwsIdentityManager.tsx',
+    ],
+    contentChecks: [
+      ['src/core/aws-identity.ts', 'export class AwsIdentityService'],
+      ['src/core/aws-identity.ts', 'export function registerAwsIdentityIpc'],
+      ['src/renderer/components/aws/AwsIdentityManager.tsx', 'export function AwsIdentityManager'],
+    ],
+    docs: ['docs/aws-identity-manager.md'],
+  },
+  {
+    id: 'account-node-colours',
+    label: 'Per-account default node colours',
+    files: [
+      'src/shared/agents/account-color.ts',
+      'src/renderer/components/settings/sections/AccountsSection.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/agents/account-color.ts', 'export function accountNodeColor'],
+      ['src/shared/agents/account-color.ts', 'export function agentAccountColor'],
+      ['src/renderer/components/settings/sections/AccountsSection.tsx', 'export function AccountsSection'],
+    ],
+    docs: ['docs/features/agents/account-node-colours.md'],
+  },
+  {
+    id: 'claude-account-rotation',
+    label: 'Automatic Claude account rotation',
+    files: [
+      'src/renderer/lib/claudeAccountRotation.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/lib/claudeAccountRotation.ts', 'export function normalizeClaudeAccountRotation'],
+      ['src/renderer/lib/claudeAccountRotation.ts', 'export const SYSTEM_ACCOUNT_KEY'],
+    ],
+    docs: ['docs/features/agents/claude-account-rotation.md'],
+  },
+  {
+    id: 'agent-status-recovery',
+    label: 'Agent status recovery and sidebar workflow grouping',
+    files: [
+      'src/core/agent-status-recovery.ts',
+    ],
+    contentChecks: [
+      ['src/core/agent-status-recovery.ts', 'export function inspectClaudeTranscript'],
+      ['src/core/agent-status-recovery.ts', 'export function inspectCodexThread'],
+    ],
+    docs: ['docs/features/agents/status-recovery-and-sidebar-grouping.md'],
+  },
+  {
+    id: 'usage-popover-account-default',
+    label: 'Usage popover per-project account default',
+    files: [
+      'src/renderer/components/UsageIndicator.tsx',
+    ],
+    contentChecks: [
+      ['src/renderer/components/UsageIndicator.tsx', 'export function UsageIndicator'],
+      ['src/renderer/components/UsageIndicator.tsx', 'defaultAccountId'],
+    ],
+    docs: ['docs/features/agents/usage-popover-account-default.md'],
+  },
+  {
+    id: 'aws-wizard-generator',
+    label: 'Schema-driven AWS wizard generator node',
+    files: [
+      'src/shared/aws-wizard.ts',
+      'src/core/aws-wizard/service.ts',
+      'src/renderer/nodes/AwsWizardNode.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/aws-wizard.ts', 'export type AwsWizardFieldKind'],
+      ['src/renderer/nodes/AwsWizardNode.tsx', 'export default function AwsWizardNode'],
+    ],
+    docs: ['docs/features/aws-wizard-generator.md'],
+  },
+  {
+    id: 'aws-shop',
+    label: 'AWS Shop and service catalog',
+    files: [
+      'src/shared/aws-shop.ts',
+      'src/core/universe-shop.ts',
+      'src/renderer/nodes/AwsShopNode.tsx',
+      'src/renderer/components/aws/AwsShopPanel.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/aws-shop.ts', 'export const AWS_SHOP_NODE_KIND'],
+      ['src/core/universe-shop.ts', 'export const SHOP_NODE_KIND'],
+      ['src/renderer/nodes/AwsShopNode.tsx', 'export function AwsShopNode'],
+      ['src/renderer/components/aws/AwsShopPanel.tsx', 'export function AwsShopPanel'],
+    ],
+    docs: ['docs/features/aws/aws-shop.md'],
+  },
+  {
+    id: 'kiosk-pwa-sessions',
+    label: 'Kiosk and PWA session nodes',
+    files: [
+      'src/shared/kiosk-sessions.ts',
+      'src/core/kiosk-pwa.ts',
+      'src/renderer/nodes/KioskPwaNode.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/kiosk-sessions.ts', 'export function normalizeKioskUrl'],
+      ['src/renderer/nodes/KioskPwaNode.tsx', 'export function KioskPwaNode'],
+    ],
+    docs: ['docs/features/browser/kiosk-pwa-sessions.md'],
+  },
+  {
+    id: 'annotation-labels',
+    label: 'Canvas annotation labels and line thickness',
+    files: [
+      'src/shared/annotation.ts',
+      'src/renderer/nodes/AnnotationNode.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/annotation.ts', 'export const ANNOTATION_MAX_LABEL_LENGTH'],
+      ['src/shared/annotation.ts', 'export function normalizeAnnotationThickness'],
+      ['src/renderer/nodes/AnnotationNode.tsx', 'export function AnnotationNode'],
+    ],
+    docs: ['docs/features/canvas/annotation-labels.md'],
+  },
+  {
+    id: 'canvas-drag-zones',
+    label: 'Canvas drag zones and saved layouts',
+    files: [
+      'src/renderer/lib/nodeZones.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/lib/nodeZones.ts', 'export function zoneTargetRects'],
+      ['src/renderer/lib/nodeZones.ts', 'export const ZONE_ARROW_KEYS'],
+    ],
+    docs: ['docs/features/canvas/drag-zones-and-saved-layouts.md'],
+  },
+  {
+    id: 'files-node',
+    label: 'Files node (canvas directory view)',
+    files: [
+      'src/renderer/nodes/FilesNode.tsx',
+    ],
+    contentChecks: [
+      ['src/renderer/nodes/FilesNode.tsx', 'export function FilesNode'],
+    ],
+    docs: ['docs/features/canvas/files-node.md'],
+  },
+  {
+    id: 'node-maximize',
+    label: 'Node maximize and restore',
+    files: [
+      'src/renderer/lib/nodeMaximize.ts',
+      'src/renderer/nodes/MaximizeButton.tsx',
+    ],
+    contentChecks: [
+      ['src/renderer/lib/nodeMaximize.ts', 'export function maximizeTargetRect'],
+      ['src/renderer/lib/nodeMaximize.ts', 'export const NODE_MAXIMIZE_MARGIN_PX'],
+    ],
+    docs: ['docs/features/canvas/node-maximize.md'],
+  },
+  {
+    id: 'portal-recovery-game',
+    label: 'Portal recovery mini-game node',
+    files: [
+      'src/shared/portal-recovery.ts',
+      'src/renderer/nodes/PortalRecoveryNode.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/portal-recovery.ts', 'export const PORTAL_RECOVERY_BOARD'],
+      ['src/renderer/nodes/PortalRecoveryNode.tsx', 'export function PortalRecoveryNode'],
+    ],
+    docs: ['docs/features/canvas/portal-recovery.md'],
+  },
+  {
+    id: 'windows-diagnostics-node',
+    label: 'Read-only Windows diagnostics node',
+    files: [
+      'src/shared/windows-diagnostics.ts',
+      'src/core/windows-diagnostics.ts',
+      'src/renderer/nodes/WindowsDiagnosticsNode.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/windows-diagnostics.ts', 'export const WINDOWS_DIAGNOSTIC_SECTIONS'],
+      ['src/renderer/nodes/WindowsDiagnosticsNode.tsx', 'export default function WindowsDiagnosticsNode'],
+    ],
+    docs: ['docs/features/canvas/windows-diagnostics.md'],
+  },
+  {
+    id: 'aws-cli-docs-index',
+    label: 'AWS CLI model and documentation index',
+    files: [
+      'src/shared/aws-cli.ts',
+      'src/core/aws-cli/model-loader.ts',
+      'src/renderer/components/aws/AwsCliDocsIndexPanel.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/aws-cli.ts', 'export const AWS_CLI_DOCS_BASE_URL'],
+      ['src/renderer/components/aws/AwsCliDocsIndexPanel.tsx', 'export function AwsCliDocsIndexPanel'],
+    ],
+    docs: ['docs/features/cloud/aws-cli-docs-index.md'],
+  },
+  {
+    id: 'advanced-media',
+    label: 'Advanced media pipelines',
+    files: [
+      'src/shared/advanced-media.ts',
+      'src/core/advanced-media/service.ts',
+      'src/core/advanced-media/register-ipc.ts',
+    ],
+    contentChecks: [
+      ['src/shared/advanced-media.ts', 'export type AdvancedMediaOperationId'],
+      ['src/shared/advanced-media.ts', 'export type AdvancedMediaDependencyId'],
+    ],
+    docs: ['docs/features/files/advanced-media.md'],
+  },
+  {
+    id: 'nextcloud-managed-hosting',
+    label: 'Managed Nextcloud hosting profile',
+    files: [
+      'src/shared/nextcloud-managed.ts',
+      'src/main/remote/nextcloud-managed.ts',
+      'src/renderer/components/nextcloud/NextcloudManagedPanel.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/nextcloud-managed.ts', 'export const NEXTCLOUD_MANAGED_BLUEPRINT_VERSION'],
+      ['src/renderer/components/nextcloud/NextcloudManagedPanel.tsx', 'export function NextcloudManagedPanel'],
+    ],
+    docs: ['docs/features/hosting/nextcloud-managed-hosting.md'],
+  },
+  {
+    id: 'aws-generic-service-gui',
+    label: 'Generic all-service AWS manager',
+    files: [
+      'src/renderer/components/aws/AwsGenericServicePanel.tsx',
+      'src/core/aws-model-documentation.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/components/aws/AwsGenericServicePanel.tsx', 'export function AwsGenericServicePanel'],
+      ['src/core/aws-model-documentation.ts', 'export function buildAwsModelDocumentationIndex'],
+    ],
+    docs: ['docs/features/integrations/aws-generic-service-gui.md'],
+  },
+  {
+    id: 'aws-resource-managers',
+    label: 'AWS service manager node (ECR, ECS, EKS, RDS, VPC, Route 53, Cost Explorer)',
+    files: [
+      'src/core/aws-resource-managers.ts',
+      'src/renderer/components/aws/AwsManagerPanel.tsx',
+    ],
+    contentChecks: [
+      ['src/core/aws-resource-managers.ts', 'export class AwsResourceManagerService'],
+      ['src/renderer/components/aws/AwsManagerPanel.tsx', 'export function AwsManagerPanel'],
+    ],
+    docs: ['docs/features/integrations/aws-managers.md'],
+  },
+  {
+    id: 'cloudflare-core-manager',
+    label: 'Cloudflare core manager (accounts, zones, DNS, rulesets)',
+    files: [
+      'src/shared/cloudflare-core-managers.ts',
+      'src/core/cloudflare-core-managers.ts',
+      'src/renderer/nodes/CloudflareCoreManagersNode.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/cloudflare-core-managers.ts', 'export const CLOUDFLARE_MANAGER_KINDS'],
+      ['src/renderer/nodes/CloudflareCoreManagersNode.tsx', 'export default function CloudflareCoreManagersNode'],
+    ],
+    docs: ['docs/features/integrations/cloudflare-manager.md'],
+  },
+  {
+    id: 'cloudflare-zero-trust-managers',
+    label: 'Cloudflare Access, Workers, Pages, R2, D1 and Queues managers',
+    files: [
+      'src/shared/cloudflare.ts',
+      'src/core/cloudflare/client.ts',
+      'src/core/cloudflare/service.ts',
+    ],
+    contentChecks: [
+      ['src/shared/cloudflare.ts', 'export const CLOUDFLARE_API_ORIGIN'],
+      ['src/shared/cloudflare.ts', 'export const CLOUDFLARE_MANAGER_VERSION'],
+    ],
+    docs: ['docs/features/integrations/cloudflare-managers.md'],
+  },
+  {
+    id: 'cloudflared-connector-runtimes',
+    label: 'Cloudflared connector runtimes',
+    files: [
+      'src/shared/cloudflared-runtime.ts',
+      'src/main/remote/cloudflared-runtime.ts',
+      'src/renderer/components/cloudflared/CloudflaredRuntimePanel.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/cloudflared-runtime.ts', 'export const CLOUDFLARED_RUNTIME_SCHEMA_VERSION'],
+      ['src/renderer/components/cloudflared/CloudflaredRuntimePanel.tsx', 'export function CloudflaredRuntimePanel'],
+    ],
+    docs: ['docs/features/integrations/cloudflared-runtimes.md'],
+  },
+  {
+    id: 'home-assistant-sensor-nodes',
+    label: 'Home Assistant sensor display nodes',
+    files: [
+      'src/shared/home-assistant-sensor.ts',
+      'src/core/home-assistant-sensor/service.ts',
+      'src/renderer/nodes/HomeAssistantSensorNode.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/home-assistant-sensor.ts', 'export interface HomeAssistantSensorConfig'],
+      ['src/renderer/nodes/HomeAssistantSensorNode.tsx', 'export default function HomeAssistantSensorNode'],
+    ],
+    docs: ['docs/features/integrations/home-assistant-sensors.md'],
+  },
+  {
+    id: 'hosted-service-backups',
+    label: 'Shared hosted-service backup and restore archives',
+    files: [
+      'src/shared/hosted-service-backup.ts',
+      'src/core/hosted-service-backup.ts',
+    ],
+    contentChecks: [
+      ['src/shared/hosted-service-backup.ts', 'export const HOSTED_BACKUP_SCHEMA_VERSION'],
+      ['src/shared/hosted-service-backup.ts', 'export const HOSTED_BACKUP_LIMITS'],
+    ],
+    docs: ['docs/features/integrations/hosted-service-backups.md'],
+  },
+  {
+    id: 'nextcloud-aio',
+    label: 'Nextcloud All-in-One hosting profile',
+    files: [
+      'src/shared/nextcloud-aio.ts',
+      'src/main/remote/nextcloud-aio-manager.ts',
+      'src/renderer/components/nextcloud/NextcloudAioPanel.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/nextcloud-aio.ts', 'export const NEXTCLOUD_AIO_IMAGE'],
+      ['src/renderer/components/nextcloud/NextcloudAioPanel.tsx', 'export function NextcloudAioPanel'],
+    ],
+    docs: ['docs/features/integrations/nextcloud-aio.md'],
+  },
+  {
+    id: 'open-webui-hosting',
+    label: 'Open WebUI hosting node',
+    files: [
+      'src/shared/open-webui-hosting.ts',
+      'src/main/open-webui-hosting.ts',
+    ],
+    contentChecks: [
+      ['src/shared/open-webui-hosting.ts', 'export const OPEN_WEBUI_IMAGE'],
+      ['src/shared/open-webui-hosting.ts', 'export const OPEN_WEBUI_SCHEMA_VERSION'],
+    ],
+    docs: ['docs/features/integrations/open-webui-hosting.md'],
+  },
+  {
+    id: 'durable-occurrences',
+    label: 'Planner, alarm and timer occurrence service',
+    files: [
+      'src/shared/durable-occurrences.ts',
+      'src/core/durable-occurrence-service.ts',
+      'src/renderer/components/DurableOccurrenceConsumer.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/durable-occurrences.ts', 'export const DURABLE_OCCURRENCES_SCHEMA_VERSION'],
+      ['src/shared/durable-occurrences.ts', 'export const DURABLE_OCCURRENCE_LIMITS'],
+    ],
+    docs: ['docs/features/integrations/planner-alarm-timer-occurrences.md'],
+  },
+  {
+    id: 'portal-door-construction',
+    label: 'Interactive portal-door construction',
+    files: [
+      'src/shared/door-construction.ts',
+      'src/renderer/components/DoorConstructionDialog.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/door-construction.ts', 'export const DOOR_PART_IDS'],
+      ['src/renderer/components/DoorConstructionDialog.tsx', 'export function DoorConstructionDialog'],
+    ],
+    docs: ['docs/features/multiverse/portal-door-construction.md'],
+  },
+  {
+    id: 'aws-universe-portal',
+    label: 'AWS Universe portal',
+    files: [
+      'src/core/aws-universe-portal.ts',
+      'src/renderer/nodes/AwsUniversePortalNode.tsx',
+    ],
+    contentChecks: [
+      ['src/core/aws-universe-portal.ts', 'export const AWS_UNIVERSE_SCHEMA_VERSION'],
+      ['src/renderer/nodes/AwsUniversePortalNode.tsx', 'export function AwsUniversePortalNode'],
+    ],
+    docs: ['docs/features/projects/aws-universe-portal.md'],
+  },
+  {
+    id: 'cross-project-links',
+    label: 'Typed cross-project links and agent harnesses',
+    files: [
+      'src/shared/link-model.ts',
+      'src/renderer/lib/link-authoring.ts',
+    ],
+    contentChecks: [
+      ['src/shared/link-model.ts', 'export const LINK_MODEL_VERSION'],
+      ['src/renderer/lib/link-authoring.ts', 'export function resolveEndpoint'],
+    ],
+    docs: ['docs/features/projects/cross-project-links-and-agent-harnesses.md'],
+  },
+  {
+    id: 'multiverse-child-canvases',
+    label: 'Multiverse child canvases',
+    files: [
+      'src/shared/multiverse.ts',
+      'src/core/multiverse.ts',
+      'src/renderer/components/MultiverseNavigator.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/multiverse.ts', 'export const MULTIVERSE_MAX_DEPTH'],
+      ['src/renderer/components/MultiverseNavigator.tsx', 'export function MultiverseNavigator'],
+    ],
+    docs: ['docs/features/projects/multiverse.md'],
+  },
+  {
+    id: 'portal-door-entry',
+    label: 'Portal-door entry admission',
+    files: [
+      'src/core/universe-door-entry.ts',
+      'src/core/portal-door-service.ts',
+      'src/renderer/components/portals/PortalDoorEntryPopover.tsx',
+    ],
+    contentChecks: [
+      ['src/core/universe-door-entry.ts', 'export const UNIVERSE_DOOR_ENTRY_SCHEMA_VERSION'],
+      ['src/renderer/components/portals/PortalDoorEntryPopover.tsx', 'export function PortalDoorEntryPopover'],
+    ],
+    docs: ['docs/features/projects/portal-door-entry.md'],
+  },
+  {
+    id: 'portal-lifecycle',
+    label: 'Portal lifecycle and child-content recovery',
+    files: [
+      'src/shared/portal-lifecycle.ts',
+      'src/core/portal-lifecycle.ts',
+    ],
+    contentChecks: [
+      ['src/shared/portal-lifecycle.ts', 'export const PORTAL_MAX_DEPTH'],
+      ['src/shared/portal-lifecycle.ts', 'export const PORTAL_DOOR_KIND'],
+    ],
+    docs: ['docs/features/projects/portal-lifecycle.md'],
+  },
+  {
+    id: 'portal-navigation',
+    label: 'Door-only portal navigation',
+    files: [
+      'src/shared/portal-navigation.ts',
+      'src/renderer/state/portalNavigation.ts',
+    ],
+    contentChecks: [
+      ['src/shared/portal-navigation.ts', 'export function validatePortalTopology'],
+      ['src/renderer/state/portalNavigation.ts', 'export function nodesForPortalCanvas'],
+    ],
+    docs: ['docs/features/projects/portal-navigation.md'],
+  },
+  {
+    id: 'cloudflare-tunnel-wizard',
+    label: 'One-click Cloudflare Tunnel wizard',
+    files: [
+      'src/shared/cloudflare-tunnel-wizard.ts',
+      'src/core/cloudflare/tunnel-wizard-service.ts',
+      'src/renderer/components/cloudflare/CloudflareTunnelWizard.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/cloudflare-tunnel-wizard.ts', 'export const CLOUDFLARE_TUNNEL_INTENT_VERSION'],
+      ['src/renderer/components/cloudflare/CloudflareTunnelWizard.tsx', 'export function CloudflareTunnelWizard'],
+    ],
+    docs: ['docs/features/remote/cloudflare-tunnel.md'],
+  },
+  {
+    id: 'cloudflare-tunnel-manager',
+    label: 'Cloudflare tunnel inventory, configuration and DNS adoption',
+    files: [
+      'src/shared/cloudflare-tunnels.ts',
+      'src/core/cloudflare/tunnel-service.ts',
+      'src/renderer/components/cloudflare/CloudflareTunnelInventoryPanel.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/cloudflare-tunnels.ts', 'export type CloudflareAdoptionAction'],
+      ['src/renderer/components/cloudflare/CloudflareTunnelInventoryPanel.tsx', 'export function CloudflareTunnelInventoryPanel'],
+    ],
+    docs: ['docs/features/remote/cloudflare-tunnels.md'],
+  },
+  {
+    id: 'gitlab-server-hosting',
+    label: 'GitLab Server hosting node',
+    files: [
+      'src/shared/gitlab.ts',
+      'src/core/gitlab/server-manager.ts',
+      'src/renderer/components/gitlab/GitLabServerPanel.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/gitlab.ts', 'export const GITLAB_IMAGE_CATALOG'],
+      ['src/renderer/components/gitlab/GitLabServerPanel.tsx', 'export function GitLabServerPanel'],
+    ],
+    docs: ['docs/features/remote/gitlab-server.md'],
+  },
+  {
+    id: 'hosted-service-tunnel-handoff',
+    label: 'Hosted-service Cloudflare Tunnel handoff',
+    files: [
+      'src/shared/hosted-service-tunnel.ts',
+      'src/core/hosted-service-tunnel.ts',
+      'src/renderer/components/HostedServiceTunnelPanel.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/hosted-service-tunnel.ts', 'export interface HostedServiceOrigin'],
+      ['src/renderer/components/HostedServiceTunnelPanel.tsx', 'export function HostedServiceTunnelPanel'],
+    ],
+    docs: ['docs/features/remote/hosted-service-tunnel.md'],
+  },
+  {
+    id: 'hosted-tunnel-state',
+    label: 'Hosted tunnel state milestones',
+    files: [
+      'src/shared/tunnel-state.ts',
+      'src/renderer/components/tunnel/TunnelStatePanel.tsx',
+      'src/renderer/components/settings/sections/TunnelStateSection.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/tunnel-state.ts', 'export const TUNNEL_FACETS'],
+      ['src/renderer/components/tunnel/TunnelStatePanel.tsx', 'export function TunnelStatePanel'],
+    ],
+    docs: ['docs/features/remote/tunnel-state.md'],
+  },
+  {
+    id: 'named-terminal-profiles',
+    label: 'Named terminal profiles',
+    files: [
+      'src/renderer/lib/named-terminal-profiles.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/lib/named-terminal-profiles.ts', 'export const NAMED_TERMINAL_PROFILE_ID_PREFIX'],
+      ['src/renderer/lib/named-terminal-profiles.ts', 'export const NAMED_TERMINAL_PROFILE_NAME_MAX'],
+    ],
+    docs: ['docs/features/terminals/named-terminal-profiles.md'],
+  },
+  {
+    id: 'session-icons',
+    label: 'Per-session icons',
+    files: [
+      'src/shared/session-icon.ts',
+      'src/renderer/components/SessionIcon.tsx',
+      'src/renderer/components/SessionIconMenu.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/session-icon.ts', 'export function sanitizeSessionIcon'],
+      ['src/renderer/components/SessionIcon.tsx', 'export function SessionIconGlyph'],
+      ['src/renderer/components/SessionIconMenu.tsx', 'export function SessionIconMenu'],
+    ],
+    docs: ['docs/features/terminals/session-icons.md'],
+  },
+  {
+    id: 'wild-dim-sum-node',
+    label: 'Wild dim-sum nodes',
+    files: [
+      'src/renderer/lib/dimsum/wild.ts',
+      'src/renderer/nodes/WildDimSumNode.tsx',
+    ],
+    contentChecks: [
+      ['src/renderer/lib/dimsum/wild.ts', 'export function drawWildDimSumForNode'],
+      ['src/renderer/nodes/WildDimSumNode.tsx', 'export default function WildDimSumNode'],
+    ],
+    docs: ['docs/wild-dimsum-node.md'],
+  },
+  {
+    id: 'windows-only-source-contract',
+    label: 'Windows-only source contract scanner',
+    files: [
+      'scripts/check-windows-only.mjs',
+    ],
+    contentChecks: [
+      ['scripts/check-windows-only.mjs', 'export const EXCLUSIONS'],
+      ['scripts/check-windows-only.mjs', 'const rootConfigurationFiles'],
+    ],
+    docs: ['docs/windows-only-source-contract.md'],
+  },
 ]
 
 // A feature-row check is only fail-closed if removing the whole row, or one of its required
@@ -2471,6 +3066,9 @@ const NON_FEATURE_DOCS = new Map([
   ,['plans/README.md', 'planning category index, not a user-facing surface']
   ,['troubleshooting-codex-snap.md', 'troubleshooting guide for agent identity, covered by agent-support']
   ,['uninstall.md', 'operational uninstall guide, not a user-facing application feature']
+  ,['features/cloud/README.md', 'cloud-integration category index; the AWS CLI model and documentation index article is inventoried separately']
+  ,['features/multiverse/README.md', 'multiverse category index; the portal-door construction article is inventoried separately']
+  ,['features/integrations/aws-identity-manager.md', 'a two-paragraph categorized pointer at docs/aws-identity-manager.md, which carries the AWS identity manager contract row']
 ])
 
 {

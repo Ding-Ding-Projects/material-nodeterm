@@ -272,6 +272,7 @@ import {
   KanbanView,
   FileConverterPanel,
   OllamaManagerPanel,
+  AwsCliManagerPanel,
   AwsShopPanel,
   UniGetUiUniversePanel,
   PasswordManagerPanel
@@ -1716,6 +1717,7 @@ export function Canvas() {
   // toggle-a-flag pattern as every other drawer/panel on this canvas.
   const [converterOpen, setConverterOpen] = useState(false)
   const [ollamaOpen, setOllamaOpen] = useState(false)
+  const [awsCliOpen, setAwsCliOpen] = useState(false)
   const [unigetuiOpen, setUnigetuiOpen] = useState(false)
   // Password manager (shared/password-manager.ts) — same drawer pattern, but per-project rather
   // than per-machine, and it can jump straight to "add a credential" when opened from the canvas
@@ -1732,6 +1734,7 @@ export function Canvas() {
     setScOpen(false)
     setConverterOpen(false)
     setOllamaOpen(false)
+    setAwsCliOpen(false)
     setUnigetuiOpen(false)
     setPwmOpen(false)
     setSettingsOpen(false)
@@ -19777,6 +19780,7 @@ export function Canvas() {
           scOpen ||
           converterOpen ||
           ollamaOpen ||
+          awsCliOpen ||
           unigetuiOpen ||
           pwmOpen ||
           settingsOpen ||
@@ -19836,7 +19840,7 @@ export function Canvas() {
             id: 'tools',
             icon: <IconConvert />,
             label: 'Tools',
-            active: converterOpen || ollamaOpen || unigetuiOpen || pwmOpen,
+            active: converterOpen || ollamaOpen || awsCliOpen || unigetuiOpen || pwmOpen,
             onClick: (anchor: HTMLElement) => {
               closeAllDrawers()
               leaveBoard()
@@ -19848,6 +19852,7 @@ export function Canvas() {
                   { label: 'File converter', onClick: () => setConverterOpen(true) },
                   { label: 'New file converter node', icon: <IconConvert />, onClick: () => addConverter() },
                   { label: 'Ollama manager', onClick: () => setOllamaOpen(true) },
+                  { label: 'AWS CLI manager', onClick: () => setAwsCliOpen(true) },
                   { label: 'UniGetUI Global Universe', onClick: () => setUnigetuiOpen(true) },
                   {
                     label: 'Password manager',
@@ -20695,6 +20700,7 @@ export function Canvas() {
 
       {converterOpen && <FileConverterPanel onClose={() => setConverterOpen(false)} />}
       {ollamaOpen && <OllamaManagerPanel onClose={() => setOllamaOpen(false)} />}
+      {awsCliOpen && <AwsCliManagerPanel onClose={() => setAwsCliOpen(false)} />}
       {awsShopUniverseId && (
         <AwsShopPanel
           universeId={awsShopUniverseId}

@@ -534,6 +534,19 @@ export interface AwsModelInventory {
   detail: string | null
 }
 
+/** Renderer-facing surface for the bundled AWS CLI v2 manager (core/aws/service.ts). Distinct
+ *  from `AwsApi` above, which is the live AWS operation/inventory lane. Machine-local: a relay
+ *  tab refuses every member rather than installing the CLI on the viewing machine. */
+export interface AwsCliApi {
+  status(): Promise<AwsCliStatus>
+  ensure(): Promise<AwsCliStatus>
+  repair(): Promise<AwsCliStatus>
+  cancel(): Promise<void>
+  models(): Promise<AwsModelInventory>
+  refreshModels(): Promise<AwsModelInventory>
+  onStatus(listener: (status: AwsCliStatus) => void): () => void
+}
+
 export interface AwsLegacyCliManagerApi {
   status(): Promise<AwsCliStatus>
   ensure(): Promise<AwsCliStatus>

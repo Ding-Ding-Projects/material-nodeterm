@@ -982,6 +982,19 @@ export const IPC = {
   awsSetEndpoint: 'aws:set-endpoint',
   awsClearMachineCache: 'aws:clear-machine-cache',
   awsTrustCredentialProcess: 'aws:trust-credential-process',
+  // Bundled AWS CLI v2 manager and Bedrock foundation-model inventory
+  // (docs/features/integrations/aws-cli-manager.md). Deliberately a separate `awsCli*` namespace
+  // from the `aws*` identity/operation channels above: this one only installs, repairs and
+  // inspects the pinned AWS CLI and reads its `bedrock list-foundation-models` output. It is
+  // machine-local (an installer on THIS machine) and carries no credential.
+  awsCliStatus: 'aws-cli:status',
+  awsCliEnsure: 'aws-cli:ensure',
+  awsCliRepair: 'aws-cli:repair',
+  awsCliCancel: 'aws-cli:cancel',
+  awsCliModels: 'aws-cli:models',
+  awsCliRefreshModels: 'aws-cli:refresh-models',
+  /** main/server -> renderer: the AWS CLI manager's install/repair status changed. */
+  awsCliStatusEvent: 'aws-cli:status-event',
   // Project-scoped repository graph. Derived indexes remain host-local; only safe graph intent
   // and bounded, provenance-rich snapshots cross the renderer boundary.
   repositoryGraphInspect: 'repository-graph:inspect',

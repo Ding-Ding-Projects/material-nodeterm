@@ -19,6 +19,7 @@ import type { GitHubApiApi, GitHubApiProgress, GitHubApiRequest } from '../../sh
 import type { GitHubCliAccountsApi, GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
+import type { AwsCliApi } from '../../shared/aws'
 import type { AwsLegacyIdentityManagerApi } from '../../shared/aws'
 import type { RepositoryGraphApi } from '../../shared/repository-graph'
 import {
@@ -1323,6 +1324,22 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+/** Bundled AWS CLI v2 manager (docs/features/integrations/aws-cli-manager.md). The Server Edition
+ * runs the identical core service as desktop, so this is a real implementation rather than a stub:
+ * the server process is the machine whose AWS CLI is installed, repaired and inspected. */
+export function buildAwsCliApi(client: RpcClient): Pick<NodeTerminalApi, 'awsCli'> {
+  const awsCli: AwsCliApi = {
+    status: () => client.request(IPC.awsCliStatus) as ReturnType<AwsCliApi['status']>,
+    ensure: () => client.request(IPC.awsCliEnsure) as ReturnType<AwsCliApi['ensure']>,
+    repair: () => client.request(IPC.awsCliRepair) as ReturnType<AwsCliApi['repair']>,
+    cancel: () => client.request(IPC.awsCliCancel) as Promise<void>,
+    models: () => client.request(IPC.awsCliModels) as ReturnType<AwsCliApi['models']>,
+    refreshModels: () => client.request(IPC.awsCliRefreshModels) as ReturnType<AwsCliApi['refreshModels']>,
+    onStatus: (listener) => client.subscribe(IPC.awsCliStatusEvent, listener as Listener)
+  }
+  return { awsCli }
+}
+
 /** Host-owned repository graph API. The Server Edition indexes the server's own project root,
  * never the browser's filesystem, while relay sessions intentionally use the explicit stub. */
 export function buildRepositoryGraphApi(client: RpcClient): Pick<NodeTerminalApi, 'repositoryGraph'> {
@@ -2191,6 +2208,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildAwsWizardModelsApi(client),
     ...buildAwsIdentityApi(client),
     ...buildOllamaApi(client),
+    ...buildAwsCliApi(client),
     ...buildAwsProfileManagerApi(client),
     ...buildRepositoryGraphApi(client),
     ...buildUniGetUiApi(client),

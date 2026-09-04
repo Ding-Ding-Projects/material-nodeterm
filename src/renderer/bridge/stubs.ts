@@ -889,6 +889,18 @@ export function buildStubApi(): Omit<
       chatStop: U('ollama.chatStop'),
       onChatStream: noopUnsub
     },
+    // Bundled AWS CLI v2 manager. Machine-local by construction: it installs and repairs an
+    // installer on THIS machine and reads that machine's own AWS CLI. A relay tab must never run
+    // it on the viewing machine, so every member refuses by name rather than being omitted.
+    awsCli: {
+      status: U('awsCli.status'),
+      ensure: U('awsCli.ensure'),
+      repair: U('awsCli.repair'),
+      cancel: U('awsCli.cancel'),
+      models: U('awsCli.models'),
+      refreshModels: U('awsCli.refreshModels'),
+      onStatus: noopUnsub
+    },
     // AWS identity manager. Explicitly refused per member rather than omitted: an absent optional
     // member and a refusing one look identical to the type checker, but only the refusal tells the
     // caller which surface said no. See the relay note in relay-api.ts for why the relay keeps it.

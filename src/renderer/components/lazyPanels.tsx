@@ -80,6 +80,9 @@ export const OllamaManagerPanel = withSuspense(
 export const UniGetUiUniversePanel = withSuspense(
   lazy(() => import('./unigetui/UniGetUiUniversePanel').then((m) => ({ default: m.UniGetUiUniversePanel })))
 )
+export const AwsCliManagerPanel = withSuspense(
+  lazy(() => import('./aws/AwsCliManagerPanel').then((m) => ({ default: m.AwsCliManagerPanel })))
+)
 export const PasswordManagerPanel = withSuspense(
   lazy(() => import('./passwordManager/PasswordManagerPanel').then((m) => ({ default: m.PasswordManagerPanel })))
 )

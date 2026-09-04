@@ -62,6 +62,7 @@ import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
+import { registerAwsCliIpc } from '../core/aws/register-cli-ipc'
 import { registerAwsProfileManagerIpc } from '../core/aws/register-identity-ipc'
 import { registerUniGetUiIpc } from '../core/unigetui/register-ipc'
 import { registerOpenWebUiHosting } from './open-webui-hosting'
@@ -2488,6 +2489,7 @@ app.whenReady().then(async () => {
   const nodeDependencyService = registerNodeDependencyIpc(corePlatform)
   const awsWizardModels = new AwsWizardModelService(nodeDependencyService)
   registerOllamaIpc(corePlatform)
+  registerAwsCliIpc(corePlatform)
   registerAwsProfileManagerIpc(corePlatform)
   registerRepositoryGraphIpc(corePlatform, { projectTargetInfo: (projectId) => workspaceStore.projectTargetInfo(projectId) })
   registerUniGetUiIpc(corePlatform)
