@@ -280,7 +280,7 @@ export default function ConverterNode({ id, data, selected }: NodeProps<CanvasNo
   }, [api, destination, lossyAcknowledged, pending, selectedAdapter, vocab])
 
   const openInEditor = useCallback((path: string): void => {
-    run(api.vscode.open(path).then((result) => {
+    run(() => api.vscode.open(path).then((result) => {
       if (!result.ok) throw new Error(result.error)
       notify(vocab('Opened the converted file in VS Code.'))
     }))

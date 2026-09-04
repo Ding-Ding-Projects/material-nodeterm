@@ -28,6 +28,7 @@ import { sanitizeMultiverseCanvases } from '../shared/multiverse-canvases'
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import { sanitizeProviderBlueprint, validateProviderBlueprint, type ProviderBinding, type ProviderBlueprint } from '../shared/provider-accounts'
 import { loadedAgentBrowserPartition } from '../shared/browser-partition'
 import { validatePortableDoorConstruction } from '../shared/door-construction'
 import { validateCalendarConfig } from '../shared/calendar'
@@ -522,6 +523,13 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
   return cleaned.length > 0 ? cleaned : undefined
 }
 
+/** Portable provider intent is hostile shared input too. Invalid rows are dropped individually. */
+export function validProviderBlueprints(v: unknown): ProviderBlueprint[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const cleaned = v.filter((item): item is ProviderBlueprint => validateProviderBlueprint(item)).map(sanitizeProviderBlueprint)
+  return cleaned.length > 0 ? cleaned : undefined
+}
+
 /** Read only safe debugging-browser intent. Malformed rows are dropped individually. */
 export function validDebugBrowserProfiles(v: unknown): DebugBrowserProfile[] | undefined {
   return normalizeDebugBrowserProfiles(v)
@@ -734,6 +742,7 @@ export function fileToProject(
   const icon = sanitizeProjectIcon(f.icon)
   const links = migrateLinks(f)
   const savedLayouts = validSavedLayouts(f.savedLayouts)
+  const providerBlueprints = validProviderBlueprints(f.providerBlueprints)
   return {
     id: base.id,
     name: f.name,

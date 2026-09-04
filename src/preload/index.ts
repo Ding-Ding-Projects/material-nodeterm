@@ -1097,7 +1097,7 @@ const api: NodeTerminalApi = {
   dockerHost: {
     listHosts: () => ipcRenderer.invoke(IPC.dockerHostList),
     saveHost: (input) => ipcRenderer.invoke(IPC.dockerHostSave, input),
-    removeHost: (id, confirmed) => ipcRenderer.invoke(IPC.dockerHostRemove, id, confirmed),
+    removeHost: (id) => ipcRenderer.invoke(IPC.dockerHostRemove, id),
     verify: (id) => ipcRenderer.invoke(IPC.dockerHostVerify, id),
     listContexts: (id) => ipcRenderer.invoke(IPC.dockerHostContexts, id),
     inventory: (id) => ipcRenderer.invoke(IPC.dockerHostInventory, id),

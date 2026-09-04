@@ -1496,7 +1496,7 @@ export function buildDockerHostApi(client: RpcClient): Pick<NodeTerminalApi, 'do
   const dockerHost: DockerHostApi = {
     listHosts: () => client.request(IPC.dockerHostList) as ReturnType<DockerHostApi['listHosts']>,
     saveHost: (input) => client.request(IPC.dockerHostSave, input) as ReturnType<DockerHostApi['saveHost']>,
-    removeHost: (id, confirmed) => client.request(IPC.dockerHostRemove, id, confirmed) as Promise<void>,
+    removeHost: (id) => client.request(IPC.dockerHostRemove, id) as Promise<void>,
     verify: (id) => client.request(IPC.dockerHostVerify, id) as ReturnType<DockerHostApi['verify']>,
     listContexts: (id) => client.request(IPC.dockerHostContexts, id) as ReturnType<DockerHostApi['listContexts']>,
     inventory: (id) => client.request(IPC.dockerHostInventory, id) as ReturnType<DockerHostApi['inventory']>,
