@@ -318,6 +318,7 @@ export function SettingsPage({
             <LicenseSection isActive={active === 'license'} />
             <PresenceIdentitySection isActive={active === 'presence'} />
             <RemoteSection isActive={active === 'remote'} onClose={onClose} />
+            <TunnelStateSection isActive={active === 'tunnel-state'} />
             <TeamAccessSection isActive={active === 'team-access'} onClose={onClose} />
             <SshSection isActive={active === 'ssh'} onNavigate={setActive} />
             <AwsSection isActive={active === 'aws'} />

@@ -2527,6 +2527,9 @@ export interface Settings {
   /** ADHD modes — five independent accommodations, all off by default. See `AdhdModes`. */
   adhdModes: AdhdModes
   dockerHost: DockerHostSettings
+  /** Provider-neutral hosted tunnel observations. Secrets, provider sessions, process state,
+   *  machine paths, and host-specific identifiers are intentionally excluded. */
+  tunnelState: TunnelStateSnapshot
   fontSize: number
   fontFamily: string
   /** Characters that end a word during xterm double-click selection. */
@@ -3053,6 +3056,31 @@ export const DEFAULT_SETTINGS: Settings = {
     pidsLimit: 256,
     network: 'none',
     workdir: '/workspace'
+  },
+  tunnelState: {
+    schemaVersion: 1,
+    tunnelId: '',
+    displayName: '',
+    hostname: '',
+    originUrl: '',
+    generation: 0,
+    lifecycle: 'idle',
+    stale: false,
+    partial: false,
+    observedAt: null,
+    updatedAt: 0,
+    phases: {
+      'api-created': { state: 'unknown', checkedAt: null },
+      'token-sealed': { state: 'unknown', checkedAt: null },
+      'process-running': { state: 'unknown', checkedAt: null },
+      'connector-healthy': { state: 'unknown', checkedAt: null },
+      'dns-routed': { state: 'unknown', checkedAt: null },
+      'access-protected': { state: 'unknown', checkedAt: null },
+      'origin-reachable': { state: 'unknown', checkedAt: null },
+      'external-reachable': { state: 'unknown', checkedAt: null }
+    },
+    errors: [],
+    history: []
   },
   fontSize: 13,
   fontFamily: 'Menlo, Monaco, Consolas, "Cascadia Mono", "Courier New", monospace',

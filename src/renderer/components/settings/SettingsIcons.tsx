@@ -156,6 +156,14 @@ const PATHS: Record<StaticSettingsSectionId, React.JSX.Element> = {
       <path d="M2.5 8h11M8 2.5c1.9 1.7 1.9 9.3 0 11M8 2.5c-1.9 1.7-1.9 9.3 0 11" />
     </>
   ),
+  'tunnel-state': (
+    <>
+      <path d="M2.5 5.2h3.2l2.3 2.6h2.3l2.2-2.6h1" />
+      <path d="M2.5 10.8h3.2L8 8.2h2.3l2.2 2.6h1" />
+      <circle cx="2.5" cy="5.2" r="1" fill="currentColor" stroke="none" />
+      <circle cx="13.5" cy="10.8" r="1" fill="currentColor" stroke="none" />
+    </>
+  ),
   'team-access': (
     <>
       <circle cx="6" cy="5.5" r="2.2" />
