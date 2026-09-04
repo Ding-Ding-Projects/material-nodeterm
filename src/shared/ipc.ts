@@ -1214,5 +1214,44 @@ export const IPC = {
   // accepted only for an immediate configure or verify request and never returned to the project.
   universeDoorEntryConfigure: 'universe-door-entry:configure',
   universeDoorEntryVerify: 'universe-door-entry:verify',
-  universeDoorEntryRemove: 'universe-door-entry:remove'
+  universeDoorEntryRemove: 'universe-door-entry:remove',
+  // Recovered from the commit that introduced this family; the merge kept the family's
+  // consumers but dropped its channel keys. Strings are verbatim — a guessed channel
+  // silently unbinds the handler rather than failing loudly.
+  cloudflaredStatus: 'cloudflared:status',
+  cloudflaredSetToken: 'cloudflared:set-token',
+  cloudflaredClearToken: 'cloudflared:clear-token',
+  cloudflaredStart: 'cloudflared:start',
+  cloudflaredStop: 'cloudflared:stop',
+  cloudflaredUninstall: 'cloudflared:uninstall',
+  cloudflaredReconcile: 'cloudflared:reconcile',
+  cloudflaredInstallService: 'cloudflared:install-service',
+  cloudflaredStatusEvent: 'cloudflared:status-event',
+  // Recovered from the commit that introduced this family; the merge kept the family's
+  // consumers but dropped its channel keys. Strings are verbatim — a guessed channel
+  // silently unbinds the handler rather than failing loudly.
+  debugBrowserListExecutables: 'debug-browser:list-executables',
+  debugBrowserStart: 'debug-browser:start',
+  debugBrowserStatus: 'debug-browser:status',
+  debugBrowserInspect: 'debug-browser:inspect',
+  debugBrowserStop: 'debug-browser:stop',
+  // Recovered from the commit that introduced this family; the merge kept the family's
+  // consumers but dropped its channel keys. Strings are verbatim — a guessed channel
+  // silently unbinds the handler rather than failing loudly.
+  durableOccurrencesLoad: 'durable-occurrences:load',
+  durableOccurrencesSave: 'durable-occurrences:save',
+  durableOccurrencesReconcile: 'durable-occurrences:reconcile',
+  durableOccurrencesClaim: 'durable-occurrences:claim',
+  durableOccurrencesSnooze: 'durable-occurrences:snooze',
+  durableOccurrencesDismiss: 'durable-occurrences:dismiss',
+  durableOccurrencesExport: 'durable-occurrences:export',
+  durableOccurrencesImport: 'durable-occurrences:import',
+  durableOccurrencesChanged: 'durable-occurrences:changed',
+  durableOccurrencesTimerTransition: 'durable-occurrences:timer-transition',
+  durableOccurrencesTimerLap: 'durable-occurrences:timer-lap',
+  durableOccurrencesTimerTick: 'durable-occurrences:timer-tick',
+  durableOccurrencesUpsertAlarm: 'durable-occurrences:upsert-alarm',
+  durableOccurrencesUpsertTimer: 'durable-occurrences:upsert-timer',
+  durableOccurrencesRemoveSource: 'durable-occurrences:remove-source',
+  durableOccurrencesAcknowledge: 'durable-occurrences:acknowledge',
 } as const
