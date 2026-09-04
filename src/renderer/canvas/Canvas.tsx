@@ -44,7 +44,7 @@ import {
 } from '../nodes/TerminalNode'
 import { solveFitPadding } from './fit-view'
 import { paneMenuGroup } from './paneMenuGroup'
-import { MacWheelGestureRouter, trackpadRoutingEnabled } from './wheel-gesture'
+import { WheelGestureRouter, trackpadRoutingEnabled } from './wheel-gesture'
 import { WheelZoomBurstLimiter, clampWheelZoomSpeed, nextWheelZoom } from './wheel-zoom'
 import { isBrowserRuntime } from '@renderer/bridge/runtime'
 import { selectedLocalFilePaths } from './canvas-file-copy'
@@ -346,7 +346,6 @@ import {
   type AccountRemovalTeardownDetail
 } from '../lib/accountRemoval'
 import { NotificationCenter } from '../components/NotificationCenter'
-import { DrillBreadcrumb } from '../components/DrillBreadcrumb'
 import { LinkInspectorPanel } from '../components/links/LinkInspectorPanel'
 import { setLinkCommitHandler } from '../components/links/link-commit'
 import { HistoryScreen } from '../components/HistoryScreen'
@@ -697,13 +696,11 @@ import { oneLine } from '@shared/one-line'
 import { isDestructiveVerb } from '@shared/control-verbs'
 import { parseLenses, verifyLensPrompt, verifySynthesisPrompt } from '../lib/verifyPanel'
 import { useSettings } from '../state/settings'
-import { useModelGateway } from '../state/modelGateway'
 import {
   terminalProfileDisplayError,
   useTerminalProfiles
 } from '../state/terminal-profiles'
 import { useSchoolMode } from '../state/schoolMode'
-import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
 import { useScheduledSettings } from '../state/scheduledSettings'
 import {
   activeAgentLaunchPlan,
@@ -867,7 +864,6 @@ import {
 import { codexAccountSelectable } from './codex-account-switch'
 import { resolveNewCodexNodeAccount, planCodexAccountSwitch } from './codex-account-ops'
 import type { CodexAccount } from '@shared/codex-account'
-import type { SavedCanvasLayout } from '@shared/types'
 import type { SchedulePlacementTarget } from '@shared/scheduled-settings'
 import { setFocusNodeHandler } from '../nodes/focus-handler'
 
@@ -2076,7 +2072,6 @@ export function Canvas() {
   const [mergeTarget, setMergeTargetState] = useState<MergeState | null>(null)
   const [mergePush, setMergePush] = useState(false)
   const settings = useSettings((s) => s.settings)
-  const gatewayModels = useModelGateway((s) => s.models)
   // Only the Windows desktop bridge exposes this API. A newly accepted peer/phone terminal gets
   // THIS host's current default snapshotted once; Server Edition keeps its existing behavior.
   const trustedHostDefaultTerminalProfileId = window.nodeTerminal.terminalProfiles

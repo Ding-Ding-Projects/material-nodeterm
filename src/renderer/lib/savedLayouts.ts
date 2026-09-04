@@ -1,4 +1,4 @@
-import type { CanvasNodeState, SavedCanvasLayout, SavedCanvasLayoutNode } from '@shared/types'
+import type { CanvasNodeState, PortableSavedCanvasLayout, SavedCanvasLayoutNode } from '@shared/types'
 
 /** Bounds shared by the editor, file boundary, and portable projection. */
 export const SAVED_LAYOUT_LIMITS = {
@@ -33,13 +33,13 @@ function safeNode(node: SavedCanvasLayoutNode): SavedCanvasLayoutNode | null {
 }
 
 /** Remove malformed rows without making a valid neighbouring layout disappear. */
-export function normalizeSavedLayouts(value: unknown): SavedCanvasLayout[] {
+export function normalizeSavedLayouts(value: unknown): PortableSavedCanvasLayout[] {
   if (!Array.isArray(value)) return []
   const seen = new Set<string>()
-  const result: SavedCanvasLayout[] = []
+  const result: PortableSavedCanvasLayout[] = []
   for (const candidate of value) {
     if (!candidate || typeof candidate !== 'object') continue
-    const layout = candidate as SavedCanvasLayout
+    const layout = candidate as PortableSavedCanvasLayout
     if (layout.version !== 1 || typeof layout.id !== 'string' || !layout.id.trim() || layout.id.length > SAVED_LAYOUT_LIMITS.maxIdLength || seen.has(layout.id)) continue
     if (typeof layout.name !== 'string' || !layout.name.trim() || layout.name.length > SAVED_LAYOUT_LIMITS.maxNameLength || typeof layout.createdAt !== 'string' || !Array.isArray(layout.nodes) || layout.nodes.length === 0 || layout.nodes.length > SAVED_LAYOUT_LIMITS.maxNodesPerLayout) continue
     const nodes = layout.nodes.map(safeNode).filter((node): node is SavedCanvasLayoutNode => node !== null)
@@ -58,7 +58,7 @@ function newLayoutId(): string {
 }
 
 /** Capture only safe, portable geometry from the live canvas. */
-export function createSavedLayout(nodes: readonly CanvasNodeState[], name: string, now = new Date().toISOString()): SavedCanvasLayout | null {
+export function createSavedLayout(nodes: readonly CanvasNodeState[], name: string, now = new Date().toISOString()): PortableSavedCanvasLayout | null {
   const cleanName = name.trim()
   if (!cleanName || cleanName.length > SAVED_LAYOUT_LIMITS.maxNameLength) return null
   const layoutNodes = nodes
@@ -122,7 +122,7 @@ function containsParent(ancestorId: string, node: CanvasNodeState, nodes: readon
 }
 
 /** Apply a saved arrangement while preserving all non-layout node data. */
-export function applySavedLayout(nodes: readonly CanvasNodeState[], layout: SavedCanvasLayout): SavedLayoutApplyResult {
+export function applySavedLayout(nodes: readonly CanvasNodeState[], layout: PortableSavedCanvasLayout): SavedLayoutApplyResult {
   const normalized = normalizeSavedLayouts([layout])[0]
   if (!normalized) return { nodes: [...nodes], appliedIds: [], missingIds: layout.nodes.map((node) => node.id), collisionPairs: [] }
   const byId = new Map(normalized.nodes.map((node) => [node.id, node]))
@@ -152,13 +152,13 @@ export function applySavedLayout(nodes: readonly CanvasNodeState[], layout: Save
   return { nodes: next, appliedIds, missingIds, collisionPairs }
 }
 
-export function serializeSavedLayout(layout: SavedCanvasLayout): string {
+export function serializeSavedLayout(layout: PortableSavedCanvasLayout): string {
   const normalized = normalizeSavedLayouts([layout])[0]
   if (!normalized) throw new Error('Saved layout is invalid.')
   return `${JSON.stringify(normalized, null, 2)}\n`
 }
 
-export function parseSavedLayout(text: string): SavedCanvasLayout {
+export function parseSavedLayout(text: string): PortableSavedCanvasLayout {
   const parsed: unknown = JSON.parse(text)
   const layout = normalizeSavedLayouts([parsed])[0]
   if (!layout) throw new Error('Saved layout is invalid or empty.')

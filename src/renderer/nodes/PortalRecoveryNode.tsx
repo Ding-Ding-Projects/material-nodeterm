@@ -11,6 +11,8 @@ import {
 } from '@shared/portal-recovery'
 import type { CanvasNode } from '../state/workspace'
 import { useSchoolMode } from '../state/schoolMode'
+import { Button, IconButton } from '../ui/md3'
+import { Input } from '../ui/Input'
 
 function directionForDelta(dx: number, dy: number): PortalRecoveryDirection | null {
   if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 'left' : 'right'
@@ -113,17 +115,15 @@ export function PortalRecoveryNode({ id, data, selected }: NodeProps<CanvasNode>
       <NodeResizer minWidth={460} minHeight={430} isVisible={selected} color={data.color} />
       <div className="portal-recovery-node__header" style={{ borderColor: data.color }}>
         <span className="term-node__color" style={{ background: data.color }} aria-hidden="true" />
-        <input
-          className="term-node__title nodrag"
+        <Input
+          className="mdx-input--bare term-node__title nodrag"
           value={data.title}
           spellCheck={false}
           aria-label="Portal recovery title"
           onChange={(event) => updateNodeData(id, { title: event.target.value })}
         />
         <span className="portal-recovery-node__badge">{game.energy}/3 energy</span>
-        <button className="term-node__close" title="Close" aria-label="Close portal recovery" onClick={() => deleteElements({ nodes: [{ id }] })}>
-          ×
-        </button>
+        <IconButton size="compact" className="term-node__close" icon="close" title="Close" aria-label="Close portal recovery" onClick={() => deleteElements({ nodes: [{ id }] })} />
       </div>
 
       <div className="portal-recovery-node__body nodrag nowheel" tabIndex={0} onKeyDown={onKeyDown} role="group" aria-label="Portal recovery game">
@@ -148,8 +148,8 @@ export function PortalRecoveryNode({ id, data, selected }: NodeProps<CanvasNode>
             const isCore = PORTAL_RECOVERY_BOARD.core.x === x && PORTAL_RECOVERY_BOARD.core.y === y
             const isPlayer = game.position.x === x && game.position.y === y
             return (
-              <button
-                type="button"
+              <Button
+                variant="text"
                 key={`${x}:${y}`}
                 className={`portal-recovery-node__cell${isPlayer ? ' is-player' : ''}${hazard ? ' is-hazard' : ''}${isCore ? ' is-core' : ''}${keyIndex >= 0 && !game.collected[keyIndex] ? ' is-key' : ''}`}
                 role="gridcell"
@@ -160,7 +160,7 @@ export function PortalRecoveryNode({ id, data, selected }: NodeProps<CanvasNode>
                 }}
               >
                 {isPlayer ? '◆' : keyIndex >= 0 && !game.collected[keyIndex] ? '⚿' : isCore ? '◎' : hazard ? '×' : ''}
-              </button>
+              </Button>
             )
           })}
         </div>
@@ -168,11 +168,11 @@ export function PortalRecoveryNode({ id, data, selected }: NodeProps<CanvasNode>
           <span>◆ You</span><span>⚿ Energy key</span><span>× Hazard</span><span>◎ Core</span>
         </div>
         <div className="portal-recovery-node__controls" aria-label="Recovery controls">
-          <button type="button" onClick={() => move('up')} disabled={game.status === 'completed'} aria-label="Move up">↑</button>
-          <button type="button" onClick={() => move('left')} disabled={game.status === 'completed'} aria-label="Move left">←</button>
-          <button type="button" onClick={() => move('down')} disabled={game.status === 'completed'} aria-label="Move down">↓</button>
-          <button type="button" onClick={() => move('right')} disabled={game.status === 'completed'} aria-label="Move right">→</button>
-          <button type="button" className="portal-recovery-node__reset" onClick={reset}>Restart</button>
+          <Button variant="outlined" size="small" onClick={() => move('up')} disabled={game.status === 'completed'} aria-label="Move up">↑</Button>
+          <Button variant="outlined" size="small" onClick={() => move('left')} disabled={game.status === 'completed'} aria-label="Move left">←</Button>
+          <Button variant="outlined" size="small" onClick={() => move('down')} disabled={game.status === 'completed'} aria-label="Move down">↓</Button>
+          <Button variant="outlined" size="small" onClick={() => move('right')} disabled={game.status === 'completed'} aria-label="Move right">→</Button>
+          <Button variant="tonal" size="small" className="portal-recovery-node__reset" onClick={reset}>Restart</Button>
         </div>
         <div className="portal-recovery-node__progress" aria-live="polite">
           Keys: {game.collected.filter(Boolean).length}/3 · Moves: {game.moves}

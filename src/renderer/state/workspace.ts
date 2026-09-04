@@ -3363,7 +3363,6 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         namedTerminalProfileId: n.ssh ? undefined : n.namedTerminalProfileId,
         cwd: n.cwd,
         text: n.text,
-        media: n.media,
         serviceLabel: n.serviceLabel,
         openWebUiIntent: n.openWebUiIntent,
         openWebUiLocalBinding: n.openWebUiLocalBinding,
@@ -3648,7 +3647,7 @@ export function applyMutationToFlow(
   // An edge mutation addresses neither of these nodes — Canvas routes those to the edge state.
   // Returned by REFERENCE so the caller's `next === prev` short-circuit still fires (same contract
   // as `applyCanvasMutation`), rather than trusting every call site to have pre-filtered.
-  if (m.op === 'edge-upsert' || m.op === 'edge-remove') return nodes
+  if (m.op === 'edge-upsert' || m.op === 'edge-remove' || m.op === 'link-upsert' || m.op === 'link-remove') return nodes
   if (m.op === 'remove') {
     if (!nodes.some((n) => n.id === m.id)) return nodes // already gone — keep identity, skip render
     return nodes.filter((n) => n.id !== m.id)

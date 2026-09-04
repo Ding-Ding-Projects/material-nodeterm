@@ -83,10 +83,10 @@ import {
   type TranscriptLine,
   type Workspace,
   type WorkspaceApi,
+  type NativePickerOptions,
   type ToylockApi,
   type AuthenticatorApi,
-  type PasswordManagerApi,
-  type PortalDoorApi
+  type PasswordManagerApi
 } from '../../shared/types'
 import type {
   OAuthCompleteInput,
@@ -450,8 +450,6 @@ export function buildRealApi(
     // reason to stop polling.
     correctTeamLeadPaneWidth: (persistKey) =>
       client.request(IPC.ptyCorrectTeamPaneWidth, persistKey).catch(() => false) as Promise<boolean>,
-    terminateForeground: (persistKey, expectedAgentId) =>
-      client.request(IPC.ptyTerminateForeground, persistKey, expectedAgentId).catch(() => false) as Promise<boolean>,
     // No server handler — the session-name poll degrades to no adopted name. A PRE-EXISTING gap,
     // and not any one agent's: `IPC.ptyReadSessionName` has never been registered server-side, so
     // claude's, grok's and gemini's read legs are equally stubbed here (the write leg works on both
@@ -506,12 +504,6 @@ export function buildRealApi(
       ) as ReturnType<WorkspaceApi['splitIntoParts']>,
     joinParts: (cwd: string) =>
       client.request(IPC.workspaceJoinParts, cwd) as ReturnType<WorkspaceApi['joinParts']>,
-    portableBindings: {
-      state: async () => [],
-      apply: async () => ({ ok: false as const, error: 'Portable destination bindings are unavailable on this browser host.' })
-    },
-    onArchiveProgress: () => () => {},
-    cancelArchiveImport: async () => false,
     exportProject: async () => ({
       ok: false,
       error: mapLocalVocabularyText('Project archive export is available in the Windows desktop app.')
@@ -1036,8 +1028,6 @@ export function buildFilesApi(
       client.request(IPC.boardLogCreateAttachmentSession, projectId) as ReturnType<BoardLogApi['createAttachmentSession']>,
     removeAttachments: (projectId, sessionId, ids) =>
       client.request(IPC.boardLogRemoveAttachments, projectId, sessionId, ids) as ReturnType<BoardLogApi['removeAttachments']>,
-    readAttachment: (projectId, attachment) =>
-      client.request(IPC.boardLogReadAttachment, projectId, attachment) as ReturnType<BoardLogApi['readAttachment']>,
     read: (projectId, opts) =>
       client.request(IPC.boardLogRead, projectId, opts) as Promise<BoardLogReadResult>,
     readAttachment: (projectId, attachment) =>
@@ -2190,8 +2180,8 @@ export async function installWsBridge(): Promise<boolean> {
       mountPickerRoot()
       const startDir = '/' // navigable up/down from root; the picker remembers nothing across calls in v1
       return {
-        selectFolder: () => openDirectoryPicker({ mode: 'folder', startDir, list: api.fs.list }),
-        selectFile: (_options?: { extensions?: string[] }) => openDirectoryPicker({ mode: 'file', startDir, list: api.fs.list }),
+        selectFolder: (_options?: NativePickerOptions) => openDirectoryPicker({ mode: 'folder', startDir, list: api.fs.list }),
+        selectFile: (_options?: NativePickerOptions) => openDirectoryPicker({ mode: 'file', startDir, list: api.fs.list }),
         // No native multi-file dialog in the browser. FileConverterPanel checks isBrowserRuntime()
         // and uses a plain <input type="file" multiple> + files.saveUploadBlob instead of calling
         // this (falling back to saveUpload for API compatibility).

@@ -1,6 +1,7 @@
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '../state/workspace'
 import type { PortalDoor } from '@shared/types'
+import { Button } from '../ui/md3'
 
 let activateDoor: ((nodeId: string, door: PortalDoor) => void) | null = null
 
@@ -29,15 +30,15 @@ export function PortalNode({ id, data, selected }: NodeProps<CanvasNode>) {
           {isEntry ? 'Enter the matched child canvas' : 'Return through the matched entry door'}
           <span lang="zh-Hant">{isEntry ? '由配對門進入子畫布' : '經配對入口門返回'}</span>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="filled"
           className="portal-node__activate"
           aria-label={`${isEntry ? 'Enter' : 'Return from'} ${data.title || 'portal door'}`}
           onClick={() => activateDoor?.(id, door)}
           disabled={!activateDoor}
         >
           {isEntry ? 'Enter · 進入' : 'Return · 返回'}
-        </button>
+        </Button>
       </div>
     </div>
   )

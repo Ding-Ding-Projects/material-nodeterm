@@ -3,17 +3,17 @@ import { AnchoredPopover } from '../../ui/AnchoredPopover'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { applySavedLayout, createSavedLayout, type SavedLayoutApplyResult } from '../../lib/savedLayouts'
-import type { CanvasNodeState, SavedCanvasLayout } from '@shared/types'
+import type { CanvasNodeState, PortableSavedCanvasLayout } from '@shared/types'
 
 interface SavedLayoutsPanelProps {
   anchorRef: RefObject<HTMLElement>
   open: boolean
-  layouts: SavedCanvasLayout[]
+  layouts: PortableSavedCanvasLayout[]
   nodes: CanvasNodeState[]
   onClose: () => void
-  onSave: (layout: SavedCanvasLayout) => void
-  onApply: (layout: SavedCanvasLayout, result: SavedLayoutApplyResult) => void
-  onDelete: (layout: SavedCanvasLayout) => void
+  onSave: (layout: PortableSavedCanvasLayout) => void
+  onApply: (layout: PortableSavedCanvasLayout, result: SavedLayoutApplyResult) => void
+  onDelete: (layout: PortableSavedCanvasLayout) => void
 }
 
 /**

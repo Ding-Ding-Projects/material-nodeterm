@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useOAuthCallbacks } from '../state/oauthCallbacks'
 import { notify } from '../lib/adhdNotify'
+import { Button, IconButton, TextField } from '../ui/md3'
 
 /** Guided Server Edition recovery for an OAuth redirect that landed on the session host. */
 function Prompt({
@@ -64,12 +65,16 @@ function Prompt({
             redirects, copy the complete callback URL from the address bar and paste it below.
           </p>
         </div>
-        <button type="button" className="remote-oauth-panel__close" onClick={() => void window.nodeTerminal.oauthCallbacks.cancel(ticket).finally(() => remove(ticket))} aria-label="Cancel OAuth callback">
-          ×
-        </button>
+        <IconButton
+          className="remote-oauth-panel__close"
+          size="dense"
+          icon="close"
+          aria-label="Cancel OAuth callback"
+          onClick={() => void window.nodeTerminal.oauthCallbacks.cancel(ticket).finally(() => remove(ticket))}
+        />
       </div>
-      <label htmlFor={`remote-oauth-input-${ticket}`}>Callback URL</label>
-      <input
+      <TextField
+        label="Callback URL"
         id={`remote-oauth-input-${ticket}`}
         type="url"
         value={callbackUrl}
@@ -82,12 +87,12 @@ function Prompt({
         {error ?? `Expires in ${Math.ceil(remaining / 1000)} seconds. The URL is checked against this provider and session before it is fetched.`}
       </p>
       <div className="remote-oauth-panel__actions">
-        <button type="button" onClick={() => void complete()} disabled={busy || !callbackUrl.trim() || remaining === 0}>
+        <Button variant="filled" onClick={() => void complete()} disabled={busy || !callbackUrl.trim() || remaining === 0}>
           {busy ? 'Completing…' : 'Complete sign-in'}
-        </button>
-        <button type="button" className="remote-oauth-panel__secondary" onClick={() => void window.nodeTerminal.oauthCallbacks.cancel(ticket).finally(() => remove(ticket))} disabled={busy}>
+        </Button>
+        <Button variant="text" className="remote-oauth-panel__secondary" onClick={() => void window.nodeTerminal.oauthCallbacks.cancel(ticket).finally(() => remove(ticket))} disabled={busy}>
           Cancel
-        </button>
+        </Button>
       </div>
     </section>
   )

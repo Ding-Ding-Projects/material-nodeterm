@@ -8,6 +8,7 @@ import {
 } from '@shared/aws-cli'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
+import { Button, SearchField } from '../../ui/md3'
 
 export interface AwsCliDocsIndexPanelProps {
   snapshot: AwsCliIndexSnapshot | null
@@ -76,7 +77,7 @@ export function AwsCliDocsIndexPanel({ snapshot, onClose, onRefresh, onOpenHelp 
       <section className="aws-cli-index" role="dialog" aria-label="AWS CLI documentation index">
         <header className="aws-cli-index__header">
           <h2>AWS CLI documentation index</h2>
-          {onClose && <button type="button" onClick={onClose} aria-label="Close AWS CLI documentation index">Close</button>}
+          {onClose && <Button variant="text" onClick={onClose} aria-label="Close AWS CLI documentation index">Close</Button>}
         </header>
         <p className="aws-cli-index__state" role="status">Loading the installed AWS CLI model files…</p>
       </section>
@@ -91,8 +92,8 @@ export function AwsCliDocsIndexPanel({ snapshot, onClose, onRefresh, onOpenHelp 
           <p className="aws-cli-index__subtitle">Services, commands, options, paginators, waiters, skeletons, input shapes, and output shapes</p>
         </div>
         <div className="aws-cli-index__header-actions">
-          {onRefresh && <button type="button" onClick={onRefresh}>Refresh local models</button>}
-          {onClose && <button type="button" onClick={onClose} aria-label="Close AWS CLI documentation index">Close</button>}
+          {onRefresh && <Button variant="tonal" onClick={onRefresh}>Refresh local models</Button>}
+          {onClose && <Button variant="text" onClick={onClose} aria-label="Close AWS CLI documentation index">Close</Button>}
         </div>
       </header>
 
@@ -106,17 +107,15 @@ export function AwsCliDocsIndexPanel({ snapshot, onClose, onRefresh, onOpenHelp 
       <div className="aws-cli-index__search">
         <label htmlFor="aws-cli-index-search">Search services, commands, options, waiters, and shapes</label>
         <div className="aws-cli-index__search-row">
-          <input
+          <SearchField
             id="aws-cli-index-search"
             ref={searchRef}
-            type="search"
             value={search.value}
-            spellCheck={false}
             placeholder={search.mode === 'regex' ? 'Search AWS CLI model index with regex…' : 'Search the AWS CLI model index…'}
             aria-describedby="aws-cli-index-search-note"
             onChange={(event) => search.setValue(event.target.value)}
+            trailingSlot={<AnchoredRegexBuilder search={search} fieldRef={searchRef} label="Regex builder for AWS CLI index search" />}
           />
-          <AnchoredRegexBuilder search={search} fieldRef={searchRef} label="Regex builder for AWS CLI index search" />
         </div>
         <span id="aws-cli-index-search-note">Plain text is the default. Regex is optional and runs against the locally indexed model metadata.</span>
         {search.error && <span className="aws-cli-index__error" role="alert">{search.error}</span>}
@@ -127,16 +126,16 @@ export function AwsCliDocsIndexPanel({ snapshot, onClose, onRefresh, onOpenHelp 
           <div className="aws-cli-index__count">{visibleServices.length} of {services.length} services</div>
           {visibleServices.length === 0 && <p>No services match this search. The index remains unchanged.</p>}
           {visibleServices.map((service) => (
-            <button
+            <Button
               key={service.id}
-              type="button"
+              variant="text"
               className={service.id === selectedService?.id ? 'is-selected' : undefined}
               aria-current={service.id === selectedService?.id ? 'true' : undefined}
               onClick={() => selectService(service)}
             >
               <span>{service.id}</span>
               <small>{service.name} · {service.commands.length} commands</small>
-            </button>
+            </Button>
           ))}
         </nav>
 
@@ -153,15 +152,16 @@ export function AwsCliDocsIndexPanel({ snapshot, onClose, onRefresh, onOpenHelp 
               </div>
               <div className="aws-cli-index__command-tabs" role="tablist" aria-label={`${selectedService.name} commands`}>
                 {visibleCommands.slice(0, 200).map((command) => (
-                  <button
+                  <Button
                     key={command.name}
-                    type="button"
+                    variant={command.name === selectedCommand?.name ? 'tonal' : 'text'}
+                    size="small"
                     role="tab"
                     aria-selected={command.name === selectedCommand?.name}
                     onClick={() => selectCommand(command)}
                   >
                     {command.name}
-                  </button>
+                  </Button>
                 ))}
               </div>
               {selectedCommand && (
@@ -173,7 +173,7 @@ export function AwsCliDocsIndexPanel({ snapshot, onClose, onRefresh, onOpenHelp 
                     </div>
                     <div className="aws-cli-index__command-actions">
                       <a href={selectedCommand.documentationUrl} target="_blank" rel="noreferrer">Official command documentation</a>
-                      <button type="button" onClick={() => onOpenHelp?.(awsCliHelpArgv(selectedService.cliName, selectedCommand.name))}>Open local help</button>
+                      <Button variant="tonal" size="small" onClick={() => onOpenHelp?.(awsCliHelpArgv(selectedService.cliName, selectedCommand.name))}>Open local help</Button>
                     </div>
                   </div>
                   {selectedCommand.documentation && <p>{selectedCommand.documentation}</p>}
@@ -185,9 +185,9 @@ export function AwsCliDocsIndexPanel({ snapshot, onClose, onRefresh, onOpenHelp 
                     <span>Waiters: {selectedCommand.waiters.length}</span>
                     <span>Skeleton: {selectedCommand.skeleton.supported ? selectedCommand.skeleton.modes.join(', ') : 'not supported'}</span>
                   </div>
-                  <button type="button" className="aws-cli-index__advanced-toggle" aria-expanded={showAdvanced} onClick={() => setShowAdvanced((open) => !open)}>
+                  <Button variant="text" size="small" className="aws-cli-index__advanced-toggle" aria-expanded={showAdvanced} onClick={() => setShowAdvanced((open) => !open)}>
                     {showAdvanced ? 'Hide detailed model' : 'Show detailed model'}
-                  </button>
+                  </Button>
                   {showAdvanced && (
                     <div className="aws-cli-index__advanced">
                       <ModelShape title="Input shape" shape={inputShape} />

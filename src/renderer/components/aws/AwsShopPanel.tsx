@@ -3,6 +3,7 @@ import { AWS_CATALOG, type AwsCatalogCategory, type AwsCatalogEntry } from '@sha
 import { searchAwsCatalog } from '@shared/aws-catalog'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
+import { Button, Checkbox, SearchField } from '../../ui/md3'
 
 const CATEGORIES: Array<AwsCatalogCategory | 'all'> = [
   'all', 'Identity', 'Compute', 'Storage', 'Networking', 'Observability', 'Infrastructure', 'Developer tools'
@@ -43,30 +44,29 @@ export function AwsShopPanel({ universeId, onCreate, onClose }: AwsShopPanelProp
           <h2>AWS Shop</h2>
           <p>Choose a typed AWS operation blueprint. No AWS operation starts from this catalog.</p>
         </div>
-        {onClose ? <button type="button" className="sc-btn" onClick={onClose}>Close</button> : null}
+        {onClose ? <Button variant="text" onClick={onClose}>Close</Button> : null}
       </header>
       <div className="aws-shop__toolbar">
         <div className="aws-shop__search">
-          <input
+          <SearchField
             ref={inputRef}
-            type="search"
             value={search.value}
             onChange={(event) => search.setValue(event.target.value)}
             placeholder={search.mode === 'regex' ? 'Search AWS catalog with regex…' : 'Search AWS catalog…'}
             aria-label="Search AWS catalog"
-            spellCheck={false}
+            trailingSlot={<AnchoredRegexBuilder search={search} fieldRef={inputRef} label="Regex builder for AWS catalog" />}
           />
-          <AnchoredRegexBuilder search={search} fieldRef={inputRef} label="Regex builder for AWS catalog" />
         </div>
         <label className="aws-shop__toggle">
-          <input type="checkbox" checked={includeUnavailable} onChange={(event) => setIncludeUnavailable(event.target.checked)} />
+          <Checkbox checked={includeUnavailable} onChange={(event) => setIncludeUnavailable(event.target.checked)} />
           Show unavailable entries
         </label>
       </div>
       <div className="aws-shop__categories" role="tablist" aria-label="AWS catalog categories">
         {CATEGORIES.map((item) => (
-          <button
-            type="button"
+          <Button
+            variant={category === item ? 'tonal' : 'text'}
+            size="small"
             role="tab"
             key={item}
             aria-selected={category === item}
@@ -74,7 +74,7 @@ export function AwsShopPanel({ universeId, onCreate, onClose }: AwsShopPanelProp
             onClick={() => setCategory(item)}
           >
             {item === 'all' ? 'All' : item}
-          </button>
+          </Button>
         ))}
       </div>
       {search.error || result.error ? <p className="aws-shop__error" role="alert">{search.error ?? result.error}</p> : null}
@@ -95,9 +95,9 @@ export function AwsShopPanel({ universeId, onCreate, onClose }: AwsShopPanelProp
                 </p>
                 {nextAction ? <p className="aws-shop__next">Next: {nextAction}</p> : null}
               </div>
-              <button type="button" className="sc-btn sc-btn--primary" disabled={unavailable} title={nextAction} onClick={() => onCreate(entry)}>
+              <Button variant="filled" disabled={unavailable} title={nextAction} onClick={() => onCreate(entry)}>
                 Create blueprint
-              </button>
+              </Button>
             </article>
           )
         })}

@@ -6,7 +6,7 @@
  * provider, and network state.  Archive writers and importers can use the bytes without this
  * module acquiring filesystem or host capabilities.
  */
-import type { BridgeLink, CanvasNodeState, Project, Viewport, NodeKind, Link, SavedCanvasLayout } from '../shared/types'
+import type { BridgeLink, CanvasNodeState, Project, Viewport, NodeKind, Link, PortableSavedCanvasLayout } from '../shared/types'
 import type { MultiverseState } from '../shared/multiverse'
 import { validatePortablePortalHierarchy, type PortablePortalHierarchy } from '../shared/portal-lifecycle'
 import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEMA_VERSION } from './portable-project-v3'
@@ -158,7 +158,7 @@ export interface PortableProjectDisplayV3 {
   icon?: { type: string; name: string }
 }
 
-export interface PortableSavedCanvasLayoutV3 extends SavedCanvasLayout {}
+export interface PortableSavedCanvasLayoutV3 extends PortableSavedCanvasLayout {}
 
 export interface PortableCanvasProjectionV3 {
   format: typeof PORTABLE_PROJECT_SCHEMA
@@ -687,7 +687,9 @@ function relationships(project: Project): PortableRelationshipV3[] {
 function savedLayouts(project: Project): PortableSavedCanvasLayoutV3[] | undefined {
   if (!project.savedLayouts?.length) return undefined
   const layouts: PortableSavedCanvasLayoutV3[] = []
-  for (const layout of project.savedLayouts) {
+  // A project file can carry either saved-layout feature, so validate the persisted rows as the
+  // portable shape and let the runtime checks below reject anything that is not one.
+  for (const layout of project.savedLayouts as unknown as PortableSavedCanvasLayout[]) {
     if (!record(layout) || layout.version !== 1 || typeof layout.id !== 'string' || !layout.id.trim() ||
         typeof layout.name !== 'string' || !layout.name.trim() || typeof layout.createdAt !== 'string' ||
         !Array.isArray(layout.nodes)) continue

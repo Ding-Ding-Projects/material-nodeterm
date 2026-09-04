@@ -968,7 +968,7 @@ export interface SavedCanvasLayoutNode {
   collapsed?: boolean
 }
 
-export interface SavedCanvasLayout {
+export interface PortableSavedCanvasLayout {
   version: 1
   id: string
   name: string

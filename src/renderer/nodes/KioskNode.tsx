@@ -13,6 +13,7 @@ import type { CanvasNode } from '../state/workspace'
 import { useProjects } from '../state/projects'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { BrowserSurface } from './BrowserSurface'
+import { Button, IconButton } from '../ui/md3'
 
 function freshLocalProfileId(): string {
   const c = globalThis.crypto as Crypto | undefined
@@ -155,20 +156,18 @@ export default function KioskNode({ id, data, selected }: NodeProps<CanvasNode>)
           Isolated profile
         </span>
         {mode === 'fullscreen' ? (
-          <button type="button" className="kiosk-node__control" onClick={() => void leaveFullscreen()} title="Exit full-screen mode">
+          <Button variant="text" size="small" className="kiosk-node__control" onClick={() => void leaveFullscreen()} title="Exit full-screen mode">
             Exit full-screen
-          </button>
+          </Button>
         ) : (
-          <button type="button" className="kiosk-node__control" onClick={() => void enterFullscreen()} title="Enter full-screen mode">
+          <Button variant="text" size="small" className="kiosk-node__control" onClick={() => void enterFullscreen()} title="Enter full-screen mode">
             Full-screen
-          </button>
+          </Button>
         )}
-        <button type="button" className="kiosk-node__control" onClick={resetProfile} title="Create a new isolated profile">
+        <Button variant="text" size="small" className="kiosk-node__control" onClick={resetProfile} title="Create a new isolated profile">
           Rebind
-        </button>
-        <button type="button" className="term-node__close" onClick={() => deleteElements({ nodes: [{ id }] })} title="Close kiosk session">
-          ×
-        </button>
+        </Button>
+        <IconButton size="compact" className="term-node__close" icon="close" onClick={() => deleteElements({ nodes: [{ id }] })} title="Close kiosk session" aria-label="Close kiosk session" />
       </div>
       <div className="kiosk-node__status" role="status" aria-live="polite">
         {manifest ? (
@@ -176,14 +175,14 @@ export default function KioskNode({ id, data, selected }: NodeProps<CanvasNode>)
         ) : (
           <span>No installable manifest detected yet. The page still works as a kiosk session.</span>
         )}
-        <button type="button" className="kiosk-node__mode" onClick={() => (mode === 'fullscreen' ? void leaveFullscreen() : saveMode('bounded'))}>
+        <Button variant="text" size="small" className="kiosk-node__mode" onClick={() => (mode === 'fullscreen' ? void leaveFullscreen() : saveMode('bounded'))}>
           {mode === 'fullscreen' ? 'Use bounded mode' : 'Bounded mode'}
-        </button>
+        </Button>
       </div>
       {failure && (
         <div className="kiosk-node__recovery" role="alert">
           <span>{failure}</span>
-          <button type="button" onClick={() => setFailure('')}>Dismiss</button>
+          <Button variant="text" size="small" onClick={() => setFailure('')}>Dismiss</Button>
         </div>
       )}
       <div className="editor-node__body kiosk-node__body">
@@ -204,7 +203,7 @@ export default function KioskNode({ id, data, selected }: NodeProps<CanvasNode>)
           <div className="kiosk-node__invalid" role="alert">
             <strong>This kiosk URL cannot be opened.</strong>
             <span>Only an HTTP(S) URL without embedded credentials is allowed.</span>
-            <button type="button" onClick={() => updateNodeData(id, { url: '' })}>Open the safe start page</button>
+            <Button variant="tonal" size="small" onClick={() => updateNodeData(id, { url: '' })}>Open the safe start page</Button>
           </div>
         )}
       </div>

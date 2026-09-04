@@ -11,6 +11,7 @@ import {
   removeDependencyLinkConfig,
   type ProjectLookup
 } from '../../lib/link-authoring'
+import { Button, IconButton } from '@renderer/ui/md3'
 import { LinkTargetPicker } from './LinkTargetPicker'
 import { commitLinksThroughCanvas } from './link-commit'
 
@@ -70,7 +71,7 @@ export function LinkInspectorPanel({ nodeId, onClose, onChanged }: { nodeId: str
     <aside className="link-inspector" role="dialog" aria-label="Link inspector">
       <div className="link-inspector__head">
         <strong>Links</strong>
-        <button type="button" onClick={onClose} aria-label="Close link inspector">×</button>
+        <IconButton size="compact" icon="close" onClick={onClose} aria-label="Close link inspector" />
       </div>
       {split.outgoing.length === 0 && split.incoming.length === 0 ? (
         <p className="link-inspector__empty">No links for this node.</p>
@@ -86,8 +87,9 @@ export function LinkInspectorPanel({ nodeId, onClose, onChanged }: { nodeId: str
                 {isBranchDependencyLink(link) && !incoming && (
                   <span className="link-row__actions">
                     {(['sync', 'propose', 'ship'] as const).map((action) => (
-                      <button
-                        type="button"
+                      <Button
+                        variant="text"
+                        size="small"
                         key={action}
                         disabled={dependencyAction === `${link.id}:${action}`}
                         onClick={() => {
@@ -111,21 +113,21 @@ export function LinkInspectorPanel({ nodeId, onClose, onChanged }: { nodeId: str
                         aria-label={`${action} branch dependency`}
                       >
                         {action}
-                      </button>
+                      </Button>
                     ))}
                   </span>
                 )}
-                <button type="button" onClick={() => remove(link)} aria-label="Remove link">×</button>
+                <IconButton size="compact" icon="close" onClick={() => remove(link)} aria-label="Remove link" />
               </div>
             )
           })}
         </div>
       )}
       {owner && (
-        <button type="button" className="link-inspector__add" onClick={() => setAdding(true)}>Add link</button>
+        <Button variant="outlined" size="small" className="link-inspector__add" onClick={() => setAdding(true)}>Add link</Button>
       )}
       {owner && (
-        <button type="button" className="link-inspector__add" onClick={inspectSubmodules}>Inspect submodules</button>
+        <Button variant="outlined" size="small" className="link-inspector__add" onClick={inspectSubmodules}>Inspect submodules</Button>
       )}
       {submoduleError && <p className="link-inspector__empty">{submoduleError}</p>}
       {submodules && (

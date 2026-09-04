@@ -4,6 +4,7 @@ import type { CanvasNode } from '../state/workspace'
 import { useProjects } from '../state/projects'
 import { resolvePortableMediaReference } from '../lib/portableMediaRuntime'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { IconButton } from '../ui/md3'
 
 export default function PortableMediaNode({ id, data, selected, type }: NodeProps<CanvasNode>): React.JSX.Element {
   const { deleteElements } = useReactFlow()
@@ -29,7 +30,7 @@ export default function PortableMediaNode({ id, data, selected, type }: NodeProp
       <Handle id="flow-in" type="target" position={Position.Top} isConnectable={false} style={{ opacity: 0, pointerEvents: 'none', top: 0 }} />
       <div className={'term-node__header ' + headerFill.className + (headerFill.filled ? ' term-node__header--filled' : '')} style={headerFill.style}>
         <span className="term-node__title-text">{data.title}</span><span className="term-node__spacer" />
-        <button className="term-node__close" title="Close" onClick={() => deleteElements({ nodes: [{ id }] })}>×</button>
+        <IconButton size="compact" className="term-node__close" icon="close" title="Close" aria-label="Close media node" onClick={() => deleteElements({ nodes: [{ id }] })} />
       </div>
       <div className="editor-node__body portable-media-node__body">
         {type === 'gallery' ? <div className="portable-media-node__gallery">{sources.map(render)}</div> : sources.slice(0, 1).map(render)}

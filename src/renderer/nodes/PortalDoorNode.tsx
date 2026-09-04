@@ -4,6 +4,7 @@ import { COLLAPSED_HEIGHT, type CanvasNode } from '../state/workspace'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColumnPill } from '../components/kanban/ColumnPill'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
+import { Button, IconButton } from '../ui/md3'
 
 const LABELS: Record<PortalDoorPart, string> = {
   frame: 'Frame', hinges: 'Hinges', panel: 'Panel', handle: 'Handle', 'activation-core': 'Activation core'
@@ -39,7 +40,7 @@ export function PortalDoorNode({ id, data, selected }: NodeProps<CanvasNode>) {
     <div className={`portal-door-node${selected ? ' selected' : ''}${collapsed ? ' collapsed' : ''} ${border.className}`} style={border.style} role="group" aria-label={data.portalDoor?.stage === 'complete' ? 'Portal door construction complete' : 'Interactive portal door construction'}>
       <NodeResizer minWidth={360} minHeight={260} isVisible={selected && !collapsed} color={data.color} />
       <div className={`portal-door-node__header ${tint.className}`} style={tint.style}>
-        <button className="term-node__collapse" title={collapsed ? 'Expand' : 'Collapse'} aria-label={collapsed ? 'Expand portal door' : 'Collapse portal door'} onClick={toggleCollapse}>{collapsed ? '▸' : '▾'}</button>
+        <IconButton size="compact" className="term-node__collapse" icon={collapsed ? 'chevron_right' : 'arrow_drop_down'} title={collapsed ? 'Expand' : 'Collapse'} aria-label={collapsed ? 'Expand portal door' : 'Collapse portal door'} onClick={toggleCollapse} />
         <span className="portal-door-node__icon" aria-hidden="true">🚪</span>
         <EditableNodeTitle value={data.title} onChange={(title) => updateNodeData(id, { title })} ariaLabel="Portal door name" title="Rename" baseTriggerClassName="" triggerClassName="portal-door-node__title" emptyLabel="Name this portal door…" rejectEmpty={false} />
       </div>
@@ -49,7 +50,7 @@ export function PortalDoorNode({ id, data, selected }: NodeProps<CanvasNode>) {
         </div>
         <div className="portal-door-node__status" role="status"><strong>{construction?.stage === 'complete' ? 'Door construction complete' : `Next: ${LABELS[next ?? 'activation-core']}`}</strong><span>{completed.length} of {PORTAL_DOOR_PARTS.length} parts installed</span></div>
         <div className="portal-door-node__parts" role="list" aria-label="Portal door construction parts">
-          {PORTAL_DOOR_PARTS.map((part) => { const done = completed.includes(part); const active = part === next; const unavailable = `Available after ${LABELS[PORTAL_DOOR_PARTS[Math.max(0, PORTAL_DOOR_PARTS.indexOf(part) - 1)]!]}`; return <div className={`portal-door-node__part${done ? ' complete' : ''}${active ? ' active' : ''}`} role="listitem" key={part}><div><strong>{done ? '✓ ' : ''}{LABELS[part]}</strong><span>{done ? 'Installed and saved' : DESCRIPTIONS[part]}</span></div><button type="button" disabled={!active} title={done ? 'Installed and saved' : active ? `Install ${LABELS[part]}` : unavailable} onClick={() => addPart(part)} aria-label={`${done ? 'Installed' : `Install ${LABELS[part]}`}${active ? '' : `, ${unavailable.toLowerCase()}`}`}>{done ? 'Installed' : active ? `Install ${LABELS[part]}` : unavailable}</button></div> })}
+          {PORTAL_DOOR_PARTS.map((part) => { const done = completed.includes(part); const active = part === next; const unavailable = `Available after ${LABELS[PORTAL_DOOR_PARTS[Math.max(0, PORTAL_DOOR_PARTS.indexOf(part) - 1)]!]}`; return <div className={`portal-door-node__part${done ? ' complete' : ''}${active ? ' active' : ''}`} role="listitem" key={part}><div><strong>{done ? '✓ ' : ''}{LABELS[part]}</strong><span>{done ? 'Installed and saved' : DESCRIPTIONS[part]}</span></div><Button variant={active ? 'filled' : 'outlined'} size="small" disabled={!active} title={done ? 'Installed and saved' : active ? `Install ${LABELS[part]}` : unavailable} onClick={() => addPart(part)} aria-label={`${done ? 'Installed' : `Install ${LABELS[part]}`}${active ? '' : `, ${unavailable.toLowerCase()}`}`}>{done ? 'Installed' : active ? `Install ${LABELS[part]}` : unavailable}</Button></div> })}
         </div>
         <p className="portal-door-node__note">This lane records the door's physical parts and portable metadata only. Entry, recovery, and navigation arrive in later portal lanes.</p>
       </div>}

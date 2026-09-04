@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { BranchSelect } from '../BranchSelect'
+import { Button, FieldLabel, SearchField } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
+import { Select } from '@renderer/ui/Select'
 import { useProjects } from '../../state/projects'
 import { activeSessionApi } from '../../session/session'
 import type { Endpoint, Link, LinkKind } from '@shared/types'
@@ -142,19 +145,18 @@ export function LinkTargetPicker({
       <div className="confirm link-picker" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <h2>New link</h2>
         <div className="link-picker__tabs" role="tablist" aria-label="Target type">
-          <button type="button" role="tab" aria-selected={targetMode === 'node'} onClick={() => setTargetMode('node')}>
+          <Button variant="text" size="small" role="tab" aria-selected={targetMode === 'node'} onClick={() => setTargetMode('node')}>
             Node
-          </button>
-          <button type="button" role="tab" aria-selected={targetMode === 'branch'} onClick={() => setTargetMode('branch')}>
+          </Button>
+          <Button variant="text" size="small" role="tab" aria-selected={targetMode === 'branch'} onClick={() => setTargetMode('branch')}>
             Branch
-          </button>
+          </Button>
         </div>
         {targetMode === 'node' ? (
           <>
-            <label className="link-picker__field">
-              <span>Find a project or node</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} autoFocus placeholder="Search" />
-            </label>
+            <FieldLabel className="link-picker__field" label="Find a project or node" htmlFor="link-picker-query">
+              <SearchField id="link-picker-query" value={query} onChange={(event) => setQuery(event.target.value)} autoFocus placeholder="Search" />
+            </FieldLabel>
             <div className="link-picker__list">
               {visibleProjects.map((project) => (
                 <div className="link-picker__project" key={project.id}>
@@ -163,16 +165,19 @@ export function LinkTargetPicker({
                     const selected = selection?.kind === 'node' && selection.projectId === project.id && selection.nodeId === node.id
                     const source = project.id === sourceProjectId && node.id === sourceNodeId
                     return (
-                      <button
-                        type="button"
+                      <Button
+                        variant="text"
+                        size="small"
+                        vocabularyMode="factual"
                         className={`link-picker__node${selected ? ' selected' : ''}`}
                         key={node.id}
                         disabled={source}
+                        aria-pressed={selected}
                         onClick={() => setSelection({ kind: 'node', projectId: project.id, nodeId: node.id })}
                       >
                         <span>{node.title || node.id}</span>
                         <small>{node.kind}{project.id === sourceProjectId ? '' : ' · foreign project'}</small>
-                      </button>
+                      </Button>
                     )
                   })}
                 </div>
@@ -184,33 +189,29 @@ export function LinkTargetPicker({
           <p className="link-picker__empty">Branch links are unavailable for a remote project.</p>
         ) : (
           <>
-            <label className="link-picker__field">
-              <span>Child branch</span>
+            <FieldLabel className="link-picker__field" label="Child branch">
               <BranchSelect value={branchSource} options={branches} placeholder="Select the child branch" allowCustom customPlaceholder="Type a child branch or ref" onChange={setBranchSource} />
-            </label>
-            <label className="link-picker__field">
-              <span>Parent branch</span>
+            </FieldLabel>
+            <FieldLabel className="link-picker__field" label="Parent branch">
               <BranchSelect value={branch} options={branches} placeholder="Select the parent branch" allowCustom customPlaceholder="Type a parent branch or ref" onChange={setBranch} />
-            </label>
+            </FieldLabel>
           </>
         )}
-        <label className="link-picker__field">
-          <span>Kind</span>
-          <select value={kind} onChange={(event) => setKind(event.target.value as LinkKind)}>
+        <FieldLabel className="link-picker__field" label="Kind" htmlFor="link-picker-kind">
+          <Select id="link-picker-kind" value={kind} onChange={(event) => setKind(event.target.value as LinkKind)}>
             {KINDS.map((candidate) => {
               const isAllowed = !!sourceDescriptor && !!targetDescriptor && kindAllowed(candidate, sourceDescriptor, targetDescriptor)
               return <option value={candidate} key={candidate} disabled={!isAllowed}>{KIND_LABEL[candidate]}{isAllowed ? '' : ' unavailable for this pair'}</option>
             })}
-          </select>
-        </label>
-        <label className="link-picker__field">
-          <span>Purpose (optional)</span>
-          <input value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder="Why this relationship exists" />
-        </label>
+          </Select>
+        </FieldLabel>
+        <FieldLabel className="link-picker__field" label="Purpose (optional)" htmlFor="link-picker-purpose">
+          <Input id="link-picker-purpose" value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder="Why this relationship exists" />
+        </FieldLabel>
         {target && <p className="link-picker__target">Target: {describeEndpoint(target, projects).label}</p>}
         <div className="confirm__actions">
-          <button type="button" className="confirm__btn" onClick={onCancel}>Cancel</button>
-          <button type="button" className="confirm__btn confirm__btn--primary" disabled={!canSubmit} onClick={submit}>Link</button>
+          <Button variant="outlined" className="confirm__btn" onClick={onCancel}>Cancel</Button>
+          <Button variant="filled" className="confirm__btn confirm__btn--primary" disabled={!canSubmit} onClick={submit}>Link</Button>
         </div>
       </div>
     </div>,
