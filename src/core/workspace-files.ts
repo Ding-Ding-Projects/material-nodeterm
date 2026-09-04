@@ -7,6 +7,7 @@ import {
   stripSharedNodeExec,
   type LocalNodeExecMap
 } from '../shared/node-exec'
+import { normalizeDebugBrowserSpec } from '../shared/browser-debug'
 import type {
   BridgeLink,
   BrowserProfile,

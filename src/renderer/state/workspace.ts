@@ -1443,6 +1443,34 @@ export function createKioskPwaNode(
   }
 }
 
+/** Creates an isolated debugging browser session node. The process starts only after the user
+ * submits its guided configuration, never from a project file or a raw flag box. */
+export function createDebugBrowserNode(
+  index: number,
+  spec?: DebugBrowserSpec,
+  center?: { x: number; y: number }
+): CanvasNode {
+  const safeSpec = spec ?? {
+    version: 1,
+    label: 'Debug browser',
+    startUrl: 'https://example.com'
+  }
+  return {
+    id: nextId('debug-browser'),
+    type: 'debug-browser',
+    position: placeAt(center, index, DEBUG_BROWSER_SIZE.width, DEBUG_BROWSER_SIZE.height),
+    width: DEBUG_BROWSER_SIZE.width,
+    height: DEBUG_BROWSER_SIZE.height,
+    style: { width: DEBUG_BROWSER_SIZE.width, height: DEBUG_BROWSER_SIZE.height },
+    data: {
+      title: safeSpec.label,
+      color: '#8ab4f8',
+      group: null,
+      debugBrowserSpec: safeSpec
+    }
+  }
+}
+
 /** Creates a diff editor node for a changed file (relative path + repo cwd). */
 export function createDiffNode(
   index: number,

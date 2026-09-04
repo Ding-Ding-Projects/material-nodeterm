@@ -375,6 +375,13 @@ and rollback hooks. Provider adapters and their user-facing controls are being a
 [the hosted-service backup documentation](./docs/features/integrations/hosted-service-backups.md)
 for the current boundary.
 
+The **isolated debugging browser** node is a separate clean-room session for local page debugging:
+it creates a fresh Chromium profile for each run, offers only validated `http`/`https`/`socks4`/
+`socks5` proxy choices, generates fixed launch arguments, and accepts CDP targets only from a
+loopback endpoint with exactly one matching page. Its portable node metadata contains no profile
+path, process state, local endpoint, cookies, or credentials. See
+[`docs/features/browser/proxy-debug-sessions.md`](./docs/features/browser/proxy-debug-sessions.md).
+
 **Group** nodes are real containers that nest inside each other and can bind to a git worktree, so
 every node created inside one inherits that worktree's directory. Quit the app and the persistent
 backend reattaches to the live session; reboot the machine and cold restore rebuilds the node,

@@ -13,6 +13,7 @@ import {
   createWildDimSumNode,
   createWebNode,
   createBrowserNode,
+  createDebugBrowserNode,
   createDiffNode,
   createStickyNode,
   createDinoNode,
@@ -194,6 +195,8 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createWebNode(0, { url: d.url, filePath: d.filePath })
     case 'browser':
       return createBrowserNode(0, d.url ?? '', undefined, undefined, d.browserProfileId)
+    case 'debug-browser':
+      return createDebugBrowserNode(0, d.debugBrowserSpec)
     case 'dino':
       return createDinoNode(0, undefined, d.highScore ?? 0)
     case 'recovery-game':

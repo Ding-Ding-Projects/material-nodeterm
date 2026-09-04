@@ -344,6 +344,22 @@ const FEATURES = [
     docs: ['docs/features/browser/browser-tabs.md'],
   },
   {
+    id: 'proxy-isolated-debug-browser',
+    label: 'Proxy and isolated debugging browser sessions',
+    files: [
+      'src/shared/browser-debug.ts',
+      'src/main/browser-debug-session.ts',
+      'src/renderer/nodes/DebugBrowserNode.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/browser-debug.ts', 'export function buildDebugBrowserLaunchArgs('],
+      ['src/shared/browser-debug.ts', 'export function validateDebugBrowserTargetList('],
+      ['src/main/browser-debug-session.ts', 'export class DebugBrowserSessionService'],
+      ['src/renderer/nodes/DebugBrowserNode.tsx', 'export default function DebugBrowserNode('],
+    ],
+    docs: ['docs/features/browser/proxy-debug-sessions.md'],
+  },
+  {
     id: 'minecraft-backups',
     label: 'Minecraft world backups',
     files: [
@@ -722,7 +738,7 @@ const FEATURES = [
   },
   {
     id: 'node-kinds',
-    label: 'Node kinds (terminal / sticky / group / editor / diff)',
+    label: 'Node kinds (terminal / sticky / group / editor / diff / debug browser)',
     files: [
       'src/renderer/nodes/TerminalNode.tsx',
       'src/renderer/nodes/StickyNode.tsx',

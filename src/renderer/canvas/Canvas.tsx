@@ -12601,6 +12601,11 @@ export function Canvas() {
               onClick: () => addBrowser(at)
             },
             {
+              label: 'New isolated debugging browser…',
+              icon: <IconRemote />,
+              onClick: () => addDebugBrowser(at)
+            },
+            {
               label: 'New sticky note',
               icon: <IconNote />,
               onClick: () => addSticky(at)
@@ -12790,6 +12795,7 @@ export function Canvas() {
       addTrigger,
       addDino,
       addBrowser,
+      addDebugBrowser,
       openFileDialog,
       newProjectFile,
       openRemotePicker,

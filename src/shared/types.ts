@@ -5105,6 +5105,8 @@ export interface NodeTerminalApi {
   fs: FsApi
   media: MediaApi
   browser: BrowserApi
+  /** Desktop-only isolated debugging browser sessions; browser/relay surfaces omit it. */
+  debugBrowser?: DebugBrowserApi
   files: FilesApi
   updates: UpdateApi
   announcements: AnnouncementsApi

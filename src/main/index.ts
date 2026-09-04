@@ -914,6 +914,7 @@ let keepAwake: KeepAwakeTracker | undefined
 // belongs to. Used today for new-window capture; every entry is proven to BE a <webview> before it
 // lands here through `registerBrowserGuestRequest`.
 const browserGuests = new Map<number, BrowserGuest>()
+let debugBrowserSessions: DebugBrowserSessionService | undefined
 
 // Node → live tail bookkeeping, so closing a node (× → pty:destroy) releases its file tailers.
 // Without this, a node closed mid-run never emits SessionEnd/PostToolUse, so context-tail (1s
@@ -2145,6 +2146,27 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle(IPC.browserProfileReset, (_e, partition: string | undefined) =>
     resetBrowserProfile(partition)
+  )
+
+  // Isolated debugging browser sessions are owned by this desktop process. Their profile
+  // directories and loopback CDP ports are runtime-only and are never written to project.json.
+  debugBrowserSessions = new DebugBrowserSessionService(join(app.getPath('userData'), 'debug-browser-profiles'))
+  await mkdirFs(join(app.getPath('userData'), 'debug-browser-profiles'), { recursive: true })
+  ipcMain.handle(IPC.debugBrowserListExecutables, () => debugBrowserSessions?.listExecutables() ?? [])
+  ipcMain.handle(IPC.debugBrowserStart, (_e, spec: unknown, executablePath?: unknown) =>
+    debugBrowserSessions?.start(spec, typeof executablePath === 'string' ? executablePath : undefined)
+      ?? Promise.resolve({ ok: false as const, error: 'The isolated debugging browser service is unavailable.' })
+  )
+  ipcMain.handle(IPC.debugBrowserStatus, (_e, sessionId: unknown) =>
+    typeof sessionId === 'string' ? debugBrowserSessions?.status(sessionId) : undefined
+  )
+  ipcMain.handle(IPC.debugBrowserInspect, (_e, sessionId: unknown) =>
+    typeof sessionId === 'string'
+      ? debugBrowserSessions?.inspect(sessionId)
+      : Promise.resolve({ ok: false as const, error: 'The isolated debugging browser session id is invalid.' })
+  )
+  ipcMain.handle(IPC.debugBrowserStop, (_e, sessionId: unknown) =>
+    typeof sessionId === 'string' ? debugBrowserSessions?.stop(sessionId) ?? false : false
   )
 
   // The naming agent runs LOCALLY on captured output, so it needs a cwd that exists on THIS

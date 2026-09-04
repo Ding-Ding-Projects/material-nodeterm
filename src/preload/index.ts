@@ -718,6 +718,13 @@ const api: NodeTerminalApi = {
     stopAll: () => ipcRenderer.send(IPC.browserStopAll),
     stopProject: (projectId: string) => ipcRenderer.send(IPC.browserStopProject, projectId)
   },
+  debugBrowser: {
+    listExecutables: () => ipcRenderer.invoke(IPC.debugBrowserListExecutables),
+    start: (spec, executablePath) => ipcRenderer.invoke(IPC.debugBrowserStart, spec, executablePath),
+    status: (sessionId) => ipcRenderer.invoke(IPC.debugBrowserStatus, sessionId),
+    inspect: (sessionId) => ipcRenderer.invoke(IPC.debugBrowserInspect, sessionId),
+    stop: (sessionId) => ipcRenderer.invoke(IPC.debugBrowserStop, sessionId)
+  },
   files: {
     quickOpen: (cwd: string) => ipcRenderer.invoke(IPC.filesQuickOpen, cwd),
     // Desktop has no HTTP surface to redeem a ticket on — the core handler answers null here, and
