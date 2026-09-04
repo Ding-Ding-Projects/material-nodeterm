@@ -23,6 +23,7 @@ import type { AwsWizardSpec } from '@shared/aws-wizard'
 import { defaultAwsWizardSpec } from '@shared/aws-wizard'
 import type { DebugBrowserSpec } from '@shared/browser-debug'
 import { createPortalDoorConstruction } from '@shared/portal-door'
+import type { PortalRecoveryProgress } from '@shared/portal-recovery'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
 import {
   agentConfig,
@@ -148,6 +149,8 @@ const AWS_UNIVERSE_SIZE = { width: 760, height: 560 }
 const DEBUG_BROWSER_SIZE = { width: 760, height: 560 }
 const KIOSK_SIZE = { width: 760, height: 560 }
 const BROWSER_PORTAL_SIZE = { width: 760, height: 560 }
+const CLOUDFLARE_TUNNEL_SIZE = { width: 620, height: 720 }
+const PORTAL_RECOVERY_SIZE = { width: 620, height: 520 }
 const AWS_WIZARD_SIZE = { width: 620, height: 560 }
 
 /** Height of a non-agent node when collapsed. */
@@ -2863,7 +2866,13 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   'repository-graph': true,
   'aws-wizard': true,
   'aws-shop': true,
-  portal: true
+  portal: true,
+  'browser-portal': true,
+  'debug-browser': true,
+  kiosk: true,
+  'aws-service': true,
+  'portal-door': true,
+  xproject: true
 }
 
 /**
@@ -2936,7 +2945,13 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   'repository-graph': REPOSITORY_GRAPH_SIZE,
   'aws-shop': SHOP_SIZE,
   'aws-wizard': AWS_WIZARD_SIZE,
-  portal: { width: 320, height: 220 }
+  portal: { width: 320, height: 220 },
+  'browser-portal': BROWSER_PORTAL_SIZE,
+  'debug-browser': DEBUG_BROWSER_SIZE,
+  kiosk: KIOSK_SIZE,
+  'aws-service': { width: 620, height: 460 },
+  'portal-door': { width: 520, height: 620 },
+  xproject: { width: 520, height: 380 }
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -2953,6 +2968,75 @@ function duplicateKind(type: string | undefined): NodeKind {
 
 export function createAlarmNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return { id: nextId('alarm'), type: 'alarm', position: placeAt(center, index, NATIVE_LOOP_SIZE.width, NATIVE_LOOP_SIZE.height), width: NATIVE_LOOP_SIZE.width, height: NATIVE_LOOP_SIZE.height, style: { width: NATIVE_LOOP_SIZE.width, height: NATIVE_LOOP_SIZE.height }, data: { title: 'Alarm', color: NODE_COLORS[index % NODE_COLORS.length], group: null, alarmId: nextId('alarm-definition') } }
+}
+
+/** Creates one independent AWS Universe portal. There is intentionally no project-wide count cap. */
+export function createAwsUniverseNode(
+  index: number,
+  center?: { x: number; y: number },
+  universeId?: string
+): CanvasNode {
+  const nodeId = nextId('aws-universe')
+  const id = universeId ?? nodeId
+  const pairId = `${id}:door-pair`
+  return {
+    id: nodeId,
+    type: 'aws-universe',
+    position: placeAt(center, index, AWS_UNIVERSE_SIZE.width, AWS_UNIVERSE_SIZE.height),
+    width: AWS_UNIVERSE_SIZE.width,
+    height: AWS_UNIVERSE_SIZE.height,
+    style: { width: AWS_UNIVERSE_SIZE.width, height: AWS_UNIVERSE_SIZE.height },
+    data: {
+      title: `AWS Universe ${index + 1}`,
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      awsUniverseId: id,
+      awsUniverseScope: 'aws-only',
+      awsUniverseServiceIntent: [],
+      awsUniverseEntryDoorId: `${pairId}:entry`,
+      awsUniverseReturnDoorId: `${pairId}:return`
+    }
+  }
+}
+
+/** Creates a guided Cloudflare Tunnel node with portable intent only. */
+export function createCloudflareTunnelNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('cloudflare-tunnel'),
+    type: 'cloudflare-tunnel',
+    position: placeAt(center, index, CLOUDFLARE_TUNNEL_SIZE.width, CLOUDFLARE_TUNNEL_SIZE.height),
+    width: CLOUDFLARE_TUNNEL_SIZE.width,
+    height: CLOUDFLARE_TUNNEL_SIZE.height,
+    style: { width: CLOUDFLARE_TUNNEL_SIZE.width, height: CLOUDFLARE_TUNNEL_SIZE.height },
+    data: {
+      title: 'Cloudflare Tunnel',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      cloudflareTunnelSpec: { hostname: '', tunnelName: 'nodeterm tunnel', accessMode: 'deny-first' }
+    }
+  }
+}
+
+/** Creates a deterministic, offline portal recovery game. Progress is portable and non-secret. */
+export function createPortalRecoveryNode(
+  index: number,
+  center?: { x: number; y: number },
+  progress?: PortalRecoveryProgress
+): CanvasNode {
+  return {
+    id: nextId('portal'),
+    type: 'portal',
+    position: placeAt(center, index, PORTAL_RECOVERY_SIZE.width, PORTAL_RECOVERY_SIZE.height),
+    width: PORTAL_RECOVERY_SIZE.width,
+    height: PORTAL_RECOVERY_SIZE.height,
+    style: { width: PORTAL_RECOVERY_SIZE.width, height: PORTAL_RECOVERY_SIZE.height },
+    data: {
+      title: 'Portal recovery',
+      color: '#7c4dff',
+      group: null,
+      portalRecoveryProgress: progress
+    }
+  }
 }
 
 /**

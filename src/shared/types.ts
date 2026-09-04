@@ -443,7 +443,9 @@ export type NodeKind =
   | 'kiosk'
   | 'aws-service'
   | 'portal-door'
-  // XProjectNode and its nodeTypes entry are both live; only the literal was dropped.
+  // XProjectNode and its `nodeTypes` entry are both live. CanvasNode separately unions this as
+  // `NodeKind | 'xproject'`, which is not sufficient: other code keys Record<NodeKind, ...> and
+  // switches on NodeKind directly.
   | 'xproject'
   // The built-in authenticator, as a node. A VIEW of this machine's own TOTP generators: it
   // persists a title and a colour and nothing else, because an entry id names a credential in
