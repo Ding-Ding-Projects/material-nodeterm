@@ -812,6 +812,18 @@ export function buildStubApi(): Omit<
       cancel: U('cloudflareZeroTrust.cancel'),
       onProgress: noopUnsub
     },
+    advancedMedia: {
+      catalog: U('advancedMedia.catalog'),
+      inspect: U('advancedMedia.inspect'),
+      enqueue: U('advancedMedia.enqueue'),
+      state: U('advancedMedia.state'),
+      start: U('advancedMedia.start'),
+      pause: U('advancedMedia.pause'),
+      cancel: U('advancedMedia.cancel'),
+      retry: U('advancedMedia.retry'),
+      remove: U('advancedMedia.remove'),
+      onProgress: noopUnsub
+    } satisfies AdvancedMediaApi,
     ollama: {
       status: U('ollama.status'),
       models: U('ollama.models'),

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Advanced media pipelines — nodeterm</title>
+    <meta name="description" content="Bounded archive, PDF, image metadata, media probing, and OCR pipelines." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="./index.html">← Documentation</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Files and media</p>
+      <h1>Advanced media pipelines</h1>
+      <p>Advanced media is a separate queue for operations that create several outputs, write a destination folder, or need a bounded local process. The express converter remains the route for one-input/one-output structured, text, binary, gzip, and Brotli conversion.</p>
+      <h2>Built-in operations</h2>
+      <ul>
+        <li>Inspect PNG, JPEG, GIF, WebP, BMP, and ICO headers, including dimensions and MIME type.</li>
+        <li>List, create, and safely extract ZIP and TAR archives.</li>
+        <li>Inspect PDF page counts and encryption, then extract conservative text from unencrypted files.</li>
+      </ul>
+      <h2>Verified external tools</h2>
+      <p>Media stream probing and OCR are enabled only by a package-owned manifest containing an HTTPS source, version, executable name, and SHA-256. The app never searches PATH or accepts an arbitrary command. Each child runs with shell execution disabled, a reduced environment, bounded arguments and output, a deadline, and cancellation.</p>
+      <h2>Safety and progress</h2>
+      <p>Archive traversal, absolute paths, links, duplicate entries, oversized data, malformed headers, and existing destinations are refused. Outputs are validated before atomic publication. Every job reports reading, processing, writing, validation, completion, cancellation, and failure with byte counts and a partial-result state.</p>
+      <h2>More detail</h2>
+      <p>This page is the hosted documentation article for configuration, persistence, failure modes, security boundaries, and the verification plan.</p>
+    </article>
+  </body>
+</html>
