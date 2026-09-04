@@ -102,6 +102,7 @@ export type KanbanCreateChoice =
   | { kind: 'terminal'; profileId?: string }
   | { kind: 'sticky' }
   | { kind: 'browser' }
+  | { kind: 'portal-door' }
   | { kind: 'agent'; agentId: AgentId }
 
 /** One actionable "+ New" menu entry. Unavailable profiles remain focusable and explain why. */

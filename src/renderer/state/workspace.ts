@@ -1975,6 +1975,12 @@ export function createAwsShopCanvasNode(universeId: string, index: number, cente
   }
 }
 
+export function createPortalDoorNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const size = { width: 520, height: 620 }
+  const id = nextId('portal-door')
+  return { id, type: 'portal-door', position: placeAt(center, index, size.width, size.height), width: size.width, height: size.height, style: { width: size.width, height: size.height }, data: { title: 'Portal door', color: NODE_COLORS[index % NODE_COLORS.length], group: null, portalDoor: createPortalDoorConstruction(id) } }
+}
+
 /**
  * Creates an NSIS installer-builder node — a GUI for authoring a Windows NSIS installer script for
  * ANOTHER project. Not this app's own installer, which stays Squirrel.Windows (see CLAUDE.md's

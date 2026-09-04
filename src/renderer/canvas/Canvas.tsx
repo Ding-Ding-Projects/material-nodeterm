@@ -5998,6 +5998,17 @@ export function Canvas() {
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
 
+  const addPortalDoor = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createPortalDoorNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
   const addSticky = useCallback(
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
@@ -12554,6 +12565,11 @@ export function Canvas() {
               onClick: () => addDino(at)
             },
             {
+              label: 'New portal door',
+              icon: <IconShapes />,
+              onClick: () => addPortalDoor(at)
+            },
+            {
               label: 'Open file…',
               icon: <IconEditor />,
               onClick: () => void openFileDialog(at)
@@ -13044,8 +13060,10 @@ export function Canvas() {
             )
           : choice.kind === 'sticky'
             ? createStickyNode(index, at)
-            : choice.kind === 'browser'
+          : choice.kind === 'browser'
               ? createBrowserNode(index, '', at)
+              : choice.kind === 'portal-door'
+                ? createPortalDoorNode(index, at)
               : createAgentNode(
                 choice.agentId,
                 index,
@@ -13084,6 +13102,8 @@ export function Canvas() {
             ? 'Sticky note'
             : choice.kind === 'browser'
               ? 'Browser'
+              : choice.kind === 'portal-door'
+                ? 'Portal door'
               : (agentConfig(choice.agentId)?.label ??
               useSettings.getState().settings.customAgents.find((a) => a.id === choice.agentId)
                 ?.label ??
