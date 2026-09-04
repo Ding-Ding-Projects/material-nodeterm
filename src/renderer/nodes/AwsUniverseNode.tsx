@@ -46,7 +46,12 @@ function storedContext(universeId: string): AwsUniverseMachineContext | undefine
 
 export function AwsUniverseNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { updateNodeData, setNodes } = useReactFlow()
-  const universeId = data.awsUniverseId ?? id
+  // `NodeData`'s blanket index signature types every undeclared field as `unknown`, which
+  // makes `unknown ?? string` widen to `{}` — cast at the read site rather than depending on
+  // workspace.ts declaring these AWS-universe fields explicitly.
+  const universeId = ((data as Record<string, unknown>).awsUniverseId as string | undefined) ?? id
+  const entryDoorId = ((data as Record<string, unknown>).awsUniverseEntryDoorId as string | undefined) ?? `${universeId}:door-pair:entry`
+  const returnDoorId = ((data as Record<string, unknown>).awsUniverseReturnDoorId as string | undefined) ?? `${universeId}:door-pair:return`
   const [entered, setEntered] = useState<AwsUniverseNavigation | null>(null)
   const [context, setContext] = useState<AwsUniverseMachineContext | undefined>(() => storedContext(universeId))
   const [colorAnchor, setColorAnchor] = useState<{ x: number; y: number } | null>(null)
@@ -75,11 +80,11 @@ export function AwsUniverseNode({ id, data, selected }: NodeProps<CanvasNode>) {
       universeId,
       displayName: data.title || 'AWS Universe',
       serviceIntent: [],
-      entryDoor: { id: data.awsUniverseEntryDoorId ?? `${universeId}:door-pair:entry`, pairId: `${universeId}:door-pair`, universeId, side: 'entry' },
-      returnDoor: { id: data.awsUniverseReturnDoorId ?? `${universeId}:door-pair:return`, pairId: `${universeId}:door-pair`, universeId, side: 'return' },
+      entryDoor: { id: entryDoorId, pairId: `${universeId}:door-pair`, universeId, side: 'entry' },
+      returnDoor: { id: returnDoorId, pairId: `${universeId}:door-pair`, universeId, side: 'return' },
       scope: 'aws-only',
       schemaVersion: 1
-    }, data.awsUniverseEntryDoorId ?? `${universeId}:door-pair:entry`)
+    }, entryDoorId)
     setEntered(navigation)
   }
   const closeThroughDoor = () => {
@@ -88,11 +93,11 @@ export function AwsUniverseNode({ id, data, selected }: NodeProps<CanvasNode>) {
       universeId,
       displayName: data.title || 'AWS Universe',
       serviceIntent: [],
-      entryDoor: { id: data.awsUniverseEntryDoorId ?? `${universeId}:door-pair:entry`, pairId: `${universeId}:door-pair`, universeId, side: 'entry' },
-      returnDoor: { id: data.awsUniverseReturnDoorId ?? `${universeId}:door-pair:return`, pairId: `${universeId}:door-pair`, universeId, side: 'return' },
+      entryDoor: { id: entryDoorId, pairId: `${universeId}:door-pair`, universeId, side: 'entry' },
+      returnDoor: { id: returnDoorId, pairId: `${universeId}:door-pair`, universeId, side: 'return' },
       scope: 'aws-only',
       schemaVersion: 1
-    }, entered, data.awsUniverseReturnDoorId ?? `${universeId}:door-pair:return`)
+    }, entered, returnDoorId)
     if (ok) setEntered(null)
   }
   const chooseContext = (value: string) => {

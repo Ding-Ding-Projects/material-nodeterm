@@ -1,4 +1,5 @@
 import type { Node } from '@xyflow/react'
+import type { SessionIcon } from '@shared/session-icon'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NamedTerminalProfile, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
 import { normalizeMediaReference, type MediaAssetReference } from '@shared/media-catalog'
 import { normalizePublicDimSumSelection, type PublicDimSumSelection } from '@shared/public-dim-sum'
@@ -7,7 +8,7 @@ import type { HomeAssistantNodeIntent } from '@shared/home-assistant'
 import { DEFAULT_HOME_ASSISTANT_NODE_INTENT } from '@shared/home-assistant'
 import type { HomeAssistantControlConfig } from '@shared/home-assistant-control'
 import { DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG, validateHomeAssistantControlConfig } from '@shared/home-assistant-control'
-import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
+import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, validateHomeAssistantSensorConfig, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { TriggerSpec } from '@shared/trigger'
 import type { ServiceConnection } from '@shared/node-exec'
@@ -20,6 +21,8 @@ import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AwsWizardSpec } from '@shared/aws-wizard'
 import { defaultAwsWizardSpec } from '@shared/aws-wizard'
+import type { DebugBrowserSpec } from '@shared/browser-debug'
+import { createPortalDoorConstruction } from '@shared/portal-door'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
 import {
   agentConfig,
@@ -142,6 +145,10 @@ const ANNOTATION_SIZE = { width: 240, height: 160 }
 const SERVICE_CONSOLE_SIZE = { width: 720, height: 520 }
 const SERVICE_SUMMARY_SIZE = { width: 520, height: 400 }
 const AWS_UNIVERSE_SIZE = { width: 760, height: 560 }
+const DEBUG_BROWSER_SIZE = { width: 760, height: 560 }
+const KIOSK_SIZE = { width: 760, height: 560 }
+const BROWSER_PORTAL_SIZE = { width: 760, height: 560 }
+const AWS_WIZARD_SIZE = { width: 620, height: 560 }
 
 /** Height of a non-agent node when collapsed. */
 export const COLLAPSED_HEIGHT = 40
@@ -942,6 +949,10 @@ export function createAgentNode(
     typeof resolvedLaunchPlan === 'string' ? resolvedLaunchPlan : undefined
   const permissionMode =
     explicitPermissionMode ?? permissionModeFromLaunchPlan(launchPlan, agentId)
+  const customAgent = settings.customAgents.find((c) => c.id === agentId)
+  const harnessId = resolveAgentBase(agentId, customAgent) ?? agentId
+  const agentModel = resolvedOptions?.model
+  const override = launchCmdOverride
   const selectedModel = normalizedAgentModel(harnessId, agentModel) ?? undefined
   // No plan passed (e.g. a legacy/test call site) = bare command, exactly as before this setting.
   // Production launch sites pass the branded plan, so a raw hand-edited settings value cannot be
@@ -1281,34 +1292,6 @@ export function createEditorNode(
       ...(sshFs ? { sshFs: true } : {})
     }
   }
-}
-
-/** Creates a persisted directory-listing node rooted at `cwd`. */
-export function createFilesNode(
-  index: number,
-  cwd: string,
-  center?: { x: number; y: number },
-  sshFs?: boolean
-): CanvasNode {
-  return {
-    id: nextId('files'),
-    type: 'files',
-    position: placeAt(center, index, FILES_SIZE.width, FILES_SIZE.height),
-    width: FILES_SIZE.width,
-    height: FILES_SIZE.height,
-    style: { width: FILES_SIZE.width, height: FILES_SIZE.height },
-    data: {
-      title: folderTitleForNode(cwd),
-      color: '#6ac4dc',
-      group: null,
-      cwd,
-      ...(sshFs ? { sshFs: true } : {})
-    }
-  }
-}
-
-function folderTitleForNode(path: string): string {
-  return path.split('/').filter(Boolean).pop() ?? '/'
 }
 
 const VIDEO_EXTS = ['mp4', 'webm', 'mov', 'm4v', 'mkv', 'ogv', 'avi']
@@ -2842,9 +2825,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gallery: true,
   'wild-dim-sum': true,
   video: true,
-  photo: true,
   audio: true,
-  gallery: true,
   web: true,
   browser: true,
   files: true,
@@ -2879,7 +2860,10 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   'github-work-item': true,
   'windows-diagnostics': true,
   veracrypt: true,
-  'repository-graph': true
+  'repository-graph': true,
+  'aws-wizard': true,
+  'aws-shop': true,
+  portal: true
 }
 
 /**
@@ -2912,9 +2896,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gallery: GALLERY_SIZE,
   'wild-dim-sum': WILD_DIM_SUM_SIZE,
   video: VIDEO_SIZE,
-  photo: VIDEO_SIZE,
   audio: VIDEO_SIZE,
-  gallery: { width: 760, height: 520 },
   web: WEB_SIZE,
   browser: BROWSER_SIZE,
   files: FILES_SIZE,
@@ -2951,7 +2933,10 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   'github-work-item': GITHUB_WORK_ITEM_NODE_SIZE,
   'windows-diagnostics': WINDOWS_DIAGNOSTICS_SIZE,
   veracrypt: VERACRYPT_SIZE,
-  'repository-graph': REPOSITORY_GRAPH_SIZE
+  'repository-graph': REPOSITORY_GRAPH_SIZE,
+  'aws-shop': SHOP_SIZE,
+  'aws-wizard': AWS_WIZARD_SIZE,
+  portal: { width: 320, height: 220 }
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -2966,18 +2951,8 @@ function duplicateKind(type: string | undefined): NodeKind {
   return type && NODE_KINDS.has(type) ? (type as NodeKind) : 'terminal'
 }
 
-export function createTimerNode(index: number, center?: { x: number; y: number }): CanvasNode {
-  const durationMs = 5 * 60_000
-  return { id: nextId('timer'), type: 'timer', position: placeAt(center, index, TIMER_SIZE.width, TIMER_SIZE.height), width: TIMER_SIZE.width, height: TIMER_SIZE.height, style: { width: TIMER_SIZE.width, height: TIMER_SIZE.height }, data: { title: 'Timer', color: NODE_COLORS[index % NODE_COLORS.length], group: null, timerData: { timerMode: 'countdown', durationMs, remainingMs: durationMs, elapsedMs: 0, running: false, paused: false, repeatCount: 0, repeatRemaining: 0, sequence: [], sequenceIndex: 0, lapsMs: [], nextOccurrenceAt: null, occurrenceState: 'scheduled', alarmEnabled: true, alarmTone: 'chime', missedCount: 0, wallAnchorMs: null, monotonicAnchorMs: null } } }
-}
-
 export function createAlarmNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return { id: nextId('alarm'), type: 'alarm', position: placeAt(center, index, NATIVE_LOOP_SIZE.width, NATIVE_LOOP_SIZE.height), width: NATIVE_LOOP_SIZE.width, height: NATIVE_LOOP_SIZE.height, style: { width: NATIVE_LOOP_SIZE.width, height: NATIVE_LOOP_SIZE.height }, data: { title: 'Alarm', color: NODE_COLORS[index % NODE_COLORS.length], group: null, alarmId: nextId('alarm-definition') } }
-}
-
-function resetTimerDataForDuplicate(data: NodeData['timerData']): NodeData['timerData'] {
-  if (!data) return data
-  return { ...data, running: false, paused: false, remainingMs: data.durationMs, elapsedMs: 0, repeatRemaining: data.repeatCount, sequenceIndex: 0, lapsMs: [], nextOccurrenceAt: null, occurrenceState: 'scheduled', missedCount: 0, wallAnchorMs: null, monotonicAnchorMs: null, sequence: data.sequence.map((step) => ({ ...step })) }
 }
 
 /**
@@ -3324,7 +3299,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
           ? defaultBrowserTabs(n.id, n.url, n.title)
           : undefined
     const browserActiveTabId = n.browserActiveTabId ?? browserTabs?.[0]?.id
-    const homeAssistantSensor = validateHomeAssistantSensorConfig(n.homeAssistantSensor)
+    const homeAssistantSensor = validateHomeAssistantSensorConfig(n.homeAssistantSensorConfig)
     return {
       id: n.id,
       // Default to 'terminal' for nodes saved before the kind field existed.
@@ -3383,7 +3358,6 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         alarmNextOccurrenceAt: n.alarmNextOccurrenceAt,
         alarmHistory: n.alarmHistory,
         trigger: n.trigger,
-        premaxRect: n.premaxRect,
         shell: n.shell,
         terminalProfileId: n.ssh ? undefined : n.terminalProfileId,
         namedTerminalProfileId: n.ssh ? undefined : n.namedTerminalProfileId,
@@ -3422,7 +3396,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
           : undefined,
         calendarConfig: n.calendarConfig,
         homeAssistantControlConfig: n.kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.homeAssistantControlConfig) : undefined,
-        homeAssistantSensorConfig: n.homeAssistantSensorConfig,
+        homeAssistantSensorConfig: n.kind === 'homeassistant-sensor' ? homeAssistantSensor : undefined,
         textUpdatedAt: n.textUpdatedAt,
         textUpdatedBy: n.textUpdatedBy,
         filePath: n.filePath,

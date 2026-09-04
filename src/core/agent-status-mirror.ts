@@ -7,7 +7,6 @@ import type { AgentId } from '@shared/agents/config'
 import type { AgentState, NormalizedAgentEvent } from '@shared/agents/normalize'
 import type { AgentStatusSnapshot, AgentStatusSnapshotEntry } from '@shared/agents/status-snapshot'
 import { WORKING_STALE_MS, isStaleWorking } from '@shared/agents/stale'
-import type { AgentStatusSnapshot, AgentStatusSnapshotEntry } from '@shared/agents/status-snapshot'
 
 /**
  * Mirrors the live per-node agent status to a small JSON file so an EXTERNAL reader (the

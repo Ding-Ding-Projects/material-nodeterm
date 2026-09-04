@@ -62,6 +62,10 @@ interface BrowserSurfaceProps {
   onLifecycleChange?: (state: BrowserPortalLifecycle) => void
   /** Optional navigation validator used by kiosk sessions to keep every persisted and live URL HTTP(S). */
   validateUrl?: (url: string) => string | null
+  /** Kiosk sessions do not expose extension management in their own toolbar. */
+  hideExtensions?: boolean
+  /** Fed the guest's web-app manifest (fixed, read-only probe) when a kiosk session wants to adopt it. */
+  onManifestDiscovered?: (value: unknown, pageUrl: string) => void
 }
 
 /**
@@ -83,7 +87,9 @@ export function BrowserSurface({
   strictHttpUrl = false,
   allowPopups = true,
   onLifecycleChange,
-  validateUrl
+  validateUrl,
+  hideExtensions = false,
+  onManifestDiscovered
 }: BrowserSurfaceProps) {
   const vocab = useVocabularyMapper()
   const ref = useRef<WebviewEl | null>(null)
@@ -234,13 +240,28 @@ export function BrowserSurface({
     const onReady = (): void => {
       wcId = wv.getWebContentsId()
       window.nodeTerminal.browser.register(wcId, nodeId, ownerNodeId, surface)
+      if (onManifestDiscovered && wv.executeJavaScript) {
+        // This is a fixed, read-only probe evaluated in the guest. It never receives caller input,
+        // never reads cookies, and bounds the manifest before it crosses into the renderer.
+        void wv
+          .executeJavaScript(
+            "(async()=>{const l=document.querySelector('link[rel~=manifest]');if(!l)return null;const u=new URL(l.href,location.href).href;const r=await fetch(u,{credentials:'omit',redirect:'error'});const t=await r.text();if(t.length>262144)throw new Error('manifest-too-large');return {url:u,manifest:JSON.parse(t)}})()",
+            false
+          )
+          .then((result) => {
+            if (!result || typeof result !== 'object') return
+            const candidate = result as { url?: unknown; manifest?: unknown }
+            if (typeof candidate.url === 'string') onManifestDiscovered(candidate.manifest, candidate.url)
+          })
+          .catch(() => undefined)
+      }
     }
     wv.addEventListener('dom-ready', onReady)
     return () => {
       wv.removeEventListener('dom-ready', onReady)
       if (wcId) window.nodeTerminal.browser.unregister(wcId)
     }
-  }, [nodeId, ownerNodeId, surface, discarded])
+  }, [nodeId, ownerNodeId, surface, discarded, onManifestDiscovered])
 
   // ── Memory saver ────────────────────────────────────────────────────────────────────────────
   // A browser node parked off-screen is a whole Chromium renderer process doing nothing, and the
@@ -337,6 +358,7 @@ export function BrowserSurface({
             if (e.key === 'Enter') go()
           }}
         />
+        {!hideExtensions && (
         <div className="browser-ext-panel__anchor">
           <IconButton
             size="compact"
@@ -354,6 +376,7 @@ export function BrowserSurface({
             <BrowserExtensionsPanel partition={partition} onClose={() => setShowExtensions(false)} />
           )}
         </div>
+        )}
       </div>
       <div className="browser-node__view nodrag nowheel">
         {/* The element is UNMOUNTED while discarded — that is what ends the guest process; an
