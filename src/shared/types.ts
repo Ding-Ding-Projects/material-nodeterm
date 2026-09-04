@@ -5292,14 +5292,14 @@ export interface NodeTerminalApi {
   /** Universal file converter — docs/file-converter.md. */
   converter: import('./converter').ConverterApi
   /** Local AWS CDK manager. The browser bridge exposes an explicit unsupported response. */
-  // `CdkManager implements CdkLegacyApi`, so that is the shape — the unprefixed CdkApi in the
-  // same module belongs to a sibling lineage with no wired backend.
+  // The UNPREFIXED shape, because that is what the wired desktop backend implements:
+  // `src/main/aws/cdk-manager.ts` declares `class CdkManager implements CdkApi` and is registered
+  // from main/index.ts via registerCdkHandlers, and preload exposes exactly those methods.
   //
-  // OPTIONAL, and that is a fact rather than caution: `core/cdk/register-ipc.ts` exists but
-  // neither shell calls it, so nothing provides this member at run time. CdkManagerPanel (reached
-  // from AwsResourceNode) therefore calls an API that is absent. Declaring it required would let
-  // every call site assume a backend that was never wired. Wiring it is a separate decision.
-  cdk?: import('./cdk').CdkLegacyApi
+  // There is a SECOND cdk lineage — `core/cdk/manager.ts` implements CdkLegacyApi and
+  // `core/cdk/register-ipc.ts` binds it — but neither shell registers it, so naming CdkLegacyApi
+  // here would point the renderer at a contract nothing serves.
+  cdk: import('./cdk').CdkApi
   /** Shared automatic dependency lifecycle for node-feature installers. */
   nodeDependencies: import('./node-dependencies').NodeDependenciesApi
   /** Current installed AWS CLI model source for the AWS Shop operation wizard. */
