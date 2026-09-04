@@ -55,3 +55,7 @@ build/icon.icns
 /canvas-tour.mp4
 /hero-tour.mp4
 nodeterm.worktrees/
+
+# Agent scratch and probe files. Untracked deliberately: a `git add -A` sweeping up
+# several lanes at once will otherwise commit them, which is how they got in once.
+.nt-tmp/
