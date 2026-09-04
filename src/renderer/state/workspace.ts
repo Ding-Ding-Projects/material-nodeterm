@@ -3310,6 +3310,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
           ? defaultBrowserTabs(n.id, n.url, n.title)
           : undefined
     const browserActiveTabId = n.browserActiveTabId ?? browserTabs?.[0]?.id
+    const homeAssistantSensor = validateHomeAssistantSensorConfig(n.homeAssistantSensor)
     return {
       id: n.id,
       // Default to 'terminal' for nodes saved before the kind field existed.

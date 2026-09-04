@@ -1231,6 +1231,7 @@ describe('duplicateNode across every node kind', () => {
     proxmox: 'proxmox',
     gitlab: 'gitlab',
     homeassistant: 'homeassistant',
+    'homeassistant-sensor': 'homeassistant-sensor',
     freepbx: 'freepbx',
     'nextcloud-aio': 'nextcloud-aio',
     // A GUI for authoring an NSIS installer script for another project (never this app's own

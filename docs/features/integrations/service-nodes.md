@@ -234,24 +234,21 @@ State this plainly, because CLAUDE.md's rule against decorative controls cuts bo
 a control that *looks* wired and is not, and it equally forbids a document that implies more than
 the control actually does.
 
-- **Nothing dials the address.** The endpoint field validates and stores a URL; no code anywhere in
-  this repository opens a connection to it, tests it, or does anything with it beyond keeping it
-  around for a future feature to read.
+- **Other manager kinds do not dial the address.** The endpoint field validates and stores a URL;
+  no code opens a connection for Docker, Proxmox, GitLab, or FreePBX. The Home Assistant sensor
+  display is the deliberate exception, and its live connection, token boundary, stale/offline
+  behavior, and recovery are documented in [Home Assistant sensor displays](home-assistant-sensors.md).
 - **There is no console.** `minecraft`, `dockerhost` and `proxmox` are sized as if a console will
   eventually live in their body (`SERVICE_CONSOLE_SIZE`), but the body today holds only the address
   field and two lines of static explanatory text — no terminal, no log tail, no command input.
-- **There is no status.** No online/offline indicator, no health check, no version, no resource
-  count. A service node cannot currently tell you whether the thing it names is even reachable.
-- **There is no credential UI.** `credentialKey` exists in the data model and in the storage/
-  validation boundary described above, but no control in `ServiceNode.tsx` sets one; there is
-  nowhere yet to pick or create a vault entry from the node itself.
+- **Other manager kinds have no status or credential UI.** The sensor display has an explicit
+  status, token field, entity picker, and live state panel; see the dedicated article.
 - **There is exactly one creation path** (the pane context menu's Managers submenu) — no
   command-palette entry, no dock button.
 
-The body copy on every node says as much in place — "Talking to a real {product} is not built yet,
-so this node stores where it would connect and nothing more. There is deliberately no button here
-that looks like it would connect." — so a user reading the node itself gets the same honest answer
-this document does.
+The body copy on each address-only node says as much in place — "Talking to a real {product} is
+not built yet, so this node stores where it would connect and nothing more." The sensor display
+instead reports its live connection and recovery state in its own panel.
 
 ## Surfaces
 

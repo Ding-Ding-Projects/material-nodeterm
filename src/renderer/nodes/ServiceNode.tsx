@@ -120,6 +120,9 @@ function describeEndpointProblem(value: string, map: (text: string) => string = 
 export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>) {
   const vocab = useVocabularyMapper()
   const { updateNodeData, setNodes } = useReactFlow()
+  const { ts } = useI18n()
+  const vocab = useVocabularyMapper()
+  const copy = (copyId: string, fallback: string): string => vocab(ts(copyId, fallback))
   /** Viewport anchor for the colour surface, or null when closed — coordinates rather than a
   *  boolean because ColorMenu is a body portal. */
   const [colorAnchor, setColorAnchor] = useState<{ x: number; y: number } | null>(null)
@@ -132,6 +135,9 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
    * string. Falling back to a neutral name keeps a mangled record rendering instead of throwing.
    */
   const kind: ServiceNodeKind | null = isServiceNodeKind(type) ? type : null
+  const schoolModeHydrated = useSchoolMode((state) => state.hydrated)
+  const schoolModeEnabled = useSchoolMode((state) => state.enabled)
+  const optionalIntegrationsAllowed = schoolModeAllowsOptionalFeatures({ hydrated: schoolModeHydrated, enabled: schoolModeEnabled })
   /**
    * The address is a DRAFT until it parses. Committing on every keystroke would mean the node
    * flickers through a dozen invalid states while somebody types a hostname, and — worse — would
@@ -169,6 +175,8 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
   const productName = kind ? SERVICE_NODE_LABELS[kind] : data.title || 'Service'
   const displayProductName = kind ? productName : data.title ? productName : vocab('Service')
   const label = data.serviceLabel ?? ''
+
+  if (!optionalIntegrationsAllowed && kind !== null && kind !== 'minecraft') return null
 
   const toggleCollapse = () =>
     setNodes((ns) =>
