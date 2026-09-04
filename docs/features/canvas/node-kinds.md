@@ -93,8 +93,10 @@ travel with the project; notification handles and any machine-specific runtime s
 
 ## Verification
 
-- Create one of each node kind from the canvas right-click menu, the bottom-dock **+** button,
-  and the command palette (`⌘K`) — all three should offer the same set.
+- Create one of each node kind from the canvas right-click menu, the add-node surface, and the
+  command palette (`Ctrl+Shift+F`) where that kind is offered. For the File converter, drop a file,
+  choose a bundled adapter and destination, then confirm the completed output can be opened in the
+  external editor handoff.
 - Reload the app and confirm every node kind's state (position, size, color, and kind-specific
   data such as an editor's open file) survived exactly as it was.
 - Group a mix of node kinds together, collapse the group, and confirm its children stay bound

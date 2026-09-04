@@ -6327,6 +6327,19 @@ export function Canvas() {
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
 
+  /** Adds the canvas-local file converter. Its queue is machine-local, while title, colour and
+   * placement remain safe to carry in the shared project projection. */
+  const addConverter = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createConverterNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
   const addNativeLoop = useCallback(
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
@@ -19630,6 +19643,7 @@ export function Canvas() {
                 y: r.top,
                 items: [
                   { label: 'File converter', onClick: () => setConverterOpen(true) },
+                  { label: 'New file converter node', icon: <IconConvert />, onClick: () => addConverter() },
                   { label: 'Ollama manager', onClick: () => setOllamaOpen(true) },
                   { label: 'UniGetUI Global Universe', onClick: () => setUnigetuiOpen(true) },
                   {

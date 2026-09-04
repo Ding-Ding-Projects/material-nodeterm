@@ -22,7 +22,86 @@ export interface AdapterCatalogProps {
   suggestedIds?: string[]
 }
 
-/** Categorized, searchable catalog of every known conversion — bundled AND disabled, per
+function CategoryBody({
+  category,
+  rows,
+  selectedId,
+  onSelect,
+  suggested
+}: {
+  category: ConverterCategoryId
+  rows: ConverterAdapterDescriptor[]
+  selectedId: string | null
+  onSelect: (id: string) => void
+  suggested: Set<string>
+}) {
+  const search = useRegexSearchField({ mode: 'text' })
+  const inputRef = useRef<HTMLInputElement>(null)
+  const visible = useMemo(
+    () => rows.filter((r) => search.test(`${r.label} ${r.unavailableReason ?? ''}`)),
+    [rows, search]
+  )
+
+  return (
+    <div className="cv-cat__body">
+      <div className="menu-filter cv-cat__search">
+        <div className="menu-filter__row">
+          <input
+            ref={inputRef}
+            type="search"
+            className="menu-filter__input"
+            placeholder={`Search ${CONVERTER_CATEGORY_LABELS[category].toLowerCase()}…`}
+            aria-label={`Search ${CONVERTER_CATEGORY_LABELS[category]} conversions`}
+            value={search.value}
+            onChange={(e) => search.setValue(e.target.value)}
+          />
+          <AnchoredRegexBuilder
+            search={search}
+            fieldRef={inputRef}
+            label={`Regex — ${CONVERTER_CATEGORY_LABELS[category]} conversions`}
+            zIndex={40}
+          />
+        </div>
+        {search.error && <div className="menu-filter__error" role="alert">{search.error}</div>}
+      </div>
+      {visible.length === 0 && <p className="cv-empty-note">No conversions match “{search.value}”.</p>}
+      <ul className="cv-rows">
+        {visible.map((row) => {
+          const isSuggested = suggested.has(row.id)
+          const isSelected = selectedId === row.id
+          return (
+            <li key={row.id}>
+              <button
+                className={`cv-row${row.available ? '' : ' cv-row--disabled'}${
+                  isSelected ? ' cv-row--selected' : ''
+                }${isSuggested ? ' cv-row--suggested' : ''}`}
+                disabled={!row.available}
+                aria-pressed={isSelected}
+                title={
+                  row.available
+                    ? row.lossy
+                      ? `Lossy conversion: ${row.lossyNotes?.join(' ') ?? ''}`
+                      : row.label
+                    : `Not available — ${row.unavailableReason}`
+                }
+                onClick={() => row.available && onSelect(row.id)}
+              >
+                <span className="cv-row__label">{row.label}</span>
+                {row.lossy && row.available && <span className="cv-row__badge cv-row__badge--lossy">lossy</span>}
+                {isSuggested && row.available && (
+                  <span className="cv-row__badge cv-row__badge--suggested">detected</span>
+                )}
+                {!row.available && <span className="cv-row__reason">{row.unavailableReason}</span>}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+/** Categorized, searchable catalog of every known conversion, bundled AND disabled, per
  *  docs/file-converter.md. Every category renders, even one that is entirely disabled, so a gap
  *  in bundled coverage is visible rather than silently hidden. Each category has its own isolated,
  *  plain-text-first search field and adjacent anchored full regex builder. Search state stays
