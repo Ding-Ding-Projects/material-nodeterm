@@ -67,6 +67,33 @@ export function shellPathNow(): string | null | undefined {
   return cachedShellPath
 }
 
+const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD'
+
+/** Return the command filenames CreateProcess would consider for a bare name. */
+export function execCandidates(
+  bin: string,
+  plat: NodeJS.Platform | string = os.platform(),
+  pathext: string | undefined = process.env.PATHEXT
+): string[] {
+  if (plat !== 'win32') return [bin]
+  if (path.extname(bin)) return [bin]
+  return (pathext || DEFAULT_PATHEXT)
+    .split(';')
+    .map((ext) => ext.trim())
+    .filter((ext) => ext.startsWith('.') && ext.length > 1)
+    .map((ext) => `${bin}${ext}`)
+}
+
+/** A single access check shared by command and executable discovery. */
+export function isExecutable(candidate: string): boolean {
+  try {
+    fs.accessSync(candidate, fs.constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * Candidate executable spellings for one PATH directory. Windows resolves extensionless commands
  * through PATHEXT, while POSIX keeps the command name unchanged.

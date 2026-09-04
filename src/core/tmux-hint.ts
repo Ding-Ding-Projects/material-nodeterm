@@ -4,6 +4,8 @@
 // a one-click install (run in a terminal node, gh-sign-in style).
 import { execCandidates } from './exec-path'
 
+import { execCandidates } from './exec-path'
+
 export interface TmuxInstallHint {
   command: string
   /** Button caption — tells the user up front when more than tmux is being installed. */
