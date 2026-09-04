@@ -375,6 +375,27 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
             </p>
           </div>
         )}
+
+        {!collapsed && kind === 'gitlab' && (
+          <HostedServiceTunnelPanel
+            serviceKind="gitlab"
+            endpoint={data.serviceConnection?.endpoint}
+            intentHealthPath={data.hostedServiceTunnel?.healthPath}
+            initialBinding={data.serviceConnection?.tunnel}
+            onIntentChange={(healthPath) => updateNodeData(id, {
+              hostedServiceTunnel: { provider: 'cloudflare-tunnel', exposure: 'private-first', access: 'required', healthPath }
+            })}
+            onBindingChange={(binding) => {
+              const connection = data.serviceConnection
+              if (!connection) return
+              updateNodeData(id, {
+                serviceConnection: binding
+                  ? { ...connection, tunnel: binding }
+                  : { ...connection, tunnel: undefined }
+              })
+            }}
+          />
+        )}
       </div>
     </>
   )
