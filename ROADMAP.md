@@ -172,6 +172,10 @@ are recorded below. Do not treat the source candidate as a published release.
       Context Link, and Branch conversation (Claude-only).
 - [x] Managed Claude accounts (local + remote/SSH), permission-mode gating with a version-gated
       `auto` flag, and per-account usage indicators including remote-host usage over SSH.
+- [ ] Claude skill visibility from issue #438 — metadata-only local, managed-account, and
+      connected-remote scope discovery with searchable state UI is implemented in the current
+      lane, but remains unverified because this ultra-speed lane intentionally ran no tests,
+      builds, runtime interaction, or captures.
 - [x] Projects/tabs with `.nodeterm/project.json` as the git-shareable source of truth, SSH
       project mirroring with atomic writes and conflict reconciliation.
 - [x] Kanban board view (session cards, card modal with live co-attached terminal, board log,

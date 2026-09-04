@@ -1833,6 +1833,19 @@ untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the
   - **Remote accounts** — selection + login + env injection, plus **usage** (below); no
     per-account transcript readers beyond env.
 
+- **Claude skill visibility** (`src/core/claude-skills.ts`, `src/main/index.ts`, and
+  `src/main/remote-ssh/ssh-project.ts`) — Settings → Claude skills exposes a metadata-only
+  catalogue for the local system config, each managed local account, and every connected SSH
+  host's system and managed-account configs. Claude resolves user skills relative to
+  `CLAUDE_CONFIG_DIR`, so each scope is inspected independently rather than assuming a skill in
+  `~/.claude/skills` is visible to an account config. Discovery checks directory entries and the
+  presence of a regular `SKILL.md` only; it never reads skill contents, credentials, transcripts,
+  or absolute private paths. Scope and skill rows distinguish available, missing, and unavailable
+  state. Remote discovery runs a fixed, account-id-validated metadata command over the existing
+  ControlMaster and returns only validated folder names. The Server Edition exposes its own local
+  scopes and explicitly has no SSH scope. `claude-skills:list` is read-only and the renderer adds
+  a local search with the shared anchored regex builder.
+
 - **The usage indicator is scoped to the ACTIVE project** (`renderer/lib/usageScope.ts`, pure +
   unit-tested) — it describes **the machine that project runs on**, and nothing else. A local
   project shows this machine (system + managed local accounts + the billing providers, whose

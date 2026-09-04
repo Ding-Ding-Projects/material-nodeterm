@@ -175,6 +175,10 @@ interface Runners {
   nodeTokenMinter?: () => ((nodeId: string) => string) | null
 }
 
+function assertClaudeAccountId(accountId: string): void {
+  if (!/^[A-Za-z0-9_-]+$/.test(accountId)) throw new Error('invalid Claude account id')
+}
+
 /** Backoff after a FAILED remote claude probe (no markers = claude not found on that attempt).
  *  A transient login-shell hiccup (nvm cache warm-up, NFS home, corp wrapper) shouldn't disable
  *  `--permission-mode auto` for the whole connection. A DEFINITE version answer never retries ,
