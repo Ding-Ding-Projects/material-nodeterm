@@ -21,6 +21,7 @@ import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AwsWizardSpec } from '@shared/aws-wizard'
 import { defaultAwsWizardSpec } from '@shared/aws-wizard'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
+import { NEXTCLOUD_AIO_DEFAULT_PROFILE, type NextcloudAioProfile } from '@shared/nextcloud-aio'
 import {
   agentConfig,
   agentLaunchProgram,

@@ -14489,6 +14489,18 @@ body.focus-mode .dock:hover {
   outline-offset: 2px;
 }
 
+.nextcloud-aio-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .nextcloud-aio-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* The rainbow swatch sits in the preset row, so it matches those buttons rather than inventing its
  * own size. `.nt-rainbow-swatch` supplies the animation; this supplies the shape. */
 .ctx-colors__rainbow {

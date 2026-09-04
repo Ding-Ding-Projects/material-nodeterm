@@ -41,6 +41,12 @@ Cloudflare manager is now the live typed API-backed member of the family.
 What changed is that the canvas object for each now exists; the research and the real client work
 for most of them has not started.
 
+The seventh kind, `nextcloudaio`, is a separate guided hosting profile rather than an address-only
+manager placeholder. Read [Nextcloud All-in-One hosting](nextcloud-aio.md) for its pinned official
+image, portable intent, local host binding, explicit Docker socket authority disclosure, and fixed
+no-privileged plan. Its runtime operations remain on the host-runtime seam and are not represented
+as generic service-node address behaviour.
+
 ## Creating one
 
 Right-click empty canvas → **Managers** → **New manager…** opens a submenu listing all service kinds by
