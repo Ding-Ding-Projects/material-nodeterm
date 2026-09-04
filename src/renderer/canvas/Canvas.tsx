@@ -1309,6 +1309,7 @@ function setupApi(): typeof window.nodeTerminal.projectSetup {
 }
 
 export function Canvas() {
+  const windowsDiagnosticsAvailable = Boolean(window.nodeTerminal.windowsDiagnostics)
   // This canvas's core api (a context read — stable for the session, no store subscription).
   // For the local session it IS window.nodeTerminal, so every call resolves identically.
   const { api, source: sessionSource } = useSession()
@@ -6068,6 +6069,17 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createCalendarNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addWindowsDiagnostics = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createWindowsDiagnosticsNode(ns.length, center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -12436,6 +12448,8 @@ export function Canvas() {
       addSticky,
       addGallery,
       addAuthenticator,
+      addWindowsDiagnostics,
+      windowsDiagnosticsAvailable,
       addNativeLoop,
       addTimer,
       addAlarmClock,
@@ -12787,6 +12801,8 @@ export function Canvas() {
       terminalProfileCreationItems,
       addSticky,
       addAuthenticator,
+      addWindowsDiagnostics,
+      windowsDiagnosticsAvailable,
       addNsis,
       addTorrent,
       addNativeLoop,

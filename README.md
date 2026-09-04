@@ -390,6 +390,11 @@ always starts with a host-and-id preview and explicit confirmation. Host labels 
 are machine-local; credentials, paths, and process state never enter a portable project save. See
 [`docs/features/remote/docker-host.md`](./docs/features/remote/docker-host.md).
 
+The canvas also includes a **read-only Windows diagnostics** node. It reads bounded drives,
+physical storage, services, startup entries, scheduled tasks, installed updates, network adapters,
+and recent System events from the local Windows desktop. Refresh is explicit, and the node has no
+control that changes the machine. See [Read-only Windows diagnostics](./docs/features/canvas/windows-diagnostics.md).
+
 **Group** nodes are real containers that nest inside each other and can bind to a git worktree, so
 every node created inside one inherits that worktree's directory. Quit the app and the persistent
 backend reattaches to the live session; reboot the machine and cold restore rebuilds the node,

@@ -1201,6 +1201,7 @@ describe('duplicateNode across every node kind', () => {
   const EXPECTED_PREFIX: Record<NodeKind, string> = {
     terminal: 'term',
     authenticator: 'authenticator',
+    'windows-diagnostics': 'windows-diagnostics',
     sticky: 'sticky',
     group: 'group',
     editor: 'editor',

@@ -288,6 +288,117 @@
   color-scheme: dark;
 }
 
+/* WindowsDiagnosticsNode: bounded, scrollable read-only host inventory. The table owns its
+   overflow so a long service or event value can never push the node beyond its resize bounds. */
+.windows-diagnostics-node {
+  min-width: 540px;
+  min-height: 320px;
+}
+.windows-diagnostics-node__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px;
+  color: var(--md-on-surface, #f2f2f2);
+}
+.windows-diagnostics-node__intro,
+.windows-diagnostics-node__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.windows-diagnostics-node__intro span:last-child,
+.windows-diagnostics-node__toolbar span {
+  margin-left: auto;
+  color: var(--md-on-surface-variant, #c5c5c5);
+}
+.windows-diagnostics-node__tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.windows-diagnostics-node__tabs button {
+  min-height: 32px;
+  flex: 0 0 auto;
+  border: 1px solid var(--md-outline-variant, #4a4a4a);
+  border-radius: 16px;
+  background: var(--md-surface-container, #242424);
+  color: var(--md-on-surface, #f2f2f2);
+  padding: 0 12px;
+  cursor: pointer;
+}
+.windows-diagnostics-node__tabs button.active {
+  background: var(--md-secondary-container, #37464b);
+  color: var(--md-on-secondary-container, #d9f5fb);
+}
+.windows-diagnostics-node__toolbar label {
+  white-space: nowrap;
+}
+.windows-diagnostics-node__toolbar input {
+  min-width: 0;
+  flex: 1;
+  min-height: 34px;
+  border: 1px solid var(--md-outline, #929292);
+  border-radius: 8px;
+  background: var(--md-surface, #171717);
+  color: var(--md-on-surface, #f2f2f2);
+  padding: 0 10px;
+}
+.windows-diagnostics-node__toolbar .md3-regex-trigger {
+  flex: 0 0 auto;
+  min-width: 34px;
+  min-height: 34px;
+}
+.windows-diagnostics-node__search-error {
+  flex-basis: 100%;
+  color: var(--md-error, #ffb4ab);
+}
+.windows-diagnostics-node__table-wrap {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--md-outline-variant, #4a4a4a);
+  border-radius: 10px;
+}
+.windows-diagnostics-node__table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.windows-diagnostics-node__table-wrap th,
+.windows-diagnostics-node__table-wrap td {
+  max-width: 260px;
+  border-bottom: 1px solid var(--md-outline-variant, #4a4a4a);
+  padding: 7px 8px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.windows-diagnostics-node__table-wrap th {
+  position: sticky;
+  top: 0;
+  background: var(--md-surface-container-high, #303030);
+  color: var(--md-on-surface, #f2f2f2);
+}
+.windows-diagnostics-node__error,
+.windows-diagnostics-node__empty {
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--md-surface-container, #242424);
+}
+.windows-diagnostics-node__error {
+  color: var(--md-error, #ffb4ab);
+}
+.windows-diagnostics-node__note {
+  margin: 0;
+  color: var(--md-on-surface-variant, #c5c5c5);
+  font-size: 11px;
+}
+
 /* ---- Light appearance ----------------------------------------------------------------------
    Set by App.tsx from `settings.appTheme` (see lib/appTheme.ts); absent = dark, so an install
    that never picks one is byte-for-byte unchanged.

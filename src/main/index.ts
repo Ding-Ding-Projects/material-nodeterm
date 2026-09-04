@@ -429,6 +429,8 @@ import { WEBGL_CONTEXT_CAP_DESKTOP } from '../shared/webgl'
 import { APP_BAR_HEIGHT } from '../shared/layout'
 import { registerConfirmedRecycleIpc } from './confirmed-recycle-ipc'
 import { registerWindowsTerminalProfileIpc } from './windows-terminal-profiles'
+import { createWindowsDiagnosticsService } from '../core/windows-diagnostics'
+import { WINDOWS_DIAGNOSTIC_KINDS } from '../shared/windows-diagnostics'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
 import { createStartupHealthTracker } from './startup-health'
 import { settleShutdownWithin } from './bounded-shutdown'
@@ -633,6 +635,7 @@ const windowsTerminalProfiles = new WindowsTerminalProfileService({
   getCustomExecutable: () => settingsStore.get().defaultShell,
   getNamedProfiles: () => settingsStore.get().namedTerminalProfiles
 })
+const windowsDiagnostics = createWindowsDiagnosticsService()
 const ptyManager = new PtyManager({ terminalProfiles: windowsTerminalProfiles })
 let agentContinuationService: AgentContinuationService | undefined
 // One tiny detached relay is shared by every Codex node/account. Keeping it outside the renderer
@@ -1650,6 +1653,15 @@ app.whenReady().then(async () => {
     )
     app.once('will-quit', disposeTerminalProfileIpc)
   }
+  // Native Windows diagnostics are machine-local and read-only. They deliberately stay out of
+  // the relay dispatch table, and neither channel has a mutation or elevation path.
+  ipcMain.handle(IPC.windowsDiagnosticsRead, (_event, kind: unknown) => {
+    if (typeof kind !== 'string' || !WINDOWS_DIAGNOSTIC_KINDS.includes(kind as never)) {
+      throw new Error('Unknown Windows diagnostic category.')
+    }
+    return windowsDiagnostics.read(kind as import('../shared/windows-diagnostics').WindowsDiagnosticKind)
+  })
+  ipcMain.handle(IPC.windowsDiagnosticsSnapshot, () => windowsDiagnostics.snapshot())
   await schoolModeStore.init()
   schoolModeStore.registerIpc()
   await kidsModeStore.init()

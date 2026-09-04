@@ -28,6 +28,10 @@ behaves, and how to build it yourself.
 - **Projects, canvas, kanban board, source control, worktrees** (local repos), **editor/diff
   nodes**, **the command palette**, **notifications**, **local Claude account switching** — all
   Electron-free `src/core` logic, none of it POSIX-specific.
+- **Read-only Windows diagnostics** — the canvas can show bounded drives, physical storage,
+  services, startup entries, scheduled tasks, installed updates, network adapters, and recent
+  System events. Refresh is explicit, queries are fixed and local, and no diagnostic control can
+  mutate the machine. See [Read-only Windows diagnostics](features/canvas/windows-diagnostics.md).
 - **SSH projects** — OpenSSH ships as an optional Windows feature since Windows 10 1809 and is
   resolved automatically (see [SSH resolution](#ssh-resolution)); these remain remote sessions
   and never receive a local Windows profile.

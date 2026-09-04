@@ -84,6 +84,8 @@ travel with the project; notification handles and any machine-specific runtime s
   delivery mechanism can send text into a terminal (which, for a plain terminal, *is*
   executed — this is why notes push to agent nodes with a clear one-shot message, not into
   plain terminals).
+- Windows diagnostics use fixed native reads in the main process. No user text is interpreted as a
+  command, no elevation is requested, and no write operation is exposed by the node.
 
 ## Verification
 
