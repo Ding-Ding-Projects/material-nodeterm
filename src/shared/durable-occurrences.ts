@@ -321,3 +321,14 @@ export function durableOccurrenceTimes(source: Pick<DurableSchedule | DurableAla
 export function durableOccurrenceLocal(occurrence: Pick<DurableOccurrence, 'scheduledAtMs' | 'local'>): { timeZone: string; date: string; time: string } {
   return { timeZone: occurrence.local.timeZone, ...wallParts(occurrence.scheduledAtMs, occurrence.local.timeZone) }
 }
+
+/**
+ * The outcome of claiming one occurrence for delivery.
+ *
+ * It lives HERE rather than beside the service because `NodeTerminalApi.claim()` in
+ * `shared/types.ts` is declared as returning it, and that declaration crosses the CorePlatform
+ * seam — the renderer and both shells have to agree on the union. The service re-exports it so
+ * its existing importers keep working; shared must never import from core, so the definition
+ * goes in this direction and not the other.
+ */
+export type DurableDeliveryResult = 'delivered' | 'pending' | 'failed'

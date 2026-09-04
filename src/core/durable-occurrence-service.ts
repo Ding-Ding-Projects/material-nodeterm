@@ -56,7 +56,12 @@ export class FileDurableOccurrenceStore implements DurableOccurrenceStore {
   }
 }
 
-export type DurableDeliveryResult = 'delivered' | 'pending' | 'failed'
+// Imported AND re-exported, not redeclared: `shared/types.ts` declares NodeTerminalApi.claim()
+// against the shared copy, so two independent unions here would be two contracts across one
+// seam. The plain `export type { X } from` form would re-export without binding the name
+// locally, and this file uses it in three places.
+import type { DurableDeliveryResult } from '../shared/durable-occurrences'
+export type { DurableDeliveryResult }
 export interface DurableDeliveryRequest {
   occurrence: DurableOccurrence
   /** Stable occurrence key. Consumers must treat retries as idempotent. */

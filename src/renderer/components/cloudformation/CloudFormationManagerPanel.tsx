@@ -16,13 +16,22 @@ import { useActiveSessionApi } from '../../session/session'
 import { openDestructiveGate } from '../../state/destructiveGate'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
-import { MaterialSymbol } from '../MaterialSymbol'
+import { Button, Checkbox, FieldLabel, IconButton, Tabs } from '../../ui/md3'
+import { Input } from '../../ui/Input'
+import { Select } from '../../ui/Select'
 
 export interface CloudFormationManagerPanelProps {
   onClose: () => void
 }
 
 type PanelTab = 'template' | 'change-set' | 'events'
+
+/** The drawer's three sections, in strip order. */
+const PANEL_TABS = [
+  { id: 'template', label: 'Template' },
+  { id: 'change-set', label: 'Change set' },
+  { id: 'events', label: 'Events' }
+] as const
 
 const CAPABILITIES: CloudFormationCapability[] = ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND']
 
@@ -83,7 +92,7 @@ export function CloudFormationManagerPanel({ onClose }: CloudFormationManagerPan
       <aside className="drawer cloudformation" role="dialog" aria-label="CloudFormation manager" onClick={(event) => event.stopPropagation()}>
         <div className="drawer__head">
           <h2>CloudFormation manager</h2>
-          <button className="drawer__close" onClick={onClose} aria-label="Close CloudFormation manager"><MaterialSymbol name="close" size={18} /></button>
+          <IconButton className="drawer__close" icon="close" onClick={onClose} aria-label="Close CloudFormation manager" />
         </div>
         {!cloudFormation ? (
           <div className="drawer__body"><p className="cf-empty" role="alert">CloudFormation is not available for this session. This manager never falls back to another machine.</p></div>

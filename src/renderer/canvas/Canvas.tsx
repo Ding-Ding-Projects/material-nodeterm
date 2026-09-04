@@ -856,7 +856,11 @@ import {
   NODE_COLORS,
   maximizeNodeToRect,
   restoreMaximizedNode,
+  createPortalDoorNode,
+  createAwsWizardNode
 } from '../state/workspace'
+import { isNonDeletableCanvasNode } from '@shared/aws-shop'
+import type { SessionIcon } from '@shared/session-icon'
 import { codexAccountSelectable } from './codex-account-switch'
 import { resolveNewCodexNodeAccount, planCodexAccountSwitch } from './codex-account-ops'
 import type { CodexAccount } from '@shared/codex-account'
@@ -10694,13 +10698,6 @@ export function Canvas() {
     setZoneOverlay({ nodeId, active, zones: availableZones })
   }, [getViewport])
 
-  const saveCurrentLayout = useCallback((layout: import('@shared/types').SavedCanvasLayout) => {
-    if (!activeProjectId) return
-    const next = [...savedLayouts.filter((item) => item.id !== layout.id), layout]
-    useProjects.getState().setProjectSavedLayouts(activeProjectId, next)
-    markDirty()
-  }, [activeProjectId, savedLayouts, markDirty])
-
   const applyLayout = useCallback((layout: import('@shared/types').SavedCanvasLayout, result: SavedLayoutApplyResult) => {
     if (!result.appliedIds.length) return
     const next = nodeStatesToFlow(result.nodes)
@@ -13545,128 +13542,6 @@ export function Canvas() {
     return () => setTravelNodeHandler(null)
   }, [focusNodeById])
 
-  const installDrilledFlow = useCallback(
-    (context: DrillContext, flow: CanvasNode[]) => {
-      drillRef.current = context
-      setDrill(context)
-      loadingRef.current = true
-      nodesRef.current = flow
-      nodesProjectIdRef.current = context.projectId
-      setNodes(flow)
-      const ids = new Set(flow.map((node) => node.id))
-      const visibleLinks = linkEdgesRef.current.filter(
-        (edge) => ids.has(edge.source) && ids.has(edge.target)
-      )
-      const visibleRopes = controlEdgesRef.current.filter(
-        (edge) => ids.has(edge.source) && ids.has(edge.target)
-      )
-      linkEdgesRef.current = visibleLinks
-      controlEdgesRef.current = visibleRopes
-      setLinkEdges(visibleLinks)
-      setControlEdges(visibleRopes)
-      setTimeout(() => {
-        loadingRef.current = false
-      }, 0)
-    },
-    [setNodes, setLinkEdges, setControlEdges]
-  )
-
-  const openNodeGroupAsCanvas = useCallback(
-    (groupId: string) => {
-      if (drillRef.current) return
-      const store = useProjects.getState()
-      const sourceProjectId = store.activeProjectId
-      const group = nodesRef.current.find((node) => node.id === groupId)
-      if (!group || group.type !== 'group' || !sourceProjectId) return
-      const projectRef = group.data.projectRef
-      if (projectRef?.projectId) {
-        const target = store.getProject(projectRef.projectId)
-        if (!target || target.unavailable || target.closed) {
-          setNotice({ kind: 'error', text: 'The referenced project is unavailable or closed.' })
-          return
-        }
-        commitActiveToStore()
-        const context: DrillContext = { kind: 'project-ref', projectId: sourceProjectId, targetId: target.id }
-        drillRef.current = context
-        setDrill(context)
-        switchProject(target.id)
-        return
-      }
-      const { flow } = drillGroupChildren(nodesRef.current, groupId)
-      commitActiveToStore()
-      installDrilledFlow({ kind: 'group', projectId: sourceProjectId, groupId }, flow)
-    },
-    [commitActiveToStore, installDrilledFlow, setNotice, switchProject]
-  )
-
-  const exitDrill = useCallback(() => {
-    const current = drillRef.current
-    if (!current) return
-    if (current.kind === 'project-ref') {
-      drillRef.current = null
-      setDrill(null)
-      switchProject(current.projectId)
-      return
-    }
-    commitActiveToStore()
-    const project = useProjects.getState().getProject(current.projectId)
-    if (!project) return
-    const fullFlow = nodeStatesToFlow(project.nodes)
-    drillRef.current = null
-    setDrill(null)
-    loadingRef.current = true
-    nodesRef.current = fullFlow
-    nodesProjectIdRef.current = project.id
-    setNodes(fullFlow)
-    const links = project.links ?? []
-    const contexts = links
-      .filter((link) => link.kind === 'context')
-      .map(nodeEndpoints)
-      .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
-    const lineage = links
-      .filter((link) => link.kind === 'lineage')
-      .map(nodeEndpoints)
-      .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
-    const contextEdges = (contexts.length ? contexts : project.bridges ?? []).map((edge) => ({
-      id: edge.id,
-      source: edge.source,
-      target: edge.target
-    }))
-    const ropeEdges = (lineage.length ? lineage : project.ropes ?? []).map((edge) => {
-      const source = project.nodes.find((node) => node.id === edge.source)
-      const color = agentConfig((source?.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
-      return ropeEdge(edge.id, edge.source, edge.target, color)
-    })
-    linkEdgesRef.current = contextEdges
-    controlEdgesRef.current = ropeEdges
-    setLinkEdges(contextEdges)
-    setControlEdges(ropeEdges)
-    setTimeout(() => {
-      loadingRef.current = false
-    }, 0)
-  }, [commitActiveToStore, setNodes, setLinkEdges, setControlEdges, switchProject])
-
-  useEffect(() => {
-    setDrillHandler(openNodeGroupAsCanvas)
-    return () => setDrillHandler(null)
-  }, [openNodeGroupAsCanvas])
-
-  useEffect(() => {
-    setFocusNodeHandler(focusNodeById)
-    return () => setFocusNodeHandler(null)
-  }, [focusNodeById])
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || !drillRef.current) return
-      const active = document.activeElement
-      if (active?.closest('input, textarea, [contenteditable="true"], .xterm')) return
-      event.preventDefault()
-      exitDrill()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [exitDrill])
 
   // Session board cards are derived LIVE from the canvas nodes; the board stores only assignments.
   // Only while the board is OPEN: `nodes` gets a fresh identity on every drag frame, so a closed

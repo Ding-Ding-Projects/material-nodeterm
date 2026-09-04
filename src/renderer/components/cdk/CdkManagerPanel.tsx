@@ -3,9 +3,17 @@ import { useEffect, useMemo, useState } from 'react'
 import type { CdkApi, CdkOperation, CdkReviewedChange, CdkStatus } from '@shared/cdk'
 import { useSession } from '../../session/session'
 import type { DialogApi } from '@shared/types'
-import { Button, Checkbox, TextField } from '@renderer/ui/md3'
+import { Button, Checkbox, IconButton, Tabs, TextField } from '@renderer/ui/md3'
 
 type PanelTab = 'project' | 'trust' | 'operations' | 'output'
+
+/** The drawer's four sections, in strip order. */
+const CDK_TABS = [
+  { id: 'project', label: 'Project' },
+  { id: 'trust', label: 'Trust review' },
+  { id: 'operations', label: 'Workflows' },
+  { id: 'output', label: 'Output' }
+] as const
 
 function toast(message: string, kind: 'info' | 'error' = 'info'): void {
   window.dispatchEvent(new CustomEvent('nodeterm:toast', { detail: { message, kind } }))
@@ -135,5 +143,5 @@ export function CdkManagerPanel({ onClose }: { onClose: () => void }): React.JSX
   const [tab, setTab] = useState<PanelTab>('project')
   const [acknowledged, setAcknowledged] = useState(false)
   useEffect(() => api.cdk.onEvent((event) => { setStatus(event.status); if (event.status.phase === 'error') setTab('trust') }), [api.cdk])
-  return createPortal(<div className="drawer-overlay md3-ollama" onClick={onClose}><aside className="drawer ollama" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="AWS CDK manager"><div className="drawer__head"><h2>AWS CDK manager</h2><button className="drawer__close" onClick={onClose} aria-label="Close">×</button></div><div className="drawer__body om-body"><div className="om-tabs" role="tablist">{(['project', 'trust', 'operations', 'output'] as PanelTab[]).map((name) => <button key={name} role="tab" aria-selected={tab === name} className={`om-tab${tab === name ? ' om-tab--active' : ''}`} onClick={() => setTab(name)}>{name === 'project' ? 'Project' : name === 'trust' ? 'Trust review' : name === 'operations' ? 'Workflows' : 'Output'}</button>)}</div>{tab === 'project' && <ProjectTab api={api.cdk} dialog={api.dialog} status={status} onStatus={setStatus} />}{tab === 'trust' && <TrustTab status={status} acknowledged={acknowledged} setAcknowledged={setAcknowledged} />}{tab === 'operations' && <OperationsTab api={api.cdk} status={status} acknowledged={acknowledged} onStatus={setStatus} setTab={setTab} />}{tab === 'output' && <OutputTab status={status} />}</div></aside></div>, document.body)
+  return createPortal(<div className="drawer-overlay md3-ollama" onClick={onClose}><aside className="drawer ollama" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="AWS CDK manager"><div className="drawer__head"><h2>AWS CDK manager</h2><IconButton className="drawer__close" icon="close" onClick={onClose} aria-label="Close" /></div><div className="drawer__body om-body"><Tabs items={CDK_TABS} value={tab} onChange={(id) => setTab(id as PanelTab)} ariaLabel="AWS CDK manager sections" className="om-tabs" tabClassName="om-tab" activeTabClassName="om-tab--active" idPrefix="cdk-tab" />{tab === 'project' && <ProjectTab api={api.cdk} dialog={api.dialog} status={status} onStatus={setStatus} />}{tab === 'trust' && <TrustTab status={status} acknowledged={acknowledged} setAcknowledged={setAcknowledged} />}{tab === 'operations' && <OperationsTab api={api.cdk} status={status} acknowledged={acknowledged} onStatus={setStatus} setTab={setTab} />}{tab === 'output' && <OutputTab status={status} />}</div></aside></div>, document.body)
 }
