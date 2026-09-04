@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AWS CLI v2 manager — nodeterm</title>
+    <meta name="description" content="Windows x64 AWS CLI v2 installation, verification, repair, and Bedrock model inventory." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="./index.html">← Documentation</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Integration</p>
+      <h1>AWS CLI v2 manager</h1>
+      <p>The desktop and Server Edition surfaces provide a Windows x64 AWS CLI v2 manager. It installs for the current user, verifies the exact AWS installer bytes, and discovers Bedrock foundation models through the installed CLI.</p>
+      <h2>Verified installation</h2>
+      <p>The pinned AWS CLI release is <code>2.36.31</code>. The manager checks the packaged user MSI first, then fetches the same version from the official AWS endpoint only when the packaged resource is unavailable. The expected SHA-256 is <code>300d490cebe7d89913acc0f7ca1c585032fd2a7f698e809d7ce9905614013acd</code>. A mismatch, failed installer, cancellation, or wrong post-install version leaves the prior valid installation in place and reports the recovery action.</p>
+      <p>Resolution is limited to the app-owned versioned cache and AWS's documented current-user location under <code>%LOCALAPPDATA%\Programs\Amazon\AWSCLIV2</code>. PATH is not used as authority, and the installer never asks for administrator access.</p>
+      <h2>Offline model inventory</h2>
+      <p>The Foundation models tab runs <code>aws bedrock list-foundation-models --output json --no-cli-pager</code> through the privileged host process. It shows model id, name, provider, modalities, streaming support, customizations, and inference types. A bounded local cache preserves the last verified result when AWS or the CLI is unavailable, and the UI marks it stale rather than presenting an empty or guessed inventory.</p>
+      <h2>Search and recovery</h2>
+      <p>Model search is plain text by default and has an anchored regex builder for deliberate pattern searches. Install, repair, refresh, and cancellation are non-blocking actions with progress and exact error details. Credentials and environment values are not returned, cached, logged, or included in exports.</p>
+      <p><a href="https://github.com/Ding-Ding-Projects/material-nodeterm/blob/main/docs/features/integrations/aws-cli-manager.md">Read the full implementation and security article</a>.</p>
+    </article>
+  </body>
+</html>

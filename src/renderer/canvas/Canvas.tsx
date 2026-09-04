@@ -241,6 +241,7 @@ import {
   IconPhone,
   IconProject,
   IconRemote,
+  IconResource,
   IconSave,
   IconSelectAll,
   IconSessions,

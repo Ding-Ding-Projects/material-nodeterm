@@ -9307,6 +9307,7 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
  * `.toylock-btn` callers, ConfirmDialog's `.confirm`, etc. all keep whatever they had before).
  * Scopes used here:
  *   .md3-ollama          -- OllamaManagerPanel's portal root (wraps .drawer.ollama + its ConfirmDialog)
+ *   .md3-aws             -- AwsCliManagerPanel's portal root (wraps .drawer.aws-cli)
  *   .md3-converter        -- FileConverterPanel's portal root (wraps .drawer.converter)
  *   .md3-authenticator    -- AuthenticatorSection's content root (wraps AddEntryForm, the entry
  *                            list, and TwoKeyExportGate when it's open)
@@ -9376,7 +9377,8 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 .converter-node .cv-items { max-height: 360px; overflow: auto; }
 
 .md3-ollama .drawer.ollama,
-.md3-converter .drawer.converter {
+.md3-converter .drawer.converter,
+.md3-aws .drawer.aws-cli {
   width: 640px;
   max-width: 94vw;
   background: var(--md-surface-container-low);
@@ -9387,21 +9389,24 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 }
 
 .md3-ollama .drawer__head,
-.md3-converter .drawer__head {
+.md3-converter .drawer__head,
+.md3-aws .drawer__head {
   background: var(--md-surface-container);
   border-bottom: 1px solid var(--md-outline-variant);
   padding: 16px 20px;
 }
 
 .md3-ollama .drawer__head h2,
-.md3-converter .drawer__head h2 {
+.md3-converter .drawer__head h2,
+.md3-aws .drawer__head h2 {
   font-size: 16px;
   font-weight: 600;
   color: var(--md-on-surface);
 }
 
 .md3-ollama .drawer__close,
-.md3-converter .drawer__close {
+.md3-converter .drawer__close,
+.md3-aws .drawer__close {
   display: flex;
   align-items: center;
   justify-content: center;

@@ -1447,6 +1447,26 @@ const FEATURES = [
     docs: ['docs/ollama-manager.md'],
   },
   {
+    id: 'aws-cli-manager',
+    label: 'Bundled AWS CLI v2 and Bedrock model inventory',
+    files: [
+      'src/shared/aws.ts',
+      'src/core/aws/manifest.ts',
+      'src/core/aws/service.ts',
+      'src/core/aws/dependency-manager-adapter.ts',
+      'src/core/aws/register-ipc.ts',
+      'src/renderer/components/aws/AwsCliManagerPanel.tsx',
+    ],
+    contentChecks: [
+      ['src/shared/aws.ts', 'AWS_CLI_WINDOWS_X64_MANIFEST'],
+      ['src/core/aws/service.ts', 'class AwsCliService'],
+      ['src/core/aws/service.ts', 'list-foundation-models'],
+      ['src/renderer/components/aws/AwsCliManagerPanel.tsx', 'export function AwsCliManagerPanel'],
+    ],
+    wired: { file: 'src/renderer/canvas/Canvas.tsx', symbol: 'AwsCliManagerPanel' },
+    docs: ['docs/features/integrations/aws-cli-manager.md'],
+  },
+  {
     id: 'minecraft-server-manager',
     label: 'Local Minecraft server create-and-manage',
     files: [
