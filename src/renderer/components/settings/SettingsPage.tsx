@@ -320,6 +320,7 @@ export function SettingsPage({
             <RemoteSection isActive={active === 'remote'} onClose={onClose} />
             <TeamAccessSection isActive={active === 'team-access'} onClose={onClose} />
             <SshSection isActive={active === 'ssh'} onNavigate={setActive} />
+            <AwsSection isActive={active === 'aws'} />
             <UpdatesSection isActive={active === 'updates'} />
             <PrivacySection isActive={active === 'privacy'} />
             <SchoolModeSection isActive={active === 'school-mode'} />
