@@ -823,7 +823,8 @@
 .md3-switcher-menu {
   position: fixed;
   z-index: 40;
-  width: 300px;
+  /* Keep the anchored menu inside very narrow viewports as well as normal desktop widths. */
+  width: min(300px, calc(100vw - 12px));
   max-height: 70vh;
   display: flex;
   flex-direction: column;

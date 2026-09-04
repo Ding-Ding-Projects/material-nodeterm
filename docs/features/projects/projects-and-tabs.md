@@ -12,6 +12,28 @@ between the tab bar and the sessions sidebar. Opening a folder either creates a 
 bound to it or, if that folder already has a project, switches to the existing one — folders
 and projects are de-duplicated by working directory rather than always minting a fresh project.
 
+### New project remains reachable when the list overflows
+
+The Material Design 3 project switcher keeps its project rows in a bounded, vertically scrolling
+list (`.md3-switcher-menu__list`). The **New project** control is a sibling after that list, not a
+child of it, so it remains fixed and reachable when the list contains more projects than the menu
+can show. The menu itself is horizontally clamped by the anchored-menu positioning helper and its
+width contracts to the viewport on narrow windows, so the control does not move off-screen.
+
+The control is a native, focusable button: keyboard users can open the switcher with the trigger,
+move focus to **New project**, and activate it with Enter or Space. Pointer users can click the
+same control. It opens the existing welcome flow, where **New project**, **Open folder…**, and
+**Clone repo…** remain separate guided choices. The command palette's `new-project` command is a
+second keyboard route; it intentionally creates an empty project directly, while the switcher
+route opens the guided welcome flow. These labels describe the two different destinations rather
+than pretending they have identical side effects.
+
+This reachability audit covers upstream issue [#375](https://github.com/eneskirca/nodeterm/issues/375)
+and consumer issue [#85](https://github.com/Ding-Ding-Projects/material-nodeterm/issues/85). The
+source-level invariant is present in `ProjectSwitcher.tsx` and `styles.md3.css`; runtime keyboard,
+pointer, overflow, narrow-layout, and palette interaction evidence remains pending because this
+lane deliberately does not run tests, builds, or captures.
+
 **Switching** commits the currently active project's live canvas state back into storage
 before loading the next one, so nothing from the outgoing project is lost mid-switch. The
 incoming project's saved camera position (pan/zoom) is restored on a genuine switch; an
