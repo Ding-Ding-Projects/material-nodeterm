@@ -1649,7 +1649,8 @@ export class WorkspaceStore {
     projectId: string,
     input: RemoteNodeInput,
     now = new Date(),
-    defaultTerminalProfileId?: string
+    defaultTerminalProfileId?: string,
+    accountColor?: string
   ): Promise<boolean> {
     const run = this.saveChain.then(() => this.appendRemoteNodeNow(projectId, input, now, defaultTerminalProfileId))
     this.saveChain = run.catch(() => {})
@@ -1666,7 +1667,7 @@ export class WorkspaceStore {
     } catch {
       return false
     }
-    const updated = appendProjectNode(raw, input, now)
+    const updated = appendProjectNode(raw, input, now, accountColor)
     if (updated === null) return false
     try {
       await writeAtomic(file, updated)

@@ -58,7 +58,12 @@ function stripRawNodeExec(node: Record<string, unknown>): Record<string, unknown
   return { ...portable, ssh: connection }
 }
 
-export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date): string | null {
+export function appendProjectNode(
+  raw: string,
+  input: RemoteNodeInput,
+  now: Date,
+  accountColor?: string
+): string | null {
   if (!SAFE_NODE_ID.test(input.id)) return null
   if (
     input.accountId !== undefined &&

@@ -4741,7 +4741,11 @@ app.whenReady().then(async () => {
         projectId,
         { ...node, accountColor: accountColorForRemoteNode(node) },
         undefined,
-        process.platform === 'win32' ? settingsStore.get().defaultTerminalProfileId : undefined
+        process.platform === 'win32' ? settingsStore.get().defaultTerminalProfileId : undefined,
+        agentAccountColor(node.agentId, node.accountId, {
+          claude: settingsStore.get().claudeAccounts ?? [],
+          codex: settingsStore.get().codexAccounts ?? []
+        })
       ),
     // "End session" from the phone (`pty.destroy`): the SAME two steps the desktop × performs —
     // kill the tmux session on every socket it could live on (the sweep may have seen it on either
