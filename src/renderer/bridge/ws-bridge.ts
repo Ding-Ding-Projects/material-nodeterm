@@ -19,6 +19,7 @@ import type { GitHubApiApi, GitHubApiProgress, GitHubApiRequest } from '../../sh
 import type { GitHubCliAccountsApi, GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
+import type { AwsLegacyIdentityManagerApi } from '../../shared/aws'
 import type { RepositoryGraphApi } from '../../shared/repository-graph'
 import {
   parseUniGetUiPackageList,
@@ -40,6 +41,7 @@ import type { HomeAssistantControlApi } from '../../shared/home-assistant-contro
 import type { HomeAssistantSensorApi } from '../../shared/home-assistant-sensor'
 import type { CloudflareTunnelApi } from '../../shared/cloudflare-tunnels'
 import type { CloudflareApi, CloudflareExecutionProgress } from '../../shared/cloudflare-zero-trust'
+import type { CloudflareTunnelApi as WizardTunnelApi } from '../../shared/cloudflare-tunnel'
 import type { AdvancedMediaApi } from '../../shared/advanced-media'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
@@ -1260,6 +1262,30 @@ export function buildAdvancedMediaApi(client: RpcClient): Pick<NodeTerminalApi, 
   return { advancedMedia }
 }
 
+/** AWS identity manager (docs/aws-identity-manager.md). A REAL implementation, not a stub: the
+ *  service is pure core over `platform.handle` and IS registered by this shell's own
+ *  `registerCoreHandlers`, so the browser manages the AWS configuration of the machine actually
+ *  running the server -- the same machine its terminals are on. Provider credentials never leave
+ *  the host's AWS boundary; this bridge carries only profile metadata, identity summaries,
+ *  expiries and permission verdicts. */
+export function buildAwsProfileManagerApi(client: RpcClient): Pick<NodeTerminalApi, 'awsProfileManager'> {
+  const awsProfileManager: AwsLegacyIdentityManagerApi = {
+    profiles: () => client.request(IPC.awsProfiles) as ReturnType<AwsLegacyIdentityManagerApi['profiles']>,
+    saveProfile: (draft) => client.request(IPC.awsSaveProfile, draft) as ReturnType<AwsLegacyIdentityManagerApi['saveProfile']>,
+    removeProfile: (name) => client.request(IPC.awsRemoveProfile, name) as Promise<void>,
+    refresh: () => client.request(IPC.awsRefresh) as ReturnType<AwsLegacyIdentityManagerApi['refresh']>,
+    ssoLogin: (name, mode) => client.request(IPC.awsSsoLogin, name, mode) as ReturnType<AwsLegacyIdentityManagerApi['ssoLogin']>,
+    assumeRole: (input) => client.request(IPC.awsAssumeRole, input) as ReturnType<AwsLegacyIdentityManagerApi['assumeRole']>,
+    callerIdentity: (name) => client.request(IPC.awsCallerIdentity, name) as ReturnType<AwsLegacyIdentityManagerApi['callerIdentity']>,
+    permissions: (name, actions) => client.request(IPC.awsPermissions, name, actions) as ReturnType<AwsLegacyIdentityManagerApi['permissions']>,
+    regions: (name) => client.request(IPC.awsRegions, name) as ReturnType<AwsLegacyIdentityManagerApi['regions']>,
+    setEndpoint: (region, endpoint) => client.request(IPC.awsSetEndpoint, region, endpoint) as ReturnType<AwsLegacyIdentityManagerApi['setEndpoint']>,
+    clearMachineCache: () => client.request(IPC.awsClearMachineCache) as Promise<void>,
+    trustCredentialProcess: (name) => client.request(IPC.awsTrustCredentialProcess, name) as ReturnType<AwsLegacyIdentityManagerApi['trustCredentialProcess']>
+  }
+  return { awsProfileManager }
+}
+
 /** Local Ollama suite manager (docs/ollama-manager.md) — the SAME core engine as desktop; the
  *  server process is the one making the loopback calls to Ollama, exactly as main does. */
 export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama'> {
@@ -1632,6 +1658,32 @@ export function buildCloudflareZeroTrustApi(client: RpcClient): Pick<NodeTermina
     onProgress: (listener) => client.subscribe(IPC.cloudflareProgress, listener as Listener)
   }
   return { cloudflareZeroTrust }
+}
+
+/**
+ * Guided Cloudflare Tunnel wizard (node kind `cloudflare-tunnel`).
+ *
+ * Deliberately NOT wired to a real request: `registerCoreHandlers` does not register the
+ * wizard’s `cloudflare:*` channels, so a `client.request` here would sit against a handler that
+ * does not exist. An explicit rejection says the feature is absent in the browser instead of
+ * silently doing nothing. Give this a real implementation in the same change that registers the
+ * wizard in src/server/handlers/index.ts.
+ */
+export function buildCloudflareTunnelWizardApi(): Pick<NodeTerminalApi, 'cloudflareTunnel'> {
+  const unsupported = (method: string) => () =>
+    Promise.reject(new Error(`E_UNSUPPORTED: cloudflareTunnel.${method} is not available in the browser.`))
+  const cloudflareTunnel: WizardTunnelApi = {
+    tokenStatus: unsupported('tokenStatus'),
+    setToken: unsupported('setToken'),
+    accounts: unsupported('accounts'),
+    zones: unsupported('zones'),
+    targets: unsupported('targets'),
+    preflight: unsupported('preflight'),
+    apply: unsupported('apply'),
+    rollback: unsupported('rollback'),
+    status: unsupported('status')
+  }
+  return { cloudflareTunnel }
 }
 
 /**
@@ -2138,10 +2190,12 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildAwsWizardModelsApi(client),
     ...buildAwsIdentityApi(client),
     ...buildOllamaApi(client),
+    ...buildAwsProfileManagerApi(client),
     ...buildRepositoryGraphApi(client),
     ...buildUniGetUiApi(client),
     ...buildCloudflareCoreManagersApi(client),
     ...buildMinecraftApi(client),
+    ...buildCloudflareTunnelWizardApi(),
     ...buildDockerHostApi(client),
     ...buildTorrentApi(client),
     ...buildVirtualMachineApi(client),

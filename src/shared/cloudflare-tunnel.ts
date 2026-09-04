@@ -142,3 +142,13 @@ export function validCloudflareOrigin(value: unknown): value is string {
 export function validCloudflarePort(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 65535
 }
+
+/**
+ * Channel for the tunnel wizard's account list.
+ *
+ * This one channel is NOT in `IPC`: the natural key there, `cloudflareAccounts`, is already bound
+ * to the Zero Trust manager ('cloudflare-zero-trust:accounts') and re-pointing it would
+ * cross-bind two handlers. The remaining eight wizard channels are the original `IPC.cloudflare*`
+ * keys. The value 'cloudflare:accounts' is unused elsewhere.
+ */
+export const CLOUDFLARE_TUNNEL_ACCOUNTS_CHANNEL = 'cloudflare:accounts'

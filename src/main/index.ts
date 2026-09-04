@@ -62,9 +62,12 @@ import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
+import { registerAwsProfileManagerIpc } from '../core/aws/register-identity-ipc'
 import { registerUniGetUiIpc } from '../core/unigetui/register-ipc'
 import { registerOpenWebUiHosting } from './open-webui-hosting'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
+import { registerCloudflareTunnelWizardIpc } from '../core/cloudflare/tunnel-wizard-service'
+import { createLocalCloudflareRuntime } from './cloudflare-runtime'
 import { registerDockerHostIpc } from '../core/docker-host/register-ipc'
 import { registerAwsIdentityIpc } from '../core/aws-identity'
 import { registerAwsResourceIpc } from '../core/aws-resource-register-ipc'
@@ -2485,10 +2488,12 @@ app.whenReady().then(async () => {
   const nodeDependencyService = registerNodeDependencyIpc(corePlatform)
   const awsWizardModels = new AwsWizardModelService(nodeDependencyService)
   registerOllamaIpc(corePlatform)
+  registerAwsProfileManagerIpc(corePlatform)
   registerRepositoryGraphIpc(corePlatform, { projectTargetInfo: (projectId) => workspaceStore.projectTargetInfo(projectId) })
   registerUniGetUiIpc(corePlatform)
   registerOpenWebUiHosting(getMainWindow, app.getPath('userData'))
   minecraftServers = registerMinecraftIpc(corePlatform).manager
+  registerCloudflareTunnelWizardIpc(corePlatform, createLocalCloudflareRuntime(app.getPath('userData')))
   registerDockerHostIpc(corePlatform, {
     credentialVault: {
       resolveSshServer: (serverId) => sshStore.list().find((server) => server.id === serverId) ?? null

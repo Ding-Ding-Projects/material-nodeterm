@@ -778,6 +778,17 @@ export function buildStubApi(): Omit<
       cancel: U('awsManagers.cancel'),
       retry: U('awsManagers.retry')
     },
+    cloudflareTunnel: {
+      tokenStatus: U('cloudflareTunnel.tokenStatus'),
+      setToken: U('cloudflareTunnel.setToken'),
+      accounts: U('cloudflareTunnel.accounts'),
+      zones: U('cloudflareTunnel.zones'),
+      targets: U('cloudflareTunnel.targets'),
+      preflight: U('cloudflareTunnel.preflight'),
+      apply: U('cloudflareTunnel.apply'),
+      rollback: U('cloudflareTunnel.rollback'),
+      status: U('cloudflareTunnel.status')
+    },
     cloudflareZeroTrust: {
       catalog: U('cloudflareZeroTrust.catalog'),
       accounts: U('cloudflareZeroTrust.accounts'),

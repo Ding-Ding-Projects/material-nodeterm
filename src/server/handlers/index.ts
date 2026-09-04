@@ -11,6 +11,7 @@ import { registerNodeDependencyIpc } from '../../core/node-dependencies/register
 import { registerAwsResourceIpc } from '../../core/aws-resource-register-ipc'
 import { AwsWizardModelService } from '../../core/aws-wizard/service'
 import { registerOllamaIpc } from '../../core/ollama/register-ipc'
+import { registerAwsProfileManagerIpc } from '../../core/aws/register-identity-ipc'
 import { registerUniGetUiIpc } from '../../core/unigetui/register-ipc'
 import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
 import { registerDockerHostIpc } from '../../core/docker-host/register-ipc'
@@ -97,6 +98,10 @@ export function registerCoreHandlers(
   const nodeDependencyService = registerNodeDependencyIpc(platform)
   const awsWizardModels = new AwsWizardModelService(nodeDependencyService)
   registerOllamaIpc(platform)
+  // AWS identity manager. Pure core over `platform.handle`, so the browser manages the AWS
+  // configuration of the machine actually running this shell — the same one the terminals are
+  // on. Credentials stay inside the host's AWS boundary; only profile metadata crosses.
+  registerAwsProfileManagerIpc(platform)
   registerRepositoryGraphIpc(platform, { projectTargetInfo: (projectId) => {
     const info = deps.workspaceStore?.projectTargetInfo(projectId)
     return info ? { cwd: info.cwd, ssh: info.ssh, name: info.name } : null

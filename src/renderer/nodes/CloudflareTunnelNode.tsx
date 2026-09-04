@@ -73,18 +73,18 @@ export default function CloudflareTunnelNode({ id, data, selected }: NodeProps<C
 
   useEffect(() => {
     let cancelled = false
-    void api.cloudflare.tokenStatus().then((result) => { if (!cancelled) setTokenConfigured(result.configured) }).catch(() => {})
-    void api.cloudflare.targets().then((result) => { if (!cancelled) setTargets(result) }).catch(() => {})
-    void api.cloudflare.status().then((result) => { if (!cancelled) setStatus(result) }).catch(() => {})
+    void api.cloudflareTunnel.tokenStatus().then((result) => { if (!cancelled) setTokenConfigured(result.configured) }).catch(() => {})
+    void api.cloudflareTunnel.targets().then((result) => { if (!cancelled) setTargets(result) }).catch(() => {})
+    void api.cloudflareTunnel.status().then((result) => { if (!cancelled) setStatus(result) }).catch(() => {})
     return () => { cancelled = true }
-  }, [api.cloudflare])
+  }, [api.cloudflareTunnel])
 
   useEffect(() => {
     if (!accountId) { setAccounts([]); setZones([]); return }
     let cancelled = false
-    void api.cloudflare.zones(accountId).then((result) => { if (!cancelled) setZones(result) }).catch((error: unknown) => { if (!cancelled) setMessage(error instanceof Error ? error.message : 'Cloudflare zones could not be read.') })
+    void api.cloudflareTunnel.zones(accountId).then((result) => { if (!cancelled) setZones(result) }).catch((error: unknown) => { if (!cancelled) setMessage(error instanceof Error ? error.message : 'Cloudflare zones could not be read.') })
     return () => { cancelled = true }
-  }, [accountId, api.cloudflare])
+  }, [accountId, api.cloudflareTunnel])
 
   const saveSpec = (patch: Partial<CloudflareTunnelSpec>): void => {
     updateNodeData(id, { cloudflareTunnelSpec: { ...spec, ...patch } })
@@ -93,8 +93,8 @@ export default function CloudflareTunnelNode({ id, data, selected }: NodeProps<C
   const loadAccounts = async (): Promise<void> => {
     setBusy(true); setMessage('')
     try {
-      if (token.trim()) { await api.cloudflare.setToken(token); setToken(''); setTokenConfigured(true) }
-      const result = await api.cloudflare.accounts()
+      if (token.trim()) { await api.cloudflareTunnel.setToken(token); setToken(''); setTokenConfigured(true) }
+      const result = await api.cloudflareTunnel.accounts()
       setAccounts(result)
       if (!accountId && result[0]) setAccountId(result[0].id)
       if (!result.length) setMessage('No Cloudflare accounts were returned for this token.')
@@ -111,7 +111,7 @@ export default function CloudflareTunnelNode({ id, data, selected }: NodeProps<C
     const plan = buildPlan()
     if (!plan) { setMessage('Choose an account, zone, valid hostname, and discovered running origin first.'); return }
     setBusy(true); setMessage('')
-    try { setChecks(await api.cloudflare.preflight(plan)) } catch (error) { setMessage(error instanceof Error ? error.message : 'Preflight could not complete.') }
+    try { setChecks(await api.cloudflareTunnel.preflight(plan)) } catch (error) { setMessage(error instanceof Error ? error.message : 'Preflight could not complete.') }
     finally { setBusy(false) }
   }
 
@@ -120,7 +120,7 @@ export default function CloudflareTunnelNode({ id, data, selected }: NodeProps<C
     if (!plan || checks.some((check) => check.state === 'fail')) return
     setBusy(true); setMessage('Applying tunnel, Access deny-first policy, DNS route, and token-file connector…')
     try {
-      const next = await api.cloudflare.apply(plan)
+      const next = await api.cloudflareTunnel.apply(plan)
       setStatus(next)
       if (next.phase === 'active') {
         updateNodeData(id, { cloudflareTunnelSpec: { hostname: plan.hostname, tunnelName: plan.tunnelName, accessMode: 'deny-first' }, cloudflareTunnelLocalBinding: { accountId: plan.accountId, zoneId: plan.zoneId, hostId: plan.hostId, targetId: plan.targetId, port: plan.port, originUrl: plan.originUrl, tunnelId: next.tunnelId ?? undefined, dnsRecordId: next.dnsRecordId ?? undefined, connectorContainerId: next.connectorContainerId ?? undefined, tokenFilePath: next.tokenFilePath ?? undefined } })
@@ -132,7 +132,7 @@ export default function CloudflareTunnelNode({ id, data, selected }: NodeProps<C
 
   const rollback = async (): Promise<void> => {
     setBusy(true); setMessage('Rolling back connector, DNS, Access, and tunnel resources…')
-    try { const next = await api.cloudflare.rollback(); setStatus(next); updateNodeData(id, { cloudflareTunnelLocalBinding: undefined }); setMessage(next.detail ?? 'Rollback completed.') }
+    try { const next = await api.cloudflareTunnel.rollback(); setStatus(next); updateNodeData(id, { cloudflareTunnelLocalBinding: undefined }); setMessage(next.detail ?? 'Rollback completed.') }
     catch (error) { setMessage(error instanceof Error ? error.message : 'Rollback status is unavailable.') }
     finally { setBusy(false) }
   }

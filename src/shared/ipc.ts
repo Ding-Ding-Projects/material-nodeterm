@@ -966,6 +966,20 @@ export const IPC = {
   /** main/server → renderer: a streamed chat token/finish/error for the session named in the
    *  payload. One shared channel (not per-session) — the renderer filters by sessionId. */
   ollamaChatStream: 'ollama:chat-stream',
+  // AWS identity manager (profiles, AWS SSO, role sessions, MFA, regions and endpoints). Secrets
+  // remain in the local AWS credential boundary and never cross these renderer channels.
+  awsProfiles: 'aws:profiles',
+  awsSaveProfile: 'aws:save-profile',
+  awsRemoveProfile: 'aws:remove-profile',
+  awsRefresh: 'aws:refresh',
+  awsSsoLogin: 'aws:sso-login',
+  awsAssumeRole: 'aws:assume-role',
+  awsCallerIdentity: 'aws:caller-identity',
+  awsPermissions: 'aws:permissions',
+  awsRegions: 'aws:regions',
+  awsSetEndpoint: 'aws:set-endpoint',
+  awsClearMachineCache: 'aws:clear-machine-cache',
+  awsTrustCredentialProcess: 'aws:trust-credential-process',
   // Project-scoped repository graph. Derived indexes remain host-local; only safe graph intent
   // and bounded, provenance-rich snapshots cross the renderer boundary.
   repositoryGraphInspect: 'repository-graph:inspect',

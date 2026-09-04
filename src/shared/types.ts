@@ -5264,6 +5264,10 @@ export interface NodeTerminalApi {
   /** Server Edition callback completer; absent on the desktop, which uses sshProject forwarding. */
   remoteOAuth?: import('./remote-oauth').RemoteOAuthApi
   /** Typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers. */
+  /** Guided Cloudflare Tunnel wizard (node kind `cloudflare-tunnel`). Metadata and outcome
+   *  only: the API token never crosses this boundary. Distinct from `cloudflareTunnels`, which
+   *  is the host-owned tunnel inventory. */
+  cloudflareTunnel: CloudflareTunnelApi
   cloudflareZeroTrust: import('./cloudflare-zero-trust').CloudflareApi
   /** Bundled cloudflared runtime control for tunnel nodes. */
   cloudflared: import('./cloudflared').CloudflaredRuntimeApi
@@ -5316,6 +5320,10 @@ export interface NodeTerminalApi {
   awsWizardModels: import('./aws-wizard').AwsWizardModelsApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Local AWS identity manager — docs/aws-identity-manager.md. Credentials and provider cache
+   *  remain machine-local and are never part of a portable project projection. Desktop-only for
+   *  now; the browser and relay bridges omit it. */
+  awsProfileManager?: import('./aws').AwsLegacyIdentityManagerApi
   /** Project-scoped semantic code and dependency graph with host-owned cache. */
   repositoryGraph: import('./repository-graph').RepositoryGraphApi
   /** Machine-owned UniGetUI Global Universe. It is deliberately independent of activeProjectId. */

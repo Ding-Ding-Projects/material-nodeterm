@@ -39,6 +39,7 @@ import type { GitLabHostingAction } from '../shared/gitlab-hosting'
 import type { NextcloudAioAction, NextcloudAioJobProgress } from '../shared/nextcloud-aio'
 import type { NextcloudManagedAction, NextcloudManagedBinding, NextcloudManagedProgress } from '../shared/nextcloud-managed'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { AwsLegacyIdentityManagerApi } from '../shared/aws'
 import type {
   OAuthCompleteInput,
   OAuthStartInput,
@@ -62,6 +63,7 @@ import type { CloudflareTunnelProgress, CloudflareTunnelRouteInput, CloudflareDn
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
 import type { CdkDeployResult, CdkDiffResult, CdkOperationInput, CdkProjectInput, CdkSynthesisResult, CdkStatus, CdkTrustInput, CdkTrustReview } from '../shared/cdk'
 import type { CloudflareApi, CloudflareCatalog, CloudflareExecutionProgress, CloudflareExecutionResult } from '../shared/cloudflare-zero-trust'
+import { CLOUDFLARE_TUNNEL_ACCOUNTS_CHANNEL } from '../shared/cloudflare-tunnel'
 import type { GitHubApiRequest, GitHubApiProgress } from '../shared/github-api'
 import type { AwsIdentityAction, AwsIdentityBinding, AwsIdentityOperation } from '../shared/aws-identity'
 import type { AwsManagerProgress } from '../shared/aws-resource'
@@ -255,6 +257,17 @@ const api: NodeTerminalApi = {
     adoptDnsRecord: (input: CloudflareDnsAdoptionInput) => ipcRenderer.invoke(IPC.cloudflareTunnelAdoptDnsRecord, input),
     cancel: (operationId: string) => ipcRenderer.send(IPC.cloudflareTunnelCancel, operationId),
     onProgress: (listener: (progress: CloudflareTunnelProgress) => void) => subscribeCloudflareTunnelProgress(listener)
+  },
+  cloudflareTunnel: {
+    tokenStatus: () => ipcRenderer.invoke(IPC.cloudflareTokenStatus),
+    setToken: (token: string | null) => ipcRenderer.invoke(IPC.cloudflareSetToken, token),
+    accounts: () => ipcRenderer.invoke(CLOUDFLARE_TUNNEL_ACCOUNTS_CHANNEL),
+    zones: (accountId: string) => ipcRenderer.invoke(IPC.cloudflareZones, accountId),
+    targets: () => ipcRenderer.invoke(IPC.cloudflareTargets),
+    preflight: (plan) => ipcRenderer.invoke(IPC.cloudflarePreflight, plan),
+    apply: (plan) => ipcRenderer.invoke(IPC.cloudflareApply, plan),
+    rollback: () => ipcRenderer.invoke(IPC.cloudflareRollback),
+    status: () => ipcRenderer.invoke(IPC.cloudflareStatus)
   },
   cloudflareZeroTrust: {
     catalog: () => ipcRenderer.invoke(IPC.cloudflareCatalog) as Promise<CloudflareCatalog>,
@@ -1391,6 +1404,20 @@ const api: NodeTerminalApi = {
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
   },
+  awsProfileManager: {
+    profiles: () => ipcRenderer.invoke(IPC.awsProfiles),
+    saveProfile: (draft) => ipcRenderer.invoke(IPC.awsSaveProfile, draft),
+    removeProfile: (name) => ipcRenderer.invoke(IPC.awsRemoveProfile, name),
+    refresh: () => ipcRenderer.invoke(IPC.awsRefresh),
+    ssoLogin: (name, mode) => ipcRenderer.invoke(IPC.awsSsoLogin, name, mode),
+    assumeRole: (input) => ipcRenderer.invoke(IPC.awsAssumeRole, input),
+    callerIdentity: (name) => ipcRenderer.invoke(IPC.awsCallerIdentity, name),
+    permissions: (name, actions) => ipcRenderer.invoke(IPC.awsPermissions, name, actions),
+    regions: (name) => ipcRenderer.invoke(IPC.awsRegions, name),
+    setEndpoint: (region, endpoint) => ipcRenderer.invoke(IPC.awsSetEndpoint, region, endpoint),
+    clearMachineCache: () => ipcRenderer.invoke(IPC.awsClearMachineCache),
+    trustCredentialProcess: (name) => ipcRenderer.invoke(IPC.awsTrustCredentialProcess, name)
+  } satisfies AwsLegacyIdentityManagerApi,
   veracrypt: {
     availability: () => ipcRenderer.invoke(IPC.veracryptAvailability),
     favorites: () => ipcRenderer.invoke(IPC.veracryptFavorites),
