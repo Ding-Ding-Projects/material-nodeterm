@@ -7,6 +7,7 @@ import { KidsGate } from './KidsGate'
 import { KidsParent } from './KidsParent'
 import { KidsStickers } from './KidsStickers'
 import { KidsActivityCanvas } from './KidsActivityCanvas'
+import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
 
 type Screen = 'home' | 'gate' | 'timesUp' | 'parent' | 'stickers' | 'activity'
 
@@ -21,6 +22,7 @@ type Screen = 'home' | 'gate' | 'timesUp' | 'parent' | 'stickers' | 'activity'
  * screen out from under a kid who is, say, mid-conversation with Beep.
  */
 export function KidsShell(): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const name = useKidsMode((s) => s.name)
   const credentialState = useKidsMode((s) => s.credentialState)
   const refreshCredentialState = useKidsMode((s) => s.refreshCredentialState)
@@ -61,7 +63,7 @@ export function KidsShell(): React.JSX.Element {
   }, [screen, tickMinute])
 
   if (credentialState === 'loading') {
-    return <div className="md3-kids-shell md3-kids-screen" role="status">Checking the shared PIN state…</div>
+    return <div className="md3-kids-shell md3-kids-screen" role="status">{vocab('Checking the shared PIN state…')}</div>
   }
 
   return (
