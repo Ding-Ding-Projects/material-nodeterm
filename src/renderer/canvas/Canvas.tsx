@@ -6345,6 +6345,17 @@ export function Canvas() {
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
 
+  const addCalendar = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createCalendarNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
   const addNativeLoop = useCallback(
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
