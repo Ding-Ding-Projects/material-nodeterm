@@ -34,6 +34,7 @@ export interface FabMenuProps {
    *  lets it land where the pointer is rather than at the default placement. */
   onAddAuthenticator: () => void
   onAddDino: () => void
+  onAddFiles?: () => void
   onAddAgent: (agentId: AgentId, accountId?: string) => void
   onOpenFile: () => void
   onAddRemote: () => void
@@ -61,6 +62,7 @@ export function FabMenu({
   onAddAlarmClock = () => {},
   onAddAuthenticator,
   onAddDino,
+  onAddFiles = () => undefined,
   onAddAgent,
   onOpenFile,
   onAddRemote,

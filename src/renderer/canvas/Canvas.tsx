@@ -19129,6 +19129,7 @@ export function Canvas() {
             onAddTimer={() => addTimer()}
             onAddAlarmClock={addAlarmClock}
             onAddDino={addDino}
+            onAddFiles={() => addFiles()}
             onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
             onOpenFile={() => void openFileDialog()}
             onAddRemote={() =>

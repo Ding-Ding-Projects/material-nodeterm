@@ -379,9 +379,9 @@ export interface NodeData {
    */
   sshRemoteTmux?: boolean
   /**
-   * editor-only: when true (an editor created in an SSH project), reads/writes/image-previews go to
-   * the project's REMOTE filesystem via `sshFs(projectId)` instead of the local fs. Persisted, so an
-   * SSH-project editor still routes to the remote fs after reopen.
+   * editor/files-only: when true (an editor or Files node created in an SSH project), reads,
+   * writes, previews, and directory listings go to the project's remote filesystem via
+   * `sshFs(projectId)` instead of the local fs. Persisted so reopen keeps the host boundary.
    */
   sshFs?: boolean
   /** annotation-only: 'line' or 'arrow' — see createAnnotationNode and AnnotationNode.tsx. */
@@ -1467,6 +1467,30 @@ export function createDebugBrowserNode(
       color: '#8ab4f8',
       group: null,
       debugBrowserSpec: safeSpec
+    }
+  }
+}
+
+/** Creates a persisted directory-listing node rooted at a project directory. */
+export function createFilesNode(
+  index: number,
+  cwd: string,
+  center?: { x: number; y: number },
+  sshFs?: boolean
+): CanvasNode {
+  return {
+    id: nextId('files'),
+    type: 'files',
+    position: placeAt(center, index, FILES_SIZE.width, FILES_SIZE.height),
+    width: FILES_SIZE.width,
+    height: FILES_SIZE.height,
+    style: { width: FILES_SIZE.width, height: FILES_SIZE.height },
+    data: {
+      title: cwd.split(/[\\/]/).filter(Boolean).pop() || '/',
+      color: '#ffd60a',
+      group: null,
+      cwd,
+      ...(sshFs ? { sshFs: true } : {})
     }
   }
 }

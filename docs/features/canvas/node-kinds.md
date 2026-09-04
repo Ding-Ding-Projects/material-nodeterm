@@ -87,6 +87,10 @@ travel with the project; notification handles and any machine-specific runtime s
 - Windows diagnostics use fixed native reads in the main process. No user text is interpreted as a
   command, no elevation is requested, and no write operation is exposed by the node.
 
+- A Files node lists through the active session filesystem. An unreadable listing is reported as an
+  error, distinct from an empty folder or a filter with no matches; remote listings never offer a
+  local reveal action.
+
 ## Verification
 
 - Create one of each node kind from the canvas right-click menu, the bottom-dock **+** button,
