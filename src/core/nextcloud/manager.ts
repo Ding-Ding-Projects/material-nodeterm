@@ -16,6 +16,7 @@ import {
   type NextcloudInstallInput,
   type NextcloudLocalBinding,
   type NextcloudManagedProfile,
+  type NextcloudPhase,
   type NextcloudRelease,
   type NextcloudServiceName,
   type NextcloudServiceStatus,
@@ -125,7 +126,7 @@ export class NextcloudManager implements NextcloudApi {
       await this.writeSecretFiles(record.binding)
       await this.removeContainers(record.binding)
       await this.runDatabase(record)
-      await this.waitFor(record.binding.containers.postgres, 'database')
+      await this.waitFor(record.binding.containers.postgres, 'postgres')
       await this.runRedis(record)
       await this.waitFor(record.binding.containers.redis, 'redis')
       await this.runWeb(record)
@@ -402,7 +403,7 @@ export class NextcloudManager implements NextcloudApi {
         image: name === 'web' ? imageForRelease(release) : name === 'postgres' ? NEXTCLOUD_IMAGES.postgres : NEXTCLOUD_IMAGES.redis,
         running: state?.Running === true,
         healthy: health ? health === 'healthy' : null,
-        reason: state?.Running === false ? 'The managed container is stopped.' : health === 'unhealthy' ? state.Health?.Log?.at(-1)?.Output ?? 'The readiness probe reported unhealthy.' : null
+        reason: state?.Running === false ? 'The managed container is stopped.' : health === 'unhealthy' ? state?.Health?.Log?.at(-1)?.Output ?? 'The readiness probe reported unhealthy.' : null
       }
     } catch {
       return { name, containerName: container, image: name === 'web' ? imageForRelease(release) : name === 'postgres' ? NEXTCLOUD_IMAGES.postgres : NEXTCLOUD_IMAGES.redis, running: false, healthy: false, reason: 'The managed container is not present.' }
