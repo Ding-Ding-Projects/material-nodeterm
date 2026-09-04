@@ -8,6 +8,12 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 import { Button, Checkbox, Chip, IconButton, Tablist } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 
+export function timerAlarmBody(alarmTone: TimerNodeData['alarmTone'], map: (text: string) => string): string {
+  return alarmTone === 'silent'
+    ? mapOwnedSentence(map, [copy('Alarm is silent.')])
+    : mapOwnedSentence(map, [copy('Alarm tone: '), fact(String(alarmTone)), copy('.')])
+}
+
 export default function TimerNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { updateNodeData, deleteElements } = useReactFlow()
   const vocab = useVocabularyMapper()
@@ -51,9 +57,7 @@ export default function TimerNode({ id, data, selected }: NodeProps<CanvasNode>)
         kind: 'success',
         title: mapOwnedSentence(vocab, [fact(String(current.title)), copy(' complete')]),
         titleKind: 'fact',
-        body: current.alarmTone === 'silent'
-          ? 'Alarm is silent.'
-          : mapOwnedSentence(vocab, [copy('Alarm tone: '), fact(String(current.alarmTone)), copy('.')]),
+        body: timerAlarmBody(current.alarmTone, vocab),
         bodyKind: 'fact'
       })
     }, 250)

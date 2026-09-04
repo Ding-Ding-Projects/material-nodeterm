@@ -154,6 +154,23 @@ describe('the protected project file prompt', () => {
     expect(must('[role="alert"]').textContent).toContain('did not open the file')
   })
 
+  it('maps the authored retry explanation while preserving the protected file path', async () => {
+    usePersonalVocabulary.setState({
+      entries: { 'That password did not open the file.': 'That passcode did not open the archive.' },
+      status: 'loaded',
+      entryCount: 1
+    })
+    void requestArchivePassword({
+      path: '/tmp/exact-protected.nodeterm-project',
+      error: 'That password did not open the file.'
+    })
+    await settle()
+
+    expect(must('.confirm__path').textContent).toBe('/tmp/exact-protected.nodeterm-project')
+    expect(must('[role="alert"]').textContent).toContain('That passcode did not open the archive.')
+    expect(must('[role="alert"]').textContent).not.toContain('That password did not open the file.')
+  })
+
   it('offers no password field, and nothing to submit, while a wait is running', async () => {
     void requestArchivePassword({ path: '/f', lockedMs: 60_000, ladderAvailable: true })
     await settle()

@@ -205,7 +205,7 @@ function ArchiveUnlockDialog({
             />
             {request.error ? (
               <p className="confirm__error" role="alert">
-                {request.error}
+                {vocab(request.error)}
               </p>
             ) : null}
           </>
