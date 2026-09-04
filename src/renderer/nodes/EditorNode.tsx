@@ -281,6 +281,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
         }`}
         style={headerFill.style}
       >
+        <SessionIconGlyph icon={data.sessionIcon} size={20} title={`Session icon for ${data.title}`} />
         <span className="term-node__title-text" title={filePath}>
           {displayFileName}
           {!isImage && !isPdf && dirty ? ' ●' : ''}

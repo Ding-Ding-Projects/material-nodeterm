@@ -180,6 +180,7 @@ import { portableCanvasProjectionToProject, projectToPortableCanvasV3 } from '..
 import { type MenuItem } from '../components/ContextMenu'
 import { devicePixelSnapOffset } from '../terminal/device-pixel-fit'
 import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
+import { SessionIconMenu } from '../components/SessionIconMenu'
 import { seedColor } from '../components/color/seedColor'
 import { appearanceId } from '../lib/appearance/registry'
 import { openAppearanceEditor } from '../state/appearanceEditorHost'
@@ -1169,6 +1170,7 @@ function toKanbanSession(n: CanvasNode): KanbanSession | null {
       id: n.id,
       title: (n.data.title as string) || 'Browser',
       color: (n.data.color as string) ?? NODE_COLORS[0],
+      sessionIcon: n.data.sessionIcon,
       kind: 'browser',
       url: n.data.url as string | undefined,
       browserProfileId: n.data.browserProfileId as string | undefined,
@@ -1182,6 +1184,7 @@ function toKanbanSession(n: CanvasNode): KanbanSession | null {
       // A note has no title of its own — its first line is the card label.
       title: text.split('\n')[0].slice(0, 80) || 'Note',
       color: (n.data.color as string) ?? NODE_COLORS[2],
+      sessionIcon: n.data.sessionIcon,
       kind: 'sticky',
       text,
       // Sticky cards never open a live terminal — the modal reads no spawn info.
@@ -1193,6 +1196,7 @@ function toKanbanSession(n: CanvasNode): KanbanSession | null {
     id: n.id,
     title: (n.data.title as string) ?? '',
     color: (n.data.color as string) ?? NODE_COLORS[0],
+    sessionIcon: n.data.sessionIcon,
     kind: 'terminal',
     agentId: n.data.agentId as string | undefined,
     icon: n.data.icon as NodeIcon | undefined,
@@ -1441,6 +1445,7 @@ export function Canvas() {
     }
   }, [])
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
+  const [sessionIconTarget, setSessionIconTarget] = useState<{ id: string; icon?: SessionIcon } | null>(null)
   // Screen coordinates of the click that most recently opened a NODE/selection context menu — a
   // ref (not state) because `selectionItems`'s "Delete" onClick reads it later, after the menu
   // has closed, and needs the value from THAT click, not a stale closure over `menu`.
@@ -16329,6 +16334,15 @@ export function Canvas() {
         items: [
           ...goToAndRename,
           {
+            label: 'Choose session icon…',
+            icon: <IconColor />,
+            onClick: () => {
+              const project = useProjects.getState().getProject(projectId)
+              const node = project?.nodes.find((n) => n.id === id)
+              setSessionIconTarget({ id, icon: node?.sessionIcon })
+            }
+          },
+          {
             label: 'Duplicate',
             icon: <IconDuplicate />,
             onClick: () => {
@@ -17024,6 +17038,22 @@ export function Canvas() {
     },
     [persist]
   )
+
+  const setSessionIcon = useCallback((id: string, icon: SessionIcon | undefined): void => {
+    if (id === nodesRef.current.find((node) => node.id === id)?.id) {
+      setNodes((nodes) => nodes.map((node) => node.id === id ? { ...node, data: { ...node.data, sessionIcon: icon } } : node))
+      markDirty()
+      return
+    }
+    const store = useProjects.getState()
+    const project = store.projects.find((candidate) => candidate.nodes.some((node) => node.id === id))
+    if (!project) return
+    store.replaceProject({
+      ...project,
+      nodes: project.nodes.map((node) => node.id === id ? { ...node, sessionIcon: icon } : node)
+    })
+    void persist()
+  }, [markDirty, persist, setNodes])
 
   const setProjectFolder = useCallback(
     async (id: string) => {

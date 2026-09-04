@@ -306,6 +306,17 @@ export function resolveNodes(nodes: CanvasNodeState[], root: string): CanvasNode
   })
 }
 
+/** Strip malformed session marks at the shared-file boundary; never trust image data from JSON. */
+function sanitizeSessionIcons(nodes: CanvasNodeState[]): CanvasNodeState[] {
+  return nodes.map((node) => {
+    const icon = sanitizeSessionIcon(node.sessionIcon)
+    return icon ? { ...node, sessionIcon: icon } : (() => {
+      const { sessionIcon: _discarded, ...withoutIcon } = node
+      return withoutIcon
+    })()
+  })
+}
+
 /**
  * The project as it is written to the SHARED file: content only.
  *

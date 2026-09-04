@@ -3,6 +3,7 @@ import type { AgentId } from '@shared/agents/config'
 import type { NodeKind } from '@shared/types'
 import type { NodeIcon } from '@shared/node-icon'
 import type { ProjectIcon } from '@shared/project-icon'
+import type { SessionIcon } from '@shared/session-icon'
 import { hasUsage } from '@shared/agents/config'
 import type { SshConnection } from '@shared/ssh'
 import { sshHostKey } from '@shared/ssh'
@@ -15,6 +16,7 @@ export interface SessionNodeInput {
   kind: NodeKind
   title: string
   color: string
+  sessionIcon?: SessionIcon
   agentId?: AgentId
   cwd?: string
   ssh?: SshConnection

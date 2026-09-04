@@ -7113,6 +7113,16 @@ button.group-node__setup:disabled {
 .ss-row:hover .ss-row__close { opacity: 0.6; }
 .ss-row__close:hover { opacity: 1 !important; color: var(--danger); }
 
+/* Per-session identity marks: local emoji or validated, bounded image data only. */
+.session-icon { width: 22px; height: 22px; flex: 0 0 22px; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 6px; }
+.session-icon--emoji { font-size: 18px; line-height: 1; }
+.session-icon--image { object-fit: cover; background: var(--panel-header); }
+.session-icon-menu__preview { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-bottom: 14px; font-weight: 600; }
+.session-icon-menu__row { display: flex; gap: 8px; align-items: center; margin: 6px 0 16px; }
+.session-icon-menu__row input { flex: 1; }
+.session-icon-menu__hint { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+.session-icon-menu__error { color: var(--error); font-size: 12px; }
+
 /* Sessions sidebar — shell */
 .sessions-sidebar {
   position: absolute;

@@ -165,6 +165,7 @@ export interface NodeData {
    */
   titleAuto?: boolean
   color: string
+  sessionIcon?: SessionIcon
   group: string | null
   tags?: string[]
   /** User-chosen terminal-session mark, validated before entering or leaving live state. */
@@ -3183,6 +3184,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         // tracking the session name; non-agent nodes ignore it.
         titleAuto: n.titleAuto ?? true,
         color: n.color,
+        sessionIcon: n.sessionIcon,
         group: n.group,
         canvasId: n.canvasId,
         tags: n.tags,
@@ -3353,6 +3355,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         title: n.data.title,
         titleAuto: n.data.titleAuto,
         color: n.data.color,
+        sessionIcon: n.data.sessionIcon,
         group: n.data.group,
         canvasId: n.data.canvasId as string | undefined,
         tags: n.data.tags,

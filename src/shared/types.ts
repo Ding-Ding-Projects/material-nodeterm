@@ -627,6 +627,8 @@ export interface CanvasNodeState {
    */
   titleAuto?: boolean
   color: string
+  /** Optional bounded local identity mark for this session. */
+  sessionIcon?: SessionIcon
   group: string | null
   /** Universe ownership for special-universe nodes. Safe display intent only, never credentials. */
   universeCanvasId?: string

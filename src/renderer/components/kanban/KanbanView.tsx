@@ -74,6 +74,7 @@ export interface KanbanSession {
   id: string
   title: string
   color: string
+  sessionIcon?: SessionIcon
   kind: 'terminal' | 'sticky' | 'browser'
   agentId?: string
   /** Sticky note body — shown in the expanded detail row. */
