@@ -22,6 +22,7 @@ import type {
   Workspace,
   WorkspaceMigrationKind
 } from '../shared/types'
+import type { NativeCopyProjection } from '../shared/native-copy-projection'
 import type { ScheduledSettingsActiveState, ScheduledSettingsFile } from '../shared/scheduled-settings'
 import type { PlannerFile, PlannerLoadState, PlannerOccurrence } from '../shared/planner-occurrences'
 import type { AlarmDefinition, AlarmDueEvent } from '../shared/alarm-clock'
@@ -1225,6 +1226,14 @@ const api: NodeTerminalApi = {
     // far side: main starts at "not focused" and the three page-death resets return it there, so a
     // report that never arrives costs the terminal-first policy, not the app's shortcuts.
     setTerminalFocused: (focused: boolean) => ipcRenderer.send(IPC.uiTerminalFocus, focused)
+  },
+  // Electron-only native chrome copy projection. The main process validates sender identity and
+  // navigation epoch; the browser bridge intentionally does not expose this namespace.
+  nativeCopy: {
+    getEpoch: () => ipcRenderer.invoke(IPC.nativeCopyGetEpoch) as Promise<number>,
+    replace: (projection: NativeCopyProjection) =>
+      ipcRenderer.invoke(IPC.nativeCopyReplace, projection),
+    reset: () => ipcRenderer.send(IPC.nativeCopyReset)
   },
   onMarkdownToggle: subscribe(IPC.appToggleMarkdown),
   onCloseNode: subscribe(IPC.appCloseNode),

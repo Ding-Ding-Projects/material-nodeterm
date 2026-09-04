@@ -5,14 +5,16 @@
 
 export const VOCAB_SCHEMA_VERSION = 1
 export const VOCAB_MAX_FILE_BYTES = 256 * 1024
-export const VOCAB_MAX_DEPTH = 12
+export const VOCAB_MAX_DEPTH = 3
 export const VOCAB_MAX_NODES = 20000
-export const VOCAB_MAX_ENTRIES = 2000
-export const VOCAB_MAX_KEY_LENGTH = 200
-export const VOCAB_MAX_VALUE_LENGTH = 500
+export const VOCAB_MAX_ENTRIES = 4096
+export const VOCAB_MAX_KEY_LENGTH = 160
+export const VOCAB_MAX_VALUE_LENGTH = 1000
 export const VOCAB_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/
+// Match the shared renderer boundary: controls and invisible bidi/zero-width characters cannot
+// enter a one-line replacement surface.
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/u
 
 function bytes(text) { return new TextEncoder().encode(String(text)).length }
 
@@ -104,8 +106,8 @@ export function validateVocabularyJson(text) {
   if (!root || typeof root !== 'object' || Array.isArray(root)) return { ok: false, reason: 'the top level must be a JSON object' }
   const keys = Object.keys(root)
   if (keys.some((key) => UNSAFE_KEYS.has(key))) return { ok: false, reason: 'an unsafe top-level key was found' }
-  if (root.version !== VOCAB_SCHEMA_VERSION) return { ok: false, reason: `schema version must be exactly ${VOCAB_SCHEMA_VERSION}` }
-  if (keys.some((key) => key !== 'version' && key !== 'entries')) return { ok: false, reason: 'unknown top-level field' }
+  if (!Object.hasOwn(root, 'schemaVersion') || root.schemaVersion !== VOCAB_SCHEMA_VERSION) return { ok: false, reason: `schema version must be exactly ${VOCAB_SCHEMA_VERSION}; select a file with "schemaVersion": ${VOCAB_SCHEMA_VERSION}` }
+  if (keys.some((key) => key !== 'schemaVersion' && key !== 'entries')) return { ok: false, reason: 'unknown top-level field' }
   return validateEntries(root.entries)
 }
 

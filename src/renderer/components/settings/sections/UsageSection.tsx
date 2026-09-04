@@ -10,6 +10,7 @@ import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { USAGE_PROVIDER_IDS, providerLabel } from '@shared/usage-limits'
 import { AGENT_CONFIG } from '@shared/agents/config'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../../../lib/personalVocabulary/agentLabel'
 import { SettingsText } from '../SettingsText'
 import { Slider } from '@renderer/ui/md3'
 
@@ -267,14 +268,14 @@ export function UsageSection({ isActive }: { isActive: boolean }): React.JSX.Ele
           {USAGE_PROVIDER_IDS.map((id) => (
             <FieldRow
               key={id}
-              label={`${labelFor(id)} usage`}
+              label={`${mapBuiltinAgentLabel(vocab, id, labelFor(id))} usage`}
               description={PROVIDER_BLURBS[id] ?? ''}
               control={
                 <Switch
                   checked={!hidden.has(id)}
                   onChange={(v) => setShown(id, v)}
                   ariaLabel="Show {provider} usage"
-                  ariaLabelParams={{ provider: labelFor(id) }}
+                  ariaLabelParams={{ provider: mapBuiltinAgentLabel(vocab, id, labelFor(id)) }}
                 />
               }
             />
