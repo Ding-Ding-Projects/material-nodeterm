@@ -1095,6 +1095,15 @@ export function buildAgentApi(
   }
 }
 
+/** Build the authenticated agent-message delivery call over the Server Edition RPC channel. */
+export function buildAgentMessageApi(client: RpcClient): Pick<NodeTerminalApi, 'agentMessage'> {
+  return {
+    agentMessage: {
+      deliver: (request) => client.request(IPC.agentMessageDeliver, request) as ReturnType<NodeTerminalApi['agentMessage']['deliver']>
+    }
+  }
+}
+
 /**
  * Build the `canvas` namespace over an RpcClient: a cast out (`canvas:mut`) and a subscription in on
  * the same channel. The server stamps each mutation with the total order (`seq`) and reflects it to
@@ -2077,6 +2086,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildRealApi(client),
     ...buildServerFilesApi(client),
     ...buildAgentApi(client),
+    ...buildAgentMessageApi(client),
     ...buildCanvasApi(client),
     ...buildPresenceApi(client),
     ...buildSpeechApi(client),

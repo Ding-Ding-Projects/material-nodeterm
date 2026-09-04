@@ -228,6 +228,7 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // Edition); inert no-ops rather than a local subscription that never carries the host's events.
     onAgentControl: stub.onAgentControl,
     sendAgentControlResult: stub.sendAgentControlResult,
+    agentMessage: stub.agentMessage,
     // The universal file converter and the local Ollama manager both operate on ONE machine's
     // filesystem/Ollama install. `...local` would silently run them against THIS machine while the
     // rest of the tab is the HOST's session — the wrong-machine failure this file's obligations

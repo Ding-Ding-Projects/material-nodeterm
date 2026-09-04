@@ -14433,6 +14433,7 @@ export function Canvas() {
             { verb, args, sourceTitle: srcTitle },
             {
               confirmationBusy: confirmBusy,
+              seamlessWrites: () => useSettings.getState().settings.agentSeamlessWrites,
               openWriteConfirmation: (request) =>
                 setConfirm({
                   message: request.message,

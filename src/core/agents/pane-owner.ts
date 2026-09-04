@@ -224,6 +224,14 @@ export function parseForegroundArgv(stdout: string | null | undefined, pgid: num
     .map((row) => row.args)
 }
 
+/** Process ids aligned with the foreground argv list, for post-write identity checks. */
+export function parseForegroundPids(stdout: string | null | undefined, pgid: number): number[] {
+  if (!Number.isInteger(pgid) || pgid <= 0) return []
+  return parsePsRows(stdout)
+    .filter((row) => row.pgid === pgid)
+    .map((row) => row.pid)
+}
+
 /**
  * The pids of the same rows `parseForegroundArgv` returns, in the same order.
  *

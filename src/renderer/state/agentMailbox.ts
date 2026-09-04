@@ -11,7 +11,7 @@ export const AGENT_MESSAGE_TTL_MS = 15 * 60_000
  *  recipient could accept an unlimited number of queued sends before the TTL sweep ever runs. */
 export const AGENT_MAILBOX_QUEUE_CAP = 20
 
-export type AgentMessageStatus = 'queued' | 'delivered' | 'expired'
+export type AgentMessageStatus = 'queued' | 'delivered' | 'expired' | 'failed'
 
 export interface AgentMessageEndpoint {
   projectId: string
@@ -34,6 +34,8 @@ export interface AgentMessage {
   status: AgentMessageStatus
   deliveredAt?: string
   expiredAt?: string
+  failedAt?: string
+  failureReason?: string
 }
 
 interface StorageLike {
@@ -85,7 +87,10 @@ function validMessage(value: unknown): value is AgentMessage {
     validEndpoint(message.recipient) &&
     typeof message.subject === 'string' &&
     typeof message.body === 'string' &&
-    (message.status === 'queued' || message.status === 'delivered' || message.status === 'expired')
+    (message.status === 'queued' ||
+      message.status === 'delivered' ||
+      message.status === 'expired' ||
+      message.status === 'failed')
   )
 }
 
@@ -246,6 +251,22 @@ export class AgentMailbox {
     this.messages[index] = delivered
     this.save()
     return delivered
+  }
+
+  /** Preserve a terminal delivery failure for status queries instead of leaving a message looking
+   * queued forever after the core has already refused it. */
+  markFailed(id: string, reason: string, now = new Date()): AgentMessage | undefined {
+    const index = this.messages.findIndex((message) => message.id === id)
+    if (index < 0) return undefined
+    const failed: AgentMessage = {
+      ...this.messages[index],
+      status: 'failed',
+      failedAt: now.toISOString(),
+      failureReason: reason
+    }
+    this.messages[index] = failed
+    this.save()
+    return failed
   }
 }
 

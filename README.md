@@ -427,6 +427,12 @@ Capabilities are per agent and none are assumed: see
 [`docs/features/agents/agent-support.md`](./docs/features/agents/agent-support.md) for exactly what
 each one has, and what it does not.
 
+Authenticated agent messaging adds `send`, `reply`, `status`, and `notify` across nodes in one
+project. Delivery is identity-aware, framed, rate-limited, queued while a target is busy, and
+reported with explicit receipts or expiry. Settings → Agents includes the opt-in seamless write
+switch; `close` remains confirmation-gated. See
+[`docs/features/agents/agent-messaging.md`](./docs/features/agents/agent-messaging.md).
+
 ### One project, two views — the kanban board
 
 Every project is a canvas **and** a Trello-style board. Cards *are* your live session nodes,

@@ -127,6 +127,7 @@ export type ControlVerb =
   | 'rename'
   | 'send'
   | 'reply'
+  | 'notify'
   | 'status'
   | 'write'
   | 'close'
@@ -172,6 +173,7 @@ const VERBS: ControlVerb[] = [
   'rename',
   'send',
   'reply',
+  'notify',
   'status',
   'write',
   'close',
@@ -214,6 +216,8 @@ export function parseControlRequest(
   if (v === 'send' && !args.text) return { error: 'send requires --text' }
   if (v === 'reply' && !args.message) return { error: 'reply requires --message <id>' }
   if (v === 'reply' && !args.text) return { error: 'reply requires --text' }
+  if (v === 'notify' && !args.node) return { error: 'notify requires --node <id>' }
+  if (v === 'notify' && args.text) return { error: 'notify does not accept --text' }
   if (v === 'status' && !args.message) return { error: 'status requires --message <id>' }
   if ((v === 'show-image' || v === 'show-video') && !args.path) {
     return { error: `${v} requires --path` }
@@ -431,6 +435,7 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '  NodeTerm generates timestamp, exact current sender/recipient titles, authenticated addresses',
     '  and message id. Busy recipients receive it at the next safe turn boundary.',
     '- `reply --message <id> --text "..."` — reply over the authenticated return route.',
+    '- `notify --node <id>` — tell a linked agent to read the latest shared context.',
     '  `status --message <id>` reports `queued` or `delivered`. Never guess ids from mutable titles.',
     '- `write --node <id> --text "..."` / `close --node <id>` — type into / close a node.',
     '  Both ask the user to confirm a dialog and may be denied. Never use `write` as agent messaging.',
@@ -809,6 +814,7 @@ Verbs:
   NodeTerm generates timestamp, current Node Chroma titles, authenticated addresses and id.
   Busy recipients are queued until a safe turn boundary.
 - \`reply --message <id> --text "..."\` — reply over the authenticated return route.
+- \`notify --node <id>\` — tell a linked agent to read the latest shared context.
   \`status --message <id>\` reports delivery state. Never guess an id from a mutable title.
 - \`write --node <id> --text "..."\` — raw terminal control, not agent messaging. (Asks the user to confirm.)
 - \`close --node <id>\` — close a node. (Asks the user to confirm.)

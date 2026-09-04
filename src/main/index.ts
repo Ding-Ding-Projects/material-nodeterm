@@ -347,6 +347,14 @@ import { buildHandoff, type HandoffRemote } from './handoff'
 import { initContextLink, setNodeTranscript } from '../core/context-link'
 import { transcriptPathOf } from '../core/context-link-core'
 import { initCanvasControl, installCanvasSkillInto } from './canvas-control'
+import {
+  createDeliveryQueue,
+  deliverFromControl,
+  isDeliverRequest,
+  onMessagingAgentEvent,
+  setDeliveryQueue,
+  type AgentMessagingDeps
+} from './agent-messaging'
 import { initTranscriptIndex } from '../core/transcript-index'
 import { initTelemetry } from './telemetry'
 import { initClaudeUsage } from './claude-usage'
