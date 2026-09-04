@@ -305,11 +305,11 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
         </p>
         <ul className="shop-node__entries" aria-label={ts('universeShop.entries.aria', 'Available catalog entries')}>
           {!scope || !canvasId || depth === null ? (
-            <p className="shop-node__empty">{ts('universeShop.invalidScope', 'This Shop has incomplete universe scope metadata, so catalog creation is unavailable.')}</p>
+            <li role="status" className="shop-node__empty">{ts('universeShop.invalidScope', 'This Shop has incomplete universe scope metadata, so catalog creation is unavailable.')}</li>
           ) : !provider ? (
-            <p className="shop-node__empty">{ts('universeShop.catalogUnavailable', 'The unified Node Catalog is unavailable in this build. Enable the catalog dependency before creating nodes.')}</p>
+            <li role="status" className="shop-node__empty">{ts('universeShop.catalogUnavailable', 'The unified Node Catalog is unavailable in this build. Enable the catalog dependency before creating nodes.')}</li>
           ) : result.entries.length === 0 ? (
-            <p className="shop-node__empty">{ts('universeShop.empty', 'No catalog entries match this search.')}</p>
+            <li role="status" className="shop-node__empty">{ts('universeShop.empty', 'No catalog entries match this search.')}</li>
           ) : (
             result.entries.map((entry) => (
               <li key={entry.id} className="shop-node__entry-item">

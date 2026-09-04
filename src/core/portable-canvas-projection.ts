@@ -14,6 +14,10 @@ import { sanitizeProjectIcon } from '../shared/project-icon'
 import type { PortableMediaManifest } from './portable-media-manifest'
 import { validatePortableMediaManifest } from './portable-media-manifest'
 import { normalizeMediaReference, type MediaAssetReference } from '../shared/media-catalog'
+// `CanvasNodeState.media` carries the other media shape (assetId/kind/displayName/source/
+// resolution). It is a separate type from the media-catalog reference above, so the validator
+// below is typed against it rather than against the catalog shape it does not describe.
+import type { MediaAssetReference as NodeMediaAssetReference } from '../shared/types'
 import { MAX_MULTIVERSE_DEPTH, repairUniverseShops } from './universe-shop'
 import { validatePortableUniverseDoors, type PortableUniverseDoorV3 } from './universe-door-navigation'
 import { createPortableUniverseDoorPair } from './universe-door-navigation'
@@ -266,7 +270,7 @@ function content(value: unknown, label: string): string {
   return value
 }
 
-function mediaReferences(value: unknown): MediaAssetReference[] {
+function mediaReferences(value: unknown): NodeMediaAssetReference[] {
   if (!Array.isArray(value) || value.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable media reference count exceeds its bound.')
   return value.map((item) => {
     if (!record(item)) throw new PortableProjectV3Error('manifest', 'Portable media reference is invalid.')
@@ -279,20 +283,20 @@ function mediaReferences(value: unknown): MediaAssetReference[] {
       throw new PortableProjectV3Error('manifest', 'Portable media reference metadata is invalid.')
     }
     if (item.sha256 !== undefined && (typeof item.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(item.sha256) || item.sha256 !== item.assetId)) throw new PortableProjectV3Error('hash', 'Portable media reference hash is invalid.')
-    if (item.bytes !== undefined && (!Number.isSafeInteger(item.bytes) || item.bytes < 0 || item.bytes > 2 * 1024 * 1024 * 1024)) throw new PortableProjectV3Error('raw-limit', 'Portable media reference size is invalid.')
+    if (item.bytes !== undefined && (typeof item.bytes !== 'number' || !Number.isSafeInteger(item.bytes) || item.bytes < 0 || item.bytes > 2 * 1024 * 1024 * 1024)) throw new PortableProjectV3Error('raw-limit', 'Portable media reference size is invalid.')
     if (item.source !== undefined && !['archive', 'local', 'ssh'].includes(String(item.source))) throw new PortableProjectV3Error('manifest', 'Portable media reference source is invalid.')
     if (item.resolution !== undefined && !['unresolved', 'available', 'missing', 'invalid'].includes(String(item.resolution))) throw new PortableProjectV3Error('manifest', 'Portable media reference resolution is invalid.')
     if (item.resolution === 'available' && (item.sha256 === undefined || item.bytes === undefined || item.source === undefined)) throw new PortableProjectV3Error('manifest', 'Available portable media references require hash, size, and a source carrier.')
     if (item.resolution === 'unresolved' && item.source === 'archive') throw new PortableProjectV3Error('manifest', 'Unresolved portable media cannot claim an archive carrier.')
     return {
       assetId: item.assetId,
-      kind: item.kind as MediaAssetReference['kind'],
+      kind: item.kind as NodeMediaAssetReference['kind'],
       displayName: item.displayName,
       ...(item.extension !== undefined ? { extension: typeof item.extension === 'string' && /^[a-z0-9]{1,16}$/i.test(item.extension) ? item.extension.toLowerCase() : (() => { throw new PortableProjectV3Error('manifest', 'Portable media reference extension is invalid.') })() } : {}),
       ...(item.sha256 !== undefined ? { sha256: item.sha256 } : {}),
-      ...(item.bytes !== undefined ? { bytes: item.bytes } : {}),
-      ...(item.source !== undefined ? { source: item.source as MediaAssetReference['source'] } : {}),
-      ...(item.resolution !== undefined ? { resolution: item.resolution as MediaAssetReference['resolution'] } : {})
+      ...(item.bytes !== undefined ? { bytes: item.bytes as number } : {}),
+      ...(item.source !== undefined ? { source: item.source as NodeMediaAssetReference['source'] } : {}),
+      ...(item.resolution !== undefined ? { resolution: item.resolution as NodeMediaAssetReference['resolution'] } : {})
     }
   })
 }
@@ -1062,8 +1066,8 @@ export function portableCanvasProjectionToProject(
         order: canvas.order,
         viewport: canvas.viewport ?? { x: 0, y: 0, zoom: 1 },
         nodes: canvas.nodeIds.map((id) => nodeById.get(id)).filter((node): node is CanvasNodeState => !!node),
-        bridges: value.relationships.filter((link) => link.kind === 'bridge' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target })),
-        ropes: value.relationships.filter((link) => link.kind === 'rope' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target }))
+        bridges: value.relationships.filter(isLegacyRelationship).filter((link) => link.kind === 'bridge' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target })),
+        ropes: value.relationships.filter(isLegacyRelationship).filter((link) => link.kind === 'rope' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target }))
       })),
     ...(bridgeLinks.length > 0 ? { bridges: bridgeLinks } : {}),
     ...(ropeLinks.length > 0 ? { ropes: ropeLinks } : {}),
@@ -1080,8 +1084,8 @@ export function portableCanvasProjectionToProject(
            order: canvas.order,
            ...(canvas.viewport ? { viewport: { ...canvas.viewport } } : {}),
            nodes: canvas.nodeIds.map((nodeId) => nodeById.get(nodeId)).filter((node): node is CanvasNodeState => !!node),
-           bridges: value.relationships.filter((link) => link.kind === 'bridge' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target })),
-           ropes: value.relationships.filter((link) => link.kind === 'rope' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target }))
+           bridges: value.relationships.filter(isLegacyRelationship).filter((link) => link.kind === 'bridge' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target })),
+           ropes: value.relationships.filter(isLegacyRelationship).filter((link) => link.kind === 'rope' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target }))
          }))
      } : {}),
      ...(value.portals ? { portals: value.portals } : {})

@@ -30,7 +30,7 @@ describe('portable schema 3 manifest boundary', () => {
   it('rejects unknown manifest, entry, and project keys', () => {
     expect(() => parsePortableProjectV3Manifest(new TextEncoder().encode(JSON.stringify({ ...base(), extra: true })))).toThrow(/unknown key/)
     const withEntry = base()
-    ;(withEntry.entries[0] as Record<string, unknown>).extra = true
+    ;(withEntry.entries[0] as unknown as Record<string, unknown>).extra = true
     expect(() => parsePortableProjectV3Manifest(new TextEncoder().encode(JSON.stringify(withEntry)))).toThrow(/unknown key/)
     const withProject = base()
     ;(withProject.project as Record<string, unknown>).extra = true
@@ -48,8 +48,8 @@ describe('portable schema 3 manifest boundary', () => {
     const value = base()
     value.entries.push(
       { path: 'assets/media/' + hash + '.png', sha256: hash, rawBytes: 1, compressedBytes: 1, required: false },
-      { path: 'sidecars/.nodeterm/board-log.jsonl', sha256: hash, rawBytes: 1, compressedBytes: 1, required: false },
-      { path: 'attachments/session/part.bin', sha256: hash, rawBytes: 1, compressedBytes: 1, required: false }
+      { path: 'comments/board-log.jsonl', sha256: hash, rawBytes: 1, compressedBytes: 1, required: false },
+      { path: 'assets/attachments/session-part.bin', sha256: hash, rawBytes: 1, compressedBytes: 1, required: false }
     )
     expect(parsePortableProjectV3Manifest(new TextEncoder().encode(JSON.stringify(value))).entries).toHaveLength(5)
     const unknown = base()

@@ -22,8 +22,7 @@ import {
   type TorrentSeedPolicy,
   type TorrentTaskState,
   type TorrentTaskStatus,
-  type TorrentSourceKind
-} from '../../shared/torrent'
+  type TorrentSourceKind, TORRENT_MAX_TASKS} from '../../shared/torrent'
 
 const execFileAsync = promisify(execFile)
 const WEBTORRENT_VERSION = '2.8.1'
@@ -75,6 +74,9 @@ export interface TorrentServiceOptions {
   resourcesPath?: string
   isPackaged?: boolean
   onTask?: (task: TorrentTaskState) => void
+  /** Optional local-history hand-off. No shell wires it today, so recordHistory guards with ?.
+   *  and falls back to the JSONL file alone. */
+  onHistory?: (event: { action: 'created' | 'updated' | 'deleted' | 'restored'; label: string; content: string }) => Promise<void>
   platform?: NodeJS.Platform
   runtimeResolver?: () => Promise<{ ctor: WebTorrentCtor; origin: 'bundled' | 'auto-installed' }>
 }
@@ -152,6 +154,7 @@ function targetPath(destination: string, relativePath: string): string | null {
 
 export class TorrentService implements TorrentApi {
   private readonly storeFile: string
+  private readonly historyFile: string
   private readonly runtimeRoot: string
   private readonly tasks = new Map<string, TorrentTaskState>()
   private readonly handles = new Map<string, TorrentLike>()
@@ -166,6 +169,7 @@ export class TorrentService implements TorrentApi {
   constructor(private readonly options: TorrentServiceOptions) {
     this.storeFile = join(options.userDataDir, 'torrent-downloader', 'tasks.json')
     this.runtimeRoot = join(options.userDataDir, 'torrent-downloader', 'webtorrent-runtime')
+    this.historyFile = join(options.userDataDir, 'torrent-downloader', 'history.jsonl')
     this.taskCallback = options.onTask
     this.initPromise = this.load()
   }
@@ -198,6 +202,22 @@ export class TorrentService implements TorrentApi {
     }
     this.writeQueue = this.writeQueue.then(next, next)
     await this.writeQueue
+  }
+
+  // Recovered with restoreHistory: the merge dropped the whole history-recording leg while
+  // keeping the Server Edition handler that calls it. onHistory is optional and no shell
+  // wires it today, so this writes the JSONL and skips the local-history hand-off.
+  private async recordHistory(action: string, task: TorrentTaskState): Promise<void> {
+    await mkdir(join(this.options.userDataDir, 'torrent-downloader'), { recursive: true })
+    const line = JSON.stringify({ version: 1, action, taskId: task.id, name: task.name, status: task.status, at: Date.now() }) + '\n'
+    await import('node:fs/promises').then(({ appendFile }) => appendFile(this.historyFile, line, { encoding: 'utf8', mode: 0o600 })).catch(() => undefined)
+    const actionName = action === 'created' ? 'created' : action === 'removed' ? 'deleted' : 'updated'
+    const historyWrite = this.options.onHistory?.({
+      action: actionName,
+      label: `Torrent task ${action}: ${task.name}`,
+      content: JSON.stringify({ version: STORE_VERSION, tasks: [...this.tasks.values()] })
+    })
+    if (historyWrite) await historyWrite.catch(() => undefined)
   }
 
   private emit(task: TorrentTaskState): void {
@@ -585,8 +605,26 @@ export class TorrentService implements TorrentApi {
     return this.list()
   }
 
+  async restoreHistory(content: string): Promise<void> {
+    await this.initPromise
+    const parsed = JSON.parse(content) as PersistedStore
+    if (parsed.version !== STORE_VERSION || !Array.isArray(parsed.tasks) || parsed.tasks.length > TORRENT_MAX_TASKS) throw new Error('Torrent history snapshot is not valid.')
+    for (const handleId of [...this.handles.keys()]) await this.stopHandle(handleId, false)
+    this.tasks.clear()
+    for (const raw of parsed.tasks) {
+      const task = safeTask(raw)
+      if (!task.id || !task.sourceRef) throw new Error('Torrent history snapshot contains an invalid task.')
+      task.status = task.status === 'downloading' || task.status === 'metadata' || task.status === 'seeding' ? 'recoverable-paused' : task.status
+      this.tasks.set(task.id, task)
+    }
+    await this.persist()
+    const first = this.tasks.values().next().value as TorrentTaskState | undefined
+    if (first) await this.recordHistory('updated', first)
+  }
+
   onTask(listener: (task: TorrentTaskState) => void): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
   }
 }
+

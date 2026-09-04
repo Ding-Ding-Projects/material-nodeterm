@@ -3,7 +3,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ShopNode from './ShopNode'
-import { nodeCatalogShopProvider, registerUniverseShopCatalog } from '../../core/universe-shop'
+import { registerUniverseShopCatalog } from '../../core/universe-shop'
+import { UNIVERSE_SHOP_CATALOG_PROVIDER } from '../state/universeShopCatalogProvider'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -20,6 +21,7 @@ vi.mock('../lib/personalVocabulary/useLocalizedVocabularyText', () => ({
     values ? fallback.replace('{scope}', values.scope ?? '').replace('{count}', values.count ?? '').replace('{entry}', values.entry ?? '') : fallback
 }))
 
+vi.mock('../session/session', () => ({ useActiveSessionApi: () => ({}) }))
 vi.mock('../lib/appearance/registry', () => ({ appearanceId: (_kind: string, id: string) => `appearance-${id}` }))
 vi.mock('../lib/nodeColor', () => ({ nodeBorderStyle: () => ({ style: {} }), nodeColorStyle: () => ({ className: '', style: {} }) }))
 
@@ -31,13 +33,13 @@ describe('ShopNode runtime surface', () => {
     host = document.createElement('div')
     document.body.appendChild(host)
     root = createRoot(host)
-    registerUniverseShopCatalog(nodeCatalogShopProvider(), '')
+    registerUniverseShopCatalog(UNIVERSE_SHOP_CATALOG_PROVIDER)
   })
 
   afterEach(() => {
     act(() => root.unmount())
     host.remove()
-    registerUniverseShopCatalog(null, '')
+    registerUniverseShopCatalog(null)
   })
 
   it('renders scoped entries, a valid list, and the anchored regex affordance', () => {

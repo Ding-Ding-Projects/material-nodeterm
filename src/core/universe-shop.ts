@@ -282,9 +282,12 @@ export function createShopAtUniverseCreation(
   if (!isSpecialScope(canvas.scope)) {
     return { node: null, creationEventId, duplicate: false, refused: true, reason: 'Only a special-universe child canvas may own a Shop.' }
   }
-  if (existingNodes.some((node) => node.creationEventId === creationEventId)) {
-    const existing = existingNodes.find((node) => node.creationEventId === creationEventId) ?? null
-    return { node: existing, creationEventId, duplicate: true, refused: false }
+  // Only a Shop this canvas already owns makes the retry a duplicate. An ordinary node that
+  // happens to carry the same creation event id is not the Shop, and returning it here handed
+  // the caller a sticky note in the Shop's place.
+  const sameEvent = existingNodes.find((node) => node.creationEventId === creationEventId && isShopNode(node) && node.universeCanvasId === canvas.id) ?? null
+  if (sameEvent) {
+    return { node: sameEvent, creationEventId, duplicate: true, refused: false }
   }
   const baseId = shopNodeIdForCanvas(canvas.id)
   const derivedId = shopNodeIdForCanvas(canvas.id, [baseId])
@@ -759,7 +762,7 @@ export class UniverseShopCoordinator {
   }
 
   createAtUniverseCreation(
-    canvas: Pick<PortableCanvasV3, 'id' | 'scope'>,
+    canvas: Pick<PortableCanvasV3, 'id' | 'scope' | 'depth'>,
     existingNodes: readonly PortableCanvasNodeV3[] = [],
     creationEventId = newUniverseCreationEventId()
   ): LiveUniverseShopCreationResult {

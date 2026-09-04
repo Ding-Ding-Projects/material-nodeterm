@@ -548,6 +548,12 @@ function profileDialect(
       throw new Error(
         "Trusted auto resolution returned kind=auto instead of its concrete shell kind.",
       );
+    case "named":
+      // A named profile delegates to a detected shell profile, so trusted resolution reports that
+      // profile's own kind. Seeing `named` here means the delegation was not resolved.
+      throw new Error(
+        "Trusted named resolution returned kind=named instead of its delegated shell kind.",
+      );
   }
 }
 

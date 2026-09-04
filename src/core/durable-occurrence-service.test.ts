@@ -8,7 +8,8 @@ import {
   validateDurableOccurrenceSnapshot,
   type DurableOccurrenceSnapshot,
   type DurableSchedule,
-  type DurableTimerNode
+  type DurableTimerNode,
+  type DurableWeekday
 } from '../shared/durable-occurrences'
 import { DurableOccurrenceService, registerDurableOccurrenceHandlers, type DurableOccurrenceStore } from './durable-occurrence-service'
 import { IPC } from '../shared/ipc'
@@ -51,7 +52,7 @@ describe('durable planner/alarm/timer source Chuts', () => {
   })
 
   it('does not silently discard a nonempty weekly schedule and caps catch-up explicitly', () => {
-    const weekly = { ...schedule(), recurrence: { kind: 'weekly' as const, weekdays: [1, 3, 5] as const } }
+    const weekly = { ...schedule(), recurrence: { kind: 'weekly' as const, weekdays: [1, 3, 5] as DurableWeekday[] } }
     const result = durableOccurrenceTimes(weekly, Date.parse('2026-01-01T00:00:00Z'), Date.parse('2026-03-01T00:00:00Z'))
     expect(result.times.length).toBeGreaterThan(0)
     const dense = { ...schedule('2020-01-01T00:00'), recurrence: { kind: 'daily' as const } }

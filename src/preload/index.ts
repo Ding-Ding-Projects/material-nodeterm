@@ -1374,6 +1374,73 @@ const api: NodeTerminalApi = {
     commands: (serviceId) => ipcRenderer.invoke(IPC.awsWizardCommands, serviceId),
     source: (serviceId, commandName) => ipcRenderer.invoke(IPC.awsWizardSource, serviceId, commandName)
   },
+  // Four namespaces the merge dropped from this object while keeping their IPC channels and
+  // NodeTerminalApi members. Each one is a thin invoke/subscribe wrapper; no argument is
+  // reinterpreted here.
+  cloudflared: {
+    status: (nodeId, runtime) => ipcRenderer.invoke(IPC.cloudflaredStatus, nodeId, runtime),
+    setToken: (nodeId, token) => ipcRenderer.invoke(IPC.cloudflaredSetToken, nodeId, token),
+    clearToken: (nodeId) => ipcRenderer.invoke(IPC.cloudflaredClearToken, nodeId),
+    start: (nodeId, settings) => ipcRenderer.invoke(IPC.cloudflaredStart, nodeId, settings),
+    stop: (nodeId) => ipcRenderer.invoke(IPC.cloudflaredStop, nodeId),
+    uninstall: (nodeId) => ipcRenderer.invoke(IPC.cloudflaredUninstall, nodeId),
+    reconcile: (nodeId, runtime) => ipcRenderer.invoke(IPC.cloudflaredReconcile, nodeId, runtime),
+    installWindowsService: (nodeId, settings) => ipcRenderer.invoke(IPC.cloudflaredInstallService, nodeId, settings),
+    onStatus: (listener) => subscribeCloudflaredStatus(listener)
+  },
+  gitlab: {
+    catalog: () => ipcRenderer.invoke(IPC.gitlabCatalog),
+    status: (id) => ipcRenderer.invoke(IPC.gitlabStatus, id),
+    create: (input) => ipcRenderer.invoke(IPC.gitlabCreate, input),
+    handoffCredential: (id) => ipcRenderer.invoke(IPC.gitlabHandoffCredential, id),
+    listBackups: (id) => ipcRenderer.invoke(IPC.gitlabBackupsList, id),
+    createBackup: (id) => ipcRenderer.invoke(IPC.gitlabBackupCreate, id),
+    restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.gitlabBackupRestore, id, backupId),
+    update: (id, profileId) => ipcRenderer.invoke(IPC.gitlabUpdate, id, profileId),
+    rollback: (id) => ipcRenderer.invoke(IPC.gitlabRollback, id),
+    start: (id) => ipcRenderer.invoke(IPC.gitlabStart, id),
+    stop: (id) => ipcRenderer.invoke(IPC.gitlabStop, id),
+    tunnelHandoff: (id) => ipcRenderer.invoke(IPC.gitlabTunnelHandoff, id)
+  },
+  durableOccurrences: {
+    load: () => ipcRenderer.invoke(IPC.durableOccurrencesLoad),
+    save: (snapshot, generation) => ipcRenderer.invoke(IPC.durableOccurrencesSave, snapshot, generation),
+    reconcile: (wallMs, monotonicMs) => ipcRenderer.invoke(IPC.durableOccurrencesReconcile, wallMs, monotonicMs),
+    claim: (id) => ipcRenderer.invoke(IPC.durableOccurrencesClaim, id),
+    snooze: (id, minutes) => ipcRenderer.invoke(IPC.durableOccurrencesSnooze, id, minutes),
+    dismiss: (id) => ipcRenderer.invoke(IPC.durableOccurrencesDismiss, id),
+    exportSchedules: () => ipcRenderer.invoke(IPC.durableOccurrencesExport),
+    importSchedules: (raw) => ipcRenderer.invoke(IPC.durableOccurrencesImport, raw),
+    timerTransition: (id, action, wallMs, monotonicMs) =>
+      ipcRenderer.invoke(IPC.durableOccurrencesTimerTransition, id, action, wallMs, monotonicMs),
+    timerLap: (id, wallMs, monotonicMs) => ipcRenderer.invoke(IPC.durableOccurrencesTimerLap, id, wallMs, monotonicMs),
+    timerTick: (wallMs, monotonicMs) => ipcRenderer.invoke(IPC.durableOccurrencesTimerTick, wallMs, monotonicMs),
+    upsertAlarm: (alarm) => ipcRenderer.invoke(IPC.durableOccurrencesUpsertAlarm, alarm),
+    upsertTimer: (timer) => ipcRenderer.invoke(IPC.durableOccurrencesUpsertTimer, timer),
+    removeSource: (kind, id) => ipcRenderer.invoke(IPC.durableOccurrencesRemoveSource, kind, id),
+    acknowledge: (id, deliveryGeneration) => ipcRenderer.invoke(IPC.durableOccurrencesAcknowledge, id, deliveryGeneration),
+    onChanged: (listener) => {
+      const handler = (_event: unknown, snapshot: Parameters<typeof listener>[0]) => listener(snapshot)
+      ipcRenderer.on(IPC.durableOccurrencesChanged, handler)
+      return () => ipcRenderer.removeListener(IPC.durableOccurrencesChanged, handler)
+    }
+  },
+  advancedMedia: {
+    catalog: () => ipcRenderer.invoke(IPC.advancedMediaCatalog),
+    inspect: (path) => ipcRenderer.invoke(IPC.advancedMediaInspect, path),
+    enqueue: (request) => ipcRenderer.invoke(IPC.advancedMediaEnqueue, request),
+    state: (offset, limit) => ipcRenderer.invoke(IPC.advancedMediaState, offset, limit),
+    start: () => ipcRenderer.invoke(IPC.advancedMediaStart),
+    pause: () => ipcRenderer.invoke(IPC.advancedMediaPause),
+    cancel: (id) => ipcRenderer.invoke(IPC.advancedMediaCancel, id),
+    retry: (id) => ipcRenderer.invoke(IPC.advancedMediaRetry, id),
+    remove: (id) => ipcRenderer.invoke(IPC.advancedMediaRemove, id),
+    onProgress: (listener) => {
+      const handler = (_event: unknown, payload: Parameters<typeof listener>[0]) => listener(payload)
+      ipcRenderer.on(IPC.advancedMediaProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.advancedMediaProgress, handler)
+    }
+  },
   ollama: {
     status: () => ipcRenderer.invoke(IPC.ollamaStatus),
     models: () => ipcRenderer.invoke(IPC.ollamaModels),

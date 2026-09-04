@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { deflateRawSync } from 'node:zlib'
 import { exportPortableProjectV3, importPortableProjectV3 } from './portable-project-import'
 import { sha256Media } from './portable-media-assets'
+import { createPortableMediaManifest } from './portable-media-manifest'
 import { createPortableProjectV3Manifest } from './portable-project-v3'
 import { openContainer, packContainer } from './project-archive-container'
 import type { Project } from '../shared/types'
@@ -26,7 +26,7 @@ const project = {
   }]
 } as Project
 
-const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
+const png = new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64'))
 
 describe('portable schema 3 import/export', () => {
   it('is deterministic and preserves viewport while hydrating no machine state', async () => {
@@ -51,11 +51,14 @@ describe('portable schema 3 import/export', () => {
       extension: 'png',
       bytes: png.byteLength,
       sha256: id,
+      width: 1,
+      height: 1,
+      frames: 1,
       label: 'Canvas photo'
     }
     const exported = await exportPortableProjectV3(project, {
       historyBundle: Buffer.from('history'),
-      media: { assets: [{ asset, data: png, sourceName: 'photo.png' }] }
+      media: { manifest: createPortableMediaManifest([asset]), files: [{ path: `assets/media/${id}.png`, asset, data: png }] }
     })
     expect(exported.manifest.entries.some((entry) => entry.path === `assets/media/${id}.png`)).toBe(true)
     expect(exported.projection.media?.assets[0].label).toBe('Canvas photo')
@@ -65,19 +68,20 @@ describe('portable schema 3 import/export', () => {
 
   it('atomically stages validated media bytes and rejects orphan media', async () => {
     const id = sha256Media(png)
-    const asset = { id, kind: 'image' as const, mime: 'image/png', extension: 'png', bytes: png.byteLength, sha256: id, label: 'Canvas photo' }
-    const exported = await exportPortableProjectV3(project, { historyBundle: Buffer.from('history'), media: { assets: [{ asset, data: png, sourceName: 'photo.png' }] } })
+    const asset = { id, kind: 'image' as const, mime: 'image/png', extension: 'png', bytes: png.byteLength, sha256: id, width: 1, height: 1, frames: 1, label: 'Canvas photo' }
+    const exported = await exportPortableProjectV3(project, { historyBundle: Buffer.from('history'), media: { manifest: createPortableMediaManifest([asset]), files: [{ path: `assets/media/${id}.png`, asset, data: png }] } })
     const parent = await mkdtemp(join(tmpdir(), 'nodeterm-portable-'))
     try {
       const destination = join(parent, 'imported')
       const imported = await importPortableProjectV3(exported.bytes, { destination })
       expect(imported.stagedPath).toBe(destination)
-      expect(await readFile(join(destination, '.nodeterm', 'assets', 'media', id + '.png'))).toEqual(Buffer.from(png))
+      expect(await readFile(join(destination, 'assets', 'media', id + '.png'))).toEqual(Buffer.from(png))
       const plain = await exportPortableProjectV3(project, { historyBundle: Buffer.from('history') })
       const entries = openContainer(plain.bytes, { maxArchiveBytes: 512 * 1024 * 1024, maxTotalBytes: 2 * 1024 * 1024 * 1024, maxEntryBytes: 2 * 1024 * 1024 * 1024, maxEntries: 60000 })
       const orphanPath = 'assets/media/' + id + '.png'
-      const payload = [...entries.entries()].filter(([name]) => name !== 'manifest.json').map(([name, data]) => ({ path: name, data, required: name === 'project.json' || name === 'history.bundle', compressedBytes: Math.min(data.length, deflateRawSync(data).length) }))
-      payload.push({ path: orphanPath, data: Buffer.from(png), required: false, compressedBytes: Math.min(png.length, deflateRawSync(png).length) })
+      const payload = [...entries.entries()].filter(([name]) => name !== 'manifest.json').map(([name, data]) => ({ path: name, data, required: name === 'project.json' || name === 'history.bundle', compressedBytes: data.byteLength }))
+      const orphanBytes = Buffer.alloc(2048, 0x41)
+      payload.push({ path: orphanPath, data: orphanBytes, required: false, compressedBytes: orphanBytes.byteLength })
       const manifest = await createPortableProjectV3Manifest({ name: project.name, color: project.color }, payload)
       const orphan = packContainer([
         { path: 'manifest.json', data: Buffer.from(JSON.stringify(manifest) + '\n') },

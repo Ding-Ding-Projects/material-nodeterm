@@ -255,6 +255,22 @@ function defaultStatus(id: string, record?: PersistedVm): VirtualMachineStatus {
   }
 }
 
+/** Recovered with cancel(): the rewritten stop() stopped using it and the helper went with it.
+ *  SIGTERM, then SIGKILL after STOP_TIMEOUT_MS, resolving once either lands. */
+async function terminateChild(child: ChildProcess, timeoutMs = STOP_TIMEOUT_MS): Promise<void> {
+  if (child.exitCode !== null) return
+  await new Promise<void>((resolve) => {
+    let done = false
+    const finish = (): void => { if (done) return; done = true; clearTimeout(timer); resolve() }
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      setTimeout(finish, 250)
+    }, timeoutMs)
+    child.once('exit', finish)
+    child.kill('SIGTERM')
+  })
+}
+
 export class VirtualMachineManager {
   private readonly running = new Map<string, RunningVm>()
   private readonly listeners = new Set<(event: VirtualMachineEvent) => void>()

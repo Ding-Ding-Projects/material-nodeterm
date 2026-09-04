@@ -87,6 +87,13 @@ export function stampCreationEvent(node: CanvasNode, creationEventId: string): C
  * and any project-specific parent conversion. This keeps the registry typed and the renderer
  * factories independent from the server and portable projection.
  */
+const MAX_CREATION_EVENT_ID = 200
+
+function isValidCreationEventId(value: string): boolean {
+  return typeof value === 'string' && value.length > 0 && value.length <= MAX_CREATION_EVENT_ID &&
+    ![...value].some((char) => (char.codePointAt(0) ?? 0) <= 0x1f)
+}
+
 export class NodeCreationCoordinator {
   private readonly consumed = new Map<string, string>()
 
@@ -96,6 +103,11 @@ export class NodeCreationCoordinator {
     factory: CatalogNodeFactory,
     parentInto?: (node: CanvasNode, groupId: string) => CanvasNode
   ): NodeCreationResult {
+    // A caller-supplied retry id is persisted into project.json and kept in the ledger for the
+    // life of the session, so it is bounded here rather than after it has already been stamped.
+    if (request.creationEventId !== undefined && !isValidCreationEventId(request.creationEventId)) {
+      return { node: null, creationEventId: newCreationEventId(), duplicate: false, error: 'The supplied creation event id is invalid.' }
+    }
     const creationEventId = request.creationEventId ?? newCreationEventId()
     const knownNodeId = this.consumed.get(creationEventId)
     const knownNode = existing.find((node) => node.id === knownNodeId || node.data.creationEventId === creationEventId)

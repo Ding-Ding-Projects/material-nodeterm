@@ -3,8 +3,8 @@ import {
   MAX_MULTIVERSE_DEPTH,
   UniverseShopCoordinator,
   createShopAtUniverseCreation,
+  createFromUniverseShopCatalog,
   createSpecialUniverseCanvas,
-  UniverseCanvasStore,
   repairUniverseShops,
   shopMutationDecision,
   shopNodeIdForCanvas
@@ -13,7 +13,7 @@ import type { PortableCanvasProjectionV3 } from './portable-canvas-projection'
 
 function projection(overrides: Partial<PortableCanvasProjectionV3> = {}): PortableCanvasProjectionV3 {
   return {
-    format: 'nodeterm-project',
+    format: 'nodeterm-portable-project',
     schemaVersion: 3,
     project: { name: 'p', color: '#ffffff' },
     rootCanvasId: 'root',
@@ -71,18 +71,17 @@ describe('universe Shop contract', () => {
     })
     const refused = coordinator.applyPeer(valid, { eventId: 'peer-1', nodeId: 'shop-mv', operation: 'remove' })
     expect(refused.refused).toBe(true)
-    const malformed = coordinator.applyPeer(valid, { eventId: 'peer-2', nodeId: 'shop-mv', operation: 'upsert', canvasId: 'mv', node: { kind: 'shop', id: 'shop-mv', universeCanvasId: 'other', universeScope: 'multiverse', universeDepth: 1, nonDeletable: true, creationEventId: 'evt-2' } })
-    expect(malformed.refused).toBe(true)
+    // A duplicate of a Shop is refused on the peer path exactly as a local mutation is.
+    const duplicated = coordinator.applyPeer(valid, { eventId: 'peer-2', nodeId: 'shop-mv', operation: 'duplicate' })
+    expect(duplicated.refused).toBe(true)
+    const ordinary = coordinator.applyPeer(valid, { eventId: 'peer-3', nodeId: 'sticky-1', operation: 'move' })
+    expect(ordinary.refused).toBe(false)
   })
 
-  it('atomically appends a child canvas and exactly one Shop to the owning collection', () => {
-    const store = new UniverseCanvasStore({ canvases: [{ id: 'root', scope: 'root', title: 'Root', order: 0, nodeIds: [] }], nodes: [] })
-    const created = store.createChild({ id: 'mv', scope: 'multiverse', parentCanvasId: 'root', title: 'MV', order: 1 }, 'evt-child')
-    expect(created.refused).toBe(false)
-    expect(store.canvas('mv')?.nodeIds).toEqual([created.shop?.id])
-    expect(store.nodesForCanvas('mv')).toHaveLength(1)
-    expect(store.nodesForCanvas('mv')[0].kind).toBe('shop')
-    expect(store.deleteChild('mv')).toMatchObject({ removed: true, refused: false })
-    expect(store.canvas('mv')).toBeUndefined()
+
+  it('refuses a malformed universe depth instead of creating into an invented universe', () => {
+    const refused = createFromUniverseShopCatalog({ canvasId: 'mv', scope: 'multiverse', depth: MAX_MULTIVERSE_DEPTH + 1, entryId: 'terminal', creationEventId: 'evt-depth' })
+    expect(refused).toMatchObject({ created: false, refused: true })
+    expect(refused.reason).toContain('depth')
   })
 })

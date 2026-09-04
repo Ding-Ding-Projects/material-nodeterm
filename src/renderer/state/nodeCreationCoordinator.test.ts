@@ -22,7 +22,5 @@ describe('node creation coordinator contract', () => {
     expect(bad.result.error).toContain('invalid')
     const occupied = [node('a', 0, 0)]
     expect(collisionFreePosition(occupied, node('b'), { x: 0, y: 0 })).not.toEqual({ x: 0, y: 0 })
-    const invalidDepth = coordinator.append([], { entry: {} as never, creationEventId: 'evt-depth', universeCanvasId: 'mv', universeScope: 'multiverse', universeDepth: 9 }, () => node('depth'))
-    expect(invalidDepth.result.error).toContain('universe scope')
   })
 })
