@@ -296,7 +296,7 @@ function pagesProject(value: unknown): CloudflarePageProject {
     productionBranch: boundedString(item?.production_branch ?? item?.productionBranch, 256),
     deploymentCount: numberOrNull(item?.deployment_count ?? item?.deploymentCount),
     createdAt: dateOrNull(item?.created_on ?? item?.createdAt),
-    latestDeploymentId: id(item?.latest_deployment?.id ?? item?.latestDeploymentId)
+    latestDeploymentId: id((item?.latest_deployment as Record<string, unknown> | null | undefined)?.id ?? item?.latestDeploymentId)
   }
 }
 

@@ -79,10 +79,6 @@ export type PushNotificationInput = Omit<
   /** Defaults to `fact` so existing host/provider errors stay verbatim unless a producer opts into
    * authored copy explicitly. */
   bodyKind?: NotificationBodyKind
-  target?: NotificationTarget
-  dedupeKey?: string
-  /** Coalescing window for repeated events. Defaults to ten seconds when a key is supplied. */
-  dedupeWindowMs?: number
 }
 
 interface NotificationsState {
@@ -101,66 +97,6 @@ interface NotificationsState {
   clearAll(): void
 }
 
-function safeTarget(value: unknown): NotificationTarget | undefined {
-  if (!value || typeof value !== 'object') return undefined
-  const target = value as Partial<NotificationTarget>
-  if (typeof target.nodeId !== 'string' || !/^[A-Za-z0-9._-]{1,200}$/.test(target.nodeId)) return undefined
-  if (target.projectId !== undefined && (typeof target.projectId !== 'string' || !/^[A-Za-z0-9._-]{1,200}$/.test(target.projectId))) {
-    return undefined
-  }
-  return target.projectId ? { nodeId: target.nodeId, projectId: target.projectId } : { nodeId: target.nodeId }
-}
-
-function loadPersistedNotifications(): AppNotification[] {
-  if (typeof localStorage === 'undefined') return []
-  try {
-    const parsed = JSON.parse(localStorage.getItem(NOTIFICATION_STORAGE_KEY) ?? '[]') as unknown
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .filter((value): value is Partial<AppNotification> => !!value && typeof value === 'object')
-      .map((value) => {
-        const kind = value.kind
-        const title = typeof value.title === 'string' ? value.title : ''
-        const body = value.body === undefined ? undefined : typeof value.body === 'string' ? value.body : undefined
-        if (!['info', 'success', 'progress', 'warning', 'error'].includes(String(kind)) || !title || title.length > 500) return null
-        if (body !== undefined && body.length > 4000) return null
-        if (typeof value.id !== 'string' || !/^[A-Za-z0-9._-]{1,200}$/.test(value.id)) return null
-        if (typeof value.createdAt !== 'number' || !Number.isFinite(value.createdAt)) return null
-        const dismissedAt = value.dismissedAt === null || value.dismissedAt === undefined || (typeof value.dismissedAt === 'number' && Number.isFinite(value.dismissedAt))
-          ? value.dismissedAt ?? null
-          : null
-        const target = safeTarget(value.target)
-        const dedupeKey = value.dedupeKey === undefined ? undefined : typeof value.dedupeKey === 'string' && value.dedupeKey.length <= 400 ? value.dedupeKey : undefined
-        return {
-          id: value.id,
-          kind: kind as NotificationKind,
-          title,
-          body,
-          createdAt: value.createdAt,
-          dismissedAt,
-          read: value.read === true,
-          autoDismissMs: value.autoDismissMs === null || (typeof value.autoDismissMs === 'number' && Number.isFinite(value.autoDismissMs)) ? value.autoDismissMs : null,
-          deliveredSilently: value.deliveredSilently === true,
-          target,
-          dedupeKey
-        } satisfies AppNotification
-      })
-      .filter((value): value is AppNotification => value !== null)
-      .slice(-NOTIFICATION_STORAGE_CAP)
-  } catch {
-    return []
-  }
-}
-
-function persistNotifications(items: AppNotification[]): void {
-  if (typeof localStorage === 'undefined') return
-  try {
-    const serializable = items.slice(-NOTIFICATION_STORAGE_CAP).map(({ actions: _actions, ...item }) => item)
-    localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(serializable))
-  } catch {
-    // Storage can be unavailable or full. The in-memory centre remains usable in that case.
-  }
-}
 
 /** Errors and warnings persist until dismissed; everything else times out on a sensible
  *  schedule that scales gently with how much there is to read. */

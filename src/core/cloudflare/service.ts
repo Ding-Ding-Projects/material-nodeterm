@@ -59,16 +59,20 @@ function targetOf(mutation: CloudflareMutation): CloudflareResourceTarget {
   }
 }
 
-function validateTarget(target: CloudflareResourceTarget): CloudflareResourceTarget {
+// Generic over the caller's own narrowed target shape (e.g. Extract<CloudflareResourceTarget,
+// { manager: 'access' }>) so a call site that already knows its manager kind gets that same
+// narrow kind back, rather than being widened to the full CloudflareResourceTarget union. The
+// switch below still only ever builds an object matching target.manager, so the cast is safe.
+function validateTarget<T extends CloudflareResourceTarget>(target: T): T {
   const account = accountId(target.accountId)
   switch (target.manager) {
-    case 'access': return { manager: 'access', accountId: account, applicationId: nonEmpty(target.applicationId, 'application id', 256) }
-    case 'zero-trust': return { manager: 'zero-trust', accountId: account, ruleId: nonEmpty(target.ruleId, 'rule id', 256) }
-    case 'workers': return { manager: 'workers', accountId: account, scriptName: nonEmpty(target.scriptName, 'script name', 256) }
-    case 'pages': return { manager: 'pages', accountId: account, projectName: nonEmpty(target.projectName, 'Pages project name', 256) }
-    case 'r2': return { manager: 'r2', accountId: account, bucketName: nonEmpty(target.bucketName, 'bucket name', 256) }
-    case 'd1': return { manager: 'd1', accountId: account, databaseId: nonEmpty(target.databaseId, 'database id', 256) }
-    case 'queues': return { manager: 'queues', accountId: account, queueName: nonEmpty(target.queueName, 'queue name', 256) }
+    case 'access': return { manager: 'access', accountId: account, applicationId: nonEmpty(target.applicationId, 'application id', 256) } as T
+    case 'zero-trust': return { manager: 'zero-trust', accountId: account, ruleId: nonEmpty(target.ruleId, 'rule id', 256) } as T
+    case 'workers': return { manager: 'workers', accountId: account, scriptName: nonEmpty(target.scriptName, 'script name', 256) } as T
+    case 'pages': return { manager: 'pages', accountId: account, projectName: nonEmpty(target.projectName, 'Pages project name', 256) } as T
+    case 'r2': return { manager: 'r2', accountId: account, bucketName: nonEmpty(target.bucketName, 'bucket name', 256) } as T
+    case 'd1': return { manager: 'd1', accountId: account, databaseId: nonEmpty(target.databaseId, 'database id', 256) } as T
+    case 'queues': return { manager: 'queues', accountId: account, queueName: nonEmpty(target.queueName, 'queue name', 256) } as T
   }
 }
 
@@ -109,7 +113,10 @@ function safeWorkerSource(value: unknown): string {
   return value
 }
 
-function validateMutation(mutation: CloudflareMutation): CloudflareMutation {
+// Generic over the caller's own narrowed mutation shape (e.g. CloudflareDestructiveMutation)
+// for the same reason as validateTarget above: preview()/mutate() pass a subtype and need
+// that subtype back, not the full CloudflareMutation union.
+function validateMutation<T extends CloudflareMutation>(mutation: T): T {
   if (!mutation || typeof mutation !== 'object') throw new CloudflareClientError('Invalid Cloudflare mutation.', 'invalid-request')
   if ('accountId' in mutation) accountId(mutation.accountId)
   else validateTarget(mutation.target)
@@ -118,17 +125,17 @@ function validateMutation(mutation: CloudflareMutation): CloudflareMutation {
       if (mutation.action === 'create-application') {
         return { ...mutation, accountId: accountId(mutation.accountId), input: {
           name: nonEmpty(mutation.input.name, 'application name'), domain: safeDomain(mutation.input.domain), type: mutation.input.type
-        } }
+        } } as T
       }
-      if (mutation.action === 'delete-application') return { ...mutation, target: validateTarget(mutation.target) }
+      if (mutation.action === 'delete-application') return { ...mutation, target: validateTarget(mutation.target) } as T
       break
     case 'zero-trust':
       if (mutation.action === 'create-gateway-rule') {
         return { ...mutation, accountId: accountId(mutation.accountId), input: {
           name: nonEmpty(mutation.input.name, 'rule name'), action: mutation.input.action, expression: safeExpression(mutation.input.expression)
-        } }
+        } } as T
       }
-      if (mutation.action === 'delete-gateway-rule') return { ...mutation, target: validateTarget(mutation.target) }
+      if (mutation.action === 'delete-gateway-rule') return { ...mutation, target: validateTarget(mutation.target) } as T
       break
     case 'workers':
       if (mutation.action === 'deploy-script') {
@@ -139,31 +146,31 @@ function validateMutation(mutation: CloudflareMutation): CloudflareMutation {
         return { ...mutation, accountId: accountId(mutation.accountId), input: {
           scriptName: nonEmpty(mutation.input.scriptName, 'script name'), source: safeWorkerSource(mutation.input.source),
           ...(compatibilityDate ? { compatibilityDate } : {})
-        } }
+        } } as T
       }
-      if (mutation.action === 'delete-script') return { ...mutation, target: validateTarget(mutation.target) }
+      if (mutation.action === 'delete-script') return { ...mutation, target: validateTarget(mutation.target) } as T
       break
     case 'pages':
       if (mutation.action === 'create-project') return { ...mutation, accountId: accountId(mutation.accountId), input: {
         name: nonEmpty(mutation.input.name, 'Pages project name'), productionBranch: nonEmpty(mutation.input.productionBranch, 'production branch')
-      } }
-      if (mutation.action === 'delete-project') return { ...mutation, target: validateTarget(mutation.target) }
+      } } as T
+      if (mutation.action === 'delete-project') return { ...mutation, target: validateTarget(mutation.target) } as T
       break
     case 'r2':
       if (mutation.action === 'create-bucket') return { ...mutation, accountId: accountId(mutation.accountId), input: {
         name: nonEmpty(mutation.input.name, 'bucket name'), ...(mutation.input.locationHint ? { locationHint: nonEmpty(mutation.input.locationHint, 'location hint', 128) } : {})
-      } }
-      if (mutation.action === 'delete-bucket') return { ...mutation, target: validateTarget(mutation.target) }
+      } } as T
+      if (mutation.action === 'delete-bucket') return { ...mutation, target: validateTarget(mutation.target) } as T
       break
     case 'd1':
       if (mutation.action === 'create-database') return { ...mutation, accountId: accountId(mutation.accountId), input: {
         name: nonEmpty(mutation.input.name, 'database name'), ...(mutation.input.primaryLocationHint ? { primaryLocationHint: nonEmpty(mutation.input.primaryLocationHint, 'primary location hint', 128) } : {})
-      } }
-      if (mutation.action === 'delete-database') return { ...mutation, target: validateTarget(mutation.target) }
+      } } as T
+      if (mutation.action === 'delete-database') return { ...mutation, target: validateTarget(mutation.target) } as T
       break
     case 'queues':
-      if (mutation.action === 'create-queue') return { ...mutation, accountId: accountId(mutation.accountId), input: { queueName: nonEmpty(mutation.input.queueName, 'queue name') } }
-      if (mutation.action === 'delete-queue') return { ...mutation, target: validateTarget(mutation.target) }
+      if (mutation.action === 'create-queue') return { ...mutation, accountId: accountId(mutation.accountId), input: { queueName: nonEmpty(mutation.input.queueName, 'queue name') } } as T
+      if (mutation.action === 'delete-queue') return { ...mutation, target: validateTarget(mutation.target) } as T
       break
   }
   throw new CloudflareClientError('The Cloudflare mutation is not registered.', 'invalid-request')

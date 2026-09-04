@@ -5,11 +5,11 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import {
   CDK_MAX_ASSET_BYTES,
   CDK_MAX_ASSETS,
-  CDK_MAX_OUTPUT_BYTES,
+  CDK_LEGACY_MAX_OUTPUT_BYTES,
   CDK_MAX_SCAN_FILES,
   CDK_TOOLKIT_VERSION,
   isCdkReviewedChange,
-  type CdkApi,
+  type CdkLegacyApi,
   type CdkAsset,
   type CdkCommandResult,
   type CdkDependencyStatus,
@@ -17,8 +17,8 @@ import {
   type CdkEvent,
   type CdkLanguage,
   type CdkOperation,
-  type CdkStatus,
-  type CdkTrustReview
+  type CdkLegacyStatus,
+  type CdkLegacyTrustReview
 } from '../../shared/cdk'
 
 const UNSAFE_APP = /[;&|><`$\r\n]/
@@ -43,17 +43,17 @@ export interface CdkManagerOptions {
 
 interface ProjectSnapshot {
   detected: CdkDetectedProject
-  trust: CdkTrustReview
+  trust: CdkLegacyTrustReview
   dependencies: CdkDependencyStatus
 }
 
 function trimOutput(state: { text: string; bytes: number; truncated: boolean }, chunk: Buffer | string): void {
   const value = Buffer.from(chunk)
-  if (state.bytes >= CDK_MAX_OUTPUT_BYTES) {
+  if (state.bytes >= CDK_LEGACY_MAX_OUTPUT_BYTES) {
     state.truncated = true
     return
   }
-  const remaining = CDK_MAX_OUTPUT_BYTES - state.bytes
+  const remaining = CDK_LEGACY_MAX_OUTPUT_BYTES - state.bytes
   state.text += value.subarray(0, remaining).toString('utf8')
   state.bytes += Math.min(value.length, remaining)
   if (value.length > remaining) state.truncated = true
@@ -156,7 +156,7 @@ async function inspectProject(folder: string, now: () => number): Promise<Projec
   if (!manifestFiles.some((f) => path.basename(f) === 'package.json' || path.basename(f) === 'requirements.txt' || path.basename(f) === 'pom.xml' || path.basename(f).endsWith('.csproj'))) {
     findings.push('No supported application dependency manifest was found.')
   }
-  const reviewedFiles: CdkTrustReview['files'] = []
+  const reviewedFiles: CdkLegacyTrustReview['files'] = []
   for (const name of manifestFiles.slice(0, CDK_MAX_SCAN_FILES)) {
     try {
       const bytes = await readFile(path.join(folder, name))
@@ -167,7 +167,7 @@ async function inspectProject(folder: string, now: () => number): Promise<Projec
     }
   }
   const fingerprint = createHash('sha256').update(JSON.stringify({ folder, entrypoint, files: reviewedFiles, findings })).digest('hex')
-  const trust: CdkTrustReview = { folder, fingerprint, files: reviewedFiles, findings, safe: findings.length === 0, reviewedAt: now() }
+  const trust: CdkLegacyTrustReview = { folder, fingerprint, files: reviewedFiles, findings, safe: findings.length === 0, reviewedAt: now() }
   const runtimeName = dialect.environment === 'node' ? 'node' : dialect.environment
   const runtimeVersion = dialect.environment === 'node' ? process.version : null
   const runtimeVerified = dialect.environment === 'node'
@@ -204,10 +204,10 @@ async function scanAssets(folder: string): Promise<CdkAsset[]> {
   return found
 }
 
-export class CdkManager implements CdkApi {
+export class CdkManager implements CdkLegacyApi {
   private readonly now: () => number
   private readonly spawnFn: typeof spawn
-  private readonly states = new Map<string, CdkStatus>()
+  private readonly states = new Map<string, CdkLegacyStatus>()
   private readonly listeners = new Set<(event: CdkEvent) => void>()
   private readonly children = new Map<string, ChildProcess>()
   private readonly cancelRequested = new Set<string>()
@@ -217,28 +217,28 @@ export class CdkManager implements CdkApi {
     this.spawnFn = opts.spawnFn ?? spawn
   }
 
-  private emit(folder: string, status: CdkStatus, operation?: CdkOperation): void {
+  private emit(folder: string, status: CdkLegacyStatus, operation?: CdkOperation): void {
     this.states.set(folder, status)
     const event: CdkEvent = { kind: 'status', status, ...(operation ? { operation } : {}) }
     for (const listener of this.listeners) listener(event)
   }
 
-  async inspect(folder: string): Promise<CdkStatus> {
-    const current: CdkStatus = { phase: 'inspecting', folder, detected: null, trust: null, dependencies: null, lastResult: null, updatedAt: this.now() }
+  async inspect(folder: string): Promise<CdkLegacyStatus> {
+    const current: CdkLegacyStatus = { phase: 'inspecting', folder, detected: null, trust: null, dependencies: null, lastResult: null, updatedAt: this.now() }
     this.emit(folder, current)
     try {
       const snapshot = await inspectProject(folder, this.now)
-      const status: CdkStatus = { phase: snapshot.trust.safe ? 'ready' : 'error', folder, detected: snapshot.detected, trust: snapshot.trust, dependencies: snapshot.dependencies, lastResult: null, updatedAt: this.now() }
+      const status: CdkLegacyStatus = { phase: snapshot.trust.safe ? 'ready' : 'error', folder, detected: snapshot.detected, trust: snapshot.trust, dependencies: snapshot.dependencies, lastResult: null, updatedAt: this.now() }
       this.emit(folder, status)
       return status
     } catch (error) {
-      const status: CdkStatus = { ...current, phase: 'error', lastResult: { operation: 'synth', ok: false, exitCode: null, output: '', truncated: false, durationMs: 0, assets: [], error: error instanceof Error ? error.message : String(error) }, updatedAt: this.now() }
+      const status: CdkLegacyStatus = { ...current, phase: 'error', lastResult: { operation: 'synth', ok: false, exitCode: null, output: '', truncated: false, durationMs: 0, assets: [], error: error instanceof Error ? error.message : String(error) }, updatedAt: this.now() }
       this.emit(folder, status)
       return status
     }
   }
 
-  async status(folder?: string): Promise<CdkStatus> {
+  async status(folder?: string): Promise<CdkLegacyStatus> {
     if (folder && this.states.has(folder)) return this.states.get(folder)!
     if (folder) return this.inspect(folder)
     return { phase: 'unconfigured', folder: null, detected: null, trust: null, dependencies: null, lastResult: null, updatedAt: this.now() }
@@ -251,10 +251,10 @@ export class CdkManager implements CdkApi {
     return this.run(folder, 'bootstrap', ['install', '--save-dev', `aws-cdk@${CDK_TOOLKIT_VERSION}`, '--ignore-scripts'])
   }
 
-  synth(folder: string, review: Parameters<CdkApi['synth']>[1]): Promise<CdkCommandResult> { return this.runReviewed(folder, 'synth', review, ['synth', '--no-color']) }
-  diff(folder: string, review: Parameters<CdkApi['diff']>[1]): Promise<CdkCommandResult> { return this.runReviewed(folder, 'diff', review, ['diff', '--no-color']) }
-  deploy(folder: string, review: Parameters<CdkApi['deploy']>[1]): Promise<CdkCommandResult> { return this.runReviewed(folder, 'deploy', review, ['deploy', '--require-approval', 'never', '--no-color']) }
-  destroy(folder: string, review: Parameters<CdkApi['destroy']>[1]): Promise<CdkCommandResult> { return this.runReviewed(folder, 'destroy', review, ['destroy', '--force', '--no-color']) }
+  synth(folder: string, review: Parameters<CdkLegacyApi['synth']>[1]): Promise<CdkCommandResult> { return this.runReviewed(folder, 'synth', review, ['synth', '--no-color']) }
+  diff(folder: string, review: Parameters<CdkLegacyApi['diff']>[1]): Promise<CdkCommandResult> { return this.runReviewed(folder, 'diff', review, ['diff', '--no-color']) }
+  deploy(folder: string, review: Parameters<CdkLegacyApi['deploy']>[1]): Promise<CdkCommandResult> { return this.runReviewed(folder, 'deploy', review, ['deploy', '--require-approval', 'never', '--no-color']) }
+  destroy(folder: string, review: Parameters<CdkLegacyApi['destroy']>[1]): Promise<CdkCommandResult> { return this.runReviewed(folder, 'destroy', review, ['destroy', '--force', '--no-color']) }
   async cancel(folder: string): Promise<boolean> {
     const child = this.children.get(folder)
     if (!child) return false
@@ -263,7 +263,7 @@ export class CdkManager implements CdkApi {
     return true
   }
 
-  private async runReviewed(folder: string, operation: Exclude<CdkOperation, 'bootstrap'>, review: Parameters<CdkApi['synth']>[1], args: string[]): Promise<CdkCommandResult> {
+  private async runReviewed(folder: string, operation: Exclude<CdkOperation, 'bootstrap'>, review: Parameters<CdkLegacyApi['synth']>[1], args: string[]): Promise<CdkCommandResult> {
     const status = await this.inspect(folder)
     if (!isCdkReviewedChange(review) || review.folder !== folder || review.operation !== operation || !status.trust || review.trustFingerprint !== status.trust.fingerprint || !status.trust.safe) {
       return { operation, ok: false, exitCode: null, output: '', truncated: false, durationMs: 0, assets: [], error: 'This operation needs a current, acknowledged trust review for the selected project.' }
@@ -274,7 +274,7 @@ export class CdkManager implements CdkApi {
   private async run(folder: string, operation: CdkOperation, args: string[]): Promise<CdkCommandResult> {
     const started = this.now()
     const status = this.states.get(folder)
-    const activePhase: Record<CdkOperation, CdkStatus['phase']> = {
+    const activePhase: Record<CdkOperation, CdkLegacyStatus['phase']> = {
       bootstrap: 'bootstrapping',
       synth: 'synthesizing',
       diff: 'diffing',
@@ -312,7 +312,7 @@ export class CdkManager implements CdkApi {
       })
     })
     const latest = operation === 'bootstrap' && result.ok ? await inspectProject(folder, this.now).catch(() => null) : null
-    const next: CdkStatus = {
+    const next: CdkLegacyStatus = {
       ...(this.states.get(folder) ?? { phase: 'ready', folder, detected: null, trust: null, dependencies: null, lastResult: null, updatedAt: this.now() }),
       ...(latest ? { detected: latest.detected, trust: latest.trust, dependencies: latest.dependencies } : {}),
       phase: result.ok ? 'completed' : 'error',

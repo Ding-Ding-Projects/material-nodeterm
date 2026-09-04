@@ -4,7 +4,7 @@ import { join, basename } from 'node:path'
 import { spawn } from 'node:child_process'
 import { platform } from '../platform'
 import type {
-  AwsApi as AwsLegacyIdentityManagerApi,
+  AwsLegacyIdentityManagerApi,
   AwsAssumeRoleInput,
   AwsAssumeRoleResult,
   AwsCallerIdentity,

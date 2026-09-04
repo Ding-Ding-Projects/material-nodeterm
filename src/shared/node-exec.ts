@@ -281,7 +281,7 @@ export function safeCloudflareTunnelLocalBinding(value: unknown): CloudflareTunn
   if (typeof raw.port !== 'number' || !Number.isInteger(raw.port) || raw.port < 1 || raw.port > 65535) return undefined
   if (typeof raw.originUrl !== 'string' || !/^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/.test(raw.originUrl)) return undefined
   const out: CloudflareTunnelLocalBinding = {
-    accountId: raw.accountId, zoneId: raw.zoneId, hostId: raw.hostId, targetId: raw.targetId,
+    accountId: raw.accountId as string, zoneId: raw.zoneId as string, hostId: raw.hostId as string, targetId: raw.targetId as string,
     port: raw.port, originUrl: raw.originUrl
   }
   for (const key of ['tunnelId', 'dnsRecordId', 'connectorContainerId', 'tokenFilePath'] as const) {

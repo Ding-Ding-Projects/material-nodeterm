@@ -5,7 +5,7 @@
 // (Canvas.tsx). The Server Edition has no renderer holding a canvas — it derives the whole map
 // from persisted project files instead (src/server/context-link.ts). Same rules either way, so
 // they belong in one place rather than two that drift.
-import type { CanvasNodeState, ContextLinkInfo, ContextLinkMap, Link } from './types'
+import type { BridgeLink, CanvasNodeState, ContextLinkInfo, ContextLinkMap, Link } from './types'
 
 /**
  * Return only local node-to-node context links. Branch endpoints and cross-project endpoints do
@@ -85,13 +85,33 @@ export function buildLinkMap(
  * running inside.
  */
 export function buildBackgroundLinkMaps(
-  projects: Array<{ id: string; nodes: CanvasNodeState[]; links?: Link[] }>,
+  projects: Array<{ id: string; nodes: CanvasNodeState[]; bridges?: BridgeLink[]; links?: Link[] }>,
   activeProjectId: string | null,
   sessionIdOf: (nodeId: string) => string | undefined,
   agentIdOf?: (nodeId: string) => string | undefined,
   onlyProjectId?: string
 ): ContextLinkMap {
   const map: ContextLinkMap = {}
+  const allNodes = new Map<string, CanvasNodeState>()
+  for (const project of projects) {
+    for (const node of project.nodes) if (!allNodes.has(node.id)) allNodes.set(node.id, node)
+  }
+  const infoFor = (id: string): LinkNodeInfo | undefined => {
+    const node = allNodes.get(id)
+    if (!node) return undefined
+    const sticky = node.kind === 'sticky'
+    const agentId = sticky ? undefined : (node.agentId ?? agentIdOf?.(id))
+    return {
+      id,
+      title: node.title || id,
+      cwd: node.cwd ?? '',
+      note: sticky ? (node.text ?? '') : undefined,
+      sticky,
+      agentId,
+      sessionId: agentId ? (sessionIdOf(id) ?? node.agentSessionId) : undefined,
+      accountId: sticky ? undefined : node.accountId
+    }
+  }
   for (const p of projects) {
     if (p.id === activeProjectId || !p.links?.length) continue
     const byId = new Map(p.nodes.map((n) => [n.id, n]))

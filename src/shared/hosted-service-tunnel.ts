@@ -193,7 +193,7 @@ export function validateHostedServiceTunnelBinding(value: unknown): HostedServic
   } else if (raw.origin && typeof raw.origin === 'object' && !Array.isArray(raw.origin)) {
     const candidate = raw.origin as Record<string, unknown>
     if ((candidate.scheme === 'http' || candidate.scheme === 'https') && typeof candidate.hostname === 'string' && typeof candidate.path === 'string' && (candidate.port === undefined || typeof candidate.port === 'number')) {
-      origin = parseHostedServiceOrigin(formatHostedServiceOrigin(candidate as HostedServiceOrigin))
+      origin = parseHostedServiceOrigin(formatHostedServiceOrigin(candidate as unknown as HostedServiceOrigin))
     }
   }
   if (!boundedId(raw.accountId) || !boundedId(raw.zoneId) || !validateHostedServiceHostname(raw.hostname) || !origin) return null

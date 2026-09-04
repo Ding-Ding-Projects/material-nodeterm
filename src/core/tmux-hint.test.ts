@@ -74,7 +74,9 @@ describe('tmuxCandidatePaths / findFixedTmux', () => {
   })
 
   it('treats a throwing existsSync as "not here" rather than failing the whole probe', () => {
+    const seen: string[] = []
     const exists = (p: string): boolean => {
+      seen.push(p)
       if (p === '/opt/homebrew/bin/tmux') throw new Error('EPERM')
       return p === '/usr/bin/tmux'
     }

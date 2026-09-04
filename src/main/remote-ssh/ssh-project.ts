@@ -65,7 +65,9 @@ import { remoteAtomicWrite } from '../remote-atomic-write'
 import {
   OAuthCallbackRegistry,
   OAUTH_CALLBACK_TTL_MS,
-  type OAuthCallbackArmInput
+  type OAuthCallbackArmInput,
+  type OAuthCallbackArmResult,
+  type OAuthCallbackCompleteResult
 } from '../../core/oauth-callback'
 import { buildCodexLauncherScript } from '../../core/codex-identity-proxy'
 import {
@@ -437,13 +439,13 @@ export class SshProjectManager {
   private conns = new Map<string, Conn>()
   private remoteHooks: RemoteHooks
   /** One temporary local callback forward per project. Callback URLs never enter this map. */
-  private oauthForwards = new Map<string, OAuthForward>()
+  private oauthProjectForwards = new Map<string, OAuthForward>()
   /** Projects whose agent-status mirror was actually pushed, gates the disconnect cleanup so a
    *  transient folder-picker browse (never pushed) doesn't pay an extra rm round-trip. */
   private statusPushed = new Set<string>()
   /** Temporary local forwards keyed by their one-use ticket. No callback URL or auth code is
    * retained here; expiry only tears down the SSH mapping and registry entry. */
-  private oauthForwards = new Map<
+  private oauthCallbackForwards = new Map<
     string,
     { projectId: string; port: number; conn: SshConnection; controlPath: string; timer: ReturnType<typeof setTimeout> }
   >()
@@ -1301,7 +1303,7 @@ export class SshProjectManager {
       void this.cancelOAuthCallback(armed.ticket)
     }, OAUTH_CALLBACK_TTL_MS)
     timer.unref?.()
-    this.oauthForwards.set(armed.ticket, {
+    this.oauthCallbackForwards.set(armed.ticket, {
       projectId,
       port: armed.redirectPort,
       conn: c.conn,
@@ -1319,17 +1321,17 @@ export class SshProjectManager {
   }
 
   async cancelOAuthCallback(ticket: string): Promise<boolean> {
-    const forward = this.oauthForwards.get(ticket)
+    const forward = this.oauthCallbackForwards.get(ticket)
     const registryCancelled = this.oauthCallbacks.cancel(ticket)
     if (!forward) return registryCancelled
     clearTimeout(forward.timer)
-    this.oauthForwards.delete(ticket)
+    this.oauthCallbackForwards.delete(ticket)
     await this.r.run(oauthForwardCancelArgs(forward.conn, forward.controlPath, forward.port)).catch(() => {})
     return true
   }
 
   private cancelOAuthCallbacksForProject(projectId: string): void {
-    for (const [ticket, forward] of this.oauthForwards) {
+    for (const [ticket, forward] of this.oauthCallbackForwards) {
       if (forward.projectId === projectId) void this.cancelOAuthCallback(ticket)
     }
     this.oauthCallbacks.cancelForProject(projectId)
@@ -1347,11 +1349,11 @@ export class SshProjectManager {
     if (!isRemoteOAuthPort(port)) return { ok: false, error: 'The OAuth callback port is invalid.' }
     const connection = this.conns.get(projectId)
     if (!connection) return { ok: false, error: 'The SSH project is not connected.' }
-    const current = this.oauthForwards.get(projectId)
+    const current = this.oauthProjectForwards.get(projectId)
     if (current?.port === port && current.expiresAt > Date.now()) {
       return { ok: true, port, expiresAt: current.expiresAt }
     }
-    if (current) await this.cancelOAuthCallback(projectId, current.port)
+    if (current) await this.cancelOAuthForward(projectId, current.port)
     let result: { code: number }
     try {
       result = await this.r.run(oauthForwardArgs(connection.conn, connection.controlPath, port))
@@ -1361,19 +1363,19 @@ export class SshProjectManager {
     if (result.code !== 0) return { ok: false, error: 'The SSH callback forward was refused.' }
     const expiresAt = Date.now() + REMOTE_OAUTH_TTL_MS
     const timer = setTimeout(() => {
-      void this.cancelOAuthCallback(projectId, port)
+      void this.cancelOAuthForward(projectId, port)
     }, REMOTE_OAUTH_TTL_MS)
     timer.unref?.()
-    this.oauthForwards.set(projectId, { port, expiresAt, timer })
+    this.oauthProjectForwards.set(projectId, { port, expiresAt, timer })
     return { ok: true, port, expiresAt }
   }
 
   /** Cancel a project's exact OAuth forward, normally after consent or its bounded expiry. */
-  async cancelOAuthCallback(projectId: string, expectedPort?: number): Promise<boolean> {
-    const current = this.oauthForwards.get(projectId)
+  async cancelOAuthForward(projectId: string, expectedPort?: number): Promise<boolean> {
+    const current = this.oauthProjectForwards.get(projectId)
     if (!current || (expectedPort !== undefined && current.port !== expectedPort)) return false
     clearTimeout(current.timer)
-    this.oauthForwards.delete(projectId)
+    this.oauthProjectForwards.delete(projectId)
     const connection = this.conns.get(projectId)
     if (!connection) return false
     try {
@@ -2257,7 +2259,7 @@ export class SshProjectManager {
     this.cancelOAuthCallbacksForProject(projectId)
     const c = this.conns.get(projectId)
     if (!c) {
-      await this.cancelOAuthCallback(projectId)
+      await this.cancelOAuthForward(projectId)
       // No registered master, but an attempt may still be in flight for this id, inside
       // connectOnce's pre-registration probes. Dropping its coalescing entry is what cancels
       // it: connectOnce re-checks its ticket before registering the master. Returning without
@@ -2278,7 +2280,7 @@ export class SshProjectManager {
     }
     // Cancel the temporary OAuth forward while the ControlMaster is still alive. The callback URL
     // itself never enters the manager; only this validated port is retained for teardown.
-    await this.cancelOAuthCallback(projectId)
+    await this.cancelOAuthForward(projectId)
     // Cancel the reverse hook tunnel (over the still-live master) BEFORE tearing the master down.
     await this.remoteHooks.teardown(projectId, c.conn, c.controlPath)
     void this.r.run(exitMasterArgs(c.conn, c.controlPath))
@@ -2318,8 +2320,10 @@ export class SshProjectManager {
    */
   disconnectAll(): void {
     this.stopWatchdog()
-    for (const forward of this.oauthForwards.values()) clearTimeout(forward.timer)
-    this.oauthForwards.clear()
+    for (const forward of this.oauthProjectForwards.values()) clearTimeout(forward.timer)
+    this.oauthProjectForwards.clear()
+    for (const forward of this.oauthCallbackForwards.values()) clearTimeout(forward.timer)
+    this.oauthCallbackForwards.clear()
     for (const projectId of [...this.conns.keys()]) {
       const c = this.conns.get(projectId)
       if (!c) continue
@@ -2641,7 +2645,7 @@ export function initSshProject(
     mgr.forwardOAuthCallback(projectId, port)
   )
   ipcMain.handle(IPC.sshOAuthForwardCancel, (_e, projectId: string, port?: number) =>
-    mgr.cancelOAuthCallback(projectId, port)
+    mgr.cancelOAuthForward(projectId, port)
   )
   // A VideoNode in an SSH project plays a HOST file: pull it into the local media cache over the
   // ControlMaster, allowlist the cached copy, and hand back its nt-media:// URL.

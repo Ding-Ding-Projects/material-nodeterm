@@ -10,7 +10,6 @@ import type {
   PairingDoneResult,
   Project,
   ProjectArchiveProgress,
-  ProjectArchiveExportOptions,
   PortableBindingState,
   PtyCreateOptions,
   LogRecord,
@@ -24,6 +23,7 @@ import type {
   Workspace,
   WorkspaceMigrationKind
 } from '../shared/types'
+import type { CloudflaredRuntimeStatus } from '../shared/cloudflared'
 import type { NativeCopyProjection } from '../shared/native-copy-projection'
 import type { ScheduledSettingsActiveState, ScheduledSettingsFile } from '../shared/scheduled-settings'
 import type { PlannerFile, PlannerLoadState, PlannerOccurrence } from '../shared/planner-occurrences'
@@ -121,7 +121,6 @@ const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
 const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC.nodeDependencyState)
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
-const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
 const subscribeCloudflareCoreProgress = subscribe<[CloudflareProgress]>(IPC.cloudflareCoreProgress)
 const subscribeCloudflareTunnelState = subscribe<[TunnelLiveState & { nodeId: string }]>(IPC.cloudflareCoreTunnelStateChanged)
@@ -200,8 +199,6 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.ptyTerminateForeground, persistKey, expectedAgentId),
     correctTeamLeadPaneWidth: (persistKey) =>
       ipcRenderer.invoke(IPC.ptyCorrectTeamPaneWidth, persistKey),
-    terminateForeground: (persistKey, expectedAgentId) =>
-      ipcRenderer.invoke(IPC.ptyTerminateForeground, persistKey, expectedAgentId),
     readSessionName: (sessionId, accountId, agentId) =>
       ipcRenderer.invoke(IPC.ptyReadSessionName, sessionId, accountId, agentId),
     onData: (sessionId, listener) => {
@@ -1203,13 +1200,6 @@ const api: NodeTerminalApi = {
     setLinks: (map) => ipcRenderer.invoke(IPC.contextLinkSetLinks, map),
     info: () => ipcRenderer.invoke(IPC.contextLinkInfo)
   },
-  agent: {
-    envSnapshot: () => ipcRenderer.invoke(IPC.agentEnvSnapshot),
-    discoverModels: (settings) => ipcRenderer.invoke(IPC.agentDiscoverModels, settings),
-    gatewayCredentialStatus: () => ipcRenderer.invoke(IPC.agentGatewayCredentialStatus),
-    saveGatewayCredential: (key) => ipcRenderer.invoke(IPC.agentSaveGatewayCredential, key),
-    clearGatewayCredential: () => ipcRenderer.invoke(IPC.agentClearGatewayCredential)
-  },
   boardLog: {
     append: (projectId, entry) => ipcRenderer.invoke(IPC.boardLogAppend, projectId, entry),
     saveAttachment: (projectId, upload) => ipcRenderer.invoke(IPC.boardLogSaveAttachment, projectId, upload),
@@ -1217,7 +1207,6 @@ const api: NodeTerminalApi = {
     removeAttachments: (projectId, sessionId, ids) => ipcRenderer.invoke(IPC.boardLogRemoveAttachments, projectId, sessionId, ids),
     readAttachment: (projectId, attachment) => ipcRenderer.invoke(IPC.boardLogReadAttachment, projectId, attachment),
     read: (projectId, opts) => ipcRenderer.invoke(IPC.boardLogRead, projectId, opts),
-    readAttachment: (projectId, attachment) => ipcRenderer.invoke(IPC.boardLogReadAttachment, projectId, attachment),
     readRaw: (projectId) => ipcRenderer.invoke(IPC.boardLogReadRaw, projectId),
     onChanged: (projectId, cb) => {
       const ch = IPC.boardLogChanged(projectId)
@@ -1371,22 +1360,6 @@ const api: NodeTerminalApi = {
     catalog: () => ipcRenderer.invoke(IPC.awsWizardCatalog),
     commands: (serviceId) => ipcRenderer.invoke(IPC.awsWizardCommands, serviceId),
     source: (serviceId, commandName) => ipcRenderer.invoke(IPC.awsWizardSource, serviceId, commandName)
-  },
-  advancedMedia: {
-    catalog: () => ipcRenderer.invoke(IPC.advancedMediaCatalog),
-    inspect: (path) => ipcRenderer.invoke(IPC.advancedMediaInspect, path),
-    enqueue: (request) => ipcRenderer.invoke(IPC.advancedMediaEnqueue, request),
-    state: (offset, limit) => ipcRenderer.invoke(IPC.advancedMediaState, offset, limit),
-    start: () => ipcRenderer.invoke(IPC.advancedMediaStart),
-    pause: () => ipcRenderer.invoke(IPC.advancedMediaPause),
-    cancel: (id) => ipcRenderer.invoke(IPC.advancedMediaCancel, id),
-    retry: (id) => ipcRenderer.invoke(IPC.advancedMediaRetry, id),
-    remove: (id) => ipcRenderer.invoke(IPC.advancedMediaRemove, id),
-    onProgress: (listener) => {
-      const handler = (_event: unknown, payload: Parameters<typeof listener>[0]) => listener(payload)
-      ipcRenderer.on(IPC.advancedMediaProgress, handler)
-      return () => ipcRenderer.removeListener(IPC.advancedMediaProgress, handler)
-    }
   },
   ollama: {
     status: () => ipcRenderer.invoke(IPC.ollamaStatus),
@@ -1649,10 +1622,7 @@ const api: NodeTerminalApi = {
     ipcRenderer.on(IPC.browserControlResolve, handler)
     return () => ipcRenderer.removeListener(IPC.browserControlResolve, handler)
   },
-  sendBrowserControlResolveResult: (payload) => ipcRenderer.send(IPC.browserControlResolveResult, payload),
-  agentMessage: {
-    deliver: (req) => ipcRenderer.invoke(IPC.agentMessageDeliver, req)
-  }
+  sendBrowserControlResolveResult: (payload) => ipcRenderer.send(IPC.browserControlResolveResult, payload)
 }
 
 contextBridge.exposeInMainWorld('nodeTerminal', api)

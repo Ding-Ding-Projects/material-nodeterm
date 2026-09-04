@@ -37,6 +37,7 @@ import {
   writeFileSync
 } from 'fs'
 import path from 'path'
+import { homedir } from 'os'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { platform } from './platform'
 import { renameAtomicSync, tempNameFor } from './fs-atomic'

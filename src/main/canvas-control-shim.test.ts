@@ -807,13 +807,16 @@ describe.skipIf(process.platform === 'win32')('codex-sandbox self-diagnosis (iss
     deadSock = path.join(dir, 'nobody-listens.sock')
   })
 
-  const sandboxEnv = (extra: Record<string, string> = {}): Record<string, string> => ({
-    PATH: process.env.PATH ?? '',
-    NODETERM_HOOK_PORT: '',
-    NODETERM_HOOK_SOCK: deadSock,
-    CODEX_SANDBOX_NETWORK_DISABLED: '1',
-    ...extra
-  })
+  const sandboxEnv = (platformOrExtra: string | Record<string, string> = {}): Record<string, string> => {
+    const extra = typeof platformOrExtra === 'string' ? { NODETERM_TEST_UNAME: platformOrExtra } : platformOrExtra
+    return {
+      PATH: process.env.PATH ?? '',
+      NODETERM_HOOK_PORT: '',
+      NODETERM_HOOK_SOCK: deadSock,
+      CODEX_SANDBOX_NETWORK_DISABLED: '1',
+      ...extra
+    }
+  }
 
   it('under the sandbox, a dead socket names the sandbox and the escalated retry — not "unreachable"', async () => {
     await expect(callShim(['list'], sandboxEnv())).rejects.toMatchObject({

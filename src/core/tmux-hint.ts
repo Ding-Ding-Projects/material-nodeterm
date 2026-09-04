@@ -2,7 +2,6 @@
 // package manager. A Windows host uses psmux when WinGet is available.
 import { execCandidates } from './exec-path'
 
-import { execCandidates } from './exec-path'
 
 export interface TmuxInstallHint {
   command: string

@@ -94,37 +94,6 @@ export function isExecutable(candidate: string): boolean {
   }
 }
 
-/**
- * Candidate executable spellings for one PATH directory. Windows resolves extensionless commands
- * through PATHEXT, while POSIX keeps the command name unchanged.
- */
-const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD'
-
-/** Return the executable spellings to try for one PATH entry. */
-export function execCandidates(
-  bin: string,
-  plat: NodeJS.Platform | string = os.platform(),
-  pathext: string | undefined = process.env.PATHEXT
-): string[] {
-  if (plat !== 'win32') return [bin]
-  if (path.extname(bin)) return [bin]
-  return (pathext || DEFAULT_PATHEXT)
-    .split(';')
-    .map((ext) => ext.trim())
-    .filter((ext) => ext.startsWith('.') && ext.length > 1)
-    .map((ext) => `${bin}${ext}`)
-}
-
-/** One shared accessibility predicate for executable discovery. */
-export function isExecutable(candidate: string): boolean {
-  try {
-    fs.accessSync(candidate, fs.constants.X_OK)
-    return true
-  } catch {
-    return false
-  }
-}
-
 /** Walk a PATH string for an executable — sync but SUBPROCESS-FREE (one accessSync per entry),
  *  so it is safe on the main thread. Returns the first accessible match, or null. */
 export function findInPathString(bin: string, pathStr: string | null | undefined): string | null {

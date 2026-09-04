@@ -327,3 +327,125 @@ export interface CloudflareApi {
   preview(mutation: CloudflareDestructiveMutation): Promise<CloudflareMutationPreview>
   mutate(mutation: CloudflareMutation, confirmation?: CloudflareMutationConfirmation): Promise<CloudflareMutationResult>
 }
+
+/**
+ * Recovered from the "feat(integrations): add Cloudflare manager" lineage (e0ef7faff), which the
+ * merge that produced this file dropped in favour of the generic Zero Trust CloudflareApi above.
+ * `src/core/cloudflare/manager.ts`, `catalog.ts`, `token-vault.ts`, and
+ * `src/renderer/components/cloudflare/CloudflareManagerPanel.tsx` still reference this exact
+ * vocabulary, so it is restored verbatim rather than reinvented.
+ *
+ * A handful of names from that same lineage — CloudflareApi, CloudflarePage, CloudflareAccount,
+ * CloudflareZone, CloudflareDnsRecord, CloudflareErrorInfo, CloudflareMutationPreview — are NOT
+ * restored here because they collide, under the identical name, with a DIFFERENT shape already
+ * kept above (the Zero Trust generic manager) and/or with a third shape from
+ * "feat(remote): add Cloudflare tunnel settings" (e9476a5b9, which CloudflareSection.tsx still
+ * needs for CloudflareConfigurationPreview/CloudflareDnsAdoptionPreview/CloudflareTunnelInventory).
+ * Resolving those collisions requires a maintainer decision about which manager owns the name;
+ * see the accompanying report rather than guessing at a merged shape here.
+ */
+
+export const CLOUDFLARE_MANAGER_TABS = ['accounts', 'zones', 'dns', 'ssl-tls', 'rulesets', 'redirects', 'cache', 'analytics'] as const
+
+export type CloudflareManagerTab = (typeof CLOUDFLARE_MANAGER_TABS)[number]
+
+export type CloudflareApiErrorCode =
+  | 'not-configured'
+  | 'invalid-token'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'rate-limited'
+  | 'unreachable'
+  | 'invalid-response'
+  | 'not-found'
+  | 'validation'
+
+export type CloudflareTokenStatus = { present: boolean; storage: 'encrypted' | 'restricted-file' | 'unavailable' }
+
+export interface CloudflareTokenPermissions {
+  valid: boolean
+  status: string | null
+  checkedAt: number
+  capabilities: string[]
+}
+
+export interface CloudflareSslTlsSetting {
+  id: string
+  value: string
+  editable: boolean
+  modifiedOn: string | null
+}
+
+export interface CloudflareSslTlsUpdateInput {
+  settingId: 'tls_1_0' | 'tls_1_1' | 'min_tls_version' | 'opportunistic_encryption' | 'automatic_https_rewrites' | 'always_use_https'
+  value: string | boolean
+}
+
+export interface CloudflareRuleset {
+  id: string
+  name: string
+  description: string | null
+  kind: string
+  phase: string
+  state: string
+  rules: Array<{ id: string; action: string; expression: string; enabled: boolean; description: string | null }>
+}
+
+export interface CloudflareRulesetInput {
+  name: string
+  description?: string
+  phase: 'http_request_firewall_custom' | 'http_request_transform' | 'http_request_redirect' | 'http_ratelimit'
+  rules: Array<{ action: 'block' | 'js_challenge' | 'managed_challenge' | 'skip' | 'rewrite' | 'redirect'; expression: string; enabled?: boolean; description?: string }>
+}
+
+export interface CloudflareRedirectRule {
+  id: string
+  expression: string
+  target: string
+  statusCode: 301 | 302
+  preserveQueryString: boolean
+  enabled: boolean
+}
+
+export interface CloudflareRedirectRuleInput {
+  expression: string
+  target: string
+  statusCode: 301 | 302
+  preserveQueryString?: boolean
+  enabled?: boolean
+}
+
+export interface CloudflareCachePurgePreview {
+  zoneId: string
+  scope: 'everything' | 'urls'
+  urls: string[]
+  destructive: true
+  summary: string
+}
+
+export interface CloudflareAnalyticsPoint {
+  timestamp: string
+  requests: number
+  bandwidthBytes: number
+  threats: number
+  cachedRequests: number
+}
+
+export interface CloudflareAnalytics {
+  zoneId: string
+  since: string
+  until: string
+  points: CloudflareAnalyticsPoint[]
+  truncated: boolean
+}
+
+export interface CloudflareDnsRecordInput {
+  type: 'A' | 'AAAA' | 'CNAME' | 'TXT' | 'MX' | 'NS' | 'SRV' | 'CAA'
+  name: string
+  content: string
+  ttl?: number
+  proxied?: boolean
+  priority?: number
+  comment?: string
+  tags?: string[]
+}

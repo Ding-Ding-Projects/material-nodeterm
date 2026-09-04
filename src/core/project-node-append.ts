@@ -108,8 +108,9 @@ export function appendProjectNode(
   const agentId = typeof input.agentId === 'string' ? input.agentId : undefined
   const bound = boundAccountId(input.accountId, agentId)
   const agent = agentId !== undefined ? agentConfig(agentId) : undefined
-  const accountColor =
-    bound && typeof input.accountColor === 'string' ? input.accountColor.trim() || undefined : undefined
+  const resolvedAccountColor =
+    accountColor ??
+    (bound && typeof input.accountColor === 'string' ? input.accountColor.trim() || undefined : undefined)
   const node: Record<string, unknown> = {
     id: input.id,
     kind: 'terminal',
@@ -120,7 +121,7 @@ export function appendProjectNode(
         ? input.title.slice(0, TITLE_MAX)
         : (agent?.label ?? 'Mobile session'),
     titleAuto: true,
-    color: accountColor ?? agent?.color ?? '#7aa2f7',
+    color: resolvedAccountColor ?? agent?.color ?? '#7aa2f7',
     group: null,
     tags: [],
     collapsed: false,

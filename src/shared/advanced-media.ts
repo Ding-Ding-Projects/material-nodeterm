@@ -173,6 +173,7 @@ function bundled(
     outputFormats,
     bundled: true,
     available: true,
+    lossy: false,
     limits: { ...ADVANCED_MEDIA_DEFAULT_LIMITS },
     ...extra
   }

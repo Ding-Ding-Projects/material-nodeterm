@@ -215,7 +215,6 @@ import {
   createdAgentHarnessId,
   createdAgentId,
   capabilityAgentId,
-  createdAgentHarnessId,
   hasPermissionMode,
   reportsOwnCopy,
   resumeCommand,
@@ -276,10 +275,6 @@ import { uuid } from '../lib/uuid'
 import { runPendingLaunchOnce } from '../lib/pendingLaunch'
 import { coldAgentLaunchIntent } from '../terminal/agent-launch-intent'
 import { executePendingLaunchForSession } from '../terminal/pending-launch-executor'
-import { focusNode } from './focus-handler'
-import { assembleResumeCommand } from '@shared/agents/launch'
-import { normalizedAgentModel } from '@shared/agents/model-gateway'
-import { agentEnvSnapshot } from '../lib/agentEnv'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { NodeIconView } from '../components/NodeIcon'
 import { nodeIconDialog } from '../components/NodeIconPicker'
@@ -1735,6 +1730,7 @@ export function TerminalNode({
   const searchLabel = claudeTranscript ? 'Search terminal + conversation' : 'Search this terminal'
   // The header 💬 now opens the board-log comments flyout (right side); ⌘M keeps the markdown/chat view.
   const [commentsOpen, setCommentsOpen] = useState(false)
+  const [linksOpen, setLinksOpen] = useState(false)
   const canRenameNode = !!agentHarnessId && canRename(agentHarnessId) // WRITE leg: push `/rename <name>` back
   // READ leg: adopt the agent's own session name into the title. A superset of canRenameNode —
   // gemini names its own sessions but has no rename command, so it polls and never pushes.

@@ -267,13 +267,13 @@ export function validateHostedBackupManifest(value: unknown): HostedBackupManife
     if (seen.has(resource.resourceId)) throw new HostedBackupContractError('duplicate-resource', `Duplicate backup resource: ${resource.resourceId}`)
     const foldedId = resource.resourceId.toLocaleLowerCase('en-US')
     if (folded.has(foldedId)) throw new HostedBackupContractError('duplicate-resource', `Case-conflicting backup resource: ${resource.resourceId}`)
-    if (resource.rawBytes < 0 || resource.rawBytes > HOSTED_BACKUP_LIMITS.maxResourceBytes || resource.compressedBytes < 0) {
+    if ((resource.rawBytes as number) < 0 || (resource.rawBytes as number) > HOSTED_BACKUP_LIMITS.maxResourceBytes || (resource.compressedBytes as number) < 0) {
       throw new HostedBackupContractError('limit', `Backup resource exceeds the supported size: ${resource.resourceId}`)
     }
     seen.add(resource.resourceId)
     folded.add(foldedId)
-    raw += resource.rawBytes
-    compressed += resource.compressedBytes
+    raw += resource.rawBytes as number
+    compressed += resource.compressedBytes as number
     if (compressed > HOSTED_BACKUP_LIMITS.maxCompressedBytes) throw new HostedBackupContractError('limit', 'Backup compressed bytes exceed the supported limit.')
     if (raw > HOSTED_BACKUP_LIMITS.maxRawBytes) throw new HostedBackupContractError('limit', 'Backup raw bytes exceed the supported limit.')
   }
@@ -294,7 +294,7 @@ export function validateHostedBackupManifest(value: unknown): HostedBackupManife
   if (raw !== value.rawBytes || compressed !== value.compressedBytes) {
     throw new HostedBackupContractError('manifest', 'Backup byte totals do not match resource metadata.')
   }
-  return value as HostedBackupManifest
+  return value as unknown as HostedBackupManifest
 }
 
 /** Check ownership, service release, edition, and each resource before restore mutation. */

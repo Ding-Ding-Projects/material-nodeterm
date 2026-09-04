@@ -6,7 +6,7 @@ import { acceptNewInboundNode, carryLocalNodeExec, sanitizeInboundNode } from '.
 import { REF_MAX_LEN } from './presence'
 import { canCreateInUniverse, isAwsShopNode, isNonDeletableCanvasNode } from './aws-shop'
 import { canCreateAwsCatalogEntry } from './aws-catalog'
-import type { BridgeLink, CanvasEdgeKind, CanvasMutation, CanvasNodeState } from './types'
+import type { BridgeLink, CanvasEdgeKind, CanvasMutation, CanvasNodeState, Link } from './types'
 
 /**
  * A canvas as the publisher sees it: the nodes React Flow manages, plus the two PERSISTED edge
@@ -239,6 +239,7 @@ export function applyCanvasMutation(
   // every caller here is applying something that came off the wire, and a silent no-op is the only
   // safe reading of "this list is not what that mutation is about".
   if (isEdgeMutation(m)) return states
+  if (isLinkMutation(m)) return states
   if (m.op === 'remove') {
     // A peer may remove ordinary nodes, but the deterministic Shop belongs to its universe and
     // must survive every mirrored remove. Import/hydration repair remains the recovery path when a

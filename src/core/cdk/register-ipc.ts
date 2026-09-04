@@ -1,5 +1,5 @@
 import { IPC } from '../../shared/ipc'
-import type { CdkApi, CdkReviewedChange } from '../../shared/cdk'
+import type { CdkLegacyApi, CdkReviewedChange } from '../../shared/cdk'
 import type { CorePlatform } from '../platform'
 import { CdkManager } from './manager'
 
@@ -17,4 +17,4 @@ export function registerCdkIpc(platform: CorePlatform): CdkManager {
   return manager
 }
 
-export type RegisteredCdkApi = Pick<CdkApi, 'inspect' | 'status' | 'bootstrap' | 'synth' | 'diff' | 'deploy' | 'destroy'>
+export type RegisteredCdkApi = Pick<CdkLegacyApi, 'inspect' | 'status' | 'bootstrap' | 'synth' | 'diff' | 'deploy' | 'destroy'>

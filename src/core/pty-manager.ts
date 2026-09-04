@@ -97,7 +97,7 @@ import { codexLauncherDir, forgetCodexThreadIdentitiesForNode, installCodexLaunc
 import { ensureNodeToken, ensureRemoteNodeToken, sweepNodeToken } from './agents/node-token-service'
 import { quitWouldLoseWork } from './quit-risk'
 import { clearNode as clearNodeAgentStatus } from './agent-status-mirror'
-import { hasSharedIdentity, setCustomAgentBaseResolver, vanillaEnvStripPattern, type AgentId } from '../shared/agents/config'
+import { hasSharedIdentity, setCustomAgentBaseResolver, capabilityAgentId, vanillaEnvStripPattern, type AgentId } from '../shared/agents/config'
 import { findCustomAgent } from '../shared/agents/custom-agent'
 import { applyCustomAgentEnv, customAgentEnvArgs } from './custom-agent-env'
 import {
@@ -863,6 +863,12 @@ export class PtyManager {
 
   /** Literal model-gateway key loaded by the shell's secret service during startup. */
   private getModelGatewaySecret: () => string | null = () => null
+
+  /** Is `id` a managed CODEX account (never guessed from the id alphabet — see
+   *  `needsCodexAccountScope`'s doc comment for why `!!accountId` is unsafe here). */
+  private isCodexAccount(id: string): boolean {
+    return this.getSettings().codexAccounts.some((account) => account.id === id)
+  }
   /**
    * What the OWNING project contributes to a session's env + shell, or null when it contributes
    * nothing. Injected (not constructed) for the same reason `getSettings` is: core cannot see the
@@ -2682,12 +2688,12 @@ export class PtyManager {
     // (the local ssh client process doesn't need it).
     let accountFallback = false
     let accountDir =
-      effectiveAccountId && !options.sshRemote ? claudeConfigDirFor(effectiveAccountId) : null
+      options.accountId && !options.sshRemote ? claudeConfigDirFor(options.accountId) : null
     // Missing/deleted account dir (spec: error handling) → fall back to system default
     // instead of pointing claude at a dead dir; the node then behaves like an unbound one.
     // `accountFallback` is surfaced to the renderer (warning chip) via the create() result.
     if (accountDir && !fs.existsSync(accountDir)) {
-      console.warn(`[accounts] config dir missing for ${effectiveAccountId}, using system default`)
+      console.warn(`[accounts] config dir missing for ${options.accountId}, using system default`)
       accountDir = null
       accountFallback = true
     }
@@ -2791,8 +2797,7 @@ export class PtyManager {
           requestedAgentId,
           options.agentModel,
           env,
-          this.getGatewaySecret(),
-          this.gatewayModels.get(settings.modelGateway.baseUrl.trim()) ?? []
+          this.getModelGatewaySecret()
         )
       : {}
     if (!options.sshRemote) {
@@ -2801,6 +2806,7 @@ export class PtyManager {
       const mergedCustom = applyCustomAgentEnv(env, customAgent, env)
       Object.assign(env, mergedCustom.env)
     }
+
     let file: string
     let args: string[]
     // Set true only by the session-host branch below. Decides which of the two `proc =` paths
@@ -4371,15 +4377,6 @@ export class PtyManager {
       // rather than throwing, so the buffer sweep is never skipped.
       return false
     }
-  }
-
-  /**
-   * Does a live session exist for this node in THIS process right now? The messaging delivery's
-   * `targetLive` fact — deliberately not derived from an unreadable pane (see `DeliveryRequest`):
-   * only "no session is registered" may be reported as "the node is gone".
-   */
-  hasLiveSession(persistKey: string): boolean {
-    return !!this.sessionByPersistKey(persistKey)
   }
 
   /**

@@ -21,7 +21,6 @@ import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AwsWizardSpec } from '@shared/aws-wizard'
 import { defaultAwsWizardSpec } from '@shared/aws-wizard'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
-import { NEXTCLOUD_AIO_DEFAULT_PROFILE, type NextcloudAioProfile } from '@shared/nextcloud-aio'
 import {
   agentConfig,
   agentLaunchProgram,
@@ -37,7 +36,6 @@ import { assembleLaunchCommand } from '@shared/agents/launch'
 import { normalizedAgentModel, withAgentModel } from '@shared/agents/model-gateway'
 import { agentEnvSnapshot } from '@renderer/lib/agentEnv'
 import { withPermissionMode } from '@shared/agents/approval-mode'
-import { withAgentModel } from '@shared/agents/model-gateway'
 import { uuid } from '@renderer/lib/uuid'
 import {
   claudeCliCapsNow,
@@ -46,11 +44,8 @@ import {
 } from './permissionMode'
 import type { Settings } from '@shared/types'
 import { supportsSessionIdFlag } from '@shared/agents/config'
-import { resolveAgentBase } from '@shared/agents/custom-agent'
-import { assembleLaunchCommand } from '@shared/agents/launch'
 import { agentAccountColor } from '@shared/agents/account-color'
 import { boundAccountId } from '@shared/agents/account-binding'
-import { agentEnvSnapshot } from '../lib/agentEnv'
 import { projectLaunchInfoNow } from './projectLaunchInfo'
 import { isAgentEnabled, launchableDefaultAgent } from './agentAvailability'
 import { codexSharedIdentity } from './codexIdentity'
@@ -133,7 +128,6 @@ const UNIGETUI_SIZE = { width: 520, height: 360 }
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
 const ANNOTATION_SIZE = { width: 240, height: 160 }
-const TIMER_SIZE = { width: 360, height: 300 }
 /**
  * Service managers. Two shapes rather than six numbers, because the distinction that matters is how
  * much a surface has to SHOW, not which product it manages:
@@ -1603,7 +1597,6 @@ const CALENDAR_SIZE = { width: 620, height: 520 }
 const HOME_ASSISTANT_CONTROL_SIZE = { width: 620, height: 620 }
 const HOME_ASSISTANT_SENSOR_SIZE = { width: 660, height: 560 }
 const NSIS_SIZE = { width: 460, height: 520 }
-export const TORRENT_SIZE = { width: 620, height: 520 }
 
 /**
  * A view of this machine's own TOTP generators, on the canvas.

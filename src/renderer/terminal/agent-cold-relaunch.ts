@@ -78,6 +78,10 @@ export function agentColdRelaunchDecision({
   agentId,
   priorSessionId,
   customLaunchCmd,
+  customBaseAgent,
+  customAgent,
+  environment,
+  model,
   sharedIdentity = false,
   launchOverride,
   continuationPacket = false
@@ -107,13 +111,14 @@ export function agentColdRelaunchDecision({
 
   if (customAgent) {
     const launchEnvironment = environment ?? {}
+    const customOverride = launchOverride ?? undefined
     const resumed = priorSessionId
       ? assembleResumeCommand(
           {
             agentId,
             baseAgentId: customBaseAgent,
             customAgent,
-            launchCmdOverride: launchOverride,
+            launchCmdOverride: customOverride,
             sessionId: priorSessionId,
             model,
             sharedIdentity
@@ -121,19 +126,19 @@ export function agentColdRelaunchDecision({
           launchEnvironment
         )
       : null
-    if (resumed) return { reconstructable: true, command: resumed.command, continuity: 'resume' }
+    if (resumed) return { reconstructable: true, command: resumed.command, continuity: 'resume', continuationReview: false }
     const fresh = assembleLaunchCommand(
       {
         agentId,
         baseAgentId: customBaseAgent,
         customAgent,
-        launchCmdOverride: launchOverride,
+        launchCmdOverride: customOverride,
         model,
         sharedIdentity
       },
       launchEnvironment
     )
-    return { reconstructable: true, command: fresh.command, continuity: 'fresh' }
+    return { reconstructable: true, command: fresh.command, continuity: 'fresh', continuationReview: continuationPacket }
   }
 
   if (typeof customLaunchCmd !== 'string' || !customLaunchCmd.trim()) {
@@ -143,7 +148,7 @@ export function agentColdRelaunchDecision({
   const resume = priorSessionId && customBaseAgent
     ? resumeCommandWith(customLaunchCmd.trim(), customBaseAgent, priorSessionId)
     : null
-  if (resume) return { reconstructable: true, command: withAgentModel(resume, customBaseAgent, model), continuity: 'resume' }
+  if (resume) return { reconstructable: true, command: withAgentModel(resume, customBaseAgent ?? agentId, model), continuity: 'resume', continuationReview: false }
 
   return {
     reconstructable: true,

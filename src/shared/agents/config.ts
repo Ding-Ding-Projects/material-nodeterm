@@ -519,8 +519,6 @@ export function resumeCommand(
   switch (id) {
     case 'codex':
       return `${override ?? codexResumeProgram(route)} resume ${sid}`
-    case 'copilot':
-      return `${override ?? 'copilot'} --resume ${sid}`
     case 'opencode':
       return `${override ?? 'opencode'} --session ${sid}`
     case 'claude':

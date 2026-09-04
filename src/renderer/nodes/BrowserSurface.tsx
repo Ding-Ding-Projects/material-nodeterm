@@ -6,6 +6,7 @@ import { useDiscardWhenHidden, webviewAudible } from './useDiscardWhenHidden'
 import { DiscardedPlate } from './DiscardedPlate'
 import { BrowserExtensionsPanel } from './BrowserExtensionsPanel'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { validateBrowserPortalUrl, type BrowserPortalLifecycle } from '@shared/browser-portal'
 import { IconButton } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 
@@ -53,6 +54,14 @@ interface BrowserSurfaceProps {
    * nothing and keeps the plate-and-restore behavior unchanged.
    */
   onGuestDiscarded?: () => void
+  /** Portal surfaces accept only absolute HTTP(S) URLs and never fall back to search. */
+  strictHttpUrl?: boolean
+  /** Ordinary browser nodes support popups; kiosk and portal sessions can disable them. */
+  allowPopups?: boolean
+  /** Lifecycle signal used by portal chrome and status reporting. */
+  onLifecycleChange?: (state: BrowserPortalLifecycle) => void
+  /** Optional navigation validator used by kiosk sessions to keep every persisted and live URL HTTP(S). */
+  validateUrl?: (url: string) => string | null
 }
 
 /**
@@ -70,7 +79,11 @@ export function BrowserSurface({
   onUrlChange,
   onTitleChange,
   partition,
-  onGuestDiscarded
+  onGuestDiscarded,
+  strictHttpUrl = false,
+  allowPopups = true,
+  onLifecycleChange,
+  validateUrl
 }: BrowserSurfaceProps) {
   const vocab = useVocabularyMapper()
   const ref = useRef<WebviewEl | null>(null)
@@ -84,6 +97,7 @@ export function BrowserSurface({
   const [canFwd, setCanFwd] = useState(false)
   const [failed, setFailed] = useState('')
   const [failedExternal, setFailedExternal] = useState(false)
+  const failedRef = useRef(false)
   const [showExtensions, setShowExtensions] = useState(false)
   // Memory saver (see `useDiscardWhenHidden`): the page is released while hidden and rebuilt on
   // reveal. `loadingRef` mirrors the `loading` state because the hook reads it at fire time, from
@@ -208,7 +222,7 @@ export function BrowserSurface({
     // `discarded` is a dep because a discard UNMOUNTS the <webview> element (dropping `src` alone
     // would leave the guest process alive): the restored element is a different node, so the
     // listeners have to be re-attached to it.
-  }, [onUrlChange, onTitleChange, discarded, validateUrl])
+  }, [onUrlChange, onTitleChange, discarded, validateUrl, onLifecycleChange, strictHttpUrl])
 
   // Registers the guest so main can route its new-window requests. `discarded` is a dep for the
   // same reason as above — and it is what makes a discard UNREGISTER the dead wcId through this
@@ -350,7 +364,7 @@ export function BrowserSurface({
             ref={ref as unknown as React.Ref<HTMLElement>}
             src={src || undefined}
             partition={partition || undefined}
-            allowpopups={true}
+            allowpopups={allowPopups}
             style={{ width: '100%', height: '100%' }}
           />
         )}

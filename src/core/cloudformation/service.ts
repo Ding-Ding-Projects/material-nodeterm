@@ -11,15 +11,15 @@ import {
   isValidCloudFormationStackName,
   normalizeCloudFormationParameters,
   normalizeCloudFormationTags,
-  type CloudFormationApi,
+  type CloudFormationLegacyApi,
   type CloudFormationCapability,
-  type CloudFormationChange,
+  type CloudFormationLegacyChange,
   type CloudFormationChangeSet,
   type CloudFormationChangeSetInput,
   type CloudFormationCliStatus,
   type CloudFormationProfile,
   type CloudFormationStackEvent,
-  type CloudFormationStackSummary,
+  type CloudFormationLegacyStackSummary,
   type CloudFormationTemplateInfo,
   type CloudFormationWaitResult
 } from '../../shared/cloudformation'
@@ -68,7 +68,7 @@ function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string').slice(0, 100) : []
 }
 
-function stackSummary(raw: unknown): CloudFormationStackSummary {
+function stackSummary(raw: unknown): CloudFormationLegacyStackSummary {
   const v = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   return {
     stackName: safeString(v.StackName) ?? 'Unnamed stack',
@@ -96,7 +96,7 @@ function event(raw: unknown): CloudFormationStackEvent {
   }
 }
 
-function change(raw: unknown): CloudFormationChange {
+function change(raw: unknown): CloudFormationLegacyChange {
   const v = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   const resourceChange = (v.ResourceChange && typeof v.ResourceChange === 'object' ? v.ResourceChange : {}) as Record<string, unknown>
   const details = Array.isArray(resourceChange.Details)
@@ -106,11 +106,11 @@ function change(raw: unknown): CloudFormationChange {
       }).filter(Boolean)
     : []
   return {
-    action: (safeString(resourceChange.Action) as CloudFormationChange['action']) ?? 'Dynamic',
+    action: (safeString(resourceChange.Action) as CloudFormationLegacyChange['action']) ?? 'Dynamic',
     logicalResourceId: safeString(resourceChange.LogicalResourceId) ?? '',
     physicalResourceId: safeString(resourceChange.PhysicalResourceId),
     resourceType: safeString(resourceChange.ResourceType) ?? 'Unknown',
-    replacement: (safeString(resourceChange.Replacement) as CloudFormationChange['replacement']) ?? null,
+    replacement: (safeString(resourceChange.Replacement) as CloudFormationLegacyChange['replacement']) ?? null,
     details
   }
 }
@@ -142,7 +142,7 @@ function formatCapabilities(capabilities: CloudFormationCapability[]): string[] 
   return [...new Set(capabilities)].filter((c) => ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND'].includes(c))
 }
 
-export class CloudFormationService implements CloudFormationApi {
+export class CloudFormationService implements CloudFormationLegacyApi {
   private readonly executable: string
   private readonly runOverride?: CliDeps['run']
 
@@ -207,7 +207,7 @@ export class CloudFormationService implements CloudFormationApi {
     return ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'ca-central-1', 'eu-west-1', 'eu-central-1', 'ap-southeast-1', 'ap-northeast-1']
   }
 
-  async stacks(input: { profile: string; region: string; includeDeleted?: boolean }): Promise<CloudFormationStackSummary[]> {
+  async stacks(input: { profile: string; region: string; includeDeleted?: boolean }): Promise<CloudFormationLegacyStackSummary[]> {
     ensureProfileRegion(input.profile, input.region)
     const args = ['cloudformation', 'list-stacks', '--profile', input.profile, '--region', input.region]
     if (!input.includeDeleted) args.push('--stack-status-filter', 'CREATE_IN_PROGRESS', 'CREATE_FAILED', 'CREATE_COMPLETE', 'UPDATE_IN_PROGRESS', 'UPDATE_COMPLETE', 'UPDATE_FAILED', 'UPDATE_ROLLBACK_IN_PROGRESS', 'UPDATE_ROLLBACK_FAILED', 'UPDATE_ROLLBACK_COMPLETE', 'DELETE_FAILED', 'REVIEW_IN_PROGRESS')

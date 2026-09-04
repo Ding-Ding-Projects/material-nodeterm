@@ -85,7 +85,6 @@ export type ConverterKind =
 export const CONVERTER_KIND_LABELS: Record<ConverterKind, string> = {
   any: 'Any bytes',
   json: 'JSON',
-  jsonl: 'JSON Lines',
   yaml: 'YAML',
   toml: 'TOML',
   xml: 'XML',
@@ -754,6 +753,24 @@ const IMAGE_ROWS: ConverterAdapterDescriptor[] = (
       : undefined
   })
 )
+
+const ADVANCED_ARCHIVE_AND_OCR_ROWS: ConverterAdapterDescriptor[] = [
+  disabled({
+    id: 'zip-extract-bounded', category: 'archives', fromKind: 'zip', toKind: 'any',
+    label: 'ZIP → files (bounded extraction)', sourceExt: ['.zip'], targetExt: '.directory',
+    reason: 'requires the verified bundled unzipper extraction pipeline; no PATH or network tools are used'
+  }),
+  disabled({
+    id: 'zip-create-bounded', category: 'archives', fromKind: 'any', toKind: 'zip',
+    label: 'Files → ZIP (bounded archive)', sourceExt: [], targetExt: '.zip',
+    reason: 'requires the multi-file advanced pipeline surface rather than the single-output queue'
+  }),
+  disabled({
+    id: 'ocr-image-to-text', category: 'documents', fromKind: 'png', toKind: 'text',
+    label: 'Image/PDF → OCR text', sourceExt: ['.png', '.jpg', '.jpeg', '.pdf'], targetExt: '.ocr.txt',
+    reason: 'requires a verified bundled OCR engine; network OCR and arbitrary executables are refused'
+  })
+]
 
 const OCR_ROWS: ConverterAdapterDescriptor[] = (['png', 'jpeg', 'webp', 'bmp'] as ConverterKind[]).map((from) => ({
   id: `${from}-ocr-to-text`,

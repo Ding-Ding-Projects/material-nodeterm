@@ -16,6 +16,13 @@ import codexPet from '../assets/pet-codex.webp'
 import { mapLocalVocabularyText, setHostVocabularySchoolState } from '../lib/personalVocabulary/hostMessage'
 import { copy, fact, mapOwnedSentence, type DisplaySegment } from '../lib/personalVocabulary/ownedCopy'
 import { mapBuiltInAgentDisplay } from '../lib/personalVocabulary/agentLabel'
+import { useSettings } from '../state/settings'
+import { useSchoolMode } from '../state/schoolMode'
+import { usePersonalVocabulary } from '../state/personalVocabulary'
+import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
+import { applyVocabulary } from '../lib/personalVocabulary/apply'
+import { normalizeLanguageMode } from '@shared/i18n/validation'
+import { t as resolveText, formatText } from '@shared/i18n'
 
 // Local mirror of the preload's HUD contract (src/preload/hud.ts) — kept self-contained so this
 // renderer entry has no cross-project (main/preload) type dependency.
