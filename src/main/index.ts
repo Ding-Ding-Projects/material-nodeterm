@@ -331,6 +331,8 @@ import {
   remoteTranscriptRoots
 } from '../core/remote-transcript-locate'
 import { registerTranscriptIpc, resolveTranscript } from '../core/transcript-ipc'
+import { locateCodex, locateGemini } from '../core/handoff/locate'
+import { contextSourceForNode, contextPercentFromCounts } from '../shared/context-source'
 import { createRemoteContextTail } from './remote-context-tail'
 import { createRemoteSubagentTail } from './remote-subagent-tail'
 import { RemoteFile, type RemoteFileRef } from './remote-ssh/remote-file'

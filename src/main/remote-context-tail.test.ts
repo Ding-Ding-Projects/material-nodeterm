@@ -72,7 +72,7 @@ describe('createRemoteContextTail', () => {
       operation: 'enqueue',
       content: '<task-notification>\n<tool-use-id>tu-remote</tool-use-id>\n<status>completed</status>\n<result>remote done</result>\n</task-notification>'
     })
-    let served = false
+    let phase = 0
     const remoteFile = {
       readTailWithSize: vi.fn(async () => ({
         data: Buffer.from(line(10, 'claude-opus-4-8') + '\n'),

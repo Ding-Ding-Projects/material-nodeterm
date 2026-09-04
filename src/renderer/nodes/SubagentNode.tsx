@@ -19,6 +19,23 @@ function fmtTokens(n: number): string {
 }
 
 /**
+ * The collapsed contract is calculated from the children that are actually rendered. The old
+ * fixed floor was shorter than the task and metadata lines, so a resize could hide the very
+ * information that identifies a subagent. Keep the context strip and card chrome in the same
+ * arithmetic as the rendered children, with a small border/spacing allowance.
+ */
+export function subagentCollapsedHeight(hasTask: boolean, hasMeta: boolean): number {
+  const contextStrip = 54
+  const header = 34
+  const task = hasTask ? 24 : 0
+  const metadata = hasMeta ? 24 : 0
+  const bordersAndGaps = 20
+  return contextStrip + header + task + metadata + bordersAndGaps
+}
+
+export const SUBAGENT_MIN_HEIGHT = subagentCollapsedHeight(true, true)
+
+/**
  * Subagent node — a first-class canvas node (select/drag/resize) visualizing a subagent the
  * Claude session spawned. Shows type + task + live timer / duration-tokens; expand to read
  * its live transcript in a terminal-styled panel (subagents have no PTY).
@@ -31,6 +48,7 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const tokens = data.subagentTokens as number | undefined
   const toolUses = data.subagentToolUses as number | undefined
   const result = (data.subagentResult as string) || ''
+  const text = useLocalizedVocabularyText()
   // Live transcript: subscribed here per-id (not passed through Canvas's ephemeral node data)
   // so streaming chunks re-render only this card, never the whole canvas.
   const activity = useAgentNodes((s) => s.activityById[id]) || ''
@@ -59,6 +77,8 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
   ]
     .filter(Boolean)
     .join(' · ')
+
+  const collapsedHeight = subagentCollapsedHeight(!!data.title, !!meta)
 
   // The cards are `selectable: false` in React Flow (a rubber band must not sweep a fan-out
   // into the selection), so selecting one — which is what reveals its resize frame — is ours.

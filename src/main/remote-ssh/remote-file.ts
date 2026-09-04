@@ -41,6 +41,9 @@ export function tailLastBytesArgs(conn: SshConnection, controlPath: string, path
   if (!boundedReadSize(bytes)) return []
   return childArgs(conn, controlPath, `tail -c ${bytes} ${posixQuote(path)}`)
 }
+export function fileSizeArgs(conn: SshConnection, controlPath: string, path: string): string[] {
+  return childArgs(conn, controlPath, `wc -c < ${posixQuote(path)}`)
+}
 
 /** Read a bounded tail and the remote file's absolute byte length in one round trip. */
 export function tailLastBytesWithSizeArgs(

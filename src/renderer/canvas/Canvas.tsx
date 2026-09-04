@@ -780,6 +780,7 @@ import {
   applyCanvasMutation,
   applyMutationToFlow,
   COLLAPSED_HEIGHT,
+  AGENT_COLLAPSED_HEIGHT,
   alignNodes,
   arrangeNodes,
   commonParentId,
@@ -3261,6 +3262,7 @@ export function Canvas() {
               agentBaseId: n.data.agentBaseId,
               cwd: n.data.cwd,
               ssh: n.data.ssh,
+              sshRemoteTmux: n.data.sshRemoteTmux,
               parentId: n.parentId
             }))
         : null,
@@ -10693,7 +10695,9 @@ export function Canvas() {
           const next = !n.data.collapsed
           const expandedHeight =
             (n.data.expandedHeight as number) ?? n.measured?.height ?? (n.height as number) ?? 300
-          const height = next ? COLLAPSED_HEIGHT : expandedHeight
+          const height = next
+            ? (createdAgentId(n.data) ? AGENT_COLLAPSED_HEIGHT : COLLAPSED_HEIGHT)
+            : expandedHeight
           return {
             ...n,
             height,

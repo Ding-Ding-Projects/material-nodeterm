@@ -185,6 +185,7 @@ import { useWorktrees } from '../state/worktrees'
 import { useSystemAccount } from '../state/systemAccount'
 import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { isRemoteSessionNode } from '@shared/worktree'
+import { contextSourceForNode } from '@shared/context-source'
 import { useSession, useActiveSessionPresence } from '../session/session'
 import { isBrowserRuntime } from '../bridge/runtime'
 import { parseOAuthAuthorizeUrl } from '@shared/oauth-callback'
@@ -195,6 +196,7 @@ import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
 import { isNodeLockEngaged, nodeLockTeardownMode } from '@shared/toylock'
 import {
   accountChipLabel,
+  AGENT_COLLAPSED_HEIGHT,
   agentLaunchOverride,
   COLLAPSED_HEIGHT,
   NODE_COLORS,
@@ -1829,6 +1831,11 @@ export function TerminalNode({
   // The affordance is absent, not merely refused on click.
   const sshProject = useProjects((s) => !!s.projects.find((p) => p.id === s.activeProjectId)?.ssh)
   const remoteSession = sshProject || isRemoteSessionNode(data)
+  const contextSource = contextSourceForNode({
+    agentId,
+    ssh: sshConnection,
+    sshRemoteTmux: remoteSession
+  })
   // Stable ids are the only profile data the renderer may send. The optional desktop bridge is
   // also the capability check that keeps the same Windows renderer bundle inert in Server Edition.
   // A missing node snapshot is a legacy node, so it follows the current machine default on its
@@ -2289,8 +2296,8 @@ export function TerminalNode({
     sessionId: status?.sessionId,
     cwd: data.cwd as string | undefined,
     accountId: data.accountId,
-    // The transcript index reads claude's JSONL through the same resolver, so it is gated on the
-    // claude-transcript fact, NOT on the meter's `showUsage` — see lib/transcriptGates.ts.
+    // The transcript index reads Claude's JSONL through the same resolver, so it is gated on the
+    // Claude transcript fact, independently of the node context meter.
     searchTranscript: claudeTranscript,
     open: searchOpen,
     readBuffer
@@ -4942,7 +4949,9 @@ export function TerminalNode({
         const next = !n.data.collapsed
         const expandedHeight =
           (n.data.expandedHeight as number) ?? n.measured?.height ?? (n.height as number) ?? 300
-        const height = next ? COLLAPSED_HEIGHT : expandedHeight
+        const height = next
+          ? (agentId ? AGENT_COLLAPSED_HEIGHT : COLLAPSED_HEIGHT)
+          : expandedHeight
         return {
           ...n,
           height,

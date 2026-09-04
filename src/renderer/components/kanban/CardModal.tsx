@@ -135,6 +135,7 @@ export function CardModal({
   // StickyNode's toggle, so the canvas and the card can't disagree about how a note reads).
   const [editingNote, setEditingNote] = useState(false)
   const agentSessionId = useAgentStatus((st) => st.byId[session.id]?.sessionId)
+  const liveAgentId = useAgentStatus((st) => st.byId[session.id]?.agentId)
   const [naming, setNaming] = useState(false)
   // Comments & activity panel: OPEN by default in the modal; the header 💬 collapses it. The
   // choice is remembered (localStorage) — once collapsed, later cards open collapsed too.
@@ -143,6 +144,11 @@ export function CardModal({
   const [linksOpen, setLinksOpen] = useState(false)
   const isTerminal = session.kind === 'terminal'
   const isBrowser = session.kind === 'browser'
+  const contextSource = contextSourceForNode({
+    agentId: session.agentId ?? liveAgentId,
+    ssh: session.spawn.ssh,
+    sshRemoteTmux: session.spawn.sshRemoteTmux
+  })
 
   // ── Resizable / maximizable sheet (issue #389) ──────────────────────────────────────────────
   // The sheet stays CENTRED; resize is symmetric about the centre, so every edge/corner handle

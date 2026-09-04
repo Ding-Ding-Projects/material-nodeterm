@@ -2182,7 +2182,7 @@ div.mdx-row[role='menuitemradio']:focus-visible {
 }
 
 /* ---------------------------------------------------------------------------------------------
-   Context meter (ContextMeter.tsx) — compact header pill + popover. Tertiary is the meter's own
+   Context meter (ContextMeter.tsx) — top-of-node progress bar, compact status pill + popover. Tertiary is the meter's own
    fill colour per the handoff table; the fullness colour (meterColor() in the component) is now
    emitted as `var(--md-...)` strings rather than raw hex, so this file stays the sole colour
    authority for the component.
@@ -2214,6 +2214,139 @@ div.mdx-row[role='menuitemradio']:focus-visible {
 }
 .ctx-popover__sub {
   color: var(--md-on-surface-variant);
+}
+
+/* Context progress is a first-class node edge, not a header-only pill. Keeping it before the
+   header makes the provider's usage state visible on collapsed, grouped, restored, and compact
+   nodes. Unknown states keep a real track and a textual state instead of a fabricated fill. */
+.ctx-meter--top {
+  position: relative;
+  width: 100%;
+  min-height: 28px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: var(--md-surface-container-low);
+  border-bottom: 1px solid var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.ctx-meter__topline {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+}
+.ctx-meter__track {
+  position: relative;
+  flex: 0 0 96px;
+  height: 8px;
+  border-radius: var(--md-shape-full);
+  overflow: hidden;
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline-variant);
+}
+.ctx-meter__fill {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  transition: width var(--md-motion-effect);
+}
+.ctx-meter__summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.ctx-meter__topline[data-level='warning'] .ctx-meter__fill {
+  background: var(--md-warning) !important;
+}
+.ctx-meter__topline[data-level='critical'] .ctx-meter__fill {
+  background: var(--md-error) !important;
+}
+.ctx-meter--unknown .ctx-meter__track,
+.ctx-meter--not-reported .ctx-meter__track,
+.ctx-meter--unavailable .ctx-meter__track,
+.ctx-meter--stale .ctx-meter__track {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--md-surface-container-highest),
+    var(--md-surface-container-highest) 4px,
+    var(--md-surface-container-high) 4px,
+    var(--md-surface-container-high) 8px
+  );
+}
+.ctx-meter--stale .ctx-meter__summary,
+.ctx-meter--unknown .ctx-meter__summary,
+.ctx-meter--not-reported .ctx-meter__summary,
+.ctx-meter--unavailable .ctx-meter__summary {
+  color: var(--md-on-surface-variant);
+}
+.ctx-meter--top .ctx-pill {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding-inline: 8px;
+}
+.ctx-meter--top .ctx-pill:focus-visible {
+  outline: 3px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.ctx-meter--top .ctx-popover {
+  top: calc(100% + 4px);
+  right: 0;
+  left: auto;
+  width: min(320px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  max-height: min(280px, calc(100vh - 24px));
+  overflow: auto;
+  z-index: 40;
+}
+.ctx-popover--portal {
+  position: fixed;
+  z-index: 1000;
+  box-sizing: border-box;
+  width: min(320px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  max-height: min(280px, calc(100vh - 24px));
+  overflow: auto;
+}
+.ss-ctx {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.subagent-node > .ctx-meter--top {
+  width: calc(100% + 24px);
+  margin: -10px -12px 8px;
+}
+@media (max-width: 520px) {
+  .ctx-meter--top {
+    gap: 5px;
+    padding-inline: 7px;
+  }
+  .ctx-meter__track {
+    flex-basis: 56px;
+  }
+  .ctx-meter__summary {
+    font-size: 9px;
+  }
+  .ctx-meter--top .ctx-pill__model {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ctx-meter__fill {
+    transition: none;
+  }
 }
 
 /* ---------------------------------------------------------------------------------------------

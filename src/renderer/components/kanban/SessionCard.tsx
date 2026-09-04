@@ -98,6 +98,11 @@ export const SessionCard = memo(function SessionCard({
   // (see its loopSig comment) and StatusAwareMiniMap demonstrates: subscribe where the value is
   // read, so the re-render is confined to the one thing that changed.
   const status = useAgentStatus((s) => s.byId[session.id])
+  const contextSource = contextSourceForNode({
+    agentId: session.agentId ?? status?.agentId,
+    ssh: session.spawn.ssh,
+    sshRemoteTmux: session.spawn.sshRemoteTmux
+  })
   // Local drag state only styles THIS card (ghost look) — the drag payload lives in KanbanView.
   const [dragging, setDragging] = useState(false)
   // Which edge a drag is hovering over → shows the drop line (top = before, bottom = after).

@@ -31,6 +31,8 @@ function dirName(p?: string): string {
   return parts[parts.length - 1] || p
 }
 
+const compactTokens = (n: number): string => new Intl.NumberFormat('en-US').format(Math.round(n))
+
 export function SessionRow({
   row,
   stateAgeLabel,

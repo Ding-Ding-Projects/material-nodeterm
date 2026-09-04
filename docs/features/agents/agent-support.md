@@ -120,6 +120,13 @@ stores the selected model name, while the gateway credential remains in protecte
 provider variables before recreating an idle resumable node. Account-isolation variables remain in
 place. Relay sessions keep this action disabled because their environment belongs to the host.
 
+**Context-window metering** is a top-of-node progress bar on every agent card, including custom,
+resumed, grouped, minimized, and ephemeral subagent cards. Claude Code, Codex, and Gemini use
+their own local transcript telemetry and show exact used, total, remaining, and percentage values.
+Grok, OpenCode, custom agents, and subagents show an explicit `unknown`, `not reported`,
+`stale`, or `unavailable` state when no verified pair exists. See [Context-window meter](./context-window-meter.md)
+for provider sources, generation fencing, privacy, accessibility, and warning thresholds.
+
 ## Configuration
 
 - **Settings → Accounts**: account labels and optional default node colours for each managed Claude

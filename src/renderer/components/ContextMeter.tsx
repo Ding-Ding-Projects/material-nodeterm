@@ -82,6 +82,8 @@ export function ContextMeter({ sessionId, agentId, sourceKey }: ContextMeterProp
   const vocab = useLocalizedVocabularyText()
   const mapVocabulary = useVocabularyMapper()
   const [open, setOpen] = useState(false)
+  const now = useContextClock(!!usage)
+  const [popoverPosition, setPopoverPosition] = useState<{ left: number; top: number; maxHeight: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const label = useMemo(
     () => detailText(usage, status, level, vocab),
@@ -106,8 +108,18 @@ export function ContextMeter({ sessionId, agentId, sourceKey }: ContextMeterProp
     const onDown = (event: MouseEvent): void => {
       if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false)
     }
+    const onDown = (e: MouseEvent): void => {
+      if (!ref.current?.contains(e.target as Node) && !popoverRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
     window.addEventListener('mousedown', onDown)
-    return () => window.removeEventListener('mousedown', onDown)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+      window.removeEventListener('mousedown', onDown)
+    }
   }, [open])
 
   return (

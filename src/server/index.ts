@@ -515,10 +515,13 @@ export async function startServer(
   // missing/corrupt file simply yields no block.
   const installMeta = readInstallMeta(config.dataDir)
   setMirrorServerProvider(() => installMeta)
-  const { contextTail, geminiContextTail } = wireAgentStatus(platform, {
+  const { contextTail, geminiContextTail, ensureContext } = wireAgentStatus(platform, {
     onSessionEnded: (listener) => {
       ptyManager.onSessionEnded(listener)
     }
+  })
+  platform.on(IPC.contextEnsure, (sessionId?: string, cwd?: string, accountId?: string, agentId?: string, nodeId?: string) => {
+    if (sessionId) void ensureContext(sessionId, cwd, accountId, agentId, nodeId)
   })
   // The ⌘M chat view + the find-bar's transcript index. Registered HERE rather than with the rest
   // of the handlers because the hook-fed path authority is the tail created just above. No remote

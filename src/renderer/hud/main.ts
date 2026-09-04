@@ -33,6 +33,11 @@ interface HudRow {
   prompt?: string
   activity?: string
   contextPercent?: number
+  contextUsed?: number
+  contextTotal?: number
+  contextRemaining?: number
+  contextState?: 'healthy' | 'warning' | 'critical' | 'stale'
+  contextSource?: string
   subagents: HudSubagentRow[]
   /** Finished and not yet looked at — the sidebar's `unread` mark, ranked + labelled here. */
   unread: boolean
@@ -94,6 +99,26 @@ const openSubs = new Set<string>()
 // the panel closes: the cap is the glance default, and an expansion is about the panel in front of
 // you, not a preference.
 let showAllRows = false
+
+// The HUD has its own renderer entry and therefore does not pass through App's normal hydration
+// sequence. Load the already-validated local vocabulary cache before the first row is painted.
+usePersonalVocabulary.getState().hydrate()
+
+/** HUD is a plain DOM entry, so it cannot call a React hook. It still crosses the same
+ * localized and personal-vocabulary boundary as ContextMeter and SessionRow, using the live
+ * store snapshots at render time. Dynamic provider facts are appended only after this resolves. */
+function hudText(id: string, fallback: string, params?: Record<string, string>): string {
+  const settings = useSettings.getState().settings
+  const school = useSchoolMode.getState()
+  const allowed = schoolModeAllowsOptionalFeatures({ enabled: school.enabled, hydrated: school.hydrated })
+  const mode = allowed ? normalizeLanguageMode(settings.languageMode) : 'en'
+  const levels = allowed
+    ? { en: settings.funnyLevelEn, yue: settings.funnyLevelYue }
+    : { en: 1, yue: 1 }
+  const resolved = resolveText(id, fallback, mode, levels)
+  const prose = !school.hydrated || school.enabled ? resolved : applyVocabulary(resolved, usePersonalVocabulary.getState().entries)
+  return params ? formatText(prose, params) : prose
+}
 
 // ---- Interaction: click-through hotspot + expand/collapse ----------------------------------
 
@@ -468,7 +493,7 @@ function buildSubItem(s: HudSubagentRow): HTMLElement {
   const li = document.createElement('li')
   const dot = document.createElement('span')
   dot.className = `hud-subs__dot hud-subs__dot--${s.state}`
-  li.append(dot, document.createTextNode(s.label || s.state))
+  li.append(dot, document.createTextNode(s.label || hudText(`hud.state.${s.state}`, s.state)))
   return li
 }
 
@@ -519,6 +544,19 @@ function applyGeometry(push: HudPush): void {
 window.hud.onRows((push: HudPush) => {
   applyGeometry(push)
   render(push.rows ?? [])
+})
+
+// The HUD is a plain DOM entry, so subscribe explicitly to the same stores that React surfaces
+// use. A language, School-mode, or personal-vocabulary change must repaint existing rows without
+// waiting for another agent event to arrive.
+useSettings.subscribe(() => {
+  if (latestRows.length) render(latestRows)
+})
+useSchoolMode.subscribe(() => {
+  if (latestRows.length) render(latestRows)
+})
+usePersonalVocabulary.subscribe(() => {
+  if (latestRows.length) render(latestRows)
 })
 
 // Refresh reltimes every 20s even without a push.
