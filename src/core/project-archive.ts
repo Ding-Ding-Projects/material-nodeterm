@@ -458,6 +458,7 @@ export class ProjectArchiveService {
       ...(media ? { media } : {})
     })
     return { bytes: exported.bytes, contents: portableContents(exported) }
+    */
   }
 
   /** Cheap peek: which schema, and does import need a destination folder first? */

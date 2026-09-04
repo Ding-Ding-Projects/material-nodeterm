@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { OPEN_WEBUI_DEFAULT_PORT, type OpenWebUiBackupSummary, type OpenWebUiConfigureInput, type OpenWebUiStatus } from '@shared/open-webui'
+import { Radio } from '@renderer/ui/md3'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 
@@ -80,8 +81,8 @@ export function OpenWebUiPanel({ nodeId }: { nodeId: string }): React.JSX.Elemen
       </label>
       <fieldset className="open-webui-panel__providers">
         <legend>Model provider</legend>
-        <label><input type="radio" checked={provider === 'ollama'} onChange={() => setProvider('ollama')} disabled={busy} /> Reuse existing local Ollama</label>
-        <label><input type="radio" checked={provider === 'openai-compatible'} onChange={() => setProvider('openai-compatible')} disabled={busy} /> OpenAI-compatible endpoint</label>
+        <label><Radio name={`${nodeId}-openwebui-provider`} checked={provider === 'ollama'} onChange={() => setProvider('ollama')} disabled={busy} /> Reuse existing local Ollama</label>
+        <label><Radio name={`${nodeId}-openwebui-provider`} checked={provider === 'openai-compatible'} onChange={() => setProvider('openai-compatible')} disabled={busy} /> OpenAI-compatible endpoint</label>
       </fieldset>
       {provider === 'openai-compatible' && <>
         <label className="service-node__field" htmlFor={`${nodeId}-openwebui-provider-url`}><span className="service-node__field-label">Provider HTTPS address</span><input id={`${nodeId}-openwebui-provider-url`} className="service-node__input nodrag" value={providerUrl} onChange={(event) => setProviderUrl(event.target.value)} placeholder="https://provider.example/v1" disabled={busy} /></label>

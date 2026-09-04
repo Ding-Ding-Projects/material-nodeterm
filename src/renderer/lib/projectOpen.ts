@@ -3,6 +3,7 @@
 // calls and the reply — so every decision that does not need React is unit-testable here, the
 // same reasoning as controlRouting.ts / pendingLaunch.ts.
 import { oneLine } from '@shared/one-line'
+import { basenameForPathSyntax, normalizePathTail } from '@shared/path-basename'
 
 /** The little these helpers need to know about a project. */
 export interface ProjectForOpen {
@@ -18,7 +19,9 @@ export interface ProjectForOpen {
  * defense, never a second resolution.
  */
 export function normalizeProjectCwd(resolvedCwd: string): string {
-  return resolvedCwd.length > 1 ? resolvedCwd.replace(/\/+$/, '') : resolvedCwd
+  // Both dialects: a POSIX-only trim leaves a Deen No path's trailing separator in place, and
+  // `C:\foo` vs `C:\foo\` then key two projects onto one folder.
+  return normalizePathTail(resolvedCwd)
 }
 
 export function findProjectByCwd<T extends { cwd?: string }>(
@@ -135,7 +138,7 @@ export function planOpenProject(input: {
   }
   const name = oneLine(
     (requestedName ?? '').trim() ||
-      (normalizeProjectCwd(resolvedCwd).split('/').filter(Boolean).pop() || 'Project')
+      (basenameForPathSyntax(normalizeProjectCwd(resolvedCwd)) || 'Project')
   )
   return {
     kind: 'confirm',

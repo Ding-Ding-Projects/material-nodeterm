@@ -34,7 +34,6 @@ export const IPC = {
   ptyCorrectTeamPaneWidth: 'pty:correct-team-pane-width',
   /** Renderer → core: SIGTERM the non-shell foreground process group in this node's pane.
    *  Model switching uses this instead of typing an exit slash-command into an agent composer. */
-  ptyTerminateForeground: 'pty:terminate-foreground',
   ptyReadSessionName: 'pty:read-session-name',
   terminalProfilesList: 'terminal-profiles:list',
   terminalProfilesRefresh: 'terminal-profiles:refresh',
@@ -215,7 +214,6 @@ export const IPC = {
   boardLogRemoveAttachments: 'board-log:remove-attachments',
   boardLogReadAttachment: 'board-log:read-attachment',
   boardLogRead: 'board-log:read',
-  boardLogReadAttachment: 'board-log:read-attachment',
   boardLogReadRaw: 'board-log:read-raw',
   /** Fire-and-forget ref-counted subscribe/unsubscribe: the first subscriber for a project starts
    *  the local fs.watch (or the desktop-ssh 5s poll); the last one stops it. */
@@ -383,19 +381,6 @@ export const IPC = {
   providerBeginOAuth: 'provider-services:begin-oauth',
   providerCompleteOAuth: 'provider-services:complete-oauth',
   providerRemoveAccount: 'provider-services:remove-account',
-  providerAccountsSnapshot: 'provider-accounts:snapshot',
-  providerAccountsCreateProfile: 'provider-accounts:create-profile',
-  providerAccountsUpdateProfile: 'provider-accounts:update-profile',
-  providerAccountsRemoveProfile: 'provider-accounts:remove-profile',
-  providerAccountsSetCredential: 'provider-accounts:set-credential',
-  providerAccountsClearCredential: 'provider-accounts:clear-credential',
-  providerAccountsSelectProfile: 'provider-accounts:select-profile',
-  providerAccountsBind: 'provider-accounts:bind',
-  providerAccountsUnbind: 'provider-accounts:unbind',
-  providerAccountsOAuthStart: 'provider-accounts:oauth-start',
-  providerAccountsOAuthComplete: 'provider-accounts:oauth-complete',
-  providerAccountsOAuthCancel: 'provider-accounts:oauth-cancel',
-  providerAccountsChanged: 'provider-accounts:changed',
   cloudflareTunnelInventory: 'cloudflare-tunnels:inventory',
   cloudflareTunnelZones: 'cloudflare-tunnels:zones',
   cloudflareTunnelPlanRoute: 'cloudflare-tunnels:plan-route',
@@ -427,7 +412,6 @@ export const IPC = {
   /** Guided Cloudflare Tunnel manager. Secrets never travel in a result or broadcast. */
   cloudflareTokenStatus: 'cloudflare:tunnel-token-status',
   cloudflareSetToken: 'cloudflare:tunnel-set-token',
-  cloudflareAccounts: 'cloudflare:accounts',
   cloudflareZones: 'cloudflare:zones',
   cloudflareTargets: 'cloudflare:targets',
   cloudflarePreflight: 'cloudflare:tunnel-preflight',

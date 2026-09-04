@@ -35,6 +35,7 @@ import type { ProjectCapability } from '@shared/project-capabilities'
 import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
 import { markWorkspaceDirty } from './workspaceDirty'
 import { isNonDeletableCanvasNode } from '@shared/aws-shop'
+import { basenameForPathSyntax } from '@shared/path-basename'
 
 function nodeLinkFor(kind: Link['kind'], edge: BridgeLink): Link {
   return {
@@ -671,7 +672,9 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       get().reopenProject(existing.id)
       return existing
     }
-    const name = folder.split('/').filter(Boolean).pop() || 'Project'
+    // Syntax-aware: a Deen No folder has no '/', so a POSIX-only split returns the WHOLE path
+    // and the project tab ends up named 'C:\Users\...' instead of its folder.
+    const name = basenameForPathSyntax(folder) || 'Project'
     const project = get().addProject(name, folder)
     set({ activeProjectId: project.id })
     return project
@@ -1162,7 +1165,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       set((s) => ({ projects: [...s.projects, adopted] }))
       return { project: adopted, created: false, adopted: true }
     }
-    const fallbackName = cwd.split('/').filter(Boolean).pop() || 'Project'
+    const fallbackName = basenameForPathSyntax(cwd) || 'Project'
     const project = {
       ...createProject(get().projects.length, name ?? fallbackName, cwd),
       ...(color ? { color } : {})

@@ -90,7 +90,7 @@ const SETTINGS_SECTION_HOST_RENDERERS: Record<SettingsSectionId, SettingsSection
   appearance: ({ isActive }) => <AppearanceSection isActive={isActive} />,
   'appearance-editor': ({ isActive }) => <AppearanceEditorSection isActive={isActive} />,
   'app-identity': ({ isActive }) => <AppIdentitySection isActive={isActive} />,
-  notch: ({ isActive }) => <NotchSection isActive={isActive} />,
+  'agent-hud': ({ isActive }) => <AgentHudSection isActive={isActive} />,
   phone: ({ isActive }) => <PhoneSection isActive={isActive} />,
   speech: ({ isActive, onNavigate }) => (
     <SpeechSection isActive={isActive} onNavigate={onNavigate} />

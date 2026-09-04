@@ -5285,8 +5285,6 @@ export interface NodeTerminalApi {
   canvas: CanvasApi
   codex: CodexApi
   claude: ClaudeApi
-  /** Custom-agent launch/preview (env-var expansion + command assembly). */
-  agent: AgentApi
   chat: ChatApi
   claudeAccounts: ClaudeAccountsApi
   codexAccounts: CodexAccountsApi
@@ -5301,7 +5299,6 @@ export interface NodeTerminalApi {
   toylock: ToylockApi
   authenticator: AuthenticatorApi
   passwordManager: PasswordManagerApi
-  providerAccounts: ProviderAccountsApi
   /** Host-owned portal-door entry vault. This is deliberately separate from toy locks. */
   universeDoorEntry: UniverseDoorEntryApi
   /** "Escape to widget" — one node's session in its own always-on-top-configurable window. */
