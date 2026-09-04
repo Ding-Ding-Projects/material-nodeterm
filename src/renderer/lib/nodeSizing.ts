@@ -62,6 +62,20 @@ export const NODE_MIN_SIZES: Record<NodeKind, { width: number; height: number }>
   , 'linux-vm': { width: 520, height: 420 }
   , 'github-work-item': { width: 520, height: 360 }
   , converter: { width: 560, height: 380 }
+  // These ten arrived with NodeKind and this exhaustive map never followed. Each minimum mirrors
+  // the nearest existing sibling rather than inventing a number: audio follows video, the
+  // browser-family kinds follow browser, aws-shop follows shop, and the panel-shaped kinds follow
+  // trigger/shop. A minimum only has to be small enough not to fight the resizer.
+  , audio: { width: 320, height: 200 }
+  , 'aws-shop': { width: 360, height: 260 }
+  , 'aws-wizard': { width: 360, height: 260 }
+  , 'browser-portal': { width: 360, height: 240 }
+  , 'debug-browser': { width: 360, height: 240 }
+  , kiosk: { width: 360, height: 240 }
+  , portal: { width: 280, height: 200 }
+  , 'portal-door': { width: 360, height: 260 }
+  , xproject: { width: 360, height: 260 }
+  , 'aws-service': { width: 360, height: 260 }
 }
 
 export interface Rect {
