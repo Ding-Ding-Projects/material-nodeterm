@@ -1427,6 +1427,9 @@ export function Canvas() {
     if (sessionSource === 'local') void useTerminalProfiles.getState().ensureLoaded()
   }, [sessionSource])
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([])
+  const wildObservedProjectRef = useRef<string | null>(null)
+  const wildObservedNodeIdsRef = useRef<Set<string>>(new Set())
+  const wildHydrationReadyRef = useRef(false)
   // Persistent context links between Claude nodes (separate from ephemeral subagent/loop edges).
   const [linkEdges, setLinkEdges, onLinkEdgesChange] = useEdgesState<Edge>([])
   const linkEdgesRef = useRef<Edge[]>([])
@@ -2501,6 +2504,7 @@ export function Canvas() {
     () => ({
       terminal: withNodeBoundary(TerminalNode),
       sticky: withNodeBoundary(StickyNode),
+      'wild-dimsum': withNodeBoundary(WildDimSumNode),
       group: withNodeBoundary(GroupNode),
       annotation: withNodeBoundary(AnnotationNode),
       authenticator: withNodeBoundary(AuthenticatorNode),
