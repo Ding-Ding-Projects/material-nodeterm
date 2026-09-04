@@ -235,6 +235,7 @@ import {
   IconNote,
   IconConvert,
   IconOllama,
+  IconCloud,
   IconPencil,
   IconPhone,
   IconProject,
