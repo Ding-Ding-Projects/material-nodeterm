@@ -14,6 +14,7 @@ import {
 } from '@shared/annotation'
 import { IconButton, Slider } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
+import { appearanceId } from '../lib/appearance/registry'
 
 /** Arrowhead size in the node's own local px space (see AnnotationNode). */
 const ARROW_MARKER_PX = 9
@@ -115,7 +116,6 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
         <IconButton
           size="compact"
           className="annotation-node__dot"
-          aria-label="Color"
           title="Color"
           aria-label="Choose annotation color"
           onClick={(e) => {
@@ -161,7 +161,6 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
         <IconButton
           size="compact"
           className="annotation-node__variant"
-          aria-label={variant === 'arrow' ? 'Arrowhead on — click for a plain line' : 'Plain line — click to add an arrowhead'}
           title={variant === 'arrow' ? 'Arrowhead on — click for a plain line' : 'Plain line — click to add an arrowhead'}
           aria-label={variant === 'arrow' ? 'Change to line' : 'Change to arrow'}
           onClick={() =>
@@ -174,7 +173,6 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
           size="compact"
           className="annotation-node__close"
           icon="delete"
-          aria-label="Delete"
           title="Delete"
           aria-label="Delete annotation"
           onClick={() => deleteElements({ nodes: [{ id }] })}

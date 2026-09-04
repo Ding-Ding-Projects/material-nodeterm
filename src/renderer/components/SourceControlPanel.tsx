@@ -742,11 +742,6 @@ export function SourceControlPanel({
                   </IconButton>
                 </div>
               )}
-              {nestedDiscovery && !nestedDiscovery.complete && (
-                <div className="scm-warning" role="status">
-                  Nested repository discovery is incomplete. {nestedDiscovery.message || 'Some folders were not inspected.'}
-                </div>
-              )}
               {/* No proactive GitHub sign-in nag. Push/pull on an existing remote use git's
                   own credential helper (the account you're already signed into), and a brand-new
                   `git init` repo shouldn't demand a gh login before you've even committed. gh

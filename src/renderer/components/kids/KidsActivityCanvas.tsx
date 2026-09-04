@@ -12,6 +12,7 @@ import type { KidsTileKind } from './KidsHome'
 import { IconTerminal } from '@renderer/components/icons'
 import { narrateKidsScreen } from './narration'
 import { Button, IconButton, Tablist } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
 
 /** Fixed node ids: the whole point is that "Type things" always reattaches the SAME tmux/session
  *  host session (see PtyManager) — a fresh random id every visit would cold-start a new shell

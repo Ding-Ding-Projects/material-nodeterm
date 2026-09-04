@@ -24,10 +24,11 @@ function readCache(): ResolvedDimSum[] | null {
   try {
     const parsed = JSON.parse(localStorage.getItem(CACHE_KEY) ?? '') as { revision?: unknown; dishes?: PublicDish[] }
     if (typeof parsed.revision !== 'string' || !Array.isArray(parsed.dishes)) return null
+    const revision = parsed.revision
     const dishes = parsed.dishes.filter(validDish).map((d) => ({
       id: d.id, name: { en: d.name.en, zhHant: d.name.zhHant },
       image: publishedImage(typeof d.imageUrl === 'string' ? d.imageUrl : d.image),
-      revision: parsed.revision
+      revision
     }))
     return dishes.length ? dishes : null
   } catch { return null }

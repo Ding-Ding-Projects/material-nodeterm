@@ -117,8 +117,12 @@ function NamedProfileControls({
       id,
       name: name.trim(),
       shellProfileId,
+      // The two lanes that authored NamedTerminalProfile named these fields differently
+      // (`cwd`/`startupCommand` vs `startDirectory`). One editor input feeds both, so a profile
+      // written here is readable by settings-store and by the Windows validator alike.
+      cwd: startDirectory.trim(),
+      startupCommand: startupCommand.trim(),
       ...(startDirectory.trim() ? { startDirectory: startDirectory.trim() } : {}),
-      ...(startupCommand.trim() ? { startupCommand: startupCommand.trim() } : {}),
       ...(accountId ? { accountId } : {}),
       environment,
       createdAt: now,

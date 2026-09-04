@@ -6,6 +6,7 @@ import { useProjects } from '../state/projects'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { IconButton } from '@renderer/ui/md3'
+import { SessionIconGlyph } from '../components/SessionIcon'
 
 /**
  * A video player node. A local file is served over the `nt-media://` protocol (allowlisted on

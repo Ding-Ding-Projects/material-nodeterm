@@ -6225,27 +6225,34 @@ export function Canvas() {
       if (decision.reason === 'rotated') {
         notify({
           kind: 'info',
+          titleKind: 'authored',
           title: 'Claude account rotated for this new session',
-          body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`
+          body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`,
+          bodyKind: 'authored'
         })
       } else if (decision.reason === 'no-alternative') {
         notify({
           kind: 'warning',
+          titleKind: 'authored',
           title: 'No lower-usage Claude account is available',
-          body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`
+          body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`,
+          bodyKind: 'authored'
         })
       }
       if (useProjects.getState().activeProjectId !== activeProjectId) {
         notify({
           kind: 'warning',
+          titleKind: 'authored',
           title: 'New Claude session cancelled',
-          body: 'The active project changed while account usage was being checked. No node was created.'
+          body: 'The active project changed while account usage was being checked. No node was created.',
+          bodyKind: 'authored'
         })
         return
       }
       setNodes((ns) => {
         const created = createAgentNode(
           'claude',
+          bodyKind: 'authored'
           ns.length,
           // Same scope resolution as every other Source Control action (`scmCwd`): the panel's
           // active scope, an SSH project's remoteCwd, else the project's own checkout.
@@ -7138,22 +7145,28 @@ export function Canvas() {
         if (decision.reason === 'rotated') {
           notify({
             kind: 'info',
+            titleKind: 'authored',
             title: 'Claude account rotated for this new session',
-            body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`
+            body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`,
+            bodyKind: 'authored'
           })
         } else if (decision.reason === 'no-alternative') {
           notify({
             kind: 'warning',
+            titleKind: 'authored',
             title: 'No lower-usage Claude account is available',
-            body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`
+            body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`,
+            bodyKind: 'authored'
           })
         }
       }
       if (useProjects.getState().activeProjectId !== drop.projectId) {
         notify({
           kind: 'warning',
+          titleKind: 'authored',
           title: 'Agent drop cancelled',
-          body: 'The active project changed while account usage was being checked. No node was created.'
+          body: 'The active project changed while account usage was being checked. No node was created.',
+          bodyKind: 'authored'
         })
         return
       }
@@ -15544,14 +15557,18 @@ export function Canvas() {
               if (decision.reason === 'rotated') {
                 notify({
                   kind: 'info',
+                  titleKind: 'authored',
                   title: 'Claude account rotated for this new session',
-                  body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`
+                  body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`,
+                  bodyKind: 'authored'
                 })
               } else if (decision.reason === 'no-alternative') {
                 notify({
                   kind: 'warning',
+                  titleKind: 'authored',
                   title: 'No lower-usage Claude account is available',
-                  body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`
+                  body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`,
+                  bodyKind: 'authored'
                 })
               }
             }

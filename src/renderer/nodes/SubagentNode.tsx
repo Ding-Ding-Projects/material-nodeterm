@@ -7,6 +7,7 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 import { ContextMeter } from '../components/ContextMeter'
 import { contextSourceKey } from '../state/contextWindow'
 import { IconButton } from '@renderer/ui/md3'
+import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 
 function fmtDur(ms: number): string {
   const s = Math.round(ms / 1000)

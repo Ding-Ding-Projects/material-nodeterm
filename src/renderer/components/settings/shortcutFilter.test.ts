@@ -52,8 +52,7 @@ describe('shortcutRowStatus', () => {
   })
 
   it('is unassigned but NOT modified for an unbound default (canvas.fitAll)', () => {
-    expect(FIT_ALL.defaultBindings.darwin).toEqual([])
-    expect(FIT_ALL.defaultBindings.other).toEqual([])
+    expect(FIT_ALL.defaultBindings).toEqual([])
     expect(shortcutRowStatus('canvas.fitAll', {}, 0)).toEqual({
       modified: false,
       disabled: false,

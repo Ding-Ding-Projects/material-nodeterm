@@ -11,6 +11,7 @@ export function drawWildDimSumForNode(requestedNodeId: string, nodes: CanvasNode
   if (!source) return null
   const eventId = globalThis.crypto?.randomUUID?.() ?? `wild-event-${requestedNodeId}`
   const position = { x: source.position.x + (source.width ?? 360) + 32, y: source.position.y }
-  return { node: createWildDimSumNode(nodes.length, position, undefined, eventId), resolve: resolvePublicDimSumCatalog }
+  const node = createWildDimSumNode(nodes.length, undefined, position)
+  return { node: { ...node, data: { ...node.data, wildEventId: eventId } }, resolve: resolvePublicDimSumCatalog }
 }
 export function resetWildDimSumDrawsForTests(): void { drawnFor.clear() }

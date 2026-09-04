@@ -67,6 +67,7 @@ import {
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { mapBuiltinAgentLabel } from '../../lib/personalVocabulary/agentLabel'
+import type { SessionIcon } from '@shared/session-icon'
 
 /** One session node shown as a board card — derived LIVE from the canvas nodes; the board
  *  itself stores only column assignments. */

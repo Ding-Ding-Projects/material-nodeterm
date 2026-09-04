@@ -13,7 +13,7 @@ export const SAVED_LAYOUT_LIMITS = {
   maxHeight: 4_000
 } as const
 
-const finiteBounded = (value: unknown, limit = SAVED_LAYOUT_LIMITS.coordinate): value is number =>
+const finiteBounded = (value: unknown, limit: number = SAVED_LAYOUT_LIMITS.coordinate): value is number =>
   typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= limit
 
 function safeNode(node: SavedCanvasLayoutNode): SavedCanvasLayoutNode | null {

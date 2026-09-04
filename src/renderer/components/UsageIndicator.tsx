@@ -29,6 +29,7 @@ import { recordClaudeUsage } from '../lib/usageAccountRotation'
 import { Button, Chip, IconButton } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapBuiltinAgentLabel } from '../lib/personalVocabulary/agentLabel'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 
 /** Grace period before a hover-opened popover closes, so the pointer can cross the pill's own
  *  gap (or clip a corner en route elsewhere) without the panel flickering shut. */

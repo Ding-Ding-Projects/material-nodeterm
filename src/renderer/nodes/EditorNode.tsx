@@ -19,6 +19,7 @@ import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { MaximizeButton } from './MaximizeButton'
 import { Button, IconButton } from '@renderer/ui/md3'
+import { SessionIconGlyph } from '../components/SessionIcon'
 
 // Image extensions get a visual preview instead of the Monaco text editor.
 const IMAGE_MIME: Record<string, string> = {

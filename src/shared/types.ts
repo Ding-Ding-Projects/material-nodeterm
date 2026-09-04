@@ -796,6 +796,8 @@ export interface CanvasNodeState {
   awsUniverseReturnDoorId?: string
   // sticky-only
   text?: string
+  /** Content-addressed media references. Machine-local source paths never enter this record. */
+  media?: MediaAssetReference[]
   /**
    * sticky-only: last canvas-control `sticky` write — when, and the title of the agent node that
    * wrote it. The stamp means "an agent synced this", not "last touched": a hand edit clears both,
@@ -817,6 +819,8 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** Multiverse portal door construction, portable intent only. */
+  portalDoor?: PortalDoorConstruction
   /** Open WebUI provider and port intent safe to share in schema 3 project files. */
   openWebUiIntent?: import('./open-webui-hosting').OpenWebUiIntent
   /** Open WebUI container and provider binding kept only in the machine-local index. */
@@ -1395,6 +1399,8 @@ export interface Project {
   ssh?: { server: import('./ssh').SshConnection; remoteCwd: string }
   viewport: Viewport
   nodes: CanvasNodeState[]
+  /** Special child canvases. The root canvas is implicit in `viewport` and nodes without canvasId. */
+  canvases?: ProjectCanvas[]
   /** Named portable arrangements for this project's active canvas. */
   savedLayouts?: SavedCanvasLayout[]
   /** Safe, git-shared child canvases. Credentials, paths and runtime bindings stay on nodes' local overlays. */
@@ -1587,6 +1593,10 @@ export interface NamedTerminalProfile {
   environment?: Record<string, string>
   /** Optional local managed-account binding. */
   accountId?: string
+  /** ISO timestamps written by the named-profile editor. Optional for the same reason as the
+   *  four fields above: an existing profile authored by the other lane carries neither. */
+  createdAt?: string
+  updatedAt?: string
 }
 
 /** Optional desktop capability for detecting the Windows terminal profiles on this machine. */
@@ -1594,6 +1604,30 @@ export interface TerminalProfilesApi {
   list(): Promise<WindowsTerminalProfile[]>
   refresh(customExecutable?: string): Promise<WindowsTerminalProfile[]>
 }
+
+/**
+ * How close THIS MACHINE is to `kern.tty.ptmx_max`, the system-wide pty-device ceiling that took
+ * the whole app down in the 2026-08-11 field report (every spawn failing with a bare
+ * `posix_spawnp failed.`). See core/pty-pressure.ts for the bands.
+ */
+export type PtyPressureLevel = 'none' | 'elevated' | 'critical'
+
+/** A pty-pressure reading, as broadcast on `IPC.ptyPressure`. `null` = could not be measured. */
+export interface PtyPressure {
+  level: PtyPressureLevel
+  /** `/dev/ttys*` entries in existence right now. */
+  usage: number | null
+  /** `kern.tty.ptmx_max`. */
+  ceiling: number | null
+}
+
+/** Outcome of the banner's "Fix automatically…" button (macOS only) — see main/ptmx-limit.ts. */
+export type PtyLimitFixResult =
+  | { ok: true; ceiling: number }
+  /** `canceled` = the user dismissed macOS's own admin-password dialog. Not an error to retry.
+   *  `busy` = a password dialog from another window/reload is already up. Both are SILENT for the
+   *  renderer: nothing failed, so neither may raise an error toast. */
+  | { ok: false; error: string; canceled?: boolean; busy?: boolean }
 
 export interface PtyApi {
   /** Starts a new PTY session; returns its sessionId and whether the session was freshly
@@ -5471,6 +5505,17 @@ export interface NodeTerminalApi {
    *  need only be idempotent, not cheap. Returns unsubscribe. Server Edition: never fires (the
    *  pressure levers run host-side there; a browser tab's memory belongs to the browser). */
   onMemoryPressure(listener: (severity: 'warning' | 'critical') => void): () => void
+  /** Fires when THIS MACHINE's pty-device pressure band changes (core/pty-pressure.ts): the
+   *  renderer raises/lowers the banner that warns before `kern.tty.ptmx_max` stops every new
+   *  terminal from opening. Optional because NO shell currently supplies it — the measuring
+   *  core, its IPC channel, the preload leg and the bridge stub are all absent from the tree, so
+   *  the banner's optional call simply never yields a reading and the strip stays down. */
+  onPtyPressure?(listener: (reading: PtyPressure) => void): () => void
+  /** Raise this Mac's pty-device ceiling (`kern.tty.ptmx_max`) now AND across reboots, behind
+   *  macOS's own administrator-password dialog. Called ONLY from the banner's explicit
+   *  "Fix automatically…" click — never on the app's initiative. Optional for the same reason as
+   *  `onPtyPressure`: the handler that would answer it does not exist yet. */
+  raisePtyDeviceLimit?(): Promise<PtyLimitFixResult>
   /** Answer a Claude permission request via the deterministic hook-reply channel (spec:
    *  docs/hook-reply-approvals.md). Writes the one-line answer file the held hook is polling
    *  (`~/.nodeterm/pending/<pendingId>.answer`) on the host the agent runs on — the LOCAL fs for a

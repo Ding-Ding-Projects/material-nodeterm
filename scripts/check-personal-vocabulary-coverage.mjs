@@ -275,7 +275,7 @@ const SETTINGS_SECTION_BOUNDARY_MANIFEST = [
   ['settings-license', 'src/renderer/components/settings/sections/LicenseSection.tsx', 'license'],
   ['settings-local-history', 'src/renderer/components/settings/sections/LocalHistorySection.tsx', 'history'],
   ['settings-narrator', 'src/renderer/components/settings/sections/NarratorSection.tsx', 'narrator'],
-  ['settings-notch', 'src/renderer/components/settings/sections/NotchSection.tsx', 'notch'],
+  ['settings-agent-hud', 'src/renderer/components/settings/sections/AgentHudSection.tsx', 'agent-hud'],
   ['settings-notifications', 'src/renderer/components/settings/sections/NotificationsSection.tsx', 'notifications'],
   ['settings-personal-vocabulary', 'src/renderer/components/settings/sections/PersonalVocabularySection.tsx', 'vocabulary'],
   ['settings-phone', 'src/renderer/components/settings/sections/PhoneSection.tsx', 'phone'],
@@ -340,7 +340,7 @@ if (dropSectionIndex >= 0 && scriptArgs[dropSectionIndex + 1]) {
   const index = SETTINGS_SECTION_BOUNDARY_MANIFEST.findIndex(([id]) => id === dropped)
   if (index >= 0) SETTINGS_SECTION_BOUNDARY_MANIFEST.splice(index, 1)
 }
-const CANONICAL_CANVAS_NOTIFY_CALL_IDS = `terminal-profile-create-unavailable terminal-create-placement-failed file-open-node-placement-failed working-diff-node-placement-failed commit-diff-node-placement-failed commit-explanation-node-placement-failed service-node-placement-failed sticky-node-placement-failed authenticator-node-placement-failed native-loop-node-placement-failed nsis-node-placement-failed dino-node-placement-failed web-node-placement-failed browser-node-placement-failed files-node-placement-failed trigger-node-placement-failed catalog-node-unavailable aws-universe-create-unavailable catalog-node-placement-failed claude-account-login-node-placement-failed codex-account-login-node-placement-failed agent-node-placement-failed explorer-agent-folder-drop-stale-project explorer-agent-folder-drop-missing-source explorer-agent-folder-node-placement-failed explorer-terminal-folder-drop-stale-project explorer-terminal-folder-node-placement-failed ssh-terminal-node-placement-failed wsl-group-node-placement-failed worktree-group-node-placement-failed duplicate-node-placement-failed terminal-profile-restart-disabled terminal-profile-restart-failed conversation-branch-failed conversation-branch-node-placement-failed conversation-transfer-not-ready conversation-transfer-failed conversation-transfer-node-placement-failed reopen-last-closed-node-placement-failed board-terminal-profile-unavailable board-node-placement-failed transcript-resume-node-placement-failed canvas-control-node-placement-failed canvas-control-verify-node-placement-failed portable-media-inspection-failed project-save-busy project-save-progress project-save-media-cancelled project-save-success project-save-cancelled project-save-failed project-password-mismatch project-open-busy project-open-cancelled project-open-password-check project-open-success project-open-failed test-notification kiosk-pwa-node-placement-failed`.split(/\s+/)
+const CANONICAL_CANVAS_NOTIFY_CALL_IDS = `terminal-profile-create-unavailable terminal-create-placement-failed file-open-node-placement-failed working-diff-node-placement-failed commit-diff-node-placement-failed commit-explanation-node-placement-failed service-node-placement-failed sticky-node-placement-failed authenticator-node-placement-failed native-loop-node-placement-failed nsis-node-placement-failed dino-node-placement-failed web-node-placement-failed browser-node-placement-failed files-node-placement-failed trigger-node-placement-failed catalog-node-unavailable aws-universe-create-unavailable catalog-node-placement-failed claude-account-login-node-placement-failed codex-account-login-node-placement-failed agent-node-placement-failed explorer-agent-folder-drop-stale-project explorer-agent-folder-drop-missing-source explorer-agent-folder-node-placement-failed explorer-terminal-folder-drop-stale-project explorer-terminal-folder-node-placement-failed ssh-terminal-node-placement-failed wsl-group-node-placement-failed worktree-group-node-placement-failed duplicate-node-placement-failed terminal-profile-restart-disabled terminal-profile-restart-failed conversation-branch-failed conversation-branch-node-placement-failed conversation-transfer-not-ready conversation-transfer-failed conversation-transfer-node-placement-failed reopen-last-closed-node-placement-failed board-terminal-profile-unavailable board-node-placement-failed transcript-resume-node-placement-failed canvas-control-node-placement-failed canvas-control-verify-node-placement-failed portable-media-inspection-failed project-save-busy project-save-progress project-save-media-cancelled project-save-success project-save-cancelled project-save-failed project-password-mismatch project-open-busy project-open-cancelled project-open-password-check project-open-success project-open-failed test-notification kiosk-pwa-node-placement-failed claude-account-rotated-explorer-drop claude-account-rotated-agent-node claude-account-rotated-board claude-account-no-headroom-explorer-drop claude-account-no-headroom-agent-node claude-account-no-headroom-board claude-session-cancelled-stale-project agent-drop-cancelled-stale-project`.split(/\s+/)
 CANONICAL_CANVAS_NOTIFY_CALL_IDS.splice(43, 0, 'linked-agent-inbox-updated')
 // Keep the expected title evidence independent from the mutable callsite count. A replacement
 // notification with the same number of arguments must not make the inventory look complete.
@@ -350,7 +350,7 @@ const CANONICAL_CANVAS_NOTIFY_TITLE_MARKERS = [
   ['Node unavailable', 1],
   ['AWS Universe unavailable', 1],
   ['Folder drop cancelled', 2],
-  ['Agent drop cancelled', 1],
+  ['Agent drop cancelled', 2],
   ['terminalProfiles.restart.failedTitle', 2],
   ['Branch failed', 1],
   ['Conversation not ready to transfer yet.', 1],
@@ -625,7 +625,7 @@ if (!fixtureRun) {
     if (!registrationTarget) continue
     runFreshFixtureMutation('full checker rejects removed ' + id, (root) => {
       const path = join(root, registrationTarget[1])
-      writeFileSync(path, readFileSync(path, 'utf8').replace(registrationTarget[2], ''), 'utf8')
+      writeFileSync(path, readFileSync(path, 'utf8').replaceAll(registrationTarget[2], ''), 'utf8')
     })
   }
 

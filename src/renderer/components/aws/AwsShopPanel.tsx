@@ -83,7 +83,7 @@ export function AwsShopPanel({ universeId, onCreate, onClose }: AwsShopPanelProp
         {result.entries.length === 0 ? <p className="aws-shop__empty">No AWS catalog entries match this search.</p> : null}
         {result.entries.map((entry) => {
           const unavailable = entry.availability.state === 'unavailable'
-          const nextAction = unavailable ? entry.availability.nextAction : undefined
+          const nextAction = entry.availability.state === 'unavailable' ? entry.availability.nextAction : undefined
           return (
             <article className={`aws-shop__entry${unavailable ? ' is-unavailable' : ''}`} key={entry.id} role="option" aria-disabled={unavailable}>
               <div className="aws-shop__entry-copy">

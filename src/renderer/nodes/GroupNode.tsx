@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { NodeResizer, useReactFlow, useStore, type NodeProps } from '@xyflow/react'
+import { Handle, NodeResizer, Position, useReactFlow, useStore, type NodeProps } from '@xyflow/react'
 import { NODE_COLORS, ungroupNodes, type CanvasNode } from '../state/workspace'
 import { useToyLocks } from '../state/toylocks'
 import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'

@@ -16,7 +16,7 @@ import { ShortcutsSection, commitCandidate } from './ShortcutsSection'
  *  registry is a growing POOL: every unbound command added later would otherwise red these
  *  counts with a number that says nothing about the behavior under test. Overrides are absent in
  *  the cases below (or sanitized away), so the effective binding IS the mac default. */
-const UNASSIGNED = COMMAND_DEFINITIONS.filter((d) => d.defaultBindings.other.length === 0).length
+const UNASSIGNED = COMMAND_DEFINITIONS.filter((d) => d.defaultBindings.length === 0).length
 
 const setKb = (kb: unknown): void =>
   useSettings.setState({ settings: { ...DEFAULT_SETTINGS, keybindings: kb as never } })

@@ -255,6 +255,7 @@ export interface NodeData {
   textUpdatedAt?: number
   textUpdatedBy?: string
   filePath?: string
+  media?: import('@shared/types').MediaAssetReference[]
   /** Wild dim sum only: validated portable selection from the public catalog. */
   wildDimSumDish?: PublicDimSumSelection
   /**
@@ -280,6 +281,12 @@ export interface NodeData {
   browserTabs?: BrowserTab[]
   /** Browser-only: which `browserTabs[].id` is currently shown. Undefined = the first tab. */
   browserActiveTabId?: string
+  /** Debug browser intent is portable; its profile and endpoint are machine-local runtime state. */
+  debugBrowserSpec?: DebugBrowserSpec
+  /** Kiosk-only portable intent. Its browser profile id is deliberately absent here. */
+  kioskMode?: import('@shared/kiosk-sessions').KioskDisplayMode
+  kioskManifest?: import('@shared/kiosk-sessions').KioskManifestMetadata
+  kioskProfileLabel?: string
   /** Portable kiosk/PWA launch intent only. Host profiles and runtime lifecycle are local. */
   kioskPwaIntent?: PortableKioskPwaIntent
   /**
@@ -306,6 +313,7 @@ export interface NodeData {
   recoveryGame?: RecoveryGameSnapshot
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
+  portalDoor?: import('@shared/portal-door').PortalDoorConstruction
   gitlabHostingConfig?: GitLabHostingConfig
   /** Nextcloud AIO safe deployment intent; live Docker bindings remain outside project data. */
   nextcloudAioConfig?: import('@shared/nextcloud-aio').NextcloudAioConfig
@@ -333,6 +341,10 @@ export interface NodeData {
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  /** AWS Universe portal metadata is portable intent only. Context and credentials stay local. */
+  awsUniverseId?: string
+  awsUniverseScope?: 'aws-only'
+  hostedServiceTunnel?: import('@shared/hosted-service-tunnel').HostedServiceTunnelIntent
   /** Open WebUI safe provider/port intent is project-portable; the live binding stays local. */
   openWebUiIntent?: OpenWebUiIntent
   openWebUiLocalBinding?: OpenWebUiLocalBinding
@@ -405,6 +417,7 @@ export interface NodeData {
   annotationVariant?: 'line' | 'arrow'
   /** annotation-only: which corner-to-corner diagonal of the node's box the line/arrow follows. */
   annotationDir?: 'tl-br' | 'tr-bl'
+  portal?: import('@shared/types').PortalDoor
   /** annotation-only: optional user-authored label rendered beside the stroke. */
   annotationLabel?: string
   /** annotation-only: bounded SVG stroke width in local px space. */

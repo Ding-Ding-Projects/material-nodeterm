@@ -117,7 +117,7 @@ const struckOut = (p: string): boolean => (missStreak.get(streakKey(p)) ?? 0) >=
 let epoch = 0
 
 /** "No worktree facts" — what a non-repo project, a failed read and a reset all collapse to. */
-const empty = (): Pick<WorktreesState, 'repoRoot' | 'entries' | 'orphans' | 'staleGroupIds'> => ({
+const empty = (): Pick<WorktreesState, 'repoRoot' | 'repoRootByProject' | 'entries' | 'orphans' | 'staleGroupIds'> => ({
   repoRoot: null,
   repoRootByProject: {},
   entries: [],
