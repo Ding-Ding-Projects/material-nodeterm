@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
@@ -142,7 +142,7 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
                 update({ soundEffects: on })
                 // Enabling plays the finish chirp — it doubles as the volume preview AND as the
                 // user gesture a browser needs before it will let us make noise at all.
-                if (on) playSfx('done', soundVolume)
+                if (on) playAlertSound('done', soundVolume, alertSounds)
               }}
             />
           }
@@ -165,7 +165,7 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
                   value={Math.round(soundVolume * 100)}
                   aria-label="Sound effect volume"
                   onChange={(e) => update({ soundVolume: Number(e.target.value) / 100 })}
-                  onMouseUp={() => playSfx('done', soundVolume)}
+                  onMouseUp={() => playAlertSound('done', soundVolume, alertSounds)}
                   className="w-40 accent-[var(--accent)]"
                 />
                 <span className="w-9 text-right text-[12px] text-muted tabular-nums">
@@ -178,8 +178,8 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
             label="Preview"
             control={
               <div className="flex items-center gap-2">
-                <Button onClick={() => playSfx('done', soundVolume)}>Finished</Button>
-                <Button onClick={() => playSfx('needsYou', soundVolume)}>Needs you</Button>
+                <Button onClick={() => playAlertSound('done', soundVolume, alertSounds)}>Finished</Button>
+                <Button onClick={() => playAlertSound('needsYou', soundVolume, alertSounds)}>Needs you</Button>
               </div>
             }
           />

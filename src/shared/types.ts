@@ -2333,6 +2333,22 @@ export type TerminalCursorInactiveStyle = TerminalCursorStyle | 'outline' | 'non
 /** Which language(s) the spoken narrator speaks (docs/narrator.md). 'both' speaks English then
  *  Cantonese, strictly serialized — never overlapping. */
 export type NarratorLanguage = 'en' | 'yue' | 'both'
+
+/** A user-provided local alert sound. The bytes stay in settings so the picker is portable
+ * between the desktop and Server Edition, and the bounded validator in sfx.ts rejects remote,
+ * animated or unreasonably large inputs before they can be persisted. */
+export interface AlertSoundClip {
+  name: string
+  mime: 'audio/wav' | 'audio/ogg' | 'audio/mpeg' | 'audio/mp4' | 'audio/webm'
+  dataUrl: string
+}
+
+export interface AlertSoundSettings {
+  clips: Partial<Record<'done' | 'needsYou', AlertSoundClip>>
+  mappings: Partial<Record<'done' | 'needsYou', 'builtin' | 'custom'>>
+  quiet: boolean
+  reducedSound: boolean
+}
 /* -----------------------------------------------------------------------------------------------
  * Per-element appearance customization (docs/appearance.md).
  *

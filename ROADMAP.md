@@ -520,8 +520,9 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
       intent. Runtime, packaged, and capture verification remain pending in the integration lane.
 - [ ] **#119** — Opt-in lead-pane-width preference (Claude Code agent teams squeeze the lead
       pane to ~30%).
-- [ ] **#78** — Owner's own tracked roadmap of 4 bug fixes + 4 features (grouped meta-issue;
-      contents not itemized here — see the issue directly).
+- [x] **#78** — Owner's own tracked roadmap of 4 bug fixes + 4 features (grouped meta-issue;
+      contents not itemized here — see the issue directly). Plan lane 67 implemented custom alert
+      sounds and recorded its verification debt.
 
 ## Portable Node Universes and Hosting Program, planned 2026-08-26
 
