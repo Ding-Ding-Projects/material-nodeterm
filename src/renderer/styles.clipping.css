@@ -179,6 +179,50 @@
   overflow-wrap: anywhere;
 }
 
+/* New node surfaces are part of the same clipping sweep as dialogs and menus. Keep their
+ * flex children shrinkable, preserve internal scrollbars, and ensure the graph's intentionally
+ * wide SVG scrolls inside its own frame instead of escaping the node. */
+.repository-graph-node,
+.veracrypt-node,
+.trigger-node,
+.unigetui-universe,
+.unigetui-universe-node {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.trigger-node {
+  min-width: min(360px, 100%);
+}
+.repository-graph-node__body,
+.veracrypt-node__body,
+.trigger-node__body,
+.unigetui-universe {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+}
+.repository-graph-node__visual {
+  min-width: 0;
+  max-width: 100%;
+  overflow: auto;
+}
+.repository-graph-node__visual svg {
+  max-width: none;
+}
+.unigetui-universe__header,
+.unigetui-universe__search-row,
+.unigetui-universe__page-actions,
+.unigetui-universe__row-actions {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.unigetui-universe__rows li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* Long names are content, not decoration. Wrap them in rows whose height is allowed to grow so
  * bilingual and user-renamed labels stay readable rather than disappearing behind ellipses. */
 .md3-switcher-row {
