@@ -140,6 +140,7 @@ interface ArchiveManifestV2 {
 export interface ProjectArchiveExportResult {
   bytes: Buffer
   contents: ProjectArchiveContents
+  archiveVersion?: 3
 }
 
 export interface ProjectArchiveInspection {
@@ -163,17 +164,8 @@ export interface ProjectArchiveImportResult {
 }
 
 export interface ProjectArchiveExportOptions {
-  /**
-   * A folder-less project's password-manager vault, to travel inside the save file.
-   *
-   * Only for a project with no folder. A folder project's vault is already a file in its own
-   * directory and is captured with the rest of the working files, so passing it here would put two
-   * copies in one archive and leave import to guess which is current.
-   *
-   * The bytes are the vault document exactly as it sits on disk - every secret in it is already an
-   * AEAD envelope under the vault's OWN password, so this carries no plaintext. It does mean the
-   * save file is as sensitive as that password, which the export UI says out loud.
-   */
+  /** Legacy input retained for callers; schema 3 records an explicit credential omission instead
+   * of carrying vault bytes. */
   vault?: Buffer
   /** One-shot, already prepared media choices. Bytes are included only after the privileged
    * preparation has validated them; unresolved and omitted media remain explicit manifest data. */
@@ -398,6 +390,48 @@ export class ProjectArchiveService {
     project: Project,
     opts: ProjectArchiveExportOptions = {}
   ): Promise<ProjectArchiveExportResult> {
+    // Schema 3 is the portable write path. The V1/V2 writer below remains for legacy reads and
+    // historical fixtures, but new archives must not carry machine paths, credentials, or process
+    // hydration data.
+    const mediaAssets = opts.media ? dedupePortableMediaCollected(opts.media.assets) : []
+    const mediaManifest = opts.media ? createPortableMediaManifest(mediaAssets.map((item) => item.asset), opts.media.omissions) : undefined
+    const projection = projectToPortableCanvasV3(project, {
+      ...(opts.appearance ? { appearance: opts.appearance } : {}),
+      ...(mediaManifest ? { media: mediaManifest } : {})
+    })
+    const projectBytes = Buffer.from(serializePortableCanvasProjectionV3(projection))
+    await this.history.record({
+      domain: `project_${project.id}`,
+      filename: 'project.json',
+      content: new TextDecoder().decode(projectBytes),
+      label: `Exported portable project ${project.name}`,
+      action: 'updated'
+    })
+    const historyBundle = await this.history.exportBundle(`project_${project.id}`)
+    if (!historyBundle) throw new Error('The project history repository could not be bundled.')
+    const portable = await exportPortableProjectV3(project, {
+      historyBundle,
+      projection,
+      ...(opts.vault ? { omissions: [{ path: 'vault', reason: 'credential' as const, detail: 'Vault material remains on the source machine and is not portable.' }] } : {}),
+      ...(opts.media ? { media: { ...opts.media, assets: mediaAssets } } : {}),
+      ...(opts.appearance ? { appearance: opts.appearance } : {}),
+      ...(opts.sidecars ? { sidecars: opts.sidecars } : {}),
+      ...(opts.attachments ? { attachments: opts.attachments } : {})
+    })
+    return {
+      bytes: portable.bytes,
+      archiveVersion: 3,
+      contents: {
+        repository: 'portable-projection',
+        repositoryNote: 'Schema 3 carries safe canvas intent and local history only. Paths, credentials, provider state, processes, and machine-local bindings remain local.',
+        workingFiles: 0,
+        workingBytes: 0,
+        excluded: portable.manifest.omissions.map((item) => ({ path: item.path, reason: item.reason, detail: item.detail })),
+        excludedFiles: portable.manifest.omissions.length,
+        excludedBytes: 0
+      }
+    }
+    /*
     const exportedAt = new Date().toISOString()
     const snapshot = projectToFile(project, 0, exportedAt)
     const snapshotText = serializeProjectFile(snapshot)

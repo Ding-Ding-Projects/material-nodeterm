@@ -113,6 +113,43 @@ export function parseLines(raw: string, opts: ParseOpts = {}): BoardLogEntry[] {
   return out.slice(0, opts.cap ?? DEFAULT_CAP)
 }
 
+/** Archive-time parser. Unlike the live display parser, a portable archive cannot silently skip
+ * malformed or foreign lines because that would make the exported sidecar differ from what was
+ * validated. */
+export function parsePortableBoardLog(raw: string, maxLines = 1_000_000): BoardLogEntry[] {
+  const out: BoardLogEntry[] = []
+  const attachmentIds = new Set<string>()
+  const allowed = new Set(['id', 'ts', 'author', 'nodeId', 'kind', 'text', 'event', 'attachments', 'attachmentSessionId'])
+  const authorAllowed = new Set(['name', 'color'])
+  const lines = raw.split('\n')
+  for (const line of lines) {
+    if (!line.trim()) continue
+    if (out.length >= maxLines) throw new Error('Portable board log exceeds its line limit.')
+    let parsed: unknown
+    try {
+      rejectDuplicateJsonKeys(line)
+      parsed = JSON.parse(line)
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('duplicate JSON key')) throw error
+      throw new Error('Portable board log contains malformed JSON.')
+    }
+    if (!validEntry(parsed)) throw new Error('Portable board log contains an invalid entry.')
+    const entry = parsed as unknown as Record<string, unknown>
+    if (Object.keys(entry).some((key) => !allowed.has(key))) throw new Error('Portable board log contains an unknown entry key.')
+    if (entry.attachments !== undefined && (!Array.isArray(entry.attachments) || !entry.attachments.every(validBoardLogAttachment))) {
+      throw new Error('Portable board log contains invalid attachment metadata.')
+    }
+    for (const attachment of (entry.attachments ?? [])) {
+      if (attachmentIds.has(attachment.id)) throw new Error('Portable board log contains duplicate attachment metadata.')
+      attachmentIds.add(attachment.id)
+    }
+    const author = entry.author as Record<string, unknown>
+    if (Object.keys(author).some((key) => !authorAllowed.has(key))) throw new Error('Portable board log contains an unknown author key.')
+    out.push(parsed)
+  }
+  return out
+}
+
 function posixJoin(cwd: string, ...parts: string[]): string {
   return [cwd.replace(/\/+$/, ''), ...parts].join('/')
 }
@@ -386,6 +423,50 @@ export class BoardLogStore {
     // current generation is always newer, so combine newest-first arrays and apply one read cap.
     const entries = [...parseLines(raw, { all: true }), ...parseLines(rotated, { all: true })]
     return { entries: opts.all ? entries : entries.slice(0, opts.cap ?? DEFAULT_CAP), failed: false }
+  }
+
+  async readRaw(cwd: string): Promise<{ state: BoardLogReadState; data?: string; error?: string }> {
+    let raw: string
+    try {
+      if (this.remote) {
+        raw = await this.remote.tail(this.remotePath(cwd), ALL_LINES)
+      } else {
+        raw = await fs.promises.readFile(this.localPath(cwd), 'utf-8')
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return { state: 'absent' }
+      return { state: 'unreadable', error: error instanceof Error ? error.message : String(error) }
+    }
+    if (raw.length === 0) return { state: 'empty', data: '' }
+    try { parsePortableBoardLog(raw); return { state: 'ok', data: Buffer.from(raw, 'utf8').toString('base64') } }
+    catch (error) { return { state: 'malformed', error: error instanceof Error ? error.message : String(error) } }
+  }
+
+  async readAttachment(cwd: string, attachment: BoardLogAttachment): Promise<{ ok: true; dataBase64: string } | { ok: false; error: string }> {
+    if (!validBoardLogAttachment(attachment)) return { ok: false, error: 'Attachment metadata is invalid.' }
+    const targetPath = path.join(cwd, LOG_DIR, 'board-attachments', attachment.id + '.bin')
+    let target = ''
+    if (this.remote) {
+      target = this.remote.readAttachment ? await this.remote.readAttachment(this.remotePath(cwd).replace(/board-log\.jsonl$/, 'board-attachments/' + attachment.id + '.bin')) : ''
+    } else {
+      try {
+        const before = await fs.promises.lstat(targetPath)
+        if (!before.isFile() || before.isSymbolicLink()) return { ok: false, error: 'Attachment body is not a regular file.' }
+        const data = await fs.promises.readFile(targetPath)
+        const after = await fs.promises.lstat(targetPath)
+        if (before.ino !== after.ino || before.size !== after.size) return { ok: false, error: 'Attachment changed while it was being read.' }
+        target = data.toString('base64')
+      } catch {
+        return { ok: false, error: 'Attachment body is unavailable.' }
+      }
+    }
+    if (!target) return { ok: false, error: 'Attachment body is unavailable.' }
+    const data = Buffer.from(target, 'base64')
+    if (data.toString('base64').replace(/=+$/, '') !== target.replace(/=+$/, '') ||
+        data.byteLength !== attachment.bytes || createHash('sha256').update(data).digest('hex') !== attachment.sha256) {
+      return { ok: false, error: 'Attachment body failed its length or SHA-256 check.' }
+    }
+    return { ok: true, dataBase64: target }
   }
 
   /** Watch the log for changes; `cb` fires (debounced 250ms) on each change. Returns an unsub.

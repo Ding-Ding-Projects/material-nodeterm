@@ -393,6 +393,9 @@ export type NodeKind =
   | 'gallery'
   | 'wild-dim-sum'
   | 'video'
+  | 'photo'
+  | 'audio'
+  | 'gallery'
   | 'web'
   | 'browser'
   /** A persisted canvas node showing one directory listing. */
@@ -542,6 +545,18 @@ export interface PendingLaunch {
    * outlives the run's event stream — an app restart — releases rather than strands the node.
    */
   awaitSetupGroup?: string
+}
+
+/** Portable media metadata attached to a canvas node. Source is an opaque reference, never a path. */
+export interface MediaAssetReference {
+  assetId: string
+  kind: 'image' | 'audio' | 'video'
+  displayName: string
+  extension?: string
+  sha256?: string
+  bytes?: number
+  source?: 'archive' | 'local' | 'ssh'
+  resolution?: 'unresolved' | 'available' | 'missing' | 'invalid'
 }
 
 export interface CanvasNodeState {
@@ -1108,6 +1123,7 @@ export interface BoardLogReadResult {
   /** True when the log could not be read. It is distinct from a valid empty log. */
   readFailed?: boolean
 }
+export type BoardLogReadState = 'absent' | 'empty' | 'ok' | 'unreadable' | 'malformed'
 
 /** The board-log surface on `window.nodeTerminal`. Project-routed: the main/server side resolves
  *  the project to a local cwd, a desktop SSH connection, or unsupported. `append` is
@@ -1170,6 +1186,8 @@ export interface BoardLogApi {
   read(projectId: string, opts?: BoardLogReadOpts): Promise<BoardLogReadResult>
   /** Subscribe to change pushes for one project; returns an unsubscribe. */
   onChanged(projectId: string, cb: () => void): () => void
+  readAttachment?(projectId: string, attachment: import('./board-log-attachments').BoardLogAttachment): Promise<{ ok: true; dataBase64: string } | { ok: false; error: string }>
+  readRaw?(projectId: string): Promise<{ state: BoardLogReadState; dataBase64?: string; error?: string }>
 }
 
 /** One recorded "deliberate landing" on a node — the breadcrumb trail's unit. Frozen at record

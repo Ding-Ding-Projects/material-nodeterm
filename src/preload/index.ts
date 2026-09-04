@@ -9,6 +9,9 @@ import type {
   NodeTerminalApi,
   PairingDoneResult,
   Project,
+  ProjectArchiveProgress,
+  ProjectArchiveExportOptions,
+  PortableBindingState,
   PtyCreateOptions,
   PtyPressure,
   LogRecord,
@@ -1191,6 +1194,8 @@ const api: NodeTerminalApi = {
     removeAttachments: (projectId, sessionId, ids) => ipcRenderer.invoke(IPC.boardLogRemoveAttachments, projectId, sessionId, ids),
     readAttachment: (projectId, attachment) => ipcRenderer.invoke(IPC.boardLogReadAttachment, projectId, attachment),
     read: (projectId, opts) => ipcRenderer.invoke(IPC.boardLogRead, projectId, opts),
+    readAttachment: (projectId, attachment) => ipcRenderer.invoke(IPC.boardLogReadAttachment, projectId, attachment),
+    readRaw: (projectId) => ipcRenderer.invoke(IPC.boardLogReadRaw, projectId),
     onChanged: (projectId, cb) => {
       const ch = IPC.boardLogChanged(projectId)
       const handler = (): void => cb()

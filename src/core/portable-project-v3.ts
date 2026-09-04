@@ -90,8 +90,68 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
+function exactKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>, label: string): void {
+  for (const key of Object.keys(value)) {
+    if (UNSAFE_KEYS.has(key) || !allowed.has(key)) {
+      throw new PortableProjectV3Error('manifest', `Portable ${label} contains an unknown key: ${key}`)
+    }
+  }
+}
+
 function utf8Bytes(value: string): number {
   return new TextEncoder().encode(value).byteLength
+}
+
+/** Scan object keys before JSON.parse, because JSON.parse silently keeps only the last duplicate. */
+export function rejectDuplicateJsonKeys(source: string): void {
+  type Frame = { kind: 'object' | 'array'; state: 'key' | 'colon' | 'value' | 'comma' }
+  const stack: Frame[] = []
+  const skipString = (start: number): number => {
+    let i = start + 1
+    while (i < source.length) {
+      const code = source.charCodeAt(i)
+      if (code === 0x5c) { i += 2; continue }
+      if (code === 0x22) return i + 1
+      i++
+    }
+    return source.length
+  }
+  const skipPrimitive = (start: number): number => {
+    let i = start
+    while (i < source.length && !/[\s,}\]]/.test(source[i])) i++
+    return i
+  }
+  let i = 0
+  while (i < source.length) {
+    if (/\s/.test(source[i])) { i++; continue }
+    const ch = source[i]
+    const top = stack[stack.length - 1]
+    if (ch === '{') {
+      stack.push({ kind: 'object', state: 'key' })
+      i++
+      continue
+    }
+    if (ch === '[') { stack.push({ kind: 'array', state: 'value' }); i++; continue }
+    if (ch === '}' || ch === ']') { stack.pop(); i++; if (stack.length) stack[stack.length - 1].state = 'comma'; continue }
+    if (ch === ':') { if (top?.kind === 'object') top.state = 'value'; i++; continue }
+    if (ch === ',') { if (top) top.state = top.kind === 'object' ? 'key' : 'value'; i++; continue }
+    if (ch === '"') {
+      const end = skipString(i)
+      if (top?.kind === 'object' && top.state === 'key') {
+        const key = JSON.parse(source.slice(i, end)) as string
+        const frameKeys = (top as Frame & { seen?: Set<string> }).seen ?? new Set<string>()
+        ;(top as Frame & { seen: Set<string> }).seen = frameKeys
+        if (frameKeys.has(key)) throw new PortableProjectV3Error('manifest', `Manifest contains a duplicate JSON key: ${key}`)
+        frameKeys.add(key)
+        top.state = 'colon'
+      } else if (top) top.state = 'comma'
+      i = end
+      continue
+    }
+    i = skipPrimitive(i)
+    if (top) top.state = 'comma'
+  }
 }
 
 /** Reject, rather than repair, paths that an extractor could interpret differently. */
@@ -132,6 +192,9 @@ function validateManifestShape(value: unknown): asserts value is PortableProject
   if (!isRecord(value) || value.schema !== PORTABLE_PROJECT_SCHEMA || value.schemaVersion !== 3) {
     throw new PortableProjectV3Error('manifest', 'Manifest must identify nodeterm-portable-project schema version 3.')
   }
+  exactKeys(value, new Set(['schema', 'schemaVersion', 'project', 'entries', 'omissions']), 'manifest')
+  if (!isRecord(value.project)) throw new PortableProjectV3Error('manifest', 'Manifest project metadata must be an object.')
+  exactKeys(value.project, new Set(['name', 'color']), 'manifest project')
   if (!isRecord(value.project) || typeof value.project.name !== 'string' || value.project.name.trim().length === 0 ||
       utf8Bytes(value.project.name) > 512) {
     throw new PortableProjectV3Error('manifest', 'Manifest project name is missing or exceeds 512 UTF-8 bytes.')
@@ -151,6 +214,7 @@ function validateManifestShape(value: unknown): asserts value is PortableProject
         typeof omission.detail !== 'string' || omission.detail.length > 1024) {
       throw new PortableProjectV3Error('manifest', 'Manifest omission metadata is invalid.')
     }
+    exactKeys(omission, new Set(['path', 'reason', 'detail']), 'manifest omission')
     validatePortableArchivePath(omission.path)
   }
   const omissionPaths = new Set<string>()
@@ -180,6 +244,7 @@ export function validatePortableProjectV3Manifest(value: unknown): PortableProje
         !Number.isSafeInteger(item.compressedBytes) || item.compressedBytes < 0 || typeof item.required !== 'boolean') {
       throw new PortableProjectV3Error('manifest', 'Manifest entry metadata is invalid.')
     }
+    exactKeys(item, new Set(['path', 'sha256', 'rawBytes', 'compressedBytes', 'required']), 'manifest entry')
     validatePortableArchivePath(item.path)
     if (seen.has(item.path)) throw new PortableProjectV3Error('duplicate-entry', `Duplicate manifest entry: ${item.path}`)
     const key = portableArchivePathKey(item.path)
@@ -197,7 +262,7 @@ export function validatePortableProjectV3Manifest(value: unknown): PortableProje
   }
   for (const omission of value.omissions) {
     if (seen.has(omission.path)) throw new PortableProjectV3Error('manifest', `Omission contradicts an included entry: ${omission.path}`)
-    const key = omission.path.toLocaleLowerCase('en-US')
+    const key = portableArchivePathKey(omission.path)
     if (folded.has(key)) throw new PortableProjectV3Error('manifest', `Omission contradicts an included entry: ${omission.path}`)
   }
   for (const required of PORTABLE_PROJECT_REQUIRED_ENTRIES) {
@@ -319,8 +384,11 @@ export function parsePortableProjectV3Manifest(bytes: Uint8Array): PortableProje
   }
   let value: unknown
   try {
-    value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
-  } catch {
+    const source = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    rejectDuplicateJsonKeys(source)
+    value = JSON.parse(source)
+  } catch (error) {
+    if (error instanceof PortableProjectV3Error) throw error
     throw new PortableProjectV3Error('manifest', 'Manifest is not valid UTF-8 JSON.')
   }
   return validatePortableProjectV3Manifest(value)
@@ -329,24 +397,27 @@ export function parsePortableProjectV3Manifest(bytes: Uint8Array): PortableProje
 /** Migrate legacy project data without carrying credentials or machine-local bindings forward. */
 export function migratePortableProject(version: 1 | 2, input: unknown): Record<string, unknown> {
   if (!isRecord(input)) throw new PortableProjectV3Error('manifest', `Schema ${version} project data must be an object.`)
-  const forbidden = /^id$|^identity$|^projectid$|credential|password|passkey|secret|token|vault|localexec|capabilityack|breadcrumb|^ssh$|cwd|defaultaccount|session|path|directory|hostname|^host$|machine|platform|environment|^env$|destination/i
+  const forbidden = /^identity$|^projectid$|credential|password|passkey|secret|token|vault|localexec|capabilityack|breadcrumb|^ssh$|cwd|defaultaccount|session|path|directory|hostname|^host$|machine|platform|environment|^env$|destination/i
+  const structuralIdParents = new Set(['nodes', 'canvases', 'relationships', 'bridges', 'ropes', 'browserTabs'])
   const unsafe = new Set(['__proto__', 'prototype', 'constructor'])
   let nodes = 0
-  const copy = (value: unknown, depth: number): unknown => {
+  const copy = (value: unknown, depth: number, parents: string[]): unknown => {
     if (++nodes > PORTABLE_PROJECT_LIMITS.maxMigrationNodes) throw new PortableProjectV3Error('manifest', 'Legacy project data exceeds the migration node limit.')
     if (depth > PORTABLE_PROJECT_LIMITS.maxMigrationDepth) throw new PortableProjectV3Error('manifest', 'Legacy project data exceeds the migration depth limit.')
     if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
-    if (Array.isArray(value)) return value.map((item) => copy(item, depth + 1))
+    if (Array.isArray(value)) return value.map((item) => copy(item, depth + 1, parents))
     if (!isRecord(value)) throw new PortableProjectV3Error('manifest', 'Legacy project data contains an unsafe value.')
     const out: Record<string, unknown> = {}
     for (const [key, child] of Object.entries(value)) {
       if (unsafe.has(key.toLowerCase())) throw new PortableProjectV3Error('manifest', `Legacy project data contains an unsafe key: ${key}`)
-      if (forbidden.test(key.toLowerCase())) continue
-      out[key] = copy(child, depth + 1)
+      const lower = key.toLowerCase()
+      if (lower === 'id' && !structuralIdParents.has(parents[parents.length - 1] ?? '')) continue
+      if (forbidden.test(lower)) continue
+      out[key] = copy(child, depth + 1, [...parents, lower])
     }
     return out
   }
-  return copy(input, 0) as Record<string, unknown>
+  return copy(input, 0, []) as Record<string, unknown>
 }
 
 /** Build omission records for unsupported optional entries. Unknown required entries throw. */

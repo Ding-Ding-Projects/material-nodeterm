@@ -106,4 +106,17 @@ describe('project archive container', () => {
       ])
     ).toThrow(/Duplicate/)
   })
+
+  it('sorts entries and reports central-directory compressed sizes deterministically', () => {
+    const unsorted = [
+      { path: 'files/z.txt', data: Buffer.from('z'.repeat(500)) },
+      { path: 'files/a.txt', data: Buffer.from('a'.repeat(500)) }
+    ]
+    expect(packContainer(unsorted).equals(packContainer([...unsorted].reverse()))).toBe(true)
+    const metadata = new Map<string, { compressedBytes: number; rawBytes: number; method: number }>()
+    const zip = packContainer(unsorted)
+    openContainer(zip, LIMITS, undefined, metadata)
+    expect(metadata.get('files/a.txt')?.rawBytes).toBe(500)
+    expect(metadata.get('files/a.txt')?.compressedBytes).toBeLessThan(500)
+  })
 })

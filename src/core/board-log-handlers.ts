@@ -86,6 +86,24 @@ export function registerBoardLogHandlers(platform: CorePlatform, router: BoardLo
       return { entries: [], unsupported: true }
     }
   )
+  platform.handle(IPC.boardLogReadAttachment, async (projectId: string, attachment: BoardLogAttachment) => {
+    const r = router.route(projectId)
+    if (r.kind === 'local') return localStore.readAttachment(r.cwd, attachment)
+    if (r.kind === 'remote') return new BoardLogStore({ remote: r.exec }).readAttachment(r.remoteCwd, attachment)
+    return { ok: false as const, error: 'Attachment bodies are unavailable on this surface.' }
+  })
+  platform.handle(IPC.boardLogReadRaw, async (projectId: string) => {
+    const r = router.route(projectId)
+    if (r.kind === 'local') {
+      const result = await localStore.readRaw(r.cwd)
+      return { state: result.state, ...(result.data !== undefined ? { dataBase64: result.data } : {}), ...(result.error ? { error: result.error } : {}) }
+    }
+    if (r.kind === 'remote') {
+      const result = await new BoardLogStore({ remote: r.exec }).readRaw(r.remoteCwd)
+      return { state: result.state, ...(result.data !== undefined ? { dataBase64: result.data } : {}), ...(result.error ? { error: result.error } : {}) }
+    }
+    return { state: 'unreadable' as const, error: 'Board history is unavailable on this surface.' }
+  })
 
   // Change subscription, ref-counted per project id (the renderer subscribes/unsubscribes as its
   // board panel mounts/unmounts; a leaked subscription is at worst one idle fs.watch/poll).

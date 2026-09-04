@@ -2421,6 +2421,9 @@ export function Canvas() {
       gallery: withNodeBoundary(GalleryNode),
       'wild-dim-sum': withNodeBoundary(WildDimSumNode),
       video: withNodeBoundary(VideoNode),
+      photo: withNodeBoundary(PortableMediaNode),
+      audio: withNodeBoundary(PortableMediaNode),
+      gallery: withNodeBoundary(PortableMediaNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
       files: withNodeBoundary(FilesNode),
@@ -17000,14 +17003,8 @@ export function Canvas() {
         })
         const result = await api.workspace.exportProject(project, password, portableMedia)
         if (result.ok) {
-          // The archive packs the project's OWN git-tracked working files verbatim (see
-          // project-archive.ts), and a password-manager vault (core/password-manager/vault-store.ts)
-          // is deliberately a git-tracked sibling of project.json — so a vault the user committed
-          // travels inside the save file too, encrypted envelopes and all. That is by design (it is
-          // how the vault survives a clone on another machine), but it means the ONE save file is now
-          // exactly as sensitive as the vault's own password: whoever gets the file and the password
-          // gets every secret in it. Say so, every time a vault exists, whether locked or unlocked —
-          // "unlocked" here is only THIS process's cached key, never the presence of a vault.
+          // Schema 3 intentionally omits the password-manager vault. It stays on this machine and
+          // is recorded as an explicit credential omission in the archive manifest.
           let vaultKind: 'uninitialized' | 'locked' | 'unlocked' | 'unsupported' = 'uninitialized'
           try {
             vaultKind = (await api.passwordManager.status(projectId)).state.kind
@@ -17017,7 +17014,7 @@ export function Canvas() {
           }
           const vaultWarning =
             vaultKind === 'locked' || vaultKind === 'unlocked'
-              ? ' This project has a password-manager vault: its encrypted secrets travel inside this file too, and they are only as safe as the vault password.'
+              ? ' This project has a password-manager vault: it stays on this machine and is explicitly omitted from the portable file.'
               : ''
           notify({
             kind: vaultKind !== 'uninitialized' ? 'warning' : 'success',
@@ -19900,6 +19897,27 @@ export function Canvas() {
           is one z-0 stacking context, so nothing inside it could ever rise above the sidebar. The
           focused node's root is appended here imperatively by TerminalNode; the exit pill stays
           above it. Esc is deliberately NOT an exit key — it must reach the CLI in the pane. */}
+      {portableMediaPrompt && (
+        <PortableMediaDecisionDialog
+          candidates={portableMediaPrompt.candidates}
+          onDecisions={(decisions) => {
+            const requests = portableMediaPrompt.candidates.map((candidate) => ({
+              key: candidate.assetId,
+              path: candidate.sourcePath ?? '',
+              label: candidate.label,
+              decision: decisions.get(candidate.assetId) ?? 'include'
+            }))
+            const resolve = portableMediaPrompt.resolve
+            setPortableMediaPrompt(null)
+            resolve(requests)
+          }}
+          onCancel={() => {
+            const resolve = portableMediaPrompt.resolve
+            setPortableMediaPrompt(null)
+            resolve(null)
+          }}
+        />
+      )}
       <div id={FOCUS_SURFACE_ID} className={`focus-surface${focusedId ? ' is-active' : ''}`}>
         {focusedId && (
           <Button variant="tonal" size="small" className="focus-exit" title="Exit focus (⌘⇧F)" onClick={toggleFocusMode}>

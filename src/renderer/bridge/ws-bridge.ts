@@ -496,6 +496,12 @@ export function buildRealApi(
       ) as ReturnType<WorkspaceApi['splitIntoParts']>,
     joinParts: (cwd: string) =>
       client.request(IPC.workspaceJoinParts, cwd) as ReturnType<WorkspaceApi['joinParts']>,
+    portableBindings: {
+      state: async () => [],
+      apply: async () => ({ ok: false as const, error: 'Portable destination bindings are unavailable on this browser host.' })
+    },
+    onArchiveProgress: () => () => {},
+    cancelArchiveImport: async () => false,
     exportProject: async () => ({
       ok: false,
       error: mapLocalVocabularyText('Project archive export is available in the Windows desktop app.')
@@ -1001,6 +1007,10 @@ export function buildFilesApi(
       client.request(IPC.boardLogReadAttachment, projectId, attachment) as ReturnType<BoardLogApi['readAttachment']>,
     read: (projectId, opts) =>
       client.request(IPC.boardLogRead, projectId, opts) as Promise<BoardLogReadResult>,
+    readAttachment: (projectId, attachment) =>
+      client.request(IPC.boardLogReadAttachment, projectId, attachment) as ReturnType<NonNullable<BoardLogApi['readAttachment']>>,
+    readRaw: (projectId) =>
+      client.request(IPC.boardLogReadRaw, projectId) as ReturnType<NonNullable<BoardLogApi['readRaw']>>,
     onChanged: (projectId, cb) => {
       const unsub = client.subscribe(IPC.boardLogChanged(projectId), cb as Listener)
       client.cast(IPC.boardLogSubscribe, projectId)

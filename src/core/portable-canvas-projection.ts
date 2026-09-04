@@ -228,6 +228,37 @@ function content(value: unknown, label: string): string {
   return value
 }
 
+function mediaReferences(value: unknown): MediaAssetReference[] {
+  if (!Array.isArray(value) || value.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable media reference count exceeds its bound.')
+  return value.map((item) => {
+    if (!record(item)) throw new PortableProjectV3Error('manifest', 'Portable media reference is invalid.')
+    exactKeys(item, ALLOWED_MEDIA_REF, 'media reference')
+    if (typeof item.assetId !== 'string' || !/^[0-9a-f]{64}$/.test(item.assetId) ||
+        !['image', 'audio', 'video'].includes(String(item.kind)) ||
+        typeof item.displayName !== 'string' || item.displayName.length === 0 ||
+        new TextEncoder().encode(item.displayName).byteLength > 512 || /[\0\r\n\\/]/.test(item.displayName) ||
+        /^[a-z][a-z0-9+.-]*:/i.test(item.displayName)) {
+      throw new PortableProjectV3Error('manifest', 'Portable media reference metadata is invalid.')
+    }
+    if (item.sha256 !== undefined && (typeof item.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(item.sha256) || item.sha256 !== item.assetId)) throw new PortableProjectV3Error('hash', 'Portable media reference hash is invalid.')
+    if (item.bytes !== undefined && (!Number.isSafeInteger(item.bytes) || item.bytes < 0 || item.bytes > 2 * 1024 * 1024 * 1024)) throw new PortableProjectV3Error('raw-limit', 'Portable media reference size is invalid.')
+    if (item.source !== undefined && !['archive', 'local', 'ssh'].includes(String(item.source))) throw new PortableProjectV3Error('manifest', 'Portable media reference source is invalid.')
+    if (item.resolution !== undefined && !['unresolved', 'available', 'missing', 'invalid'].includes(String(item.resolution))) throw new PortableProjectV3Error('manifest', 'Portable media reference resolution is invalid.')
+    if (item.resolution === 'available' && (item.sha256 === undefined || item.bytes === undefined || item.source === undefined)) throw new PortableProjectV3Error('manifest', 'Available portable media references require hash, size, and a source carrier.')
+    if (item.resolution === 'unresolved' && item.source === 'archive') throw new PortableProjectV3Error('manifest', 'Unresolved portable media cannot claim an archive carrier.')
+    return {
+      assetId: item.assetId,
+      kind: item.kind as MediaAssetReference['kind'],
+      displayName: item.displayName,
+      ...(item.extension !== undefined ? { extension: typeof item.extension === 'string' && /^[a-z0-9]{1,16}$/i.test(item.extension) ? item.extension.toLowerCase() : (() => { throw new PortableProjectV3Error('manifest', 'Portable media reference extension is invalid.') })() } : {}),
+      ...(item.sha256 !== undefined ? { sha256: item.sha256 } : {}),
+      ...(item.bytes !== undefined ? { bytes: item.bytes } : {}),
+      ...(item.source !== undefined ? { source: item.source as MediaAssetReference['source'] } : {}),
+      ...(item.resolution !== undefined ? { resolution: item.resolution as MediaAssetReference['resolution'] } : {})
+    }
+  })
+}
+
 function finite(value: unknown, label: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > 1e9) {
     throw new PortableProjectV3Error('manifest', `Portable ${label} is not a bounded number.`)
