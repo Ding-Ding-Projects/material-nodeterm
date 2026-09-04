@@ -14,6 +14,11 @@ export interface ScmScope {
   id: string
   label: string
   cwd: string
+  /** Runtime origin of the checkout. Nested scopes carry portable relative metadata. */
+  source?: 'project' | 'worktree' | 'nested'
+  relativePath?: string
+  /** True for paths discovered on this machine, never serialized with a project. */
+  machineLocal?: boolean
 }
 
 /**
@@ -45,7 +50,14 @@ export function scmScopes(
 ): ScmScope[] {
   if (!project.cwd) return []
   return [
-    { id: 'main', label: `${project.name} (main checkout)`, cwd: project.cwd },
+    {
+      id: 'main',
+      label: `${project.name} (main checkout)`,
+      cwd: project.cwd,
+      source: 'project',
+      relativePath: '.',
+      machineLocal: true
+    },
     ...bound.map((b) => ({
       id: b.groupId,
       label: `${b.worktree.branch} (worktree)`,

@@ -45,6 +45,7 @@ import {
   parseCloneProgress,
   stripAnsiCodes
 } from '../shared/clone-url'
+import { discoverNestedRepositories } from './git-repository-discovery'
 
 const run = promisify(execFile)
 
@@ -355,6 +356,7 @@ export class GitService {
 
   registerIpc(): void {
     platform().handle(IPC.gitStatus, (cwd: string) => this.status(cwd))
+    platform().handle(IPC.gitDiscoverRepositories, (cwd: string) => this.discoverRepositories(cwd))
     platform().handle(IPC.gitInit, (cwd: string) => this.init(cwd))
     platform().handle(IPC.gitClone, (parentDir: string, url: string) => this.clone(parentDir, url))
     platform().handle(IPC.gitCloneAbort, () => this.cloneAbort())

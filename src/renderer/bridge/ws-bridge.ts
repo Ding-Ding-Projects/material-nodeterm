@@ -862,6 +862,8 @@ export function buildFilesApi(
 
   const git: GitApi = {
     status: (cwd) => client.request(IPC.gitStatus, cwd) as ReturnType<GitApi['status']>,
+    discoverRepositories: (cwd) =>
+      client.request(IPC.gitDiscoverRepositories, cwd) as ReturnType<GitApi['discoverRepositories']>,
     init: (cwd) => client.request(IPC.gitInit, cwd) as ReturnType<GitApi['init']>,
     clone: (parentDir, url) =>
       client.request(IPC.gitClone, parentDir, url) as ReturnType<GitApi['clone']>,

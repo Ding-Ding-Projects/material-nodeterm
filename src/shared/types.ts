@@ -3743,6 +3743,8 @@ export interface GitResult {
 
 export interface GitApi {
   status(cwd: string): Promise<GitStatus>
+  /** Discover nested repositories below cwd without following links or traversing unbounded trees. */
+  discoverRepositories(cwd: string): Promise<GitRepositoryDiscovery>
   init(cwd: string): Promise<GitResult>
   /** Clone a repo into parentDir; returns the cloned folder path in message on success. */
   clone(parentDir: string, url: string): Promise<GitResult>

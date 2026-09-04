@@ -69,6 +69,11 @@ politely undone the way a local merge can.
 
 - **Settings → Agents** — which local agent CLI (if any) generates commit messages and how, and
   the extra prompt appended to that generation.
+- **Nested repository scan** — discovery searches at most four directory levels and 512 folders.
+  Dependency, build, cache, VCS metadata, virtual-environment, and coverage directories are
+  ignored. Symlinks are never followed. A root `.gitignore` or nested `.gitignore` may add simple
+  directory-name exclusions. Refreshing the panel repeats the scan; no discovered path is stored
+  in the portable project file.
 - **Unbind** only drops the canvas binding and never deletes the checkout. Disk removal is a
   separate confirmed action. A checkout of a pre-existing branch keeps that branch; a branch which
   nodeterm created locally is deleted only if Git proves it reachable and its exact full ref still
@@ -96,6 +101,14 @@ politely undone the way a local merge can.
   Keep editors and shells idle after reviewing the final inventory; any change observed before the
   invocation refuses and requires a fresh confirmation.
 
+- **Nested discovery on an SSH project**: the local client cannot enumerate a third machine's
+  filesystem safely, so discovery is explicitly unavailable for that project. Existing SSH source
+  control remains available at its configured remote checkout, and the panel does not fall back to
+  similarly named folders on the client.
+- **The scan reaches a bound**: the panel lists all repositories found before the depth or folder
+  limit and labels the result incomplete. Increasing the limit is a code-level change, not a hidden
+  user setting, because unbounded traversal can enter dependency trees and stall the panel.
+
 ## Security considerations
 
 - nodeterm shells out to your own `git`/`gh` binaries with your own credentials and your own
@@ -110,6 +123,10 @@ politely undone the way a local merge can.
 - Directory creation and branch creation are separate machine-local provenance facts. Editing a
   shared project file cannot manufacture branch-deletion authority.
 - Nothing this feature does leaves your machine unless you explicitly choose to push.
+- Nested discovery returns both a portable project-relative identifier and a machine-local runtime
+  path. Only the relative identifier is suitable for project metadata or exports. The absolute path
+  is used transiently to route operations and is never persisted, synchronized, logged, or placed
+  in portable archives.
 
 ## Verification
 
