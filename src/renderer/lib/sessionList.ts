@@ -766,3 +766,66 @@ export function repoSignalCounts(repo: RepoGroup): { attention: number; unread: 
     { attention: 0, unread: 0, working: 0 }
   )
 }
+
+/** One workflow-state section in the flattened sidebar view. */
+export interface StatusSection {
+  kind: StatusKind
+  label: string
+  rows: SessionRowVM[]
+}
+
+/**
+ * Flatten terminal rows across projects and regroup them by workflow state. Unread is retained on
+ * each row as a notification affordance, but never becomes a workflow bucket of its own. The
+ * active project's live nodes override persisted presentation without duplicating node ownership.
+ */
+export function buildStatusList(
+  projects: ProjectInput[],
+  liveActiveNodes: SessionNodeInput[] | null,
+  activeProjectId: string,
+  statusById: Record<string, AgentNodeStatus>,
+  filter: string
+): StatusSection[] {
+  const needle = filter.trim().toLowerCase()
+  const liveById = new Map((liveActiveNodes ?? []).map((node) => [node.id, node]))
+  const rows: SessionRowVM[] = []
+  const seen = new Set<string>()
+
+  for (const project of projects) {
+    for (const persisted of project.nodes) {
+      if (persisted.kind !== 'terminal' || seen.has(persisted.id)) continue
+      const node = project.id === activeProjectId ? liveById.get(persisted.id) ?? persisted : persisted
+      const row = toRow(node, statusById[node.id], project)
+      if (!needle || `${row.title} ${row.session ?? ''}`.toLowerCase().includes(needle)) rows.push(row)
+      seen.add(node.id)
+    }
+  }
+
+  // A newly created active node may not have reached the persisted project snapshot yet. Show it
+  // under the active project only, keeping status mode useful during the short save window.
+  const active = projects.find((project) => project.id === activeProjectId)
+  if (active) {
+    for (const node of liveActiveNodes ?? []) {
+      if (node.kind !== 'terminal' || seen.has(node.id)) continue
+      const row = toRow(node, statusById[node.id], active)
+      if (!needle || `${row.title} ${row.session ?? ''}`.toLowerCase().includes(needle)) rows.push(row)
+      seen.add(node.id)
+    }
+  }
+
+  const sections = new Map<StatusKind, SessionRowVM[]>()
+  for (const row of rows) {
+    const bucket = sections.get(row.statusKind) ?? []
+    bucket.push(row)
+    sections.set(row.statusKind, bucket)
+  }
+  return STATUS_ORDER
+    .map((kind) => ({
+      kind,
+      label: STATE_LABEL[kind],
+      rows: (sections.get(kind) ?? []).sort(
+        (a, b) => (b.statusUpdatedAt ?? 0) - (a.statusUpdatedAt ?? 0)
+      )
+    }))
+    .filter((section) => section.rows.length > 0)
+}

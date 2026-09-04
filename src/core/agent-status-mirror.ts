@@ -5,6 +5,7 @@ import { platform } from './platform'
 import { publishMirrorGeneration, reserveMirrorGeneration } from './mirror-publication'
 import type { AgentId } from '@shared/agents/config'
 import type { AgentState, NormalizedAgentEvent } from '@shared/agents/normalize'
+import type { AgentStatusSnapshot, AgentStatusSnapshotEntry } from '@shared/agents/status-snapshot'
 import { WORKING_STALE_MS, isStaleWorking } from '@shared/agents/stale'
 import type { AgentStatusSnapshot, AgentStatusSnapshotEntry } from '@shared/agents/status-snapshot'
 

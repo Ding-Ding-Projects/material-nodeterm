@@ -204,6 +204,20 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
         : [],
     [open, grouping, projects, liveActiveNodes, activeProjectId, statusById, filter]
   )
+  const statusSections = useMemo(
+    () =>
+      open && grouping === 'status'
+        ? buildStatusList(projects, liveActiveNodes, activeProjectId, statusById, filter)
+        : [],
+    [open, grouping, projects, liveActiveNodes, activeProjectId, statusById, filter]
+  )
+
+  useEffect(() => {
+    if (!open || grouping !== 'status') return
+    setStatusNow(Date.now())
+    const timer = window.setInterval(() => setStatusNow(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [open, grouping])
 
   // Relative state ages need to advance even when no hook event arrives. Keep the clock dormant
   // unless the status view is visible; 30s catches minute boundaries without per-row timers.
@@ -319,6 +333,22 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
       </div>
     )
   }
+
+  const renderStatusRow = (row: (typeof statusSections)[number]['rows'][number]): JSX.Element => (
+    <div key={row.id} className="ss-rowdrop">
+      <SessionRow
+        row={row}
+        stateAgeLabel={sessionStateAgeLabel(row.statusUpdatedAt, statusNow)}
+        onClick={() => props.onFocusNode(row.id)}
+        onClose={() => props.onCloseSession(row.projectId!, row.id)}
+        onRename={(title) => props.onRenameSession(row.projectId!, row.id, title)}
+        onAiName={() => props.onAiNameSession(row.projectId!, row.id, row.cwd)}
+        onContextMenu={(e) => props.onRowContextMenu(e, row.projectId!, row.id)}
+        onDragStart={() => {}}
+        onDragEnd={() => {}}
+      />
+    </div>
+  )
 
   /**
    * One group frame's row and everything under it, recursively — this is what makes the sidebar
@@ -659,6 +689,27 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
+      </div>
+
+      <div className="ss-tabs" role="tablist" aria-label="Group sessions by">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={grouping === 'project'}
+          className={`ss-tab${grouping === 'project' ? ' is-active' : ''}`}
+          onClick={() => updateSettings({ sidebarGrouping: 'project' })}
+        >
+          Project
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={grouping === 'status'}
+          className={`ss-tab${grouping === 'status' ? ' is-active' : ''}`}
+          onClick={() => updateSettings({ sidebarGrouping: 'status' })}
+        >
+          Status
+        </button>
       </div>
 
       <div

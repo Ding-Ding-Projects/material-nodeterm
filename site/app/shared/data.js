@@ -26,7 +26,7 @@ export const FEATURES = [
   { id: 'nodes', icon: '🖥', color: 'var(--yellow)', title: 'Real terminals as blocks', body: 'Every block runs its own shell. Drag them, resize them, zoom out and see the whole map at once.' },
   { id: 'tmux', icon: '♻️', color: 'var(--green)', title: 'Warm reconnect and cold restore', body: 'A live session host can reconnect after the app closes. After a computer restart, nodeterm restores layout and saved scrollback without pretending the old process survived.' },
   { id: 'projects', icon: '🗂', color: 'var(--blue)', title: 'Projects and tabs', body: 'Each project is its own canvas with its own folder. Reorder them, close them, bring them back from history.' },
-  { id: 'agents', icon: '🤖', color: 'var(--pink)', title: 'Robot helpers', body: 'Claude Code, Codex, Gemini, opencode, Grok and your own CLIs — one click each, with a live status badge.' },
+  { id: 'agents', icon: '🤖', color: 'var(--pink)', title: 'Robot helpers', body: 'Claude Code, Codex, Gemini, opencode, Grok and your own CLIs — one click each, with live status badges and restart-safe display continuity.' },
   { id: 'super', icon: '✦', color: 'var(--purple)', title: 'Helper superpowers', body: 'Link two helpers so they read each other, branch a conversation, or let a helper open new blocks for you.' },
   { id: 'editor', icon: '✏️', color: 'var(--orange)', title: 'Editor and diff blocks', body: 'A real code editor and a side-by-side diff sit right next to your shells. Image previews too.' },
   { id: 'git', icon: '⎇', color: 'var(--green)', title: 'Git without the fear', body: 'Stage, diff, branch, commit and push from a panel — plus one-step worktrees bound to a canvas frame.' },

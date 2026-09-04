@@ -12,6 +12,8 @@ import { Input } from '@renderer/ui/Input'
 
 export interface SessionRowProps {
   row: SessionRowVM
+  /** Status-mode detail: relative age of live or display-only recovered workflow state. */
+  stateAgeLabel?: string
   onClick(): void
   onClose(): void
   onRename(title: string): void
@@ -31,6 +33,7 @@ function dirName(p?: string): string {
 
 export function SessionRow({
   row,
+  stateAgeLabel,
   onClick,
   onClose,
   onRename,
