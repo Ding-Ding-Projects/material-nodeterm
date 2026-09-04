@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type {
-  CloudFormationApi,
+  CloudFormationLegacyApi,
   CloudFormationCapability,
-  CloudFormationChange,
+  CloudFormationLegacyChange,
   CloudFormationChangeSet,
   CloudFormationParameter,
   CloudFormationProfile,
   CloudFormationStackEvent,
-  CloudFormationStackSummary,
+  CloudFormationLegacyStackSummary,
   CloudFormationTag,
   CloudFormationTemplateInfo
 } from '@shared/cloudformation'
@@ -50,7 +50,7 @@ function statusTone(status: string): string {
   return ''
 }
 
-function ChangeRows({ changes }: { changes: CloudFormationChange[] }): React.JSX.Element {
+function ChangeRows({ changes }: { changes: CloudFormationLegacyChange[] }): React.JSX.Element {
   if (changes.length === 0) return <p className="cf-empty">No resource changes were returned by CloudFormation.</p>
   return (
     <div className="cf-change-table" role="table" aria-label="Exact change-set resource changes">
@@ -103,14 +103,14 @@ export function CloudFormationManagerPanel({ onClose }: CloudFormationManagerPan
   )
 }
 
-function CloudFormationBody({ api }: { api: CloudFormationApi }): React.JSX.Element {
+function CloudFormationBody({ api }: { api: CloudFormationLegacyApi }): React.JSX.Element {
   const [tab, setTab] = useState<PanelTab>('template')
   const [status, setStatus] = useState<{ available: boolean; version: string | null; reason: string | null } | null>(null)
   const [profiles, setProfiles] = useState<CloudFormationProfile[]>([])
   const [regions, setRegions] = useState<string[]>([])
   const [profile, setProfile] = useState('default')
   const [region, setRegion] = useState('us-east-1')
-  const [stacks, setStacks] = useState<CloudFormationStackSummary[]>([])
+  const [stacks, setStacks] = useState<CloudFormationLegacyStackSummary[]>([])
   const [stackName, setStackName] = useState('')
   const [templateName, setTemplateName] = useState('')
   const [templateBody, setTemplateBody] = useState('')

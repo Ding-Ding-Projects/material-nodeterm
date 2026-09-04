@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
 import { useEffect, useMemo, useState } from 'react'
-import type { CdkApi, CdkOperation, CdkReviewedChange, CdkStatus } from '@shared/cdk'
+import type { CdkLegacyApi, CdkOperation, CdkReviewedChange, CdkLegacyStatus } from '@shared/cdk'
 import { useSession } from '../../session/session'
 import type { DialogApi } from '@shared/types'
 import { Button, Checkbox, IconButton, Tabs, TextField } from '@renderer/ui/md3'
@@ -23,18 +23,18 @@ function operationLabel(operation: CdkOperation): string {
   return operation[0].toUpperCase() + operation.slice(1)
 }
 
-function reviewedChange(status: CdkStatus, operation: Exclude<CdkOperation, 'bootstrap'>, acknowledged: boolean): CdkReviewedChange | null {
+function reviewedChange(status: CdkLegacyStatus, operation: Exclude<CdkOperation, 'bootstrap'>, acknowledged: boolean): CdkReviewedChange | null {
   if (!status.folder || !status.trust) return null
   return { operation, folder: status.folder, trustFingerprint: status.trust.fingerprint, acknowledged, reviewedAt: Date.now() }
 }
 
-function StatusSummary({ status }: { status: CdkStatus | null }): React.JSX.Element {
+function StatusSummary({ status }: { status: CdkLegacyStatus | null }): React.JSX.Element {
   if (!status) return <p className="service-node__note">Choose a CDK project folder to begin.</p>
   if (status.phase === 'error') return <p className="service-node__note mc-note--warn">CDK manager needs attention. Read the Trust review and Output tabs for the exact reason.</p>
   return <p className="service-node__note">{status.phase === 'completed' ? 'Last operation completed.' : 'Project is ready for a reviewed workflow.'}</p>
 }
 
-function ProjectTab({ api, dialog, status, onStatus }: { api: CdkApi; dialog: DialogApi; status: CdkStatus | null; onStatus: (s: CdkStatus) => void }): React.JSX.Element {
+function ProjectTab({ api, dialog, status, onStatus }: { api: CdkLegacyApi; dialog: DialogApi; status: CdkLegacyStatus | null; onStatus: (s: CdkLegacyStatus) => void }): React.JSX.Element {
   const [folder, setFolder] = useState(status?.folder ?? '')
   const [query, setQuery] = useState('')
   const filtered = useMemo(() => {
@@ -82,7 +82,7 @@ function ProjectTab({ api, dialog, status, onStatus }: { api: CdkApi; dialog: Di
   )
 }
 
-function TrustTab({ status, acknowledged, setAcknowledged }: { status: CdkStatus | null; acknowledged: boolean; setAcknowledged: (v: boolean) => void }): React.JSX.Element {
+function TrustTab({ status, acknowledged, setAcknowledged }: { status: CdkLegacyStatus | null; acknowledged: boolean; setAcknowledged: (v: boolean) => void }): React.JSX.Element {
   if (!status?.trust) return <p className="om-empty-note">Inspect a project before reviewing it.</p>
   return (
     <section>
@@ -97,7 +97,7 @@ function TrustTab({ status, acknowledged, setAcknowledged }: { status: CdkStatus
   )
 }
 
-function OperationsTab({ api, status, acknowledged, onStatus, setTab }: { api: CdkApi; status: CdkStatus | null; acknowledged: boolean; onStatus: (s: CdkStatus) => void; setTab: (tab: PanelTab) => void }): React.JSX.Element {
+function OperationsTab({ api, status, acknowledged, onStatus, setTab }: { api: CdkLegacyApi; status: CdkLegacyStatus | null; acknowledged: boolean; onStatus: (s: CdkLegacyStatus) => void; setTab: (tab: PanelTab) => void }): React.JSX.Element {
   const [busy, setBusy] = useState<CdkOperation | null>(null)
   const run = async (operation: Exclude<CdkOperation, 'bootstrap'>): Promise<void> => {
     const review = reviewedChange(status!, operation, acknowledged)
@@ -131,7 +131,7 @@ function OperationsTab({ api, status, acknowledged, onStatus, setTab }: { api: C
   )
 }
 
-function OutputTab({ status }: { status: CdkStatus | null }): React.JSX.Element {
+function OutputTab({ status }: { status: CdkLegacyStatus | null }): React.JSX.Element {
   const result = status?.lastResult
   if (!result) return <p className="om-empty-note">No CDK workflow has run yet.</p>
   return <section><h3>{operationLabel(result.operation)} output</h3><p role="status">{result.ok ? 'Completed' : 'Failed'} · exit code {result.exitCode ?? 'unknown'} · {result.durationMs} ms{result.truncated ? ' · output truncated at the safety bound' : ''}</p><pre className="cdk-output">{result.output || result.error || 'No output was reported.'}</pre>{result.assets.length > 0 && <details><summary>Generated assets ({result.assets.length})</summary><ul>{result.assets.map((asset) => <li key={asset.path}><code>{asset.path}</code> · {asset.bytes} bytes · <code>{asset.sha256}</code></li>)}</ul></details>}</section>
@@ -139,7 +139,7 @@ function OutputTab({ status }: { status: CdkStatus | null }): React.JSX.Element 
 
 export function CdkManagerPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
   const { api } = useSession()
-  const [status, setStatus] = useState<CdkStatus | null>(null)
+  const [status, setStatus] = useState<CdkLegacyStatus | null>(null)
   const [tab, setTab] = useState<PanelTab>('project')
   const [acknowledged, setAcknowledged] = useState(false)
   useEffect(() => api.cdk.onEvent((event) => { setStatus(event.status); if (event.status.phase === 'error') setTab('trust') }), [api.cdk])

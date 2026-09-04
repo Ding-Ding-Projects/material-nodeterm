@@ -5264,7 +5264,11 @@ export interface NodeTerminalApi {
   /** Self-managed and SaaS GitLab server operations. */
   gitlab: import('./gitlab').GitLabApi
   /** Desktop-only CloudFormation stack manager; browser and relay surfaces omit it. */
-  cloudFormation?: import('./cloudformation').CloudFormationApi
+  // The registered service is `CloudFormationService implements CloudFormationLegacyApi`, so
+  // this member names that shape. The unprefixed CloudFormationApi in the same module belongs
+  // to a sibling lineage with no wired backend — naming it here would compile while pointing
+  // at a contract nothing implements.
+  cloudFormation?: import('./cloudformation').CloudFormationLegacyApi
   /** Desktop-only AWS resource managers; browser and relay surfaces omit them. */
   aws?: import('./aws').AwsApi
   timer: TimerApi
@@ -5288,7 +5292,14 @@ export interface NodeTerminalApi {
   /** Universal file converter — docs/file-converter.md. */
   converter: import('./converter').ConverterApi
   /** Local AWS CDK manager. The browser bridge exposes an explicit unsupported response. */
-  cdk: import('./cdk').CdkApi
+  // `CdkManager implements CdkLegacyApi`, so that is the shape — the unprefixed CdkApi in the
+  // same module belongs to a sibling lineage with no wired backend.
+  //
+  // OPTIONAL, and that is a fact rather than caution: `core/cdk/register-ipc.ts` exists but
+  // neither shell calls it, so nothing provides this member at run time. CdkManagerPanel (reached
+  // from AwsResourceNode) therefore calls an API that is absent. Declaring it required would let
+  // every call site assume a backend that was never wired. Wiring it is a separate decision.
+  cdk?: import('./cdk').CdkLegacyApi
   /** Shared automatic dependency lifecycle for node-feature installers. */
   nodeDependencies: import('./node-dependencies').NodeDependenciesApi
   /** Current installed AWS CLI model source for the AWS Shop operation wizard. */
