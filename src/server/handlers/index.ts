@@ -109,7 +109,7 @@ export function registerCoreHandlers(
   registerUniGetUiIpc(platform)
   const { manager: minecraftServers } = registerMinecraftIpc(platform)
   registerDockerHostIpc(platform)
-  registerTorrentIpc(platform)
+  const { service: torrentService } = registerTorrentIpc(platform)
   const { manager: virtualMachineManager } = registerVirtualMachineIpc(platform)
   registerCalendarIpc(platform)
   const cloudflareCoreManagers = registerCloudflareCoreManagersIpc(platform)

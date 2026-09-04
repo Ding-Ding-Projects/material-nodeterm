@@ -5,7 +5,7 @@ import {
   formatHomeAssistantValue,
   homeAssistantGaugeRange,
   homeAssistantTrendRange,
-  normalizeHomeAssistantEntity,
+  normalizeHomeAssistantSensorEntity,
   parseHomeAssistantNumericState,
   validateHomeAssistantConnection,
   validateHomeAssistantSensorConfig,
@@ -222,7 +222,7 @@ export class HomeAssistantSensorService {
     const body = await boundedJson(apiUrl(connection.endpoint, '/api/states'), token)
     if (!Array.isArray(body)) throw new Error('Home Assistant returned an invalid entity list.')
     if (body.length > MAX_JSON_ARRAY) throw new Error(`Home Assistant entity catalogue exceeds the supported ${MAX_JSON_ARRAY}-entity limit.`)
-    const entities = body.map(normalizeHomeAssistantEntity)
+    const entities = body.map(normalizeHomeAssistantSensorEntity)
     if (entities.some((entry) => entry === null)) throw new Error('Home Assistant returned an invalid entity record.')
     return entities as HomeAssistantEntitySummary[]
   }
@@ -235,7 +235,7 @@ export class HomeAssistantSensorService {
     if (!token) throw new Error('No Home Assistant access token is stored for this node.')
     if (!config.entityId) throw new Error('Choose a Home Assistant entity before reading a sensor.')
     const body = await boundedJson(apiUrl(connection.endpoint, `/api/states/${config.entityId}`), token)
-    const entity = normalizeHomeAssistantEntity(body)
+    const entity = normalizeHomeAssistantSensorEntity(body)
     if (!entity) throw new Error('Home Assistant returned an invalid sensor state.')
     const current = this.watches.get(this.watchKey(clientId, nodeId))
     const history = current?.history ?? []
@@ -302,7 +302,7 @@ export class HomeAssistantSensorService {
         }
       }
       else if (parsed.type === 'event' && parsed.event?.data?.entity_id === watch.config.entityId) {
-        const entity = normalizeHomeAssistantEntity(parsed.event.data.new_state)
+        const entity = normalizeHomeAssistantSensorEntity(parsed.event.data.new_state)
         if (!entity) {
           this.publishOffline(nodeId, watch)
           try { socket.close() } catch { /* the close handler still owns retry state */ }

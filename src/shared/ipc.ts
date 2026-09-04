@@ -47,6 +47,8 @@ export const IPC = {
   virtualMachineRestore: 'virtual-machine:restore',
   virtualMachineOpenDisplay: 'virtual-machine:open-display',
   virtualMachineReset: 'virtual-machine:reset',
+  virtualMachineCancel: 'virtual-machine:cancel',
+  virtualMachineRemove: 'virtual-machine:remove',
   virtualMachineEvent: 'virtual-machine:event',
   claudeReadTranscript: 'claude:read-transcript',
   chatReadTranscript: 'chat:read-transcript',

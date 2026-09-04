@@ -1596,6 +1596,7 @@ const api: NodeTerminalApi = {
     createDisk: (id, folder) => ipcRenderer.invoke(IPC.virtualMachineCreateDisk, id, folder),
     start: (id) => ipcRenderer.invoke(IPC.virtualMachineStart, id),
     stop: (id) => ipcRenderer.invoke(IPC.virtualMachineStop, id),
+    remove: (id) => ipcRenderer.invoke(IPC.virtualMachineRemove, id),
     snapshot: (id, name) => ipcRenderer.invoke(IPC.virtualMachineSnapshot, id, name),
     restore: (id, name) => ipcRenderer.invoke(IPC.virtualMachineRestore, id, name),
     openDisplay: (id) => ipcRenderer.invoke(IPC.virtualMachineOpenDisplay, id),

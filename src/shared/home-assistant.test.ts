@@ -4,7 +4,7 @@ import {
   defaultHomeAssistantSensorConfig,
   homeAssistantGaugeRange,
   homeAssistantTrendRange,
-  normalizeHomeAssistantEntity,
+  normalizeHomeAssistantSensorEntity,
   parseHomeAssistantNumericState,
   validateHomeAssistantConnection,
   validateHomeAssistantSensorConfig
@@ -30,11 +30,11 @@ describe('Home Assistant sensor contract', () => {
   })
 
   it('keeps structured attributes and refuses unsafe attribute objects', () => {
-    const normalized = normalizeHomeAssistantEntity(entity())
+    const normalized = normalizeHomeAssistantSensorEntity(entity())
     expect(normalized?.attributes.nested).toEqual({ ok: true })
     expect(normalized?.attributes.forecast).toEqual([{ temperature: 22 }])
-    expect(normalizeHomeAssistantEntity(entity({ attributes: Object.create(null) }))).toBeNull()
-    expect(normalizeHomeAssistantEntity(entity({ attributes: { bad: { deep: { deeper: { too: { far: true } } } } } }))).toBeNull()
+    expect(normalizeHomeAssistantSensorEntity(entity({ attributes: Object.create(null) }))).toBeNull()
+    expect(normalizeHomeAssistantSensorEntity(entity({ attributes: { bad: { deep: { deeper: { too: { far: true } } } } } }))).toBeNull()
   })
 
   it('classifies unknown, unavailable, stale, and malformed timestamps distinctly', () => {
@@ -53,7 +53,7 @@ describe('Home Assistant sensor contract', () => {
   })
 
   it('requires a real gauge range and preserves a real trend range', () => {
-    const normalized = normalizeHomeAssistantEntity(entity())!
+    const normalized = normalizeHomeAssistantSensorEntity(entity())!
     const config = { ...defaultHomeAssistantSensorConfig(normalized.entityId), mode: 'gauge' as const }
     expect(homeAssistantGaugeRange(normalized, config)).toEqual({ min: 0, max: 50 })
     expect(homeAssistantGaugeRange(normalized, { ...config, unitOverride: '', gaugeMin: 0, gaugeMax: undefined })).toBeNull()

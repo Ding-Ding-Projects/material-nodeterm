@@ -557,6 +557,19 @@ export class VirtualMachineManager {
     return this.emit({ ...status, isoSha256Actual: actualIsoSha256, diskFormat })
   }
 
+  async cancel(id: string): Promise<boolean> {
+    if (!safeId(id)) return false
+    this.generations.set(id, (this.generations.get(id) ?? 0) + 1)
+    const live = this.running.get(id)
+    if (!live) return false
+    await terminateChild(live.process)
+    if (this.running.get(id)?.generation === live.generation) this.running.delete(id)
+    const record = await this.read(id)
+    if (record) await this.write({ ...record, phase: 'stopped', error: 'VM start cancelled.', updatedAt: new Date().toISOString() })
+    this.emit(await this.statusFrom(id))
+    return true
+  }
+
   async stop(id: string): Promise<VirtualMachineStatus> {
     if (!safeId(id)) throw new Error('The VM id is invalid.')
     await this.reconciliation
@@ -592,6 +605,14 @@ export class VirtualMachineManager {
     const status = this.emit(await this.statusFrom(id))
     if (qmpFailure) throw new Error(status.error ?? qmpFailure.message)
     return status
+  }
+
+  /** Delete the VM's machine-local record only after its owned process has stopped. */
+  async remove(id: string): Promise<boolean> {
+    if (!safeId(id)) return false
+    await this.stop(id)
+    await rm(this.recordPath(id), { force: true })
+    return true
   }
 
   async snapshot(id: string, name: string): Promise<VirtualMachineStatus> {

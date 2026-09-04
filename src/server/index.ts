@@ -22,7 +22,6 @@ import { WorkspaceStore } from '../core/workspace-store'
 import { registerAgentEnvIpc } from '../core/agent-env-ipc'
 import { PtyManager } from '../core/pty-manager'
 import { registerCoreHandlers } from './handlers'
-import { registerAgentEnvIpc } from '../core/agent-env-ipc'
 import { registerGitHubIntegration } from '../core/github/integration'
 import { runGitHubCliCommand } from '../core/github/credentials'
 import {

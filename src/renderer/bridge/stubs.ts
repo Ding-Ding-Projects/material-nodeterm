@@ -1060,6 +1060,7 @@ export function buildStubApi(): Omit<
       restore: U('virtualMachine.restore'),
       openDisplay: U('virtualMachine.openDisplay'),
       reset: U('virtualMachine.reset'),
+      remove: U('virtualMachine.remove'),
       onEvent: noopUnsub,
     },
     windowsDiagnostics: {

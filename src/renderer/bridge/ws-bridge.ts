@@ -1579,6 +1579,7 @@ export function buildVirtualMachineApi(client: RpcClient): Pick<NodeTerminalApi,
     restore: (id, name) => client.request(IPC.virtualMachineRestore, id, name) as ReturnType<VirtualMachineApi['restore']>,
     openDisplay: (id) => client.request(IPC.virtualMachineOpenDisplay, id) as ReturnType<VirtualMachineApi['openDisplay']>,
     reset: (id) => client.request(IPC.virtualMachineReset, id) as ReturnType<VirtualMachineApi['reset']>,
+    remove: (id) => client.request(IPC.virtualMachineRemove, id) as ReturnType<VirtualMachineApi['remove']>,
     onEvent: (listener) => client.subscribe(IPC.virtualMachineEvent, listener as Listener)
   }
   return { virtualMachine }

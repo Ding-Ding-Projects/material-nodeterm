@@ -441,7 +441,12 @@ function validWslDistributionName(name: string): boolean {
 const SAFE_ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/u
 const MAX_NAMED_PROFILE_TEXT = 256
 
-function validNamedProfile(profile: NamedTerminalProfile): boolean {
+type CheckedNamedProfile = NamedTerminalProfile & {
+  shellProfileId: string
+  environment: Record<string, string>
+}
+
+function validNamedProfile(profile: NamedTerminalProfile): profile is CheckedNamedProfile {
   if (
     typeof profile.id !== 'string' ||
     !/^[-a-zA-Z0-9_]{1,96}$/u.test(profile.id) ||
@@ -465,7 +470,7 @@ function validNamedProfile(profile: NamedTerminalProfile): boolean {
     typeof profile.environment !== 'object' ||
     Object.keys(profile.environment).length > 64
   ) return false
-  for (const [key, value] of Object.entries(profile.environment)) {
+  for (const [key, value] of Object.entries(profile.environment as Record<string, unknown>)) {
     if (
       !SAFE_ENV_KEY.test(key) ||
       /^(?:PATH|PATHEXT|COMSPEC|SystemRoot|WINDIR|HOME|USERPROFILE|TMP|TEMP|NODE_OPTIONS|NODE_PATH)$/iu.test(key) ||
@@ -494,7 +499,7 @@ export class WindowsTerminalProfileService implements WindowsTerminalProfileReso
     const active = this.cachedDetection
     try {
       const snapshot = await active
-      return this.withNamedProfiles(this.withCurrentCustomProfile(snapshot.profiles))
+      return this.withNamedProfiles(await this.withCurrentCustomProfile(snapshot.profiles))
     } catch (error) {
       if (this.cachedDetection === active) this.cachedDetection = null
       throw error
@@ -507,7 +512,7 @@ export class WindowsTerminalProfileService implements WindowsTerminalProfileReso
     this.cachedDetection = refreshed
     try {
       const snapshot = await refreshed
-      return this.withNamedProfiles(this.withCurrentCustomProfile(
+      return this.withNamedProfiles(await this.withCurrentCustomProfile(
         snapshot.profiles,
         hasCustomExecutableOverride,
         customExecutableOverride
@@ -586,8 +591,9 @@ export class WindowsTerminalProfileService implements WindowsTerminalProfileReso
     if (!Array.isArray(configured)) return profiles
     const byId = new Set(profiles.map((profile) => profile.id))
     const named = configured.flatMap((candidate): WindowsTerminalProfileDescriptor[] => {
-      if (!candidate || typeof candidate !== 'object' || !validNamedProfile(candidate as NamedTerminalProfile)) return []
+      if (!candidate || typeof candidate !== 'object') return []
       const profile = candidate as NamedTerminalProfile
+      if (!validNamedProfile(profile)) return []
       if (byId.has(`named:${profile.id}`)) return []
       const base = profiles.find((entry) => entry.id === profile.shellProfileId)
       return [{
@@ -607,16 +613,17 @@ export class WindowsTerminalProfileService implements WindowsTerminalProfileReso
     const id = request.profileId.slice('named:'.length)
     const raw = this.getNamedProfiles()
     const profiles = Array.isArray(raw) ? raw : []
-    const profile = profiles.find((candidate): candidate is NamedTerminalProfile =>
-      candidate && typeof candidate === 'object' && (candidate as { id?: unknown }).id === id
+    const found = profiles.find((candidate): candidate is NamedTerminalProfile =>
+      Boolean(candidate) && typeof candidate === 'object' && (candidate as { id?: unknown }).id === id
     )
-    if (!profile || !validNamedProfile(profile)) {
+    if (!found || !validNamedProfile(found)) {
       throw new WindowsTerminalProfileError(
         'profile-unavailable',
         request.profileId,
         'The named terminal profile is unavailable or invalid on this machine. Edit or remove it in Settings.'
       )
     }
+    const profile = found
     if (profile.shellProfileId.startsWith('named:') || profile.shellProfileId === 'custom') {
       throw new WindowsTerminalProfileError(
         'malformed-profile-id',
