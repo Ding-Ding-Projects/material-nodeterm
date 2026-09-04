@@ -59,6 +59,15 @@ export function registerVocabulary(store, deps, registerAction, registerBinding)
     }
     h.save({ vocabEntries: result.entries, vocabSavedAt: savedAt, vocabStatus: 'loaded', vocabError: persistenceError, vocab: '' }, 'Vocabulary file changed')
   })
+  registerBinding('vocab-json', (s, id, value, h) => {
+    const result = validateVocabularyJson(value)
+    if (!result.ok) {
+      h.toast('❌', 'That file did not fit', result.reason)
+      return
+    }
+    h.save({ vocab: JSON.stringify({ version: 1, entries: Object.fromEntries(result.entries) }) }, 'Vocabulary file loaded')
+    h.toast('📖', 'Loaded', `${result.entries.length} local swaps are active.`)
+  })
   registerAction('vocab-clear', (s, id, el, h) => {
     try { localStorage.removeItem(CACHE_KEY) } catch (_err) {}
     h.save({ vocabEntries: Object.create(null), vocabSavedAt: 0, vocabStatus: 'no-file', vocabError: '', vocab: '' }, 'Vocabulary file cleared')

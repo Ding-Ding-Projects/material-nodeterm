@@ -6029,6 +6029,17 @@ export function Canvas() {
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
 
+  const addVirtualMachine = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createVirtualMachineNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
   const addSticky = useCallback(
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
@@ -7362,11 +7373,19 @@ export function Canvas() {
       const projectSession = projectScope.session
       const projectSessionId = projectSession.id
       const projectAgentStatus = projectScope.stores.agentStatus.store
+      // A VM owns a real child process outside React Flow. Await its stop before removing the
+      // canvas node, otherwise selection-delete leaves QEMU orphaned after the node disappears.
+      const vmStops = await Promise.all(targets.filter((node) => node.type === 'linux-vm').map(async (node) => {
+        try { await projectSession.api.virtualMachine.remove(node.id); return null }
+        catch (error) { return { nodeId: node.id, message: error instanceof Error ? error.message : String(error) } }
+      }))
+      const vmFailures = vmStops.filter((failure): failure is { nodeId: string; message: string } => failure !== null)
+      const vmFailedIds = new Set(vmFailures.map((failure) => failure.nodeId))
       const outcome = await settleSessionDestroys(terminalIds, (nodeId) =>
         projectSession.api.pty.destroy(nodeId)
       )
       const candidates = new Set([
-        ...targets.filter((node) => node.type !== 'terminal').map((node) => node.id),
+        ...targets.filter((node) => node.type !== 'terminal' && !vmFailedIds.has(node.id)).map((node) => node.id),
         ...outcome.confirmed
       ])
       const currentStore = useProjects.getState()
@@ -7382,6 +7401,7 @@ export function Canvas() {
       if (destination === 'stored' && !currentStore.getProject(projectId)) destination = 'retain'
       const applied = new Set(destination === 'retain' ? [] : candidates)
       const sequencingFailures = [] as Array<{ nodeId: string; message: string }>
+      sequencingFailures.push(...vmFailures)
       if (destination === 'retain') {
         for (const nodeId of candidates)
           sequencingFailures.push({

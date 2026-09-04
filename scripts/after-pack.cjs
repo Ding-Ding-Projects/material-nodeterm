@@ -1,6 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const asar = require('@electron/asar')
+const crypto = require('crypto')
 
 exports.default = async function verifyCodexRelayPackaging(context) {
   // Squirrel.Windows and Linux both lay the packaged app out flat: extraResources and app.asar
