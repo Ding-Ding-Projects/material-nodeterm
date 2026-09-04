@@ -36,7 +36,6 @@ import {
   unlinkSync,
   writeFileSync
 } from 'fs'
-import { homedir } from 'os'
 import path from 'path'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { platform } from './platform'
@@ -581,7 +580,6 @@ export function writeCodexThreadIdentity(
   const tmp = tempNameFor(file)
   mkdirSync(dir, { recursive: true, mode: 0o700 })
   let renamed = false
-  let quarantined: Array<{ source: string; quarantine: string }> = []
   try {
     writeFileSync(
       tmp,
@@ -595,10 +593,6 @@ export function writeCodexThreadIdentity(
     quarantined = quarantineOtherCodexThreadIdentities(root, nodeId, threadId, scope, tmp)
     renameAtomicSync(tmp, file)
     renamed = true
-    discardQuarantinedCodexThreadIdentities(quarantined)
-  } catch (error) {
-    restoreQuarantinedCodexThreadIdentities(quarantined)
-    throw error
   } finally {
     if (!renamed) {
       try {
@@ -655,7 +649,7 @@ export function bindCodexThreadIdentity(
  */
 export function forgetCodexThreadIdentitiesForNode(
   nodeId: string,
-  root = defaultIdentityRoot()
+  root = codexThreadIdentityRoot()
 ): void {
   if (!SAFE_NODE_ID.test(nodeId)) return
   const forgetInScope = (scope: string, dir: string): void => {
@@ -694,11 +688,7 @@ export function forgetCodexThreadIdentitiesForNode(
 }
 
 export function codexLauncherDir(): string {
-  try {
-    return path.join(platform().userDataDir, 'codex-bin')
-  } catch {
-    return path.join(homedir(), '.nodeterm', 'bin')
-  }
+  return path.join(platform().userDataDir, 'codex-bin')
 }
 
 export const CODEX_LAUNCHER_NAME = 'nodeterm-codex'
@@ -749,8 +739,8 @@ fi
 # — escaping a space inside a case pattern's bracket expression is exactly the kind of quoting
 # that reads fine and matches nothing.
 nt_safe_path() {
-  case "\${1-}" in /*) ;; [A-Za-z]:[/\\\\]*) ;; *) return 1 ;; esac
-  [ "$(printf %s "$1" | tr -cd 'A-Za-z0-9._/\\\\: -')" = "$1" ]
+  case "\${1-}" in /*) ;; *) return 1 ;; esac
+  [ "$(printf %s "$1" | tr -cd 'A-Za-z0-9._/ -')" = "$1" ]
 }
 
 # Runs in THIS shell, never a command substitution: it sources the endpoint file, and that file is
@@ -794,7 +784,7 @@ nt_preflight() {
     ''|*[!A-Za-z0-9._-]*) nt_fail node-token-unavailable; return ;;
   esac
   if [ "\${1-}" = resume ]; then
-    case "\${2-}" in ''|.|..|*[!A-Za-z0-9._-]*) nt_fail thread-id-unavailable; return ;; esac
+    case "\${2-}" in ''|*[!A-Za-z0-9._-]*) nt_fail thread-id-unavailable; return ;; esac
   fi
   # The authoritative check runs FIRST and unchanged; the stat below only decides WHICH reason to
   # report. Ordering it the other way would let a codex that no longer needs the standalone runtime
@@ -823,7 +813,7 @@ nt_preflight() {
 # Best effort, and never fatal: tell the desktop this node is running plain codex, so the UI can
 # say so without the user reading a log. Sent WITHOUT the per-node capability on purpose — the
 # commonest thing it reports is that there was no capability to present. The server only trusts a
-# TOKENLESS report on the node it names (see the /codex-thread/fallback handler), so a session that does hold a
+# TOKENLESS report on the node it names (see handleCodexThread), so a session that does hold a
 # token cannot use this route to flag a sibling.
 nt_report_fallback() {
   [ -n "\${NODETERM_HOOK_PORT-}" ] || return 0
@@ -853,43 +843,7 @@ nt_post() {
     nt_hook_curl --silent --show-error --fail --max-time "$nt_budget" --config - --request POST "$@"
 }
 
-# Relay registration receives the per-node capability on stdin, never argv or the environment.
-nt_register_relay() {
-  nt_safe_path "\${NODETERM_CODEX_RELAY_RUNTIME-}" || return 1
-  nt_safe_path "\${NODETERM_CODEX_RELAY_SCRIPT-}" || return 1
-  [ -x "$NODETERM_CODEX_RELAY_RUNTIME" ] && [ -r "$NODETERM_CODEX_RELAY_SCRIPT" ] || return 1
-  nt_relay_info=''
-  for nt_relay_attempt in 1 2 3; do
-    nt_relay_info=$(printf '%s\\n' "$nt_node_token" |
-      ELECTRON_RUN_AS_NODE=1 "$NODETERM_CODEX_RELAY_RUNTIME" "$NODETERM_CODEX_RELAY_SCRIPT" \\
-        register "$NODETERM_NODE_ID" "\${NODETERM_CODEX_ACCOUNT_ID-}" \\
-        "\${CODEX_HOME:-$HOME/.codex}/app-server-control/app-server-control.sock" \\
-        "$NODETERM_HOOK_ENDPOINT") && break
-    sleep 0.2
-  done
-  [ -n "$nt_relay_info" ] || return 1
-  nt_relay_url=$(printf '%s\\n' "$nt_relay_info" | sed -n '1p')
-  NODETERM_CODEX_RELAY_TOKEN=$(printf '%s\\n' "$nt_relay_info" | sed -n '2p')
-  case "$nt_relay_url" in ws://127.0.0.1:*/*) return 1 ;; ws://127.0.0.1:*) ;; *) return 1 ;; esac
-  [ -n "$NODETERM_CODEX_RELAY_TOKEN" ] || return 1
-  export NODETERM_CODEX_RELAY_TOKEN
-}
-
 if [ "\${1-}" = resume ]; then
-  if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then
-    if ! nt_post 20 --data-urlencode "nodeId=$NODETERM_NODE_ID" \\
-        --data-urlencode "threadId=\${2-}" \\
-        --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\
-        "http://localhost:\${NODETERM_HOOK_PORT-0}/codex-thread/expose" >/dev/null; then
-      nt_report_fallback thread-expose-refused
-      exec codex "$@"
-    fi
-    if ! nt_register_relay; then
-      nt_report_fallback relay-unavailable
-      exec codex "$@"
-    fi
-    exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"
-  fi
   # Claim the caller-supplied thread for THIS node before Codex opens it. A refusal means another
   # live node owns it; two clients on one thread is worse than one plain session, so we fall back.
   if nt_post 20 --data-urlencode "nodeId=$NODETERM_NODE_ID" \\
