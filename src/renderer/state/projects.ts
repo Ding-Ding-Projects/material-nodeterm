@@ -176,7 +176,7 @@ interface ProjectsState {
   /** Replaces the named portable arrangements for a project. */
   setProjectSavedLayouts(id: string, savedLayouts: SavedCanvasLayout[]): void
   /** Writes the serialized canvas (nodes + viewport + unified links) back into a project. */
-  commitCanvas(id: string, nodes: CanvasNodeState[], viewport: Viewport, linksOrBridges?: Link[] | BridgeLink[], ropes?: BridgeLink[]): void
+  commitCanvas(id: string, nodes: CanvasNodeState[], viewport: Viewport, linksOrBridges?: Link[] | BridgeLink[], ropes?: BridgeLink[], links?: Link[]): void
   /**
    * Applies ONE peer canvas mutation to a project's serialized nodes — the path for a project
    * that is loaded but NOT active (React Flow only holds the active project's nodes). Returns
@@ -870,11 +870,11 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     }))
   },
 
-  commitCanvas(id, nodes, viewport, linksOrBridges, ropes) {
+  commitCanvas(id, nodes, viewport, linksOrBridges, ropes, links) {
     const legacyBridgeList = Array.isArray(linksOrBridges) && linksOrBridges.length > 0 &&
       !('kind' in (linksOrBridges[0] as object))
     const edgeSnapshot = ropes !== undefined || legacyBridgeList
-      ? { bridges: linksOrBridges as BridgeLink[], ropes: ropes ?? [] }
+      ? { bridges: linksOrBridges as BridgeLink[], ropes: ropes ?? [], ...(links !== undefined ? { links } : {}) }
       : { links: linksOrBridges as Link[] | undefined }
     set((s) => ({
       projects: s.projects.map((p) => {

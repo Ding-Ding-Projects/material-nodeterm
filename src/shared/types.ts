@@ -443,6 +443,8 @@ export type NodeKind =
   | 'kiosk'
   | 'aws-service'
   | 'portal-door'
+  // XProjectNode and its nodeTypes entry are both live; only the literal was dropped.
+  | 'xproject'
   // The built-in authenticator, as a node. A VIEW of this machine's own TOTP generators: it
   // persists a title and a colour and nothing else, because an entry id names a credential in
   // this machine's OS vault while project.json is git-shared. See AuthenticatorNode.tsx.
@@ -2882,6 +2884,8 @@ export interface Settings {
   soundEffects: boolean
   /** Sound-effect volume, 0..1. */
   soundVolume: number
+  /** Per-event local alert sounds. Data URLs are bounded, validated local media only. */
+  alertSounds: AlertSoundSettings
   /** Optional per-event sound files. Empty entries use the synthesized built-in sound. */
   customAlertSounds: Partial<Record<AlertSoundKind, CustomAlertSound>>
   /** User-defined agents (BYO CLI) appended to the Add menus. */

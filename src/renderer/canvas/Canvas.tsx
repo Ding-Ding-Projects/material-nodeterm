@@ -271,6 +271,7 @@ import {
   KanbanView,
   FileConverterPanel,
   OllamaManagerPanel,
+  AwsShopPanel,
   UniGetUiUniversePanel,
   PasswordManagerPanel
 } from '../components/lazyPanels'
@@ -793,6 +794,7 @@ import {
   claudeLaunchCommand,
   createAgentNode,
   createCanvasControlTerminalNode,
+  createAwsServiceNode,
   createBrowserNode,
   createDebugBrowserNode,
   createKioskNode,
@@ -1838,6 +1840,9 @@ export function Canvas() {
   const [nodeCatalog, setNodeCatalog] = useState<{
     at?: { x: number; y: number }
     groupId?: string
+    universeScope?: NodeCatalogAvailabilityContext['universeScope']
+    universeCanvasId?: string
+    universeDepth?: number
   } | null>(null)
   const [githubAttachment, setGithubAttachment] = useState<{
     targetNodeId: string
@@ -1845,6 +1850,8 @@ export function Canvas() {
     frameBranch?: string
   } | null>(null)
   const [docsInitialPath, setDocsInitialPath] = useState<string | undefined>(undefined)
+  const [awsShopUniverseId, setAwsShopUniverseId] = useState<string | null>(null)
+  const [activeUniverseCanvasId, setActiveUniverseCanvasId] = useState<string | null>(null)
   const nodeCreationCoordinatorRef = useRef(new NodeCreationCoordinator())
   // Drives WorktreeDialog. `groupId` null = create the group frame around the new worktree;
   // set = bind an existing group (the group context menu). `at` is the pane cursor, if any.
@@ -6203,6 +6210,39 @@ export function Canvas() {
         project,
         useSettings.getState().settings.claudeAccounts
       )
+      const settings = useSettings.getState().settings
+      const decision = await resolveClaudeAccountForLaunch({
+        selectedAccountId: selectedAccount,
+        projectDefaultAccountId: project?.defaultAccountId,
+        accounts: settings.claudeAccounts,
+        systemLabel: settings.systemAccountLabel,
+        projectId: project?.id,
+        projectIsRemote: !!project?.ssh,
+        settings: normalizeClaudeAccountRotation(settings.claudeAccountRotation),
+        fetchUsage: (id) => window.nodeTerminal.usage.fetch(id)
+      })
+      const account = decision.accountId
+      if (decision.reason === 'rotated') {
+        notify({
+          kind: 'info',
+          title: 'Claude account rotated for this new session',
+          body: `${decision.sourceLabel} reached ${decision.sourcePercent ?? '?'}% usage. New sessions now use ${decision.targetLabel ?? 'the system account'} at ${decision.targetPercent ?? '?'}%. Running sessions were left untouched.`
+        })
+      } else if (decision.reason === 'no-alternative') {
+        notify({
+          kind: 'warning',
+          title: 'No lower-usage Claude account is available',
+          body: `${decision.sourceLabel} is at ${decision.sourcePercent ?? '?'}%. The new session will use ${decision.targetLabel ?? decision.sourceLabel} at ${decision.targetPercent ?? decision.sourcePercent ?? '?'}%; usage reads that failed were not treated as headroom.`
+        })
+      }
+      if (useProjects.getState().activeProjectId !== activeProjectId) {
+        notify({
+          kind: 'warning',
+          title: 'New Claude session cancelled',
+          body: 'The active project changed while account usage was being checked. No node was created.'
+        })
+        return
+      }
       setNodes((ns) => {
         const created = createAgentNode(
           'claude',
@@ -11967,6 +12007,10 @@ export function Canvas() {
     // Destructive/recovery rows (Delete, Restart agent, Branch/Transfer) are not hideable at all:
     // `isHidden` only answers for ids in its own inventory.
     const hidden = useSettings.getState().settings.hiddenNodeMenuItems
+    const protectedSelection = ids.some((id) => {
+      const node = nodesRef.current.find((candidate) => candidate.id === id)
+      return node?.type === 'shop' || node?.data.nonDeletable === true
+    })
     const drivenHere =
       ids.length === 1 && drivingNodeIds(useBrowserLease.getState().entries, Date.now()).has(ids[0])
     const target = ids.length === 1 ? nodesRef.current.find((node) => node.id === ids[0]) : undefined
@@ -20372,9 +20416,10 @@ export function Canvas() {
             isSshProject,
             hasRemoteConnection: useSshServers.getState().servers.length > 0,
             supportsWindowsTerminalProfiles: offersTerminalProfiles,
-            universeScope: 'root',
-            universeDepth: 0,
-            hasShopNode: false
+            universeScope: nodeCatalog.universeScope ?? 'root',
+            universeId: nodeCatalog.universeCanvasId,
+            universeDepth: nodeCatalog.universeDepth ?? 0,
+            hasShopNode: nodeCatalog.universeScope !== undefined
           }}
           terminalProfileChoices={terminalProfileMenuChoices}
           namedTerminalProfiles={offersTerminalProfiles ? settings.namedTerminalProfiles : []}
@@ -20388,7 +20433,12 @@ export function Canvas() {
               })
               return
             }
-            createCatalogNode(entry, creationEventId, nodeCatalog.at, nodeCatalog.groupId, options)
+            createCatalogNode(entry, creationEventId, nodeCatalog.at, nodeCatalog.groupId, options, {
+              universeScope: nodeCatalog.universeScope ?? 'root',
+              universeId: nodeCatalog.universeCanvasId,
+              universeDepth: nodeCatalog.universeDepth ?? 0,
+              hasShopNode: nodeCatalog.universeScope !== undefined
+            })
           }}
           onOpenDocumentation={(path) => {
             setNodeCatalog(null)
@@ -20525,33 +20575,6 @@ export function Canvas() {
           <DocsBrowser initialPath={docsInitialPath} />
         </div>
       )}
-      <NodeCatalogDialog
-        open={nodeCatalog !== null}
-        onClose={() => setNodeCatalog(null)}
-        context={{
-          sessionSource,
-          hasProjectFolder: !!(useProjects.getState().getProject(activeProjectId)?.cwd || useProjects.getState().getProject(activeProjectId)?.ssh?.remoteCwd),
-          isSshProject: !!useProjects.getState().getProject(activeProjectId)?.ssh,
-          hasRemoteConnection: useSshServers.getState().servers.length > 0,
-          supportsWindowsTerminalProfiles: offersTerminalProfiles,
-          universeScope: nodeCatalog?.universeScope ?? 'root',
-          universeId: nodeCatalog?.universeCanvasId,
-          universeDepth: nodeCatalog?.universeDepth ?? 0,
-          hasShopNode: nodeCatalog?.universeScope !== undefined
-        }}
-        terminalProfileChoices={terminalProfileMenuChoices}
-        onCreate={(entry, creationEventId, options) => createCatalogNode(entry, creationEventId, nodeCatalog?.at, nodeCatalog?.groupId, options, {
-          universeScope: nodeCatalog?.universeScope ?? 'root',
-          universeId: nodeCatalog?.universeCanvasId,
-          universeDepth: nodeCatalog?.universeDepth ?? 0,
-          hasShopNode: nodeCatalog?.universeScope !== undefined
-        })}
-        onOpenDocumentation={(path) => {
-          setDocsInitialPath(path)
-          setDocsOpen(true)
-          setNodeCatalog(null)
-        }}
-      />
       {statusOpen && (
         <div className="md3-status-host">
           <StatusSurface />
@@ -20652,6 +20675,16 @@ export function Canvas() {
 
       {converterOpen && <FileConverterPanel onClose={() => setConverterOpen(false)} />}
       {ollamaOpen && <OllamaManagerPanel onClose={() => setOllamaOpen(false)} />}
+      {awsShopUniverseId && (
+        <AwsShopPanel
+          universeId={awsShopUniverseId}
+          onClose={() => setAwsShopUniverseId(null)}
+          onCreate={(entry) => {
+            setNodes((current) => [...current, createAwsServiceNode(entry, awsShopUniverseId, current.length, emptyNodePos())])
+            markDirty()
+          }}
+        />
+      )}
       {unigetuiOpen && <UniGetUiUniversePanel onClose={() => setUnigetuiOpen(false)} />}
       {pwmOpen && (
         <PasswordManagerPanel

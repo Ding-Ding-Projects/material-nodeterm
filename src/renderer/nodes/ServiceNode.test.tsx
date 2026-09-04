@@ -22,6 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ServiceNode } from './ServiceNode'
 import { useProjects } from '../state/projects'
+import { useSchoolMode } from '../state/schoolMode'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -112,6 +113,11 @@ describe('ServiceNode', () => {
     // a project left behind by a leaked module instance can never make one appear here; see
     // ColumnPill.test.tsx for that pill exercised directly.
     useProjects.setState({ projects: [], activeProjectId: '' })
+    // ServiceNode renders NOTHING until the shared School-mode record is known to be off:
+    // `{ hydrated: false }` is a placeholder, not evidence that optional integrations are
+    // allowed, so the node fails closed while the record is still loading. Hydrate it here the
+    // way the sibling suites do, or every case below renders null and reads as a broken node.
+    useSchoolMode.setState({ enabled: false, hydrated: true })
     const windowWithBridge = window as unknown as { nodeTerminal?: Record<string, unknown> }
     const nodeTerminal = (windowWithBridge.nodeTerminal ??= {})
     nodeTerminal.relayHost = {

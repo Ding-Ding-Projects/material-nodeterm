@@ -78,6 +78,7 @@ export interface VirtualMachineApi {
   restore(id: string, name: string): Promise<VirtualMachineStatus>
   openDisplay(id: string): Promise<{ ok: true; url: string } | { ok: false; error: string }>
   reset(id: string): Promise<VirtualMachineStatus>
+  remove(id: string): Promise<boolean>
   onEvent(listener: (event: VirtualMachineEvent) => void): () => void
 }
 

@@ -17,7 +17,7 @@ import { Button, IconButton } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 import { MaterialSymbol } from '../components/MaterialSymbol'
 
-export type WorktreeAction = 'merge' | 'remove' | 'unbind' | 'rerun-setup'
+export type WorktreeAction = 'merge' | 'remove' | 'unbind' | 'rerun-setup' | 'sync'
 export type WslAction = 'sleep' | 'wake' | 'delete' | 'unbind'
 
 /** Canvas-owned drill navigation. Group frames remain ordinary persisted nodes; this handler
