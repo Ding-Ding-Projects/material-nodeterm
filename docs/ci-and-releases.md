@@ -116,7 +116,10 @@ job:
     and expected names are replaced with `--clobber`. Any failure leaves a private draft, never
     a public empty or partial release.
 14. **Generate the publication-ready release notes after upload** (`scripts/release-notes.mjs`, embedding
-    `scripts/count-lines.mjs`'s report — see [Release notes content](#release-notes-content)).
+    `scripts/count-lines.mjs`'s report — see [Release notes content](#release-notes-content)). Both
+    note-generation steps receive the same `releases-for-plan.json` snapshot and the explicit
+    non-first-release marker. A different or missing history input in the final timing pass could
+    silently replace a correct unused code name with the catalog's first dish.
 15. **Read the draft back and recheck version authority immediately before publication.** The
     exact hosted asset inventory, draft/non-prerelease state, target/tag ownership, and stable
     version ordering must all still hold; this catches a newer stable release created while the
@@ -240,10 +243,13 @@ printed as **missing**, not guessed at. It always includes:
 4. **The unsigned-installer warning** described above.
 5. **The asset list** (installer filename + size), when the packaging step located any.
 6. **A dim-sum code name with an honest public catalog-photo link.** The note generator reads the
-   workflow's already-paginated prior-release bodies once before selecting a dish. It excludes a
+   workflow's `gh api --paginate --slurp` nested page array before selecting a dish. The initial
+   publication notes and the final timing notes use the same snapshot. It excludes a
    catalog record when either its id or either part of its bilingual name already appears in those
-   bodies, then probes only a bounded number of published catalog photos. If the history snapshot
-   cannot be read, the optional name is omitted rather than risking a duplicate. If the catalog
+   bodies, then probes only a bounded number of published catalog photos. This repository is
+   explicitly marked as a non-first release, so a missing, malformed, flat, or empty snapshot
+   omits the optional name rather than treating history as empty and reusing the first dish. Only
+   an explicit first-release marker may accept a successfully read empty snapshot. If the catalog
    has no unused published photo within the probe budget, the workflow emits a warning and continues
    without a code name. Both note-generation passes receive that same snapshot. The workflow
    checker deliberately removes the finalizer binding and must fail, preventing a completion-timing

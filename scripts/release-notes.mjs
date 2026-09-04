@@ -24,6 +24,12 @@
  *                             their size. Optional — omitted assets are simply not listed.
  *   RELEASE_ASSET_MANIFEST   validated JSON manifest containing each asset's SHA-256.
  *                             The release workflow always supplies it.
+ *   RELEASE_PRIOR_BODIES_FILE
+ *                            JSON emitted by `gh api --paginate --slurp` for the complete
+ *                             prior-release inventory. Required for code-name selection.
+ *   RELEASE_IS_FIRST_RELEASE Exact string `true` only when a successful empty inventory proves
+ *                             this project has no prior release. Missing/false means history is
+ *                             required, so an absent or empty snapshot omits the optional name.
  */
 import { readFile, stat } from 'node:fs/promises'
 import { basename, resolve } from 'node:path'
@@ -166,34 +172,58 @@ export async function renderLineCountSection(compute = computeLineCounts) {
   return lines.join('\n')
 }
 
-/** Read release bodies from the workflow's already-fetched, paginated release inventory. */
-export async function readPriorReleaseBodies(file, read = readFile) {
+/** Read release bodies from the workflow's already-fetched `gh api --paginate --slurp` inventory. */
+export async function readPriorReleaseBodies(file, read = readFile, { allowEmpty = false } = {}) {
   if (!file) return []
   const parsed = JSON.parse(await read(file, 'utf8'))
-  const entries = Array.isArray(parsed)
-    ? parsed.flatMap((page) => Array.isArray(page) ? page : [page])
-    : []
+  if (!Array.isArray(parsed) || !parsed.every((page) => Array.isArray(page))) {
+    throw new Error('prior release inventory must use the nested page array emitted by gh api --paginate --slurp')
+  }
+  const entries = parsed.flat()
+  if (entries.some((entry) => !entry || typeof entry !== 'object' || Array.isArray(entry))) {
+    throw new Error('prior release inventory contains a malformed release entry')
+  }
+  if (!allowEmpty && entries.length === 0) {
+    throw new Error('prior release inventory is empty for a non-first release')
+  }
   return entries
-    .filter((entry) => entry && typeof entry === 'object')
-    .map((entry) => typeof entry.body === 'string' ? entry.body : '')
+    .map((entry) => {
+      if (!Object.hasOwn(entry, 'body') || (entry.body !== null && typeof entry.body !== 'string')) {
+        throw new Error('prior release inventory contains an invalid release body')
+      }
+      return typeof entry.body === 'string' ? entry.body : ''
+    })
     .filter(Boolean)
 }
 
-async function priorReleaseBodiesFromEnvironment() {
-  const file = process.env.RELEASE_PRIOR_BODIES_FILE
-  if (file) {
-    try {
-      return await readPriorReleaseBodies(file)
-    } catch (error) {
-      // A broken history read is not a first release. Keep the optional name out rather than
-      // publishing a duplicate, while allowing the build and release to continue.
-      console.error(`::warning::Prior release inventory was unavailable; omitting the optional release code name (${error instanceof Error ? error.message : String(error)}).`)
-      return null
+export async function priorReleaseBodiesFromEnvironment({
+  environment = process.env,
+  read = readFile,
+  warn = (message) => console.error(message),
+} = {}) {
+  try {
+    const firstReleaseRaw = environment.RELEASE_IS_FIRST_RELEASE
+    if (firstReleaseRaw != null && firstReleaseRaw !== 'true' && firstReleaseRaw !== 'false') {
+      throw new Error('RELEASE_IS_FIRST_RELEASE must be exactly true or false')
     }
+    const allowEmpty = firstReleaseRaw === 'true'
+    const file = environment.RELEASE_PRIOR_BODIES_FILE
+    if (file) return await readPriorReleaseBodies(file, read, { allowEmpty })
+
+    if (environment.RELEASE_PRIOR_BODIES != null) {
+      const bodies = environment.RELEASE_PRIOR_BODIES.split('\u0000').filter(Boolean)
+      if (!allowEmpty && bodies.length === 0) {
+        throw new Error('prior release bodies are empty for a non-first release')
+      }
+      return bodies
+    }
+    throw new Error('prior release inventory was not supplied')
+  } catch (error) {
+    // A broken history read is not a first release. Keep the optional name out rather than
+    // publishing a duplicate, while allowing the build and release to continue.
+    warn(`::warning::Prior release inventory was unavailable; omitting the optional release code name (${error instanceof Error ? error.message : String(error)}).`)
+    return null
   }
-  return process.env.RELEASE_PRIOR_BODIES == null
-    ? []
-    : process.env.RELEASE_PRIOR_BODIES.split('\u0000').filter(Boolean)
 }
 
 function renderChecksSection() {

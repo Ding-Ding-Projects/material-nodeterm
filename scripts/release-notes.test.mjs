@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { readPriorReleaseBodies, renderLineCountSection } from './release-notes.mjs'
+import {
+  priorReleaseBodiesFromEnvironment,
+  readPriorReleaseBodies,
+  renderLineCountSection,
+} from './release-notes.mjs'
+import { renderCodeNameSection, resolveCodeName } from './dim-sum-code-name.mjs'
 
 /**
  * The line-count contract has two halves, and only one of them had a test.
@@ -93,7 +98,11 @@ describe('renderLineCountSection', () => {
 })
 
 describe('readPriorReleaseBodies', () => {
-  it("reads every body from the workflow's paginated release inventory", async () => {
+  it('rejects a missing snapshot path instead of inventing an empty release history', async () => {
+    await expect(readPriorReleaseBodies(undefined)).rejects.toThrow(/RELEASE_PRIOR_BODIES_FILE is required/)
+  })
+
+  it("reads every body from the exact nested page shape emitted by gh api --paginate --slurp", async () => {
     const bodies = await readPriorReleaseBodies('releases.json', async () => JSON.stringify([
       [{ body: 'hk-dish-0001' }, { body: null }],
       [{ body: 'hk-dish-0002' }],
@@ -103,5 +112,115 @@ describe('readPriorReleaseBodies', () => {
 
   it('rejects malformed release-inventory JSON instead of inventing a prior-body list', async () => {
     await expect(readPriorReleaseBodies('releases.json', async () => '{not json')).rejects.toThrow()
+  })
+
+  it('rejects flat, object, malformed-entry, and empty snapshots for a non-first release', async () => {
+    const payloads = [
+      JSON.stringify([{ body: 'hk-dish-0001' }]),
+      JSON.stringify({ body: 'hk-dish-0001' }),
+      JSON.stringify([[null]]),
+      JSON.stringify([]),
+      JSON.stringify([[]]),
+    ]
+    for (const payload of payloads) {
+      await expect(readPriorReleaseBodies('releases.json', async () => payload)).rejects.toThrow()
+    }
+  })
+
+  it('accepts an empty successful snapshot only with an explicit first-release proof', async () => {
+    await expect(
+      readPriorReleaseBodies('releases.json', async () => JSON.stringify([[]]), { allowEmpty: true }),
+    ).resolves.toEqual([])
+  })
+})
+
+const releaseDish = (n) => ({
+  id: `hk-dish-${String(n).padStart(4, '0')}`,
+  name: { en: `Release Dish ${n}`, zhHant: `發佈點心${n}` },
+  image: {
+    path: `images/hk-dish-${String(n).padStart(4, '0')}-release-dish.png`,
+    alt: { en: `Release photo ${n}` },
+  },
+})
+
+const workflowFetch = (dishes) => async (url) => {
+  if (String(url).includes('catalog/index.json')) {
+    return { ok: true, status: 200, json: async () => ({ dishes }) }
+  }
+  const hit = dishes.find((entry) => String(url).endsWith(entry.image.path.split('/').pop()))
+  return { ok: Boolean(hit), status: hit ? 200 : 404 }
+}
+
+async function workflowCodeName(snapshot, dishes) {
+  const warnings = []
+  const environment = {
+    RELEASE_PRIOR_BODIES_FILE: 'releases-for-plan.json',
+    RELEASE_IS_FIRST_RELEASE: 'false',
+  }
+  const releaseBodies = await priorReleaseBodiesFromEnvironment({
+    environment,
+    read: async () => JSON.stringify(snapshot),
+    warn: (message) => warnings.push(message),
+  })
+  const codeName = await resolveCodeName({
+    releaseBodies,
+    fetchImpl: workflowFetch(dishes),
+    volumes: ['catalog-v1'],
+  })
+  return { codeName, warnings }
+}
+
+describe('release code-name workflow boundary', () => {
+  it('omits the optional name when non-first history is missing, malformed, or empty', async () => {
+    const cases = [
+      { environment: { RELEASE_IS_FIRST_RELEASE: 'false' }, read: async () => JSON.stringify([[{ body: 'ignored' }]]) },
+      { environment: { RELEASE_PRIOR_BODIES_FILE: 'releases.json', RELEASE_IS_FIRST_RELEASE: 'false' }, read: async () => '{bad json' },
+      { environment: { RELEASE_PRIOR_BODIES_FILE: 'releases.json', RELEASE_IS_FIRST_RELEASE: 'false' }, read: async () => JSON.stringify([[]]) },
+    ]
+    for (const testCase of cases) {
+      const warnings = []
+      const releaseBodies = await priorReleaseBodiesFromEnvironment({
+        ...testCase,
+        warn: (message) => warnings.push(message),
+      })
+      expect(releaseBodies).toBeNull()
+      expect(renderCodeNameSection(await resolveCodeName({
+        releaseBodies,
+        fetchImpl: workflowFetch([releaseDish(1)]),
+        volumes: ['catalog-v1'],
+      }))).toBe('')
+      expect(warnings).toHaveLength(1)
+    }
+  })
+
+  it('keeps initial and final note generation on the same code name from one workflow snapshot', async () => {
+    const dishes = [releaseDish(1), releaseDish(2), releaseDish(3)]
+    const snapshot = [[{ tag_name: 'v1.0.0', body: 'hk-dish-0001' }]]
+    const initial = await workflowCodeName(snapshot, dishes)
+    const final = await workflowCodeName(snapshot, dishes)
+    expect(initial.codeName?.id).toBe('hk-dish-0002')
+    expect(final.codeName?.id).toBe(initial.codeName?.id)
+    expect(initial.warnings).toEqual([])
+    expect(final.warnings).toEqual([])
+  })
+
+  it('selects different names for two consecutive workflow-style release inventories', async () => {
+    const dishes = [releaseDish(1), releaseDish(2), releaseDish(3)]
+    const firstSnapshot = [
+      [{ tag_name: 'v1.0.0', body: 'hk-dish-0001' }],
+      [],
+    ]
+    const first = await workflowCodeName(firstSnapshot, dishes)
+    expect(first.codeName?.id).toBe('hk-dish-0002')
+
+    const secondSnapshot = [
+      [{ tag_name: 'v1.0.1', body: renderCodeNameSection(first.codeName) }],
+      [{ tag_name: 'v1.0.0', body: 'hk-dish-0001' }],
+    ]
+    const second = await workflowCodeName(secondSnapshot, dishes)
+    expect(second.codeName?.id).toBe('hk-dish-0003')
+    expect(second.codeName?.id).not.toBe(first.codeName?.id)
+    expect(first.warnings).toEqual([])
+    expect(second.warnings).toEqual([])
   })
 })

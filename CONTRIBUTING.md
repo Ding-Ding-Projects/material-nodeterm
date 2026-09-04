@@ -217,6 +217,11 @@ need it too, and wire it in the same change.
   route is still pending; do not weaken the production wrapper's clean-tree/exact-commit guard to
   create fixture artifacts. The Server Edition and mobile companion do not use this desktop
   installer.
+  Release notes are generated twice, once before publication and once to add completed timing. Both
+  steps must receive the same nested `gh api --paginate --slurp` prior-release snapshot and the
+  explicit non-first-release marker. A missing, malformed, flat, or empty snapshot omits the
+  optional code name; it must never be treated as an empty history, because that reselects the first
+  catalog dish when the final timing edit runs.
   unless the owning filesystem is known to be Windows.
 
 - **Never publish a file with a bare `fs.rename`.** Use `renameAtomic` or `writeFileAtomic` from
