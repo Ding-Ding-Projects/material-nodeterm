@@ -18,18 +18,17 @@ src/core/windows-terminal-profiles.ts(628,7): error TS2322: Type 'string | undef
 src/core/windows-terminal-profiles.ts(651,23): error TS2769: No overload matches this call.
 src/renderer/App.personal-vocabulary.lifecycle.test.ts(7,33): error TS6307: File 'C:/Users/cntow/Documents/GitHub/material-nodeterm/src/main/native-copy-store.ts' is not listed within the file list of project 'C:/Users/cntow/Documents/GitHub/material-nodeterm/tsconfig.web.json'. Projects must list all files or use an 'include' pattern.
 src/renderer/bridge/stubs.ts(1052,5): error TS2741: Property 'remove' is missing in type '{ tools: () => Promise<never>; status: () => Promise<never>; configure: () => Promise<never>; createDisk: () => Promise<never>; start: () => Promise<never>; stop: () => Promise<never>; snapshot: () => Promise<never>; restore: () => Promise<never>; openDisplay: () => Promise<never>; reset: () => Promise<never>; onEve...' but required in type 'VirtualMachineApi'.
-src/renderer/bridge/stubs.ts(1174,3): error TS2322: Type '{ providerServices: { catalog: () => Promise<never[]>; accounts: () => Promise<never[]>; resources: () => Promise<never[]>; beginOAuth: (providerId: string) => Promise<{ status: "unsupported"; ... 4 more ...; reason: string; }>; completeOAuth: () => Promise<...>; removeAccount: () => Promise<...>; }; ... 85 more ......' is not assignable to type 'Omit<NodeTerminalApi, "files" | "authenticator" | "timer" | "dialog" | "speech" | "logs" | "cloudflare" | "settings" | "canvas" | "context" | "pty" | "workspace" | ... 23 more ... | "universeDoorEntry">'.
+src/renderer/bridge/stubs.ts(1174,3): error TS2322: Type '{ providerServices: { catalog: () => Promise<never[]>; accounts: () => Promise<never[]>; resources: () => Promise<never[]>; beginOAuth: (providerId: string) => Promise<{ status: "unsupported"; ... 4 more ...; reason: string; }>; completeOAuth: () => Promise<...>; removeAccount: () => Promise<...>; }; ... 85 more ......' is not assignable to type 'Omit<NodeTerminalApi, "files" | "authenticator" | "timer" | "dialog" | "speech" | "settings" | "canvas" | "context" | "planner" | "presence" | "logs" | "workspace" | ... 23 more ... | "universeDoorEntry">'.
 src/renderer/bridge/ws-bridge.ts(1571,9): error TS2741: Property 'remove' is missing in type '{ tools: () => ReturnType<VirtualMachineApi["tools"]>; status: (id: string) => ReturnType<VirtualMachineApi["status"]>; configure: (id: string, config: VirtualMachineConfig, local: VirtualMachineLocalPaths) => ReturnType<VirtualMachineApi["configure"]>; ... 7 more ...; onEvent: (listener: (event: VirtualMachineEvent...' but required in type 'VirtualMachineApi'.
 src/renderer/canvas/Canvas.tsx(5318,57): error TS2554: Expected 1 arguments, but got 2.
-src/renderer/canvas/Canvas.tsx(6386,32): error TS2552: Cannot find name 'createAwsUniverseNode'. Did you mean 'createAwsUniverse'?
-src/renderer/canvas/Canvas.tsx(6539,22): error TS2304: Cannot find name 'createCloudflareTunnelNode'.
-src/renderer/canvas/Canvas.tsx(6570,32): error TS2552: Cannot find name 'createPortalRecoveryNode'. Did you mean 'createPortalDoorNode'?
-src/renderer/canvas/Canvas.tsx(7873,223): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
-src/renderer/canvas/Canvas.tsx(9326,14): error TS2678: Type '"sync"' is not comparable to type '"remove" | "unbind" | "merge" | "rerun-setup"'.
-src/renderer/canvas/Canvas.tsx(9374,30): error TS2345: Argument of type '(groupId: string, action: "merge" | "remove" | "unbind" | "rerun-setup") => void' is not assignable to parameter of type '(groupId: string, action: WorktreeAction) => void'.
-src/renderer/canvas/Canvas.tsx(20226,11): error TS2322: Type 'SavedCanvasLayout[]' is not assignable to type 'PortableSavedCanvasLayout[]'.
-src/renderer/canvas/Canvas.tsx(20230,11): error TS2322: Type '(layout: import("@shared/types").SavedCanvasLayout, result: SavedLayoutApplyResult) => void' is not assignable to type '(layout: PortableSavedCanvasLayout, result: SavedLayoutApplyResult) => void'.
-src/renderer/components/aws/AwsShopPanel.tsx(86,63): error TS2339: Property 'nextAction' does not exist on type 'AwsAvailability'.
+src/renderer/canvas/Canvas.tsx(6392,32): error TS2552: Cannot find name 'createAwsUniverseNode'. Did you mean 'createAwsUniverse'?
+src/renderer/canvas/Canvas.tsx(6545,22): error TS2304: Cannot find name 'createCloudflareTunnelNode'.
+src/renderer/canvas/Canvas.tsx(6576,32): error TS2552: Cannot find name 'createPortalRecoveryNode'. Did you mean 'createPortalDoorNode'?
+src/renderer/canvas/Canvas.tsx(7885,223): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
+src/renderer/canvas/Canvas.tsx(9338,14): error TS2678: Type '"sync"' is not comparable to type '"remove" | "unbind" | "merge" | "rerun-setup"'.
+src/renderer/canvas/Canvas.tsx(9386,30): error TS2345: Argument of type '(groupId: string, action: "merge" | "remove" | "unbind" | "rerun-setup") => void' is not assignable to parameter of type '(groupId: string, action: WorktreeAction) => void'.
+src/renderer/canvas/Canvas.tsx(20242,11): error TS2322: Type 'SavedCanvasLayout[]' is not assignable to type 'PortableSavedCanvasLayout[]'.
+src/renderer/canvas/Canvas.tsx(20246,11): error TS2322: Type '(layout: import("@shared/types").SavedCanvasLayout, result: SavedLayoutApplyResult) => void' is not assignable to type '(layout: PortableSavedCanvasLayout, result: SavedLayoutApplyResult) => void'.
 src/renderer/components/HostedServiceTunnelPanel.tsx(180,19): error TS2345: Argument of type '(items: HostedServiceOriginCandidate[]) => (HostedServiceOriginCandidate | { health: string; checkedAt: string | undefined; ... 5 more ...; latencyMs?: number | undefined; })[]' is not assignable to parameter of type 'SetStateAction<HostedServiceOriginCandidate[]>'.
 src/renderer/components/portals/PortalDoorEntryPopover.tsx(56,48): error TS2339: Property 'portalDoor' does not exist on type 'NodeTerminalApi'.
 src/renderer/components/settings/sections/CloudflareSection.tsx(62,50): error TS2551: Property 'cloudflare' does not exist on type 'NodeTerminalApi'. Did you mean 'cloudflared'?
@@ -41,28 +40,15 @@ src/renderer/components/settings/sections/CloudflareSection.tsx(108,52): error T
 src/renderer/components/settings/sections/CloudflareSection.tsx(117,593): error TS2551: Property 'cloudflare' does not exist on type 'NodeTerminalApi'. Did you mean 'cloudflared'?
 src/renderer/components/settings/sections/CloudflareSection.tsx(132,102): error TS2551: Property 'cloudflare' does not exist on type 'NodeTerminalApi'. Did you mean 'cloudflared'?
 src/renderer/components/settings/sections/CloudflareSection.tsx(133,96): error TS2551: Property 'cloudflare' does not exist on type 'NodeTerminalApi'. Did you mean 'cloudflared'?
-src/renderer/components/settings/sections/ShellSection.tsx(124,7): error TS2353: Object literal may only specify known properties, and 'createdAt' does not exist in type 'NamedTerminalProfile'.
-src/renderer/components/settings/sections/ShortcutsSection.test.tsx(19,72): error TS2339: Property 'other' does not exist on type 'readonly string[]'.
 src/renderer/components/settings/SettingsIcons.tsx(228,3): error TS2353: Object literal may only specify known properties, and 'cloudflare' does not exist in type 'Record<StaticSettingsSectionId, Element>'.
-src/renderer/components/settings/shortcutFilter.test.ts(55,36): error TS2339: Property 'darwin' does not exist on type 'readonly string[]'.
-src/renderer/components/settings/shortcutFilter.test.ts(56,36): error TS2339: Property 'other' does not exist on type 'readonly string[]'.
-src/renderer/lib/dimsum/public-catalog.ts(32,28): error TS2322: Type '{ id: string; name: { en: string; zhHant: string; }; image: string; revision: unknown; }[]' is not assignable to type 'ResolvedDimSum[]'.
-src/renderer/lib/dimsum/wild.ts(14,74): error TS2554: Expected 1-3 arguments, but got 4.
 src/renderer/lib/nodeSizing.ts(13,14): error TS2740: Type '{ terminal: { width: number; height: number; }; sticky: { width: number; height: number; }; group: { width: number; height: number; }; editor: { width: number; height: number; }; diff: { width: number; height: number; }; ... 45 more ...; converter: { ...; }; }' is missing the following properties from type 'Record<NodeKind, { width: number; height: number; }>': audio, "aws-shop", "aws-wizard", "browser-portal", and 6 more.
-src/renderer/lib/reopenNode.ts(199,40): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'DebugBrowserSpec | undefined'.
-src/renderer/lib/savedLayouts.ts(22,40): error TS2345: Argument of type '5000' is not assignable to parameter of type '100000'.
-src/renderer/lib/savedLayouts.ts(22,107): error TS2345: Argument of type '4000' is not assignable to parameter of type '100000'.
-src/renderer/nodes/AwsServiceNode.tsx(14,60): error TS2322: Type '{}' is not assignable to type 'ReactNode'.
 src/renderer/nodes/ConverterNode.tsx(320,62): error TS2322: Type 'readonly DisplaySegment[]' is not assignable to type 'ReactNode'.
-src/renderer/nodes/KioskNode.tsx(50,79): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'KioskManifestMetadata | (() => KioskManifestMetadata | undefined) | undefined'.
 src/renderer/nodes/ShopNode.test.tsx(6,10): error TS2305: Module '"../../core/universe-shop"' has no exported member 'nodeCatalogShopProvider'.
 src/renderer/nodes/ShopNode.test.tsx(34,60): error TS2554: Expected 1 arguments, but got 2.
 src/renderer/nodes/ShopNode.test.tsx(40,39): error TS2554: Expected 1 arguments, but got 2.
 src/renderer/nodes/TorrentNode.contract.test.ts(2,10): error TS2614: Module '"./TorrentNode"' has no exported member 'torrentNodeOptionalFeatureVisible'. Did you mean to use 'import torrentNodeOptionalFeatureVisible from "./TorrentNode"' instead?
 src/renderer/state/nodeCreationCoordinator.test.ts(25,101): error TS2353: Object literal may only specify known properties, and 'universeCanvasId' does not exist in type 'NodeCreationRequest'.
-src/renderer/state/portalNavigation.ts(25,23): error TS2339: Property 'canvases' does not exist on type 'Project'.
 src/renderer/state/workspace.test.ts(1201,9): error TS2740: Type '{ terminal: string; authenticator: string; 'windows-diagnostics': string; sticky: string; group: string; editor: string; diff: string; photo: string; gallery: string; video: string; audio: string; web: string; ... 39 more ...; converter: string; }' is missing the following properties from type 'Record<NodeKind, string>': "aws-shop", "aws-wizard", "browser-portal", "debug-browser", and 5 more.
-src/renderer/state/worktrees.ts(122,3): error TS2353: Object literal may only specify known properties, and 'repoRootByProject' does not exist in type 'Pick<WorktreesState, "entries" | "repoRoot" | "orphans" | "staleGroupIds">'.
 src/shared/home-assistant.test.ts(34,24): error TS2339: Property 'attributes' does not exist on type 'HomeAssistantEntity'.
 src/shared/home-assistant.test.ts(35,24): error TS2339: Property 'attributes' does not exist on type 'HomeAssistantEntity'.
 src/shared/home-assistant.test.ts(58,36): error TS2345: Argument of type 'HomeAssistantEntity' is not assignable to parameter of type 'HomeAssistantEntitySummary'.

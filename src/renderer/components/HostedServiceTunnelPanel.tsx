@@ -176,7 +176,7 @@ export function HostedServiceTunnelPanel({
       const response = await fetch(formatHostedServiceOrigin(origin), { method: 'GET', signal, credentials: 'omit', redirect: 'manual' })
       return { ok: response.ok, status: response.status, detail: response.ok ? undefined : `Local health returned HTTP ${response.status}.` }
     })
-    const nextCandidate = { ...selected, health: result.state === 'ready' ? 'healthy' : 'unhealthy', checkedAt: result.checkedAt, detail: result.message }
+    const nextCandidate: HostedServiceOriginCandidate = { ...selected, health: result.state === 'ready' ? 'healthy' : 'unhealthy', checkedAt: result.checkedAt, detail: result.message }
     setCandidates((items) => items.map((item) => item.id === selected.id ? nextCandidate : item))
     setStatus(result)
     setBusy(false)

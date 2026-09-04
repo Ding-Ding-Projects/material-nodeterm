@@ -6252,7 +6252,6 @@ export function Canvas() {
       setNodes((ns) => {
         const created = createAgentNode(
           'claude',
-          bodyKind: 'authored'
           ns.length,
           // Same scope resolution as every other Source Control action (`scmCwd`): the panel's
           // active scope, an SSH project's remoteCwd, else the project's own checkout.

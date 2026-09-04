@@ -317,7 +317,7 @@ export default function ConverterNode({ id, data, selected }: NodeProps<CanvasNo
           idPrefix="converter-view"
           vocabularyMode="factual"
         />
-        {error && <p className="cv-item__error" role="alert">{error}</p>}
+        {error && <p className="cv-item__error" role="alert">{mapOwnedSentence(vocab, error)}</p>}
         {view === 'convert' ? (
           <>
             <div className="converter-node__drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => void onDrop(event)}>
