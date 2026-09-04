@@ -20,6 +20,7 @@ import './styles.md3.css'
 import './ui/md3/primitives.css'
 import './tailwind.css'
 import './styles.clipping.css'
+import './styles.durable-occurrences.css'
 
 // Register the custom-agent → baseAgent resolver so the capability predicates (hasHooks, canResume,
 // canControlCanvas, …) resolve a custom agent's inherited harness. Reads the live settings store.

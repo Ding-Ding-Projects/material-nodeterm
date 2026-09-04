@@ -716,6 +716,25 @@ export function buildRealApi(
       >
   }
 
+  const durableOccurrences: DurableOccurrencesApi = {
+    load: () => client.request(IPC.durableOccurrencesLoad) as ReturnType<DurableOccurrencesApi['load']>,
+    save: (snapshot, generation) => client.request(IPC.durableOccurrencesSave, snapshot, generation) as ReturnType<DurableOccurrencesApi['save']>,
+    reconcile: (wallMs, monotonicMs) => client.request(IPC.durableOccurrencesReconcile, wallMs, monotonicMs) as Promise<void>,
+    claim: (id) => client.request(IPC.durableOccurrencesClaim, id) as ReturnType<DurableOccurrencesApi['claim']>,
+    snooze: (id, minutes) => client.request(IPC.durableOccurrencesSnooze, id, minutes) as Promise<boolean>,
+    dismiss: (id) => client.request(IPC.durableOccurrencesDismiss, id) as Promise<boolean>,
+    exportSchedules: () => client.request(IPC.durableOccurrencesExport) as ReturnType<DurableOccurrencesApi['exportSchedules']>,
+    importSchedules: (raw) => client.request(IPC.durableOccurrencesImport, raw) as ReturnType<DurableOccurrencesApi['importSchedules']>,
+    timerTransition: (id, action, wallMs, monotonicMs) => client.request(IPC.durableOccurrencesTimerTransition, id, action, wallMs, monotonicMs) as ReturnType<DurableOccurrencesApi['timerTransition']>,
+    timerLap: (id, wallMs, monotonicMs) => client.request(IPC.durableOccurrencesTimerLap, id, wallMs, monotonicMs) as ReturnType<DurableOccurrencesApi['timerLap']>,
+    timerTick: (wallMs, monotonicMs) => client.request(IPC.durableOccurrencesTimerTick, wallMs, monotonicMs) as Promise<void>,
+    upsertAlarm: (alarm) => client.request(IPC.durableOccurrencesUpsertAlarm, alarm) as ReturnType<DurableOccurrencesApi['upsertAlarm']>,
+    upsertTimer: (timer) => client.request(IPC.durableOccurrencesUpsertTimer, timer) as ReturnType<DurableOccurrencesApi['upsertTimer']>,
+    removeSource: (kind, id) => client.request(IPC.durableOccurrencesRemoveSource, kind, id) as ReturnType<DurableOccurrencesApi['removeSource']>,
+    acknowledge: (id, deliveryGeneration) => client.request(IPC.durableOccurrencesAcknowledge, id, deliveryGeneration) as Promise<boolean>,
+    onChanged: (cb) => client.subscribe(IPC.durableOccurrencesChanged, cb as Listener)
+  }
+
   // The server's data dir, over the SAME channel the desktop preload uses. It is the writable base
   // the worktree dialog derives its default path from — a stub returning '' would suggest
   // `/worktrees/…` at the filesystem root (the server usually runs as root, and git would create it).

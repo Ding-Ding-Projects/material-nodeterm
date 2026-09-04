@@ -132,6 +132,7 @@ const UNIGETUI_SIZE = { width: 520, height: 360 }
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
 const ANNOTATION_SIZE = { width: 240, height: 160 }
+const TIMER_SIZE = { width: 360, height: 300 }
 /**
  * Service managers. Two shapes rather than six numbers, because the distinction that matters is how
  * much a surface has to SHOW, not which product it manages:
@@ -2967,6 +2968,20 @@ const NODE_KINDS = new Set<string>(Object.keys(NODE_KIND_TABLE))
  */
 function duplicateKind(type: string | undefined): NodeKind {
   return type && NODE_KINDS.has(type) ? (type as NodeKind) : 'terminal'
+}
+
+export function createTimerNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const durationMs = 5 * 60_000
+  return { id: nextId('timer'), type: 'timer', position: placeAt(center, index, TIMER_SIZE.width, TIMER_SIZE.height), width: TIMER_SIZE.width, height: TIMER_SIZE.height, style: { width: TIMER_SIZE.width, height: TIMER_SIZE.height }, data: { title: 'Timer', color: NODE_COLORS[index % NODE_COLORS.length], group: null, timerData: { timerMode: 'countdown', durationMs, remainingMs: durationMs, elapsedMs: 0, running: false, paused: false, repeatCount: 0, repeatRemaining: 0, sequence: [], sequenceIndex: 0, lapsMs: [], nextOccurrenceAt: null, occurrenceState: 'scheduled', alarmEnabled: true, alarmTone: 'chime', missedCount: 0, wallAnchorMs: null, monotonicAnchorMs: null } } }
+}
+
+export function createAlarmNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return { id: nextId('alarm'), type: 'alarm', position: placeAt(center, index, NATIVE_LOOP_SIZE.width, NATIVE_LOOP_SIZE.height), width: NATIVE_LOOP_SIZE.width, height: NATIVE_LOOP_SIZE.height, style: { width: NATIVE_LOOP_SIZE.width, height: NATIVE_LOOP_SIZE.height }, data: { title: 'Alarm', color: NODE_COLORS[index % NODE_COLORS.length], group: null, alarmId: nextId('alarm-definition') } }
+}
+
+function resetTimerDataForDuplicate(data: NodeData['timerData']): NodeData['timerData'] {
+  if (!data) return data
+  return { ...data, running: false, paused: false, remainingMs: data.durationMs, elapsedMs: 0, repeatRemaining: data.repeatCount, sequenceIndex: 0, lapsMs: [], nextOccurrenceAt: null, occurrenceState: 'scheduled', missedCount: 0, wallAnchorMs: null, monotonicAnchorMs: null, sequence: data.sequence.map((step) => ({ ...step })) }
 }
 
 /**

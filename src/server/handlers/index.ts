@@ -49,6 +49,7 @@ import {
   flush as flushAgentStatusMirror
 } from '../../core/agent-status-mirror'
 import { IPC } from '../../shared/ipc'
+import { DurableOccurrenceService, FileDurableOccurrenceStore, durableOccurrenceFile, registerDurableOccurrenceHandlers } from '../../core/durable-occurrence-service'
 
 /** Register the Phase-3a handler surface (fs + git + commit) on the server platform.
  *  git.setActiveRemote is a local-only no-op here: it exists to arm SSH-project remote

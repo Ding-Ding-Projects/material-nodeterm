@@ -7718,6 +7718,12 @@ export function Canvas() {
           })
       }
       if (applied.size > 0) markDirty()
+      // Alarm and timer records are host-owned companions of the canvas node. Remove only the
+      // source identity after the node deletion was acknowledged; the service preserves all
+      // terminal occurrence history and cancels any in-flight delivery instead of pruning it.
+      if (applied.size > 0) {
+        void Promise.all(targets.filter((node) => applied.has(node.id) && (node.type === 'alarm' || node.type === 'timer')).map((node) => window.nodeTerminal.durableOccurrences.removeSource(node.type as 'alarm' | 'timer', node.type === 'alarm' ? (node.data.alarmId ?? node.id) : node.id)))
+      }
       // A deleted group takes its worktree BINDING with it — and the frame is the only thing that
       // goes: its children SURVIVE (freed to absolute positions above), dead `data.cwd` and all. So
       // this is a binding-dropping path like Unbind, and it owes exactly what Unbind owes:

@@ -1,0 +1,16 @@
+/* Planner/alarm/timer controls use the same Lang gui surface roles as the rest of the renderer. */
+.planner-section,
+.timer-node,
+.alarm-node { min-width: 0; color: var(--md-on-surface); background: var(--md-surface-container); border-radius: var(--md-shape-medium, 12px); }
+.planner-section input,
+.planner-section select,
+.planner-section textarea,
+.planner-section button,
+.timer-node button,
+.alarm-node button { min-height: 44px; }
+.planner-section input,
+.planner-section select,
+.planner-section textarea { max-width: 100%; min-width: 0; }
+@media (max-width: 560px) {
+  .planner-section .md3-settings-row--stacked { grid-template-columns: minmax(0, 1fr); }
+}
