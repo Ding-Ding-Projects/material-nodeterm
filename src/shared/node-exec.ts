@@ -268,6 +268,23 @@ export function safeNsisLocalPaths(value: unknown): NsisLocalPaths | undefined {
   return out
 }
 
+const SAFE_CLOUDFLARE_BINDING_ID = /^[A-Za-z0-9_.:-]{1,256}$/
+export function safeCloudflareTunnelLocalBinding(value: unknown): CloudflareTunnelLocalBinding | undefined {
+  if (!isRecord(value)) return undefined
+  const raw = value as Record<string, unknown>
+  if (![raw.accountId, raw.zoneId, raw.hostId, raw.targetId].every((v) => typeof v === 'string' && SAFE_CLOUDFLARE_BINDING_ID.test(v))) return undefined
+  if (typeof raw.port !== 'number' || !Number.isInteger(raw.port) || raw.port < 1 || raw.port > 65535) return undefined
+  if (typeof raw.originUrl !== 'string' || !/^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/.test(raw.originUrl)) return undefined
+  const out: CloudflareTunnelLocalBinding = {
+    accountId: raw.accountId, zoneId: raw.zoneId, hostId: raw.hostId, targetId: raw.targetId,
+    port: raw.port, originUrl: raw.originUrl
+  }
+  for (const key of ['tunnelId', 'dnsRecordId', 'connectorContainerId', 'tokenFilePath'] as const) {
+    if (typeof raw[key] === 'string' && raw[key].length <= 4096 && !/[\u0000-\u001f\u007f]/.test(raw[key])) out[key] = raw[key]
+  }
+  return out
+}
+
 /** Node id → the exec values that stay on this machine. */
 export type LocalNodeExecMap = Record<string, LocalNodeExec>
 

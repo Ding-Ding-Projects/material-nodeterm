@@ -425,6 +425,16 @@ export const IPC = {
   serverDeploymentStart: 'server-deployment:start',
   serverDeploymentTotp: 'server-deployment:totp',
   serverDeploymentStatus: 'server-deployment:status',
+  /** Guided Cloudflare Tunnel manager. Secrets never travel in a result or broadcast. */
+  cloudflareTokenStatus: 'cloudflare:tunnel-token-status',
+  cloudflareSetToken: 'cloudflare:tunnel-set-token',
+  cloudflareAccounts: 'cloudflare:accounts',
+  cloudflareZones: 'cloudflare:zones',
+  cloudflareTargets: 'cloudflare:targets',
+  cloudflarePreflight: 'cloudflare:tunnel-preflight',
+  cloudflareApply: 'cloudflare:tunnel-apply',
+  cloudflareRollback: 'cloudflare:tunnel-rollback',
+  cloudflareStatus: 'cloudflare:tunnel-status',
   /** Main → renderer event (not invoke/handle): one `ServerDeploymentStage` per emission, sent
    *  while a `serverDeployment.start()` call is in flight. */
   serverDeploymentProgress: 'server-deployment:progress',

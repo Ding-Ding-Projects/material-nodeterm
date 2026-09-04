@@ -2002,6 +2002,19 @@ export interface NativePickerOptions {
   filters?: readonly { name: string; extensions: readonly string[] }[]
 }
 
+/** Guided Cloudflare Tunnel setup. The API exposes metadata and outcome only, never tunnel tokens. */
+export interface CloudflareTunnelApi {
+  tokenStatus(): Promise<{ configured: boolean }>
+  setToken(token: string | null): Promise<void>
+  accounts(): Promise<CloudflareAccount[]>
+  zones(accountId: string): Promise<CloudflareZone[]>
+  targets(): Promise<CloudflareOriginTarget[]>
+  preflight(plan: CloudflareTunnelPlan): Promise<CloudflarePreflightCheck[]>
+  apply(plan: CloudflareTunnelPlan): Promise<CloudflareTunnelStatus>
+  rollback(): Promise<CloudflareTunnelStatus>
+  status(): Promise<CloudflareTunnelStatus>
+}
+
 export interface DialogApi {
   /** Opens a native folder picker; returns the chosen path or null if cancelled. */
   selectFolder(options?: NativePickerOptions): Promise<string | null>

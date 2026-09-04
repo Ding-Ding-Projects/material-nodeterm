@@ -3051,6 +3051,9 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
       // paths are keyed on it (`releaseWorktreeBinding`). A second frame claiming the same
       // binding could remove the directory the ORIGINAL frame is still working in.
       worktree: undefined,
+      // Provider and connector bindings are machine-local and must not be copied to a second
+      // tunnel node, where they could target an unrelated hostname or container.
+      cloudflareTunnelLocalBinding: undefined,
       // Grants an agent control of this tab through the Browser Plugin. An agent propagates its
       // own grant when IT opens a popup; a user duplicating a node must not hand that authority
       // to a tab the agent never opened.
