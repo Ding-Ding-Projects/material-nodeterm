@@ -24,6 +24,9 @@ import { GitHistoryPanel } from "./git-history/GitHistoryPanel";
 import { buildCommitMenuItems } from "./git-history/git-history-menu";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { VocabularyContextMenu } from "./menu/VocabularyContextMenu";
+import { FilterableMenuHeader } from "./menu/FilterableMenu";
+import { useMenuFilter } from "./menu/useMenuFilter";
+import { useRegexSearchField } from "../lib/regex/useRegexSearchField";
 import { PublishDialog } from "./PublishDialog";
 import { defaultScmScope, type ScmScope } from "@shared/scm-scope";
 import { hintLabel } from "@shared/platform-utils";
@@ -119,6 +122,18 @@ export function SourceControlPanel({
   // checkout rather than pointing at a checkout that no longer exists (same pure helper — and the
   // same fallback — the caller uses to pick the default).
   const scope = defaultScmScope(scopes, scopeId);
+  // A monorepo scan routinely returns dozens of nested repositories. The list gets the same
+  // filterable header (plain text by default, anchored regex builder beside it) as every other
+  // list in the app rather than an unbounded run of buttons.
+  const nestedRepoSearch = useRegexSearchField({ mode: 'text' });
+  const nestedRepoItems = useMemo(
+    () =>
+      (nestedRepoDiscovery?.repositories ?? [])
+        .filter((repo) => nestedRepoSearch.test(repo.relativePath))
+        .map((repo) => ({ id: repo.path, label: repo.relativePath, repo })),
+    [nestedRepoDiscovery, nestedRepoSearch],
+  );
+  const nestedRepoFilter = useMenuFilter(nestedRepoItems, nestedRepoSearch);
   // SSH projects have no worktrees (v1), so the remote cwd is still the whole story there — and
   // with nothing to pick between, the scope chip stays a plain repo label (no menu, no
   // "New worktree…", which does not apply to an SSH project at all).
@@ -602,7 +617,17 @@ export function SourceControlPanel({
                     "Choose a repository below to use Source Control without creating another project.",
                   )}
                 </p>
-                {nestedRepoDiscovery.repositories.map((repo) => {
+                <FilterableMenuHeader
+                  filter={nestedRepoFilter}
+                  placeholder="Filter nested repositories…"
+                  regexLabel="Regex — nested repositories"
+                />
+                {nestedRepoItems.length === 0 && (
+                  <p className="set-note">
+                    {vocab("No nested repository matches this filter.")}
+                  </p>
+                )}
+                {nestedRepoItems.map(({ repo }) => {
                   const nestedScope = scopes.find(
                     (candidate) => candidate.cwd === repo.path,
                   );

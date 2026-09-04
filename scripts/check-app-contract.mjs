@@ -389,7 +389,12 @@ const FEATURES = [
       ['src/core/torrent/register-ipc.ts', 'registerTorrentIpc('],
       ['scripts/after-pack.cjs', 'Packaged WebTorrent runtime is missing']
     ],
-    tests: ['src/shared/torrent.test.ts', 'src/shared/torrent-localization.test.ts', 'src/core/torrent/service.test.ts', 'src/renderer/nodes/TorrentNode.contract.test.ts'],
+    tests: [
+      ['src/shared/torrent.test.ts', "describe('torrent source contracts'"],
+      ['src/shared/torrent-localization.test.ts', "describe('torrent localization contract'"],
+      ['src/core/torrent/service.test.ts', "describe('TorrentService WebTorrent startup containment'"],
+      ['src/renderer/nodes/TorrentNode.contract.test.ts', "describe('torrent node School-mode boundary'"]
+    ],
     docs: ['docs/features/torrents/torrent-downloader.md']
   },
   {
@@ -1389,12 +1394,18 @@ const FEATURES = [
       ['src/renderer/state/nodeCreationCoordinator.ts', 'export class NodeCreationCoordinator'],
       ['src/core/universe-shop.ts', 'export function repairUniverseShops('],
       ['src/core/universe-shop.ts', 'export function createSpecialUniverseCanvas('],
-      ['src/core/universe-shop.ts', 'export class UniverseCanvasStore'],
-      ['src/renderer/state/projects.ts', 'createUniverseChild(projectId'],
+      // The surviving lineage names this coordinator; `UniverseCanvasStore` was a sibling
+      // implementation of the same feature that the merge did not keep.
+      ['src/core/universe-shop.ts', 'export class UniverseShopCoordinator'],
+      // Child-canvas creation shipped as the two explicit universe entry points rather than
+      // one generic `createUniverseChild`.
+      ['src/renderer/state/projects.ts', 'createMultiverseCanvas(projectId'],
+      ['src/renderer/state/projects.ts', 'createAwsUniverseCanvas(projectId'],
       ['src/renderer/components/UniverseCanvasView.tsx', 'export function UniverseCanvasView('],
       ['src/renderer/components/NodeCatalogDialog.tsx', 'export function NodeCatalogDialog('],
       ['src/renderer/nodes/ShopNode.tsx', 'export function ShopNode('],
-      ['src/renderer/canvas/Canvas.tsx', 'nodeCatalogShopProvider('],
+      // The shop catalog reaches the canvas through the runtime registry, not a local provider fn.
+      ['src/renderer/canvas/Canvas.tsx', 'setUniverseShopCatalogRuntime'],
       ['src/renderer/canvas/Canvas.tsx', 'onOpenCatalog=']
     ],
     wired: { file: 'src/renderer/canvas/Canvas.tsx', symbol: 'NodeCatalogDialog' },
