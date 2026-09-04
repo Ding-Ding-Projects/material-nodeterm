@@ -382,6 +382,14 @@ loopback endpoint with exactly one matching page. Its portable node metadata con
 path, process state, local endpoint, cookies, or credentials. See
 [`docs/features/browser/proxy-debug-sessions.md`](./docs/features/browser/proxy-debug-sessions.md).
 
+The Docker host manager in **Settings → Docker host** reaches a local daemon or a saved SSH host
+through typed, argv-only operations. It verifies the real Engine, inventories containers, images,
+volumes, networks, and Compose services, and offers bounded stats, logs, lifecycle actions, and
+typed exec. Searches are plain text by default with an adjacent regex builder. Destructive removal
+always starts with a host-and-id preview and explicit confirmation. Host labels and transport ids
+are machine-local; credentials, paths, and process state never enter a portable project save. See
+[`docs/features/remote/docker-host.md`](./docs/features/remote/docker-host.md).
+
 **Group** nodes are real containers that nest inside each other and can bind to a git worktree, so
 every node created inside one inherits that worktree's directory. Quit the app and the persistent
 backend reattaches to the live session; reboot the machine and cold restore rebuilds the node,
