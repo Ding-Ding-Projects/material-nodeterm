@@ -225,6 +225,12 @@ const PATHS: Record<StaticSettingsSectionId, React.JSX.Element> = {
       <path d="M4.2 4.2 6.4 6.4M11.8 4.2 9.6 6.4M4.2 11.8 6.4 9.6M11.8 11.8 9.6 9.6" />
     </>
   ),
+  cloudflare: (
+    <>
+      <path d="M3 10.8h9.4a2.2 2.2 0 0 0 .2-4.4 4.1 4.1 0 0 0-7.7-.8A2.7 2.7 0 0 0 3 10.8Z" />
+      <path d="M8 7.2v4.1M6.4 8.8 8 7.2l1.6 1.6" />
+    </>
+  ),
   // A clock with a counter-clockwise arrow — "go back to how it was", not "what time is it".
   history: (
     <>

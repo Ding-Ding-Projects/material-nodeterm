@@ -62,6 +62,7 @@ export const DOCS = [
   ['Shared provider services', 'accounts, local credentials, OAuth callbacks, and bindings', 'provider-services'],
   ['Projects & tabs', 'one canvas per project', 'projects-and-tabs'],
   ['Remote & SSH projects', 'work on another machine', 'remote-ssh-projects'],
+  ['Cloudflare tunnels', 'inventory, route previews and DNS proof', 'cloudflare-tunnels'],
   ['School mode', 'plain English, locked with a PIN', 'school-mode'],
   ['Server Edition', 'self-host it in a browser', 'server-edition'],
   ['Source control & worktrees', 'a git panel, and a branch per helper', 'source-control-worktrees'],
@@ -194,6 +195,7 @@ export const SECTIONS = [
   { id: 'coverage', icon: '✅', label: 'Checklist', kicker: 'nothing hidden', title: 'The big checklist', sub: 'Every promise this page makes, and exactly where it lives. Anything only half-done says so.', ph: 'Search the checklist…' },
   { id: 'shots', icon: '🖼️', label: 'Screenshots', kicker: 'the real app', title: 'What nodeterm actually looks like', sub: 'Captures of the built desktop app, taken from a running build — never a mockup. Select one to open it full size.', ph: 'Search the screenshots…' },
   { id: 'pair', icon: '📱', label: 'Remote access', kicker: 'browser or iPhone', title: 'Use nodeterm remotely', sub: 'Open a real Server Edition host in your browser, or pair with nodeterm mobile. This tour never asks for access.', ph: 'Search remote access…' },
+  { id: 'cloudflare', icon: '☁️', label: 'Cloudflare', kicker: 'control plane', title: 'Cloudflare tunnel manager', sub: 'Inventory tunnels, preview route changes and prove DNS ownership. No connector runs here.', ph: 'Search Cloudflare…' },
   { id: 'play', icon: '🎮', label: 'Playroom', kicker: 'three games', title: 'The playroom', sub: 'Memory pairs, dumpling maths and whack-a-block. Every button really works, and your best score is kept.', ph: 'Search the playroom…' },
   { id: 'settings', icon: '⚙️', label: 'Settings', kicker: 'make it yours', title: 'Make it yours', sub: 'Colours, words, sound, timers, and a toy padlock for any box. Everything is saved in this browser only.', ph: 'Search settings…' },
 ]

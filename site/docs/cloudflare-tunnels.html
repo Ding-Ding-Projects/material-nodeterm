@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloudflare tunnels — nodeterm</title>
+    <meta name="description" content="Typed Cloudflare tunnel inventory, route preservation, hostname conflict checks, and DNS ownership previews." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="./index.html">← Documentation</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Remote &amp; SSH</p>
+      <h1>Cloudflare tunnel manager</h1>
+      <p>Inspect Cloudflare control-plane state from Settings → Cloudflare tunnels. This surface does not run a connector runtime.</p>
+      <h2>Inventory and status</h2>
+      <p>Inventory reads accounts, zones, tunnels, connections, routes, and DNS records through the privileged core. Token state is presence-only. Unauthorized, partial-permission, rate-limited, and unreachable states stay distinct.</p>
+      <h2>Typed configuration preview</h2>
+      <p>Routes use guided hostname and HTTP(S) service fields. Every write previews its exact changes, preserves unmanaged routes, and blocks duplicate or conflicting hostnames before the API mutation.</p>
+      <h2>DNS adoption proof</h2>
+      <p>DNS adoption requires an existing CNAME in the selected zone that points to a Cloudflare tunnel hostname. The preview shows the zone and record proof. Adoption records the local relationship and never replaces or deletes an unmanaged record.</p>
+      <h2>Local binding and limits</h2>
+      <p>Account, zone, tunnel, and hostname intent is bound to this computer in local application data. Credentials, machine identity, provider sessions, caches, and connector process state are not portable. The implementation lane intentionally does not launch cloudflared.</p>
+      <h2>Verification boundary</h2>
+      <p>This ultra-speed implementation lane did not run tests, type checks, linting, security checks, accessibility checks, builds, packaging, installer execution, runtime interaction checks, or UI captures. The source and documentation describe the shipped boundary, not a claim that those checks ran.</p>
+      <h2>Suggested articles</h2>
+      <ul><li><a href="./remote-ssh-projects.html">Remote &amp; SSH projects</a></li><li><a href="./server-edition.html">Server Edition</a></li><li><a href="./exports-and-history.html">Exports and local history</a></li></ul>
+    </article>
+  </body>
+</html>

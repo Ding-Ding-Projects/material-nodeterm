@@ -155,6 +155,7 @@ export const CATALOG: Catalog = {
   'settings.section.provider-accounts': { en: flat('Provider accounts'), yue: flat('服務帳戶') },
   'settings.section.language': { en: flat('Language'), yue: flat('語言') },
   'settings.section.privacy': { en: flat('Privacy'), yue: flat('私隱') },
+  'settings.section.cloudflare': { en: flat('Cloudflare tunnels'), yue: flat('Cloudflare 隧道') },
 
   // Context-window meter copy. Values are interpolated by the component, while these variants
   // keep status and threshold wording in the same language/funny-level pipeline as other chrome.
