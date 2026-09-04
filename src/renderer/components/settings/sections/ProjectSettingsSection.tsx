@@ -29,6 +29,8 @@ import { projectSectionId } from '../project-settings-targets'
 import { matchesQuery, type SettingsSearchEntry } from '../search'
 import { useProjectSettings } from '../useProjectSettings'
 import { permissionModeForProject } from '../../../state/permissionMode'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../../../lib/personalVocabulary/agentLabel'
 
 /**
  * Persists an identity/defaults edit. The store setters (`renameProject`, `setProjectColor`,
@@ -169,6 +171,8 @@ function EditableProjectSection({
   forceVisible: boolean
 }): React.JSX.Element {
   const settings = useProjectSettings(project.id)
+  const mapVocabulary = useVocabularyMapper()
+  const claudeLabel = mapBuiltinAgentLabel(mapVocabulary, 'claude')
   const appTheme = useAppTheme()
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
   const globalMode = permissionModeForProject(project, 'claude')
@@ -289,7 +293,8 @@ function EditableProjectSection({
       <SearchableRow {...ROWS.permission}>
         <FieldRow
           label="Default permission mode"
-          description="Start-up permission mode for new Claude terminal sessions in this project. Saved in the shared project file, so it travels to everyone who clones the repo."
+          description="Start-up permission mode for new {agent} terminal sessions in this project. Saved in the shared project file, so it travels to everyone who clones the repo."
+          descriptionParams={{ agent: claudeLabel }}
           htmlFor={`project-permission-mode-${project.id}`}
           control={
             <Select
@@ -320,13 +325,15 @@ function EditableProjectSection({
       <SearchableRow {...ROWS.account}>
         <FieldRow
           label="Default Claude account"
-          description="Account new Claude and chat nodes in this project use."
+          labelSegments={[{ kind: 'copy', value: 'Default ' }, { kind: 'fact', value: claudeLabel }, { kind: 'copy', value: ' account' }]}
+          description="Account new {agent} and chat nodes in this project use."
+          descriptionParams={{ agent: claudeLabel }}
           note={accountsHint ?? undefined}
           htmlFor={`project-account-${project.id}`}
           control={
             <Select
               id={`project-account-${project.id}`}
-              aria-label="Default Claude account"
+              aria-label={`Default ${claudeLabel} account`}
               value={project.defaultAccountId ?? ''}
               onChange={(e) => {
                 const v = e.target.value

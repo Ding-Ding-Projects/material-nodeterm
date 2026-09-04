@@ -25,6 +25,8 @@ import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
 import type { NamedTerminalProfile } from '@shared/types'
 import { Button } from '@renderer/ui/md3'
 import { ListRow } from '../ui/md3/ListRow'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../lib/personalVocabulary/agentLabel'
 
 export interface NodeCatalogDialogProps {
   open: boolean
@@ -70,6 +72,7 @@ const PROFILE_CHIPS_SHOWN = 8
 export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoices = [], namedTerminalProfiles = [], onCreate, onOpenDocumentation }: NodeCatalogDialogProps) {
   const { t, emoji } = useI18n()
   const profileText = useLocalizedVocabularyText()
+  const vocab = useVocabularyMapper()
   const docsLabel = profileText('nodeCatalog.docs', 'Documentation')
   const vocabularyEntries = usePersonalVocabulary((state) => state.entries)
   const schoolModeEnabled = useSchoolMode((state) => state.enabled)
@@ -240,6 +243,13 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
             const disabled = !state.available
             const labelValue = blockText(label.id, label.fallback)
             const descriptionValue = blockText(description.id, description.fallback)
+            const displayLabel = mapBuiltinAgentLabel(
+              vocab,
+              entry.category === 'agents' && typeof entry.safeDefaults?.agentId === 'string'
+                ? entry.safeDefaults.agentId
+                : undefined,
+              labelValue.primary
+            )
             return (
               <div
                 key={entry.id}
@@ -268,7 +278,7 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
                   }}
                   onClick={() => create(entry)}
                   title={localize(state.reason ?? '')}
-                  label={<span className="node-catalog-dialog__row-title"><span>{labelValue.primary}</span>{labelValue.secondary && <span className="node-catalog-dialog__row-secondary">{labelValue.secondary}</span>}</span>}
+                  label={<span className="node-catalog-dialog__row-title"><span>{displayLabel}</span>{labelValue.secondary && <span className="node-catalog-dialog__row-secondary">{labelValue.secondary}</span>}</span>}
                   sub={
                     <>
                       <span className="node-catalog-dialog__row-mode">{profileText(
@@ -280,7 +290,7 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
                     </>
                   }
                 />
-                <Button variant="outlined" size="small" vocabularyMode="factual" className="node-catalog-dialog__docs" type="button" onClick={() => onOpenDocumentation(entry.documentationPath)} aria-label={`${profileText(label.id, label.fallback)} ${docsLabel}`}>
+                <Button variant="outlined" size="small" vocabularyMode="factual" className="node-catalog-dialog__docs" type="button" onClick={() => onOpenDocumentation(entry.documentationPath)} aria-label={`${displayLabel} ${docsLabel}`}>
                   {docsLabel}
                 </Button>
               </div>

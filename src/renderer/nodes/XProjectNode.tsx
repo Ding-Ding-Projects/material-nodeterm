@@ -28,6 +28,8 @@ import { travelToNode } from './travel-handler'
 import type { CanvasNode } from '../state/workspace'
 import type { CanvasNodeState, Project } from '@shared/types'
 import { IconButton } from '@renderer/ui/md3'
+import { copy as copySegment, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /** B-side context for one derived foreign projection. It is transient React Flow data, never a
  * project-file record. */
@@ -47,6 +49,8 @@ export function XProjectNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const spawn = data.xprojSpawn as XProjectSpawn | undefined
   const originName = String(data.xprojOriginName ?? spawn?.bProject.name ?? '')
   const originColor = String(data.xprojOriginColor ?? spawn?.bProject.color ?? '#8e8e93')
+  const map = useVocabularyMapper()
+  const nodeTitle = String(data.title || '')
   const copy = useCopyFeedback({
     hostRef,
     hasSelection: () => !!termRef.current?.hasSelection(),
@@ -57,6 +61,23 @@ export function XProjectNode({ id, data, selected }: NodeProps<CanvasNode>) {
   })
   const [retry, setRetry] = useState(0)
   const [plate, setPlate] = useState<'no-session' | 'ssh' | 'closed' | null>('no-session')
+  const jumpTitle = mapOwnedSentence(map, [copySegment('Open in '), fact(originName)])
+  const jumpLabel = mapOwnedSentence(map, [copySegment('Open '), nodeTitle ? fact(nodeTitle) : copySegment('projection'), copySegment(' in '), fact(originName)])
+  const noSessionMessage = mapOwnedSentence(map, [
+    fact(originName),
+    copySegment("'s session is not live yet. Open "),
+    fact(originName),
+    copySegment(' and this view will connect.')
+  ])
+  const sshMessage = mapOwnedSentence(map, [
+    copySegment('Not connected to '),
+    fact(originName),
+    copySegment("'s host. Nothing was started; reconnect and retry.")
+  ])
+  const closedMessage = mapOwnedSentence(map, [
+    fact(originName),
+    copySegment("'s session was closed by another user.")
+  ])
 
   useEffect(() => {
     if (!spawn || !hostRef.current) return
@@ -190,14 +211,14 @@ export function XProjectNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <span className="xproj-node__dot" style={{ background: originColor }} />
           {originName}
         </span>
-        <span className="xproj-node__title">{String(data.title || 'projection')}</span>
+        <span className="xproj-node__title">{nodeTitle ? nodeTitle : map('projection')}</span>
         <IconButton
           size="compact"
           className="xproj-node__jump"
           icon="north_east"
           vocabularyMode="factual"
-          title={`Open in ${originName}`}
-          aria-label={`Open ${String(data.title || 'projection')} in ${originName}`}
+          title={jumpTitle}
+          aria-label={jumpLabel}
           onClick={(event) => {
             event.stopPropagation()
             if (spawn) travelToNode(spawn.bNodeId)
@@ -207,9 +228,9 @@ export function XProjectNode({ id, data, selected }: NodeProps<CanvasNode>) {
       <div className="xproj-node__body nodrag nowheel" ref={hostRef} />
       {plate && (
         <div className="xproj-node__plate">
-          {plate === 'no-session' && `${originName}'s session is not live yet. Open ${originName} and this view will connect.`}
-          {plate === 'ssh' && `Not connected to ${originName}'s host. Nothing was started; reconnect and retry.`}
-          {plate === 'closed' && `${originName}'s session was closed by another user.`}
+          {plate === 'no-session' && noSessionMessage}
+          {plate === 'ssh' && sshMessage}
+          {plate === 'closed' && closedMessage}
         </div>
       )}
     </div>

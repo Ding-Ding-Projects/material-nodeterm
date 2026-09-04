@@ -27,6 +27,8 @@ import {
 import { systemAccountDisplay } from '../state/workspace'
 import { recordClaudeUsage } from '../lib/usageAccountRotation'
 import { Button, Chip, IconButton } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../lib/personalVocabulary/agentLabel'
 
 /** Grace period before a hover-opened popover closes, so the pointer can cross the pill's own
  *  gap (or clip a corner en route elsewhere) without the panel flickering shut. */
@@ -194,8 +196,9 @@ function ProviderBlock({
   mode: 'used' | 'remaining' | 'tokens'
   identity?: string | null
 }) {
+  const vocab = useVocabularyMapper()
   if (u.status === 'unavailable') return null
-  const label = labelFor(u.provider)
+  const label = mapBuiltinAgentLabel(vocab, u.provider, labelFor(u.provider))
   return (
     <div className="usage-account">
       <div className="usage-account__label">{label}</div>
@@ -228,6 +231,8 @@ export function UsageIndicator({
   /** Existing Canvas call sites may provide the same persisted write path used by its menu. */
   onSetDefaultAccount?: (projectId: string, accountId: string | undefined) => void
 }): JSX.Element | null {
+  const mapVocabulary = useVocabularyMapper()
+  const claudeLabel = mapBuiltinAgentLabel(mapVocabulary, 'claude')
   const [usage, setUsage] = useState<ClaudeUsage | null>(null)
   const [open, setOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -495,7 +500,7 @@ export function UsageIndicator({
             <span key={p.provider} className="usage-pill__provider">
               {(limits.length > 0 || i > 0) && <span className="usage-pill__sep">·</span>}
               <span className="usage-pill__num">
-              {percentNumber(worst.usedPercent, percentMode)}% {providerIdentity(p) || labelFor(p.provider)}
+              {percentNumber(worst.usedPercent, percentMode)}% {providerIdentity(p) || mapBuiltinAgentLabel(mapVocabulary, p.provider, labelFor(p.provider))}
               </span>
             </span>
           )
@@ -549,7 +554,7 @@ export function UsageIndicator({
               host's numbers twice under two different headings. */}
           {scope.kind === 'local' &&
             (scoped.accounts.length > 0 && claudeUsage ? (
-              <div role="radiogroup" aria-label="Default Claude account for new sessions" onKeyDown={moveRadioFocus}>
+              <div role="radiogroup" aria-label={`Default ${claudeLabel} account for new sessions`} onKeyDown={moveRadioFocus}>
                 <AccountUsageBlock
                   mode={percentMode}
                   label={systemAccountDisplay(systemLabelSetting, claudeUsage.email)}
@@ -579,7 +584,7 @@ export function UsageIndicator({
               <>
                 {/* No Claude snapshot is available, but enabled providers may still have limits. */}
                 {enabled.length > 0 && limits.length > 0 && (
-                  <div className="usage-account__label">Claude</div>
+                  <div className="usage-account__label">{claudeLabel}</div>
                 )}
                 {limits.map((l) => (
                   <LimitRow key={limitKey(l)} limit={l} mode={percentMode} />
@@ -587,7 +592,7 @@ export function UsageIndicator({
                 {!hasData && <div className="usage-popover__empty">No usage data.</div>}
                 {claudeUsage?.email && (
                   <div className="usage-account">
-                    <div className="usage-account__label">Claude Account</div>
+                    <div className="usage-account__label">{claudeLabel} Account</div>
                     <div className="usage-account__email">{claudeUsage.email}</div>
                   </div>
                 )}
@@ -596,7 +601,7 @@ export function UsageIndicator({
           {/* On an SSH project these are the whole panel; the host badge is what says the numbers
               were read somewhere other than this machine. */}
           {selectableRemote ? (
-            <div role="radiogroup" aria-label="Default Claude account for new sessions" onKeyDown={moveRadioFocus}>
+            <div role="radiogroup" aria-label={`Default ${claudeLabel} account for new sessions`} onKeyDown={moveRadioFocus}>
               {visibleRemote.map((r) => (
                 <RemoteUsageBlock
                   key={`${r.hostKey}#${r.accountId ?? ''}`}

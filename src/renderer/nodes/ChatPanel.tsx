@@ -7,6 +7,7 @@ import { chipFor } from '../lib/keybindingOverrides'
 import { E_UNSUPPORTED } from '@shared/rpc'
 import { Button, TextArea } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../lib/personalVocabulary/agentLabel'
 import { hintLabel } from '@shared/platform-utils'
 import { mapAroundExactFacts } from './nodeVocabulary'
 
@@ -62,6 +63,7 @@ const EMPTY_TEXT: Record<LoadState, { title: string; detail?: string }> = {
  */
 export function ChatPanel({ nodeId, sessionId, cwd, accountId }: ChatPanelProps) {
   const vocab = useVocabularyMapper()
+  const agentLabel = mapBuiltinAgentLabel(vocab, 'claude')
   // This node's core api (stable for the session — the chat transcript and the tmux session
   // both live on the core this panel's project belongs to).
   const { api } = useSession()
@@ -180,8 +182,8 @@ export function ChatPanel({ nodeId, sessionId, cwd, accountId }: ChatPanelProps)
             readonly
               ? vocab("Can't write to this session")
               : working
-                ? mapAroundExactFacts('Claude is working…', ['Claude'], vocab)
-                : mapAroundExactFacts('Message Claude…  (Enter to send)', ['Claude', 'Enter'], vocab)
+                ? mapAroundExactFacts(`${agentLabel} is working…`, [agentLabel], vocab)
+                : mapAroundExactFacts(`Message ${agentLabel}…  (Enter to send)`, [agentLabel, 'Enter'], vocab)
           }
           disabled={readonly || working}
           rows={2}

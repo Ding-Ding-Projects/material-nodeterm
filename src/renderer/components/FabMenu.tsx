@@ -8,6 +8,7 @@ import { accountsForProject, sshAccountsHint } from '../state/workspace'
 import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapBuiltinAgentLabel } from '../lib/personalVocabulary/agentLabel'
 import { IconLock } from './icons'
 import { writeAuthenticatorDrag } from '../lib/explorerNodeDrag'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
@@ -203,8 +204,9 @@ export function FabMenu({
                 ) : null}
                 <ListRow role="menuitem" onClick={pick(onAddRemote)} vocabularyMode="factual" icon={<TerminalIcon />} label={<>{vocab('Remote…')}</>} />
                 {BUILTIN_AGENT_IDS.filter((aid) => !disabledAgents.includes(aid)).flatMap((aid) => {
+                  const displayLabel = mapBuiltinAgentLabel(vocab, aid, AGENT_CONFIG[aid].label)
                   const base = (
-                    <ListRow role="menuitem" key={aid} vocabularyMode="factual" icon={<AgentIcon agentId={aid} size={18} />} label={AGENT_CONFIG[aid].label} onClick={pick(() => onAddAgent(aid))} />
+                    <ListRow role="menuitem" key={aid} vocabularyMode="factual" icon={<AgentIcon agentId={aid} size={18} />} label={displayLabel} onClick={pick(() => onAddAgent(aid))} />
                   )
                   if (aid !== 'claude') return [base]
                   // SSH project with no accounts on its host: a disabled row saying where this
@@ -221,7 +223,7 @@ export function FabMenu({
                   return [
                     base,
                     ...localAccounts.map((a) => (
-                      <ListRow role="menuitem" key={`${aid}-${a.id}`} onClick={pick(() => onAddAgent(aid, a.id))} vocabularyMode="factual" icon={<AgentIcon agentId={aid} size={18} />} label={<>Claude — {a.label}
+                      <ListRow role="menuitem" key={`${aid}-${a.id}`} onClick={pick(() => onAddAgent(aid, a.id))} vocabularyMode="factual" icon={<AgentIcon agentId={aid} size={18} />} label={<>{displayLabel} — {a.label}
                           {a.id === defaultAccountId ? ' ✓' : ''}</>} />
                     ))
                   ]

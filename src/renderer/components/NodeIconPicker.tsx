@@ -8,6 +8,8 @@ import { sessionForProject } from '../session/session'
 import { useDialogStack } from './dialog-stack'
 import { Button } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 const PALETTE: readonly string[] = [
   '\u{1F680}', '\u{1F525}', '\u{2B50}', '\u{26A1}', '\u{1F41B}', '\u{1F527}',
@@ -52,6 +54,7 @@ function NodeIconPicker({ title, icon, onDone }: { title: string; icon?: NodeIco
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const map = useVocabularyMapper()
   useDialogStack()
 
   useEffect(() => {
@@ -70,7 +73,7 @@ function NodeIconPicker({ title, icon, onDone }: { title: string; icon?: NodeIco
     if (!project) return
     const refusal = canvasImportRefusal(!!project.remote)
     if (refusal) {
-      setError(refusal)
+      setError(map(refusal))
       return
     }
     const api = sessionForProject(project.id).api
@@ -80,19 +83,19 @@ function NodeIconPicker({ title, icon, onDone }: { title: string; icon?: NodeIco
     try {
       const base64 = await api.fs.readBinary(picked)
       if (!base64) {
-        setError('Could not read that file.')
+        setError(map('Could not read that file.'))
         return
       }
       const name = picked.replace(/\\/g, '/').split('/').pop() || 'icon.png'
       const saved = await api.files.saveCanvasImage(project.id, name, base64)
       if (!saved) {
-        setError('Could not save the image. Check that this project folder is writable.')
+        setError(map('Could not save the image. Check that this project folder is writable.'))
         return
       }
       const stored = portableIconPath(saved, project.ssh ? undefined : project.cwd)
       const next = normalizeNodeIcon({ type: 'image', path: stored })
       if (!next) {
-        setError('That file type cannot be used as an icon. Try PNG, JPEG, GIF, WEBP or SVG.')
+        setError(map('That file type cannot be used as an icon. Try PNG, JPEG, GIF, WEBP or SVG.'))
         return
       }
       onDone(next)
@@ -104,26 +107,26 @@ function NodeIconPicker({ title, icon, onDone }: { title: string; icon?: NodeIco
   return createPortal(
     <div className="confirm-overlay" onClick={() => onDone(undefined)}>
       <div className="confirm node-icon-dialog" onClick={(event) => event.stopPropagation()}>
-        <p className="confirm__msg">Icon for {title || 'this node'}</p>
+        <p className="confirm__msg">{mapOwnedSentence(map, title ? [copy('Icon for '), fact(title)] : [copy('Icon for this node')])}</p>
         <div className="node-icon-dialog__grid">
           {PALETTE.map((entry) => (
-            <Button variant="outlined" size="small" vocabularyMode="factual" key={entry} type="button" aria-label={`Use ${entry} as the session icon`} className={`node-icon-dialog__swatch${icon?.type === 'emoji' && icon.value === entry ? ' is-current' : ''}`} onClick={() => onDone({ type: 'emoji', value: entry })}>
+            <Button variant="outlined" size="small" vocabularyMode="factual" key={entry} type="button" aria-label={mapOwnedSentence(map, [copy('Use '), fact(entry), copy(' as the session icon')])} className={`node-icon-dialog__swatch${icon?.type === 'emoji' && icon.value === entry ? ' is-current' : ''}`} onClick={() => onDone({ type: 'emoji', value: entry })}>
               {entry}
             </Button>
           ))}
         </div>
         <div className="node-icon-dialog__row">
-          <Input vocabularyMode="factual" ref={inputRef} className="confirm__input node-icon-dialog__input" value={typed} placeholder="Or type any emoji or character" spellCheck={false} onChange={(event) => setTyped(event.target.value)} onKeyDown={(event) => {
+          <Input vocabularyMode="factual" ref={inputRef} className="confirm__input node-icon-dialog__input" value={typed} placeholder={map('Or type any emoji or character')} spellCheck={false} onChange={(event) => setTyped(event.target.value)} onKeyDown={(event) => {
             if (event.key === 'Enter') { event.preventDefault(); commitTyped(typed) }
             else if (event.key === 'Escape') { event.preventDefault(); onDone(undefined) }
           }} />
-          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" disabled={busy} onClick={() => void chooseImage()}>{busy ? 'Copying…' : 'Choose image…'}</Button>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" disabled={busy} onClick={() => void chooseImage()}>{map(busy ? 'Copying…' : 'Choose image…')}</Button>
         </div>
         {error && <p className="node-icon-dialog__error">{error}</p>}
         <div className="confirm__actions">
-          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" disabled={!icon} onClick={() => onDone(null)}>Remove icon</Button>
-          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" onClick={() => onDone(undefined)}>Cancel</Button>
-          <Button variant="filled" size="small" vocabularyMode="factual" type="button" className="confirm__btn primary" onClick={() => commitTyped(typed)}>Use</Button>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" disabled={!icon} onClick={() => onDone(null)}>{map('Remove icon')}</Button>
+          <Button variant="outlined" size="small" vocabularyMode="factual" className="confirm__btn" onClick={() => onDone(undefined)}>{map('Cancel')}</Button>
+          <Button variant="filled" size="small" vocabularyMode="factual" type="button" className="confirm__btn primary" onClick={() => commitTyped(typed)}>{map('Use')}</Button>
         </div>
       </div>
     </div>,

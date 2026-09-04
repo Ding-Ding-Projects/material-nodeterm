@@ -3,6 +3,8 @@ import { act, useEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentLinkPickerDialog, type AgentLinkPickerOption } from './AgentLinkPickerDialog'
+import { usePersonalVocabulary } from '../../state/personalVocabulary'
+import { useSchoolMode } from '../../state/schoolMode'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -66,6 +68,8 @@ describe('AgentLinkPickerDialog', () => {
   beforeEach(() => {
     host = document.createElement('div')
     document.body.appendChild(host)
+    usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0 })
+    useSchoolMode.setState({ enabled: false, hydrated: true })
   })
 
   afterEach(() => {
@@ -73,6 +77,8 @@ describe('AgentLinkPickerDialog', () => {
     root = undefined
     host.remove()
     document.body.replaceChildren()
+    usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0 })
+    useSchoolMode.setState({ enabled: false, hydrated: false })
   })
 
   function render(targets = TARGETS, onPick = vi.fn(), onCancel = vi.fn()): {
@@ -105,6 +111,20 @@ describe('AgentLinkPickerDialog', () => {
     expect(rows()).toHaveLength(2)
     expect(document.querySelector('[data-agent-id="codex"]')).not.toBeNull()
     expect(document.querySelector('[data-agent-id="gemini"]')).not.toBeNull()
+  })
+
+  it('maps the built-in display label in the visible row and accessible name while keeping the node title exact', () => {
+    usePersonalVocabulary.setState({
+      status: 'loaded',
+      entries: { Codex: 'Code buddy' },
+      entryCount: 1
+    })
+    const target = TARGETS[0]
+    render([target])
+    const row = rows()[0]
+    expect(row.textContent).toContain('Code buddy')
+    expect(row.textContent).toContain('Codex reviewer')
+    expect(row.getAttribute('aria-label')).toBe('Codex reviewer, Code buddy')
   })
 
   it('focuses the search field, reaches the regex trigger, then roves to the first row with Tab', () => {
