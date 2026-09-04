@@ -2531,7 +2531,7 @@ export function Canvas() {
       files: withNodeBoundary(FilesNode),
       // The service family. One component for all six: they differ in what they manage, not in how
       // they behave as canvas objects, and React Flow hands each its own `type` so the component can
-      // tell them apart without six registrations of six near-identical files.
+      // tell them apart without seven registrations of seven near-identical files.
       nsis: withNodeBoundary(NsisInstallerNode),
       shop: withNodeBoundary(ShopNode),
       'aws-universe': withNodeBoundary(AwsUniversePortalNode),

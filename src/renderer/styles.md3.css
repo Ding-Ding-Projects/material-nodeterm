@@ -2798,6 +2798,10 @@ div.mdx-row[role='menuitemradio']:focus-visible {
 .service-node :is(button:not(.mdx-btn):not(.md3-icon-btn):not(.mdx-chip):not(.mdx-row):not(.md3-fab):not(.md3-switch), input:not(.mdx-input):not(.mdx-checkbox):not(.mdx-radio):not(.mdx-slider)):focus-visible {
   outline-color: var(--md-primary);
 }
+
+.open-webui-panel { background: var(--md-sys-color-surface-container); border-radius: var(--md-shape-medium, 12px); color: var(--md-sys-color-on-surface); padding: 12px; }
+.open-webui-panel .button-component { min-height: 40px; }
+.open-webui-panel__providers { border-color: var(--md-sys-color-outline); }
 .service-node__input {
   border-radius: var(--md-shape-sm);
 }
