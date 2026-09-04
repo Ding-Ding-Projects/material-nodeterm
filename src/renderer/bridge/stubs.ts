@@ -240,6 +240,11 @@ export function buildStubApi(): Omit<
       onPassphraseRequest: noopUnsub,
       onPassphraseDismiss: noopUnsub
     },
+    oauthCallbacks: {
+      arm: U('oauthCallbacks.arm'),
+      complete: U('oauthCallbacks.complete'),
+      cancel: U('oauthCallbacks.cancel')
+    },
     sshFs: {
       list: U('sshFs.list'),
       read: U('sshFs.read'),

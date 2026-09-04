@@ -3639,6 +3639,23 @@ So it is enforced by scan: `src/core/fs-atomic.guard.test.ts` fails on any bare 
 the helper. Full write-up, including the separate shared-temp-name bug at the same sites:
 **`docs/atomic-writes.md`**.
 
+### Remote OAuth localhost callbacks
+
+`src/shared/oauth-callback.ts` is the single parser for authorize URLs observed in terminal output.
+It accepts only HTTP(S) authorize URLs whose decoded `redirect_uri` is an explicit loopback host
+with a bounded port and whose URL contains a bounded provider `state`. `src/core/oauth-callback.ts`
+binds that state to a memory-only ticket, session, provider host, callback path, and five-minute
+expiry. The ticket is consumed before Server Edition performs its loopback fetch, so a callback
+cannot be replayed or redirected to an arbitrary host. Callback URLs and response bodies never
+enter project files, settings, history, logs, or exports.
+
+Desktop SSH projects arm `ssh -O forward -L <port>:localhost:<port>` on the existing ControlMaster
+and cancel it on expiry, disconnect, or explicit cancellation. Server Edition exposes the same
+API through its WebSocket bridge and shows a guided paste-and-complete panel; the server performs
+the validated request against its own loopback listener with a bounded timeout and manual redirect
+handling. The two shells share IPC names and renderer detection while retaining their distinct host
+boundaries.
+
 SSH/scp staging follows the same ownership rule outside direct `fs` calls. Atomic remote stdin
 writes use `src/main/remote-atomic-write.ts`: a bounded `.nodeterm-<uuid>.tmp` leaf is placed beside
 the target BEFORE both complete paths are quoted, then the shell preserves the write/move status

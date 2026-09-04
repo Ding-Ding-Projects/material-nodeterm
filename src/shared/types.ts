@@ -3478,6 +3478,39 @@ export interface SshApi {
   importCandidates(): Promise<import('./ssh').ParsedSshHost[]>
 }
 
+/** Remote OAuth localhost callback handoff. Tokens and callback URLs stay in memory only. */
+export type OAuthCallbackArmResult =
+  | {
+      ok: true
+      ticket: string
+      provider: string
+      redirectPort: number
+      redirectPath: string
+      expiresAt: number
+      mode: 'ssh-forward' | 'server-completer'
+    }
+  | { ok: false; code: 'invalid-url' | 'unavailable' | 'forward-failed'; message: string }
+
+export type OAuthCallbackCompleteResult =
+  | { ok: true; callbackUrl: string; provider: string; sessionId: string }
+  | {
+      ok: false
+      code: 'unknown-ticket' | 'expired' | 'replayed' | 'invalid-callback'
+      message: string
+      retryable?: boolean
+    }
+
+export interface OAuthCallbackApi {
+  /** Observe an authorize URL in one terminal and arm its provider-bound callback handoff. */
+  arm(input: { sessionId: string; projectId?: string; authorizeUrl: string }): Promise<
+    OAuthCallbackArmResult
+  >
+  /** Server Edition only: redeem the one-use callback by fetching it on the session host. */
+  complete(ticket: string, callbackUrl: string): Promise<OAuthCallbackCompleteResult>
+  /** Cancel a pending handoff when the user closes the pane or dismisses the recovery surface. */
+  cancel(ticket: string): Promise<boolean>
+}
+
 export type SshProjectStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error'
 
 /**
@@ -5171,6 +5204,7 @@ export interface NodeTerminalApi {
   homeAssistantSensor: HomeAssistantSensorApi
   calendar: import('./calendar').CalendarApi
   ssh: SshApi
+  oauthCallbacks: OAuthCallbackApi
   sshProject: SshProjectApi
   sshFs: SshFsApi
   git: GitApi

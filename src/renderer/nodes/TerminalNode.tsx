@@ -187,6 +187,9 @@ import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { isRemoteSessionNode } from '@shared/worktree'
 import { useSession, useActiveSessionPresence } from '../session/session'
 import { isBrowserRuntime } from '../bridge/runtime'
+import { parseOAuthAuthorizeUrl } from '@shared/oauth-callback'
+import { useOAuthCallbacks } from '../state/oauthCallbacks'
+import { notify } from '../lib/adhdNotify'
 import { useToyLocks } from '../state/toylocks'
 import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
 import { isNodeLockEngaged, nodeLockTeardownMode } from '@shared/toylock'
@@ -3620,6 +3623,10 @@ export function TerminalNode({
             // queues those chunks until the seed is written, then drains them in order. Queued bytes
             // still count towards `pending`, so a flood during the gap pauses the source.
             const gate = createDataGate(writeChunk)
+            // OAuth authorize URLs can be split across PTY chunks. Retain only a bounded output
+            // window and never store the callback URL or its credential-bearing query.
+            let oauthOutput = ''
+            const oauthSeen = new Set<string>()
             offData = transport.onData(sid, (chunk) => {
               handleRemoteOAuthOutput(chunk)
               // "Something changed here" for ADHD time awareness / momentum. Deliberately on the
@@ -3627,6 +3634,42 @@ export function TerminalNode({
               // enough to sit there: one Map lookup and one number, no allocation, no store write
               // and no render. A store would re-render the canvas per chunk on a flooding terminal.
               markNodeActivity(id)
+              if (sshProjectId || isBrowserRuntime()) {
+                oauthOutput = `${oauthOutput}${chunk}`.slice(-64 * 1024)
+                const observed = parseOAuthAuthorizeUrl(oauthOutput)
+                if (observed && !oauthSeen.has(observed.authorizeUrl)) {
+                  oauthSeen.add(observed.authorizeUrl)
+                  void window.nodeTerminal.oauthCallbacks
+                    .arm({
+                      sessionId: sid,
+                      projectId: sshProjectId ?? undefined,
+                      authorizeUrl: observed.authorizeUrl
+                    })
+                    .then((armed) => {
+                      if (!armed.ok) {
+                        notify({ kind: 'error', title: 'OAuth sign-in needs attention', body: armed.message })
+                        return
+                      }
+                      window.nodeTerminal.shell.openExternal(observed.authorizeUrl)
+                      if (armed.mode === 'server-completer') {
+                        useOAuthCallbacks.getState().add(armed, sid)
+                      } else {
+                        notify({
+                          kind: 'info',
+                          title: 'OAuth sign-in opened',
+                          body: `The ${armed.provider} localhost callback is forwarded to this SSH session for five minutes.`
+                        })
+                      }
+                    })
+                    .catch(() => {
+                      notify({
+                        kind: 'error',
+                        title: 'OAuth sign-in could not start',
+                        body: 'The callback handoff was unavailable. Retry sign-in from the remote session.'
+                      })
+                    })
+                }
+              }
               pending += chunk.length
               if (!paused && pending > HIGH_WATER) {
                 paused = true

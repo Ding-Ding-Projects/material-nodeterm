@@ -476,6 +476,13 @@ export function buildRealApi(
       client.subscribe(IPC.ptyResync(sessionId), listener as Listener)
   }
 
+  const oauthCallbacks: NodeTerminalApi['oauthCallbacks'] = {
+    arm: (input) => client.request(IPC.oauthCallbackArm, input) as ReturnType<NodeTerminalApi['oauthCallbacks']['arm']>,
+    complete: (ticket, callbackUrl) =>
+      client.request(IPC.oauthCallbackComplete, ticket, callbackUrl) as ReturnType<NodeTerminalApi['oauthCallbacks']['complete']>,
+    cancel: (ticket) => client.request(IPC.oauthCallbackCancel, ticket) as ReturnType<NodeTerminalApi['oauthCallbacks']['cancel']>
+  }
+
   const workspace: WorkspaceApi = {
     load: () => client.request(IPC.workspaceLoad) as Promise<Workspace>,
     save: (ws: Workspace) => client.request(IPC.workspaceSave, ws) as Promise<void>,

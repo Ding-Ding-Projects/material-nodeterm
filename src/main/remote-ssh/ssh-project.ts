@@ -62,6 +62,11 @@ import { appSshAgent } from './ssh-agent'
 import { probeAgentSockToPin } from '../../core/remote-ssh/agent-probe'
 import { sessionName } from '../../core/tmux-naming'
 import { remoteAtomicWrite } from '../remote-atomic-write'
+import {
+  OAuthCallbackRegistry,
+  OAUTH_CALLBACK_TTL_MS,
+  type OAuthCallbackArmInput
+} from '../../core/oauth-callback'
 import { buildCodexLauncherScript } from '../../core/codex-identity-proxy'
 import {
   ACCOUNT_ID_RE,
@@ -436,6 +441,13 @@ export class SshProjectManager {
   /** Projects whose agent-status mirror was actually pushed, gates the disconnect cleanup so a
    *  transient folder-picker browse (never pushed) doesn't pay an extra rm round-trip. */
   private statusPushed = new Set<string>()
+  /** Temporary local forwards keyed by their one-use ticket. No callback URL or auth code is
+   * retained here; expiry only tears down the SSH mapping and registry entry. */
+  private oauthForwards = new Map<
+    string,
+    { projectId: string; port: number; conn: SshConnection; controlPath: string; timer: ReturnType<typeof setTimeout> }
+  >()
+  private oauthCallbacks = new OAuthCallbackRegistry()
   /** One in-flight connect attempt per project, so concurrent callers share it (see connect).
    *  The conn the attempt was started with rides along so a joiner with an EDITED endpoint can
    *  be detected instead of silently receiving a connection to the old server. */
@@ -1257,6 +1269,61 @@ export class SshProjectManager {
    */
   sshRun(args: string[], stdin?: string): Promise<{ code: number; stdout: string }> {
     return this.r.run(args, stdin)
+  }
+
+  /** Arm a provider-bound localhost OAuth callback over the project's existing ControlMaster. */
+  async armOAuthCallback(projectId: string, authorizeUrl: string, sessionId: string): Promise<OAuthCallbackArmResult> {
+    const c = this.conns.get(projectId)
+    if (!c) return { ok: false, code: 'unavailable', message: 'The SSH project is not connected. Reconnect it, then retry sign-in.' }
+    const input: OAuthCallbackArmInput = {
+      authorizeUrl,
+      sessionId,
+      projectId,
+      mode: 'ssh-forward'
+    }
+    const armed = this.oauthCallbacks.arm(input)
+    if (!armed.ok) return armed
+    const forwarded = await this.r.run(oauthForwardArgs(c.conn, c.controlPath, armed.redirectPort))
+    if (forwarded.code !== 0) {
+      this.oauthCallbacks.cancel(armed.ticket)
+      return { ok: false, code: 'forward-failed', message: 'The localhost callback tunnel could not be opened. Retry after reconnecting the SSH project.' }
+    }
+    const timer = setTimeout(() => {
+      void this.cancelOAuthCallback(armed.ticket)
+    }, OAUTH_CALLBACK_TTL_MS)
+    timer.unref?.()
+    this.oauthForwards.set(armed.ticket, {
+      projectId,
+      port: armed.redirectPort,
+      conn: c.conn,
+      controlPath: c.controlPath,
+      timer
+    })
+    return armed
+  }
+
+  /** Complete or reject a callback without ever logging its query or storing its credential. */
+  completeOAuthCallback(ticket: string, callbackUrl: string): OAuthCallbackCompleteResult {
+    const result = this.oauthCallbacks.complete(ticket, callbackUrl)
+    if (result.ok) void this.cancelOAuthCallback(ticket)
+    return result
+  }
+
+  async cancelOAuthCallback(ticket: string): Promise<boolean> {
+    const forward = this.oauthForwards.get(ticket)
+    const registryCancelled = this.oauthCallbacks.cancel(ticket)
+    if (!forward) return registryCancelled
+    clearTimeout(forward.timer)
+    this.oauthForwards.delete(ticket)
+    await this.r.run(oauthForwardCancelArgs(forward.conn, forward.controlPath, forward.port)).catch(() => {})
+    return true
+  }
+
+  private cancelOAuthCallbacksForProject(projectId: string): void {
+    for (const [ticket, forward] of this.oauthForwards) {
+      if (forward.projectId === projectId) void this.cancelOAuthCallback(ticket)
+    }
+    this.oauthCallbacks.cancelForProject(projectId)
   }
 
   /**
@@ -2177,6 +2244,7 @@ export class SshProjectManager {
    * routinely and must not be read as "the user is done with SSH".
    */
   async disconnect(projectId: string, opts?: { keepInFlight?: boolean; final?: boolean }): Promise<void> {
+    this.cancelOAuthCallbacksForProject(projectId)
     const c = this.conns.get(projectId)
     if (!c) {
       await this.cancelOAuthCallback(projectId)
@@ -2518,6 +2586,25 @@ export function initSshProject(
     onConnected?.(projectId)
     return res
   })
+  ipcMain.handle(
+    IPC.oauthCallbackArm,
+    (_e, input: { projectId?: string; sessionId?: string; authorizeUrl?: string }) => {
+      if (!input?.projectId || !input.sessionId || !input.authorizeUrl) {
+        return Promise.resolve({
+          ok: false,
+          code: 'invalid-url' as const,
+          message: 'The OAuth callback request is incomplete. Start sign-in from the remote session again.'
+        })
+      }
+      return mgr.armOAuthCallback(input.projectId, input.authorizeUrl, input.sessionId)
+    }
+  )
+  ipcMain.handle(IPC.oauthCallbackComplete, (_e, ticket: string, callbackUrl: string) =>
+    mgr.completeOAuthCallback(String(ticket ?? ''), String(callbackUrl ?? ''))
+  )
+  ipcMain.handle(IPC.oauthCallbackCancel, (_e, ticket: string) =>
+    mgr.cancelOAuthCallback(String(ticket ?? ''))
+  )
   // `final`: the only USER-facing disconnect there is (a deleted project, or the connect dialog
   // dropping its browse master). Internal teardowns never reach here, which is what makes "no
   // connections left" a trustworthy signal to forget the key.

@@ -25,6 +25,12 @@ agent hooks and forwarding RUNNING/NEEDS-YOU events to your phone as push notifi
 no open inbound port, since the hook server stays loopback-only and outbound push goes out over
 plain HTTPS.
 
+**Remote OAuth callbacks** are completed on the server when a terminal prints an authorize URL with
+a loopback `redirect_uri`. The browser opens the provider URL, then a guided panel accepts the
+complete callback URL and asks the server to fetch its own loopback listener. The ticket is bound
+to the provider state and session, expires after five minutes, is consumed before fetching, and is
+never persisted or logged. See [Remote OAuth localhost callbacks](./oauth-callbacks.md).
+
 ## Configuration
 
 ```bash

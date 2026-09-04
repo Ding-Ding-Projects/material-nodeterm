@@ -8,6 +8,7 @@ import { ArchiveUnlockDialogHost } from './components/archiveUnlockDialog'
 import { DestructiveGateHost } from './components/DestructiveGateHost'
 import { DimSumSurprise } from './components/DimSumSurprise'
 import { NotificationToasts } from './components/NotificationToasts'
+import { RemoteOAuthCallbackPanel } from './components/RemoteOAuthCallbackPanel'
 import { KidsShell } from './components/kids/KidsShell'
 import { EnableKidsModeDialogHost } from './components/kids/EnableKidsModeDialog'
 import { SessionProvider } from './session/session'
@@ -220,6 +221,7 @@ export default function App() {
         {/* Non-blocking corner-anchored toast stack — mounted once, app-wide. See
             docs/notifications.md. */}
         <NotificationToasts />
+        <RemoteOAuthCallbackPanel />
         {/* Per-element appearance customization (docs/appearance.md): the generated stylesheet
             plus the one shared anchored editor popover, both mounted once. */}
         <AppearanceStyleInjector />

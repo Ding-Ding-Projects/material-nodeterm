@@ -366,7 +366,8 @@ features.
 66. Named terminal profiles from issue #286.
 67. Custom per-event alert sounds from issue #289.
 68. Nested Git repository discovery from issue #290.
-69. Remote OAuth localhost callbacks from issue #292.
+69. Remote OAuth localhost callbacks from issue #292. Implementation is present on `feat/program-69`;
+    verification and integration remain pending.
 70. Usage-threshold account rotation from issue #295.
 71. Drag overlays, complete zones, and saved layouts from issue #394.
 72. Complete Claude skill visibility from issue #438.

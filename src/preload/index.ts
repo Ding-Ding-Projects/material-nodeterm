@@ -539,6 +539,11 @@ const api: NodeTerminalApi = {
     remove: (id) => ipcRenderer.invoke(IPC.sshDelete, id),
     importCandidates: () => ipcRenderer.invoke(IPC.sshImport)
   },
+  oauthCallbacks: {
+    arm: (input) => ipcRenderer.invoke(IPC.oauthCallbackArm, input),
+    complete: (ticket, callbackUrl) => ipcRenderer.invoke(IPC.oauthCallbackComplete, ticket, callbackUrl),
+    cancel: (ticket) => ipcRenderer.invoke(IPC.oauthCallbackCancel, ticket)
+  },
   sshProject: {
     connect: (projectId, conn, remoteCwd) =>
       ipcRenderer.invoke(IPC.sshConnectProject, projectId, conn, remoteCwd),
