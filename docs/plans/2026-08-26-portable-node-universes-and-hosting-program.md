@@ -360,7 +360,8 @@ features.
 62. First-class Files node from PR #294.
 63. Display-only agent-state recovery and sidebar workflow grouping from PR #421.
 64. `psmux` discovery from PR #111, excluding NSIS packaging.
-65. Annotation labels and line thickness from issue #145.
+65. Annotation labels and line thickness from issue #145 — implemented in the #76 lane; focused
+    verification remains for the next owner because this lane was explicitly no-tests/no-builds.
 66. Named terminal profiles from issue #286.
 67. Custom per-event alert sounds from issue #289.
 68. Nested Git repository discovery from issue #290.

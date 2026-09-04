@@ -5912,6 +5912,18 @@ button.group-node__setup:disabled {
   text-align: right;
 }
 
+.annotation-node__label-input {
+  width: 92px;
+  min-height: 28px;
+  font-size: 11px;
+}
+
+.annotation-node__toolbar input[type='number'] {
+  width: 58px;
+  min-height: 28px;
+  font-size: 11px;
+}
+
 /* The next drag on the canvas creates an area/line/arrow — a crosshair says so before the click. */
 .flow-wrap.canvas-draw-active {
   cursor: crosshair;
