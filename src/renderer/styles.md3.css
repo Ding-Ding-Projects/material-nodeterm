@@ -5699,6 +5699,10 @@ div.mdx-row[role='menuitemradio']:focus-visible {
      -low would step DOWN, blending the row further into the background instead of lifting it. */
   background: var(--md-surface-container-high);
 }
+.notif-center__row:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
 .notif-center__row.unread {
   /* A low-opacity state layer, not the full-strength container colour: the container tint is
      sized for a prominent chip/FAB, and painting a whole row with it while the row's own text

@@ -18653,6 +18653,22 @@ export function Canvas() {
         secondaryLabel: 'Open in Settings'
       },
       {
+        id: 'setting-agent-inbox-notifications',
+        label: 'Allow linked agents to signal inbox updates',
+        hint: 'authenticated context link fixed prompt rate limited notification',
+        section: 'Settings',
+        icon: <IconGear />,
+        control: {
+          type: 'toggle',
+          checked: s.agentInboxNotifications,
+          ariaLabel: 'Allow linked agents to signal inbox updates',
+          onToggle: (v) => update({ agentInboxNotifications: v })
+        },
+        run: () => update({ agentInboxNotifications: !s.agentInboxNotifications }),
+        onSecondary: () => openSettingsTo('notifications', 'Allow linked agents'),
+        secondaryLabel: 'Open in Settings'
+      },
+      {
         id: 'setting-sound-effects',
         label: 'Play a sound when a turn finishes or needs you',
         section: 'Settings',

@@ -127,6 +127,7 @@ export type ControlVerb =
   | 'sync-stack'
   | 'branch'
   | 'rename'
+  | 'notify'
   | 'send'
   | 'reply'
   | 'notify'
@@ -175,6 +176,7 @@ const VERBS: ControlVerb[] = [
   'sync-stack',
   'branch',
   'rename',
+  'notify',
   'send',
   'reply',
   'notify',
@@ -298,6 +300,13 @@ export function parseControlRequest(
   if (v === 'branch' && !args.node) return { error: 'branch requires --node <id>' }
   if (v === 'rename' && !args.node) return { error: 'rename requires --node <id>' }
   if (v === 'rename' && !args.title) return { error: 'rename requires --title' }
+  if (v === 'notify' && !args.node) return { error: 'notify requires --node <id>' }
+  if (v === 'notify' && Object.prototype.hasOwnProperty.call(args, 'text')) {
+    return { error: 'notify does not accept --text' }
+  }
+  if (v === 'notify' && Object.keys(args).some((key) => key !== 'node')) {
+    return { error: 'notify accepts only --node <id>' }
+  }
   // `browser` drives a real webview through the CDP allowlist (browser-cdp-allowlist.ts) under a
   // debugger lease (browser-lease.ts) — the most security-sensitive verb in this file, so its
   // deep shape is decided ONCE, in the pure `parseBrowserArgs` (src/core/browser-verb.ts), which
@@ -456,6 +465,8 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '  A conflict remains in the child checkout for the user to resolve; nothing is force-merged.',
     '- `branch --node <id>` — branch a Claude node\'s conversation (Claude nodes only).',
     '- `rename --node <id> --title "New Name"` — rename any node (terminals, groups, stickies…).',
+    '- `notify --node <id>` — ask a context-linked agent to check its configured coordination inbox.',
+    '  This is a fixed, rate-limited prompt and cannot carry arbitrary text.',
     '- `send --node <id> --subject "LABEL" --text "..."` — send a persistent inter-agent message.',
     '  NodeTerm generates timestamp, exact current sender/recipient titles, authenticated addresses',
     '  and message id. Busy recipients receive it at the next safe turn boundary.',
@@ -843,6 +854,8 @@ Verbs:
 - \`branch --node <id>\` — branch a Claude node's conversation: the node stays on the new
   branch and a new node opens resuming the original. Target must be a Claude agent node.
 - \`rename --node <id> --title "New Name"\` — rename any node (terminals, groups, stickies…).
+- \`notify --node <id>\` — ask a context-linked agent to check its configured coordination inbox.
+  This is a fixed, rate-limited prompt and cannot carry arbitrary text.
 - \`send --node <id> --subject "LABEL" --text "..."\` — send a persistent inter-agent message.
   NodeTerm generates timestamp, current Node Chroma titles, authenticated addresses and id.
   Busy recipients are queued until a safe turn boundary.

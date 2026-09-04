@@ -299,6 +299,7 @@ export function NotificationCenter({
                   <span>{relTime(n.createdAt)}</span>
                   <span>{n.dismissedAt == null ? 'active' : 'dismissed'}</span>
                   {n.deliveredSilently && <span className="notif-center__row-quieted">quieted</span>}
+                  {n.target && <span className="notif-center__row-actionable">action available</span>}
                 </div>
               </div>
               {n.target && onGoToNode && (
