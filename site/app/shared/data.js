@@ -119,6 +119,7 @@ export const COVERAGE = [
   ['A real local file converter with honest unsupported cases', 'Turn-it-into lab', 'done'],
   ['Advanced media: archives, PDF, image metadata, media probing and OCR', 'Documentation → Advanced media pipelines', 'partial'],
   ['Ollama browser with hardware-fit verdicts and a basket', 'Model shop room', 'done'],
+  ['Guided Cloudflare account, zone and DNS manager', 'Cloudflare manager room', 'partial'],
   ['The dim sum surprise, one visit in ten', 'Dim sum room', 'done'],
   ['School mode that forces plain English and hides the rest', 'Settings → School mode', 'done'],
   ['Narrator that reads the page out loud', 'Settings → Read it to me', 'done'],
