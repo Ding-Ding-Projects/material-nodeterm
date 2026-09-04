@@ -20,6 +20,13 @@ import { MaterialSymbol } from '../components/MaterialSymbol'
 export type WorktreeAction = 'merge' | 'remove' | 'unbind' | 'rerun-setup'
 export type WslAction = 'sleep' | 'wake' | 'delete' | 'unbind'
 
+/** Canvas-owned drill navigation. Group frames remain ordinary persisted nodes; this handler
+ * changes the current view without placing navigation state in the project file. */
+let drillHandler: ((groupId: string) => void) | null = null
+export function setDrillHandler(next: ((groupId: string) => void) | null): void {
+  drillHandler = next
+}
+
 /**
  * Worktree-action handler bridge. React Flow instantiates custom nodes itself, so we can't
  * pass Canvas callbacks through props; Canvas registers its handler here (the same indirection
@@ -257,6 +264,20 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
         isVisible={selected}
         color={data.color}
         lineStyle={{ borderColor: 'transparent' }}
+      />
+      <Handle
+        id="link-out"
+        type="source"
+        position={Position.Right}
+        isConnectable={false}
+        style={{ opacity: 0, pointerEvents: 'none' }}
+      />
+      <Handle
+        id="link-in"
+        type="target"
+        position={Position.Left}
+        isConnectable={false}
+        style={{ opacity: 0, pointerEvents: 'none' }}
       />
 
       <div className="group-node__label">

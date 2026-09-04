@@ -25,6 +25,7 @@ export const IPC = {
   /** The foreground command of a node's tmux pane (`#{pane_current_command}`) — how the in-place
    *  agent restart sees that the CLI has exited and a shell owns the pane again. */
   ptyPaneCommand: 'pty:pane-command',
+  ptyTerminateForeground: 'pty:terminate-foreground',
   /** Correct a node's tmux "lead" pane width after Claude Code's own agent-team backend has
    *  narrowed it (`settings.agentTeamLeadPaneWidthEnabled` — see
    *  shared/agents/team-pane-layout.ts). Counts the node's panes and, when the setting calls for
@@ -672,6 +673,7 @@ export const IPC = {
   gitRepoRoot: 'git:repo-root',
   gitDiscoverNestedRepos: 'git:discover-nested-repos',
   gitWorktreeList: 'git:worktree-list',
+  gitSubmoduleList: 'git:submodule-list',
   gitWorktreeAdd: 'git:worktree-add',
   gitWorktreeMerge: 'git:worktree-merge',
   gitWorktreeRemovalProof: 'git:worktree-removal-proof',

@@ -72,6 +72,18 @@ export const GEMINI_HOOK_EVENTS = [
   'SessionEnd'
 ] as const
 
+/** GitHub Copilot CLI events used for status and session lifecycle reporting. */
+export const COPILOT_HOOK_EVENTS = [
+  'SessionStart',
+  'UserPromptSubmit',
+  'PreToolUse',
+  'PostToolUse',
+  'PostToolUseFailure',
+  'Stop',
+  'Notification',
+  'SessionEnd'
+] as const
+
 /**
  * GitHub Copilot CLI hook events (→ normalizeCopilot). Copilot uses the same PascalCase event
  * names as Claude but a different config-file shape, so the subscription list stays shared while

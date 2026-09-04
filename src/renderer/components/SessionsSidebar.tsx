@@ -6,7 +6,7 @@ import {
   groupSessionCount,
   groupSessionRows,
   isGroupCollapsed,
-  liveCollapseKeys,
+  liveRepoCollapseKeys,
   projectCollapseKey,
   projectHeadClickAction,
   projectSignalCounts,
@@ -224,7 +224,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
   // forever, and a canvas churns through group ids.
   const toggleCollapse = (key: string, currentlyCollapsed: boolean): void => {
     const current = useSettings.getState().settings.sidebarCollapsedItems
-    const pruned = pruneCollapsedItems(current, liveCollapseKeys(groups), key)
+    const pruned = pruneCollapsedItems(current, liveRepoCollapseKeys(groups), key)
     useSettings.getState().update({
       sidebarCollapsedItems: { ...pruned, [key]: !currentlyCollapsed }
     })

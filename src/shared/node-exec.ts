@@ -273,6 +273,7 @@ export type LocalNodeExecMap = Record<string, LocalNodeExec>
 const SAFE_PROGRAM = /^[A-Za-z0-9_./+@:=-]+$/
 const SAFE_OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/
 const SAFE_CUSTOM_AGENT_ID = /^custom:[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/
+const SAFE_MODEL = /^(?=.{1,500}$)[^\u0000-\u001f\u007f\r\n]+$/u
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const BUILTIN_AGENT_ID_SET = new Set<string>(BUILTIN_AGENT_IDS)
 const MAX_PENDING_DEPS = 256
@@ -336,6 +337,7 @@ function clonePendingLaunch(value: unknown): PendingLaunch | undefined {
       raw.sessionId !== undefined ||
       (raw.prompt !== undefined &&
         (typeof raw.prompt !== 'string' || raw.prompt.length > MAX_INTENT_TEXT)) ||
+      (raw.model !== undefined && (typeof raw.model !== 'string' || !SAFE_MODEL.test(raw.model))) ||
       (raw.newSessionId !== undefined &&
         (typeof raw.newSessionId !== 'string' || !SAFE_OPAQUE_ID.test(raw.newSessionId)))
     ) {
@@ -346,12 +348,14 @@ function clonePendingLaunch(value: unknown): PendingLaunch | undefined {
     }
     if (raw.prompt !== undefined) launch.prompt = raw.prompt
     if (raw.permissionMode !== undefined) launch.permissionMode = raw.permissionMode
+    if (raw.model !== undefined) launch.model = raw.model
     if (raw.newSessionId !== undefined) launch.newSessionId = raw.newSessionId
     return { after: [...value.after], launchId: value.launchId, launch }
   }
 
   if (
     raw.prompt !== undefined ||
+    (raw.model !== undefined && (typeof raw.model !== 'string' || !SAFE_MODEL.test(raw.model))) ||
     raw.newSessionId !== undefined ||
     typeof raw.sessionId !== 'string' ||
     !SAFE_OPAQUE_ID.test(raw.sessionId)
@@ -362,6 +366,7 @@ function clonePendingLaunch(value: unknown): PendingLaunch | undefined {
     kind: 'agent', action: 'resume', agentId: raw.agentId, sessionId: raw.sessionId
   }
   if (raw.permissionMode !== undefined) launch.permissionMode = raw.permissionMode
+  if (raw.model !== undefined) launch.model = raw.model
   return { after: [...value.after], launchId: value.launchId, launch }
 }
 
@@ -579,6 +584,7 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     if (extraArgs && (n.ssh?.execTrusted || !sshExtraArgsEnableLocalExec(extraArgs)))
       entry.sshExtraArgs = extraArgs
     if (n.kind === 'terminal') entry.pendingLaunch = clonePendingLaunch(n.pendingLaunch)
+    if (n.clearEnv === true) entry.clearEnv = true
     // Validated on the way IN as well as on the way out. This value reaches us from the live node,
     // which a peer mutation can have touched, so harvesting it unchecked would launder a foreign
     // endpoint into the trusted store — the exact laundering `sanitizeInboundNode` exists to stop.
@@ -612,6 +618,7 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
       entry.namedTerminalProfileCwd !== undefined ||
       entry.sshExtraArgs ||
       entry.pendingLaunch ||
+      entry.clearEnv ||
       entry.serviceConnection ||
       entry.openWebUiLocalBinding ||
       entry.awsIdentityBinding ||

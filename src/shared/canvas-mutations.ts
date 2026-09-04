@@ -22,11 +22,12 @@ export interface CanvasScene {
   nodes: CanvasNodeState[]
   bridges: BridgeLink[]
   ropes: BridgeLink[]
+  links?: Link[]
 }
 
 /** A bare node array read as a scene with no edges — the shape every pre-edge caller passes. */
 export function asScene(s: CanvasScene | CanvasNodeState[]): CanvasScene {
-  return Array.isArray(s) ? { nodes: s, bridges: [], ropes: [] } : s
+  return Array.isArray(s) ? { nodes: s, bridges: [], ropes: [], links: [] } : { ...s, links: s.links ?? [] }
 }
 
 /** Does this mutation address an edge (rather than a node)? */
@@ -34,6 +35,12 @@ export function isEdgeMutation(
   m: CanvasMutation
 ): m is Extract<CanvasMutation, { op: 'edge-upsert' | 'edge-remove' }> {
   return m.op === 'edge-upsert' || m.op === 'edge-remove'
+}
+
+export function isLinkMutation(
+  m: CanvasMutation
+): m is Extract<CanvasMutation, { op: 'link-upsert' | 'link-remove' }> {
+  return m.op === 'link-upsert' || m.op === 'link-remove'
 }
 
 function isEdgeKind(value: unknown): value is CanvasEdgeKind {
@@ -73,6 +80,22 @@ export function isCanvasMutation(value: unknown): value is CanvasMutation {
   if (!value || typeof value !== 'object') return false
   const m = value as { op?: unknown; id?: unknown; node?: unknown; kind?: unknown; edge?: unknown }
   if (m.op === 'remove') return isRefId(m.id)
+  if (m.op === 'link-remove') return isRefId(m.id)
+  if (m.op === 'link-upsert') {
+    const link = (value as { link?: unknown }).link
+    if (!link || typeof link !== 'object') return false
+    const raw = link as { id?: unknown; kind?: unknown; source?: unknown; target?: unknown }
+    if (!isRefId(raw.id) || !['context', 'lineage', 'dependency'].includes(String(raw.kind))) return false
+    const endpoint = (candidate: unknown): boolean => {
+      if (!candidate || typeof candidate !== 'object') return false
+      const ep = candidate as Record<string, unknown>
+      if (ep.ref === 'node') return isRefId(ep.nodeId)
+      if (ep.ref === 'xnode') return isRefId(ep.projectId) && isRefId(ep.nodeId)
+      if (ep.ref === 'branch') return isRefId(ep.repoPath) && isRefId(ep.branch)
+      return false
+    }
+    return endpoint(raw.source) && endpoint(raw.target) && withinSizeLimit(value)
+  }
   if (m.op === 'edge-remove') return isEdgeKind(m.kind) && isRefId(m.id)
   if (m.op === 'edge-upsert') {
     if (!isEdgeKind(m.kind)) return false
@@ -276,6 +299,27 @@ export function applyEdgeMutation(
   return next
 }
 
+/** Apply one typed link mutation to a project's relationship list. */
+export function applyLinkMutation(links: Link[], m: CanvasMutation): Link[] {
+  if (!isLinkMutation(m)) return links
+  if (m.op === 'link-remove') {
+    const next = links.filter((link) => link.id !== m.id)
+    return next.length === links.length ? links : next
+  }
+  const nextLink: Link = {
+    id: m.link.id,
+    kind: m.link.kind,
+    source: m.link.source,
+    target: m.link.target,
+    ...(m.link.meta ? { meta: { ...m.link.meta } } : {})
+  }
+  const index = links.findIndex((link) => link.id === nextLink.id)
+  if (index < 0) return [...links, nextLink]
+  const next = links.slice()
+  next[index] = nextLink
+  return next
+}
+
 /** Stable JSON stringify (keys sorted) so deep-equality is order-independent. */
 function stableStringify(value: unknown): string {
   return JSON.stringify(value, (_key, val) => {
@@ -313,6 +357,18 @@ function diffEdges(
     // an upsert followed by a later remove that would win the total order and erase the move.
     if (!allNextIds.has(edge.id)) removes.push({ op: 'edge-remove', kind, id: edge.id })
   }
+}
+
+function diffLinks(
+  previous: readonly Link[],
+  next: readonly Link[],
+  upserts: CanvasMutation[],
+  removes: CanvasMutation[]
+): void {
+  const before = new Map(previous.map((link) => [link.id, JSON.stringify(link)]))
+  const ids = new Set(next.map((link) => link.id))
+  for (const link of next) if (before.get(link.id) !== JSON.stringify(link)) upserts.push({ op: 'link-upsert', link })
+  for (const link of previous) if (!ids.has(link.id)) removes.push({ op: 'link-remove', id: link.id })
 }
 
 /**
@@ -358,5 +414,8 @@ export function diffToMutations(
   diffEdges(a.bridges, b.bridges, allNextEdgeIds, 'bridge', edgeUpserts, edgeRemoves)
   diffEdges(a.ropes, b.ropes, allNextEdgeIds, 'rope', edgeUpserts, edgeRemoves)
 
-  return [...upserts, ...edgeUpserts, ...edgeRemoves, ...removes]
+  const linkUpserts: CanvasMutation[] = []
+  const linkRemoves: CanvasMutation[] = []
+  diffLinks(a.links ?? [], b.links ?? [], linkUpserts, linkRemoves)
+  return [...upserts, ...edgeUpserts, ...linkUpserts, ...linkRemoves, ...edgeRemoves, ...removes]
 }

@@ -118,6 +118,10 @@ export const RESTART_POLL_MS = 250
  *  node after it is blocked and the summary the user is waiting for never arrives. */
 export const RESTART_DELIVERY_TIMEOUT_MS = DELIVERY_ATTEMPTS * VERIFY_TIMEOUT_MS + 1000
 
+function resumeGateCommand(agentId: string, sessionId: string): string | null {
+  return resumeCommand(agentId, sessionId) ?? resumeCommandWith('agent', capabilityAgentId(agentId), sessionId)
+}
+
 /**
  * One bounded pane query. Unbounded, a wedged tmux server (or a relay whose IPC never answers)
  * would hang the restart — and with it the bulk run's summary — forever. A lapsed, failed or

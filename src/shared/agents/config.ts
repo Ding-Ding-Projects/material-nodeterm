@@ -519,6 +519,8 @@ export function resumeCommand(
   switch (id) {
     case 'codex':
       return `${override ?? codexResumeProgram(route)} resume ${sid}`
+    case 'copilot':
+      return `${override ?? 'copilot'} --resume ${sid}`
     case 'opencode':
       return `${override ?? 'opencode'} --session ${sid}`
     case 'claude':
@@ -578,6 +580,26 @@ export function resumeCommandWith(
     default:
       return null
   }
+}
+
+/** Resume using a caller-supplied executable while retaining the effective built-in grammar. This
+ * is the custom-agent harness path: a proxy CLI can inherit Claude, Codex, or Copilot resume
+ * behavior without pretending its user-provided command is a built-in id. */
+export function resumeCommandWith(
+  launchCmd: string,
+  grammarId: AgentId,
+  sessionId: string
+): string | null {
+  if (!canResume(grammarId)) return null
+  const sid = sessionId.trim()
+  if (!sid || !SAFE_SESSION_ID.test(sid)) return null
+  const effective = capabilityAgentId(grammarId)
+  if (effective === 'codex') return `${launchCmd} resume ${sid}`
+  if (effective === 'opencode') return `${launchCmd} --session ${sid}`
+  if (effective === 'claude' || effective === 'gemini' || effective === 'grok' || effective === 'copilot') {
+    return `${launchCmd} --resume ${sid}`
+  }
+  return null
 }
 
 /**

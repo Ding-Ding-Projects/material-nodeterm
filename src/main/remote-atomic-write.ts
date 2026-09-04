@@ -55,7 +55,9 @@ export function remoteAtomicWrite(
   const parent = options.makeParent === false
     ? ''
     : `mkdir -p -- ${quoteRemotePath(parentPath)} && `
-  const protect = options.chmod600 ? ` && chmod 600 -- ${temporary}` : ''
+  // BSD chmod does not accept GNU's `--` option terminator. The temporary leaf is generated as
+  // `.nodeterm-<uuid>.tmp`, so it cannot be mistaken for an option and needs no terminator.
+  const protect = options.chmod600 ? ` && chmod 600 ${temporary}` : ''
   const command =
     `${prefix}${parent}{ cat > ${temporary}${protect} && mv -f -- ${temporary} ${target}; ` +
     `nt_status=$?; ` +

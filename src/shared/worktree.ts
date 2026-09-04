@@ -54,6 +54,38 @@ export interface WorktreeListResult {
   entries: WorktreeEntry[]
 }
 
+/** One submodule reported by Git. The path is relative to the containing repository. */
+export interface SubmoduleEntry {
+  path: string
+  sha: string
+  prunable?: boolean
+}
+
+/** Result of reading submodules, preserving read failure as distinct from an empty list. */
+export interface SubmoduleListResult {
+  ok: boolean
+  entries: SubmoduleEntry[]
+}
+
+/** Parse `git submodule status` output without treating an uninitialized entry as absent. */
+export function parseSubmoduleStatus(output: string): SubmoduleEntry[] {
+  const entries: SubmoduleEntry[] = []
+  for (const raw of output.split('\n')) {
+    const line = raw.trimEnd()
+    if (!line) continue
+    const flag = line[0]
+    const rest = line.slice(1)
+    const shaMatch = rest.match(/^\s*([0-9a-f]{40})\s+/i)
+    if (!shaMatch) continue
+    const afterSha = rest.slice(shaMatch[0].length)
+    const description = afterSha.indexOf(' (')
+    const path = (description >= 0 ? afterSha.slice(0, description) : afterSha).trim()
+    if (!path) continue
+    entries.push({ path, sha: shaMatch[1], ...(flag === '-' ? { prunable: true } : {}) })
+  }
+  return entries
+}
+
 /** The node fields that can say "this session does not run on this machine". */
 interface RemoteNodeLike {
   /** SSH-PROJECT terminal (`createTerminalNode(..., project.ssh)`) — the connection it runs on. */

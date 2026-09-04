@@ -50,6 +50,8 @@ export const WORKTREE_STALE_STRIKES = 2
 
 interface WorktreesState {
   repoRoot: string | null
+  /** Resolved repository roots for open projects, retained across active-project switches. */
+  repoRootByProject: Record<string, string | null>
   entries: WorktreeEntry[]
   orphans: WorktreeEntry[]
   staleGroupIds: string[]
@@ -119,6 +121,7 @@ let epoch = 0
 /** "No worktree facts" — what a non-repo project, a failed read and a reset all collapse to. */
 const empty = (): Pick<WorktreesState, 'repoRoot' | 'entries' | 'orphans' | 'staleGroupIds'> => ({
   repoRoot: null,
+  repoRootByProject: {},
   entries: [],
   orphans: [],
   staleGroupIds: []

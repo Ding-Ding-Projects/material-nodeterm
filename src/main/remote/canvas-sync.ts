@@ -33,6 +33,11 @@ export function sanitizeClientMutation(
   current: CanvasState | null
 ): CanvasMutation | null {
   if (m.op === 'remove') return typeof m.id === 'string' && m.id ? m : null
+  // Typed links are declarative relationships. They carry no shell, path, or credential authority,
+  // so a relay client may add or remove them after the shared mutation validator has bounded their
+  // endpoint ids. The host still applies its normal project-scope check before this helper runs.
+  if (m.op === 'link-remove') return typeof m.id === 'string' && m.id ? m : null
+  if (m.op === 'link-upsert') return m
   if (m.op !== 'upsert' || !m.node || typeof m.node !== 'object') return null
   const incoming = m.node
   const existing = current?.nodes.find((n) => n.id === incoming.id)

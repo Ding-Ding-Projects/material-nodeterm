@@ -123,6 +123,8 @@ export type ControlVerb =
   | 'spawn-team'
   | 'open-worktree'
   | 'close-worktree'
+  | 'link-branches'
+  | 'sync-stack'
   | 'branch'
   | 'rename'
   | 'send'
@@ -169,6 +171,8 @@ const VERBS: ControlVerb[] = [
   'spawn-team',
   'open-worktree',
   'close-worktree',
+  'link-branches',
+  'sync-stack',
   'branch',
   'rename',
   'send',
@@ -226,6 +230,18 @@ export function parseControlRequest(
     return { error: 'show-web requires --url, --file or --html' }
   }
   if (v === 'open-browser' && !args.url) return { error: 'open-browser requires --url' }
+  if (
+    Object.prototype.hasOwnProperty.call(args, 'project') &&
+    !['open-terminal', 'open-claude', 'open-agent'].includes(v)
+  ) {
+    return { error: '--project is supported only for open-terminal, open-claude and open-agent' }
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(args, 'project') &&
+    (!args.project?.trim() || args.project.length > 4096 || /[\u0000-\u001f\u007f]/.test(args.project))
+  ) {
+    return { error: '--project must be a bounded project id or path' }
+  }
   if (v === 'open-agent' && !args.agent) return { error: 'open-agent requires --agent <id>' }
   if (v === 'open-agent' && args.resume && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(args.resume)) {
     return { error: 'open-agent --resume requires a safe session id' }
@@ -277,6 +293,8 @@ export function parseControlRequest(
   if (v === 'assign' && !args.node) return { error: 'assign requires --node <id>' }
   if (v === 'open-worktree' && !args.branch) return { error: 'open-worktree requires --branch <name>' }
   if (v === 'close-worktree' && !args.group) return { error: 'close-worktree requires --group <id>' }
+  if (v === 'link-branches' && !args.base) return { error: 'link-branches requires --base <parent branch>' }
+  if (v === 'link-branches' && !args.branch) return { error: 'link-branches requires --branch <child branch>' }
   if (v === 'branch' && !args.node) return { error: 'branch requires --node <id>' }
   if (v === 'rename' && !args.node) return { error: 'rename requires --node <id>' }
   if (v === 'rename' && !args.title) return { error: 'rename requires --title' }
@@ -375,6 +393,9 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '  their work when it wakes — use it for "B needs what A produced" instead of polling. Only',
     '  status-reporting agent nodes (claude/codex/gemini/opencode/grok/copilot/devin) may be waited on; a plain terminal never',
     '  reports finishing, so waiting on one is refused.',
+    '  `--project` resolves an already-open local project by id or exact cwd. The target owns the',
+    '  new session and its lineage projection; unknown, closed, unavailable, SSH, and relay targets',
+    '  are refused. Cross-project opens cannot combine with `--group` or `--after`.',
     '  `--resume` opens exactly one existing session through the agent\'s native resume command.',
     '  RESTORE RULE: when an existing session id is known, you MUST pass it with `--resume`.',
     '  A prompt-only node plus a renamed title is a new conversation, never a restored session.',
@@ -429,6 +450,10 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '  wrapped in a bound group frame (terminals inside it run in the worktree). Local projects only.',
     '- `close-worktree --group <id> [--mode unbind|remove]` — unbind keeps the directory; remove asks',
     '  the user to confirm deletion.',
+    '- `link-branches --base <parent> --branch <child>` — declare a stacked-diff dependency. It',
+    '  records the parent in git config and stores a typed dependency link between the branches.',
+    '- `sync-stack [--branch <child>]` — rebase each named child branch onto its configured parent.',
+    '  A conflict remains in the child checkout for the user to resolve; nothing is force-merged.',
     '- `branch --node <id>` — branch a Claude node\'s conversation (Claude nodes only).',
     '- `rename --node <id> --title "New Name"` — rename any node (terminals, groups, stickies…).',
     '- `send --node <id> --subject "LABEL" --text "..."` — send a persistent inter-agent message.',
@@ -735,6 +760,10 @@ Verbs:
   plain terminal never reports finishing and the node would hang forever. Note the semantics:
   "idle" is the end of a station's TURN, not proof its whole job is done — right for a station
   given one self-contained prompt, wrong if you expect a long conversation first.
+  \`--project <id|cwd>\` creates the node in an already-open local target project and renders a
+  live foreign projection from the caller's canvas. The target project owns its cwd, account, and
+  permission defaults. The target must be local and open; \`--group\` and \`--after\` are only for
+  same-project opens.
 - \`create-loop --task "..." [--every 15m|2h|1d] [--to <node-id,id>] [--title L] [--start]\` — create
   a visible persistent Loop. Omit \`--to\` to target yourself. Every target must be an exact existing
   agent node id from \`list\`; never address mutable titles. New Loops are paused unless \`--start\`
@@ -807,6 +836,10 @@ Verbs:
   run in the worktree. Local projects only.
 - \`close-worktree --group <id> [--mode unbind|remove]\` — unbind (default) drops the binding
   and keeps the directory; remove asks the user to confirm deleting the worktree.
+- \`link-branches --base <parent> --branch <child>\` — record a typed dependency from the child
+  branch to its parent and write the matching git config entry. Local projects only.
+- \`sync-stack [--branch <child>]\` — rebase one or every linked child branch onto its parent.
+  Conflicts remain in the child checkout for the user to resolve; no force merge is attempted.
 - \`branch --node <id>\` — branch a Claude node's conversation: the node stays on the new
   branch and a new node opens resuming the original. Target must be a Claude agent node.
 - \`rename --node <id> --title "New Name"\` — rename any node (terminals, groups, stickies…).

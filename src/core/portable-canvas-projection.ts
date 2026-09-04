@@ -77,6 +77,7 @@ export interface PortableCanvasNodeV3 {
   shopSelection?: string
   collapsed?: boolean
   parentId?: string
+  projectRef?: { projectId: string }
   tags?: string[]
   text?: string
   url?: string
@@ -121,7 +122,7 @@ export interface PortableCanvasNodeV3 {
   annotationThickness?: number
 }
 
-export interface PortableRelationshipV3 {
+export interface PortableLegacyRelationshipV3 {
   id: string
   kind: 'bridge' | 'rope'
   /** Owning canvas. Older schema 3 payloads omit it and therefore belong to root. */
@@ -130,6 +131,24 @@ export interface PortableRelationshipV3 {
   target: string
   order: number
 }
+
+/** A typed link is safe to carry when its endpoint identity is explicit and portable. */
+export type PortableEndpointV3 =
+  | { ref: 'node'; nodeId: string }
+  | { ref: 'xnode'; projectId: string; nodeId: string }
+  | { ref: 'branch'; repoPath: string; branch: string }
+
+export interface PortableTypedRelationshipV3 {
+  id: string
+  kind: 'context' | 'lineage' | 'dependency'
+  source: PortableEndpointV3
+  target: PortableEndpointV3
+  order: number
+  meta?: { purpose?: string; displayOnly?: boolean }
+}
+
+/** Schema 3 keeps the old bridge and rope shape readable while allowing typed links. */
+export type PortableRelationshipV3 = PortableLegacyRelationshipV3 | PortableTypedRelationshipV3
 
 export interface PortableProjectDisplayV3 {
   name: string
@@ -332,6 +351,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.group !== null && typeof node.group !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node group is invalid.')
   if (strict && node.tags !== undefined && !Array.isArray(node.tags)) throw new PortableProjectV3Error('manifest', 'Portable node tags must be an array.')
   if (strict && node.parentId !== undefined && typeof node.parentId !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node parent is invalid.')
+  if (strict && node.projectRef !== undefined && (!record(node.projectRef) || typeof node.projectRef.projectId !== 'string')) throw new PortableProjectV3Error('manifest', 'Portable project reference is invalid.')
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
   if (strict && node.cloudflareZeroTrustIntent !== undefined && !normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
@@ -354,6 +374,10 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.nonDeletable !== undefined) out.nonDeletable = node.nonDeletable
   if (node.shopSelection !== undefined) out.shopSelection = content(node.shopSelection, 'Shop selection')
   if (node.parentId !== undefined) out.parentId = text(node.parentId, 'parent id')
+  if (node.projectRef !== undefined) {
+    exactKeys(node.projectRef, new Set(['projectId']), 'project reference')
+    out.projectRef = { projectId: text(node.projectRef.projectId, 'project reference id') }
+  }
   if (node.tags !== undefined) { if (node.tags.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable tag count exceeds its bound.'); out.tags = node.tags.map((tag) => text(tag, 'node tag')).sort() }
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
@@ -528,6 +552,104 @@ function safeUrl(value: unknown, label: string): string | undefined {
   try { parsed = new URL(value) } catch { throw new PortableProjectV3Error('manifest', `Portable ${label} is not an absolute HTTP URL.`) }
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) throw new PortableProjectV3Error('manifest', `Portable ${label} must use HTTP(S) without credentials.`)
   return parsed.href
+}
+
+function isAbsoluteRepositoryPath(value: string): boolean {
+  return value.startsWith('/') || value.startsWith('\\\\') || /^[A-Za-z]:[\\/]/.test(value)
+}
+
+function comparableRepositoryPath(value: string): string {
+  return value.replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLocaleLowerCase('en-US')
+}
+
+/** Keep branch identity portable without allowing a machine-local absolute path into the file. */
+function portableRepositoryPath(value: unknown, projectCwd: string | undefined, label: string): string {
+  const raw = text(value, label)
+  if ([...raw].some((char) => char < ' ' || char === '\u007f')) throw new PortableProjectV3Error('manifest', `Portable ${label} contains control characters.`)
+  if (isAbsoluteRepositoryPath(raw)) {
+    if (projectCwd && comparableRepositoryPath(raw) === comparableRepositoryPath(projectCwd)) return '.'
+    throw new PortableProjectV3Error('manifest', `Portable ${label} cannot contain a machine-local absolute path.`)
+  }
+  if (raw === '.') return raw
+  if (raw.includes('\\') || raw.startsWith('/') || /^[A-Za-z]:/.test(raw) || raw.split('/').some((part) => part.length === 0 || part === '.' || part === '..')) {
+    throw new PortableProjectV3Error('manifest', `Portable ${label} is not a safe repository reference.`)
+  }
+  return raw
+}
+
+function portableEndpoint(value: unknown, project: Project, label: string): PortableEndpointV3 {
+  if (!record(value)) throw new PortableProjectV3Error('manifest', `Portable ${label} is invalid.`)
+  if (value.ref === 'node') {
+    exactKeys(value, ALLOWED_NODE_ENDPOINT, `${label} node endpoint`)
+    return { ref: 'node', nodeId: text(value.nodeId, `${label} node id`) }
+  }
+  if (value.ref === 'xnode') {
+    exactKeys(value, ALLOWED_XNODE_ENDPOINT, `${label} foreign endpoint`)
+    return { ref: 'xnode', projectId: text(value.projectId, `${label} project id`), nodeId: text(value.nodeId, `${label} node id`) }
+  }
+  if (value.ref === 'branch') {
+    exactKeys(value, ALLOWED_BRANCH_ENDPOINT, `${label} branch endpoint`)
+    return { ref: 'branch', repoPath: portableRepositoryPath(value.repoPath, project.cwd, `${label} repository`), branch: text(value.branch, `${label} branch`) }
+  }
+  throw new PortableProjectV3Error('manifest', `Portable ${label} has an unknown endpoint reference.`)
+}
+
+function portableEndpointKey(endpoint: PortableEndpointV3): string {
+  if (endpoint.ref === 'node') return `node:${endpoint.nodeId}`
+  if (endpoint.ref === 'xnode') return `xnode:${endpoint.projectId}:${endpoint.nodeId}`
+  return `branch:${endpoint.repoPath}:${endpoint.branch}`
+}
+
+function validatePortableEndpoint(value: unknown, label: string, nodeIds: ReadonlySet<string>): PortableEndpointV3 {
+  if (!record(value)) throw new PortableProjectV3Error('manifest', `Portable ${label} is invalid.`)
+  if (value.ref === 'node') {
+    exactKeys(value, ALLOWED_NODE_ENDPOINT, `${label} node endpoint`)
+    const nodeId = text(value.nodeId, `${label} node id`)
+    if (!nodeIds.has(nodeId)) throw new PortableProjectV3Error('manifest', `Portable ${label} references an unknown node.`)
+    return { ref: 'node', nodeId }
+  }
+  if (value.ref === 'xnode') {
+    exactKeys(value, ALLOWED_XNODE_ENDPOINT, `${label} foreign endpoint`)
+    return { ref: 'xnode', projectId: text(value.projectId, `${label} project id`), nodeId: text(value.nodeId, `${label} node id`) }
+  }
+  if (value.ref === 'branch') {
+    exactKeys(value, ALLOWED_BRANCH_ENDPOINT, `${label} branch endpoint`)
+    return {
+      ref: 'branch',
+      repoPath: portableRepositoryPath(value.repoPath, undefined, `${label} repository`),
+      branch: text(value.branch, `${label} branch`)
+    }
+  }
+  throw new PortableProjectV3Error('manifest', `Portable ${label} has an unknown endpoint reference.`)
+}
+
+function portableLinkMeta(value: unknown, label: string): { purpose?: string; displayOnly?: boolean } | undefined {
+  if (value === undefined) return undefined
+  if (!record(value)) throw new PortableProjectV3Error('manifest', `Portable ${label} is invalid.`)
+  exactKeys(value, ALLOWED_LINK_META, label)
+  const out: { purpose?: string; displayOnly?: boolean } = {}
+  if (value.purpose !== undefined) out.purpose = content(value.purpose, `${label} purpose`)
+  if (value.displayOnly !== undefined) {
+    if (typeof value.displayOnly !== 'boolean') throw new PortableProjectV3Error('manifest', `Portable ${label} displayOnly is invalid.`)
+    out.displayOnly = value.displayOnly
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+function typedRelationships(project: Project): PortableTypedRelationshipV3[] {
+  const links = Array.isArray(project.links) ? project.links : []
+  return links.map((link: Link, order) => {
+    if (!record(link) || !['context', 'lineage', 'dependency'].includes(String(link.kind))) throw new PortableProjectV3Error('manifest', 'Portable typed relationship kind is invalid.')
+    const meta = portableLinkMeta(link.meta, 'typed relationship metadata')
+    return {
+      id: text(link.id, 'typed relationship id'),
+      kind: link.kind,
+      source: portableEndpoint(link.source, project, 'typed relationship source'),
+      target: portableEndpoint(link.target, project, 'typed relationship target'),
+      order,
+      ...(meta ? { meta } : {})
+    }
+  }).sort((a, b) => a.kind.localeCompare(b.kind) || a.order - b.order || a.id.localeCompare(b.id) || portableEndpointKey(a.source).localeCompare(portableEndpointKey(b.source)) || portableEndpointKey(a.target).localeCompare(portableEndpointKey(b.target))).map((link, order) => ({ ...link, order }))
 }
 
 function relationships(project: Project): PortableRelationshipV3[] {

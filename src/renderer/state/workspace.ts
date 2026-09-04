@@ -24,12 +24,17 @@ import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agent
 import {
   agentConfig,
   agentLaunchProgram,
+  createdAgentHarnessId,
   explicitCodexResumeSession,
   mintsSessionId,
   resumeCommand,
   withSessionId,
   isPermissionMode
 } from '@shared/agents/config'
+import { resolveAgentBase, resolveAgentConfig } from '@shared/agents/custom-agent'
+import { assembleLaunchCommand } from '@shared/agents/launch'
+import { normalizedAgentModel, withAgentModel } from '@shared/agents/model-gateway'
+import { agentEnvSnapshot } from '@renderer/lib/agentEnv'
 import { withPermissionMode } from '@shared/agents/approval-mode'
 import { withAgentModel } from '@shared/agents/model-gateway'
 import { uuid } from '@renderer/lib/uuid'
@@ -783,11 +788,9 @@ function resolveAgent(agentId: AgentId): {
   color: string
   launchCmd: string
 } {
-  const builtin = agentConfig(agentId)
-  if (builtin) return { label: builtin.label, color: builtin.color, launchCmd: builtin.launchCmd }
   const custom = useSettings.getState().settings.customAgents.find((c) => c.id === agentId)
-  if (custom) return { label: custom.label, color: FALLBACK_AGENT_COLOR, launchCmd: custom.launchCmd }
-  return { label: agentId, color: FALLBACK_AGENT_COLOR, launchCmd: agentId }
+  const effective = resolveAgentConfig(agentId, custom)
+  return { label: effective.label, color: effective.color, launchCmd: effective.launchCmd }
 }
 
 /**
@@ -939,6 +942,7 @@ export function createAgentNode(
     typeof resolvedLaunchPlan === 'string' ? resolvedLaunchPlan : undefined
   const permissionMode =
     explicitPermissionMode ?? permissionModeFromLaunchPlan(launchPlan, agentId)
+  const selectedModel = normalizedAgentModel(harnessId, agentModel) ?? undefined
   // No plan passed (e.g. a legacy/test call site) = bare command, exactly as before this setting.
   // Production launch sites pass the branded plan, so a raw hand-edited settings value cannot be
   // threaded around the live version/Kids gates.
@@ -946,7 +950,8 @@ export function createAgentNode(
   // that is BEFORE `--` (end-of-options), and getting it wrong makes a flag part of the prompt.
   const flagged = (cmd: string): string => {
     const withMode = permissionMode ? withPermissionMode(cmd, agentId, permissionMode) : cmd
-    return mintedSessionId ? withSessionId(withMode, agentId, mintedSessionId) : withMode
+    const withId = mintedSessionId ? withSessionId(withMode, agentId, mintedSessionId) : withMode
+    return withAgentModel(withId, harnessId, selectedModel)
   }
   // WHERE the mode flag goes is decided by the agent's prompt convention, and the two conventions
   // are opposites:
@@ -960,13 +965,28 @@ export function createAgentNode(
   //    would silently do nothing, or the launch would die on a usage message. It therefore goes
   //    BEFORE the separator: `grok --permission-mode plan -- 'explain this repo'`, matching grok's
   //    own usage line `grok [OPTIONS] [PROMPT] [COMMAND]`.
-  const initialCommand = usesSep ? `${flagged(baseCmd)} ${sep} ${promptArg}` : flagged(withPrompt)
+  const assembled = customAgent
+    ? assembleLaunchCommand({
+        agentId,
+        baseAgentId: customAgent.baseAgent,
+        customAgent,
+        launchCmdOverride: override,
+        initialPrompt: normalizedPrompt,
+        permissionMode,
+        sessionId: mintedSessionId,
+        model: selectedModel,
+        sessionIdFlagSupported: harnessId === 'claude' ? claudeCliCapsNow().sessionIdFlag : true,
+        sharedIdentity: codexSharedIdentity(ssh)
+      }, agentEnvSnapshot())
+    : null
+  const initialCommand = assembled?.command ?? (usesSep ? `${flagged(baseCmd)} ${sep} ${promptArg}` : flagged(withPrompt))
   const agentLaunchIntent: AgentLaunchIntent = {
     kind: 'agent',
     action: 'start',
     agentId,
     ...(normalizedPrompt ? { prompt: normalizedPrompt } : {}),
     ...(permissionMode ? { permissionMode } : {}),
+    ...(selectedModel ? { model: selectedModel } : {}),
     ...(mintedSessionId ? { newSessionId: mintedSessionId } : {})
   }
   const size = terminalNodeSize()

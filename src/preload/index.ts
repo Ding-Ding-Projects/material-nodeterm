@@ -197,6 +197,8 @@ const api: NodeTerminalApi = {
     // — not before.
     tmuxStatus: () => ipcRenderer.invoke(IPC.ptyTmuxStatus),
     paneCommand: (persistKey) => ipcRenderer.invoke(IPC.ptyPaneCommand, persistKey),
+    terminateForeground: (persistKey, expectedAgentId) =>
+      ipcRenderer.invoke(IPC.ptyTerminateForeground, persistKey, expectedAgentId),
     correctTeamLeadPaneWidth: (persistKey) =>
       ipcRenderer.invoke(IPC.ptyCorrectTeamPaneWidth, persistKey),
     terminateForeground: (persistKey, expectedAgentId) =>
@@ -628,6 +630,7 @@ const api: NodeTerminalApi = {
     repoRoot: (cwd) => ipcRenderer.invoke(IPC.gitRepoRoot, cwd),
     discoverNestedRepos: (cwd) => ipcRenderer.invoke(IPC.gitDiscoverNestedRepos, cwd),
     worktreeList: (repoPath) => ipcRenderer.invoke(IPC.gitWorktreeList, repoPath),
+    submoduleList: (repoPath) => ipcRenderer.invoke(IPC.gitSubmoduleList, repoPath),
     worktreeAdd: (repoPath, wtPath, branch, baseRef, isNew) =>
       ipcRenderer.invoke(IPC.gitWorktreeAdd, repoPath, wtPath, branch, baseRef, isNew),
     worktreeMerge: (repoPath, branch, baseRef, push) =>
@@ -1195,6 +1198,13 @@ const api: NodeTerminalApi = {
   contextLink: {
     setLinks: (map) => ipcRenderer.invoke(IPC.contextLinkSetLinks, map),
     info: () => ipcRenderer.invoke(IPC.contextLinkInfo)
+  },
+  agent: {
+    envSnapshot: () => ipcRenderer.invoke(IPC.agentEnvSnapshot),
+    discoverModels: (settings) => ipcRenderer.invoke(IPC.agentDiscoverModels, settings),
+    gatewayCredentialStatus: () => ipcRenderer.invoke(IPC.agentGatewayCredentialStatus),
+    saveGatewayCredential: (key) => ipcRenderer.invoke(IPC.agentSaveGatewayCredential, key),
+    clearGatewayCredential: () => ipcRenderer.invoke(IPC.agentClearGatewayCredential)
   },
   boardLog: {
     append: (projectId, entry) => ipcRenderer.invoke(IPC.boardLogAppend, projectId, entry),

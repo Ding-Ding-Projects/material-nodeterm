@@ -76,6 +76,110 @@ export function sanitizeNodeTriggers(nodes: CanvasNodeState[]): CanvasNodeState[
 export const PROJECT_DIR = '.nodeterm'
 export const PROJECT_FILE = 'project.json'
 
+/** Lift legacy bridge and rope arrays into the typed link substrate. Existing ids remain stable so
+ * peers and deletion commands keep addressing the same relationship after migration. */
+export function migrateLinks(value: {
+  links?: Link[]
+  bridges?: BridgeLink[]
+  ropes?: BridgeLink[]
+}): Link[] | undefined {
+  // A typed field wins only after the same boundary validation used by file reads. Returning a
+  // malformed non-empty array here would let `validLinks(...) ?? migrateLinks(...)` re-introduce
+  // the very records the validator rejected.
+  if (Array.isArray(value.links)) {
+    const typed = validLinks(value.links)
+    if (typed !== undefined) return typed
+  }
+  const links: Link[] = []
+  for (const bridge of value.bridges ?? []) {
+    if (!bridge || typeof bridge.id !== 'string' || typeof bridge.source !== 'string' || typeof bridge.target !== 'string') continue
+    links.push({
+      id: bridge.id,
+      kind: 'context',
+      source: { ref: 'node', nodeId: bridge.source },
+      target: { ref: 'node', nodeId: bridge.target }
+    })
+  }
+  for (const rope of value.ropes ?? []) {
+    if (!rope || typeof rope.id !== 'string' || typeof rope.source !== 'string' || typeof rope.target !== 'string') continue
+    links.push({
+      id: rope.id,
+      kind: 'lineage',
+      source: { ref: 'node', nodeId: rope.source },
+      target: { ref: 'node', nodeId: rope.target },
+      meta: { displayOnly: true }
+    })
+  }
+  return links.length ? links : undefined
+}
+
+/** Tolerant validation for typed links read from hand-edited project JSON. Invalid relationships
+ * are dropped at the file boundary, while valid independent nodes remain usable. */
+function validLinks(value: unknown): Link[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const validText = (candidate: unknown): candidate is string =>
+    typeof candidate === 'string' && candidate.length > 0 && candidate.length <= 4096 && !/[\u0000-\u001f\u007f]/.test(candidate)
+  const validEndpoint = (candidate: unknown): candidate is Link['source'] => {
+    if (!candidate || typeof candidate !== 'object') return false
+    const raw = candidate as Record<string, unknown>
+    if (raw.ref === 'node') return validText(raw.nodeId)
+    if (raw.ref === 'xnode') return validText(raw.projectId) && validText(raw.nodeId)
+    if (raw.ref === 'branch') return validText(raw.repoPath) && validText(raw.branch)
+    return false
+  }
+  const result: Link[] = []
+  const ids = new Set<string>()
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== 'object') continue
+    const raw = candidate as Record<string, unknown>
+    if (!validText(raw.id) || ids.has(raw.id) || !['context', 'lineage', 'dependency'].includes(String(raw.kind))) continue
+    if (!validEndpoint(raw.source) || !validEndpoint(raw.target)) continue
+    ids.add(raw.id)
+    const link: Link = {
+      id: raw.id,
+      kind: raw.kind as Link['kind'],
+      source: raw.source as Link['source'],
+      target: raw.target as Link['target']
+    }
+    if (raw.meta && typeof raw.meta === 'object' && !Array.isArray(raw.meta)) link.meta = raw.meta as Record<string, unknown>
+    result.push(link)
+    if (result.length >= 40_000) break
+  }
+  // Preserve an explicit empty typed list. A non-empty list with no valid entries is treated as
+  // malformed so legacy bridge/rope data can still migrate instead of being silently discarded.
+  return result.length > 0 || value.length === 0 ? result : undefined
+}
+
+/** Convert the project-root branch marker to a live path only after the shared file is read. */
+function runtimeLinkPaths(links: Link[] | undefined, cwd: string | undefined): Link[] | undefined {
+  if (!links || !cwd) return links
+  return links.map((link) => ({
+    ...link,
+    source: link.source.ref === 'branch' && link.source.repoPath === '.'
+      ? { ...link.source, repoPath: cwd }
+      : link.source,
+    target: link.target.ref === 'branch' && link.target.repoPath === '.'
+      ? { ...link.target, repoPath: cwd }
+      : link.target
+  }))
+}
+
+/** Store same-repository branch endpoints as a portable project-root marker. */
+function sharedLinkPaths(links: Link[] | undefined, cwd: string | undefined): Link[] | undefined {
+  if (!links || !cwd) return links
+  const comparable = (value: string): string => path.resolve(value).replace(/[\\/]+$/, '').toLocaleLowerCase('en-US')
+  const root = comparable(cwd)
+  return links.map((link) => ({
+    ...link,
+    source: link.source.ref === 'branch' && comparable(link.source.repoPath) === root
+      ? { ...link.source, repoPath: '.' }
+      : link.source,
+    target: link.target.ref === 'branch' && comparable(link.target.repoPath) === root
+      ? { ...link.target, repoPath: '.' }
+      : link.target
+  }))
+}
+
 /**
  * Lift legacy bridge and rope arrays into the unified link substrate while reading a project.
  *

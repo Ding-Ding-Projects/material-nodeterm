@@ -4,6 +4,8 @@ import App from './App'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { ensureClaudeCliCaps } from './state/permissionMode'
 import { ensureCodexIdentityCaps } from './state/codexIdentity'
+import { initAgentResolver } from './state/agent-resolver'
+import { refreshAgentEnv } from './lib/agentEnv'
 import './fonts.css'
 import { initAgentResolver } from './state/agent-resolver'
 import { refreshAgentEnv } from './lib/agentEnv'
@@ -33,6 +35,10 @@ void ensureClaudeCliCaps()
 // this machine has one installed and armed. Unprobed ⇒ plain `codex`, which is what every Codex
 // node ran before this feature — never a launcher path that might not resolve.
 void ensureCodexIdentityCaps()
+// Register custom-agent harness inheritance before any canvas node asks a capability predicate.
+// The environment snapshot is best effort and never blocks renderer startup.
+initAgentResolver()
+void refreshAgentEnv()
 
 // One env snapshot for `${env:VAR}` expansion, fetched up front and cached (src/renderer/lib/
 // agentEnv.ts): the Settings preview and every launch path expand against the same object, so the

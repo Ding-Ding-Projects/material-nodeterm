@@ -88,7 +88,8 @@ export function buildBackgroundLinkMaps(
   projects: Array<{ id: string; nodes: CanvasNodeState[]; links?: Link[] }>,
   activeProjectId: string | null,
   sessionIdOf: (nodeId: string) => string | undefined,
-  agentIdOf?: (nodeId: string) => string | undefined
+  agentIdOf?: (nodeId: string) => string | undefined,
+  onlyProjectId?: string
 ): ContextLinkMap {
   const map: ContextLinkMap = {}
   for (const p of projects) {
@@ -112,7 +113,51 @@ export function buildBackgroundLinkMaps(
         accountId: sticky ? undefined : n.accountId
       }
     }
-    Object.assign(map, buildLinkMap(edges, infoOf))
+  }
+  for (const p of projects) {
+    if (p.id === activeProjectId) continue
+    if (onlyProjectId !== undefined && p.id !== onlyProjectId) continue
+    const typed = p.links?.filter(
+      (link) =>
+        link.kind === 'context' &&
+        (link.source.ref === 'node' || link.source.ref === 'xnode') &&
+        (link.target.ref === 'node' || link.target.ref === 'xnode')
+    ) ?? []
+    if (typed.length) {
+      const edges = typed
+        .map((link) => ({
+          id: link.id,
+          source: link.source.ref === 'node' || link.source.ref === 'xnode' ? link.source.nodeId : '',
+          target: link.target.ref === 'node' || link.target.ref === 'xnode' ? link.target.nodeId : ''
+        }))
+        .filter((edge) => !!edge.source && !!edge.target && !!infoFor(edge.source) && !!infoFor(edge.target))
+      Object.assign(map, buildLinkMap(edges, (id) => infoFor(id)!))
+      continue
+    }
+    // Legacy bridge arrays only ever had same-project node ids. Keep that fallback for older files,
+    // but never invent a cross-project endpoint from a bridge-shaped record.
+    const byId = new Map(p.nodes.map((node) => [node.id, node]))
+    const edges = (p.bridges ?? []).filter((edge) => byId.has(edge.source) && byId.has(edge.target))
+    if (!edges.length) continue
+    Object.assign(map, buildLinkMap(edges, (id) => infoFor(id)!))
   }
   return map
+}
+
+/** Build context-link entries for one project, including xnode endpoints resolved from the full
+ * project set. The active canvas uses this alongside its live React Flow edge map; background and
+ * Server Edition callers use `buildBackgroundLinkMaps` above. */
+export function buildProjectContextLinkMap(
+  project: { id: string; nodes: CanvasNodeState[]; bridges?: BridgeLink[]; links?: Link[] },
+  projects: readonly { id: string; nodes: CanvasNodeState[]; bridges?: BridgeLink[]; links?: Link[] }[],
+  sessionIdOf: (nodeId: string) => string | undefined,
+  agentIdOf?: (nodeId: string) => string | undefined
+): ContextLinkMap {
+  return buildBackgroundLinkMaps(
+    [...projects.filter((candidate) => candidate.id !== project.id), project],
+    null,
+    sessionIdOf,
+    agentIdOf,
+    project.id
+  )
 }

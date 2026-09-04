@@ -2,7 +2,7 @@
 
 **Category:** [Agents](./README.md)
 
-nodeterm treats an AI coding agent CLI as just another kind of terminal node — with extra
+nodeterm treats an AI coding agent CLI as just another kind of terminal node, with extra
 behaviour layered on top wherever the specific agent supports it. Claude Code, Codex, Gemini,
 opencode, Grok, and Cognition Devin are built in; any other CLI can be added as a custom agent
 with basic support (spawn, terminal-title tracking, process status).
@@ -109,6 +109,16 @@ directory. The fork adds an accessible `Link to another agent` header action wit
 keyboard picker; it invokes the same `onConnect` handler and therefore has the same capability,
 duplicate, persistence, failure, and deletion semantics as the handle drag. It does not add body-drop
 reparenting, automatic transcript exchange, new team roles, or a new session authority boundary.
+
+**Custom harnesses** can inherit a built-in agent's hook, resume, permission, canvas-control, and
+model-switch behavior. Extra arguments and environment assignments support bounded `${env:NAME}`
+expansion, and the launch preview reports unset references without exposing credentials. A model
+gateway can discover an OpenAI-compatible catalogue and offer a model picker on a node. The node
+stores the selected model name, while the gateway credential remains in protected local storage.
+
+**Restart on subscription** is an opt-in fresh-session path that removes gateway and inherited
+provider variables before recreating an idle resumable node. Account-isolation variables remain in
+place. Relay sessions keep this action disabled because their environment belongs to the host.
 
 ## Configuration
 

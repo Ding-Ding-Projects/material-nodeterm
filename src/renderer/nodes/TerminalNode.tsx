@@ -206,6 +206,8 @@ import {
   canResume,
   canRename,
   canReadTitle,
+  createdAgentBaseId,
+  createdAgentHarnessId,
   createdAgentId,
   capabilityAgentId,
   createdAgentHarnessId,
@@ -215,6 +217,7 @@ import {
   agentConfig,
   type AgentId
 } from '@shared/agents/config'
+import { resolveAgentBase } from '@shared/agents/custom-agent'
 import {
   commandForAgentLaunch,
   ensureActiveAgentLaunchPlan
@@ -258,6 +261,7 @@ import {
 } from '../lib/keybindingOverrides'
 import { ColumnPill } from '../components/kanban/ColumnPill'
 import { BoardLogPanel } from '../components/kanban/BoardLogPanel'
+import { LinkInspectorPanel } from '../components/links/LinkInspectorPanel'
 import { AgentMascot } from './AgentMascot'
 import { MaximizeButton } from './MaximizeButton'
 import { focusNode } from './focus-handler'
@@ -267,6 +271,10 @@ import { uuid } from '../lib/uuid'
 import { runPendingLaunchOnce } from '../lib/pendingLaunch'
 import { coldAgentLaunchIntent } from '../terminal/agent-launch-intent'
 import { executePendingLaunchForSession } from '../terminal/pending-launch-executor'
+import { focusNode } from './focus-handler'
+import { assembleResumeCommand } from '@shared/agents/launch'
+import { normalizedAgentModel } from '@shared/agents/model-gateway'
+import { agentEnvSnapshot } from '../lib/agentEnv'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { NodeIconView } from '../components/NodeIcon'
 import { nodeIconDialog } from '../components/NodeIconPicker'
@@ -2214,11 +2222,18 @@ export function TerminalNode({
     const customLaunchCmd = useSettings
       .getState()
       .settings.customAgents.find((custom) => custom.id === agentId)?.launchCmd
+    const customAgent = useSettings
+      .getState()
+      .settings.customAgents.find((custom) => custom.id === agentId)
     void retryAgentColdRelaunch(
       {
         agentId,
         priorSessionId: status?.sessionId || data.agentSessionId,
         customLaunchCmd,
+        customAgent,
+        customBaseAgent: data.agentBaseId ?? customAgent?.baseAgent,
+        model: data.agentModel,
+        environment: agentEnvSnapshot(),
         sharedIdentity: codexSharedIdentity(data.ssh || data.sshRemoteTmux),
         persistKey: id,
         profileId: terminalProfileId,
@@ -3388,11 +3403,9 @@ export function TerminalNode({
           agentId,
           priorSessionId: status?.sessionId || data.agentSessionId,
           customAgentConfigured,
-          ...(hasPermissionMode(agentId)
+          ...(hasPermissionMode(agentHarnessId ?? agentId)
             ? {
-                permissionMode: (
-                  await ensureActiveAgentLaunchPlan('terminal-cold-restore', agentId)
-                ).mode
+                permissionMode: (await ensureActiveAgentLaunchPlan('terminal-cold-restore', agentHarnessId ?? agentId)).mode
               }
             : {})
         }) ?? undefined
@@ -3481,6 +3494,7 @@ export function TerminalNode({
             let offData: (() => void) | undefined
             if (onDisposed()) return
             sessionId = sid
+            if (data.clearEnv) updateNodeData(id, { clearEnv: undefined })
             const executePendingLaunch: PendingLaunchExecutor = async (pending) => {
               // Bind semantic launches to THIS exact PTY generation. The core rejects a stale id and
               // deduplicates launchId within the generation, so a lost reply cannot type it twice.
@@ -3821,7 +3835,7 @@ export function TerminalNode({
                   : data.initialCommand
               writeWhenShellReady(initial)
               updateNodeData(id, { initialCommand: undefined })
-            } else if (fresh && agentId && !data.pendingLaunch) {
+            } else if (fresh && agentId && agentHarnessId && !data.pendingLaunch) {
               // Cold restart of an agent node: the live agent is gone, so re-launch it. Resume the
               // prior conversation by its session id when we have one; otherwise start the agent
               // fresh. Plain terminals get nothing here — just the restored shell.
@@ -4153,14 +4167,14 @@ export function TerminalNode({
         // Read at CALL time — a local project can BECOME an SSH project long after this mount.
         if (offscreenRemoteRef.current) return 'not-eligible'
         const st = useAgentStatus.getState().byId[id]
-        const agentSessionId = st?.sessionId
+        const agentSessionId = restartSessionId(st?.sessionId, data.agentSessionId)
         // Re-asked here, not trusted from the plan: a node that started working between the sweep's
         // decision and its turn must keep its turn (BUSY_STATES — an exit line typed into a
         // permission prompt ANSWERS it).
-        const gate = restartEligibility(agentId, st?.state, agentSessionId)
-        if (!gate.ok || !agentId || !agentSessionId || !restartTarget()) return 'not-eligible'
+        const gate = restartEligibility(agentHarnessId, st?.state, agentSessionId)
+        if (!gate.ok || !agentHarnessId || !agentSessionId || !restartTarget()) return 'not-eligible'
         const outcome = await performExitPhase({
-          agentId,
+          agentId: agentHarnessId,
           sessionId: agentSessionId,
           io: restartIo,
           paneCommand: () => api.pty.paneCommand(id),
@@ -4185,8 +4199,8 @@ export function TerminalNode({
       }),
       resume: guardConcurrentRestart(id, async (): Promise<ResumePhaseOutcome> => {
         const st = useAgentStatus.getState().byId[id]
-        const agentSessionId = st?.sessionId
-        if (!agentId || !agentSessionId || !restartTarget()) return 'not-eligible'
+        const agentSessionId = restartSessionId(st?.sessionId, data.agentSessionId)
+        if (!agentId || !agentHarnessId || !agentSessionId || !restartTarget()) return 'not-eligible'
         // Command FIRST, pane check LAST. Both of these awaits can take a moment (the claude
         // version probe behind `ensureActiveAgentLaunchPlan` most of all), and whatever is asked
         // first is stale by the time the delivery runs — so the fact that must be freshest is the
@@ -4249,7 +4263,7 @@ export function TerminalNode({
         // and the restart path (which just cleared the line itself) must not clear it twice.
         restartIo.write(KILL_LINE)
         return performResumePhase({
-          agentId,
+          agentId: agentHarnessId,
           sessionId: agentSessionId,
           io: restartIo,
           command,
@@ -5166,8 +5180,8 @@ export function TerminalNode({
     const sync = async () => {
       if (!titleAutoRef.current || editingTitleRef.current) return
       const accountScope =
-        agentId === 'codex' ? (data.codexAccountId as string | undefined) : data.accountId
-      const name = await api.pty.readSessionName(sid, accountScope, agentId)
+        agentHarnessId === 'codex' ? (data.codexAccountId as string | undefined) : data.accountId
+      const name = await api.pty.readSessionName(sid, accountScope, agentHarnessId)
       if (cancelled) return
       if (name) delayMs = 15000
       if (name && titleAutoRef.current && !editingTitleRef.current && name !== titleRef.current) {
@@ -5183,7 +5197,7 @@ export function TerminalNode({
       cancelled = true
       if (timer) clearTimeout(timer)
     }
-  }, [id, canReadTitleNode, status?.sessionId, data.titleAuto, updateNodeData])
+  }, [id, canReadTitleNode, status?.sessionId, data.titleAuto, updateNodeData, agentHarnessId])
 
   // LEAD PANE WIDTH for Claude Code agent teams (`settings.agentTeamLeadPaneWidthEnabled`, opt-in,
   // default off) — see shared/agents/team-pane-layout.ts for the problem this corrects (Claude's
@@ -5763,6 +5777,20 @@ export function TerminalNode({
               </IconButton>
             </Tooltip>
           )}
+          {!isHidden('maximize', hiddenHeaderButtons) && (
+            <Tooltip label="Focus this node alone (Escape to return)">
+              <button
+                className="term-node__maximize nodrag"
+                title="Focus this node alone (Escape to return)"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  focusNode(id)
+                }}
+              >
+                <IconFocus />
+              </button>
+            </Tooltip>
+          )}
           {/* "Escape to widget" (docs/features/terminals/canvas-widget.md): pop this node's live session into its
             own always-on-top-configurable desktop window. Electron-only — a Server Edition
             browser tab has no OS window to open, so this button is simply absent there rather
@@ -6187,6 +6215,14 @@ export function TerminalNode({
           onMouseDown={(e) => e.stopPropagation()}
         >
           <BoardLogPanel card={{ id }} />
+        </div>
+      )}
+      {linksOpen && !collapsed && (
+        <div
+          className="term-node__links nodrag nowheel"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <LinkInspectorPanel nodeId={id} onClose={() => setLinksOpen(false)} />
         </div>
       )}
     </>

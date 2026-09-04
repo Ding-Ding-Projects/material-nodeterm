@@ -145,7 +145,10 @@ export function needsLiveCanvas(verb: string): boolean {
  * a plain terminal node received the claude hook env at spawn, so a manual `claude` there holds
  * NODETERM_CANVAS_CONTROL — rejecting it here would contradict the env it was handed.
  */
-export function sourceIsControlCapable(agentId: unknown): boolean {
+export function sourceIsControlCapable(agentId: unknown, persistedBaseAgentId?: unknown): boolean {
+  if (typeof persistedBaseAgentId === 'string' && persistedBaseAgentId) {
+    return canControlCanvas(persistedBaseAgentId as AgentId)
+  }
   const id = typeof agentId === 'string' && agentId ? agentId : 'claude'
   return canControlCanvas(id as AgentId)
 }

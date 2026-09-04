@@ -3,6 +3,7 @@ import type { AgentLaunchIntent, CustomAgent } from "../shared/types";
 import {
   AGENT_CONFIG,
   agentLaunchProgram,
+  canSwitchModel,
   canResume,
   hasPermissionMode,
   isPermissionMode,
@@ -40,7 +41,7 @@ export type AgentLaunchExecutableKindResolver = (
 /** The one current custom-agent record selected from machine-local settings. */
 export type TrustedCustomAgentLaunchConfig = Pick<
   CustomAgent,
-  "id" | "launchCmd" | "promptInjectionMode"
+  "id" | "launchCmd" | "promptInjectionMode" | "baseAgent"
 >;
 
 /**
@@ -92,6 +93,7 @@ interface LogicalAgentLaunch {
 
 interface ResolvedAgentConfig {
   id: AgentId;
+  capabilityId: AgentId;
   launchCmd: string;
   promptInjectionMode: PromptInjectionMode;
   argvPromptSeparator?: string;
@@ -115,12 +117,14 @@ const MAX_PORTABLE_POSIX_COMMAND_BYTES = 32_000;
 // interactive line at 8,191. Leave a small fixed margin for implementation-added framing/NUL.
 const MAX_WINDOWS_COMMAND_LINE = 32_700;
 const MAX_CMD_INTERACTIVE_LINE = 8_100;
+const MAX_MODEL_LENGTH = 500;
 const START_FIELDS = new Set([
   "kind",
   "action",
   "agentId",
   "prompt",
   "permissionMode",
+  "model",
   "newSessionId",
 ]);
 const RESUME_FIELDS = new Set([
@@ -129,6 +133,7 @@ const RESUME_FIELDS = new Set([
   "agentId",
   "sessionId",
   "permissionMode",
+  "model",
 ]);
 
 function fail(code: AgentLaunchPreparationErrorCode): never {
@@ -171,6 +176,11 @@ function validateIntentRuntime(
   if (
     intent.permissionMode !== undefined &&
     !isPermissionMode(intent.permissionMode)
+  )
+    fail("invalid-intent");
+  if (
+    intent.model !== undefined &&
+    (!safeText(intent.model, MAX_MODEL_LENGTH) || !intent.model.trim())
   )
     fail("invalid-intent");
 
@@ -221,6 +231,7 @@ function resolveTrustedAgentConfig(
     const config: AgentConfig = AGENT_CONFIG[intent.agentId];
     return {
       id: intent.agentId,
+      capabilityId: intent.agentId,
       launchCmd: config.launchCmd,
       promptInjectionMode: config.promptInjectionMode,
       argvPromptSeparator: config.argvPromptSeparator,
@@ -229,21 +240,27 @@ function resolveTrustedAgentConfig(
   }
 
   const custom = context.customAgent;
+  const baseId = custom?.baseAgent;
+  if (baseId !== undefined && !isBuiltinAgentId(baseId)) fail("agent-unavailable");
+  const base = baseId === undefined ? undefined : AGENT_CONFIG[baseId];
+  const launchCmd = custom?.launchCmd?.trim() || base?.launchCmd || "";
   if (
     !custom ||
     typeof custom.id !== "string" ||
     custom.id !== intent.agentId ||
     custom.id !== context.expectedAgentId ||
-    !safeText(custom.launchCmd, MAX_LAUNCH_COMMAND_LENGTH) ||
-    !custom.launchCmd.trim() ||
+    !safeText(launchCmd, MAX_LAUNCH_COMMAND_LENGTH) ||
+    !launchCmd ||
     !validPromptMode(custom.promptInjectionMode)
   )
     fail("agent-unavailable");
 
   return {
     id: intent.agentId,
-    launchCmd: custom.launchCmd,
-    promptInjectionMode: custom.promptInjectionMode,
+    capabilityId: baseId ?? intent.agentId,
+    launchCmd,
+    promptInjectionMode: base?.promptInjectionMode ?? custom.promptInjectionMode,
+    argvPromptSeparator: base?.argvPromptSeparator,
     builtin: false,
   };
 }
@@ -339,28 +356,32 @@ function logicalLaunch(
       context.sharedIdentityAvailable,
     );
 
-  if (intent.permissionMode !== undefined && !hasPermissionMode(config.id))
+  if (intent.permissionMode !== undefined && !hasPermissionMode(config.capabilityId))
     fail("invalid-intent");
   const modeFlags = intent.permissionMode
-    ? approvalFlags(config.id, intent.permissionMode)
+    ? approvalFlags(config.capabilityId, intent.permissionMode)
+    : [];
+  if (intent.model !== undefined && !canSwitchModel(config.capabilityId)) fail("invalid-intent");
+  const modelFlags = intent.model && config.capabilityId !== "copilot"
+    ? ["--model", intent.model]
     : [];
 
   if (intent.action === "resume") {
-    if (!config.builtin || !canResume(config.id)) fail("agent-unavailable");
+    if (!canResume(config.capabilityId)) fail("agent-unavailable");
     const resumeArgs =
-      config.id === "codex"
+      config.capabilityId === "codex"
         ? ["resume", intent.sessionId]
-        : config.id === "opencode"
+        : config.capabilityId === "opencode"
           ? ["--session", intent.sessionId]
           : config.id === "devin"
             ? ["-r", intent.sessionId]
           : ["--resume", intent.sessionId];
-    return { executable, args: [...baseArgs, ...resumeArgs, ...modeFlags] };
+    return { executable, args: [...baseArgs, ...resumeArgs, ...modeFlags, ...modelFlags] };
   }
 
   const sessionArgs: string[] = [];
   if (intent.newSessionId !== undefined) {
-    if (!mintsSessionId(config.id)) fail("invalid-intent");
+    if (!mintsSessionId(config.capabilityId)) fail("invalid-intent");
     sessionArgs.push("--session-id", intent.newSessionId);
   }
 
@@ -376,7 +397,7 @@ function logicalLaunch(
   if (promptInjectionMode === "stdin-after-start") {
     return {
       executable,
-      args: [...baseArgs, ...modeFlags, ...sessionArgs],
+      args: [...baseArgs, ...modeFlags, ...modelFlags, ...sessionArgs],
       ...(hasPrompt ? { stdinAfterStart: prompt } : {}),
     };
   }
@@ -388,6 +409,20 @@ function logicalLaunch(
         ...baseArgs,
         ...(hasPrompt ? ["--prompt", prompt as string] : []),
         ...modeFlags,
+        ...modelFlags,
+        ...sessionArgs,
+      ],
+    };
+  }
+
+  if (promptInjectionMode === "flag-interactive") {
+    return {
+      executable,
+      args: [
+        ...baseArgs,
+        ...(hasPrompt ? ["--interactive", prompt as string] : []),
+        ...modeFlags,
+        ...modelFlags,
         ...sessionArgs,
       ],
     };
@@ -399,6 +434,7 @@ function logicalLaunch(
       args: [
         ...baseArgs,
         ...modeFlags,
+        ...modelFlags,
         ...sessionArgs,
         config.argvPromptSeparator,
         prompt as string,
@@ -412,6 +448,7 @@ function logicalLaunch(
       ...baseArgs,
       ...(hasPrompt ? [prompt as string] : []),
       ...modeFlags,
+      ...modelFlags,
       ...sessionArgs,
     ],
   };

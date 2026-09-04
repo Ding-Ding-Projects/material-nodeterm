@@ -4,7 +4,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { quantizeCharSize } from '../../terminal/char-size-quantize'
-import { hasPermissionMode, reportsOwnCopy } from '@shared/agents/config'
+import { createdAgentHarnessId, hasPermissionMode, reportsOwnCopy } from '@shared/agents/config'
 import type { AgentId } from '@shared/agents/config'
 import type { AgentLaunchIntent } from '@shared/types'
 import { readsClaudeTranscript } from '../../lib/transcriptGates'
@@ -70,6 +70,9 @@ export interface ModalSpawn {
   respawnNonce?: number
   cwd?: string
   agentId?: string
+  agentBaseId?: import('@shared/agents/config').BuiltinAgentId
+  agentModel?: string
+  clearEnv?: boolean
   /** Transient semantic first launch; never serialized into the shared project document. */
   agentLaunchIntent?: AgentLaunchIntent
   /** Persisted provider id used only to derive a trusted cold-resume intent. */
@@ -134,6 +137,7 @@ export function ModalTerminal({
   const fitRef = useRef<FitAddon | null>(null)
   const transportRef = useRef<LocalTransport | null>(null)
   const agentSessionId = useAgentStatus((s) => s.byId[nodeId]?.sessionId)
+  const agentHarnessId = createdAgentHarnessId({ agentId: spawn.agentId, agentBaseId: spawn.agentBaseId })
   // One shallow-compared subscription for the whole appearance slice — see useXtermVisualSettings.
   // MIRROR TerminalNode: scoped to the OWNING project (`owningProjectId`, the active one — a modal
   // only ever opens over it), deliberately NOT this card's connection scope. `sshConnectionScope`
@@ -161,7 +165,7 @@ export function ModalTerminal({
   const copy = useCopyFeedback({
     hostRef,
     hasSelection: () => !!termRef.current?.hasSelection(),
-    enabled: !reportsOwnCopy(spawn.agentId as AgentId | undefined)
+    enabled: !reportsOwnCopy(agentHarnessId as AgentId | undefined)
   })
 
   // Same search machinery as the canvas node: capture-indexed matches + xterm highlight.
@@ -180,7 +184,7 @@ export function ModalTerminal({
     // MIRROR TerminalNode: the transcript index reads claude's JSONL through claude's resolver, so
     // it is gated on the claude-transcript fact, NOT on the context meter's `hasUsage` (which now
     // spans codex and gemini too) — see lib/transcriptGates.ts.
-    searchTranscript: readsClaudeTranscript(spawn.agentId),
+    searchTranscript: readsClaudeTranscript(agentHarnessId),
     open: searchOpen,
     readBuffer
   })
@@ -353,8 +357,8 @@ export function ModalTerminal({
           agentId: spawn.agentId,
           priorSessionId: agentSessionId || spawn.agentSessionId,
           customAgentConfigured,
-          ...(hasPermissionMode(spawn.agentId)
-            ? { permissionMode: await ensureActivePermissionMode(spawn.agentId) }
+            ...(agentHarnessId && hasPermissionMode(agentHarnessId)
+              ? { permissionMode: await ensureActivePermissionMode(agentHarnessId) }
             : {})
         }) ?? undefined
       }
@@ -374,6 +378,9 @@ export function ModalTerminal({
         // non-active project. Recorded main-side only on a genuine fresh spawn.
         ownerProjectId: projectId,
         agentId: spawn.agentId,
+        agentBaseId: spawn.agentBaseId,
+        agentModel: spawn.agentModel,
+        clearEnv: spawn.clearEnv,
         accountId: spawn.accountId,
         codexAccountId: spawn.codexAccountId,
         sshRemote,

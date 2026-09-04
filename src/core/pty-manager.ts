@@ -1723,6 +1723,9 @@ export class PtyManager {
     )
     platform().handle(IPC.ptyTmuxStatus, () => this.tmuxStatus())
     platform().handle(IPC.ptyPaneCommand, (persistKey: string) => this.paneCommand(persistKey))
+    platform().handle(IPC.ptyTerminateForeground, (persistKey: string, expectedAgentId?: string) =>
+      this.terminateForeground(persistKey, expectedAgentId)
+    )
     platform().handle(IPC.ptyCorrectTeamPaneWidth, (persistKey: string) =>
       this.correctTeamLeadPaneWidth(persistKey)
     )
@@ -2088,6 +2091,16 @@ export class PtyManager {
     // is skipped and the local one runs.
     if (options.requireRemote && !(options.sshRemote && options.persistKey && findSsh())) {
       return { sessionId: '', fresh: false, unavailable: 'ssh' }
+    }
+    // Foreign-node projections are viewers, never owners. Probe the persistent backend as well as
+    // this core's in-memory index, because a projection may open after an app restart while the
+    // owning tmux or session-host generation is still alive. Only then allow attach-or-create;
+    // refusing when the probe says absent prevents a missing foreign node from becoming a new
+    // owner under the projection's identity.
+    if (options.requireExisting) {
+      if (!options.persistKey || !(await this.sessionExists(options.persistKey))) {
+        return { sessionId: '', fresh: false, unavailable: 'no-session' }
+      }
     }
     // Account-login nodes are intentionally plain terminals, not agent nodes. The selected
     // Codex account is therefore identified by codexAccountId itself — never by agentId.
@@ -2743,6 +2756,8 @@ export class PtyManager {
     // Deterministic hook-reply approvals (docs/hook-reply-approvals.md): arm the permission hook's
     // wait-branch for claude sessions when the setting is on. `permWaitSecs > 0` injects
     // NODETERM_PERM_WAIT_SECS; off / non-claude ⇒ 0 ⇒ absent ⇒ legacy behavior.
+    const requestedAgentId = (options.agentId ?? 'claude') as AgentId
+    const effectiveAgentId = capabilityAgentId(requestedAgentId)
     const permWaitSecs =
       this.getSettings().hookReplyApprovals &&
       (options.agentBaseId ?? options.agentId ?? 'claude') === 'claude'
@@ -2878,6 +2893,25 @@ export class PtyManager {
     }
 
     const settings = this.getSettings()
+    const customAgent = settings.customAgents.find((agent) => agent.id === requestedAgentId)
+    const stripProviderEnv =
+      (options.clearEnv || settings.vanillaLaunchDefault) && vanillaEnvStripPattern(requestedAgentId)
+    const gateway = options.agentId && !stripProviderEnv
+      ? modelGatewayEnv(
+          settings.modelGateway,
+          requestedAgentId,
+          options.agentModel,
+          env,
+          this.getGatewaySecret(),
+          this.gatewayModels.get(settings.modelGateway.baseUrl.trim()) ?? []
+        )
+      : {}
+    if (!options.sshRemote) {
+      for (const [key, value] of Object.entries(gateway)) env[key] = value
+      if (stripProviderEnv) for (const key of Object.keys(env)) if (stripProviderEnv.test(key)) delete env[key]
+      const mergedCustom = applyCustomAgentEnv(env, customAgent, env)
+      Object.assign(env, mergedCustom.env)
+    }
     let file: string
     let args: string[]
     // Set true only by the session-host branch below. Decides which of the two `proc =` paths
@@ -2947,8 +2981,8 @@ export class PtyManager {
       // NODETERM_NODE_ID = persistKey, and Canvas.tsx onAgentStatus keys agentStatus.byId /
       // selection off that raw id with no `nt-` stripping. Passing the session name here would
       // emit events under `nt-<id>` that match no node → no badge/notification/session/loop.
-      const remoteCodex = (options.agentId ?? 'claude') === 'codex'
-      const remoteCodexScope = needsCodexAccountScope(options.agentId, options.codexAccountId)
+      const remoteCodex = effectiveAgentId === 'codex'
+      const remoteCodexScope = needsCodexAccountScope(effectiveAgentId, options.codexAccountId)
       if (
         remoteCodex &&
         (!options.sshRemote.remoteHome ||
@@ -2984,6 +3018,20 @@ export class PtyManager {
               : [])
           ]
         : []
+      // Gateway values can contain credentials. They must never become SSH argv, where the
+      // remote process list and audit tools can expose them. Remote gateway injection therefore
+      // remains disabled until a host-side environment transport can carry it without argv.
+      const gatewayEnvArgs: string[] = []
+      if (Object.keys(gateway).length > 0) {
+        console.warn('[gateway] gateway environment is not applied to remote sessions because argv transport is unsafe')
+      }
+      // User-defined values can include credentials. This branch builds one remote shell command,
+      // so placing them in tmux `-e` arguments would expose them through the SSH process list. Keep
+      // the remote launch host-safe until a stdin-backed session environment transport is present.
+      const customEnvArgs: string[] = []
+      if (customAgent?.env && Object.keys(customAgent.env).length > 0) {
+        console.warn('[custom-agent] custom environment values are not applied to remote sessions because argv transport is unsafe')
+      }
       // Managed REMOTE Claude account (Task 12): inject CLAUDE_CONFIG_DIR into the remote tmux
       // session via `-e`, pointing at the account's config dir on the remote host. The path must be
       // ABSOLUTE — tmux copies `-e` values verbatim (no `$HOME`/`~` expansion) — so we build it from
@@ -3061,7 +3109,7 @@ export class PtyManager {
         // place a foreign value is most at home.
         reqShell,
         options.shellArgs,
-        [...hookExtraEnv, ...remoteAccountEnv, ...remoteCodexEnv],
+        [...hookExtraEnv, ...gatewayEnvArgs, ...customEnvArgs, ...remoteAccountEnv, ...remoteCodexEnv],
         // Source nodeterm's remote tmux.conf via `-f` (written on connect, Task 2) so a cold-start
         // session gets mouse/clipboard/scrollback. Fail-open: undefined → remote tmux host defaults.
         options.sshRemote.tmuxConfPath,
@@ -3132,10 +3180,13 @@ export class PtyManager {
       // The account config dir must ride `-e` like the hook env: the tmux server is shared
       // and long-lived, so session env comes from creation args, not client inheritance.
       const accountEnvArgs = accountDir ? accountTmuxEnvArgs(accountDir) : []
-      const codexEnvArgs = needsCodexAccountScope(options.agentId, options.codexAccountId)
+      const codexEnvArgs = needsCodexAccountScope(effectiveAgentId, options.codexAccountId)
         ? codexTmuxEnvArgs(platform().userDataDir, options.codexAccountId)
         : []
       const attachFlags = tmuxAttachFlags(!!sinks)
+      if (customAgent?.env && Object.keys(customAgent.env).length > 0) {
+        console.warn('[custom-agent] custom environment values are not applied to persistent tmux sessions because argv-safe staging is unavailable')
+      }
         args = [
           '-L',
           TMUX_SOCKET,

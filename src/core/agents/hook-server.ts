@@ -1465,7 +1465,7 @@ class HookServer {
       // by $NODETERM_NODE_ID and advertised in the endpoint file) — where the launcher
       // (core/codex-identity-proxy.ts) reads it, exactly as the managed script and both sh shims
       // do, so shared identity is LIVE with no credential in anyone's argv.
-      ...(agentId === 'codex' && this.codexRelayRuntime
+      ...(capabilityAgentId === 'codex' && this.codexRelayRuntime
         ? {
             NODETERM_CODEX_RELAY_RUNTIME: this.codexRelayRuntime.executable,
             NODETERM_CODEX_RELAY_SCRIPT: this.codexRelayRuntime.script

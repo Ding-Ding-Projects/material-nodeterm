@@ -112,6 +112,8 @@ export const REMOVED_MAX = 512
 export function mutationKey(m: CanvasMutation): string {
   if (m.op === 'edge-remove') return `e:${m.id}`
   if (m.op === 'edge-upsert') return `e:${m.edge.id}`
+  if (m.op === 'link-remove') return `l:${m.id}`
+  if (m.op === 'link-upsert') return `l:${m.link.id}`
   return `n:${m.op === 'remove' ? m.id : m.node.id}`
 }
 
@@ -125,12 +127,12 @@ export function mutationNodeId(m: CanvasMutation): string | null {
 /** Does this mutation ADD-OR-REPLACE its subject (as opposed to dropping it)? Nodes and edges are
  *  ordered by the same rules, so every rule below asks this rather than `op === 'upsert'`. */
 function isUpsert(m: CanvasMutation): boolean {
-  return m.op === 'upsert' || m.op === 'edge-upsert'
+  return m.op === 'upsert' || m.op === 'edge-upsert' || m.op === 'link-upsert'
 }
 
 /** Does this mutation DROP its subject? The mirror of `isUpsert`. */
 function isRemove(m: CanvasMutation): boolean {
-  return m.op === 'remove' || m.op === 'edge-remove'
+  return m.op === 'remove' || m.op === 'edge-remove' || m.op === 'link-remove'
 }
 
 export interface CanvasOrder {

@@ -17,7 +17,7 @@ import type {
 import type { ProjectIcon } from '@shared/project-icon'
 import type { ProviderBlueprint } from '@shared/provider-accounts'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
-import { applyEdgeMutation } from '@shared/canvas-mutations'
+import { applyEdgeMutation, applyLinkMutation as applyTypedLinkMutation } from '@shared/canvas-mutations'
 import { collisionSeed, derivedProjectId } from '@shared/project-id'
 import {
   canvasDepth,
@@ -34,6 +34,25 @@ import type { ProjectCapability } from '@shared/project-capabilities'
 import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
 import { markWorkspaceDirty } from './workspaceDirty'
 import { isNonDeletableCanvasNode } from '@shared/aws-shop'
+
+function nodeLinkFor(kind: Link['kind'], edge: BridgeLink): Link {
+  return {
+    id: edge.id,
+    kind,
+    source: { ref: 'node', nodeId: edge.source },
+    target: { ref: 'node', nodeId: edge.target },
+    ...(kind === 'lineage' ? { meta: { displayOnly: true } } : {})
+  }
+}
+
+/** Keep typed links that are not re-derived from the visible React Flow edge lists. */
+function retainNonVisualLinks(link: Link): boolean {
+  return !(
+    (link.kind === 'context' || link.kind === 'lineage') &&
+    link.source.ref === 'node' &&
+    link.target.ref === 'node'
+  )
+}
 
 interface ProjectsState {
   projects: Project[]
@@ -177,6 +196,10 @@ interface ProjectsState {
    * Returns false if the project is unknown here (nothing applied).
    */
   applyEdgeMutation(projectId: string, mutation: CanvasMutation): boolean
+  /** Applies one typed-link mutation to a background or active project's serialized relationship set. */
+  applyLinkMutation(projectId: string, mutation: CanvasMutation): boolean
+  /** Appends a node directly to a background project's serialized canvas. */
+  addNodeToProject(projectId: string, node: CanvasNodeState): boolean
   /** Renames a node within a project (source of truth for inactive projects). */
   renameNode(projectId: string, nodeId: string, title: string): void
   /** Recolors a node within a project. */
@@ -897,8 +920,53 @@ export const useProjects = create<ProjectsState>((set, get) => ({
           }
         }
         if (nextBridges === p.bridges && nextRopes === p.ropes) return p
-        return { ...p, bridges: nextBridges, ropes: nextRopes }
+        const retained = (p.links ?? []).filter(retainNonVisualLinks)
+        const nextLinks = [
+          ...retained,
+          ...(nextBridges ?? []).map((edge) => nodeLinkFor('context', edge)),
+          ...(nextRopes ?? []).map((edge) => nodeLinkFor('lineage', edge))
+        ]
+        return {
+          ...p,
+          bridges: nextBridges,
+          ropes: nextRopes,
+          ...(nextLinks.length ? { links: nextLinks } : { links: undefined })
+        }
       })
+    }))
+    return true
+  },
+
+  applyLinkMutation(projectId, mutation) {
+    if (!get().projects.some((p) => p.id === projectId)) return false
+    set((s) => ({
+      projects: s.projects.map((p) => {
+        if (p.id !== projectId) return p
+        const previous = p.links ?? []
+        const next = applyTypedLinkMutation(previous, mutation)
+        if (next === previous) return p
+        const bridges = next
+          .filter((link) => link.kind === 'context' && link.source.ref === 'node' && link.target.ref === 'node')
+          .map((link) => ({ id: link.id, source: link.source.nodeId, target: link.target.nodeId }))
+        const ropes = next
+          .filter((link) => link.kind === 'lineage' && link.source.ref === 'node' && link.target.ref === 'node')
+          .map((link) => ({ id: link.id, source: link.source.nodeId, target: link.target.nodeId }))
+        return {
+          ...p,
+          links: next,
+          ...(bridges.length ? { bridges } : { bridges: undefined }),
+          ...(ropes.length ? { ropes } : { ropes: undefined })
+        }
+      })
+    }))
+    return true
+  },
+
+  addNodeToProject(projectId, node) {
+    if (!get().projects.some((p) => p.id === projectId)) return false
+    if (!node || typeof node.id !== 'string' || get().projects.some((p) => p.nodes.some((candidate) => candidate.id === node.id))) return false
+    set((s) => ({
+      projects: mapProjectNodes(s.projects, projectId, (nodes) => [...nodes, node])
     }))
     return true
   },

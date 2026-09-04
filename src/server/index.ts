@@ -22,6 +22,7 @@ import { WorkspaceStore } from '../core/workspace-store'
 import { registerAgentEnvIpc } from '../core/agent-env-ipc'
 import { PtyManager } from '../core/pty-manager'
 import { registerCoreHandlers } from './handlers'
+import { registerAgentEnvIpc } from '../core/agent-env-ipc'
 import { registerGitHubIntegration } from '../core/github/integration'
 import { runGitHubCliCommand } from '../core/github/credentials'
 import {
@@ -254,6 +255,7 @@ export async function startServer(
     console.warn('[model-gateway] could not migrate the legacy API key to secret storage', error)
   }
   settingsStore.registerIpc()
+  registerAgentEnvIpc(() => settingsStore.get().modelGateway)
   await schoolModeStore.init()
   schoolModeStore.registerIpc()
   await kidsModeStore.init()

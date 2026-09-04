@@ -29,6 +29,7 @@ import { BoardLogPanel } from './BoardLogPanel'
 import { CardMetaBar } from './CardMetaBar'
 import { ModalTerminal } from './ModalTerminal'
 import { BrowserSurface } from '../../nodes/BrowserSurface'
+import { LinkInspectorPanel } from '../links/LinkInspectorPanel'
 import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 import { IconButton, TextArea } from '@renderer/ui/md3'
@@ -139,6 +140,7 @@ export function CardModal({
   // choice is remembered (localStorage) — once collapsed, later cards open collapsed too.
   const panelOpen = useCardPanel((s) => s.open)
   const togglePanel = useCardPanel((s) => s.toggle)
+  const [linksOpen, setLinksOpen] = useState(false)
   const isTerminal = session.kind === 'terminal'
   const isBrowser = session.kind === 'browser'
 
@@ -514,6 +516,7 @@ export function CardModal({
             )}
           </div>
           {panelOpen && <BoardLogPanel card={session} />}
+          {linksOpen && <LinkInspectorPanel nodeId={session.id} onClose={() => setLinksOpen(false)} />}
         </div>
       </div>
     </div>,

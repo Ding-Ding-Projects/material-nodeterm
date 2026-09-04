@@ -442,6 +442,8 @@ export function buildRealApi(
     // shell yet" and gives up on its own deadline.
     paneCommand: (persistKey) =>
       client.request(IPC.ptyPaneCommand, persistKey).catch(() => null) as Promise<string | null>,
+    terminateForeground: (persistKey, expectedAgentId) =>
+      client.request(IPC.ptyTerminateForeground, persistKey, expectedAgentId).catch(() => false) as Promise<boolean>,
     // REAL: PtyManager (core) registers this handler in both the Electron main process and the
     // Server Edition, so the server genuinely serves it — not a stub. Failure reads as "nothing
     // acted" (false), never a rejection: a poller must never treat a dropped connection as a
@@ -920,6 +922,8 @@ export function buildFilesApi(
       client.request(IPC.gitDiscoverNestedRepos, cwd) as ReturnType<GitApi['discoverNestedRepos']>,
     worktreeList: (repoPath) =>
       client.request(IPC.gitWorktreeList, repoPath) as ReturnType<GitApi['worktreeList']>,
+    submoduleList: (repoPath) =>
+      client.request(IPC.gitSubmoduleList, repoPath) as ReturnType<GitApi['submoduleList']>,
     worktreeAdd: (repoPath, wtPath, branch, baseRef, isNew) =>
       client.request(
         IPC.gitWorktreeAdd,

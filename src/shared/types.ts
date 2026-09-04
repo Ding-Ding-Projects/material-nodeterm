@@ -116,6 +116,8 @@ export type AgentLaunchIntent =
       prompt?: string
       /** Already version/policy-gated starting mode. The core re-validates it at execution. */
       permissionMode?: AgentPermissionMode
+      /** Optional validated model id selected through the configured gateway. */
+      model?: string
       /** Optional provider id minted for this first launch; never reused as a resume id. */
       newSessionId?: string
     }
@@ -127,6 +129,8 @@ export type AgentLaunchIntent =
       sessionId: string
       /** Starting mode for the reconstructed CLI, where the selected agent supports it. */
       permissionMode?: AgentPermissionMode
+      /** Optional validated model id selected through the configured gateway. */
+      model?: string
     }
 
 /**
@@ -171,6 +175,8 @@ export interface PtyCreateOptions {
    * terminal reattaches to the same session across remounts and app restarts.
    */
   persistKey?: string
+  /** Machine-local project identity used to prove pane ownership for agent messaging. */
+  ownerProjectId?: string
   /**
    * The machine-local id (`IndexEntryV3.id`) of the project this node belongs to, as the renderer
    * knows it at the create call. Recorded in the runtime pane-ownership ledger on a GENUINE FRESH
@@ -966,6 +972,8 @@ export type CanvasMutation =
       seen?: number
     }
   | { op: 'edge-remove'; kind: CanvasEdgeKind; id: string; src?: string; seq?: number; seen?: number }
+  | { op: 'link-upsert'; link: Link; src?: string; seq?: number; seen?: number }
+  | { op: 'link-remove'; id: string; src?: string; seq?: number; seen?: number }
 
 /**
  * Which persisted edge list a mutation addresses — `bridges` (context links, which an agent can
@@ -1388,7 +1396,7 @@ export interface Project {
    * See `BrowserProfile`. Absent = no profiles defined yet; browser nodes with no `browserProfileId`
    * use the app's default (unpartitioned) Electron session, which is bit-for-bit the pre-feature
    * behavior.
-   */
+  */
   browserProfiles?: BrowserProfile[]
   /** Unified typed links whose source belongs to this project. */
   links?: Link[]
@@ -1397,9 +1405,8 @@ export interface Project {
   /** Bridge links between Claude nodes (optional; absent in pre-bridge files). */
   bridges?: BridgeLink[]
   /**
-   * Visual "spawned by" ropes (control-capable agent → node it opened via the `nodeterm` CLI,
-   * or browser popup → its opener). Display-only — never context links — but persisted so the
-   * lineage survives restarts; deletable like any selected edge.
+   * Legacy visual "spawned by" ropes. Readers migrate these to `links` as `lineage`; new project
+   * files omit the field.
    */
   ropes?: BridgeLink[]
   /** Camera navigation history -- deliberate node landings, newest last. MACHINE-LOCAL: rides
@@ -1596,6 +1603,8 @@ export interface PtyApi {
    *  node persistKey. null when it is unknown — no session, no tmux, or the query failed — which
    *  callers must read as "not observed", never as evidence of a particular command. */
   paneCommand(persistKey: string): Promise<string | null>
+  /** Terminate an identified foreground agent process group without typing into the pane. */
+  terminateForeground(persistKey: string, expectedAgentId?: string): Promise<boolean>
   /** Correct a node's tmux "lead" pane width after Claude Code's agent-team backend has narrowed
    *  it (`settings.agentTeamLeadPaneWidthEnabled` — see shared/agents/team-pane-layout.ts). Counts
    *  the node's panes and, when the setting calls for it, resizes pane 0; resolves `true` only
@@ -2781,6 +2790,9 @@ export interface Settings {
   customAlertSounds: Partial<Record<AlertSoundKind, CustomAlertSound>>
   /** User-defined agents (BYO CLI) appended to the Add menus. */
   customAgents: CustomAgent[]
+  /** One gateway root and a non-secret credential reference used by model-switch-capable
+   * harnesses. Literal credentials live in the OS secret store, never in this object. */
+  modelGateway: ModelGatewaySettings
   /** Per-builtin-agent launch command overrides (Settings → Agents → Launch commands). The value
    *  replaces the bare CLI name everywhere a launch line is built — new sessions, cold-restore
    *  relaunches, in-place restarts, hibernation wakes and the transcript-search resume — with the
@@ -2798,6 +2810,9 @@ export interface Settings {
    *  wherever the agent would. Empty/absent = the builtin default, byte-identical to before this
    *  setting existed. Keyed by builtin id only: custom agents already own their `launchCmd`. */
   agentLaunchCommands: Partial<Record<BuiltinAgentId, string>>
+  /** When true, fresh agent launches strip inherited gateway/provider variables and use the
+   * agent's own subscription or default provider. */
+  vanillaLaunchDefault: boolean
   /** Managed Claude accounts (config-dir isolated). See ClaudeAccount. */
   claudeAccounts: ClaudeAccount[]
   /** Managed Codex accounts (CODEX_HOME isolated, machine-scoped by `host`). See CodexAccount.
@@ -3167,6 +3182,7 @@ export const DEFAULT_SETTINGS: Settings = {
   customAgents: [],
   modelGateway: { baseUrl: '', apiKey: '' },
   agentLaunchCommands: {},
+  vanillaLaunchDefault: false,
   claudeAccounts: [],
   claudeAccountRotation: {
     enabled: false,
@@ -3820,6 +3836,14 @@ export interface GitApi {
   /** `{ ok: false, entries: [] }` when git itself could not be read — which is NOT the same fact as
    *  "this repo has no worktrees", and no caller may treat it as one (see worktree-ops). */
   worktreeList(repoPath: string): Promise<import('./worktree').WorktreeListResult>
+  /** Read recursive submodule status, preserving read failure as `ok:false`. */
+  submoduleList(repoPath: string): Promise<import('./worktree').SubmoduleListResult>
+  /** Rebase a child branch onto its configured typed-link parent. */
+  syncBranch(cwd: string, child: string): Promise<GitResult>
+  /** Open a pull request from a child branch into its configured parent. */
+  proposeBranch(cwd: string, child: string): Promise<GitResult>
+  /** Fast-forward a parent branch to a child branch after an explicit review. */
+  shipBranch(cwd: string, child: string, parent: string): Promise<GitResult>
   worktreeAdd(repoPath: string, wtPath: string, branch: string, baseRef: string, isNew: boolean): Promise<GitResult>
   /** `push`: also publish `baseRef` to origin after a successful merge (only if a remote exists).
    *  Opt-in — a merge must never publish to a shared remote the user was not told about. */
@@ -4363,6 +4387,16 @@ export interface ChatApi {
     accountId?: string,
     nodeId?: string
   ): Promise<ChatTranscriptResult>
+}
+
+/** Custom-agent launch and model-gateway IPC. Environment values are returned only as a bounded
+ * snapshot for local command preview; stored credentials cross this boundary as presence only. */
+export interface AgentApi {
+  envSnapshot(): Promise<Record<string, string>>
+  discoverModels(settings: ModelGatewaySettings): Promise<ModelDiscoveryResult>
+  gatewayCredentialStatus(): Promise<ModelGatewayCredentialStatus>
+  saveGatewayCredential(apiKey: string): Promise<ModelGatewayCredentialStatus>
+  clearGatewayCredential(): Promise<ModelGatewayCredentialStatus>
 }
 
 /** Optional SSH context for account ops. When `projectId` names a connected SSH project, the
@@ -5148,6 +5182,8 @@ export interface NodeTerminalApi {
   announcements: AnnouncementsApi
   license: LicenseApi
   contextLink: ContextLinkApi
+  /** Custom-agent environment expansion and model-gateway operations. */
+  agent: AgentApi
   boardLog: BoardLogApi
   logs: LogApi
   githubIssues: import('./github-issues').GitHubIssuesApi
