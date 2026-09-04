@@ -350,6 +350,8 @@ export interface IndexEntryV3 {
    *  shell / advanced ssh args still survive a restart. Inline (`project`) entries need none: they
    *  live in this same machine-local file already. */
   localExec?: LocalNodeExecMap
+  /** MACHINE-LOCAL provider links; never serialized into project.json. */
+  providerBindings?: ProviderBinding[]
   /**
    * The one-time exec migration has completed for this entry: its shared project file was readable
    * and therefore could be loaded through the strip boundary and rewritten without machine-local
@@ -714,6 +716,7 @@ export function fileToProject(
      *  WITHOUT them — an adopted/cloned folder, a probe — gets the safe defaults, never the file's
      *  own `shell`/`ssh.extraArgs`. */
     localExec?: LocalNodeExecMap
+    providerBindings?: ProviderBinding[]
   }
 ): Project {
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId

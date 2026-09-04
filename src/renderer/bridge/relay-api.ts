@@ -34,6 +34,7 @@
 //    it after approval already fired leaves `ready()` pending forever and the api never comes up.
 
 import type { NodeTerminalApi } from '../../shared/types'
+import type { ProviderAccountsApi } from '../../shared/provider-accounts'
 import { E_UNSUPPORTED } from '../../shared/rpc'
 import { type FrameTransport, RelayFrameTransport } from './frame-transport'
 import {

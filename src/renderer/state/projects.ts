@@ -14,6 +14,7 @@ import type {
   Viewport,
   Workspace
 } from '@shared/types'
+import type { ProviderBlueprint } from '@shared/provider-accounts'
 import type { ProjectIcon } from '@shared/project-icon'
 import type { ProviderBlueprint } from '@shared/provider-accounts'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
