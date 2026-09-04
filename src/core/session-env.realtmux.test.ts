@@ -16,7 +16,7 @@ import fs from 'fs'
 import path from 'path'
 import { tmuxConf } from './pty-manager'
 import { sessionEnvFileContent } from './remote-ssh/session-env'
-import { makeTmuxTmpdir } from './tmux-test-socket'
+import { makeTmuxTmpdir, posixTmuxUnavailableReason } from './tmux-test-socket'
 
 /**
  * A private socket — never the live-session sockets, and never the SHARED `/tmp/tmux-<uid>/`
@@ -29,6 +29,9 @@ const SOCKET = `nt-envtest-${process.pid}`
 
 let tmp: string
 let conf: string
+// Reported once, at module load, so the runner shows these as SKIPPED with a reason instead
+// of as tests that passed without asserting anything.
+const TMUX_BLOCKED = posixTmuxUnavailableReason()
 let tmuxOk = false
 
 function tmux(args: string[], env?: Record<string, string>): string {
@@ -41,12 +44,15 @@ function tmux(args: string[], env?: Record<string, string>): string {
 }
 
 beforeAll(() => {
-  try {
-    execFileSync('tmux', ['-V'], { stdio: 'ignore' })
-    tmuxOk = true
-  } catch {
-    return // no tmux on this host — every test below self-skips
+  // A binary called tmux is not enough here: see `posixTmuxUnavailableReason`. When the host
+  // cannot host these contracts the suite states why and every test below self-skips, rather
+  // than reporting a missing dependency as a product failure.
+  const blocked = TMUX_BLOCKED
+  if (blocked) {
+    console.warn(`skipping real-tmux suite: ${blocked}`)
+    return
   }
+  tmuxOk = true
   tmp = makeTmuxTmpdir('ntenv-', SOCKET)
   conf = path.join(tmp, 'tmux.conf')
   fs.writeFileSync(conf, tmuxConf(2000))
@@ -71,7 +77,7 @@ const waitFor = async (file: string, ms = 3000): Promise<string> => {
   }
 }
 
-describe('update-environment delivery (the argv-free gateway path)', () => {
+describe.skipIf(TMUX_BLOCKED)('update-environment delivery (the argv-free gateway path)', () => {
   it('a client carrying the var in its process env hands it to the pane — argv stays clean', async () => {
     if (!tmuxOk) return
     const out = path.join(tmp, 'claude-pane')
@@ -106,7 +112,7 @@ describe('update-environment delivery (the argv-free gateway path)', () => {
   })
 })
 
-describe('the remote prologue, run through a real /bin/sh', () => {
+describe.skipIf(TMUX_BLOCKED)('the remote prologue, run through a real /bin/sh', () => {
   it('sources the staged 0600 file into the tmux client env, deletes it, and the pane sees the value', async () => {
     if (!tmuxOk) return
     const envFile = path.join(tmp, 'nt-remote.env')

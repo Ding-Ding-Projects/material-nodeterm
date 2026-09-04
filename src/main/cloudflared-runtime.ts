@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
-import { access, chmod, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdir, rm, stat, writeFile } from 'node:fs/promises'
+import { renameAtomic, tempNameFor } from '../core/fs-atomic'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { IPC } from '../shared/ipc'
@@ -179,11 +180,11 @@ export class CloudflaredRuntimeManager implements CloudflaredRuntimeApi {
       return { ok: false, error: 'Enter a connector token without line breaks or control characters.' }
     }
     await mkdir(entry.tokenDir, { recursive: true })
-    const temp = `${this.tokenFile(entry)}.${randomUUID()}.tmp`
+    const temp = tempNameFor(this.tokenFile(entry))
     try {
       await writeFile(temp, `${value}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
       await this.protectTokenFile(temp)
-      await rename(temp, this.tokenFile(entry))
+      await renameAtomic(temp, this.tokenFile(entry))
       await this.protectTokenFile(this.tokenFile(entry))
       entry.status = { ...entry.status, tokenFile: this.tokenFile(entry), detail: null }
       this.publish(nodeId, entry)
@@ -239,9 +240,14 @@ export class CloudflaredRuntimeManager implements CloudflaredRuntimeApi {
     if (digest !== asset.digest) throw new Error('The downloaded cloudflared binary checksum did not match the official release.')
     const destination = candidates[candidates.length - 1]
     await mkdir(path.dirname(destination), { recursive: true })
-    const temp = `${destination}.${randomUUID()}.tmp`
-    await writeFile(temp, bytes, { flag: 'wx' })
-    await rename(temp, destination)
+    const temp = tempNameFor(destination)
+    try {
+      await writeFile(temp, bytes, { flag: 'wx' })
+      await renameAtomic(temp, destination)
+    } catch (error) {
+      await rm(temp, { force: true }).catch(() => {})
+      throw error
+    }
     return destination
   }
 

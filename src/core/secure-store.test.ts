@@ -299,12 +299,20 @@ describe('SecureStore transaction ordering', () => {
     await store.save([sealed('original')])
     const before = await fs.readFile(target, 'utf8')
     const realReadFile = fs.readFile.bind(fs)
+    const realOpen = fs.open.bind(fs)
+    const unreadable = (): never => {
+      throw Object.assign(new Error('EACCES: credential evidence is unreadable'), { code: 'EACCES' })
+    }
     vi.spyOn(fs, 'readFile').mockImplementation(async (file, options) => {
-      if (path.resolve(String(file)) === target) {
-        throw Object.assign(new Error('EACCES: credential evidence is unreadable'), { code: 'EACCES' })
-      }
+      if (path.resolve(String(file)) === target) unreadable()
       return realReadFile(file, options)
     })
+    // A bounded credential read opens a descriptor rather than calling readFile, so the refusal
+    // has to be injected at the same door the store actually uses.
+    vi.spyOn(fs, 'open').mockImplementation(((file: Parameters<typeof fs.open>[0], ...rest: unknown[]) => {
+      if (path.resolve(String(file)) === target) unreadable()
+      return (realOpen as (...args: unknown[]) => unknown)(file, ...rest)
+    }) as unknown as typeof fs.open)
 
     await expect(store.load()).rejects.toMatchObject({ code: 'EACCES' })
     await expect(

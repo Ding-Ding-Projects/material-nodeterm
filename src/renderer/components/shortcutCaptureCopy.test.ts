@@ -13,19 +13,24 @@ describe('shortcutCaptureCopy', () => {
   it('names the command and the chord that took the key', () => {
     const copy = shortcutCaptureCopy('app.commandPalette', true)
     expect(copy?.title).toBe('Command palette')
-    expect(copy?.body).toContain('⌘K')
+    expect(copy?.body).toContain('Ctrl+K')
     expect(copy?.body).toContain('Command palette')
     // The two ways out are what the banner is FOR — a notice that only reports is noise.
     expect(copy?.body.toLowerCase()).toContain('terminal-first')
   })
 
-  it('spells the chord the way the platform does', () => {
+  // Windows-only delivery: the legacy platform flag no longer changes the spelling, so BOTH
+  // arguments must produce the one canonical Ctrl notation. Asserting only the `false` side
+  // would let a resurrected mac branch pass.
+  it('spells the chord in canonical Ctrl notation whatever the legacy platform flag says', () => {
     expect(shortcutCaptureCopy('app.commandPalette', false)?.body).toContain('Ctrl+K')
+    expect(shortcutCaptureCopy('app.commandPalette', true)?.body).toContain('Ctrl+K')
+    expect(shortcutCaptureCopy('app.commandPalette', true)?.body).not.toMatch(/[⌘⌃⌥⇧]/)
   })
 
   it('follows a remap, so the notice quotes the chord the user actually pressed', () => {
     setKb({ 'app.commandPalette': ['Cmd+Shift+P'] })
-    expect(shortcutCaptureCopy('app.commandPalette', true)?.body).toContain('⌘⇧P')
+    expect(shortcutCaptureCopy('app.commandPalette', true)?.body).toContain('Ctrl+Shift+P')
   })
 
   // Both halves of "say nothing": there is no chord to quote, so a banner could only claim a

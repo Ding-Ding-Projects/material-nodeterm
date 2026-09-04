@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm } from 'node:fs/promises'
+import { writeFileAtomic } from '../core/fs-atomic'
 import { promisify } from 'node:util'
 import path from 'node:path'
 import type { CloudflareOriginTarget, CloudflareTunnelRuntime } from '../shared/cloudflare-tunnel'
@@ -86,9 +87,7 @@ export function createLocalCloudflareRuntime(userDataDir: string): CloudflareTun
       const connectorContainerId = `nodeterm-cloudflared-${input.tunnelId}`
       const tokenFilePath = path.join(tokenRoot, `${input.tunnelId}.token`)
       await mkdir(tokenRoot, { recursive: true })
-      const staging = `${tokenFilePath}.${randomUUID()}.tmp`
-      await writeFile(staging, `${input.token}\n`, { encoding: 'utf8', mode: 0o600 })
-      await rename(staging, tokenFilePath)
+      await writeFileAtomic(tokenFilePath, `${input.token}\n`, { mode: 0o600 })
       try {
         const args = [
           'run', '--detach', '--name', connectorContainerId, '--restart', 'unless-stopped',

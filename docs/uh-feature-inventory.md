@@ -77,7 +77,7 @@ and then never edited this file.
 | Changelog viewer | `src/renderer/components/changelog/ChangelogPanel.tsx` | `docs/changelog-viewer.md` | `src/shared/changelog.test.ts` |
 | Command palette | `src/renderer/components/CommandPalette.tsx` | `docs/command-palette.md` | `src/renderer/components/CommandPalette.disabled.test.tsx` |
 | Local version history | `src/core/local-history.ts` | `docs/local-history.md` | `src/core/local-history.test.ts` |
-| Calendar nodes, Local and ICS with source-bound cache and provider refusal | `src/core/calendar/service.ts`, `src/renderer/nodes/CalendarNode.tsx` | `docs/features/calendar/README.md` | `src/shared/calendar.test.ts`, `src/core/calendar/service.test.ts` |
+| Calendar nodes, Local and ICS with source-bound cache and provider refusal | `src/core/calendar/service.ts`, `src/renderer/nodes/CalendarNode.tsx` | `docs/features/calendar/README.md` | `src/shared/calendar.test.ts`, `src/core/calendar/service.reconciliation.test.ts` |
 | Personal-vocabulary JSON upload | `src/renderer/state/personalVocabulary.ts` | `docs/personal-vocabulary.md` | `src/renderer/state/personalVocabulary.test.ts` |
 | Export everything, in every format | `src/renderer/components/ExportMenu.tsx` | `docs/exports.md` | `src/shared/export/codec-roundtrip.test.ts` |
 | Bulk actions on every list | `src/renderer/components/BulkActionBar.tsx` | `docs/bulk-actions.md` | `scripts/check-app-contract.mjs` (`bulk-actions` row — no behavioral suite covers `BulkActionBar`/`bulkSelection`) |

@@ -62,7 +62,7 @@
     "check:site-contract": "node scripts/check-site-contract.mjs",
     "dist": "npm run dist:win",
     "dist:win": "node scripts/windows-installer.mjs build",
-    "release": "npm run make-icon && npm run build && sh -c 'electron-builder --mac --arm64 --x64 --publish never; s=$?; npm run rebuild; exit $s'",
+    "release": "npm run dist:win",
     "postinstall": "node scripts/patch-node-pty.mjs && node scripts/rebuild-electron-native.mjs",
     "design:compare": "electron design/compare",
     "design:v2": "electron design/v2-preview",

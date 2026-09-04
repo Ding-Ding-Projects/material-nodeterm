@@ -1036,6 +1036,12 @@ export function searchNodeCatalog(
   })
 }
 
+/** A creation event id off the wire: bounded, non-empty, and free of control characters, so a
+ *  forged value cannot smuggle newlines into a deduplication key or a rendered record. */
+export function isCreationEventId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 256 && ![...value].some((char) => char < ' ' || char === '')
+}
+
 /** Generate an immutable creation event id without assuming randomUUID exists in the browser or
  * Server Edition. The coordinator records this id on the node and uses it for deduplication. */
 export function newCreationEventId(): string {

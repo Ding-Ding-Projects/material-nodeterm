@@ -155,8 +155,25 @@ describe('TorrentNode personal-vocabulary boundary', () => {
     expect(activeApi.torrent.chooseFiles).toHaveBeenCalledWith('task-1', ['folder\\exact.bin'])
   })
 
-  it('restores shipped copy while School mode is enabled', async () => {
-    useSchoolMode.setState({ enabled: true, hydrated: true })
+  // School mode omits the downloader entirely (torrentNodeOptionalFeatureVisible), so there is no
+  // surface left for a mapped label to reach. An unhydrated record is not evidence the mode is
+  // off, so it omits the node too.
+  it.each([
+    ['enabled', { enabled: true, hydrated: true }],
+    ['unhydrated', { enabled: false, hydrated: false }]
+  ])('omits the downloader and its mapped copy while School mode is %s', async (_label, state) => {
+    useSchoolMode.setState(state)
+    renderNode(host)
+    await settle()
+
+    expect(host.textContent).toBe('')
+    expect(host.textContent).not.toContain('Transfer desk')
+  })
+
+  // The other half of the same contract: with the mode off and no vocabulary file loaded, every
+  // authored label renders as the shipped wording rather than a stale mapping.
+  it('renders shipped copy when no personal vocabulary is loaded', async () => {
+    usePersonalVocabulary.setState({ status: 'no-file', entries: {}, entryCount: 0, loadedAt: null, lastError: null })
     renderNode(host)
     await settle()
 

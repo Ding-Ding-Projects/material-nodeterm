@@ -6,10 +6,10 @@ describe('SETTINGS_GROUPS', () => {
   // act that updates this number and the SettingsIcons record together. The icon record is keyed
   // by SettingsSectionId, and a section registered without an icon is a type error nobody sees
   // until the build — which is exactly how several sections shipped iconless.
-  it('lists exactly 42 sections with no duplicates', () => {
+  it('lists exactly 44 sections with no duplicates', () => {
     const ids = allSectionIds()
-    expect(ids).toHaveLength(42)
-    expect(new Set(ids).size).toBe(42)
+    expect(ids).toHaveLength(44)
+    expect(new Set(ids).size).toBe(44)
   })
   it('keeps the registry count aligned with the rendered static sections', () => {
     const ids = allSectionIds()
@@ -21,9 +21,10 @@ describe('SETTINGS_GROUPS', () => {
   })
   it('keeps Agent HUD visible in the Windows settings registry', () => {
     const off = visibleSettingsGroups(false).flatMap((g) => g.sections.map((s) => s.id))
+    expect(off).toContain('agent-hud')
+    // The mac-only Notch HUD section is gone, so nothing is filtered: all 44 stay visible.
     expect(off).not.toContain('notch')
-    // 42 total minus the one mac-only section.
-    expect(off).toHaveLength(41)
+    expect(off).toHaveLength(44)
     expect(visibleSettingsGroups(true)).toEqual(SETTINGS_GROUPS)
     // No group is left empty by the filter.
     expect(visibleSettingsGroups(false).every((g) => g.sections.length > 0)).toBe(true)

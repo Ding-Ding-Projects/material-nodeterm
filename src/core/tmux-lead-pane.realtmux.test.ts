@@ -20,7 +20,7 @@ import { execFileSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import { tmuxConf } from './pty-manager'
-import { makeTmuxTmpdir } from './tmux-test-socket'
+import { makeTmuxTmpdir, posixTmuxUnavailableReason } from './tmux-test-socket'
 
 const SOCKET_OFF = `nt-lead0-${process.pid}`
 const SOCKET_ON = `nt-lead1-${process.pid}`
@@ -28,6 +28,9 @@ const SOCKET_ON = `nt-lead1-${process.pid}`
 const W = 200
 
 let tmp: string
+// Reported once, at module load, so the runner shows these as SKIPPED with a reason instead
+// of as tests that passed without asserting anything.
+const TMUX_BLOCKED = posixTmuxUnavailableReason()
 let tmuxOk = false
 
 function tmux(socket: string, args: string[]): string {
@@ -78,12 +81,15 @@ async function waitForWidth(
 }
 
 beforeAll(() => {
-  try {
-    execFileSync('tmux', ['-V'], { stdio: 'ignore' })
-    tmuxOk = true
-  } catch {
-    return // no tmux on this host — every test below self-skips
+  // A binary called tmux is not enough here: see `posixTmuxUnavailableReason`. When the host
+  // cannot host these contracts the suite states why and every test below self-skips, rather
+  // than reporting a missing dependency as a product failure.
+  const blocked = TMUX_BLOCKED
+  if (blocked) {
+    console.warn(`skipping real-tmux suite: ${blocked}`)
+    return
   }
+  tmuxOk = true
   tmp = makeTmuxTmpdir('ntlead-', SOCKET_ON)
 })
 
@@ -94,7 +100,7 @@ afterAll(() => {
   fs.rmSync(tmp, { recursive: true, force: true })
 })
 
-describe('setting OFF — the default conf really ships no hooks', () => {
+describe.skipIf(TMUX_BLOCKED)('setting OFF — the default conf really ships no hooks', () => {
   it('loads cleanly, configures zero hooks, and leaves the 70/30 squeeze alone (CC default behavior)', async () => {
     if (!tmuxOk) return
     startServer(SOCKET_OFF, tmuxConf(2000), 'off')
@@ -108,7 +114,7 @@ describe('setting OFF — the default conf really ships no hooks', () => {
   })
 })
 
-describe('setting ON — the guarded hook pair, measured', () => {
+describe.skipIf(TMUX_BLOCKED)('setting ON — the guarded hook pair, measured', () => {
   it('the generated conf parses and BOTH hooks are configured (new-session under -f)', () => {
     if (!tmuxOk) return
     startServer(SOCKET_ON, tmuxConf(2000, 72), 'on')

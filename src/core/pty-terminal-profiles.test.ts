@@ -948,6 +948,16 @@ describe('PtyManager trusted Windows profile spawn boundary', () => {
     const { PtyManager, CONFIRMED_PLAIN_EXIT_TIMEOUT_MS } = await import('./pty-manager')
     const manager = new PtyManager({ runtimePlatform: 'linux' })
     managers.push(manager)
+    // PIN the tmux side of the backend too, for the same reason the session-host backend is
+    // mocked at the top of this file. `findTmux` walks the REAL host PATH, so on a developer or
+    // CI machine that has tmux installed this "plain" manager silently resolves one: the recycle
+    // then takes the tmux-discovery branch (an extra await, and a real tmux subprocess) and the
+    // plain path this test is named for never runs. An empty PATH is the honest way to say
+    // "no tmux on this host" without mocking the module under test.
+    // The stub stays up for the WHOLE test: `init` also schedules an async login-shell PATH
+    // re-probe (`resolveShellPath().then(ensureTmux)`) that lands later and would otherwise
+    // resolve the host's tmux after the fact.
+    vi.stubEnv('PATH', '')
     manager.init(() => ({ ...DEFAULT_SETTINGS, tmuxEnabled: false }))
     manager.registerIpc()
     const silent = fakePty()
@@ -959,7 +969,9 @@ describe('PtyManager trusted Windows profile spawn boundary', () => {
     try {
       const recycle = manager.recycleSessionFromClient(7, options.persistKey)
       const rejection = expect(recycle).rejects.toThrow('did not confirm that it exited')
-      await Promise.resolve()
+      // Drain the pending microtasks rather than counting them: the release must happen BEFORE
+      // the bounded wait, and how many awaits precede it is an implementation detail.
+      await vi.advanceTimersByTimeAsync(0)
       expect(silent.destroy).toHaveBeenCalledTimes(1)
       await vi.advanceTimersByTimeAsync(CONFIRMED_PLAIN_EXIT_TIMEOUT_MS)
       await rejection
@@ -973,5 +985,6 @@ describe('PtyManager trusted Windows profile spawn boundary', () => {
       fresh: false
     })
     expect(nodePty.spawn).toHaveBeenCalledTimes(1)
+    vi.unstubAllEnvs()
   })
 })

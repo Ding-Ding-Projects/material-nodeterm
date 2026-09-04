@@ -136,9 +136,9 @@ function KidsActivityCanvasInner({
           <IconBackArrow />
           {vocab('Back to Beep')}
         </Button>
-        <div className="md3-kids-activity__title">{TILE_TITLE[active]}</div>
-        <Tablist className="md3-kids-activity__switch" ariaLabel="Switch activity">
-          <IconButton size="dense" vocabularyMode="factual" aria-label="Talk to Beep" active={active === 'beep'}
+        <div className="md3-kids-activity__title">{activeTitle}</div>
+        <Tablist className="md3-kids-activity__switch" ariaLabel={vocab('Switch activity')}>
+          <IconButton size="dense" vocabularyMode="factual" aria-label={vocab('Talk to Beep')} active={active === 'beep'}
             role="tab"
             aria-selected={active === 'beep'}
             className={'md3-kids-switchbtn' + (active === 'beep' ? ' md3-kids-switchbtn--active' : '')}

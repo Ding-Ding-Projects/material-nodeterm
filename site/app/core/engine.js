@@ -319,14 +319,14 @@ export function menuDefs(store, deps) {
   if (kind === 'search' || kind === 'header') {
     return [
       { icon: '🧩', label: 'Build a pattern for the big search', hint: '.*', run: () => openRx(store, 'global', 'the big search') },
-      { icon: '🧹', label: 'Clear the big search', hint: '', run: () => store.setState({ qGlobal: '', menuOpen: false }, { persist: false }) },
+      { icon: '🧼', label: 'Clear the big search', hint: '', run: () => store.setState({ qGlobal: '', menuOpen: false }, { persist: false }) },
       { icon: '🔤', label: s.rxOn.global ? 'Treat it as plain words again' : 'Treat what I typed as a pattern', hint: '', run: () => store.setState((st) => ({ rxOn: Object.assign({}, st.rxOn, { global: !st.rxOn.global }), menuOpen: false }), { persist: false }) },
       { icon: '📋', label: 'Copy what I searched for', hint: '', run: () => { deps.copy(s.qGlobal); closeMenu(store) } },
     ].concat(base)
   }
   if (kind === 'rail') {
     return [
-      { icon: '🧹', label: 'Clear the room filter', hint: '', run: () => store.setState({ qNav: '', menuOpen: false }, { persist: false }) },
+      { icon: '🧼', label: 'Clear the room filter', hint: '', run: () => store.setState({ qNav: '', menuOpen: false }, { persist: false }) },
       { icon: '🧩', label: 'Build a pattern for the room filter', hint: '.*', run: () => openRx(store, 'nav', 'the room finder') },
       { icon: '📚', label: 'Open the guide book', hint: '', run: () => deps.goRoom('docs') },
     ].concat(base)

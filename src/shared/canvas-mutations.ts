@@ -4,6 +4,7 @@
 
 import { acceptNewInboundNode, carryLocalNodeExec, sanitizeInboundNode } from './node-exec'
 import { REF_MAX_LEN } from './presence'
+import { isCreationEventId } from './node-catalog'
 import { canCreateInUniverse, isAwsShopNode, isNonDeletableCanvasNode } from './aws-shop'
 import { canCreateAwsCatalogEntry } from './aws-catalog'
 import type { BridgeLink, CanvasEdgeKind, CanvasMutation, CanvasNodeState, Link } from './types'
@@ -113,7 +114,7 @@ export function isCanvasMutation(value: unknown): value is CanvasMutation {
   // shared wire predicate keeps the reflector and every receiver from learning a mutable copy.
   if ((node as { kind?: unknown }).kind === 'aws-shop') return false
   if (!isRefId(node.id)) return false
-  if ('creationEventId' in node && node.creationEventId !== undefined && !isRefId(node.creationEventId)) return false
+  if ('creationEventId' in node && node.creationEventId !== undefined && !isCreationEventId(node.creationEventId)) return false
   const pos = node.position
   if (!pos || typeof pos !== 'object') return false
   if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return false

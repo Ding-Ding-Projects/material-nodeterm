@@ -435,7 +435,10 @@ describe('per-chip removal', () => {
     setKb({ 'canvas.undo': ['Cmd+Z', 'Cmd+Alt+Z'] })
     render()
     click(button('canvas.undo', 'Remove Ctrl+Alt+Z from Undo')!)
-    expect(kb()['canvas.undo']).toEqual(['Cmd+Z'])
+    // The legacy `Cmd+…` input above is deliberate (a pre-rewire settings.json). The survivor is
+    // rebuilt from the EFFECTIVE bindings, which are canonicalized through `serializeShortcut`,
+    // so it comes back in the one emitted spelling — this pins that migration, not just removal.
+    expect(kb()['canvas.undo']).toEqual(['Ctrl+Z'])
     // …and with one chord left there is nothing to remove: the last × would be a Disable in
     // disguise, and Disable has its own control.
     expect(button('canvas.undo', 'Remove Ctrl+Z from Undo')).toBeNull()
@@ -539,13 +542,15 @@ describe('commitCandidate', () => {
   })
 
   it('accepts a free chord, replacing or adding to the list', () => {
-    expect(commitCandidate('canvas.fitAll', 'Cmd+Alt+F', 'replace')).toEqual({ ok: true })
-    expect(kb()['canvas.fitAll']).toEqual(['Cmd+Alt+F'])
-    expect(commitCandidate('canvas.fitAll', 'Cmd+Alt+G', 'add')).toEqual({ ok: true })
-    expect(kb()['canvas.fitAll']).toEqual(['Cmd+Alt+F', 'Cmd+Alt+G'])
+    // Candidates arrive from `normalizeBindingForCommand`, which serializes to the one canonical
+    // Ctrl spelling — so the whole list stays canonical across replace and add.
+    expect(commitCandidate('canvas.fitAll', 'Ctrl+Alt+F', 'replace')).toEqual({ ok: true })
+    expect(kb()['canvas.fitAll']).toEqual(['Ctrl+Alt+F'])
+    expect(commitCandidate('canvas.fitAll', 'Ctrl+Alt+G', 'add')).toEqual({ ok: true })
+    expect(kb()['canvas.fitAll']).toEqual(['Ctrl+Alt+F', 'Ctrl+Alt+G'])
     // Re-adding an existing chord is idempotent, not a self-conflict.
-    expect(commitCandidate('canvas.fitAll', 'Cmd+Alt+F', 'add')).toEqual({ ok: true })
-    expect(kb()['canvas.fitAll']).toEqual(['Cmd+Alt+G', 'Cmd+Alt+F'])
+    expect(commitCandidate('canvas.fitAll', 'Ctrl+Alt+F', 'add')).toEqual({ ok: true })
+    expect(kb()['canvas.fitAll']).toEqual(['Ctrl+Alt+G', 'Ctrl+Alt+F'])
   })
 
   // Dictation is its own conflict bucket (Task 1), so NEITHER of the three gates above can see an

@@ -9,9 +9,16 @@ import { SESSION_COOKIE } from '../../src/server/http'
 import { decodePtyData } from '../../src/shared/rpc'
 import { IPC } from '../../src/shared/ipc'
 import { TMUX_SOCKET, sessionName } from '../../src/core/tmux-naming'
+import { posixTmuxUnavailableReason } from '../../src/core/tmux-test-socket'
 import { removeFixtureDir } from './fixture-cleanup'
 
-const hasTmux = (() => { try { execSync('tmux -V'); return true } catch { return false } })()
+// A binary answering `tmux -V` is not enough: this round-trip drives a POSIX tmux SERVER and
+// asserts on what a POSIX pane SHELL echoes back. On Windows the tmux that resolves is psmux,
+// whose panes are PowerShell and whose config rejects `terminal-features` — the marker never
+// comes back, so the timeout reads as a broken server pty rather than as a missing dependency.
+// `posixTmuxUnavailableReason` is this repo's one predicate for that distinction.
+const TMUX_BLOCKED = posixTmuxUnavailableReason()
+if (TMUX_BLOCKED) console.warn(`skipping server pty e2e: ${TMUX_BLOCKED}`)
 
 
 // Unique per run so a leftover `nt-<persistKey>` tmux session (e.g. from a crashed prior run)
@@ -19,7 +26,7 @@ const hasTmux = (() => { try { execSync('tmux -V'); return true } catch { return
 // is the whole point (a real cold start spawns a real pty inside a brand-new tmux session).
 const PERSIST_KEY = `e2e-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 
-describe.skipIf(!hasTmux)('server e2e: login → ws → pty echo round-trip', () => {
+describe.skipIf(!!TMUX_BLOCKED)('server e2e: login → ws → pty echo round-trip', () => {
   let dataDir: string, close: () => Promise<void>, port: number, cookie: string
 
   beforeAll(async () => {

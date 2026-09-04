@@ -1,8 +1,9 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, basename } from 'node:path'
 import { spawn } from 'node:child_process'
 import { platform } from '../platform'
+import { writeFileAtomic } from '../fs-atomic'
 import type {
   AwsLegacyIdentityManagerApi,
   AwsAssumeRoleInput,
@@ -221,12 +222,7 @@ export class AwsProfileManager implements AwsLegacyIdentityManagerApi {
 
   private async saveManaged(next: CacheFile): Promise<void> {
     await mkdir(join(this.root, 'aws-manager'), { recursive: true })
-    const temp = `${this.file}.${process.pid}.${Date.now()}.tmp`
-    await writeFile(temp, JSON.stringify(next, null, 2), { encoding: 'utf8', mode: 0o600 })
-    await rename(temp, this.file).catch(async (error) => {
-      await unlink(temp).catch(() => {})
-      throw error
-    })
+    await writeFileAtomic(this.file, JSON.stringify(next, null, 2), { mode: 0o600 })
     this.cached = structuredClone(next)
   }
 

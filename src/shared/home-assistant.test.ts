@@ -72,7 +72,9 @@ describe('Home Assistant sensor contract', () => {
     expect(() => parseBoundedJson(JSON.stringify(Array.from({ length: MAX_JSON_ARRAY + 1 }, () => null)))).toThrow()
     expect(() => parseBoundedJson(JSON.stringify(Object.fromEntries(Array.from({ length: MAX_JSON_KEYS + 1 }, (_, i) => [`k${i}`, true]))))).toThrow()
     expect(() => parseBoundedJson(JSON.stringify('x'.repeat(MAX_JSON_STRING + 1)))).toThrow()
-    expect(() => parseBoundedJson(JSON.stringify({ a: { b: { c: { d: { e: { f: { g: { h: true } } } } } } } }))).toThrow()
+    let tooDeep: unknown = true
+    for (let i = 0; i <= MAX_JSON_DEPTH + 1; i += 1) tooDeep = { nested: tooDeep }
+    expect(() => parseBoundedJson(JSON.stringify(tooDeep))).toThrow()
     expect(parseBoundedJson('{"type":"auth_ok"}')).toEqual({ type: 'auth_ok' })
   })
 })

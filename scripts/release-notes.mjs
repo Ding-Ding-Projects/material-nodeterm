@@ -174,7 +174,11 @@ export async function renderLineCountSection(compute = computeLineCounts) {
 
 /** Read release bodies from the workflow's already-fetched `gh api --paginate --slurp` inventory. */
 export async function readPriorReleaseBodies(file, read = readFile, { allowEmpty = false } = {}) {
-  if (!file) return []
+  // Fail closed. An absent snapshot path is not an empty release history: returning [] would
+  // reset code-name selection to the first catalog record and republish a used dish. The
+  // environment reader below guards with `if (file)` and reports its own missing-inventory
+  // error, so this refusal only reaches a direct caller that supplied nothing.
+  if (!file) throw new Error('RELEASE_PRIOR_BODIES_FILE is required; a missing snapshot is not an empty release history')
   const parsed = JSON.parse(await read(file, 'utf8'))
   if (!Array.isArray(parsed) || !parsed.every((page) => Array.isArray(page))) {
     throw new Error('prior release inventory must use the nested page array emitted by gh api --paginate --slurp')

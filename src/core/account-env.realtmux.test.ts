@@ -21,12 +21,15 @@ import { execFileSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import { tmuxConf } from './pty-manager'
-import { makeTmuxTmpdir } from './tmux-test-socket'
+import { makeTmuxTmpdir, posixTmuxUnavailableReason } from './tmux-test-socket'
 
 const SOCKET = `nt-accttest-${process.pid}`
 
 let tmp: string
 let conf: string
+// Reported once, at module load, so the runner shows these as SKIPPED with a reason instead
+// of as tests that passed without asserting anything.
+const TMUX_BLOCKED = posixTmuxUnavailableReason()
 let tmuxOk = false
 
 function tmux(args: string[], env?: Record<string, string>): string {
@@ -49,12 +52,15 @@ function cleanEnv(): Record<string, string | undefined> {
 }
 
 beforeAll(() => {
-  try {
-    execFileSync('tmux', ['-V'], { stdio: 'ignore' })
-    tmuxOk = true
-  } catch {
-    return // no tmux on this host — every test below self-skips
+  // A binary called tmux is not enough here: see `posixTmuxUnavailableReason`. When the host
+  // cannot host these contracts the suite states why and every test below self-skips, rather
+  // than reporting a missing dependency as a product failure.
+  const blocked = TMUX_BLOCKED
+  if (blocked) {
+    console.warn(`skipping real-tmux suite: ${blocked}`)
+    return
   }
+  tmuxOk = true
   tmp = makeTmuxTmpdir('ntacct-', SOCKET)
   conf = path.join(tmp, 'tmux.conf')
   fs.writeFileSync(conf, tmuxConf(2000))
@@ -79,7 +85,7 @@ const waitFor = async (file: string, ms = 3000): Promise<string> => {
   }
 }
 
-describe('managed-account isolation on a shared tmux server (issue #419)', () => {
+describe.skipIf(TMUX_BLOCKED)('managed-account isolation on a shared tmux server (issue #419)', () => {
   it('an account node (client env + -e, the pty-manager shape) sees its own config dir', async () => {
     if (!tmuxOk) return
     const out = path.join(tmp, 'account-pane')

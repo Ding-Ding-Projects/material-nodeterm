@@ -3,6 +3,7 @@
 import { execFile } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, statfs, writeFile } from 'node:fs/promises'
+import { writeFileAtomic } from '../fs-atomic'
 import net from 'node:net'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -125,12 +126,10 @@ export class GitLabServerManager implements GitLabApi {
   private async save(record: GitLabRecord): Promise<void> {
     await mkdir(this.recordsDir, { recursive: true })
     const target = this.recordPath(record.id)
-    const temporary = `${target}.tmp.${process.pid}.${randomBytes(4).toString('hex')}`
-    await writeFile(temporary, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 })
-    // The record is private application state. A rename is intentionally kept in this manager's
-    // narrow write path so no credential can leak into the shared project document.
-    const fs = await import('node:fs/promises')
-    await fs.rename(temporary, target)
+    // The record is private application state. Publication goes through the shared atomic
+    // helper so no credential can leak into the shared project document and no Windows sharing
+    // violation can silently lose the write.
+    await writeFileAtomic(target, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 })
   }
 
   private emptyStatus(id: string): GitLabServerStatus {

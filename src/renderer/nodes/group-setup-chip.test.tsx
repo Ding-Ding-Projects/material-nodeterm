@@ -15,6 +15,9 @@ import { useWorktrees } from '../state/worktrees'
 
 // React Flow instantiates custom nodes itself; the chip needs none of that machinery.
 vi.mock('@xyflow/react', () => ({
+  // The frame renders its own link-in/link-out handles, which React Flow owns.
+  Handle: () => null,
+  Position: { Left: 'left', Right: 'right' },
   NodeResizer: () => null,
   useReactFlow: () => ({ updateNodeData: vi.fn(), setNodes: vi.fn() }),
   // GroupNode also reads the live node list to derive descendants and attached work items. The

@@ -11,13 +11,18 @@ const IDS = [
   , 'torrent.bulk.pause', 'torrent.bulk.resume', 'torrent.bulk.cancel', 'torrent.bulk.retry', 'torrent.bulk.remove', 'torrent.bulk.export', 'torrent.exportSummary', 'torrent.status.queued', 'torrent.status.metadata', 'torrent.status.downloading', 'torrent.status.paused', 'torrent.status.recoverable-paused', 'torrent.status.completed', 'torrent.status.seeding', 'torrent.status.stopped', 'torrent.status.cancelled', 'torrent.status.failed', 'torrent.files', 'torrent.peers', 'torrent.eta', 'torrent.seed.never', 'torrent.seed.ratio', 'torrent.seed.minutes', 'torrent.seed.indefinite'
 ] as const
 
+const VARIANT_LENGTHS = [5, 10]
+
 describe('torrent localization contract', () => {
-  it('has five English and Cantonese variants for every torrent product message', () => {
+  it('has matched English and Cantonese variant rows for every torrent product message', () => {
     for (const id of IDS) {
       const entry = CATALOG[id]
       expect(entry, id).toBeDefined()
-      expect(entry.en, id).toHaveLength(5)
-      expect(entry.yue, id).toHaveLength(5)
+      // A row is either a legacy five-variant entry or a ten-variant one (FiveVariants |
+      // FunnyVariants). Both are the shipped contract; what must never differ is the two
+      // languages' lengths, which is how a half-migrated row renders blank at a high level.
+      expect(VARIANT_LENGTHS, id).toContain(entry.en.length)
+      expect(entry.yue, id).toHaveLength(entry.en.length)
     }
   })
 

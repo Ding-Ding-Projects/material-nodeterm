@@ -150,4 +150,15 @@ async function run() {
   console.log('PASS check-windows-only fixture coverage')
 }
 
-await run()
+// Dual entry point. `docs` documents `node scripts/check-windows-only.test.mjs` as the focused
+// fixture run, while vitest.config.ts includes `scripts/**/*.test.mjs` — a file that only ran
+// its assertions at import time was reported by vitest as "No test suite found". Registering the
+// same `run()` as one vitest case keeps both routes exercising the identical assertions.
+if (process.env.VITEST) {
+  const { describe, it } = await import('vitest')
+  describe('check-windows-only', () => {
+    it('fixture coverage: clean tree, forbidden terms, renames, exclusions, unreadable files', run, 120_000)
+  })
+} else {
+  await run()
+}

@@ -44,9 +44,14 @@ describe('portable media assets', () => {
       [second.asset.id, 'omit'],
       [third.asset.id, 'locate-later']
     ]))
-    expect(result.assets.map((item) => item.asset.id)).toEqual([asset.id])
+    // Locate Later keeps a content-addressed placeholder ASSET (the destination can offer a file
+    // picker later); only Omit becomes an omission record, whose assetId the manifest schema
+    // requires to be the SHA-256 content address.
+    expect(result.assets.map((item) => item.asset.id)).toEqual([asset.id, third.asset.id])
+    expect(result.assets[1]?.asset.unresolved).toBe(true)
+    expect(result.assets[1]?.data).toBeUndefined()
+    expect(result.omissions).toHaveLength(1)
     expect(result.omissions[0]).toMatchObject({ assetId: second.asset.id, decision: 'omit' })
-    expect(result.omissions[1]).toMatchObject({ decision: 'locate-later' })
-    expect(result.omissions[1].assetId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(result.omissions[0].assetId).toMatch(/^[0-9a-f]{64}$/)
   })
 })

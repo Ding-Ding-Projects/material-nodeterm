@@ -39,6 +39,25 @@ const REQUIRED_TERMINAL_PROFILE_COPY = {
   'terminalProfiles.settings.legacyDefaultDescription':
     'Shell executable (leave empty to use $SHELL or the system default)',
   'terminalProfiles.settings.systemDefaultPlaceholder': 'system default',
+
+  // Named machine-local profiles: a shell, start directory, startup command, account binding and
+  // safe environment values. Every one of these stays on this machine and never enters a project
+  // file, so the copy is listed here beside the rest of the settings surface.
+  'terminalProfiles.settings.namedTitle': 'Named terminal profiles',
+  'terminalProfiles.settings.namedDescription':
+    'Save a shell, start directory, startup command, account, and safe environment values for this machine. These values never travel in a project file.',
+  'terminalProfiles.settings.nameLabel': 'Profile name',
+  'terminalProfiles.settings.namePlaceholder': 'Projects',
+  'terminalProfiles.settings.shellLabel': 'Shell profile',
+  'terminalProfiles.settings.directoryLabel': 'Start directory',
+  'terminalProfiles.settings.chooseDirectory': 'Choose start directory',
+  'terminalProfiles.settings.startupLabel': 'Startup command',
+  'terminalProfiles.settings.accountLabel': 'Account',
+  'terminalProfiles.settings.noAccount': 'No account binding',
+  'terminalProfiles.settings.envKey': 'Environment key',
+  'terminalProfiles.settings.envValue': 'Environment value',
+  'terminalProfiles.settings.addNamed': 'Save named profile',
+  'terminalProfiles.settings.removeNamed': 'Remove',
   'terminalProfiles.settings.defaultLabel': 'Default terminal profile',
   'terminalProfiles.settings.defaultDescription':
     'Used by every one-click New terminal action. Existing nodes keep their selected profile.',

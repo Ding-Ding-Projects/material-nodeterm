@@ -690,7 +690,14 @@ export function forgetCodexThreadIdentitiesForNode(
 }
 
 export function codexLauncherDir(): string {
-  return path.join(platform().userDataDir, 'codex-bin')
+  try {
+    return path.join(platform().userDataDir, 'codex-bin')
+  } catch {
+    // Same test/recovery compatibility as defaultIdentityRoot(): `platform()` throws when no
+    // CorePlatform was initialized. Real shells initialize it before a launcher is installed,
+    // so production state stays app-owned under userDataDir.
+    return path.join(homedir(), '.nodeterm', 'bin')
+  }
 }
 
 export const CODEX_LAUNCHER_NAME = 'nodeterm-codex'
@@ -845,7 +852,43 @@ nt_post() {
     nt_hook_curl --silent --show-error --fail --max-time "$nt_budget" --config - --request POST "$@"
 }
 
+# Relay registration receives the per-node capability on stdin, never argv or the environment.
+nt_register_relay() {
+  nt_safe_path "\${NODETERM_CODEX_RELAY_RUNTIME-}" || return 1
+  nt_safe_path "\${NODETERM_CODEX_RELAY_SCRIPT-}" || return 1
+  [ -x "$NODETERM_CODEX_RELAY_RUNTIME" ] && [ -r "$NODETERM_CODEX_RELAY_SCRIPT" ] || return 1
+  nt_relay_info=''
+  for nt_relay_attempt in 1 2 3; do
+    nt_relay_info=$(printf '%s\\n' "$nt_node_token" |
+      ELECTRON_RUN_AS_NODE=1 "$NODETERM_CODEX_RELAY_RUNTIME" "$NODETERM_CODEX_RELAY_SCRIPT" \\
+        register "$NODETERM_NODE_ID" "\${NODETERM_CODEX_ACCOUNT_ID-}" \\
+        "\${CODEX_HOME:-$HOME/.codex}/app-server-control/app-server-control.sock" \\
+        "$NODETERM_HOOK_ENDPOINT") && break
+    sleep 0.2
+  done
+  [ -n "$nt_relay_info" ] || return 1
+  nt_relay_url=$(printf '%s\\n' "$nt_relay_info" | sed -n '1p')
+  NODETERM_CODEX_RELAY_TOKEN=$(printf '%s\\n' "$nt_relay_info" | sed -n '2p')
+  case "$nt_relay_url" in ws://127.0.0.1:*/*) return 1 ;; ws://127.0.0.1:*) ;; *) return 1 ;; esac
+  [ -n "$NODETERM_CODEX_RELAY_TOKEN" ] || return 1
+  export NODETERM_CODEX_RELAY_TOKEN
+}
+
 if [ "\${1-}" = resume ]; then
+  if [ -n "\${NODETERM_CODEX_RELAY_RUNTIME-}\${NODETERM_CODEX_RELAY_SCRIPT-}" ]; then
+    if ! nt_post 20 --data-urlencode "nodeId=$NODETERM_NODE_ID" \\
+        --data-urlencode "threadId=\${2-}" \\
+        --data-urlencode "accountId=\${NODETERM_CODEX_ACCOUNT_ID-}" \\
+        "http://localhost:\${NODETERM_HOOK_PORT-0}/codex-thread/expose" >/dev/null; then
+      nt_report_fallback thread-expose-refused
+      exec codex "$@"
+    fi
+    if ! nt_register_relay; then
+      nt_report_fallback relay-unavailable
+      exec codex "$@"
+    fi
+    exec codex --remote "$nt_relay_url" --remote-auth-token-env NODETERM_CODEX_RELAY_TOKEN "$@"
+  fi
   # Claim the caller-supplied thread for THIS node before Codex opens it. A refusal means another
   # live node owns it; two clients on one thread is worse than one plain session, so we fall back.
   if nt_post 20 --data-urlencode "nodeId=$NODETERM_NODE_ID" \\

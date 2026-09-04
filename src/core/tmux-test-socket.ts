@@ -14,6 +14,7 @@
 //
 // Production is not exposed to (2): `PtyManager` binds `-L node-terminal` under the default
 // `/tmp/tmux-<uid>/`, which is short on every platform we ship to.
+import childProcess from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -90,5 +91,35 @@ function realpathOrSelf(p: string): string {
     return fs.realpathSync(p)
   } catch {
     return p
+  }
+}
+
+/**
+ * Why a `*.realtmux.test.ts` suite cannot run here, or `null` when it can.
+ *
+ * These suites do not merely need "a binary called tmux". They drive a POSIX tmux SERVER over a
+ * unix socket and assert on what a POSIX pane SHELL prints (variable expansion, LF line endings)
+ * plus `set-hook`/`if-shell` formats measured on tmux 3.4+. On Windows the tmux that resolves is
+ * psmux, whose panes are Windows shells, so the same assertions come back CRLF-terminated with
+ * every variable unexpanded and no hook configured -- which reads as a broken product rather than
+ * as a missing dependency. Mocking tmux would delete the only thing these files prove, so they
+ * skip instead, with this reason.
+ */
+export function posixTmuxUnavailableReason(
+  platform: NodeJS.Platform | string = process.platform,
+  hasTmux: () => boolean = defaultTmuxProbe
+): string | null {
+  if (platform === 'win32') {
+    return 'needs a POSIX tmux server and POSIX pane shells; the Windows tmux is psmux'
+  }
+  return hasTmux() ? null : 'no tmux binary on this host'
+}
+
+function defaultTmuxProbe(): boolean {
+  try {
+    childProcess.execFileSync('tmux', ['-V'], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
   }
 }

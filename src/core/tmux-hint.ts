@@ -47,7 +47,15 @@ export function tmuxInstall(
 }
 
 /** Extra executable directories a Linux GUI process may not inherit through PATH. */
-const COMMON_BIN_DIRS = ['/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']
+const COMMON_BIN_DIRS = [
+  '/opt/homebrew/bin',
+  '/usr/local/bin',
+  '/opt/local/bin',
+  '/usr/bin',
+  '/bin',
+  '/usr/sbin',
+  '/sbin'
+]
 
 /**
  * Absolute Linux tmux locations walked by `findFixedTmux`. The list stays subprocess-free because
@@ -55,8 +63,11 @@ const COMMON_BIN_DIRS = ['/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sb
  */
 export function tmuxCandidatePaths(home?: string | null, user?: string | null): string[] {
   const paths = [
+    '/opt/homebrew/bin/tmux',
+    '/usr/local/bin/tmux',
     '/usr/bin/tmux',
     '/bin/tmux',
+    '/opt/local/bin/tmux',
     '/run/current-system/sw/bin/tmux',
     '/home/linuxbrew/.linuxbrew/bin/tmux'
   ]

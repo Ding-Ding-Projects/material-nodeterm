@@ -630,8 +630,8 @@ describe('release workflow semantic contract', () => {
     const missingFinalSnapshot = check(
       replaceOnce(
         WORKFLOW,
-        '          RELEASE_PRIOR_BODIES_FILE: ${{ runner.temp }}/releases-for-plan.json\n          ALREADY_PUBLISHED: ${{ steps.draft.outputs.already_published }}',
-        '          ALREADY_PUBLISHED: ${{ steps.draft.outputs.already_published }}',
+        '          RELEASE_PRIOR_BODIES_FILE: ${{ runner.temp }}/releases-for-plan.json\n          RELEASE_IS_FIRST_RELEASE: \'false\'\n          ALREADY_PUBLISHED: ${{ steps.draft.outputs.already_published }}',
+        '          RELEASE_IS_FIRST_RELEASE: \'false\'\n          ALREADY_PUBLISHED: ${{ steps.draft.outputs.already_published }}',
       ),
     )
     expect(missingFinalSnapshot.status).toBe(1)

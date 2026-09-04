@@ -21,6 +21,7 @@ import {
   parsePaneOwner
 } from './pane-owner'
 import { remotePaneOwnerCombinedArgs } from '../remote-ssh/control-master'
+import { posixTmuxUnavailableReason } from '../tmux-test-socket'
 
 describe('PANE_OWNER_FMT', () => {
   it('asks for pid, tty, current command and the pane id in one round-trip', () => {
@@ -214,13 +215,21 @@ describe('paneOwnerFrom', () => {
  * or an SSH project's `nodeterm-rmt` one, and nothing is left behind in the shared `/tmp/tmux-<uid>`
  * of a host that may be running other people's sessions.
  */
+// `command -v tmux` under a POSIX shell answers in that shell's own path spelling, which Node
+// cannot spawn on Windows (it hands back an MSYS `/c/...` path and `execFileSync` throws ENOENT),
+// and the Windows tmux is psmux driving Windows pane shells anyway - neither the foreground
+// process group nor the `ps` columns these tests read exist there. So the same POSIX-tmux
+// requirement the *.realtmux.test.ts suites state applies here, and the suite skips with it.
+const tmuxUnavailable = posixTmuxUnavailableReason()
 const tmuxBin = (() => {
+  if (tmuxUnavailable) return null
   try {
     return execFileSync('sh', ['-c', 'command -v tmux'], { encoding: 'utf8' }).trim() || null
   } catch {
     return null
   }
 })()
+if (tmuxUnavailable) console.warn(`skipping real-tmux pane-owner suites: ${tmuxUnavailable}`)
 
 const TMUX_TMPDIR = tmuxBin ? fs.mkdtempSync(path.join(os.tmpdir(), 'nt-paneowner-')) : ''
 const tmux = (...args: string[]) =>

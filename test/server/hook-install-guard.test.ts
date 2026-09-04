@@ -17,10 +17,14 @@ import path from 'path'
 // straight past this test's own sandbox and written the skill file + AGENTS.md into the
 // DEVELOPER'S REAL `~\.claude` / `~\.codex` on every Windows run — the exact catastrophe this
 // file exists to guard against, on the one platform its guard didn't actually cover.
-let testHome = ''
+// vi.mock factories AND the static imports below are hoisted above ordinary top-level
+// statements, and `src/server/index` reads `os.homedir()` during module evaluation
+// (git-service's gh fallbacks). A plain `let` binding is therefore still in its temporal dead
+// zone at that point, so the sandbox home must live in a vi.hoisted cell instead.
+const homeCell = vi.hoisted(() => ({ dir: '' }))
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof import('os')>()
-  const homedir = (): string => testHome
+  const homedir = (): string => homeCell.dir
   const base = (actual as unknown as { default?: typeof actual }).default ?? actual
   return { ...actual, homedir, default: { ...base, homedir } }
 })
@@ -36,7 +40,7 @@ describe('startServer: managed hook install is opt-out-able', () => {
 
   beforeEach(() => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-e2e-hookguard-'))
-    testHome = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-e2e-hookguard-home-'))
+    homeCell.dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-e2e-hookguard-home-'))
     vi.mocked(installManagedAgentHooks).mockClear()
   })
 
@@ -54,7 +58,7 @@ describe('startServer: managed hook install is opt-out-able', () => {
     // TEMP still carry that database, which is what says the sync retry was luck rather than a
     // fix. Diagnosed in src/server/handlers/index.test.ts.
     await fsp.rm(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
-    await fsp.rm(testHome, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    await fsp.rm(homeCell.dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
   })
 
   const boot = (installHooks?: boolean) =>
@@ -72,15 +76,15 @@ describe('startServer: managed hook install is opt-out-able', () => {
     const srv = await boot(false)
     close = srv.close
     expect(installManagedAgentHooks).not.toHaveBeenCalled()
-    expect(fs.existsSync(path.join(testHome, '.claude', 'skills', 'get-linked-context', 'SKILL.md'))).toBe(false)
-    expect(fs.existsSync(path.join(testHome, '.codex', 'AGENTS.md'))).toBe(false)
+    expect(fs.existsSync(path.join(homeCell.dir, '.claude', 'skills', 'get-linked-context', 'SKILL.md'))).toBe(false)
+    expect(fs.existsSync(path.join(homeCell.dir, '.codex', 'AGENTS.md'))).toBe(false)
   }, 30_000)
 
   it('installs the hooks by default (real deployments need them)', async () => {
     const srv = await boot(undefined)
     close = srv.close
     expect(installManagedAgentHooks).toHaveBeenCalledOnce()
-    expect(fs.existsSync(path.join(testHome, '.claude', 'skills', 'get-linked-context', 'SKILL.md'))).toBe(true)
-    expect(fs.existsSync(path.join(testHome, '.codex', 'AGENTS.md'))).toBe(true)
+    expect(fs.existsSync(path.join(homeCell.dir, '.claude', 'skills', 'get-linked-context', 'SKILL.md'))).toBe(true)
+    expect(fs.existsSync(path.join(homeCell.dir, '.codex', 'AGENTS.md'))).toBe(true)
   }, 30_000)
 })

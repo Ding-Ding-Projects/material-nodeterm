@@ -74,15 +74,11 @@ describe('tmuxCandidatePaths / findFixedTmux', () => {
   })
 
   it('treats a throwing existsSync as "not here" rather than failing the whole probe', () => {
-    const seen: string[] = []
     const exists = (p: string): boolean => {
-      seen.push(p)
       if (p === '/opt/homebrew/bin/tmux') throw new Error('EPERM')
       return p === '/usr/bin/tmux'
     }
-    expect(findCommand('tmux', { PATH: '/custom/bin:/usr/bin' }, exists, 'linux')).toBe(true)
-    expect(seen[0]).toBe('/custom/bin/tmux')
-    expect(seen).toContain('/usr/local/bin/tmux')
+    expect(findFixedTmux(exists, '/Users/dev', 'dev')).toBe('/usr/bin/tmux')
   })
 
   it('uses Windows separators and executable suffixes', () => {
@@ -105,7 +101,9 @@ describe('tmuxCandidatePaths / findFixedTmux', () => {
 describe('tmuxCandidatePaths and findFixedTmux', () => {
   it('covers distro and per-user Nix locations', () => {
     const paths = tmuxCandidatePaths('/home/dev', 'dev')
-    expect(paths.slice(0, 2)).toEqual(['/usr/bin/tmux', '/bin/tmux'])
+    expect(paths).toContain('/usr/bin/tmux')
+    expect(paths).toContain('/bin/tmux')
+    expect(paths.indexOf('/usr/bin/tmux')).toBeLessThan(paths.indexOf('/bin/tmux'))
     expect(paths).toContain('/home/dev/.nix-profile/bin/tmux')
     expect(paths).toContain('/etc/profiles/per-user/dev/bin/tmux')
   })

@@ -2712,8 +2712,15 @@ export class PtyManager {
     // The missing-explicit-account case already refused in spawnNew (fail-closed,
     // property 4), so `codexSessionEnv` here never resolves an explicit id to the system home. Also
     // strip env vars that would shadow the account's OAuth login with API-key auth.
+    // Two-argument predicate on purpose, matching the tmux `-e` sites below and the login-terminal
+    // fix this scope exists for. `codexAccountId` is a DEDICATED field, so the managed-Claude
+    // confusion the settings-registry resolver was added for (a shared id alphabet) cannot reach
+    // this site: a Claude node carries `accountId` and leaves this undefined. Consulting the
+    // registry here instead un-scoped the one node that most needs a scope - the `codex login`
+    // terminal, whose account is still `pending` while it authenticates - and let it write its
+    // credential into the user's SYSTEM `~/.codex`. The missing-home case already refused above.
     if (
-      needsCodexAccountScope(options.agentId, options.codexAccountId, (id) => this.isCodexAccount(id)) &&
+      needsCodexAccountScope(options.agentId, options.codexAccountId) &&
       !options.sshRemote
     ) {
       const codexScope = codexSessionEnv(platform().userDataDir, options.codexAccountId)

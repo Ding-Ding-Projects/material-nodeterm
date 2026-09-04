@@ -301,16 +301,17 @@ export default function ConverterNode({ id, data, selected }: NodeProps<CanvasNo
         {/* Was a hand-rolled `role="tablist"` of chips: it announced itself as ARIA tabs and then
             ignored the arrow keys that role promises, so a keyboard or screen-reader user was told
             these were tabs and found they could not traverse them. Tabs owns the roving tabIndex,
-            aria-orientation and Arrow/Home/End contract. `factual` keeps the labels unmapped exactly
-            as the chips had them, so this stays a keyboard fix and nothing else. */}
+            aria-orientation and Arrow/Home/End contract. The authored words are mapped here before
+            they are handed over, and `factual` then stops Tabs mapping them a second time; the
+            queue count beside the word stays a caller-owned fact. */}
         <Tabs
           items={[
-            { id: 'convert', label: 'Convert' },
-            { id: 'queue', label: `Queue (${summary.total})` }
+            { id: 'convert', label: vocab('Convert') },
+            { id: 'queue', label: `${vocab('Queue')} (${summary.total})` }
           ]}
           value={view}
           onChange={(id) => setView(id === 'queue' ? 'queue' : 'convert')}
-          ariaLabel="Converter views"
+          ariaLabel={vocab('Converter views')}
           className="converter-node__tabs"
           tabClassName="mdx-chip"
           activeTabClassName="mdx-chip--selected"

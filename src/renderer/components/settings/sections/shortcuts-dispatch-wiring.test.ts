@@ -13,6 +13,11 @@ import { describe, expect, it } from 'vitest'
 
 const read = (rel: string): string => fs.readFileSync(path.join(__dirname, rel), 'utf8')
 
+/** Collapse runs of whitespace so a formatter wrapping a call across lines cannot silently
+ *  disarm a needle. The needle still has to name the exact identifiers and argument list — this
+ *  only removes the layout, never a token. */
+const flat = (src: string): string => src.replace(/\s+/g, ' ')
+
 const CANVAS = read('../../../canvas/Canvas.tsx')
 const TERMINAL_NODE = read('../../../nodes/TerminalNode.tsx')
 const SOURCE_CONTROL = read('../../SourceControlPanel.tsx')
@@ -49,7 +54,7 @@ describe('shortcut dispatch sites read the LIVE settings store (rebind applies i
   })
 
   it('SourceControlPanel commit reads the live map and dispatches commitStaged', () => {
-    expect(SOURCE_CONTROL).toContain(
+    expect(flat(SOURCE_CONTROL)).toContain(
       'const commitShortcut = useSettings.getState().settings.shortcuts.commitStaged'
     )
     expect(SOURCE_CONTROL).toContain('matchesShortcut(e, commitShortcut, isMac)')
@@ -57,12 +62,19 @@ describe('shortcut dispatch sites read the LIVE settings store (rebind applies i
 
   it('main-process markdown/close intercepts read the settings store live', () => {
     // Main has no zustand; it reads the persisted settings store on every before-input-event.
-    expect(MAIN).toContain('resolveInterceptBindings(settingsStore.get().keybindings, interceptIsMac)')
+    // Windows-only delivery: `resolveInterceptBindings` takes the overrides ALONE — the mac flag
+    // it used to carry is gone, so a needle still demanding it would fail on correct code.
+    expect(flat(MAIN)).toContain('resolveInterceptBindings(settingsStore.get().keybindings)')
+    // Lazy read plus recompute on save is the whole "live" claim; pin both halves, not just one.
+    expect(flat(MAIN)).toContain('interceptBindings = resolveInterceptBindings(s.keybindings)')
     expect(MAIN).toContain('installKeydownIntercepts(')
     expect(MAIN).toContain('currentInterceptBindings,')
-    expect(MAIN).toContain('interceptIsMac,')
     const intercept = read('../../../../main/keydown-intercept.ts')
-    expect(intercept).toContain('bindings.toggleMarkdown.some((s) => matchesShortcut(ev, s, isMac))')
-    expect(intercept).toContain('bindings.closeNode.some((s) => matchesShortcut(ev, s, isMac))')
+    expect(flat(intercept)).toContain(
+      'bindings.toggleMarkdown.some((binding) => matchesShortcut(event, binding))'
+    )
+    expect(flat(intercept)).toContain(
+      'bindings.closeNode.some((binding) => matchesShortcut(event, binding))'
+    )
   })
 })

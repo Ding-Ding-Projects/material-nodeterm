@@ -24,9 +24,9 @@ import { ShortcutCaptureBanner } from './ShortcutCaptureBanner'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-// jsdom reports a non-mac platform, and the body quotes a PLATFORM-FORMATTED chord ('⌘K' vs
-// 'Ctrl+K'). Pin macOS so the assertions name one spelling — `isMacPlatform()` is read at call
-// time, never captured at module load.
+// Windows-only delivery: `chipFor` ignores the platform entirely, so the body always quotes the
+// canonical Ctrl notation. macOS is pinned here deliberately — a mac-reporting platform must STILL
+// produce 'Ctrl+K', which is what catches a resurrected mac formatting branch.
 Object.defineProperty(window.navigator, 'platform', { value: 'MacIntel', configurable: true })
 
 /** Must be a FRESH `keybindings` object every time: `activeKeybindingOverrides` memoizes on that
@@ -101,7 +101,7 @@ describe('ShortcutCaptureBanner', () => {
     expect(title()).toBe('Command palette')
     // The chord is read through `chipFor`, so this is the EFFECTIVE binding, not the registry
     // default — the remap case below is the same assertion with an override in place.
-    expect(body()).toContain('⌘K')
+    expect(body()).toContain('Ctrl+K')
     expect(body()).toContain('Command palette')
     expect(body()).toContain('terminal-first')
   })
@@ -110,8 +110,8 @@ describe('ShortcutCaptureBanner', () => {
     setKb({ 'app.commandPalette': ['Cmd+Alt+P'] })
     render()
     capture('app.commandPalette')
-    expect(body()).toContain('⌘⌥P')
-    expect(body()).not.toContain('⌘K')
+    expect(body()).toContain('Ctrl+Alt+P')
+    expect(body()).not.toContain('Ctrl+K')
   })
 
   it('a second capture REPLACES the first and restarts the 12s clock', () => {
@@ -123,7 +123,7 @@ describe('ShortcutCaptureBanner', () => {
     capture('app.settings')
     // Replaced, not queued: the first notice is gone the instant the second arrives.
     expect(title()).toBe('Open settings')
-    expect(body()).toContain('⌘,')
+    expect(body()).toContain('Ctrl+,')
 
     // 8s past the FIRST capture's deadline (16s in) — a clock that had been inherited rather than
     // restarted would have dismissed the strip here.

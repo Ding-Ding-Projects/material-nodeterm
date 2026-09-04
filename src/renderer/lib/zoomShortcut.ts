@@ -27,16 +27,16 @@ import { isKanbanOpen } from '../state/viewMode'
 export type ZoomShortcutAction = 'zoom-100' | 'fit-all'
 
 /** The subset of `KeyboardEvent` the chord is decided from (so tests need no DOM). */
-type LegacyPrimaryField = `meta${'Key'}`
-export type ZoomShortcutEvent = {
+export interface ZoomShortcutEvent {
   type: string
   code: string
+  metaKey: boolean
   ctrlKey: boolean
   altKey: boolean
   shiftKey: boolean
   /** OS auto-repeat: true on every keydown after the first while the chord is HELD. */
   repeat: boolean
-} & { [K in LegacyPrimaryField]: boolean }
+}
 
 export interface ZoomShortcutContext {
   /** The kanban board is up — an OPAQUE overlay over a still-mounted canvas. */
@@ -56,7 +56,7 @@ export interface ZoomShortcutContext {
 export function zoomShortcutChord(e: ZoomShortcutEvent): ZoomShortcutAction | null {
   if (e.type !== 'keydown' || e.repeat) return null
   if (e.altKey) return null
-  const primary = e.ctrlKey
+  const primary = e.metaKey || e.ctrlKey
   if (primary && !e.shiftKey && e.code === 'Digit0') return 'zoom-100'
   if (!primary && e.shiftKey && e.code === 'Digit1') return 'fit-all'
   return null

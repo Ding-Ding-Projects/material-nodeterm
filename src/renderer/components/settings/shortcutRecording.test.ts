@@ -16,15 +16,19 @@ const KEYED = { isMac: true, allowHold: false }
 
 describe('recordingKeydown', () => {
   it('a keyed chord commits immediately', () => {
-    expect(recordingKeydown({ mods: null }, e({ metaKey: true, key: 'd' }), KEYED)).toEqual({
+    expect(recordingKeydown({ mods: null }, e({ ctrlKey: true, key: 'd' }), KEYED)).toEqual({
       kind: 'commit',
-      combo: 'Cmd+D'
+      combo: 'Ctrl+D'
     })
   })
-  it('mac Ctrl rides along in a keyed capture (the PR1 gap, closed)', () => {
-    expect(
-      recordingKeydown({ mods: null }, e({ metaKey: true, ctrlKey: true, key: 'd' }), KEYED)
-    ).toEqual({ kind: 'commit', combo: 'Cmd+Ctrl+D' })
+  // The mac primary went with the macOS target: `captureToShortcut` refuses ANY held Meta, so the
+  // gesture that used to record `Cmd+D` / `Cmd+Ctrl+D` now records nothing and keeps hinting.
+  // Refusing is the safe direction — matching is exact on all four flags, so a chord that dropped
+  // the Meta the user was holding could never fire again from the gesture that recorded it.
+  it('a held Meta is refused in a keyed capture, never recorded as a chord', () => {
+    for (const ev of [{ metaKey: true, key: 'd' }, { metaKey: true, ctrlKey: true, key: 'd' }]) {
+      expect(recordingKeydown({ mods: null }, e(ev), KEYED).kind).toBe('pending')
+    }
   })
   it('Escape cancels', () => {
     expect(recordingKeydown({ mods: null }, e({ key: 'Escape' }), KEYED)).toEqual({ kind: 'cancel' })
@@ -70,7 +74,7 @@ describe('recordingKeydown', () => {
 describe('recordingKeyup', () => {
   it('full release commits the remembered hold chord', () => {
     const armed = { mods: { cmd: true, ctrl: false, alt: true, shift: false } }
-    expect(recordingKeyup(armed, e({}), HOLD)).toEqual({ kind: 'commit', combo: 'Cmd+Alt' })
+    expect(recordingKeyup(armed, e({}), HOLD)).toEqual({ kind: 'commit', combo: 'Ctrl+Alt' })
   })
   it('partial release keeps waiting; no remembered mods ignores', () => {
     const armed = { mods: { cmd: true, ctrl: false, alt: true, shift: false } }
@@ -83,6 +87,9 @@ describe('recordingKeyup', () => {
   it('a keyup with only Ctrl still held is ignored (the anyModDown gap, closed)', () => {
     const armed = { mods: { cmd: true, ctrl: true, alt: false, shift: false } }
     expect(recordingKeyup(armed, e({ ctrlKey: true }), HOLD)).toEqual({ kind: 'ignored' })
-    expect(recordingKeyup(armed, e({}), HOLD)).toEqual({ kind: 'commit', combo: 'Cmd+Ctrl' })
+    // …and once everything IS up, a cmd+ctrl chord still commits nothing: the one-Control grammar
+    // has no second primary to spell, so `buildModifierChord` refuses it rather than emitting a
+    // string `normalizeBindingForCommand` would reject with "Use only one Control modifier."
+    expect(recordingKeyup(armed, e({}), HOLD)).toEqual({ kind: 'ignored' })
   })
 })
