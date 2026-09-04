@@ -223,6 +223,7 @@ import {
   IconGrid,
   IconGroup,
   IconDino,
+  IconPortal,
   IconJump,
   IconKanban,
   IconCanvasView,
@@ -6188,6 +6189,14 @@ export function Canvas() {
       })
     },
     [setNodes, markDirty, viewCenter, activeProjectId]
+  )
+
+  const addPortalRecovery = useCallback(
+    (center?: { x: number; y: number }) => {
+      setNodes((ns) => [...ns, createPortalRecoveryNode(ns.length, center ?? viewCenter())])
+      markDirty()
+    },
+    [setNodes, markDirty, viewCenter]
   )
 
   const addWebView = useCallback(
@@ -12831,6 +12840,7 @@ export function Canvas() {
       addAlarmClock,
       addTrigger,
       addDino,
+      addPortalRecovery,
       addBrowser,
       addDebugBrowser,
       openFileDialog,
@@ -17840,6 +17850,13 @@ export function Canvas() {
             run: () => addDino()
           },
           {
+            id: 'new-portal-recovery',
+            label: 'New portal recovery game',
+            hint: 'Three energy keys, hazards, activation core, no authentication bypass',
+            icon: <IconPortal />,
+            run: () => addPortalRecovery()
+          },
+          {
             id: 'open-file',
             label: 'Open file…',
             icon: <IconEditor />,
@@ -18334,6 +18351,7 @@ export function Canvas() {
       addAlarmClock,
       addTrigger,
     addDino,
+    addPortalRecovery,
     addWebView,
     addBrowser,
     addFiles,
