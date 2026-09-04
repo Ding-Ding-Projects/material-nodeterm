@@ -27,6 +27,7 @@ import {
   type UpdatePolicy
 } from '../../shared/types'
 import type { HistoryListResult } from '../../shared/local-history'
+import type { CloudflareApi } from '../../shared/cloudflare'
 import { E_UNSUPPORTED } from '../../shared/rpc'
 import { formatHostMessage, hostFact, hostText, mapLocalVocabularyText, mapNativeNotification } from '../lib/personalVocabulary/hostMessage'
 
