@@ -287,6 +287,7 @@ export async function startServer(
   )
   ptyManager.registerIpc()
   workspaceStore.registerIpc()
+  registerCloudFormationIpc(platform)
   // Dictation: same construction as src/main/index.ts, with the server's data dir. onProgress
   // broadcasts to every attached browser tab the same way wireAgentStatus pushes agent-status.
   const whisperModels = new WhisperModelStore({
