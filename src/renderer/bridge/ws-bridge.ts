@@ -85,7 +85,8 @@ import {
   type WorkspaceApi,
   type ToylockApi,
   type AuthenticatorApi,
-  type PasswordManagerApi
+  type PasswordManagerApi,
+  type PortalDoorApi
 } from '../../shared/types'
 import type {
   OAuthCompleteInput,
