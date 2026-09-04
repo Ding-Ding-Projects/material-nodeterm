@@ -2244,6 +2244,13 @@ export const CATALOG: Catalog = {
     en: ['Step {step} of {steps}, {stage}. {detail}', 'Step {step} of {steps}, currently {stage}. {detail}', 'Phase {step} of {steps}: {stage}. {detail}', 'Phase {step} of {steps} is {stage}; {detail}', 'Step {step} of {steps}: {stage} is on duty. {detail}'],
     yue: ['第 {step} 步，共 {steps} 步，{stage}。{detail}', '第 {step} 步，共 {steps} 步，而家係 {stage}。{detail}', '第 {step} 階段，共 {steps} 階段：{stage}。{detail}', '第 {step} 階段，共 {steps} 階段，狀態係 {stage}；{detail}', '第 {step} 步，共 {steps} 步：{stage} 當值中。{detail}']
   },
+  'wsl.create.progress.stage.validating': { en: flat('validating'), yue: flat('驗證中') },
+  'wsl.create.progress.stage.checking': { en: flat('checking'), yue: flat('檢查中') },
+  'wsl.create.progress.stage.installing': { en: flat('installing'), yue: flat('安裝中') },
+  'wsl.create.progress.stage.recording': { en: flat('recording'), yue: flat('記錄中') },
+  'wsl.create.progress.stage.completed': { en: flat('completed'), yue: flat('已完成') },
+  'wsl.create.progress.stage.failed': { en: flat('failed'), yue: flat('失敗') },
+  'wsl.create.progress.stage.cancelled': { en: flat('cancelled'), yue: flat('已取消') },
   'wsl.create.progress.elapsed': { en: flat('Elapsed time:'), yue: flat('已用時間：') },
   'wsl.create.progress.seconds': { en: flat('seconds.'), yue: flat('秒。') },
   'wsl.create.progress.installing': {

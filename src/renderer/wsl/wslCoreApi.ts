@@ -29,6 +29,7 @@ export type {
   WslCreateError,
   WslCreateProgress,
   WslCreateResult,
+  WslCreateError,
   WslApi as WslCoreApi
 } from '@shared/wsl'
 

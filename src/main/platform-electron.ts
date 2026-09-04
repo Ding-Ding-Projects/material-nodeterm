@@ -258,7 +258,11 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
       } catch (err) {
         return {
           t: 'res', id: req.id, ok: false,
-          error: { code: 'E_HANDLER', message: err instanceof Error ? err.message : String(err) }
+          error: {
+            code: 'E_HANDLER',
+            message: err instanceof Error ? err.message : String(err),
+            ...(rpcErrorDetails(err) ? { details: rpcErrorDetails(err) } : {})
+          }
         }
       }
     },
