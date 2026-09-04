@@ -1364,6 +1364,45 @@ const FEATURES = [
     // profiles one. docs/assets/shots/capture-manifest.json does record `app-status-surface`, but
     // its method is plain CDP against the unpackaged out/ build, which is the exact route that
     // row's pending reason says cannot stand as packaged headless capture evidence.
+    id: 'node-catalog-universe-shops',
+    label: 'Unified Node Catalog and special-universe Shops',
+    files: [
+      'src/shared/node-catalog.ts',
+      'src/renderer/state/nodeCreationCoordinator.ts',
+      'src/core/universe-shop.ts',
+      'src/renderer/components/NodeCatalogDialog.tsx',
+      'src/renderer/nodes/ShopNode.tsx',
+      'src/renderer/components/UniverseCanvasView.tsx',
+      'src/renderer/canvas/Canvas.tsx'
+    ],
+    contentChecks: [
+      ['src/shared/node-catalog.ts', 'export function validateNodeCatalogCompleteness('],
+      ['src/renderer/state/nodeCreationCoordinator.ts', 'export class NodeCreationCoordinator'],
+      ['src/core/universe-shop.ts', 'export function repairUniverseShops('],
+      ['src/core/universe-shop.ts', 'export function createSpecialUniverseCanvas('],
+      ['src/core/universe-shop.ts', 'export class UniverseCanvasStore'],
+      ['src/renderer/state/projects.ts', 'createUniverseChild(projectId'],
+      ['src/renderer/components/UniverseCanvasView.tsx', 'export function UniverseCanvasView('],
+      ['src/renderer/components/NodeCatalogDialog.tsx', 'export function NodeCatalogDialog('],
+      ['src/renderer/nodes/ShopNode.tsx', 'export function ShopNode('],
+      ['src/renderer/canvas/Canvas.tsx', 'nodeCatalogShopProvider('],
+      ['src/renderer/canvas/Canvas.tsx', 'onOpenCatalog=']
+    ],
+    wired: { file: 'src/renderer/canvas/Canvas.tsx', symbol: 'NodeCatalogDialog' },
+    tests: [
+      ['src/shared/node-catalog.test.ts', "describe('unified node catalog contract'"],
+      ['src/renderer/state/nodeCreationCoordinator.test.ts', "describe('node creation coordinator contract'"],
+      ['src/core/universe-shop.test.ts', "describe('universe Shop contract'"],
+      ['src/renderer/nodes/ShopNode.test.tsx', "describe('ShopNode runtime surface'"],
+    ],
+    localizedCopy: {
+      status: 'verified',
+      files: ['src/shared/i18n/catalog.ts'],
+      contentChecks: [['src/shared/i18n/catalog.ts', "'nodeCatalog.title'"], ['src/shared/i18n/catalog.ts', "'universeShop.title'"]]
+    },
+    docs: ['docs/features/canvas/node-catalog.md', 'docs/features/integrations/aws-universe-shop.md'],
+  },
+  {
     id: 'status-surface',
     label: 'Status surface (project gates + recorded evidence)',
     files: [

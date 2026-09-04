@@ -1447,6 +1447,18 @@ export interface Project {
   remote?: boolean
 }
 
+export type ProjectCanvasScope = 'multiverse' | 'aws-universe'
+export interface ProjectCanvasState {
+  id: string
+  scope: ProjectCanvasScope
+  parentCanvasId: string
+  depth: number
+  title: string
+  order: number
+  viewport?: Viewport
+  nodeIds: string[]
+}
+
 /** The full workspace written to / read from disk. */
 export interface Workspace {
   version: 2

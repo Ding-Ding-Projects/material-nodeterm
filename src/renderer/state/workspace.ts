@@ -2788,7 +2788,7 @@ export function groupSelectedNodes(
     members.some((member) =>
       members.some((other) => other.id !== member.id && isDescendant(nodes, other.id, member.id))
     )
-  ) {
+) {
     return nodes
   }
 

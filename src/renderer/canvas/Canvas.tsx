@@ -2429,6 +2429,11 @@ export function Canvas() {
     [terminalProfiles, profileText]
   )
   nodesRef.current = nodes
+  useEffect(() => setActiveUniverseCanvasId(null), [activeProjectId])
+  useEffect(() => {
+    // Hydration records persisted event ids without minting new creation events.
+    nodeCreationCoordinatorRef.current.remember(nodes)
+  }, [nodes])
   useEffect(() => {
     // Hydration is a read, not a creation event. Remembering persisted ids makes a retried
     // catalogue command idempotent without minting anything while a project is reopened.
@@ -11810,6 +11815,7 @@ export function Canvas() {
         const rootNodes = selectedNodes.filter((node) => rootSet.has(node.id))
         const groupable =
           rootNodes.length > 0 &&
+          !rootNodes.some((node) => node.type === 'shop' || node.data.nonDeletable === true) &&
           (ids.length === 1 || rootNodes.length > 1) &&
           new Set(rootNodes.map((node) => node.parentId ?? null)).size === 1
         // EVERY frame on the canvas this selection could actually be ADDED to — not only frames
@@ -11886,7 +11892,7 @@ export function Canvas() {
       ...(isHidden('duplicate', hidden)
         ? []
         : ([
-            { label: 'Duplicate', icon: <IconDuplicate />, onClick: () => duplicateNodes(ids, at) }
+            { label: 'Duplicate', icon: <IconDuplicate />, disabled: protectedSelection, hint: protectedSelection ? 'The Shop is permanent and cannot be duplicated.' : undefined, onClick: () => duplicateNodes(ids, at) }
           ] as MenuItem[])),
       // Zone snap (issue #394 v1): place THIS node into a region of the visible canvas at that
       // region's size — halves/quarters/thirds. Single non-group, non-collapsed target only (the
@@ -13633,6 +13639,91 @@ export function Canvas() {
         : NO_KANBAN_SESSIONS,
     [nodes, kanbanOpen]
   )
+
+  /** One typed executor for catalog rows. Legacy factories may remain for compatibility, but a
+   * catalog-created node crosses this immutable event and bounded placement boundary exactly once. */
+  const createCatalogNode = useCallback(
+    (entry: NodeCatalogEntry, creationEventId: string, options?: { terminalProfileId?: string; at?: { x: number; y: number }; groupId?: string; universeCanvasId?: string; universeScope?: 'multiverse' | 'aws-universe'; universeDepth?: number }): ShopCreationResult => {
+      const project = useProjects.getState().getProject(activeProjectId)
+      const availability = nodeCatalogAvailability(entry, {
+        sessionSource,
+        hasProjectFolder: !!(project?.cwd || project?.ssh?.remoteCwd),
+        isSshProject: !!project?.ssh,
+        hasRemoteConnection: useSshServers.getState().servers.length > 0,
+        supportsWindowsTerminalProfiles: offersTerminalProfiles,
+        universeScope: options?.universeScope ?? 'root',
+        universeId: options?.universeCanvasId,
+        universeDepth: options?.universeDepth ?? 0,
+        hasShopNode: options?.universeScope !== undefined
+      })
+      if (!availability.available) return { status: 'refused', creationEventId, reason: availability.reason }
+      const center = options?.at ?? emptyNodePos() ?? viewCenter() ?? { x: 120, y: 120 }
+      let result: ShopCreationResult = { status: 'refused', creationEventId, reason: 'Node creation did not run.' }
+      setNodes((existing) => {
+        const factory = (candidate: NodeCatalogEntry, index: number, at: { x: number; y: number }): CanvasNode | null => {
+          if (candidate.id === 'terminal') return createTerminalNode(index, project?.cwd, at, undefined, project?.ssh, terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId))
+          if (candidate.id.startsWith('agent:')) {
+            const agentId = candidate.id.slice(6) as AgentId
+            const settings = useSettings.getState().settings
+            const codexAccounts = codexAccountsForCanvas(settings.codexAccounts, project)
+            const account = agentId === 'claude'
+              ? resolveNewNodeAccount(undefined, project, settings.claudeAccounts)
+              : agentId === 'codex' && codexAccounts.length > 0
+                ? codexAccounts[0].id
+                : undefined
+            const accountSsh = agentId === 'codex' ? sshForCodexAccount(account) : undefined
+            const ssh = accountSsh ?? project?.ssh
+            return createAgentNode(agentId, index, ssh?.remoteCwd ?? project?.cwd, at, undefined, ssh, account, activeAgentLaunchPlan('catalog-new-agent', agentId), terminalCreationOptionsFor(activeProjectId))
+          }
+          if (candidate.id === 'sticky') return createStickyNode(index, at)
+          if (candidate.id === 'group') return createGroupNode(at, undefined, index)
+          if (candidate.id === 'browser') return createBrowserNode(index, '', at)
+          if (candidate.id === 'web') return createWebNode(index, { url: '' }, at)
+          if (candidate.id === 'authenticator') return createAuthenticatorNode(index, at)
+          if (candidate.id === 'dino') return createDinoNode(index, at)
+          if (candidate.id === 'loop') return createNativeLoopNode(index, at)
+          if (candidate.id === 'nsis') return createNsisNode(index, at)
+          if (candidate.id.startsWith('service:')) return createServiceNode(candidate.nodeKind as ServiceNodeKind, index, at)
+          return null
+        }
+        const appended = nodeCreationCoordinatorRef.current.append(existing, { entry, creationEventId, center, groupId: options?.groupId, projectId: activeProjectId ?? undefined, universeCanvasId: options?.universeCanvasId, universeScope: options?.universeScope, universeDepth: options?.universeDepth }, factory, parentInto)
+        result = { status: appended.result.error ? 'refused' : appended.result.duplicate ? 'duplicate' : appended.result.node ? 'created' : 'refused', creationEventId, nodeId: appended.result.node?.id, reason: appended.result.error }
+        if (appended.result.node && options?.universeCanvasId) useProjects.getState().appendUniverseChildNode(activeProjectId ?? '', options.universeCanvasId, appended.result.node.id)
+        if (appended.result.node && !appended.result.duplicate) markDirty()
+        return appended.nodes
+      })
+      return result
+    },
+    [activeProjectId, emptyNodePos, markDirty, offersTerminalProfiles, parentInto, sessionSource, setNodes, terminalCreationOptionsFor, viewCenter]
+  )
+  const createCatalogChild = useCallback((entry: NodeCatalogEntry, creationEventId: string) => {
+    const projectId = activeProjectId
+    if (!projectId) return
+    const scope = entry.id === 'aws-universe' ? 'aws-universe' as const : 'multiverse' as const
+    const id = `${scope}-${creationEventId.slice(-12)}`
+    const result = useProjects.getState().createUniverseChild(projectId, {
+      id, scope, parentCanvasId: 'root', depth: 1, title: entry.label, order: (useProjects.getState().getProject(projectId)?.childCanvases?.length ?? 0) + 1
+    }, creationEventId)
+    if (!result.refused && result.canvasId) {
+      setNodes(nodeStatesToFlow(useProjects.getState().getProject(projectId)?.nodes ?? []))
+      markDirty()
+      void writeDisk()
+      setActiveUniverseCanvasId(result.canvasId)
+    }
+  }, [activeProjectId, markDirty, setNodes, writeDisk])
+  useEffect(() => {
+    registerUniverseShopCatalog(nodeCatalogShopProvider((entry, context) => {
+      const catalogEntry = NODE_CATALOG.find((candidate) => candidate.id === entry.id)
+      if (catalogEntry) return createCatalogNode(catalogEntry, context.creationEventId, {
+        universeCanvasId: context.canvasId,
+        universeScope: context.scope,
+        universeDepth: context.depth,
+        at: context.placement
+      })
+      return { status: 'refused', creationEventId: context.creationEventId, reason: 'Catalog entry no longer exists.' }
+    }), activeProjectId ?? 'default')
+    return () => registerUniverseShopCatalog(null, activeProjectId ?? 'default')
+  }, [activeProjectId, createCatalogNode])
 
   // Create a node from the board's per-column "+ New" menu: it lands on the canvas (view
   // center) and, for a real column, is assigned there. The assignment is written directly —
@@ -19733,6 +19824,7 @@ export function Canvas() {
             }}
             onOpenCatalog={() => setNodeCatalog({})}
             onAddTerminal={defaultTerminalCreationHandler(addTerminal)}
+            onOpenCatalog={() => setNodeCatalog({ at: viewCenter() ?? undefined })}
             offersTerminalProfiles={offersTerminalProfiles}
             terminalProfileChoices={terminalProfileMenuChoices}
             terminalProfileEmptyState={{
@@ -20372,6 +20464,29 @@ export function Canvas() {
           <DocsBrowser initialPath={docsInitialPath} />
         </div>
       )}
+      <NodeCatalogDialog
+        open={nodeCatalog !== null}
+        onClose={() => setNodeCatalog(null)}
+        context={{
+          sessionSource,
+          hasProjectFolder: !!(useProjects.getState().getProject(activeProjectId)?.cwd || useProjects.getState().getProject(activeProjectId)?.ssh?.remoteCwd),
+          isSshProject: !!useProjects.getState().getProject(activeProjectId)?.ssh,
+          hasRemoteConnection: useSshServers.getState().servers.length > 0,
+          supportsWindowsTerminalProfiles: offersTerminalProfiles,
+          universeScope: nodeCatalog?.universeScope ?? 'root',
+          universeId: nodeCatalog?.universeCanvasId,
+          universeDepth: nodeCatalog?.universeDepth ?? 0,
+          hasShopNode: nodeCatalog?.universeScope !== undefined
+        }}
+        terminalProfileChoices={terminalProfileMenuChoices}
+        onCreate={(entry, creationEventId, options) => createCatalogNode(entry, creationEventId, { ...options, at: nodeCatalog?.at, groupId: nodeCatalog?.groupId, universeCanvasId: nodeCatalog?.universeCanvasId, universeScope: nodeCatalog?.universeScope, universeDepth: nodeCatalog?.universeDepth })}
+        onCreateChild={createCatalogChild}
+        onOpenDocumentation={(path) => {
+          setDocsInitialPath(path)
+          setDocsOpen(true)
+          setNodeCatalog(null)
+        }}
+      />
       {statusOpen && (
         <div className="md3-status-host">
           <StatusSurface />

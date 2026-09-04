@@ -131,6 +131,14 @@ function withinSizeLimit(m: unknown): boolean {
   }
 }
 
+function isDeterministicShopId(node: CanvasNodeState): boolean {
+  if (typeof node.universeCanvasId !== 'string') return false
+  const base = `shop-${node.universeCanvasId}`
+  if (node.id === base) return true
+  const suffix = node.id.startsWith(`${base}-`) ? node.id.slice(base.length + 1) : ''
+  return suffix.length === 8 && [...suffix].every((char) => '0123456789abcdefABCDEF'.includes(char))
+}
+
 /**
  * Same top-level VALUE? A shallow compare, deliberately: it never reads the CONTENT of a string
  * field, which is the whole point (the free text is what makes an oversized node expensive).
