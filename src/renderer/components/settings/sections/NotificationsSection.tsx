@@ -16,6 +16,7 @@ import { Slider } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { mapNativeNotification } from '../../../lib/personalVocabulary/hostMessage'
 import { Input } from '@renderer/ui/Input'
+import { notify } from '../../../lib/adhdNotify'
 
 const ROWS = {
   notify: {
@@ -143,7 +144,7 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
                 update({ soundEffects: on })
                 // Enabling plays the finish chirp — it doubles as the volume preview AND as the
                 // user gesture a browser needs before it will let us make noise at all.
-                if (on) playAlertSound('done', soundVolume, alertSounds)
+                if (on) playSfx('done', soundVolume)
               }}
             />
           }
@@ -166,7 +167,7 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
                   value={Math.round(soundVolume * 100)}
                   aria-label="Sound effect volume"
                   onChange={(e) => update({ soundVolume: Number(e.target.value) / 100 })}
-                  onMouseUp={() => playAlertSound('done', soundVolume, alertSounds)}
+                  onMouseUp={() => playSfx('done', soundVolume)}
                   className="w-40 accent-[var(--accent)]"
                 />
                 <span className="w-9 text-right text-[12px] text-muted tabular-nums">
@@ -179,8 +180,8 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
             label="Preview"
             control={
               <div className="flex items-center gap-2">
-                <Button onClick={() => playAlertSound('done', soundVolume, alertSounds)}>Finished</Button>
-                <Button onClick={() => playAlertSound('needsYou', soundVolume, alertSounds)}>Needs you</Button>
+                <Button onClick={() => playSfx('done', soundVolume)}>Finished</Button>
+                <Button onClick={() => playSfx('needsYou', soundVolume)}>Needs you</Button>
               </div>
             }
           />

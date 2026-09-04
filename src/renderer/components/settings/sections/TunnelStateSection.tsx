@@ -97,7 +97,7 @@ export function TunnelStateSection({ isActive }: { isActive: boolean }): React.J
 
   const complete = () => {
     const result = applyTunnelStateAction(draft, { type: 'complete-reconciliation', generation: draft.generation })
-    commit(result.state, statusCopy(result), result.state.lifecycle === 'error' ? 'warning' : 'success')
+    commit(result.state, statusCopy(result.state), result.state.lifecycle === 'error' ? 'warning' : 'success')
   }
 
   const saveIdentity = () => {

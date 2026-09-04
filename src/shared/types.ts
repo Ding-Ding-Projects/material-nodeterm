@@ -3270,6 +3270,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notifyConsentAsked: false,
   soundEffects: true,
   soundVolume: 0.5,
+  alertSounds: { clips: {}, mappings: { done: 'builtin', needsYou: 'builtin' }, quiet: false, reducedSound: false },
   customAlertSounds: {},
   customAgents: [],
   modelGateway: { baseUrl: '', apiKey: '' },
