@@ -205,6 +205,8 @@ export interface NodeData {
   alarmHistory?: AlarmOccurrence[]
   /** Trigger schedule and delivery definition. Arm state never enters renderer persistence. */
   trigger?: import('@shared/trigger').TriggerSpec
+  /** Alarm/timer nodes: the durable occurrence definition this node owns (see `createAlarmNode`). */
+  alarmId?: string
   /** Agent nodes only: when true, this node's subagent/loop fan-out cards are hidden. */
   hideFanout?: boolean
   /** Expanded height to restore when un-collapsing (kept out of the persisted size). */

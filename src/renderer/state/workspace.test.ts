@@ -1256,7 +1256,17 @@ describe('duplicateNode across every node kind', () => {
     'gitlab-hosting': 'gitlab-hosting',
     veracrypt: 'veracrypt',
     'repository-graph': 'repository-graph',
-    converter: 'converter',
+    converter: 'converter',
+
+    'aws-shop': 'aws-shop',
+    'aws-wizard': 'aws-wizard',
+    'browser-portal': 'browser-portal',
+    'debug-browser': 'debug-browser',
+    kiosk: 'kiosk',
+    'aws-service': 'aws-service',
+    'portal-door': 'portal-door',
+    xproject: 'xproject',
+    portal: 'portal',
   }
   const ALL_KINDS = Object.keys(EXPECTED_PREFIX) as NodeKind[]
 

@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { AnchoredPopover } from '../../ui/AnchoredPopover'
+import { Button, FieldLabel, IconButton, SearchField, TextField } from '../../ui/md3'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { applySavedLayout, createSavedLayout, type SavedLayoutApplyResult } from '../../lib/savedLayouts'
-import type { CanvasNodeState, PortableSavedCanvasLayout } from '@shared/types'
+import type { CanvasNodeState, SavedLayoutView } from '@shared/types'
 
 interface SavedLayoutsPanelProps {
   anchorRef: RefObject<HTMLElement>
   open: boolean
-  layouts: PortableSavedCanvasLayout[]
+  layouts: SavedLayoutView[]
   nodes: CanvasNodeState[]
   onClose: () => void
-  onSave: (layout: PortableSavedCanvasLayout) => void
-  onApply: (layout: PortableSavedCanvasLayout, result: SavedLayoutApplyResult) => void
-  onDelete: (layout: PortableSavedCanvasLayout) => void
+  onSave: (layout: SavedLayoutView) => void
+  onApply: (layout: SavedLayoutView, result: SavedLayoutApplyResult) => void
+  onDelete: (layout: SavedLayoutView) => void
 }
 
 /**
@@ -53,7 +54,7 @@ export function SavedLayoutsPanel({ anchorRef, open, layouts, nodes, onClose, on
             <h2>Saved layouts</h2>
             <p>Portable node arrangements for this project. Applying one changes geometry only.</p>
           </div>
-          <button type="button" className="icon-button" aria-label="Close saved layouts" onClick={onClose}>×</button>
+          <IconButton icon="close" aria-label="Close saved layouts" title="Close saved layouts" onClick={onClose} />
         </header>
         <div className="saved-layouts__note" role="note">
           Stored in the shared project file: node identity, size, position, grouping, and collapsed state only.
@@ -61,8 +62,15 @@ export function SavedLayoutsPanel({ anchorRef, open, layouts, nodes, onClose, on
         </div>
         <div className="menu-filter saved-layouts__search">
           <div className="menu-filter__row">
-            <input ref={inputRef} className="menu-filter__input" value={search.value} onChange={(e) => search.setValue(e.target.value)} placeholder={search.mode === 'regex' ? 'Search layouts… (regex)' : 'Search layouts…'} aria-label="Search saved layouts" />
-            <AnchoredRegexBuilder search={search} fieldRef={inputRef} label="Regex — saved layouts" zIndex={73} />
+            <SearchField
+              ref={inputRef}
+              inputClassName="menu-filter__input"
+              value={search.value}
+              onChange={(e) => search.setValue(e.target.value)}
+              placeholder={search.mode === 'regex' ? 'Search layouts… (regex)' : 'Search layouts…'}
+              aria-label="Search saved layouts"
+              trailingSlot={<AnchoredRegexBuilder search={search} fieldRef={inputRef} label="Regex — saved layouts" zIndex={73} />}
+            />
           </div>
           {search.error && <div className="menu-filter__error">{search.error}</div>}
           <span className="sr-only" role="status" aria-live="polite">{filtered.length} saved layouts</span>
@@ -72,12 +80,12 @@ export function SavedLayoutsPanel({ anchorRef, open, layouts, nodes, onClose, on
             const selected = previewId === layout.id
             return (
               <div className={`saved-layouts__row${selected ? ' is-selected' : ''}`} key={layout.id} role="option" aria-selected={selected}>
-                <button type="button" className="saved-layouts__select" onClick={() => setPreviewId(layout.id)}>
+                <Button type="button" variant="text" className="saved-layouts__select" onClick={() => setPreviewId(layout.id)}>
                   <strong>{layout.name}</strong>
                   <span>{layout.nodes.length} nodes · {new Date(layout.createdAt).toLocaleString()}</span>
-                </button>
-                <button type="button" className="saved-layouts__apply" onClick={() => onApply(layout, applySavedLayout(nodes, layout))} aria-label={`Apply saved layout ${layout.name}`}>Apply</button>
-                <button type="button" className="saved-layouts__delete" onClick={() => onDelete(layout)} aria-label={`Delete saved layout ${layout.name}`}>Delete</button>
+                </Button>
+                <Button type="button" variant="tonal" className="saved-layouts__apply" onClick={() => onApply(layout, applySavedLayout(nodes, layout))} aria-label={`Apply saved layout ${layout.name}`}>Apply</Button>
+                <Button type="button" variant="text" className="saved-layouts__delete" onClick={() => onDelete(layout)} aria-label={`Delete saved layout ${layout.name}`}>Delete</Button>
               </div>
             )
           })}
@@ -91,16 +99,16 @@ export function SavedLayoutsPanel({ anchorRef, open, layouts, nodes, onClose, on
           </div>
         )}
         <div className="saved-layouts__create">
-          <label htmlFor="saved-layout-name">Name this canvas</label>
+          <FieldLabel label="Name this canvas" htmlFor="saved-layout-name" />
           <div className="saved-layouts__create-row">
-            <input ref={nameRef} id="saved-layout-name" value={name} maxLength={160} onChange={(e) => setName(e.target.value)} placeholder="For example: Agent review" aria-describedby="saved-layout-name-help" />
-            <button type="button" onClick={save} disabled={!name.trim() || nodes.length === 0}>Save layout</button>
+            <TextField ref={nameRef} id="saved-layout-name" label="Layout name" value={name} maxLength={160} onChange={(e) => setName(e.target.value)} placeholder="For example: Agent review" aria-describedby="saved-layout-name-help" />
+            <Button type="button" variant="filled" onClick={save} disabled={!name.trim() || nodes.length === 0}>Save layout</Button>
           </div>
           <small id="saved-layout-name-help">Names are required, limited to 160 characters, and saved with the portable project geometry.</small>
         </div>
         <footer className="saved-layouts__footer">
           <span>Keyboard: Tab through layouts, Enter applies, Escape closes.</span>
-          <button type="button" onClick={onClose}>Close</button>
+          <Button type="button" variant="text" onClick={onClose}>Close</Button>
         </footer>
       </section>
     </AnchoredPopover>

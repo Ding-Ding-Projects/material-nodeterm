@@ -996,6 +996,16 @@ export interface PortableSavedCanvasLayout {
  * A snapshot of one canvas's nodes in the form sent over the remote mirror wire.
  * Reuses the persisted node shape (`CanvasNodeState`) so host and client agree on layout.
  */
+/**
+ * The subset of a saved arrangement any catalogue surface actually reads.  Two lineages write
+ * `project.savedLayouts` -- the persisted `SavedCanvasLayout` (canvas id + viewport, validated
+ * in `core/workspace-files.ts`) and the portable `PortableSavedCanvasLayout` -- and their node
+ * records are identical.  Consumers take this view so neither producer has to be dropped.
+ */
+export type SavedLayoutView = Pick<PortableSavedCanvasLayout, 'id' | 'name' | 'nodes'> & {
+  createdAt: string | number
+}
+
 export interface CanvasState {
   nodes: CanvasNodeState[]
 }
@@ -5295,6 +5305,7 @@ export interface NodeTerminalApi {
   /** Named provider profiles and project bindings, with credential values kept in the host vault. */
   providerAccounts: import('./provider-accounts').ProviderAccountsApi
   /** Host-owned Cloudflare tunnel inventory, route preservation, and reviewed DNS adoption. */
+  portalDoor: import('./portal-door').PortalDoorApi
   cloudflareTunnels: import('./cloudflare-tunnels').CloudflareTunnelApi
   /** Server Edition callback completer; absent on the desktop, which uses sshProject forwarding. */
   remoteOAuth?: import('./remote-oauth').RemoteOAuthApi

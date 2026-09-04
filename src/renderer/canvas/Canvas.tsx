@@ -102,7 +102,8 @@ import {
   setDrillHandler,
   setWorktreeActionHandler,
   setWslActionHandler,
-  setWslTerminalHandler
+  setWslTerminalHandler,
+  type WorktreeAction
 } from '../nodes/GroupNode'
 import { DrillBreadcrumb } from '../components/DrillBreadcrumb'
 import { AnnotationNode } from '../nodes/AnnotationNode'
@@ -866,6 +867,9 @@ import {
   maximizeNodeToRect,
   restoreMaximizedNode,
   createPortalDoorNode,
+  createAwsUniverseNode,
+  createCloudflareTunnelNode,
+  createPortalRecoveryNode,
   createAwsWizardNode
 } from '../state/workspace'
 import { isNonDeletableCanvasNode } from '@shared/aws-shop'
@@ -5315,7 +5319,7 @@ export function Canvas() {
   const wheelZoomSpeed = clampWheelZoomSpeed(settings.wheelZoomSpeed)
   // The escape hatch, resolved ONCE: the router and React Flow's panOnScroll below must agree, or
   // a gesture neither of them pans is a gesture that does nothing.
-  const trackpadRouting = trackpadRoutingEnabled(isMac, settings.trackpadPan)
+  const trackpadRouting = trackpadRoutingEnabled(settings.trackpadPan)
   useEffect(() => {
     const wrap = flowWrapRef.current
     if (!wrap) return
@@ -9286,7 +9290,7 @@ export function Canvas() {
   // merge / remove teardown actions (Tasks 8 & 9) slot in as new cases. `unbind` forgets the
   // binding without touching disk; `merge` merges to base; `remove` opens the safety dialog.
   const onWorktreeAction = useCallback(
-    (groupId: string, action: 'merge' | 'remove' | 'unbind' | 'rerun-setup') => {
+    (groupId: string, action: WorktreeAction) => {
       // A binding can only predate the SSH gate (hand-edited project file, or a project that became
       // an SSH project), but it can still exist — and merge/remove would run against the LOCAL
       // filesystem for a project whose git and terminals live on the remote host. Refuse them, out
@@ -10861,7 +10865,7 @@ export function Canvas() {
     setZoneOverlay({ nodeId, active, zones: availableZones })
   }, [getViewport])
 
-  const applyLayout = useCallback((layout: import('@shared/types').SavedCanvasLayout, result: SavedLayoutApplyResult) => {
+  const applyLayout = useCallback((layout: import('@shared/types').SavedLayoutView, result: SavedLayoutApplyResult) => {
     if (!result.appliedIds.length) return
     const next = nodeStatesToFlow(result.nodes)
     nodesRef.current = next

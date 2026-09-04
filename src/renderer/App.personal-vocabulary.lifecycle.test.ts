@@ -4,7 +4,7 @@ import { applyVocabulary } from './lib/personalVocabulary/apply'
 import { nativeCopyProjection } from './lib/personalVocabulary/nativeCopy'
 import { usePersonalVocabulary } from './state/personalVocabulary'
 import { useSchoolMode } from './state/schoolMode'
-import { NativeCopyStore } from '../main/native-copy-store'
+import { NativeCopyStore } from '../core/native-copy-store'
 import { NATIVE_COPY_SLOTS } from '../shared/native-copy-projection'
 
 const CACHE_KEY = 'nodeterm.personalVocabulary.v1'

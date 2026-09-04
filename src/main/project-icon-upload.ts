@@ -4,7 +4,7 @@ import {
   PROJECT_ICON_MAX_BYTES,
   type ProjectIconPickResult
 } from '@shared/project-icon'
-import { nativeCopyStore } from './native-copy-store'
+import { nativeCopyStore } from '../core/native-copy-store'
 
 /**
  * Project-icon upload, main side. The renderer must never trust a user-chosen file straight onto

@@ -6,7 +6,7 @@ import path from 'node:path'
 import { IPC } from '../shared/ipc'
 import { shouldEnableUpdater } from '../shared/update-platform'
 import { getMainWindow, sendToMain } from './main-window'
-import { nativeCopyStore } from './native-copy-store'
+import { nativeCopyStore } from '../core/native-copy-store'
 import { retainUntilDismissed } from './notifications'
 import {
   createWindowsSquirrelController,

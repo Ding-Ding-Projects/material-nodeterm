@@ -14,6 +14,8 @@ import { openDestructiveGate } from '../state/destructiveGate'
 import { Radio } from '../ui/md3'
 import { Button, Checkbox, IconButton } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
+import { schoolModeAllowsOptionalFeatures, type SchoolModeGateState } from '../lib/schoolModePolicy'
+import { useSchoolMode } from '../state/schoolMode'
 
 function bytes(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '0 B'
@@ -207,6 +209,15 @@ function TorrentTaskCard({ task, busy, destination, torrent, run }: TorrentTaskC
   )
 }
 
+/**
+ * School mode requires every optional capability to behave as if it is not installed, and an
+ * unhydrated record is NOT evidence that the mode is off -- both states omit the downloader.
+ * Exported so the contract test asserts the real decision this component renders through.
+ */
+export function torrentNodeOptionalFeatureVisible(state: SchoolModeGateState): boolean {
+  return schoolModeAllowsOptionalFeatures(state)
+}
+
 export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { updateNodeData } = useReactFlow()
   const api = useActiveSessionApi()
@@ -214,6 +225,9 @@ export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode
   const [tasks, setTasks] = useState<TorrentTaskState[]>([])
   const [destination, setDestination] = useState('')
   const [runtime, setRuntime] = useState<{ available: boolean; origin: string; detail: string | null } | null>(null)
+  const schoolModeHydrated = useSchoolMode((state) => state.hydrated)
+  const schoolModeEnabled = useSchoolMode((state) => state.enabled)
+  const downloaderVisible = torrentNodeOptionalFeatureVisible({ hydrated: schoolModeHydrated, enabled: schoolModeEnabled })
   const [busy, setBusy] = useState(false)
   const taskSearch = useRegexSearchField()
   const taskSearchRef = useRef<HTMLInputElement>(null)
@@ -283,6 +297,11 @@ export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode
       setTasks((current) => [...current.filter((item) => item.id !== task.id), task])
     })
   }, [api, id, withBusy])
+
+  // Omit the whole surface rather than disabling it: School mode requires an optional capability
+  // to behave as though it is not installed, and a visibly disabled control still discloses it.
+  // Same precedent as ServiceNode's optional integrations.
+  if (!downloaderVisible) return null
 
   const fill = nodeHeaderFillStyle(data.color)
   return (

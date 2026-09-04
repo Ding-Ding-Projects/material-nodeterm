@@ -187,6 +187,16 @@ export function buildStubApi(): Omit<
   | 'universeDoorEntry'
 > {
   const api = {
+    // Deliberately refusing rather than real: portal entry is owned by the machine the canvas
+    // lives on, so a relay peer can never use a remote door as a credential oracle.
+    portalDoor: {
+      list: () => Promise.resolve([]),
+      configure: () => Promise.reject(new Error('E_UNSUPPORTED')),
+      remove: () => Promise.reject(new Error('E_UNSUPPORTED')),
+      status: () => Promise.reject(new Error('E_UNSUPPORTED')),
+      verify: () => Promise.reject(new Error('E_UNSUPPORTED')),
+      relock: () => Promise.reject(new Error('E_UNSUPPORTED'))
+    },
     providerServices: {
       catalog: () => Promise.resolve([]),
       accounts: () => Promise.resolve([]),

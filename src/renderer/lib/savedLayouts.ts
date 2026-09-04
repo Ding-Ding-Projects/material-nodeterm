@@ -1,4 +1,4 @@
-import type { CanvasNodeState, PortableSavedCanvasLayout, SavedCanvasLayoutNode } from '@shared/types'
+import type { CanvasNodeState, PortableSavedCanvasLayout, SavedCanvasLayoutNode, SavedLayoutView } from '@shared/types'
 
 /** Bounds shared by the editor, file boundary, and portable projection. */
 export const SAVED_LAYOUT_LIMITS = {
@@ -122,10 +122,14 @@ function containsParent(ancestorId: string, node: CanvasNodeState, nodes: readon
 }
 
 /** Apply a saved arrangement while preserving all non-layout node data. */
-export function applySavedLayout(nodes: readonly CanvasNodeState[], layout: PortableSavedCanvasLayout): SavedLayoutApplyResult {
-  const normalized = normalizeSavedLayouts([layout])[0]
-  if (!normalized) return { nodes: [...nodes], appliedIds: [], missingIds: layout.nodes.map((node) => node.id), collisionPairs: [] }
-  const byId = new Map(normalized.nodes.map((node) => [node.id, node]))
+export function applySavedLayout(nodes: readonly CanvasNodeState[], layout: SavedLayoutView): SavedLayoutApplyResult {
+  // Normalize the NODE RECORDS only.  `normalizeSavedLayouts` is the persistence-load gate and
+  // additionally demands `version: 1` plus a string `createdAt`; running a persisted
+  // `SavedCanvasLayout` through it rejected the whole layout and reported every node missing.
+  const safeNodes = (Array.isArray(layout.nodes) ? layout.nodes : [])
+    .map(safeNode)
+    .filter((node): node is SavedCanvasLayoutNode => node !== null)
+  const byId = new Map(safeNodes.map((node) => [node.id, node]))
   const appliedIds: string[] = []
   const missingIds: string[] = []
   const next = nodes.map((node) => {
@@ -140,7 +144,7 @@ export function applySavedLayout(nodes: readonly CanvasNodeState[], layout: Port
       collapsed: saved.collapsed
     }
   })
-  for (const saved of normalized.nodes) if (!nodes.some((node) => node.id === saved.id)) missingIds.push(saved.id)
+  for (const saved of safeNodes) if (!nodes.some((node) => node.id === saved.id)) missingIds.push(saved.id)
   const collisionPairs: Array<[string, string]> = []
   const visible = next.filter((node) => !node.collapsed)
   for (let i = 0; i < visible.length; i += 1) {

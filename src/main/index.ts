@@ -433,7 +433,7 @@ import { stopOwnedCodexRelayProcess } from './codex-relay-lifecycle'
 import { TriggerArmStore } from '../core/trigger-arm-store'
 import { TriggerScheduler, type TriggerDeliveryResult } from '../core/trigger-scheduler'
 import { registerTriggerIpc, triggerIpcNotify } from '../core/trigger-ipc'
-import { nativeCopyStore } from './native-copy-store'
+import { nativeCopyStore } from '../core/native-copy-store'
 
 // Fail before Electron initializes any persistent service. mirror-publication loads node:sqlite
 // lazily so an incompatible embedded runtime reaches this clear diagnostic instead of an import

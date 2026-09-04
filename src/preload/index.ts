@@ -62,6 +62,7 @@ import type { HomeAssistantClientEvent } from '../shared/home-assistant'
 import type { CloudflareTunnelProgress, CloudflareTunnelRouteInput, CloudflareDnsAdoptionInput } from '../shared/cloudflare-tunnels'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
 import type { CdkDeployResult, CdkDiffResult, CdkOperationInput, CdkProjectInput, CdkSynthesisResult, CdkStatus, CdkTrustInput, CdkTrustReview } from '../shared/cdk'
+import type { PortalDoorApi } from '@shared/portal-door'
 import type { CloudflareApi, CloudflareCatalog, CloudflareExecutionProgress, CloudflareExecutionResult } from '../shared/cloudflare-zero-trust'
 import { CLOUDFLARE_TUNNEL_ACCOUNTS_CHANNEL } from '../shared/cloudflare-tunnel'
 import type { GitHubApiRequest, GitHubApiProgress } from '../shared/github-api'
@@ -248,6 +249,16 @@ const api: NodeTerminalApi = {
     completeOAuth: (callbackUrl: string) => ipcRenderer.invoke(IPC.providerCompleteOAuth, callbackUrl),
     removeAccount: (accountId: string) => ipcRenderer.invoke(IPC.providerRemoveAccount, accountId)
   },
+  // The core service (src/core/portal-door-service.ts) and PortalDoorApi both survived the
+  // merge; only this bridge member was dropped, leaving PortalDoorEntryPopover unreachable.
+  portalDoor: {
+    list: (projectId: string) => ipcRenderer.invoke(IPC.portalDoorList, projectId),
+    configure: (input) => ipcRenderer.invoke(IPC.portalDoorConfigure, input),
+    remove: (input) => ipcRenderer.invoke(IPC.portalDoorRemove, input),
+    status: (input) => ipcRenderer.invoke(IPC.portalDoorStatus, input),
+    verify: (input) => ipcRenderer.invoke(IPC.portalDoorVerify, input),
+    relock: (input) => ipcRenderer.invoke(IPC.portalDoorRelock, input)
+  } satisfies PortalDoorApi,
   cloudflareTunnels: {
     zones: (accountId: string) => ipcRenderer.invoke(IPC.cloudflareTunnelZones, accountId),
     inventory: (accountId: string, zoneId?: string) => ipcRenderer.invoke(IPC.cloudflareTunnelInventory, accountId, zoneId),
