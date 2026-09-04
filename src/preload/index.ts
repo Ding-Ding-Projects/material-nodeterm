@@ -396,9 +396,9 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.worktreeMaterializeShared, projectId, worktreePath)
   },
   dialog: {
-    selectFolder: () => ipcRenderer.invoke(IPC.dialogSelectFolder),
-    selectFile: () => ipcRenderer.invoke(IPC.dialogSelectFile),
-    selectFiles: () => ipcRenderer.invoke(IPC.dialogSelectFiles)
+    selectFolder: (options) => ipcRenderer.invoke(IPC.dialogSelectFolder, options),
+    selectFile: (options) => ipcRenderer.invoke(IPC.dialogSelectFile, options),
+    selectFiles: (options) => ipcRenderer.invoke(IPC.dialogSelectFiles, options)
   },
   settings: {
     load: () => ipcRenderer.invoke(IPC.settingsLoad),

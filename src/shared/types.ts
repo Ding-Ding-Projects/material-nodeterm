@@ -1879,15 +1879,37 @@ export interface WorktreeApi {
   ): Promise<import('./worktree').SharedPathResult[]>
 }
 
+/**
+ * Labelling for a native picker.
+ *
+ * Every picker used to open as the OS's bare default — window title "Open", button "Open", no
+ * filters — whatever the flow that opened it was called. A picker raised BY A SAVE therefore
+ * announced itself as an Open dialog, which is exactly how "Save project as one file with media…"
+ * read as the wrong dialog (issue: "trying to save as one file and opens instead"). A caller whose
+ * surrounding action is not literally "open a file" passes its own title and button label so the
+ * dialog says what it is for.
+ *
+ * Every field is optional and every one is validated in main before it reaches Electron: this
+ * crosses the preload bridge, so a renderer cannot hand the OS an arbitrary object.
+ */
+export interface NativePickerOptions {
+  /** Window title, e.g. "Choose media files to pack into the project file". */
+  title?: string
+  /** Confirm-button label, e.g. "Pack these" — never left as the default "Open" for a save flow. */
+  buttonLabel?: string
+  /** Extension filters. Ignored by the folder picker, which has nothing to filter. */
+  filters?: readonly { name: string; extensions: readonly string[] }[]
+}
+
 export interface DialogApi {
   /** Opens a native folder picker; returns the chosen path or null if cancelled. */
-  selectFolder(): Promise<string | null>
+  selectFolder(options?: NativePickerOptions): Promise<string | null>
   /** Opens a native file picker; returns the chosen path or null if cancelled. */
-  selectFile(): Promise<string | null>
+  selectFile(options?: NativePickerOptions): Promise<string | null>
   /** Opens a native MULTI-file picker (for the converter's "Add files…"); returns the chosen paths,
    *  null if cancelled. Electron only — the Server Edition has no native dialog and returns null;
    *  its FileConverterPanel uses a plain `<input type="file" multiple>` instead. */
-  selectFiles(): Promise<string[] | null>
+  selectFiles(options?: NativePickerOptions): Promise<string[] | null>
 }
 
 export interface ClipboardWriteOptions {
