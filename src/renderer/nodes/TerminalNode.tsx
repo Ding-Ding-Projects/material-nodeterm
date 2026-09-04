@@ -5549,6 +5549,22 @@ export function TerminalNode({
               <MaterialSymbol name="link" size={16} />
             </button>
           )}
+          {contextLinkCapable && (
+            <button
+              className="term-node__link-agent nodrag"
+              type="button"
+              title={profileText('agentLink.headerAction.title', 'Link to another agent')}
+              aria-label={profileText('agentLink.headerAction.aria', 'Link {title} to another agent', {
+                title: String(data.title || 'agent')
+              })}
+              onClick={(event) => {
+                event.stopPropagation()
+                requestAgentLinkPicker(id, event.currentTarget)
+              }}
+            >
+              <MaterialSymbol name="link" size={16} />
+            </button>
+          )}
           {editingTitle ? (
             <Input
               className="mdx-input--bare term-node__title nodrag"

@@ -140,11 +140,10 @@ interface ArchiveManifestV2 {
 export interface ProjectArchiveExportResult {
   bytes: Buffer
   contents: ProjectArchiveContents
-  archiveVersion?: 3
 }
 
 export interface ProjectArchiveInspection {
-  archiveVersion: 1 | 2 | 3
+  archiveVersion: 1 | 2
   /** True when the archive carries working files / a repository and import therefore needs an
    *  empty destination folder before it can proceed. */
   needsDestination: boolean
@@ -153,7 +152,7 @@ export interface ProjectArchiveInspection {
 
 export interface ProjectArchiveImportResult {
   project: Project
-  archiveVersion: 1 | 2 | 3
+  archiveVersion: 1 | 2
   contents: ProjectArchiveContents
   restoredTo?: string
   /** The password-manager vault the archive carried for a FOLDER-LESS project, verbatim. The
