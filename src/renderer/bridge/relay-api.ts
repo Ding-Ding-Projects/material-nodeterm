@@ -244,6 +244,12 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // Relay v1 has no remote-routed manager channel, so refuse rather than contacting the viewer.
     cloudflareZeroTrust: stub.cloudflareZeroTrust,
     ollama: stub.ollama,
+    // AWS identity is machine-local to the host that owns the credentials. Relay tabs refuse it
+    // rather than accidentally running profile, SSO-login or credential-process commands against
+    // the viewer's machine. A mutually approved peer gets shell access to the SHARED PROJECT, not
+    // to the viewing machine's cloud identity, so none of these channels is in the
+    // `src/main/relay-rpc-policy.ts` allowlist and none should be added there.
+    awsProfileManager: stub.awsProfileManager,
     repositoryGraph: stub.repositoryGraph,
     // Trigger execution is host-local and is not routed by relay v1. Keep the explicit refusal
     // beside the other host-local managers so a viewer cannot run a payload on itself.

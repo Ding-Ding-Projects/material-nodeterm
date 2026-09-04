@@ -879,6 +879,23 @@ export function buildStubApi(): Omit<
       chatStop: U('ollama.chatStop'),
       onChatStream: noopUnsub
     },
+    // AWS identity manager. Explicitly refused per member rather than omitted: an absent optional
+    // member and a refusing one look identical to the type checker, but only the refusal tells the
+    // caller which surface said no. See the relay note in relay-api.ts for why the relay keeps it.
+    awsProfileManager: {
+      profiles: U('awsProfileManager.profiles'),
+      saveProfile: U('awsProfileManager.saveProfile'),
+      removeProfile: U('awsProfileManager.removeProfile'),
+      refresh: U('awsProfileManager.refresh'),
+      ssoLogin: U('awsProfileManager.ssoLogin'),
+      assumeRole: U('awsProfileManager.assumeRole'),
+      callerIdentity: U('awsProfileManager.callerIdentity'),
+      permissions: U('awsProfileManager.permissions'),
+      regions: U('awsProfileManager.regions'),
+      setEndpoint: U('awsProfileManager.setEndpoint'),
+      clearMachineCache: U('awsProfileManager.clearMachineCache'),
+      trustCredentialProcess: U('awsProfileManager.trustCredentialProcess')
+    },
     repositoryGraph: {
       inspect: () => unsupported('repository graph'),
       refresh: () => unsupported('repository graph'),

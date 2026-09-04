@@ -11,6 +11,14 @@ import type { AwsLegacyIdentityManagerApi } from '../../shared/aws'
  *  Sibling of `register-ipc.ts`, which is owned by the unrelated AWS OPERATIONS lineage
  *  (catalog/inventory/execute). The two lineages share the `aws:` channel prefix but no key and
  *  no channel string; keeping the registrars separate keeps that boundary visible. */
+
+/*  NAMING, deliberately: do NOT rename this back to `registerAwsIdentityIpc`, the name it had in
+ *  its origin commit 1204916b9. `src/core/aws-identity.ts` -- a THIRD, unrelated AWS lineage --
+ *  already exports that name and is imported under it by BOTH `src/main/index.ts` and
+ *  `src/server/handlers/index.ts`. Restoring the old name does not merely collide: it silently
+ *  re-resolves those shells' EXISTING two-argument `registerAwsIdentityIpc(platform, {...})` call
+ *  sites to this one-argument function. That is a duplicate which CHANGES BEHAVIOUR rather than
+ *  failing loudly, so the distinct name is load-bearing. */
 export function registerAwsProfileManagerIpc(core: CorePlatform): { manager: AwsLegacyIdentityManagerApi } {
   const manager = new AwsProfileManager(core.userDataDir)
   core.handle(IPC.awsProfiles, () => manager.profiles())
