@@ -115,6 +115,7 @@ import { AtomicJsonArrayStore } from '../core/atomic-json-store'
 import { TimerOccurrenceService } from '../core/timer-service'
 import type { TimerOccurrence } from '../shared/timer'
 import { registerSpeechIpc } from '../core/speech/register-ipc'
+import { registerAwsIpc } from '../core/aws/register-ipc'
 import { isPremium, getStoredEntitlement } from '../core/license'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
 import { TriggerArmStore } from '../core/trigger-arm-store'
@@ -308,6 +309,7 @@ export async function startServer(
   // Team presence (hello / cursor / focus / chat). The hub itself is joined per WebSocket in
   // ws.ts; this only registers the RPC surface. Presence is transient — nothing is persisted.
   presenceHub.registerIpc()
+  registerAwsIpc(platform)
 
   // WS backpressure: when a connection's socket send buffer fills while streaming pty
   // output, pause that tmux client so the OS pipe applies real backpressure (resumes below
