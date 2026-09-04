@@ -368,6 +368,13 @@ The canvas also includes a **Torrent Downloader** node for explicit local WebTor
 magnet or `.torrent` intake, safe destination selection, file-level metadata choices, live transfer
 progress, restart recovery, and a bounded per-task seeding policy.
 
+Hosted-service integrations share a portable backup and restore framework with version, edition,
+owner and resource compatibility checks, per-resource hashes, optional password encryption, atomic
+local archives, storage preflight, progress and cancellation, restore preview, two-key confirmation,
+and rollback hooks. Provider adapters and their user-facing controls are being added separately; see
+[the hosted-service backup documentation](./docs/features/integrations/hosted-service-backups.md)
+for the current boundary.
+
 **Group** nodes are real containers that nest inside each other and can bind to a git worktree, so
 every node created inside one inherits that worktree's directory. Quit the app and the persistent
 backend reattaches to the live session; reboot the machine and cold restore rebuilds the node,

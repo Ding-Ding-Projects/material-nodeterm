@@ -12,6 +12,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Managed Nextcloud, no socket](nextcloud-managed.md) | guided PostgreSQL, Redis, and Nextcloud web stack with persistent local data, secret files, loopback binding, update, backup, restore, and rollback sequencing |
 | [Home Assistant client](home-assistant-client.md) | multi-instance machine-local registration with bounded REST and WebSocket entity discovery |
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
+| [Shared hosted-service backups](hosted-service-backups.md) | shared archive and restore contract implemented; provider adapters and verification pending |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |
 | [Special-universe Shop nodes](aws-universe-shop.md) | implemented deterministic, scope-bound Shop coordinator and catalog surface; generic AWS operations now route through the shared manager |
 | [AWS CDK manager](cdk-manager.md) | local folder picker, trust review, synth, diff, and reviewed deploy implementation; focused verification remains unrun in the ultra-speed lane |
