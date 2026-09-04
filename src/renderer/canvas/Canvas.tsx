@@ -6261,6 +6261,14 @@ export function Canvas() {
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
 
+  const addAwsUniverse = useCallback(
+    (center?: { x: number; y: number }) => {
+      setNodes((ns) => [...ns, createAwsUniverseNode(ns.length, center ?? emptyNodePos())])
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos]
+  )
+
   const addSticky = useCallback(
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
@@ -19724,6 +19732,7 @@ export function Canvas() {
               profileTerminalCreationHandler(addTerminal, profileId)()
             }
             onAddSticky={addSticky}
+            onAddAwsUniverse={addAwsUniverse}
             onAddAuthenticator={() => addAuthenticator()}
             onAddLoop={addNativeLoop}
             onAddTimer={() => addTimer()}

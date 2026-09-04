@@ -146,6 +146,7 @@ const TIMER_SIZE = { width: 360, height: 300 }
  */
 const SERVICE_CONSOLE_SIZE = { width: 720, height: 520 }
 const SERVICE_SUMMARY_SIZE = { width: 520, height: 400 }
+const AWS_UNIVERSE_SIZE = { width: 760, height: 560 }
 
 /** Height of a non-agent node when collapsed. */
 export const COLLAPSED_HEIGHT = 40

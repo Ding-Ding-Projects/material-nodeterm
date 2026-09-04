@@ -21,6 +21,10 @@ schema exists. Multiverse child canvases carry their own node content, viewport,
 without turning children into project tabs. A universe scope is either `multiverse` or
 `aws-universe`; the root scope is `root`.
 
+AWS Universe nodes additionally preserve their safe universe id, `aws-only` scope, region and
+service intent, and deterministic entry and return door ids. Machine-local AWS context is not a
+node field and is never projected.
+
 ## Excluded data
 
 Working directories, machine and project identities, credentials, account bindings, service

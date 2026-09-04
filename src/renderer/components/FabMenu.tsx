@@ -39,6 +39,7 @@ export interface FabMenuProps {
   onOpenFile: () => void
   onAddRemote: () => void
   onConnectRemote: () => void
+  onAddAwsUniverse?: () => void
 }
 
 /**
@@ -66,7 +67,8 @@ export function FabMenu({
   onAddAgent,
   onOpenFile,
   onAddRemote,
-  onConnectRemote
+  onConnectRemote,
+  onAddAwsUniverse
 }: FabMenuProps) {
   const customAgents = useSettings((s) => s.settings.customAgents)
   const disabledAgents = useSettings((s) => s.settings.disabledAgents)
