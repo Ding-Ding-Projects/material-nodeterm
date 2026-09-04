@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AWS service managers | nodeterm</title>
+  <link rel="stylesheet" href="./assets/docs.css">
+</head>
+<body>
+  <main class="docs-page">
+    <p><a href="./index.html">Documentation</a> / Integrations</p>
+    <h1>AWS service managers</h1>
+    <p>The AWS Universe includes typed managers for S3, EC2, IAM, STS, Lambda, CloudWatch, and Logs.
+      Each operation uses a guided form and the shared schema executor. There is no raw shell or
+      raw request editor fallback.</p>
+    <h2>What the managers provide</h2>
+    <ul>
+      <li>Searchable operation catalogs with typed enums, switches, bounded numbers, date-time controls,
+        and native file pickers.</li>
+      <li>Permission checks before execution, exact disabled-state reasons, and retry handling limited
+        to transient service failures.</li>
+      <li>Bounded pagination, waiters, streaming, progress, cancellation, and per-item bulk outcomes.</li>
+      <li>Destructive previews with exact affected resources and a single-use expiring confirmation.</li>
+      <li>Portable intent that omits profiles, credentials, tokens, local file handles, caches, and host
+        paths. Import does not call AWS.</li>
+    </ul>
+    <h2>Verification status</h2>
+    <p>The implementation is present in <code>src/core/aws</code> and
+      <code>src/shared/aws-managers.ts</code>. Tests, packaging, runtime interaction, and captures
+      remain pending for issue #46, so this page does not claim runtime verification.</p>
+    <p>See the full <a href="https://github.com/Ding-Ding-Projects/material-nodeterm/blob/main/docs/features/integrations/aws-managers.md">AWS manager article</a>
+      for service coverage, failure behavior, privacy, and portability details.</p>
+  </main>
+</body>
+</html>

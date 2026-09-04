@@ -42,6 +42,10 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 
 Planned, not yet researched here:
 
+- **AWS managers** — the typed core catalog and shared executor are implemented in
+  `src/core/aws`; canvas AWS Universe and Shop wiring, runtime verification, and captures remain
+  pending.
+
 - **Proxmox** — a MANAGER for an existing instance. It is a bare-metal hypervisor distribution, so
   there is nothing to host from a right-click; the node drives its API.
 - **Docker** — the highest-value angle is exec-into-a-container as a real terminal node, since that
