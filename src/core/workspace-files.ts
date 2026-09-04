@@ -530,6 +530,43 @@ function validPortals(value: unknown): value is ProjectPortalState[] {
 }
 
 /**
+ * Validate child-canvas metadata at the shared-file boundary. A malformed portal record must
+ * degrade to no special canvas, never create a route that can skip its matching door.
+ */
+export function validProjectCanvases(v: unknown): ProjectCanvas[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const out: ProjectCanvas[] = []
+  const ids = new Set<string>()
+  for (const value of v) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue
+    const c = value as Partial<ProjectCanvas>
+    if (
+      typeof c.id !== 'string' || !c.id || ids.has(c.id) ||
+      (c.scope !== 'multiverse' && c.scope !== 'aws-universe') ||
+      typeof c.parentCanvasId !== 'string' || !c.parentCanvasId ||
+      typeof c.title !== 'string' || !c.title || typeof c.order !== 'number' || !Number.isFinite(c.order)
+    ) continue
+    if (c.viewport !== undefined) {
+      const vp = c.viewport
+      if (!vp || !Number.isFinite(vp.x) || !Number.isFinite(vp.y) || !Number.isFinite(vp.zoom) || vp.zoom <= 0) continue
+    }
+    if ((c.entryDoorPairId !== undefined && (typeof c.entryDoorPairId !== 'string' || !c.entryDoorPairId)) || (c.returnDoorPairId !== undefined && (typeof c.returnDoorPairId !== 'string' || !c.returnDoorPairId))) continue
+    ids.add(c.id)
+    out.push({
+      id: c.id,
+      scope: c.scope,
+      parentCanvasId: c.parentCanvasId,
+      title: c.title,
+      order: c.order,
+      ...(c.viewport ? { viewport: { x: c.viewport.x, y: c.viewport.y, zoom: c.viewport.zoom } } : {}),
+      ...(c.entryDoorPairId ? { entryDoorPairId: c.entryDoorPairId } : {}),
+      ...(c.returnDoorPairId ? { returnDoorPairId: c.returnDoorPairId } : {})
+    })
+  }
+  return out.length ? out : undefined
+}
+
+/**
  * The shared file plus this machine's own half of the project.
  *
  * `base.id` is REQUIRED and never defaulted from the file: identity comes from the index entry

@@ -55,6 +55,9 @@ export interface PortableCanvasV3 {
   order: number
   viewport?: Viewport
   nodeIds: string[]
+  /** The matching entry/return pair for this canvas, when one exists. */
+  entryDoorPairId?: string
+  returnDoorPairId?: string
 }
 
 export interface PortableCanvasNodeV3 {
@@ -207,6 +210,8 @@ const ALLOWED_ALARM_OCCURRENCE = new Set(['id', 'alarmId', 'scheduledAt', 'statu
 const ALLOWED_HOME_ASSISTANT_CONTROL = new Set(['entityHint', 'domainHint', 'serviceHint', 'controlMode'])
 const ALLOWED_RELATIONSHIP = new Set(['id', 'kind', 'canvasId', 'source', 'target', 'order'])
 const ALLOWED_APPEARANCE = new Set(['theme', 'density', 'seedColor', 'fontFamily', 'fontSize', 'fontWeight', 'motion'])
+const ALLOWED_NAVIGATION = new Set(['currentCanvasId', 'parentCanvasId', 'entryDoorNodeId', 'returnDoorNodeId', 'parentViewport', 'parentFocusNodeId', 'trail'])
+const ALLOWED_NAV_FRAME = new Set(['canvasId', 'entryDoorNodeId', 'returnDoorNodeId', 'viewport', 'focusNodeId'])
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

@@ -3445,7 +3445,7 @@ export function Canvas() {
     }, 0)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProjectId, reloadNonce, setNodes, setViewport])
+  }, [activeProjectId, portalCanvasId, reloadNonce, setNodes, setViewport])
 
   // Keep-alive pool hygiene: a PERMANENTLY deleted project's ghosts must die now, not at the next
   // switch (an invisible page is still a live Chromium process). Keyed on the id signature — the
@@ -3657,6 +3657,16 @@ export function Canvas() {
     // ids still agree — but an autosave timer armed under the previous project now skips instead of
     // writing its nodes under the new project's id (field bug 2026-08-10). The tested commit seam
     // carries both edge refs too; a peer edge must reach the same whole-file snapshot as the nodes.
+    const visibleNodes = flowToNodeStates(nodesRef.current)
+    const activeProject = store.getProject(store.activeProjectId)
+    // Child canvases share one project record. Merge only the visible canvas slice so leaving a
+    // child never replaces the parent's nodes, and leaving the root never drops child content.
+    const nodes = activeProject
+      ? [
+          ...activeProject.nodes.filter((node) => (node.canvasId ?? 'root') !== portalCanvasId),
+          ...visibleNodes
+        ]
+      : visibleNodes
     commitActiveCanvas(
       {
         nodesProjectId: nodesProjectIdRef.current,
@@ -10801,6 +10811,39 @@ export function Canvas() {
     [commitActiveToStore, exitDrill, writeDisk]
   )
 
+  const activatePortalDoor = useCallback(
+    (doorNodeId: string, door: import('@shared/types').PortalDoor) => {
+      const project = useProjects.getState().getProject(useProjects.getState().activeProjectId)
+      if (!project) return
+      const nav = usePortalNavigation.getState()
+      const result = door.direction === 'entry'
+        ? nav.enter(project, doorNodeId, viewportRef.current, focusedId ?? undefined)
+        : nav.exit(project, doorNodeId)
+      if (!result.ok) {
+        setNotice({ kind: 'error', text: `This door cannot open its matched canvas (${result.reason ?? 'invalid topology'}).` })
+        return
+      }
+      // Commit the visible slice before changing the route. The child canvas is not a tab and its
+      // navigation is not reachable through browser history or a generic route command.
+      commitActiveToStore()
+      void writeDisk()
+      if (door.direction === 'return') {
+        const restored = result.snapshot?.parentViewport
+        if (restored) {
+          viewportRef.current = restored
+          void setViewport(restored)
+        }
+        if (result.snapshot?.parentFocusNodeId) pendingFocusRef.current = result.snapshot.parentFocusNodeId
+      }
+    },
+    [commitActiveToStore, focusedId, setNotice, setViewport, writeDisk]
+  )
+
+  useEffect(() => {
+    setPortalDoorActionHandler(activatePortalDoor)
+    return () => setPortalDoorActionHandler(null)
+  }, [activatePortalDoor])
+
   /**
    * `app.reopenLastClosed` (Ctrl+Shift+T): pops the shared close-history stack and reopens a
    * project tab or recreates a deleted node batch — whichever was closed more recently. Skips
@@ -17361,12 +17404,16 @@ export function Canvas() {
   // serialized nodes, whose TerminalNodes reattach to the surviving tmux sessions (or cold-restore).
   const reopenProject = useCallback(
     (id: string) => {
+      if (usePortalNavigation.getState().current(useProjects.getState().activeProjectId).currentCanvasId !== 'root') {
+        setNotice({ kind: 'error', text: 'Return through the matching portal door before reopening a project.' })
+        return
+      }
       commitActiveToStore()
       useProjects.getState().reopenProject(id)
       setWelcomeOpen(false)
       void writeDisk()
     },
-    [commitActiveToStore, writeDisk]
+    [commitActiveToStore, portalCanvasId, setNotice, writeDisk]
   )
 
   // ---- presence travel ("go to where my teammate is", from the facepile) ----
@@ -18072,20 +18119,22 @@ export function Canvas() {
     )
 
     const store = useProjects.getState()
-    store.projects
-      // Skip unavailable projects: activating one lets edits commit to the store but they're
-      // dropped on save (the ref emits header-only), so switching there silently loses work.
-      // The TabBar already guards its own click; this covers the palette (⌘K) path.
-      .filter((p) => p.id !== store.activeProjectId && !p.unavailable)
-      .forEach((p) =>
-        cmds.push({
-          id: `proj-${p.id}`,
-          label: `Switch to ${p.name}`,
-          hint: 'project',
-          icon: <IconSwitch />,
-          run: () => switchProject(p.id)
-        })
-      )
+    if (portalCanvasId === 'root') {
+      store.projects
+        // Skip unavailable projects: activating one lets edits commit to the store but they're
+        // dropped on save (the ref emits header-only), so switching there silently loses work.
+        // The TabBar already guards its own click; this covers the palette (⌘K) path.
+        .filter((p) => p.id !== store.activeProjectId && !p.unavailable)
+        .forEach((p) =>
+          cmds.push({
+            id: `proj-${p.id}`,
+            label: `Switch to ${p.name}`,
+            hint: 'project',
+            icon: <IconSwitch />,
+            run: () => switchProject(p.id)
+          })
+        )
+    }
     const cs = useAgentStatus.getState()
     // Labels replaced free-text tags — search matches label NAMES now (unified system).
     const searchKanban = useProjects.getState().getProject(useProjects.getState().activeProjectId)?.kanban
@@ -18414,10 +18463,22 @@ export function Canvas() {
           onSwitch={switchProject}
           onReconnect={reconnectRelay}
           onReorder={reorderProject}
-          onOpenWelcome={() => setWelcomeOpen(true)}
+          onOpenWelcome={() => {
+            if (usePortalNavigation.getState().current(useProjects.getState().activeProjectId).currentCanvasId !== 'root') {
+              setNotice({ kind: 'error', text: 'Return through the matching portal door before leaving this canvas.' })
+              return
+            }
+            setWelcomeOpen(true)
+          }}
           onRename={renameProject}
           onSetFolder={setProjectFolder}
-          onCloseProject={closeProject}
+          onCloseProject={(id) => {
+            if (usePortalNavigation.getState().current(useProjects.getState().activeProjectId).currentCanvasId !== 'root') {
+              setNotice({ kind: 'error', text: 'Return through the matching portal door before closing this project.' })
+              return
+            }
+            closeProject(id)
+          }}
           onRemoteAccess={() => setRemoteDialogOpen(true)}
           onSetDefaultAccount={setProjectDefaultAccount}
           onSetDefaultPermissionMode={setProjectDefaultPermissionMode}

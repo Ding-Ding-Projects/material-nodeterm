@@ -499,6 +499,57 @@ export const SERVICE_NODE_KINDS = [
   'cloudflare-core-managers'
 ] as const
 
+/** The portable canvas scopes that may be nested below a project root. */
+export type CanvasScope = 'root' | 'multiverse' | 'aws-universe'
+
+/** A door's direction is part of the persisted contract, not inferred from its label. */
+export type PortalDoorDirection = 'entry' | 'return'
+
+/**
+ * Safe, portable identity of one portal door. The pair id is deliberately shared by the two
+ * physical doors, while each door names the canvas it opens. No host, credential, process, or
+ * browser state belongs here.
+ */
+export interface PortalDoor {
+  doorPairId: string
+  direction: PortalDoorDirection
+  targetCanvasId: string
+}
+
+/** A child canvas carried by a project file and by schema 3 portable projection. */
+export interface ProjectCanvas {
+  id: string
+  scope: CanvasScope
+  parentCanvasId: string
+  title: string
+  order: number
+  viewport?: Viewport
+  entryDoorPairId?: string
+  returnDoorPairId?: string
+}
+
+/** The local navigation snapshot. It is safe to persist in a portable projection, but the live
+ * controller always returns to root on application relaunch rather than reopening a child behind a
+ * missing door interaction. */
+export interface PortalNavigationSnapshot {
+  currentCanvasId: string
+  parentCanvasId?: string
+  entryDoorNodeId?: string
+  returnDoorNodeId?: string
+  parentViewport?: Viewport
+  parentFocusNodeId?: string
+  /** Parent frames, oldest first, so nested special canvases unwind door-by-door. */
+  trail?: PortalNavigationFrame[]
+}
+
+export interface PortalNavigationFrame {
+  canvasId: string
+  entryDoorNodeId?: string
+  returnDoorNodeId?: string
+  viewport?: Viewport
+  focusNodeId?: string
+}
+
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
 
 /** True when `kind` is one of the service family. A `Set` rather than `in`, for the same reason
