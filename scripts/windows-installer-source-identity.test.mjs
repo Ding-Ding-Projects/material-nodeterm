@@ -70,16 +70,19 @@ describe('resolveSourceIdentity', () => {
       rmSync(stray, { force: true })
     }
   })
-  it('refuses any own signAndEditExecutable property and accepts omission', async () => {
+  it('requires signAndEditExecutable false and rejects enabled or missing values', async () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), 'nodeterm-release-identity-'))
     const fixturePath = join(fixtureRoot, 'package.json')
     try {
       const baseline = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'))
-      for (const value of [true, false]) {
+      for (const mutate of [
+        (fixture) => { fixture.build.win.signAndEditExecutable = true },
+        (fixture) => { delete fixture.build.win.signAndEditExecutable },
+      ]) {
         const fixture = structuredClone(baseline)
-        fixture.build.win.signAndEditExecutable = value
+        mutate(fixture)
         writeFileSync(fixturePath, JSON.stringify(fixture))
-        await expect(readReleaseIdentity(fixturePath)).rejects.toThrow(/signAndEditExecutable must be omitted/)
+        await expect(readReleaseIdentity(fixturePath)).rejects.toThrow(/signAndEditExecutable/)
       }
       writeFileSync(fixturePath, JSON.stringify(baseline))
       await expect(readReleaseIdentity(fixturePath)).resolves.toBeDefined()

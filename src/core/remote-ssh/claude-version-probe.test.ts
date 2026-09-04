@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { isSupportedClaudeVersion } from '../claude-accounts-core'
 import { supportsAutoPermissionMode } from '../../shared/agents/config'
 import {
   CLAUDE_VERSION_END,
@@ -54,14 +53,11 @@ describe('parseClaudeVersionProbe', () => {
     expect(parseClaudeVersionProbe(null)).toBeNull()
   })
 
-  it('banner-contaminated output never reports auto support, nor a supported account CLI', () => {
-    // Old remote CLI (2.0.30) behind an Ubuntu banner: the ONLY version the consumers may see is
-    // claude's own, so both gates say "old" — no `--permission-mode auto`, keychain warning kept.
+  it('banner-contaminated output never reports auto support', () => {
+    // Old remote CLI (2.0.30) behind an Ubuntu banner: only the CLI's own version may decide.
     const noisy = `Welcome — Ubuntu 22.04.3 LTS\n${wrap('2.0.30 (Claude Code)')}`
     const version = parseClaudeVersionProbe(noisy)
     expect(supportsAutoPermissionMode(version)).toBe(false)
-    expect(isSupportedClaudeVersion(version ?? '')).toBe(false)
-
     // …and a banner with no claude output at all parses to null, which every caller treats as
     // "unknown" (fail-open: no flag).
     expect(supportsAutoPermissionMode(parseClaudeVersionProbe('Welcome — Ubuntu 22.04.3 LTS'))).toBe(

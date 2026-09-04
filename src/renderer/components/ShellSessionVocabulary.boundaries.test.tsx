@@ -7,11 +7,9 @@ import { mapTemplate } from './UpdateCard'
 import { phonePairCodeLabel } from './PhonePairPopover'
 import { renderStatusSummary, statusSearchCorpus } from './StatusSurface'
 import { vocabularyProvenanceLine } from './WelcomeScreen'
-import { ptyPressureCopy } from './PtyPressureBanner'
 import { UpdateCard } from './UpdateCard'
 import { StatusSurface } from './StatusSurface'
 import { PhonePairPopover } from './PhonePairPopover'
-import { PtyPressureBanner } from './PtyPressureBanner'
 import { WelcomeScreen } from './WelcomeScreen'
 import { AnnouncementBanner } from './AnnouncementBanner'
 import { ResumeCard } from './ResumeCard'
@@ -126,21 +124,6 @@ describe('shell and session vocabulary boundaries', () => {
     expect(line).toContain('this build carries no build stamp')
   })
 
-  it('keeps measured PTY counts factual while exposing typed authored body parts', () => {
-    const copy = ptyPressureCopy({ level: 'critical', usage: 509, ceiling: 511 })
-    expect(copy?.bodyParts.filter((part) => part.kind === 'factual').map((part) => part.text)).toEqual(['509', '511'])
-    expect(copy?.bodyParts.map((part) => part.text).join('')).toContain('(509 of 511 pty devices)')
-    expect(copy?.body).toContain('(509 of 511 pty devices)')
-  })
-
-  it('does not allow vocabulary terms that look like measurements to rewrite the PTY facts', () => {
-    const copy = ptyPressureCopy({ level: 'elevated', usage: 42, ceiling: 100 })
-    const mapper = (text: string): string => text.replace('42', 'four hundred')
-    const rendered = copy?.bodyParts.map((part) => (part.kind === 'authored' ? mapper(part.text) : part.text)).join('')
-    expect(rendered).toContain('(42 of 100 pty devices)')
-    expect(rendered).not.toContain('four hundred')
-  })
-
   it('maps UpdateCard copy and immediately restores shipped wording when School mode changes', async () => {
     let onAvailable: ((info: unknown) => void) | undefined
     const noopSubscription = () => () => {}
@@ -202,20 +185,6 @@ describe('shell and session vocabulary boundaries', () => {
     act(() => useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' }))
     expect(document.body.querySelector('.phone-pair__title')?.textContent).toContain('Open nodeterm on another device')
     expect(document.body.textContent).toContain('123456')
-  })
-
-  it('maps PTY authored copy while keeping the measured numbers unchanged', () => {
-    let listener: ((reading: { level: 'critical'; usage: number; ceiling: number }) => void) | undefined
-    ;(window as any).nodeTerminal = {
-      onPtyPressure: (callback: typeof listener) => { listener = callback; return () => {} }
-    }
-    usePersonalVocabulary.setState({ entries: { 'Out of terminal capacity': 'No headroom' }, status: 'loaded', entryCount: 1 })
-    mount(<PtyPressureBanner isMac={false} onError={() => {}} />)
-    act(() => listener?.({ level: 'critical', usage: 42, ceiling: 100 }))
-    expect(host?.querySelector('.announce-banner__title')?.textContent).toBe('No headroom')
-    expect(host?.textContent).toContain('(42 of 100 pty devices)')
-    act(() => useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' }))
-    expect(host?.querySelector('.announce-banner__title')?.textContent).toBe('Out of terminal capacity')
   })
 
   it('maps Welcome copy and live School mode changes without remapping project data', () => {

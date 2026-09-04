@@ -62,10 +62,7 @@ export const WEBGL_BUDGET = 12
 /** Live ceiling — `WEBGL_BUDGET` unless the shell raised it (see `setWebglBudget`). */
 let budget = WEBGL_BUDGET
 
-/** Master switch (Settings → the GPU-terminal-rendering toggle). When false, the coordinator
- *  grants NOTHING and every terminal stays on xterm's DOM renderer — an escape hatch for machines
- *  where many live WebGL contexts destabilize the OS compositor (observed as whole-window flicker
- *  on some macOS GPUs). Default on; `setWebglEnabled` reclaims/re-grants live when it flips. */
+/** Master switch. When false, every terminal stays on xterm's DOM renderer. */
 let enabled = true
 
 /**
@@ -82,8 +79,7 @@ export function setWebglBudget(n: number): void {
  * Turn GPU (WebGL) terminal rendering on or off globally. OFF reclaims every currently-held
  * context immediately (each client falls back to xterm's DOM renderer) and blocks all future
  * grants; ON re-attempts a grant for every visible client, budget-gated as usual. Idempotent, and
- * safe to call before any client registers (boot). This is the user-facing escape hatch for the
- * macOS compositor-flicker case — see `enabled`.
+ * safe to call before any client registers at boot.
  */
 export function setWebglEnabled(on: boolean): void {
   if (enabled === on) return

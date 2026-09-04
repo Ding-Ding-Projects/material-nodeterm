@@ -353,7 +353,7 @@ export class ScheduledSettingsService {
   private async fetchHa(rule: ScheduleRule, owner: InFlightRefresh): Promise<HaFetchResult | null> {
     if (rule.source.kind !== 'home-assistant') return null
     const token = await this.dependencies.getHomeAssistantToken(rule.id)
-    // A Clear/retarget can finish while an OS keychain read is pending. Check ownership BEFORE
+    // A clear or retarget can finish while an OS credential-vault read is pending. Check ownership before
     // putting the recovered bearer on a network request, not merely after that request returns.
     if (!this.ownsRefresh(rule.id, owner)) return null
     if (!token) return { ok: false, error: 'No access token saved for this rule.' }

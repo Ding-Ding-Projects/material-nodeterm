@@ -17,8 +17,8 @@ import type { NormalizedAgentEvent } from '../../../shared/agents/normalize'
 let tmp = ''
 beforeAll(async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-oc-live-'))
-  // Spaced userDataDir — the "Application Support" shape the quoting exists for.
-  tmp = path.join(root, 'App Support', 'node-terminal')
+  // Spaced Linux Server Edition data directory, proving the quoting used by the endpoint writer.
+  tmp = path.join(root, 'server data', 'node-terminal')
   fs.mkdirSync(tmp, { recursive: true })
   resetPlatformForTests()
   initPlatform(fakePlatform({ userDataDir: tmp }))

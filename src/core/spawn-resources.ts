@@ -36,8 +36,8 @@ const NEAR_LIMIT = 16
  * These two numbers are the closest thing available, and they are cheap: a directory listing and a
  * field already inside Node's own report.
  *
- * `/dev/fd` is the descriptor list on macOS AND on Linux (where it is a symlink to
- * `/proc/self/fd`), which is why it is read directly rather than branched on platform. Note the
+ * `/dev/fd` is the descriptor list on Linux, commonly a symlink to `/proc/self/fd`, which is why
+ * it is read directly. Note the
  * listing itself holds a descriptor while it runs, so the count is honest to within one.
  *
  * Fail-open in every direction: this runs INSIDE an error path, and a diagnostic that throws would

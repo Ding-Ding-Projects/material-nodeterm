@@ -919,7 +919,7 @@ export class SshProjectManager {
     // Secretive without an `IdentityAgent` line). Masters authenticate against the app-private
     // agent (ssh-agent.ts), so the user's own agent is not consulted and no prompt can rescue it.
     // This is a HINT, not a retry: retrying on the ambient agent would spend a second failed login
-    // on every ordinary auth failure (launchd exports SSH_AUTH_SOCK on every Mac, empty or not),
+    // on every ordinary auth failure when the desktop exports SSH_AUTH_SOCK, empty or not,
     // and it would carry `AddKeysToAgent=yes` into the user's agent, which is the exact leak this
     // design closes. `IdentityAgent` in ~/.ssh/config overrides SSH_AUTH_SOCK and is the documented
     // setup for those tools, so the fix belongs in the user's config, not in a blind second attempt.
@@ -1082,7 +1082,7 @@ export class SshProjectManager {
       // alias) create different locks beside the same target and race. Basename makes them
       // converge without a realpath check that can itself go stale.
       const candidate = path.basename(finalPath).normalize('NFC')
-      const caseInsensitive = process.platform === 'win32' || process.platform === 'darwin'
+      const caseInsensitive = process.platform === 'win32'
       const normalized = caseInsensitive ? candidate.toLowerCase() : candidate
       const key = createHash('sha256').update(normalized).digest('hex').slice(0, 20)
       const lockPath = path.join(destDir, `.nodeterm-download-${key}.lock`)
@@ -1101,11 +1101,20 @@ export class SshProjectManager {
             typeof error === 'object' && error && 'code' in error
               ? String((error as { code: unknown }).code)
               : ''
-          // A failed read is not evidence of absence. Only lstat's ENOENT proves the directory
-          // entry is free; EACCES/EIO and unknown failures must refuse instead of authorizing an
-          // overwrite. In particular, lstat succeeds for a dangling symlink while access did not.
-          if (code === 'ENOENT') taken = false
-          else throw error
+          // A failed read is not evidence of absence. EACCES/EIO and unknown failures must refuse
+          // instead of authorizing an overwrite. On Windows, a dangling junction can make lstat
+          // return ENOENT even though the directory entry is still present. Re-read the parent
+          // directory in that case so the entry remains occupied; if it is absent there too, the
+          // candidate is genuinely free.
+          if (code === 'ENOENT') {
+            const entryName = path.basename(finalPath).normalize('NFC')
+            const normalizedEntryName = caseInsensitive ? entryName.toLowerCase() : entryName
+            const entries = await fs.readdir(path.dirname(finalPath))
+            taken = entries.some((entry) => {
+              const normalized = entry.normalize('NFC')
+              return (caseInsensitive ? normalized.toLowerCase() : normalized) === normalizedEntryName
+            })
+          } else throw error
         }
         if (taken) {
           await removeAtomic(lockPath)
@@ -2003,11 +2012,14 @@ export class SshProjectManager {
     if (!ACCOUNT_ID_RE.test(threadId)) throw new Error('Invalid Codex thread id')
     // The relative path is renderer/main-supplied but ends up as a remote absolute path, so it is
     // confined to `sessions/…` with no absolute segment and no `.`/`..`/empty component (traversal
-    // guard — the host layout U7 proves `sessions/` is a sibling of the socket under CODEX_HOME).
+    // guard, the host layout U7 proves `sessions/` is a sibling of the socket under CODEX_HOME).
+    // Test fixtures and renderer path APIs can use the local separator, but the remote host uses
+    // POSIX separators regardless of the desktop running this code.
+    const normalizedSessionsRelativePath = sessionsRelativePath.split('\\').join('/')
     if (
-      !sessionsRelativePath.startsWith('sessions/') ||
-      path.posix.isAbsolute(sessionsRelativePath) ||
-      sessionsRelativePath
+      !normalizedSessionsRelativePath.startsWith('sessions/') ||
+      path.posix.isAbsolute(normalizedSessionsRelativePath) ||
+      normalizedSessionsRelativePath
         .split('/')
         .some((segment) => !segment || segment === '.' || segment === '..')
     ) {
@@ -2018,7 +2030,7 @@ export class SshProjectManager {
     if (await this.remoteCodexThreadExists(c!.controlPath, accountId, threadId)) {
       return { imported: false }
     }
-    const target = `${remoteCodexHome(remoteHome, accountId)}/${sessionsRelativePath}`
+    const target = `${remoteCodexHome(remoteHome, accountId)}/${normalizedSessionsRelativePath}`
     const targetDir = target.slice(0, target.lastIndexOf('/'))
     const token = randomUUID()
     const stagingDir = `${remoteHome}/.nodeterm/codex-imports`
@@ -2082,13 +2094,12 @@ export class SshProjectManager {
 
   /**
    * Create a managed remote account's config dir on the host and merge the status hook into its
-   * `settings.json`. Returns the remote dir (`~/.nodeterm/claude-accounts/<id>`) + whether the
-   * remote claude CLI is new enough to scope credentials per config dir, or null when not connected.
+   * `settings.json`. Returns the remote directory, or null when not connected.
    */
   async remoteAccountAdd(
     projectId: string,
     accountId: string
-  ): Promise<{ configDir: string; versionSupported: boolean } | null> {
+  ): Promise<{ configDir: string } | null> {
     const c = this.conns.get(projectId)
     if (!c) return null
     const dir = remoteAccountConfigDir(accountId) // id-validated ~-relative path
@@ -2103,13 +2114,12 @@ export class SshProjectManager {
       await this.remoteHooks.installCanvasSkillIntoAccountDir(c.conn, c.controlPath, c.remoteHome, accountId)
       await this.remoteHooks.installContextLinkSkillIntoAccountDir(c.conn, c.controlPath, c.remoteHome, accountId)
     }
-    // One remote `claude --version` gates both the keychain-scoping answer (>= 2.1, fail-open true)
-    // AND the fullscreen-tui write (>= 2.1.89, write-if-absent) into the account dir.
+    // One remote version read gates the fullscreen-tui write into the account directory.
     const version = await this.remoteClaudeVersion(c.conn, c.controlPath)
     if (c.remoteHome && supportsFullscreenTui(version)) {
       await this.remoteHooks.ensureFullscreenTuiInAccountDir(c.conn, c.controlPath, c.remoteHome, accountId)
     }
-    return { configDir: dir, versionSupported: version ? isSupportedClaudeVersion(version) : true }
+    return { configDir: dir }
   }
 
   /** Read a managed remote account's `.claude.json` (login capture); null when not connected or the
@@ -2172,7 +2182,7 @@ export class SshProjectManager {
    * Best-effort `claude --version` ON THE REMOTE HOST. Null when it can't be determined.
    *
    * An ssh EXEC channel gets a non-interactive, non-login shell, whose rc file usually bails out
-   * early, so a claude installed via nvm/asdf/homebrew-on-PATH may be invisible to a plain
+   * early, so a CLI installed via a user-scoped version manager may be invisible to a plain
    * `claude --version`. The remote tmux session that actually RUNS the node uses a login shell, so
    * the probe tries that first and only then the bare command. A login shell also sources the
    * user's profile, whose STDOUT noise (banners, neofetch, …) would otherwise be parsed as the
@@ -2340,7 +2350,7 @@ const pendingPassphrasePrompts = new Map<string, (value: string | null) => void>
  * be delivered.
  *
  * The explicit getMainWindow() probe is the other half: sendToMain's optional chain silently
- * NO-OPS when there is no window at all (macOS close-to-dock, or before the first window exists),
+ * no-ops when there is no live window at all,
  * so without the probe this returned true for a send nobody received. That false "delivered" kept
  * promptForPassphrase's no-UI branch dead exactly when it was needed: with the window closed and
  * the watchdog respawning a master after a network drop, the prompt was "sent" to nothing and the
@@ -2442,7 +2452,7 @@ export function initSshProject(
   const scp = scpBin()
   // No window reference is threaded through here on purpose: every renderer push resolves the
   // live window AT SEND TIME (getMainWindow/sendToMain), because a captured BrowserWindow goes
-  // stale across a macOS close/reopen cycle (see main-window.ts).
+  // stale after window replacement (see main-window.ts).
   ipcMain.handle(IPC.sshPassphraseSubmit, (_e, requestId: string, value: string | null) =>
     resolvePassphrasePrompt(requestId, value)
   )
@@ -2550,7 +2560,7 @@ export function initSshProject(
     nodeTokenMinter: () => remoteNodeTokenMinter(),
     onStatus: (e) => {
       // sendToMain resolves the window AT SEND TIME (see main-window.ts): the `win` captured here
-      // is destroyed and recreated by a macOS close/reopen, and sending to the stale reference is
+      // can be destroyed and recreated, and sending to the stale reference is
       // silently dropped. The try/catch is the other half: webContents.send THROWS when the render
       // frame is disposed even though isDestroyed() is false (renderer crash, reload, quit), and a
       // status push must never be load-bearing. It used to abort connect() mid-flight, which left

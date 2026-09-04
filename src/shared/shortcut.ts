@@ -21,12 +21,9 @@
  */
 
 export interface ParsedShortcut {
-  /** Primary modifier required: ctrlKey on Windows/Linux, metaKey for a mac browser client.
-   *  Field keeps its historical name — renaming it would ripple through every consumer for a
-   *  purely cosmetic change while stored strings still contain the `Cmd` alias anyway. */
+  /** Historical primary modifier token. It resolves to Control and is never emitted. */
   cmd: boolean
-  /** LITERAL Control required (⌃ on mac). On non-mac `Cmd` already resolves to Control, so a
-   *  chord never needs both; validation of both-at-once lives in keybindings.ts. */
+  /** Literal Control token. */
   ctrl: boolean
   shift: boolean
   alt: boolean
@@ -158,8 +155,7 @@ function keyTokenForSerialize(key: string): string {
  *  always serialize identically — keybindings.ts keys its conflict identities off this. */
 export function serializeShortcut(p: ParsedShortcut): string {
   const parts: string[] = []
-  if (p.cmd) parts.push('Cmd')
-  if (p.ctrl) parts.push('Ctrl')
+  if (p.cmd || p.ctrl) parts.push('Ctrl')
   if (p.alt) parts.push('Alt')
   if (p.shift) parts.push('Shift')
   if (p.key !== null) parts.push(keyTokenForSerialize(p.key))
@@ -181,36 +177,21 @@ function keyLabel(key: string): string {
   return key.charAt(0) + key.slice(1).toLowerCase()
 }
 
-/** `"Ctrl+Shift+D"` -> `["Ctrl", "Shift", "D"]`; with `isMac` (a Server Edition browser tab on
- *  a real Mac, where matching keys off metaKey) -> `["⌘", "⇧", "D"]`; a modifier-only chord
- *  (`"Ctrl+Alt"`) -> `["Ctrl", "Alt"]` / `["⌘", "⌥"]` (no trailing key badge). One badge per
- *  element — used by ShortcutsPanel's `<kbd>` row rendering. */
-/** `"Cmd+Shift+D"` + mac -> `["⌘", "⇧", "D"]`; + non-mac -> `["Ctrl", "Shift", "D"]`; a
- *  modifier-only chord (`"Cmd+Alt"`) -> `["⌘", "⌥"]` (no trailing key badge). One badge per
- *  element — used by ShortcutsPanel's `<kbd>` row rendering. The non-mac `cmd || ctrl` collapse
- *  is safe because keybindings.ts validation forbids both in one chord. */
-export function shortcutKeyParts(s: string, isMac: boolean): string[] {
+/** Render a Control-based shortcut as one badge per modifier or key. The optional argument is
+ * retained only so older callsites can migrate without a platform flag reaching runtime logic. */
+export function shortcutKeyParts(s: string, _legacyPlatformFlag?: boolean): string[] {
   const { cmd, ctrl, shift, alt, key } = parseShortcut(s)
   const parts: string[] = []
-  if (isMac) {
-    if (cmd) parts.push('⌘')
-    if (ctrl) parts.push('⌃')
-    if (alt) parts.push('⌥')
-    if (shift) parts.push('⇧')
-  } else {
-    if (cmd || ctrl) parts.push('Ctrl')
-    if (alt) parts.push('Alt')
-    if (shift) parts.push('Shift')
-  }
+  if (cmd || ctrl) parts.push('Ctrl')
+  if (alt) parts.push('Alt')
+  if (shift) parts.push('Shift')
   if (key !== null) parts.push(keyLabel(key))
   return parts
 }
 
-/** `"Ctrl+Shift+D"` -> `"Ctrl+Shift+D"`; + mac (Server-on-Mac browser tab) -> `"⌘⇧D"`; a
- *  modifier-only chord (`"Ctrl+Alt"`) -> `"Ctrl+Alt"` / `"⌘⌥"`. */
-export function formatShortcut(s: string, isMac: boolean): string {
-  const parts = shortcutKeyParts(s, isMac)
-  return isMac ? parts.join('') : parts.join('+')
+/** Render a stored shortcut using Control notation. */
+export function formatShortcut(s: string, _legacyPlatformFlag?: boolean): string {
+  return shortcutKeyParts(s).join('+')
 }
 
 /** Minimal shape of a KeyboardEvent this module needs — kept structural so callers don't have
@@ -223,34 +204,27 @@ export interface ShortcutKeyEvent {
   key: string
 }
 
-/** Does `e` match the canonical combo `s`? The primary modifier means ctrlKey on Windows/Linux
- *  and metaKey on a mac browser client (`isMac` — the Server Edition tab; see the module doc).
- *  For a keyed combo only — a modifier-only chord (`isHoldChord(s)`) never matches here (its
- *  `key` is `null`, which no `e.key` ever equals); the Canvas hold-mode listener uses
- *  `chordHeld` instead. */
-/** The concrete modifier flags a chord requires on `isMac`. `Cmd` resolves to meta on mac and
- *  ctrl elsewhere; the literal `ctrl` field always demands ctrlKey. */
+/** Resolve the concrete modifier flags used by the supported desktop runtime. */
 export function resolvedModifiers(
   p: ParsedShortcut,
-  isMac: boolean
+  _legacyPlatformFlag?: boolean
 ): { meta: boolean; ctrl: boolean; alt: boolean; shift: boolean } {
   return {
-    meta: isMac && p.cmd,
-    ctrl: p.ctrl || (!isMac && p.cmd),
+    meta: false,
+    ctrl: p.ctrl || p.cmd,
     alt: p.alt,
     shift: p.shift
   }
 }
 
-/** Does `e` match the canonical combo `s`? `cmd` in `s` means metaKey on mac, ctrlKey elsewhere;
- *  `ctrl` always means ctrlKey. All four modifier flags must match EXACTLY, so a chord never
- *  fires with an extra modifier held on top of it (a Control held over `Cmd+K` on mac is a
- *  different chord, not a sloppier one). For a keyed combo only — a modifier-only chord
+/** Does `e` match the canonical combo `s`? Both historical primary and canonical Control tokens
+ * resolve to ctrlKey. All four modifier flags must match exactly, so an extra modifier never fires
+ * a shorter binding. For a keyed combo only, a modifier-only chord
  *  (`isHoldChord(s)`) never matches here (its `key` is `null`, which no `e.key` ever equals); the
  *  Canvas hold-mode listener uses `chordHeld` instead. */
-export function matchesShortcut(e: ShortcutKeyEvent, s: string, isMac: boolean): boolean {
+export function matchesShortcut(e: ShortcutKeyEvent, s: string, _legacyPlatformFlag?: boolean): boolean {
   const parsed = parseShortcut(s)
-  const need = resolvedModifiers(parsed, isMac)
+  const need = resolvedModifiers(parsed)
   if (e.metaKey !== need.meta || e.ctrlKey !== need.ctrl) return false
   if (e.shiftKey !== need.shift || e.altKey !== need.alt) return false
   return parsed.key !== null && normalizeKey(e.key) === parsed.key
@@ -264,8 +238,8 @@ export function matchesShortcut(e: ShortcutKeyEvent, s: string, isMac: boolean):
  *  Shift added to a `Ctrl+Alt` chord) makes this false, which is also the "third key" misfire
  *  guard for modifier keys specifically (a non-modifier third key is guarded separately, since
  *  this function ignores `e.key` entirely). */
-export function chordHeld(e: ShortcutKeyEvent, s: string, isMac: boolean): boolean {
-  const need = resolvedModifiers(parseShortcut(s), isMac)
+export function chordHeld(e: ShortcutKeyEvent, s: string, _legacyPlatformFlag?: boolean): boolean {
+  const need = resolvedModifiers(parseShortcut(s))
   return (
     e.metaKey === need.meta &&
     e.ctrlKey === need.ctrl &&
@@ -291,10 +265,8 @@ export function chordHeld(e: ShortcutKeyEvent, s: string, isMac: boolean): boole
  * REFUSES the capture — that chord has no spelling in this grammar, and storing the bare `Cmd+…`
  * would save a binding the same gesture can never fire again.
  */
-export function captureToShortcut(e: ShortcutKeyEvent, isMac: boolean): string | null {
-  const primaryPressed = isMac ? e.metaKey : e.ctrlKey
-  if (!primaryPressed) return null
-  if (!isMac && e.metaKey) return null
+export function captureToShortcut(e: ShortcutKeyEvent, _legacyPlatformFlag?: boolean): string | null {
+  if (!e.ctrlKey || e.metaKey) return null
   const key = normalizeKey(e.key)
   if (MODIFIER_KEYS.has(key)) return null
   const parts = ['Cmd']
@@ -309,8 +281,7 @@ export function captureToShortcut(e: ShortcutKeyEvent, isMac: boolean): string |
  *  `buildModifierChord`). */
 export interface ChordModifiers {
   cmd: boolean
-  /** A literal Control held beside the primary (mac ⌃). OPTIONAL so a caller that does not
-   *  collect it keeps its existing behavior — collecting it is the capture field's job. */
+  /** A second Control token from a legacy recorder path. It is invalid in the one-Control grammar. */
   ctrl?: boolean
   alt: boolean
   shift: boolean

@@ -139,92 +139,12 @@ export function parseWindowsProcessTable(stdout: string): ProcEntry[] {
   return out
 }
 
-/** Parse the macOS `top -stats pid,mem` process block into resident kilobytes. */
-export function parseTopFootprint(stdout: string): Map<number, number> {
-  const out = new Map<number, number>()
-  const lines = stdout.split('\n')
-  const head = lines.findIndex((line) => /^\s*PID\s+MEM\s*$/.test(line))
-  if (head < 0) return out
-  const unitScale: Record<string, number> = { K: 1, M: 1024, G: 1024 * 1024 }
-  for (const line of lines.slice(head + 1)) {
-    const match = /^\s*(\d+)\s+(\d+(?:\.\d+)?)([A-Za-z])\s*$/.exec(line)
-    if (!match) continue
-    const factor = unitScale[match[3].toUpperCase()]
-    if (factor === undefined) continue
-    const pid = Number(match[1])
-    if (Number.isFinite(pid)) out.set(pid, Number(match[2]) * factor)
-  }
-  return out
-}
-
 /** Linux `/proc/meminfo` (MemAvailable is the honest number); `os.freemem()` fallback elsewhere.
  *  Returns null when nothing is readable — callers treat that as "no signal", never as zero.
  *
- *  Lives here rather than in session-budget.ts because two features read it (the reaper's
- *  watermark and the system-resource pill) and a second copy would drift.
- *
- *  (A darwin `vm_stat` reader used to sit between the two legs — macOS keeps almost nothing
- *  genuinely "free", so `os.freemem()` there read near zero and permanently tripped the reaper's
- *  watermark. It died with the macOS desktop; neither surviving platform has that pathology.)
- * That fallback is the very number this function exists to replace: on macOS it sits near zero, and
- * the session reaper's watermark (10% of RAM) then reads as permanent memory pressure — which had a
- * Mac reaping idle detached sessions every 10 minutes regardless of how much memory was free. A
- * confirmed field symptom, reported as "my sessions keep disappearing".
- *
- * So a `vm_stat` we cannot run or cannot parse yields NO SIGNAL, not a wrong one. Both consumers
- * degrade correctly on null: `planReap` treats it as "no pressure" (absence of evidence never
- * triggers a kill) and the pill pulses instead of printing a number it has not earned.
+ *  Lives here rather than in session-budget.ts because two features read it and a second copy
+ *  would drift.
  */
-export function darwinMemInfo(runVmStat: () => string, totalBytes: number): MemInfo | null {
-  try {
-    return parseVmStat(runVmStat(), totalBytes)
-  } catch {
-    return null
-  }
-}
-
-/**
- * Parse `vm_stat` into the same MemInfo shape, given the machine's total bytes.
- *
- * macOS deliberately keeps almost nothing "free": file-backed and purgeable pages are held until
- * something needs them, so libuv's `os.freemem()` — which counts only genuinely free pages —
- * reports near zero on a healthy Mac. `total - free` therefore renders every Mac as ~100% full,
- * which is both useless and alarming. (It also pinned the session reaper's watermark permanently
- * below its threshold, so a Mac reaped idle detached sessions on every sweep regardless of memory.)
- *
- * The number Activity Monitor calls "Memory Used" is app + wired + compressed, i.e.
- * `anonymous - purgeable + wired + compressor`; everything else is reclaimable and counts as
- * available. This is an approximation of Activity Monitor, not a reproduction of it — Apple does not
- * document the exact figure, and on Apple Silicon the parts are known not to sum to its total.
- *
- * The page size is READ FROM THE HEADER, never assumed: Apple Silicon uses 16 KiB pages, and
- * hard-coding 4096 is the identical bug this file already fixed on the Linux side.
- */
-export function parseVmStat(text: string, totalBytes: number): MemInfo | null {
-  const pageSize = Number(/page size of (\d+) bytes/.exec(text)?.[1])
-  if (!Number.isFinite(pageSize) || pageSize <= 0 || !Number.isFinite(totalBytes) || totalBytes <= 0) {
-    return null
-  }
-  const pages = (label: string): number | null => {
-    const m = new RegExp(`^${label}:\\s+(\\d+)\\.`, 'm').exec(text)
-    return m ? Number(m[1]) : null
-  }
-  const anonymous = pages('Anonymous pages')
-  const wired = pages('Pages wired down')
-  const compressor = pages('Pages occupied by compressor')
-  // `Pages purgeable` is a SUBSET of anonymous — caches an app has volunteered as droppable.
-  const purgeable = pages('Pages purgeable') ?? 0
-  // A missing field means we are not looking at vm_stat output we understand. Report nothing rather
-  // than a number built from a partial read — the pill pulses, which is the honest answer.
-  if (anonymous === null || wired === null || compressor === null) return null
-
-  const usedBytes = (Math.max(0, anonymous - purgeable) + wired + compressor) * pageSize
-  const totalMb = Math.round(totalBytes / 1048576)
-  // Clamp: the parts are an approximation and can exceed the total on a heavily compressed system.
-  const availableMb = Math.max(0, totalMb - Math.round(usedBytes / 1048576))
-  return { availableMb, totalMb }
-}
-
 /**
  * Parse `/proc/meminfo`. `MemAvailable`/`MemTotal` are REQUIRED (without them there is no reading
  * at all); swap is optional and reported only when BOTH halves are present.

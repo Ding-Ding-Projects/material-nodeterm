@@ -3,7 +3,7 @@ import { useProjects } from "../state/projects";
 import { projectIdAtIndex } from "./sessionList";
 
 /**
- * The Cmd/Ctrl+1-9 "jump to the Nth project" chord — ONE decision, shared by the three places
+ * The Ctrl+1-9 "jump to the Nth project" chord, ONE decision shared by the three places
  * that must agree about it: the Canvas keydown handler (which performs the switch), and the two
  * xterm key handlers (canvas `TerminalNode` + kanban `ModalTerminal`) that have to swallow the
  * key BEFORE xterm writes a control byte to the pty. Keeping the matcher in one module is
@@ -11,7 +11,7 @@ import { projectIdAtIndex } from "./sessionList";
  *
  * Two facts make the answer narrower than "is this the chord":
  *
- * 1. **Desktop only.** Chrome, Firefox and Safari all own Ctrl+1-9 (Cmd+1-9 on macOS) for tab
+ * 1. **Desktop only.** Chrome, Firefox and Safari all own Ctrl+1-9 for tab
  *    switching, and a page CANNOT `preventDefault()` them. So in the Server Edition the switch
  *    can never happen — and swallowing the key there would strip the terminal's control codes
  *    for exactly zero benefit. The whole feature is therefore gated on the shell.
@@ -30,7 +30,6 @@ import { projectIdAtIndex } from "./sessionList";
 export interface ProjectJumpEvent {
   type: string;
   code: string;
-  metaKey: boolean;
   ctrlKey: boolean;
   altKey: boolean;
   shiftKey: boolean;
@@ -48,14 +47,13 @@ const DIGIT_CODE_RE = /^Digit[1-9]$/;
 /**
  * The 1-9 digit this keydown addresses, or null when it is not the chord at all.
  *
- * Accepts EITHER modifier (`meta || ctrl`) on every platform, so a mac user's Ctrl+3 jumps too —
- * and, more importantly, so the swallow covers exactly the set the handler acts on. Alt is
+ * Accepts the Windows Ctrl modifier. Alt is
  * excluded because AltGr reports as ctrl+alt and must keep typing a real character on non-US
  * layouts; Shift is excluded because a shifted digit is a punctuation key.
  */
 export function projectJumpDigit(e: ProjectJumpEvent): number | null {
   if (e.type !== "keydown") return null;
-  if (!e.metaKey && !e.ctrlKey) return null;
+  if (!e.ctrlKey) return null;
   if (e.altKey || e.shiftKey) return null;
   if (!DIGIT_CODE_RE.test(e.code)) return null;
   return Number(e.code.slice(5));

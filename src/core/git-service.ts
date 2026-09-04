@@ -29,6 +29,7 @@ import {
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import { resolveGitRemote, runRemoteGit } from './remote-ssh/remote-git'
 import { platform } from './platform'
+import { findExecutableSync } from './exec-path'
 import { gitRemovalFingerprint } from './git-removal-proof'
 import { withCrossProcessLock } from './fs-transaction-lock'
 import { WorktreeOwnershipStore } from './worktree-ownership'
@@ -106,7 +107,8 @@ function findBin(names: string[]): string | null {
       // ignore
     }
   }
-  return null
+  if (process.platform === 'linux') return ['/usr/local/bin/gh', '/usr/bin/gh']
+  return []
 }
 
 const GH_PATH = findBin([
@@ -135,8 +137,10 @@ const GIT_ENV: NodeJS.ProcessEnv = {
   GIT_TERMINAL_PROMPT: '0'
 }
 
-// Single-flight registry for the one clone the app runs at a time. Module-scoped so a
-// macOS window re-creation can't orphan it.
+const GIT_ENV = createGitEnvironment()
+
+// Single-flight registry for the one clone the app runs at a time. Module scope keeps the
+// operation alive across desktop window replacement.
 type ActiveClone = {
   child: import('child_process').ChildProcess | null
   clonePath: string
@@ -319,8 +323,8 @@ function parseNumstat(out: string): Map<string, { added: number; deleted: number
 }
 
 /**
- * Read the user's stored github.com HTTPS token from git's credential helper
- * (macOS keychain etc.) so we can hand it to `gh` as GH_TOKEN — letting someone
+ * Read the user's stored github.com HTTPS token from git's configured credential helper
+ * so we can hand it to `gh` as GH_TOKEN, letting someone
  * who can already push over HTTPS publish a new repo without a separate
  * `gh auth login`. Returns null if no HTTPS credential is stored (e.g. SSH-only).
  * Never logs the token. `git credential fill` reads the query from stdin.

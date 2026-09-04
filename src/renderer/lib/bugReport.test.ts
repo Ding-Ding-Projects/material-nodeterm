@@ -9,11 +9,11 @@ import {
 } from './bugReport'
 
 const ELECTRON_UA =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) nodeterm/0.2.7 Chrome/120.0.6099.291 Electron/28.2.6 Safari/537.36'
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) nodeterm/0.2.7 Chrome/120.0.6099.291 Electron/28.2.6'
 const LINUX_BROWSER_UA =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+  'Mozilla/5.0 (X11; Linux x86_64) Chrome/126.0.0.0'
 const WINDOWS_BROWSER_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0'
 
 describe('describeSurface', () => {
   it('detects Electron as desktop', () => {
@@ -26,7 +26,6 @@ describe('describeSurface', () => {
 
 describe('describeOs', () => {
   it('maps user agents to OS names', () => {
-    expect(describeOs(ELECTRON_UA)).toBe('macOS')
     expect(describeOs(LINUX_BROWSER_UA)).toBe('Linux')
     expect(describeOs(WINDOWS_BROWSER_UA)).toBe('Windows')
     expect(describeOs('SomethingElse/1.0')).toBe('unknown')
@@ -38,7 +37,7 @@ describe('envBlock', () => {
     const block = envBlock({ appVersion: '0.2.7', userAgent: ELECTRON_UA })
     expect(block).toContain('nodeterm: v0.2.7')
     expect(block).toContain('surface: desktop')
-    expect(block).toContain('os: macOS')
+    expect(block).toContain('os: Windows')
     expect(block).toContain('electron: 28.2.6')
   })
   it('reports unknown version and omits electron on server', () => {
@@ -69,7 +68,7 @@ describe('buildBugReportUrl', () => {
     const { url, truncated } = buildBugReportUrl('t', long, env)
     expect(truncated).toBe(true)
     const body = new URL(url).searchParams.get('body')!
-    expect(body).toContain('… (truncated)')
+    expect(body).toContain('... (truncated)')
     expect(body.length).toBeLessThanOrEqual(BODY_BUDGET)
     // env block must survive truncation
     expect(body).toContain('nodeterm: v0.2.7')

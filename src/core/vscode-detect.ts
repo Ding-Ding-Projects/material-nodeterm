@@ -76,18 +76,6 @@ async function verify(cmd: string, d: ResolvedDeps): Promise<boolean> {
 function wellKnownPaths(d: ResolvedDeps): { cmd: string; kind: VsCodeKind }[] {
   const home = d.homedir()
   const plat = d.platform
-  if (plat === 'darwin') {
-    return [
-      { cmd: '/usr/local/bin/code', kind: 'code' },
-      { cmd: '/opt/homebrew/bin/code', kind: 'code' },
-      { cmd: '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code', kind: 'code' },
-      { cmd: '/usr/local/bin/code-insiders', kind: 'code-insiders' },
-      {
-        cmd: '/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code-insiders',
-        kind: 'code-insiders'
-      }
-    ]
-  }
   if (plat === 'win32') {
     const localAppData = d.env.LOCALAPPDATA ?? path.join(home, 'AppData', 'Local')
     const programFiles = d.env.ProgramFiles ?? 'C:\\Program Files'
@@ -104,7 +92,7 @@ function wellKnownPaths(d: ResolvedDeps): { cmd: string; kind: VsCodeKind }[] {
       }
     ]
   }
-  // Linux and everything else POSIX.
+  if (plat !== 'linux') return []
   return [
     { cmd: '/usr/bin/code', kind: 'code' },
     { cmd: '/snap/bin/code', kind: 'code' },

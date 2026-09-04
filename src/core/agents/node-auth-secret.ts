@@ -13,7 +13,7 @@ import { renameAtomic, tempNameFor } from '../fs-atomic'
  *
  *   - Desktop shell (can seal): node-auth-key.json — {version:1, secretKeyEnc:<base64
  *     of the sealed base64 secret>}, mirroring #167's codex-node-auth-key.json shape.
- *   - Server Edition (no keychain): node-auth-key.bin — exactly 32 raw bytes, mode 0600.
+ *   - Server Edition (filesystem vault): node-auth-key.bin: exactly 32 raw bytes, mode 0600.
  *
  * The same secret signs the codex thread→node records #167 wrote, so on the sealed
  * path we ADOPT a pre-existing codex-node-auth-key.json before minting fresh — minting

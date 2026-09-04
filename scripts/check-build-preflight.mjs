@@ -29,8 +29,7 @@
 //
 // The Windows packaging route does not rebuild or reinstall native modules. It passes
 // `--no-native-mutation` explicitly and checks the toolchain without requiring a dormant relay.
-// This cannot happen on macOS or Linux, where unlinking an open file is ordinary. So it is invisible
-// to everyone not building on Windows, which is the platform this project ships.
+// Linux Server Edition builds do not use this native Windows replacement check.
 //
 // HOW IT DETECTS THE LOCK
 //

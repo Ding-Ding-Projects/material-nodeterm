@@ -10,9 +10,7 @@ import { sessionName } from './tmux-naming'
 import { REAP_IDLE_MS, REAP_SWEEP_MS } from './pty-reap'
 
 /**
- * IDLE REAP (2026-08-11: the machine hit `kern.tty.ptmx_max` with 62 live PTYs in this manager).
- *
- * The sweep exists to return pty devices held by sessions NOBODY is attached to any more — the
+ * The sweep exists to return pty clients held by sessions nobody is attached to any more, the
  * residue of a release hook that was never wired or never ran (a destroyed window, a vanished relay
  * peer). What it must never do is take a device back at the cost of somebody's work, so each
  * refusal below is as much the subject as the reap itself.
@@ -94,7 +92,7 @@ vi.mock('child_process', () => {
  * `findTmux()` (pty-manager.ts) takes an entirely different branch on win32 — a bare PATH probe,
  * skipping every POSIX fixed-candidate and bundled-binary check, because Windows has none of those
  * targets (see the doc comment on `findTmux`). This suite is not ABOUT that branch difference
- * (unlike pty-bundled-tmux.test.ts, which is deliberately win32-vs-darwin) — it is ordinary
+ * (the multiplexer lookup itself has dedicated coverage), it is ordinary
  * tmux-session-management logic, driven entirely through the `child_process`/`node-pty` mocks
  * above, that must behave the same on every host. Running it on a machine with no real `tmux` on
  * PATH hit the win32 short-circuit and got `null` back for `findTmux()`, silently downgrading
@@ -118,21 +116,6 @@ vi.mock('./exec-path', async (importOriginal) => {
 })
 
 const ALICE = 1
-
-/**
- * A machine with pty devices to spare, always.
- *
- * Without this the real probe runs a `readdir('/dev')` against the DEVELOPER's host, and
- * `spawnSession`'s pre-flight refuses every create once that host is within `PTY_DEVICE_HEADROOM`
- * of its own `kern.tty.ptmx_max` — which a machine running this app all day genuinely reaches (511
- * on macOS; this one sits in the 480s). Nothing below is about device pressure, so it is pinned
- * healthy rather than left to depend on who is running the suite and how many terminals they have
- * open. The pressure behaviour itself is tested in pty-spawn-preflight.test.ts.
- */
-vi.mock('./pty-devices', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./pty-devices')>()),
-  readPtyDevices: () => ({ ceiling: 511, inUse: 8 })
-}))
 
 describe('idle reap of unwatched client PTYs', () => {
   let fake: FakePlatform
@@ -166,6 +149,7 @@ describe('idle reap of unwatched client PTYs', () => {
     const { PtyManager } = await import('./pty-manager')
     const m = new PtyManager()
     m.init(() => DEFAULT_SETTINGS)
+    ;(m as unknown as { tmuxPath: string | null }).tmuxPath = '/usr/bin/tmux'
     m.registerIpc()
     return m
   }
@@ -251,7 +235,7 @@ describe('idle reap of unwatched client PTYs', () => {
     expect(spawnArgs[1].args.slice(-2)).toEqual(['-s', sessionName('node-1')])
   })
 
-  it('sweeps the same way off darwin — the pty ceiling is macOS, running out of them is not', async () => {
+  it('sweeps the same way on Linux', async () => {
     vi.spyOn(os, 'platform').mockReturnValue('linux')
     await tmuxManager()
     await create(ALICE)

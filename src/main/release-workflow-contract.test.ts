@@ -287,7 +287,7 @@ describe('release workflow semantic contract', () => {
       },
     })
     expect(signingEnabled.status).toBe(1)
-    expect(signingEnabled.output).toMatch(/disable signing.*default resource editing/i)
+    expect(signingEnabled.output).toMatch(/disable.*signing.*afterPack resource/i)
 
     const windowsForceSigningEnabled = check(WORKFLOW, {
       ...PACKAGE,
@@ -297,17 +297,17 @@ describe('release workflow semantic contract', () => {
       },
     })
     expect(windowsForceSigningEnabled.status).toBe(1)
-    expect(windowsForceSigningEnabled.output).toMatch(/disable signing.*default resource editing/i)
+    expect(windowsForceSigningEnabled.output).toMatch(/disable.*signing.*afterPack resource/i)
 
-    const resourceEditingDisabled = check(WORKFLOW, {
+    const signerCoupledResourceEditingEnabled = check(WORKFLOW, {
       ...PACKAGE,
       build: {
         ...PACKAGE.build,
-        win: { ...PACKAGE.build.win, signAndEditExecutable: false },
+        win: { ...PACKAGE.build.win, signAndEditExecutable: true },
       },
     })
-    expect(resourceEditingDisabled.status).toBe(1)
-    expect(resourceEditingDisabled.output).toMatch(/default resource editing/i)
+    expect(signerCoupledResourceEditingEnabled.status).toBe(1)
+    expect(signerCoupledResourceEditingEnabled.output).toMatch(/afterPack resource/i)
   })
 
   it('requires the release upload to contain exactly three Squirrel assets', () => {

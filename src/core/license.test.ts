@@ -473,22 +473,16 @@ describe('license detail + release', () => {
     expect((JSON.parse(init.body) as { entitlement: string }).entitlement).toBe(TOKEN)
   })
 
-  it('carries the source, so a non-keygen entitlement is not read as a failed count', async () => {
-    // An App Store purchase on a paired phone bridges Pro to the desktop as `apple:<txn>`. The
-    // server makes zero keygen calls for it and answers 200 with no key and no machines — those
-    // zeros mean "device counting does not apply here", NOT "the read failed". `source` is the
-    // only thing that tells the two apart, and the UI hides the release action on it.
-    //
-    // This is also the fixture that stops the malformed-2xx guard below from OVER-firing: these
-    // zeros are stated numbers, so they must still read as a success.
+  it('carries the free source, so a keyless entitlement is not read as a failed count', async () => {
+    // The free source has no key or device count. Its stated zeros remain a successful response.
     storeToken()
-    await boot(vi.fn(async () => jsonResponse({ key: null, used: 0, seats: 0, source: 'apple' })))
+    await boot(vi.fn(async () => jsonResponse({ key: null, used: 0, seats: 0, source: 'free' })))
 
     expect(await detail()).toEqual({
       key: null,
       used: 0,
       seats: 0,
-      source: 'apple',
+      source: 'free',
       error: null
     })
   })

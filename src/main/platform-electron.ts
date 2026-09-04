@@ -142,8 +142,7 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
     get isPackaged() {
       return app.isPackaged
     },
-    // `<app>/Contents/Resources` when packaged; node_modules/electron/…/Resources in dev (which is
-    // why bundledTmuxPath falls back to the repo's own resources/bin).
+    // Packaged resource root, with Electron's development resource root used in dev.
     get resourcesPath() {
       return process.resourcesPath
     },

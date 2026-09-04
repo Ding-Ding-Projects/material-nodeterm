@@ -5224,13 +5224,7 @@ export function Canvas() {
   useEffect(() => {
     const wrap = flowWrapRef.current
     if (!wrap) return
-    // Desktop macOS receives raw gesture facts from the main process. The browser bridge cannot
-    // observe that stream, so it keeps the existing delta-shape heuristic.
-    const gestureReporting = isMac && !isBrowserRuntime()
-    const wheelRouting = new MacWheelGestureRouter(gestureReporting)
-    const offGesture = gestureReporting
-      ? window.nodeTerminal.onCanvasTrackpadGesture((active) => wheelRouting.noteGesture(active))
-      : undefined
+    const wheelRouting = new WheelGestureRouter()
     const wheelLimiter = new WheelZoomBurstLimiter()
     const onWheel = (e: WheelEvent) => {
       if (canvasLocked) return
@@ -5268,7 +5262,6 @@ export function Canvas() {
     wrap.addEventListener('wheel', onWheel, { capture: true, passive: false })
     return () => {
       wrap.removeEventListener('wheel', onWheel, { capture: true })
-      offGesture?.()
     }
   }, [getViewport, setViewport, wheelZoom, wheelZoomSpeed, trackpadRouting, canvasLocked])
 

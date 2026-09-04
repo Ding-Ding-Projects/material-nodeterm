@@ -46,7 +46,7 @@ describe('groupCodexAccountsByMachine', () => {
     null
   )
 
-  it('puts This Mac first with exactly the host-less accounts', () => {
+  it('puts the local computer first with exactly the host-less accounts', () => {
     const groups = groupCodexAccountsByMachine(accounts, targets)
     expect(groups[0]).toMatchObject({ host: '', remote: false })
     expect(groups[0].accounts.map((a) => a.id)).toEqual(['local-1', 'local-2'])
@@ -54,7 +54,7 @@ describe('groupCodexAccountsByMachine', () => {
 
   it('emits one panel per configured host with its own accounts', () => {
     const groups = groupCodexAccountsByMachine(accounts, targets)
-    expect(groups).toHaveLength(3) // This Mac + 2 hosts
+    expect(groups).toHaveLength(3) // local computer + 2 hosts
     expect(groups[1]).toMatchObject({ host: 'me@box', remote: true })
     expect(groups[1].accounts.map((a) => a.id)).toEqual(['box-1'])
     expect(groups[2].accounts.map((a) => a.id)).toEqual(['two-1'])

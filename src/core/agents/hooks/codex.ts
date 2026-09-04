@@ -13,7 +13,8 @@
 //
 // Adapted for the REAL ~/.codex (local install path only):
 // dropped the managed CODEX_HOME, system-hook mirroring, project-trust, legacy
-// cleanup, and Windows/remote paths. POSIX (macOS) is the target.
+// cleanup, and unrelated remote paths. This module owns the POSIX hook command used by the
+// Linux Server Edition; the Windows desktop transport remains loopback-native.
 import { homedir } from 'os'
 import path from 'path'
 import {

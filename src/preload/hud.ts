@@ -1,6 +1,6 @@
-// Tiny, HUD-only preload (docs/notch-hud.md). The Notch HUD is a separate BrowserWindow with a
-// minimal surface — it does not need the full `window.nodeTerminal` API, so it gets its own bridge
-// exposing exactly the HUD channels. contextIsolation stays on; no node integration.
+// Tiny, HUD-only preload (docs/agent-hud.md). The Agent HUD is a separate BrowserWindow with a
+// minimal surface. It does not need the full `window.nodeTerminal` API, so it gets its own bridge
+// exposing exactly the HUD channels. contextIsolation stays on and node integration stays off.
 
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc'
@@ -35,17 +35,9 @@ export interface HudPush {
   /** Shared School-mode state. Unhydrated means vocabulary substitutions stay off. */
   schoolModeEnabled: boolean
   schoolModeHydrated: boolean
-  /** Notch/menu-bar strip height in px (the capsule's fused top zone; content sits below it). */
-  bar: number
-  /** Primary-display width in px. */
-  width: number
-  /** Assumed physical notch width in px — the capsule's collapsed (fused) width. */
-  notchWidth: number
-  /** Notch horizontal center in px (= width / 2) — where the capsule anchors. */
-  notchCenterX: number
-  /** True when a physical notch is present (fuse to it); false = draw a standalone floating pill. */
-  hasNotch: boolean
-  /** Expand the panel on hover (settings.notchHoverExpand); false = click-only. */
+  /** Collapsed Agent HUD indicator width in px. */
+  agentHudWidth: number
+  /** Expand the panel on hover; false means click-only. */
   hoverExpand: boolean
   /** settings.usagePercentMode — how a row's context percentage renders ("42% used" / "58% left"). */
   percentMode: 'used' | 'remaining' | 'tokens'

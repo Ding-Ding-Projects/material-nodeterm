@@ -65,7 +65,7 @@ function formatArg(a: unknown): string {
  * throw-on-unhandled behavior — so rejections are left alone here on purpose.
  *
  * **A dying stdio stream must not take the app with it** (issue #382: `write EIO` killed the
- * main process after the terminal a `npm start` was launched from went away — macOS `revoke()`s
+ * main process after the terminal an `npm start` was launched from went away. A closed terminal can
  * the tty's fds, and every later `console.log` writes into a revoked descriptor). Two facts
  * decide the shape of the guard, and the first one is counter-intuitive:
  *

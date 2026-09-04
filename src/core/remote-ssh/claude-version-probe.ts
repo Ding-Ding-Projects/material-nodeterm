@@ -2,7 +2,7 @@
 //
 // The probe has to run through the LOGIN shell (`$SHELL -lc`): an ssh exec channel gets a
 // non-interactive, non-login shell whose rc file usually bails out early, so a claude installed via
-// nvm/asdf/homebrew can be invisible to a bare `claude --version`. But a login shell SOURCES the
+// A user-scoped version manager can be invisible to a bare `claude --version`. A login shell SOURCES the
 // user's profile, and profiles print to STDOUT — corp banners, `neofetch`, `echo "kernel $(uname
 // -r)"`, pyenv/conda notices. Every version check in the app first-matches a `\d+\.\d+\.\d+`
 // anywhere in the string, so a banner line like `Welcome — Ubuntu 22.04.3 LTS` would be read as

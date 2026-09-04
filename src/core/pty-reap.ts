@@ -1,9 +1,5 @@
 /**
- * IDLE REAP: give pty devices back to the OS without killing anybody's work.
- *
- * macOS caps pty devices system-wide (`kern.tty.ptmx_max`, 511 by default) and on 2026-08-11 this
- * app was a large part of a machine that hit it: 62 live PTYs in PtyManager, 18 tmux sessions, ~19
- * ssh children. Every terminal after that spawned black (see pty-devices.ts, which now says so).
+ * IDLE REAP: release unused pty clients without killing anybody's work.
  *
  * The normal release paths — the last subscriber's `pty:kill`, `dropClient` when a window/tab
  * vanishes, the renderer's 5-minute park expiry — already return the pty client for anything the
@@ -36,7 +32,7 @@
  * subscription, so the sweep already skips it on the `watched` test — the margin is so that the two
  * mechanisms cannot come to depend on each other's timing. Ten minutes with nobody attached is also
  * far past any human "I'll be right back": the cost of reaping is one tmux redraw on return, the
- * cost of not reaping is a pty device held forever.
+ * cost of not reaping is an idle client and child process held forever.
  */
 export const REAP_IDLE_MS = 10 * 60 * 1000
 

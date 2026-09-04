@@ -1,23 +1,12 @@
-// Agent HUD (docs/notch-hud.md) — a small, frameless, always-on-top, click-through tool window
-// docked at the top-center of the primary display's WORK AREA, showing walking agent mascots while
-// agents work and expanding into a mini session panel. Windows desktop only; default on
-// (settings.notchHud).
+// Agent HUD (docs/agent-hud.md) — a small, frameless, always-on-top, click-through tool window
+// docked inside the primary display work area, showing walking agent mascots while agents work and
+// expanding into a mini session panel. It is a standalone Windows tool window, independent of
+// display hardware geometry, and is enabled by default through the Agent HUD setting.
 //
-// HISTORY: this began life as the macOS "Notch HUD", a full-display-width strip fused to the
-// MacBook notch. The macOS desktop was deleted (Windows-only product decision, 2026-08); the HUD
-// itself was REWIRED, not deleted — same model (notch-hud-model.ts, byte-identical), same renderer
-// contract (HudPush), same preload (src/preload/hud.ts). The renderer already draws a standalone
-// floating pill when `hasNotch` is false (its "notchless" mode), so the Windows window simply
-// always reports that. What changed is only the window shape: notch geometry (display bounds,
-// menu-bar inset, AppKit constraint escapes) became work-area geometry, and the NSPanel became a
-// Windows tool window (skipTaskbar + non-focusable, so it never appears in the taskbar/Alt-Tab
-// and never steals focus from the terminal the user is typing into).
-//
-// This module owns the BrowserWindow + the getHudWindow/sendToHud singleton (mirroring
-// main-window.ts) and the mirror/IPC subscriptions. The DATA folding lives in the pure,
-// Electron-free notch-hud-model.ts so it is unit-testable without a window. index.ts feeds two
-// extra streams in (the normalized agent-event stream for prompt+subagents, and context-update for
-// the model) via the module-level notchHudOn* functions, which no-op when the HUD is off.
+// This module owns the BrowserWindow, the getHudWindow/sendToHud singleton, and the mirror/IPC
+// subscriptions. The data folding lives in the pure, Electron-free agent-hud-model.ts so it is
+// unit-testable without a window. index.ts feeds the normalized agent-event and context-update
+// streams through the module-level agentHudOn* functions.
 
 import { BrowserWindow, ipcMain, screen } from 'electron'
 import { IPC } from '../shared/ipc'
@@ -32,43 +21,25 @@ import {
   type MirrorFile
 } from '../core/agent-status-mirror'
 import type { NormalizedAgentEvent } from '../shared/agents/normalize'
-import { createHudModel, type HudModel } from './notch-hud-model'
+import { createHudModel, type HudModel } from './agent-hud-model'
 
-/**
- * The `bar` height pushed to the renderer (px). In the renderer's floating-pill mode this only
- * seeds the `--bar` CSS variable (pill height/padding come from its own `--pill-*` tunables), but
- * the contract field is required, and 24 is the strip height the pill was tuned against.
- */
-const HUD_BAR = 24
-/** Bounds for the user-tunable pill width (settings.notchWidth — the setting name is historical;
- *  it drives the collapsed pill's symmetric side padding in the renderer). */
-export const NOTCH_WIDTH_MIN = 100
-export const NOTCH_WIDTH_MAX = 320
-const NOTCH_WIDTH_DEFAULT = 168
+/** Bounds for the user-tunable collapsed indicator width. */
+export const AGENT_HUD_WIDTH_MIN = 100
+export const AGENT_HUD_WIDTH_MAX = 320
+const AGENT_HUD_WIDTH_DEFAULT = 168
 /**
  * Window WIDTH (px): the expanded panel is 400px wide (hud.css --panel-width) plus its 44px blur
  * shadow on each side. 560 leaves that whole paint inside the window — a narrower window would
  * clip the expanded panel's edges, which reads as a rendering bug rather than a size choice.
  */
 const HUD_WINDOW_WIDTH = 560
-/** Total window height — sized to the EXPANDED box (we never resize the frame; the renderer scales
- *  a CSS transform). Capped to the work-area height. */
+/** Total tool-window height. The renderer expands within this fixed, independent surface. */
 const HUD_WINDOW_HEIGHT = 460
 /** Debounce for coalescing feed changes into one push to the HUD renderer. */
 const PUSH_DEBOUNCE_MS = 150
 /** Low-frequency sweep so stale (gone + idle > 6h) nodes drop even with no live events. */
 // Also the tick that lets the model's working watchdog and the relative times age without events.
 const SWEEP_MS = 60 * 1000
-
-/**
- * No-op survivor of the macOS Dock guard. On macOS a `focusable:false` panel could demote the
- * app's Dock presence, and this re-asserted the regular activation policy; Windows has no Dock or
- * activation policy, and the taskbar is governed per-window (`skipTaskbar` on the HUD, normal on
- * the main window). The EXPORT stays because src/main/index.ts still calls it from its
- * window-show handlers — deleting the symbol would break a file this change does not own. Remove
- * both together when index.ts drops its call sites.
- */
-export function assertRegularDockPresence(): void {}
 
 // ---- Singleton (mirror main-window.ts) -----------------------------------------------------
 
@@ -84,7 +55,7 @@ export function sendToHud(channel: string, ...args: unknown[]): void {
 
 // ---- Controller ----------------------------------------------------------------------------
 
-export interface NotchHudDeps {
+export interface AgentHudDeps {
   /** Sync in-memory node title (workspaceStore.getNodeTitle). */
   getNodeTitle: (nodeId: string) => string | undefined
   /** Shared School-mode snapshot. Unhydrated keeps non-React vocabulary mapping fail-closed. */
@@ -92,10 +63,10 @@ export interface NotchHudDeps {
 }
 
 /** The user-tunable part of the HUD (Settings → Interface). Applied live, no restart. */
-export interface NotchHudTunables {
+export interface AgentHudTunables {
   enabled: boolean
-  /** Collapsed-pill width hint in px (historically the assumed notch width). */
-  notchWidth: number
+  /** Collapsed indicator width in px. */
+  agentHudWidth: number
   /** Expand the panel on hover (else click-only). */
   hoverExpand: boolean
   /** settings.usagePercentMode — how the rows' context percentages render ("42% used" / "58% left"). */
@@ -103,13 +74,13 @@ export interface NotchHudTunables {
 }
 
 /** Clamp a hand-editable width to something that can't push the pill off the window. */
-function sanitizeNotchWidth(px: number): number {
+function sanitizeAgentHudWidth(px: number): number {
   return Number.isFinite(px)
-    ? Math.max(NOTCH_WIDTH_MIN, Math.min(NOTCH_WIDTH_MAX, Math.round(px)))
-    : NOTCH_WIDTH_DEFAULT
+    ? Math.max(AGENT_HUD_WIDTH_MIN, Math.min(AGENT_HUD_WIDTH_MAX, Math.round(px)))
+    : AGENT_HUD_WIDTH_DEFAULT
 }
 
-class NotchHudController {
+class AgentHudController {
   private model: HudModel = createHudModel()
   private unsubs: (() => void)[] = []
   private pushTimer: ReturnType<typeof setTimeout> | null = null
@@ -122,8 +93,8 @@ class NotchHudController {
   private readonly onDisplayChange: () => void
 
   constructor(
-    private deps: NotchHudDeps,
-    private tunables: { notchWidth: number; hoverExpand: boolean; percentMode: 'used' | 'remaining' | 'tokens' }
+    private deps: AgentHudDeps,
+    private tunables: { agentHudWidth: number; hoverExpand: boolean; percentMode: 'used' | 'remaining' | 'tokens' }
   ) {
     this.onSetIgnoreMouse = (_e, ignore) => {
       // Ignore-mouse ON = click-through (the strip is transparent to the app beneath); OFF while the
@@ -241,40 +212,28 @@ class NotchHudController {
   }
 
   /** Apply live tunables and re-push, so a slider drag moves the capsule as you drag. */
-  setTunables(t: { notchWidth: number; hoverExpand: boolean; percentMode: 'used' | 'remaining' | 'tokens' }): void {
-    this.tunables = { notchWidth: t.notchWidth, hoverExpand: t.hoverExpand, percentMode: t.percentMode }
+  setTunables(t: { agentHudWidth: number; hoverExpand: boolean; percentMode: 'used' | 'remaining' | 'tokens' }): void {
+    this.tunables = { agentHudWidth: t.agentHudWidth, hoverExpand: t.hoverExpand, percentMode: t.percentMode }
     this.schedulePush()
   }
 
-  /**
-   * Windows geometry: a small window docked at the TOP-CENTER of the primary display's WORK AREA.
-   * `workArea` rather than `bounds` on purpose — a top-docked taskbar shrinks the work area from
-   * above, and a window placed at `bounds.y` would sit UNDER it (always-on-top fights the taskbar's
-   * own topmost band and loses focus-follows clicks either way). The work area is the honest
-   * "top edge the user can see".
-   */
+  /** Position a fixed standalone tool window inside the primary display work area. */
   private geometry(): {
     x: number
     y: number
     width: number
     height: number
-    bar: number
-    notchWidth: number
-    notchCenterX: number
+    agentHudWidth: number
   } {
     const wa = screen.getPrimaryDisplay().workArea
-    const width = Math.min(HUD_WINDOW_WIDTH, wa.width)
-    const height = Math.min(HUD_WINDOW_HEIGHT, wa.height)
+    const width = Math.min(HUD_WINDOW_WIDTH, Math.max(320, wa.width - 32), wa.width)
+    const height = Math.min(HUD_WINDOW_HEIGHT, Math.max(240, wa.height - 32), wa.height)
     return {
-      x: wa.x + Math.round((wa.width - width) / 2),
-      y: wa.y,
+      x: wa.x + Math.max(16, wa.width - width - 24),
+      y: wa.y + 24,
       width,
       height,
-      bar: HUD_BAR,
-      notchWidth: sanitizeNotchWidth(this.tunables.notchWidth),
-      // The pill centers itself on this x (renderer --notch-center-x); the window is centered on
-      // the work area, so the window's own midline is the anchor.
-      notchCenterX: Math.round(width / 2)
+      agentHudWidth: sanitizeAgentHudWidth(this.tunables.agentHudWidth)
     }
   }
 
@@ -362,32 +321,22 @@ class NotchHudController {
     w.webContents.send(IPC.hudRows, {
       rows,
       ...this.deps.getSchoolMode(),
-      bar: g.bar,
-      width: g.width,
-      notchWidth: g.notchWidth,
+      agentHudWidth: g.agentHudWidth,
       hoverExpand: this.tunables.hoverExpand,
-      percentMode: this.tunables.percentMode,
-      notchCenterX: g.notchCenterX,
-      // Always false: no Windows display has a notch, and false is the renderer's floating-pill
-      // mode — the branch the notchless-Mac fallback already exercised, so the renderer needed no
-      // change for the Windows rewire. Do not "optimize" the field away: the push contract is
-      // shared with the preload/renderer pair, and a missing boolean would read as undefined
-      // there and skip the notchless class toggle.
-      hasNotch: false
+      percentMode: this.tunables.percentMode
     })
   }
 }
 
 // ---- Module-level lifecycle + feed shims ---------------------------------------------------
 
-let controller: NotchHudController | null = null
-let controllerDeps: NotchHudDeps | null = null
+let controller: AgentHudController | null = null
+let controllerDeps: AgentHudDeps | null = null
 
 /**
- * Whether the HUD is supported on this platform (Windows desktop only). The Linux Server Edition
- * never reaches this module (it is src/main, desktop shell only), and the Linux DESKTOP build
- * never had the HUD (it was darwin-gated before the Windows rewire) — keeping it win32-only keeps
- * Linux behavior exactly what it was.
+ * Whether the HUD is supported on this platform. The Linux Server Edition never reaches this
+ * module because it is part of the desktop shell. Keeping the tool Windows-only preserves the
+ * product's active desktop delivery scope.
  */
 function supported(): boolean {
   return process.platform === 'win32'
@@ -395,13 +344,13 @@ function supported(): boolean {
 
 /**
  * Create the HUD (if win32 + enabled). Idempotent. `deps.getNodeTitle` is retained so a later
- * `setNotchHudEnabled(true)` (settings toggle) can recreate it without re-plumbing.
+ * `setAgentHudEnabled(true)` can recreate it without re-plumbing.
  */
-export function initNotchHud(deps: NotchHudDeps, t: NotchHudTunables): void {
+export function initAgentHud(deps: AgentHudDeps, t: AgentHudTunables): void {
   controllerDeps = deps
   if (!supported() || !t.enabled) return
   if (controller) return
-  controller = new NotchHudController(deps, t)
+  controller = new AgentHudController(deps, t)
   controller.start()
 }
 
@@ -410,7 +359,7 @@ export function initNotchHud(deps: NotchHudDeps, t: NotchHudTunables): void {
  * tunables (pill width, hover-expand) straight through to a running HUD — no restart, so the
  * width slider can be dragged while watching the pill move.
  */
-export function applyNotchHudSettings(t: NotchHudTunables): void {
+export function applyAgentHudSettings(t: AgentHudTunables): void {
   if (!supported()) return
   if (!t.enabled) {
     controller?.stop()
@@ -422,21 +371,21 @@ export function applyNotchHudSettings(t: NotchHudTunables): void {
     return
   }
   if (!controllerDeps) return
-  controller = new NotchHudController(controllerDeps, t)
+  controller = new AgentHudController(controllerDeps, t)
   controller.start()
 }
 
 /** Tear the HUD down (app quit). */
-export function destroyNotchHud(): void {
+export function destroyAgentHud(): void {
   controller?.stop()
   controller = null
 }
 
 /** Feed shims — cheap no-ops when the HUD is off. Called unconditionally from index.ts. */
-export function notchHudOnAgentEvent(ev: NormalizedAgentEvent): void {
+export function agentHudOnAgentEvent(ev: NormalizedAgentEvent): void {
   controller?.onAgentEvent(ev)
 }
-export function notchHudOnContextUpdate(p: {
+export function agentHudOnContextUpdate(p: {
   sessionId?: string
   agentId?: string
   source?: string
@@ -449,6 +398,6 @@ export function notchHudOnContextUpdate(p: {
 }
 
 /** Push the current HUD snapshot immediately when the shared School-mode record changes. */
-export function notchHudOnSchoolModeChange(): void {
+export function agentHudOnSchoolModeChange(): void {
   controller?.schedulePush()
 }

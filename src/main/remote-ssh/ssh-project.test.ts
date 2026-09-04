@@ -95,14 +95,14 @@ describe('SshProjectManager', () => {
       runScp: vi.fn(async () => ({ code: 0 })),
       getHook: () => ({ port: 1, token: 't', version: '1' }),
       onStatus: (e) => statuses.push(e.status),
-      probeAgentSock: async () => '/tmp/launchd.x/Listeners'
+      probeAgentSock: async () => '/tmp/ssh-agent.sock'
     })
     await mgr.connect('p1', conn)
     const args = ((spawnMaster.mock.calls[0] as unknown[])[0] as string[]).join(' ')
-    expect(args).toContain('-o IdentityAgent=/tmp/launchd.x/Listeners')
+    expect(args).toContain('-o IdentityAgent=/tmp/ssh-agent.sock')
     expect(args).not.toContain('AddKeysToAgent=yes')
     // The stored conn carries the pin, so every later childArgs consumer rides the same answer.
-    expect(mgr.refForProject('p1')?.conn.identityAgentSock).toBe('/tmp/launchd.x/Listeners')
+    expect(mgr.refForProject('p1')?.conn.identityAgentSock).toBe('/tmp/ssh-agent.sock')
   })
 
   it('strips an INBOUND identityAgentSock: only the local probe may aim ssh at an agent socket', async () => {
@@ -288,7 +288,7 @@ describe('SshProjectManager', () => {
       const command = args.at(-1) ?? ''
       commands.push(command)
       return command.includes('printf %s')
-        ? { code: 0, stdout: "/Users/O'Brien Home" }
+        ? { code: 0, stdout: "/home/O'Brien Home" }
         : { code: 0, stdout: '' }
     })
     const mgr = new SshProjectManager({
@@ -304,7 +304,7 @@ describe('SshProjectManager', () => {
     expect(await mgr.uploadFile('p1', '/local/a.png', 'same.png')).toBeNull()
     const cleanup = commands.find((command) => command.startsWith('rm -rf -- '))
     expect(cleanup).toMatch(
-      /^rm -rf -- '\/Users\/O'\\''Brien Home\/\.nodeterm\/uploads\/[0-9a-f-]{36}'$/
+      /^rm -rf -- '\/home\/O'\\''Brien Home\/\.nodeterm\/uploads\/[0-9a-f-]{36}'$/
     )
   })
 
@@ -410,11 +410,11 @@ describe('SshProjectManager', () => {
     expect(calls.some((c) => c.args.join(' ').includes('id > /tmp/pwned'))).toBe(false)
   })
 
-  it('connect ACCEPTS a home with a space (the validator must not break real macOS homes)', async () => {
-    const { mgr } = mgrWithHome('/Users/Enes Kirca')
+  it('connect accepts a remote Linux home with a space', async () => {
+    const { mgr } = mgrWithHome('/home/Enes Kirca')
     const { tmuxConfPath } = await mgr.connect('p1', conn)
-    expect(tmuxConfPath).toBe('/Users/Enes Kirca/.nodeterm/tmux.conf')
-    expect(mgr.remoteHomeFor('p1')).toBe('/Users/Enes Kirca')
+    expect(tmuxConfPath).toBe('/home/Enes Kirca/.nodeterm/tmux.conf')
+    expect(mgr.remoteHomeFor('p1')).toBe('/home/Enes Kirca')
   })
 
   it('uploadFile REFUSES a probed $HOME carrying a newline', async () => {
@@ -609,21 +609,25 @@ describe('SshProjectManager', () => {
     releaseProbe?.()
   })
 
-  it('remoteAccountAdd reads the version from the markers, not from banner noise', async () => {
-    // Same probe, other consumer: an OLD remote CLI must still report versionSupported=false so the
-    // keychain-collision warning survives (the banner's `22.04.3` would have suppressed it).
+  it('remoteAccountAdd returns the isolated config directory for every version result', async () => {
     const { mgr } = mgrWithClaude('__NT_V_START__2.0.14 (Claude Code)__NT_V_END__')
     await mgr.connect('p1', conn)
-    expect((await mgr.remoteAccountAdd('p1', 'acc1'))?.versionSupported).toBe(false)
+    expect(await mgr.remoteAccountAdd('p1', 'acc1')).toEqual({
+      configDir: '~/.nodeterm/claude-accounts/acc1'
+    })
 
     const modern = mgrWithClaude('__NT_V_START__2.1.0 (Claude Code)__NT_V_END__')
     await modern.mgr.connect('p2', conn)
-    expect((await modern.mgr.remoteAccountAdd('p2', 'acc1'))?.versionSupported).toBe(true)
+    expect((await modern.mgr.remoteAccountAdd('p2', 'acc1'))?.configDir).toBe(
+      '~/.nodeterm/claude-accounts/acc1'
+    )
 
-    // Probe failed entirely (no markers) → fail-open true: adding an account is never blocked.
+    // A missing version never blocks account creation.
     const unknown = mgrWithClaude(null)
     await unknown.mgr.connect('p3', conn)
-    expect((await unknown.mgr.remoteAccountAdd('p3', 'acc1'))?.versionSupported).toBe(true)
+    expect((await unknown.mgr.remoteAccountAdd('p3', 'acc1'))?.configDir).toBe(
+      '~/.nodeterm/claude-accounts/acc1'
+    )
   })
 
   it('installs a standalone Codex launcher and relay on the SSH host without credentials', async () => {
@@ -737,7 +741,7 @@ describe('SshProjectManager', () => {
   it.skipIf(process.platform === 'win32')(
     'starts and reuses one direct app-server when the remote npm CLI has no daemon install',
     async () => {
-      // Keep the Unix socket below macOS SUN_LEN; production remote homes are deliberately short too.
+      // Keep the Unix socket below the host socket-path limit; production remote homes are short too.
       const root = await fs.mkdtemp('/tmp/nt-cx-server-')
       const fakeCodex = path.join(root, 'fake-codex.cjs')
       try {
@@ -892,7 +896,9 @@ describe('SshProjectManager', () => {
       try {
         const res = await mgr.downloadFile('p1', '/srv/repo/notes.md', dir)
         expect(res).toMatchObject({ ok: true, localPath: path.join(dir, 'notes (2).md') })
-        expect((await fs.lstat(dangling)).isSymbolicLink()).toBe(true)
+        // lstat of a dangling Windows junction can itself return ENOENT. The parent directory
+        // listing is the stable directory-entry assertion that also works on POSIX symlinks.
+        expect(await fs.readdir(dir)).toContain('notes.md')
         expect(await fs.readFile(path.join(dir, 'notes (2).md'), 'utf8')).toBe('payload')
       } finally {
         windowsAccess?.mockRestore()
@@ -1145,41 +1151,6 @@ describe('SshProjectManager', () => {
         ])
         const names = results.map((result) => result.ok ? path.basename(result.localPath) : '')
         expect(names.sort()).toEqual(['foo', 'foo (2)'])
-      }
-    )
-
-    it.skipIf(process.platform !== 'darwin')(
-      'coordinates case aliases on the default macOS filesystem',
-      async () => {
-        const dir = await destDir()
-        let arrived = 0
-        let release!: () => void
-        const bothArrived = new Promise<void>((resolve) => { release = resolve })
-        const runScp = vi.fn(async (args: string[]) => {
-          if (++arrived === 2) release()
-          await bothArrived
-          await fs.writeFile(args.at(-1)!, String(arrived))
-          return { code: 0 }
-        })
-        const mgr = new SshProjectManager({
-          userDataDir: '/ud',
-          spawnMaster: vi.fn(() => ({ kill: vi.fn(), on: vi.fn() })),
-          run: vi.fn(async (args: string[]) => ({
-            code: args.join(' ').includes('test -d') ? 1 : 0,
-            stdout: ''
-          })),
-          runScp,
-          getHook: () => ({ port: 1, token: 't', version: '1' }),
-          onStatus: vi.fn()
-        })
-        await mgr.connect('p1', conn, '/srv/repo')
-
-        const results = await Promise.all([
-          mgr.downloadFile('p1', '/srv/repo/Foo', dir),
-          mgr.downloadFile('p1', '/srv/repo/foo', dir)
-        ])
-        const names = results.map((result) => result.ok ? path.basename(result.localPath) : '')
-        expect(new Set(names.map((name) => name.toLowerCase())).size).toBe(2)
       }
     )
 
@@ -2408,9 +2379,8 @@ describe('SshProjectManager', () => {
       // The agent-only credential case (smartcard, 1Password/Secretive with no IdentityAgent line):
       // no key FILE exists, so no prompt can rescue it, and our private agent hides the user's own.
       // The answer is a HINT naming the documented fix (IdentityAgent), never a second attempt: an
-      // automatic ambient-agent retry fired on every ordinary auth failure (launchd exports
-      // SSH_AUTH_SOCK on every Mac) and carried AddKeysToAgent=yes into the login agent - the leak
-      // this design exists to close.
+      // An automatic ambient-agent retry after ordinary auth failure would carry AddKeysToAgent=yes
+      // into the login agent, which is the credential-lifetime leak this design closes.
       vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined as never)
       vi.spyOn(fs, 'stat').mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
       const spawnMaster = vi.fn(() => ({
@@ -2499,7 +2469,7 @@ describe('SshProjectManager', () => {
     // logic runs. The feature itself is POSIX-shaped too (it hands ssh a generated `.sh` helper
     // via SSH_ASKPASS, which Windows OpenSSH will not execute), so this is a real platform gap
     // rather than a test artefact: see the SSH passphrase note in docs/windows.md. Skipped by
-    // condition rather than deleted, so it keeps running — and keeps guarding — on macOS/Linux.
+    // condition rather than deleted, so it keeps running and keeps guarding on POSIX hosts.
     // POSIX-only: the askpass transport is an AF_UNIX socket (SSH_ASKPASS over a `.sock`), which
     // cannot bind on Windows (`listen EACCES` on a Temp `.sock`). The mechanism itself is never
     // used on Windows, so this pins POSIX wiring; the file's drive/UNC uploadFile cases still run
@@ -2813,13 +2783,14 @@ describe('master watchdog', () => {
       const catalog = vi
         .spyOn(mgr, 'remoteCodexCatalog')
         .mockResolvedValue([{ accountId: 'account-b', socketPath: '/remote/socket' }])
+      const relativePath = path.join('sessions', '2026', 'rollout-thread-123.jsonl')
 
       await mgr.remoteCodexImportThread(
         'p1',
         'account-b',
         'thread-123',
         '/local/sessions/2026/rollout-thread-123.jsonl',
-        'sessions/2026/rollout-thread-123.jsonl'
+        relativePath
       )
 
       expect(runScp).toHaveBeenCalledTimes(1)
@@ -2844,7 +2815,7 @@ describe('master watchdog', () => {
         undefined,
         'thread-123',
         '/local/rollout.jsonl',
-        'sessions/2026/rollout-thread-123.jsonl'
+        path.join('sessions', '2026', 'rollout-thread-123.jsonl')
       )
 
       expect(runScp).not.toHaveBeenCalled()
@@ -2867,7 +2838,7 @@ describe('master watchdog', () => {
           undefined,
           'thread-123',
           '/local/rollout.jsonl',
-          'sessions/2026/rollout-thread-123.jsonl'
+          path.join('sessions', '2026', 'rollout-thread-123.jsonl')
         )
       ).rejects.toThrow('Could not upload Codex conversation')
 
@@ -3110,7 +3081,7 @@ describe('SshProjectManager — remote Codex account lifecycle (Task 6.1, Proper
     const before = run.mock.calls.length
     await expect(mgr.remoteCodexAccountAdd('nope', 'acc1')).rejects.toThrow(/not connected/)
     await expect(
-      mgr.remoteCodexImportThread('nope', 'acc1', 'threadid', 'sessions/a/b.jsonl', '/l/r.jsonl')
+      mgr.remoteCodexImportThread('nope', 'acc1', 'threadid', '/l/r.jsonl', 'sessions/a/b.jsonl')
     ).rejects.toThrow(/not connected/)
     expect(run.mock.calls.length).toBe(before) // neither refusal issued any ssh
   })
@@ -3156,11 +3127,11 @@ describe('SshProjectManager — atomic remote import (Task 6.2, Property 2 + 11)
     const { mgr, run, runScp } = await makeCodexMgr()
     const before = run.mock.calls.length
     await expect(
-      mgr.remoteCodexImportThread('p1', undefined, 'bad id!', REL, '/l/r.jsonl')
+      mgr.remoteCodexImportThread('p1', undefined, 'bad id!', '/l/r.jsonl', REL)
     ).rejects.toThrow(/Invalid Codex thread id/)
     for (const bad of ['etc/passwd', 'sessions/../etc/x', 'sessions//x', '/abs/sessions/x']) {
       await expect(
-        mgr.remoteCodexImportThread('p1', undefined, 'thread1', bad, '/l/r.jsonl')
+        mgr.remoteCodexImportThread('p1', undefined, 'thread1', '/l/r.jsonl', bad)
       ).rejects.toThrow(/Invalid Codex rollout path/)
     }
     expect(run.mock.calls.length).toBe(before)
@@ -3171,7 +3142,7 @@ describe('SshProjectManager — atomic remote import (Task 6.2, Property 2 + 11)
     const { mgr, runScp } = await makeCodexMgr({
       handler: (cmd) => (cmd.includes('thread-check') ? { code: 0 } : undefined) // already present
     })
-    expect(await mgr.remoteCodexImportThread('p1', undefined, 'thread1', REL, '/l/r.jsonl')).toEqual({
+    expect(await mgr.remoteCodexImportThread('p1', undefined, 'thread1', '/l/r.jsonl', REL)).toEqual({
       imported: false
     })
     expect(runScp.mock.calls.length).toBe(0)
@@ -3185,7 +3156,7 @@ describe('SshProjectManager — atomic remote import (Task 6.2, Property 2 + 11)
         return undefined
       }
     })
-    const out = await cm.mgr.remoteCodexImportThread('p1', 'acc1', 'thread1', REL, '/l/r.jsonl')
+    const out = await cm.mgr.remoteCodexImportThread('p1', 'acc1', 'thread1', '/l/r.jsonl', REL)
     expect(out).toEqual({ imported: true })
     const install = cm.runCalls.find((c) => c.cmd.includes(' ln '))
     expect(install).toBeTruthy()
@@ -3207,7 +3178,7 @@ describe('SshProjectManager — atomic remote import (Task 6.2, Property 2 + 11)
       }
     })
     await expect(
-      mgr.remoteCodexImportThread('p1', 'acc1', 'thread1', REL, '/l/r.jsonl')
+      mgr.remoteCodexImportThread('p1', 'acc1', 'thread1', '/l/r.jsonl', REL)
     ).rejects.toThrow(/already exists or could not be installed/)
   })
 
@@ -3222,7 +3193,7 @@ describe('SshProjectManager — atomic remote import (Task 6.2, Property 2 + 11)
       }
     })
     await expect(
-      mgr.remoteCodexImportThread('p1', 'acc1', 'thread1', REL, '/l/r.jsonl')
+      mgr.remoteCodexImportThread('p1', 'acc1', 'thread1', '/l/r.jsonl', REL)
     ).rejects.toThrow(/did not discover the imported conversation/)
     // The rollback removed the freshly installed target — no half-landed state.
     expect(seen.some((c) => /rm -f '[^']*rollout-x\.jsonl'/.test(c))).toBe(true)

@@ -19,7 +19,7 @@ describe('SETTINGS_GROUPS', () => {
   it('starts at a section that exists in the groups', () => {
     expect(allSectionIds()).toContain(FIRST_SECTION_ID)
   })
-  it('hides mac-only sections off macOS, keeps them on', () => {
+  it('keeps Agent HUD visible in the Windows settings registry', () => {
     const off = visibleSettingsGroups(false).flatMap((g) => g.sections.map((s) => s.id))
     expect(off).not.toContain('notch')
     // 42 total minus the one mac-only section.

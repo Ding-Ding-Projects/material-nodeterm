@@ -4,7 +4,7 @@ import { prepareQuickOpenFiles, rankQuickOpenFiles } from './quickOpenSearch'
 const files = prepareQuickOpenFiles([
   'src/main/index.ts',
   'src/renderer/components/CommandPalette.tsx',
-  'dist/nodeterm-0.2.0-arm64.dmg',
+  'dist/nodeterm-0.2.0-x64.exe',
   'README.md'
 ])
 
@@ -14,8 +14,8 @@ describe('rankQuickOpenFiles', () => {
     expect(r.map((x) => x.path)).toEqual(['src/main/index.ts', 'src/renderer/components/CommandPalette.tsx'])
   })
   it('finds a git-ignored artifact by name fragment', () => {
-    const r = rankQuickOpenFiles('dmg', files)
-    expect(r[0].path).toBe('dist/nodeterm-0.2.0-arm64.dmg')
+    const r = rankQuickOpenFiles('exe', files)
+    expect(r[0].path).toBe('dist/nodeterm-0.2.0-x64.exe')
   })
   it('a filename hit outranks a path-only subsequence hit', () => {
     const r = rankQuickOpenFiles('index', files)

@@ -15,8 +15,6 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { connect as netConnect } from 'net'
 import { randomBytes, randomInt, randomUUID, timingSafeEqual } from 'crypto'
 import { promises as fs } from 'fs'
-import { execFile } from 'child_process'
-import { promisify } from 'util'
 import os from 'os'
 import path from 'path'
 import {
@@ -48,7 +46,6 @@ import { renameAtomic, sweepStaleTempFiles, tempNameFor } from '../core/fs-atomi
 import { openPairingEnvelope, sealPairingResponse } from './pairing-envelope'
 import { withPairingRegistryLock } from './pairing-registry-lock'
 
-const execFileAsync = promisify(execFile)
 
 /**
  * Host-identity and optional relay dependencies injected into the pairing service. The host-key
@@ -288,19 +285,10 @@ async function readAgentJson(): Promise<Record<string, unknown>> {
 
 /** Detect the machine's display name (macOS ComputerName, else hostname). */
 async function computerName(): Promise<string> {
-  if (process.platform === 'darwin') {
-    try {
-      const { stdout } = await execFileAsync('scutil', ['--get', 'ComputerName'])
-      const name = stdout.trim()
-      if (name) return name
-    } catch {
-      // fall through to hostname
-    }
-  }
   return os.hostname()
 }
 
-/** Quick TCP probe of 127.0.0.1:22 to guess whether Remote Login (sshd) is on. */
+/** Quick TCP probe of 127.0.0.1:22 to check whether sshd is listening. */
 function probeSsh(): Promise<boolean> {
   return new Promise((resolve) => {
     let done = false

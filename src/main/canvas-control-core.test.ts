@@ -331,9 +331,7 @@ describe('parseControlRequest', () => {
       // The one action that works everywhere, and the never-do.
       expect(body.toLowerCase()).toContain('escalated permissions')
       expect(body).toMatch(/never relink, reinstall or restart nodeterm/)
-      // The macOS permanent remedy, named exactly as codex's config reads it.
-      expect(body).toContain('network.allow_unix_sockets')
-      expect(body).toContain('~/.codex/config.toml')
+      expect(body).not.toContain('network.allow_')
     }
   })
 

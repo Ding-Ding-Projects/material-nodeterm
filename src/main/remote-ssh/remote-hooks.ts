@@ -23,7 +23,7 @@ import {
  * Remote hook scripts get NO Codex thread-identity root.
  *
  * The default root is THIS machine's data dir, and baking it into a script written to someone
- * else's host puts a path like `/Users/<you>/Library/Application Support/…` on that host — inert
+ * else's host puts a path from this desktop's data directory on that host, which is inert
  * (nothing there can read it) but a needless leak of the desktop's layout. Shared identity for SSH
  * hosts is a later slice; when it lands, this becomes the REMOTE host's root, not null.
  */
@@ -868,10 +868,10 @@ export class RemoteHooks {
       if (!changed) return // key already present (any value) → never overwrite the user's `/tui`
       await this.r.run(
         // `$(dirname …)` QUOTED, like the other three sites. Unquoted, a home with a space
-        // (`/Users/Enes Kirca`) word-splits the substitution into two mkdir args — measured
+        // (a remote home with spaces) word-splits the substitution into two mkdir args, measured
         // ARGC=2 — so junk directories are created, the correctly-quoted `cat >` then fails, and
         // the catch below swallows it. Symptom: fullscreen-TUI silently never written for any
-        // macOS user whose home has a space in it.
+        // remote user whose home has a space in it.
         childArgs(conn, controlPath, `mkdir -p "$(dirname ${posixQuote(config)})" && cat > ${posixQuote(config)}`),
         JSON.stringify(next, null, 2)
       )

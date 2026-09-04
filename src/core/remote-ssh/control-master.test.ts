@@ -63,8 +63,8 @@ describe('mkDirArgs', () => {
 
 describe('controlPathFor', () => {
   it('returns a SHORT, space-free socket path under ~/.nodeterm/ssh-cm (not the long/spaced userData)', () => {
-    // Regression: macOS userData is `~/Library/Application Support/<app>` — too long for a unix
-    // socket (sun_path 104, minus ssh's ~17-char bind suffix) AND has a space ssh's `-o` rejects.
+    // Regression: a long or spaced desktop data path can exceed Unix socket limits or split the
+    // SSH option value.
     const cp = controlPathFor('a-fairly-long-project-id-0123456789')
     // controlPathFor is built with path.join, which is platform-native (win32 joins with `\`),
     // so the expected prefix has to be built the same way rather than hard-coded with `/` — a
@@ -129,11 +129,11 @@ describe('agent pin (identityAgentSock, issue #427)', () => {
   // A conn the `ssh -G` probe marked: this host's effective config says `IdentityAgent
   // SSH_AUTH_SOCK` (or equivalent), so the ambient login-agent socket is pinned on argv — a
   // command-line -o beats both the config line and the app-agent env override.
-  const pinned = { ...conn, identityAgentSock: '/tmp/launchd.abc/Listeners' }
+  const pinned = { ...conn, identityAgentSock: '/tmp/ssh-agent.sock' }
 
   it('masterArgs pins the login agent and drops the forced AddKeysToAgent', () => {
     const args = masterArgs(pinned, '/s.sock')
-    expect(args.join(' ')).toContain('-o IdentityAgent=/tmp/launchd.abc/Listeners')
+    expect(args.join(' ')).toContain('-o IdentityAgent=/tmp/ssh-agent.sock')
     // Forcing AddKeysToAgent=yes at a LOGIN agent would load an askpass-unlocked key into it
     // until logout — the exact leak the app-private agent exists to close. The user's own config
     // decides for a pinned host.
@@ -141,15 +141,15 @@ describe('agent pin (identityAgentSock, issue #427)', () => {
   })
   it('childArgs carries the pin too: the ControlMaster=auto fallback re-authenticates for real', () => {
     const args = childArgs(pinned, '/s.sock', 'tmux ls')
-    expect(args.join(' ')).toContain('-o IdentityAgent=/tmp/launchd.abc/Listeners')
+    expect(args.join(' ')).toContain('-o IdentityAgent=/tmp/ssh-agent.sock')
     expect(args.at(-1)).toBe('tmux ls')
   })
   it('scp up AND down carry the pin: scp re-authenticates when the master socket is gone', () => {
     expect(scpArgs(pinned, '/s.sock', '/l/f', '/r/f').join(' ')).toContain(
-      '-o IdentityAgent=/tmp/launchd.abc/Listeners'
+      '-o IdentityAgent=/tmp/ssh-agent.sock'
     )
     expect(scpDownArgs(pinned, '/s.sock', '/r/f', '/l/f').join(' ')).toContain(
-      '-o IdentityAgent=/tmp/launchd.abc/Listeners'
+      '-o IdentityAgent=/tmp/ssh-agent.sock'
     )
   })
   it('an unpinned conn is byte-identical to the pre-#427 argv (the exact-array tests above are the pin)', () => {
@@ -465,11 +465,11 @@ describe('scpArgs', () => {
 
 describe('scpDownArgs', () => {
   it('pulls remote → local over the master, with the remote side after host: (never an option)', () => {
-    const j = scpDownArgs(conn, '/s.sock', '/srv/app/notes.md', '/Users/e/Downloads/notes.md.part').join(' ')
+    const j = scpDownArgs(conn, '/s.sock', '/srv/app/notes.md', 'C:/Users/e/Downloads/notes.md.part').join(' ')
     expect(j).toContain('-o ControlPath=/s.sock')
     expect(j).toContain('-o BatchMode=yes')
     expect(j).toContain('-P 2222')
-    expect(j).toContain('deploy@h.example.com:/srv/app/notes.md /Users/e/Downloads/notes.md.part')
+    expect(j).toContain('deploy@h.example.com:/srv/app/notes.md C:/Users/e/Downloads/notes.md.part')
     expect(j).not.toContain(' -r ')
   })
 

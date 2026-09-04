@@ -56,7 +56,7 @@ const ROWS = {
   },
   trackpadPan: {
     title: 'Trackpad scroll pans',
-    keywords: ['trackpad', 'pan', 'scroll', 'zoom', 'magic', 'mouse', 'two-finger', 'macos']
+    keywords: ['trackpad', 'touchpad', 'pan', 'scroll', 'zoom', 'mouse', 'two-finger', 'windows']
   },
   dragMode: {
     title: 'Canvas left-drag',
@@ -341,7 +341,7 @@ export function BehaviorSection({ isActive }: { isActive: boolean }): React.JSX.
         <FieldRow
           label="Trackpad scroll pans"
           description={hintLabel(
-            'macOS: a two-finger trackpad scroll pans the canvas even with wheel zoom on. The desktop app tells mouse and trackpad apart directly, so a wheel mouse still zooms; in the browser (Server Edition) detection is heuristic - turn off there if a precise-pixel mouse (Magic Mouse, MX) pans when you meant to zoom.'
+            'A two-finger trackpad scroll pans the canvas even with wheel zoom on. Detection is heuristic because Chromium reports trackpads and precise-pixel mice through the same wheel API. Turn this off if a precise-pixel mouse pans when you meant to zoom.'
           )}
           control={
             <Switch

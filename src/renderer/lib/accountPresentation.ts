@@ -55,7 +55,7 @@ export function presentAccount({
   const cleanEmail = email?.trim() || undefined
   const identity = displayLabel || cleanEmail || 'Default account'
   const provenance = host ? `SSH · ${machineLabel?.trim() || host}` : 'Local'
-  const originDetail = host ? `SSH ${host}` : 'This Mac'
+  const originDetail = host ? `SSH ${host}` : 'This computer'
   const identityDetail =
     cleanEmail && cleanEmail !== identity ? `${identity} (${cleanEmail})` : identity
   return {

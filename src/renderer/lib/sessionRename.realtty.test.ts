@@ -50,7 +50,17 @@ const SENTINEL_CMD = "printf 'NTDONE%s\\n' 42\r"
 const SENTINEL_OUT = 'NTDONE42'
 
 function findBash(): string | null {
-  for (const c of ['/bin/bash', '/usr/bin/bash', '/usr/local/bin/bash', '/opt/homebrew/bin/bash']) {
+  const candidates = [
+    process.env.SHELL,
+    '/bin/bash',
+    '/usr/bin/bash',
+    process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'Git', 'bin', 'bash.exe') : null,
+    process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Git', 'bin', 'bash.exe')
+      : null
+  ]
+  for (const c of candidates) {
+    if (!c) continue
     if (fs.existsSync(c)) return c
   }
   return null
@@ -128,7 +138,10 @@ function deliver(bytes: string): Promise<string> {
 /** The delivery: the composed text, then the Enter `sendText` appends. */
 const delivered = (line: string): string => `${line}\r`
 
-const suite = BASH && pty ? describe : describe.skip
+// node-pty's ConPTY helper requires a console attachment that Vitest does not provide on Windows.
+// The byte-level sibling remains the cross-platform proof, while this real bash lane runs where a
+// native pseudo-terminal can attach reliably.
+const suite = process.platform === 'win32' ? describe.skip : BASH && pty ? describe : describe.skip
 
 suite('REAL bash: a rename title cannot submit a second command', () => {
   it(

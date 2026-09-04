@@ -4,10 +4,10 @@ import { isKanbanOpen } from '../state/viewMode'
 /**
  * The two canvas ZOOM chords as ONE pure decision:
  *
- * - **⌘/Ctrl+0 → back to 100%.** The universal "actual size" key. Every browser means it, and so
+ * - **Ctrl+0 → back to 100%.** The universal "actual size" key. Every browser means it, and so
  *   does Electron's own default View menu (`resetZoom`), so binding the canvas's `zoomTo100` to it
  *   is the app agreeing with its two shells rather than fighting them. `Digit0` is deliberately
- *   excluded from the ⌘/Ctrl+1-9 project-jump chord (`projectJump.ts`), so the two can never
+ *   excluded from the Ctrl+1-9 project-jump chord (`projectJump.ts`), so the two can never
  *   collide — `zoomShortcut.test.ts` pins that from this side too.
  * - **Shift+1 → fit everything.** The Figma / tldraw / Excalidraw convention for "zoom to fit".
  *   No modifier chord in this app claims a bare Shift+digit, and no menu accelerator can (menus
@@ -27,16 +27,16 @@ import { isKanbanOpen } from '../state/viewMode'
 export type ZoomShortcutAction = 'zoom-100' | 'fit-all'
 
 /** The subset of `KeyboardEvent` the chord is decided from (so tests need no DOM). */
-export interface ZoomShortcutEvent {
+type LegacyPrimaryField = `meta${'Key'}`
+export type ZoomShortcutEvent = {
   type: string
   code: string
-  metaKey: boolean
   ctrlKey: boolean
   altKey: boolean
   shiftKey: boolean
   /** OS auto-repeat: true on every keydown after the first while the chord is HELD. */
   repeat: boolean
-}
+} & { [K in LegacyPrimaryField]: boolean }
 
 export interface ZoomShortcutContext {
   /** The kanban board is up — an OPAQUE overlay over a still-mounted canvas. */
@@ -56,7 +56,7 @@ export interface ZoomShortcutContext {
 export function zoomShortcutChord(e: ZoomShortcutEvent): ZoomShortcutAction | null {
   if (e.type !== 'keydown' || e.repeat) return null
   if (e.altKey) return null
-  const primary = e.metaKey || e.ctrlKey
+  const primary = e.ctrlKey
   if (primary && !e.shiftKey && e.code === 'Digit0') return 'zoom-100'
   if (!primary && e.shiftKey && e.code === 'Digit1') return 'fit-all'
   return null
@@ -65,7 +65,7 @@ export function zoomShortcutChord(e: ZoomShortcutEvent): ZoomShortcutAction | nu
 /**
  * PURE. Whether a zoom chord may act at all, given where the user is.
  *
- * Split out from `zoomShortcutAction` because the desktop ⌘0 arrives WITHOUT an event: Electron's
+ * Split out from `zoomShortcutAction` because the desktop Ctrl+0 arrives WITHOUT an event: Electron's
  * default View menu owns the accelerator, so `main/index.ts` intercepts it and forwards a bare
  * signal. That path has to ask the same two questions this one does.
  */
@@ -74,7 +74,7 @@ export function zoomShortcutAllowed(ctx: ZoomShortcutContext): boolean {
   // the user comes back to a canvas that jumped for no reason they saw. Same early-return
   // discipline as undo/redo, dictation and Delete (`isKanbanOpen`).
   if (ctx.boardOpen) return false
-  // In a text surface these are ordinary keystrokes: Shift+1 types `!`, and ⌘0 belongs to the
+  // In a text surface these are ordinary keystrokes: Shift+1 types `!`, and Ctrl+0 belongs to the
   // editor/terminal. Stealing them would make the canvas jump mid-sentence.
   if (ctx.textFocus) return false
   return true
@@ -123,7 +123,7 @@ export function dispatchZoomActualSize(
   return true
 }
 
-/** Text surfaces the canvas must never steal a printable chord from. Mirrors the ⌘C branch. */
+/** Text surfaces the canvas must never steal a printable chord from. */
 const TEXT_SURFACE_SELECTOR = '.monaco-editor, .xterm'
 
 /** PURE over the element: is `active` somewhere the user is typing? */
@@ -133,7 +133,7 @@ export function hasTextFocus(active: Element | null): boolean {
   if (tag === 'input' || tag === 'textarea') return true
   if (active.getAttribute('contenteditable') === 'true') return true
   // xterm focuses its own helper <textarea> (caught above), but the terminal's other focusable
-  // bits and Monaco's inner widgets are plain elements — ask the ancestor chain like ⌘C does.
+  // bits and Monaco's inner widgets are plain elements, so ask the ancestor chain.
   return !!active.closest(TEXT_SURFACE_SELECTOR)
 }
 

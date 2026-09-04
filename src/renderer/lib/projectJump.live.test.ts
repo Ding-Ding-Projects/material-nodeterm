@@ -22,7 +22,6 @@ function ev(code: string): ProjectJumpEvent {
   return {
     type: "keydown",
     code,
-    metaKey: false,
     ctrlKey: true,
     altKey: false,
     shiftKey: false,

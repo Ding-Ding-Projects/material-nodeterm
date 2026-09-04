@@ -1,10 +1,10 @@
-/** Decides whether a quick-open file should open as an editor node (text/image, handled by
- *  EditorNode) or be handed to the OS default app (binaries/installers like .dmg). */
+/** Decides whether a quick-open file should open as an editor node or be handed to the
+ *  operating system's default app. */
 
 // Extensions the OS should handle — EditorNode (Monaco) can't render these. Anything NOT in
 // this set opens in an editor node (text, code, images, or extensionless config files).
 const OS_OPEN_EXTENSIONS = new Set([
-  'dmg', 'pkg', 'app', 'zip', 'gz', 'tar', 'tgz', 'rar', '7z',
+  'zip', 'gz', 'tar', 'tgz', 'rar', '7z',
   'exe', 'msi', 'deb', 'rpm', 'iso',
   'mp4', 'mov', 'avi', 'mkv', 'mp3', 'wav', 'flac',
   'sqlite', 'db', 'bin', 'dat', 'wasm'

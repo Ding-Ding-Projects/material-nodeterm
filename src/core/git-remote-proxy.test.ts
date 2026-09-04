@@ -38,7 +38,7 @@ describe('isSafeBranch', () => {
 
 describe('runGitRemoteOp', () => {
   // `runGitRemoteOp` launches `opts.gitBin` directly via `execFile` -- no shell, by design (see
-  // the security note atop git-remote-proxy.ts: "git runs via execFile (no shell)"). A POSIX
+  // the security note atop git-remote-proxy.ts: "git runs via execFile (no shell)"). A Linux
   // shebang script cannot be launched that way on Windows at all -- CreateProcess has no notion
   // of `#!` -- so the stub needs a real, directly-launchable Windows executable. It can't be a
   // real interpreter (node, sh, powershell) either: every one of them recognizes a `-C` flag of

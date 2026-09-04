@@ -1,6 +1,6 @@
 // Electron garbage-collects Notification objects nothing references (electron/electron#16922):
 // the notification still shows, but once the wrapper is collected its 'click' handler is gone —
-// clicking then only activates the app (macOS default) instead of running our focus logic.
+// clicking then only activates the app instead of running our focus logic.
 // Retain every shown notification here until the OS reports it dismissed.
 
 // Structural view of Electron's Notification (keeps this module electron-free and unit-testable).
@@ -49,8 +49,8 @@ export function composeNativeNotification(payload: PreparedNativeNotification): 
   return { title: payload.title, body: payload.body }
 }
 
-// Backstop for notifications macOS parks in Notification Center without ever emitting
-// 'close' — beyond this, the oldest retained one is dropped (its click stops working,
+// Backstop for notifications the operating system retains without emitting `close`. Beyond this,
+// the oldest retained one is dropped (its click stops working,
 // which is the pre-fix behavior; anything recent keeps its handler alive).
 export const MAX_RETAINED_NOTIFICATIONS = 50
 

@@ -225,11 +225,11 @@ jobs:
       # electron-builder has no certificate to sign with in the first place;
       # CSC_IDENTITY_AUTO_DISCOVERY=false additionally stops it from opportunistically
       # picking one up from the runner's own certificate store. package.json's root
-      # `build.forceCodeSigning: false`, `build.win.forceCodeSigning: false`, and
-      # `build.win.signExecutable: false` prevent signing,
-      # while the omitted `build.win.signAndEditExecutable` uses electron-builder's default
-      # `true` so PE icon and version resources are still written. The next step independently verifies the produced
-      # installer's real Authenticode signature and fails if it is somehow signed.
+      # `build.forceCodeSigning: false`, `build.win.forceCodeSigning: false`,
+      # `build.win.signExecutable: false`, and `build.win.signAndEditExecutable: false` prevent
+      # signer invocation. The reviewed afterPack hook applies PE icon and version resources
+      # directly. The next step independently verifies the produced installer's real Authenticode
+      # signature and fails if it is somehow signed.
       - name: Package Windows installer (Squirrel, unsigned)
         id: package
         env:

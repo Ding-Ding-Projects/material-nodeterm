@@ -594,10 +594,13 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   if (
     packageJson?.build?.win?.signExecutable !== false ||
     packageJson?.build?.win?.forceCodeSigning !== false ||
-    Object.hasOwn(packageJson?.build?.win ?? {}, 'signAndEditExecutable') ||
+    packageJson?.build?.win?.signAndEditExecutable !== false ||
     packageJson?.build?.forceCodeSigning !== false
   ) {
-    issues.push('electron-builder must disable signing and omit signAndEditExecutable so default resource editing remains enabled')
+    issues.push('electron-builder must disable every signing control while the unsigned afterPack resource hook remains enabled')
+  }
+  if (packageJson?.build?.afterPack !== './scripts/after-pack.cjs') {
+    issues.push('package.json must keep the unsigned afterPack resource and package verification hook')
   }
 
   const assetsAt = stepIndex(steps, 'assets')

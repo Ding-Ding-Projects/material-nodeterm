@@ -1,7 +1,7 @@
-// Executable resolution for a GUI process, without ever spawning a login shell SYNCHRONOUSLY.
+// Executable resolution for desktop and server processes, without ever spawning a login shell
+// synchronously.
 //
-// A GUI app launched from Finder/Dock inherits only a minimal PATH (`/usr/bin:/bin:…`) — it
-// never sees Homebrew, `~/.local/bin`, nvm, etc. The historical fix was a sync
+// A Linux service can inherit only a minimal PATH and miss user-local tools. The historical fix was a sync
 // `execFileSync($SHELL, ['-lc', 'command -v <bin>'])` per lookup, but sourcing the user's
 // profile routinely takes 100-800ms (nvm/conda init) and a synchronous spawn of it sits on the
 // MAIN thread — freezing every window, every PTY flush and all IPC for its duration (and the
@@ -25,15 +25,15 @@ const runAsync = promisify(execFile)
  *
  * We run the user's login + interactive shell (so BOTH profile files and `.zshrc`/`.bashrc`
  * PATH additions are seen) and read back `$PATH`, printed between sentinels to survive any
- * dotfile noise. Bounded by a timeout; on any failure (hang, dotfile error, non-POSIX shell,
- * Windows) we fall back to the inherited PATH.
+ * dotfile noise. Bounded by a timeout; on any failure, or on a non-Linux host, we fall back to
+ * the inherited PATH.
  */
 let cachedShellPath: string | null | undefined
 let shellPathPromise: Promise<string | null> | null = null
 export function resolveShellPath(): Promise<string | null> {
   if (cachedShellPath !== undefined) return Promise.resolve(cachedShellPath)
   if (shellPathPromise) return shellPathPromise
-  if (os.platform() === 'win32') {
+  if (os.platform() !== 'linux') {
     cachedShellPath = null
     return Promise.resolve(null)
   }
@@ -140,7 +140,7 @@ export function findInPathString(bin: string, pathStr: string | null | undefined
 }
 
 /**
- * Resolve `bin` against the cached login-shell PATH (falling back to the inherited PATH while
+ * Resolve `bin` against the cached Linux login-shell PATH, falling back to the inherited PATH while
  * the probe is in flight), then against the caller's well-known locations. Never spawns.
  */
 export function findExecutableSync(bin: string, fallbacks: string[] = []): string | null {
@@ -152,16 +152,16 @@ export function findExecutableSync(bin: string, fallbacks: string[] = []): strin
 
 /**
  * Well-known install locations for the OpenSSH client tools, walked when neither the login-shell
- * PATH (macOS/Linux) nor the inherited PATH (Windows — `resolveShellPath` never probes there, see
- * above) had a hit. Windows 10 1809+ ships OpenSSH as an optional Windows feature installed under
+ * PATH (Linux) nor the inherited PATH (Windows, where `resolveShellPath` never probes) had a hit.
+ * Windows 10 1809+ ships OpenSSH as an optional Windows feature installed under
  * `%WINDIR%\System32\OpenSSH`, which is on the SYSTEM PATH for a normal user session but not
- * necessarily inherited by a GUI app launched from Explorer/a shortcut — the same class of gap the
- * macOS Homebrew paths returned here exist to cover.
+ * necessarily inherited by a desktop app launched from Explorer or a shortcut.
  */
 export function opensshFallbacks(bin: 'ssh' | 'scp'): string[] {
   if (os.platform() === 'win32') {
     const winDir = process.env.WINDIR || process.env.SystemRoot || 'C:\\Windows'
     return [path.join(winDir, 'System32', 'OpenSSH', `${bin}.exe`)]
   }
-  return [`/usr/bin/${bin}`, `/usr/local/bin/${bin}`, `/opt/homebrew/bin/${bin}`]
+  if (os.platform() === 'linux') return [`/usr/bin/${bin}`, `/usr/local/bin/${bin}`]
+  return []
 }

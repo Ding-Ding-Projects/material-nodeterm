@@ -186,7 +186,7 @@ describe('LicenseSection — confirming the destructive actions', () => {
     const dialog = screenText()
     expect(dialog).toMatch(/paired phone/)
     expect(dialog).toMatch(/once every 30 days/)
-    expect(dialog).toMatch(/this Mac keeps it/)
+    expect(dialog).toMatch(/this computer keeps it/)
 
     await act(async () => confirmDialog('Cancel'))
     expect(releaseOthers).not.toHaveBeenCalled()
@@ -212,8 +212,7 @@ describe('LicenseSection — confirming the destructive actions', () => {
   })
 
   it('does not tell a license with no key to copy one', async () => {
-    // An App Store entitlement: nothing to copy, so that sentence would be nonsense.
-    await mount(PRO, { key: null, used: 0, seats: 0, source: 'apple', error: null })
+    await mount(PRO, { key: null, used: 0, seats: 0, source: 'free', error: null })
     await act(async () => click('Deactivate on this device'))
 
     expect(screenText()).not.toMatch(/Copy your license key first/)
@@ -231,15 +230,15 @@ describe('LicenseSection — the key field and the paste-elsewhere line', () => 
   })
 
   it('offers no key field at all when the stated source has none', async () => {
-    await mount(PRO, { key: null, used: 0, seats: 0, source: 'apple', error: null })
+    await mount(PRO, { key: null, used: 0, seats: 0, source: 'free', error: null })
 
     const text = screenText()
     // "not available" means "exists, could not be fetched" — beside a sentence that says there is
-    // no key at all, the two halves of the first screen an App Store subscriber sees disagree.
+    // no key at all, the two halves of the screen disagree.
     expect(text).not.toContain('not available')
     expect(text).not.toContain('License key')
     expect(document.querySelector('input[readonly]')).toBeNull()
-    expect(text).toContain('comes from the App Store subscription on your paired phone')
+    expect(text).toContain('not backed by a license key')
   })
 
   it('stops inviting the user to paste the key elsewhere once the cap is full', async () => {
@@ -248,7 +247,7 @@ describe('LicenseSection — the key field and the paste-elsewhere line', () => 
     const text = screenText()
     expect(text).toContain('All 3 devices are in use.')
     // The line used to render on `detail.key` alone — directly under that sentence. Following it
-    // lands the user on `seat_limit` on the other Mac, which is where this whole task started.
+    // lands the user on `seat_limit` on the other computer, which is where this whole task started.
     expect(text).not.toMatch(/paste this key/)
     // The key itself is still shown and copyable; it is the ADVICE that is wrong here.
     expect((document.querySelector('input[readonly]') as HTMLInputElement).value).toBe('NT-KEY-1')

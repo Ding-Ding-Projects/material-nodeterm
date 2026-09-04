@@ -102,7 +102,7 @@ function seatsFrom(p: Payload | null): number {
  * different facts, and rendering the first as the second is the bug this whole route exists for. */
 const EMPTY_DETAIL: LicenseDetail = { key: null, used: 0, seats: 0, source: null, error: null }
 
-const LICENSE_SOURCES: readonly string[] = ['keygen', 'apple', 'free']
+const LICENSE_SOURCES: readonly string[] = ['keygen', 'free']
 
 /** The source decides whether the UI offers "release other devices" at all, so an unrecognized
  * word degrades to "none stated" (action hidden) rather than reaching the renderer as data. */
@@ -277,8 +277,7 @@ export function initLicense(onChange?: () => void): void {
       // or corporate proxy answers this POST with a 200 HTML page, and a bad deploy can answer
       // `200 {}` or `200 {"used":"3"}` — coercing any of those to 0 while leaving `error` null
       // renders "0 of 0 devices" and an empty key AS FACT, which is the one thing this route
-      // exists to prevent. Both counts must be real numbers; the legitimate non-keygen 200 states
-      // exactly that (`{key:null, used:0, seats:0, source:'apple'}`) and is untouched.
+      // exists to prevent. Both counts must be real numbers, including a keyless `free` source.
       if (!isCount(json.used) || !isCount(json.seats)) {
         return { ...EMPTY_DETAIL, error: 'network' }
       }

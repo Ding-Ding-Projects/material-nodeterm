@@ -11,8 +11,8 @@
  *
  * **Fail-safe direction: NOT focused.** A missing, stale or never-sent mirror must read as "no
  * terminal is focused", i.e. the intercepts stay ON and the app behaves exactly as it did before
- * this feature. The opposite direction is the expensive one: main would stand down forever, ⌘W and
- * ⌘M would go to the application MENU (close window / minimize), and no live component would be
+ * this feature. The opposite direction is the expensive one: main would stand down forever, Ctrl+W and
+ * Ctrl+M would go to the application MENU (close window / minimize), and no live component would be
  * left to correct it. Main enforces its half (a `false` initial value plus a reset on every way
  * the page can stop existing); this module enforces the renderer's half by never leaving a `true`
  * standing on an event that may not arrive.

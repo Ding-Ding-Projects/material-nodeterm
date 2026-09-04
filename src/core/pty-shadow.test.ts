@@ -9,7 +9,6 @@ import { DEFAULT_SETTINGS } from '../shared/types'
 import { TMUX_SOCKET, sessionName } from './tmux-naming'
 import { REAP_IDLE_MS, REAP_SWEEP_MS } from './pty-reap'
 import type { ControlSpawn } from './tmux-control-client'
-import type { PtyDevices } from './pty-devices'
 import { setRemoteNodeTokenWriter } from './agents/node-token-service'
 
 /**
@@ -95,7 +94,7 @@ vi.mock('child_process', () => {
  * `findTmux()` (pty-manager.ts) takes an entirely different branch on win32 — a bare PATH probe,
  * skipping every POSIX fixed-candidate and bundled-binary check, because Windows has none of those
  * targets (see the doc comment on `findTmux`). This suite is not ABOUT that branch difference
- * (unlike pty-bundled-tmux.test.ts, which is deliberately win32-vs-darwin) — it is ordinary
+ * (the multiplexer lookup itself has dedicated coverage), it is ordinary
  * tmux-session-management logic, driven entirely through the `child_process`/`node-pty` mocks
  * above, that must behave the same on every host. Running it on a machine with no real `tmux` on
  * PATH hit the win32 short-circuit and got `null` back for `findTmux()`, silently downgrading
@@ -184,21 +183,6 @@ class FakeControlSpawn implements ControlSpawn {
   }
 }
 
-/**
- * A machine with pty devices to spare by default.
- *
- * Without this the real probe runs a `readdir('/dev')` against the DEVELOPER's host, and
- * `spawnSession`'s pre-flight refuses every create once that host is within `PTY_DEVICE_HEADROOM`
- * of its own `kern.tty.ptmx_max` — which a machine running this app all day genuinely reaches (511
- * on macOS; this one sits in the 480s). Settable, because one test below is about what a REFUSED
- * create does to a shadow.
- */
-const devices = vi.hoisted(() => ({ current: { ceiling: 511, inUse: 8 } as PtyDevices }))
-vi.mock('./pty-devices', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./pty-devices')>()),
-  readPtyDevices: () => devices.current
-}))
-
 const ALICE = 1
 const BOB = 2
 
@@ -210,7 +194,6 @@ describe('control-mode shadow clients for released sessions', () => {
   beforeEach(() => {
     spawned.length = 0
     log.length = 0
-    devices.current = { ceiling: 511, inUse: 8 }
     liveTmuxSessions.clear()
     control = new FakeControlSpawn()
     userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-shadow-'))
@@ -236,6 +219,7 @@ describe('control-mode shadow clients for released sessions', () => {
     const { PtyManager } = await import('./pty-manager')
     const m = new PtyManager({ controlSpawn: control })
     m.init(() => DEFAULT_SETTINGS)
+    ;(m as unknown as { tmuxPath: string | null }).tmuxPath = '/usr/bin/tmux'
     m.registerIpc()
     return m
   }
@@ -288,27 +272,6 @@ describe('control-mode shadow clients for released sessions', () => {
 
     expect(await m.shadowAttach('node-1')).toBeNull()
     expect(control.calls).toHaveLength(0)
-  })
-
-  it('leaves the shadow ALIVE when the create is refused for want of pty devices', async () => {
-    // The swap-out below retires the shadow to make way for an arriving painter. If a create that
-    // never spawns anything still ran it, a machine at its pty ceiling would silently kill the
-    // background client of every node it refused — and nothing re-attaches one (`shadowAttach` is
-    // driven by release/reap, not by a failed create), so the node would go dark until the user
-    // reopened it. Hence the pre-flight runs BEFORE the swap-out, not next to `pty.spawn`.
-    const m = await tmuxManager()
-    const { sessionId } = await create(ALICE)
-    kill(ALICE, sessionId)
-    const shadow = await m.shadowAttach('node-1')
-    expect(shadow).not.toBeNull()
-
-    devices.current = { ceiling: 511, inUse: 515 } // the machine fills up
-    await expect(create(ALICE)).rejects.toThrow(/out of pty devices/)
-
-    expect(control.only.killed).toBe(0) // not retired…
-    expect(await m.shadowAttach('node-1')).toBe(shadow) // …and still the live one, re-used
-    expect(control.calls).toHaveLength(1) // no second control client either
-    expect(spawned).toHaveLength(1) // and, of course, no second pty
   })
 
   it('re-uses a live shadow instead of spawning a second control client', async () => {
@@ -625,6 +588,7 @@ describe('control-mode shadow clients for released sessions', () => {
     const { PtyManager } = await import('./pty-manager')
     const m = new PtyManager({ controlSpawn: control })
     m.init(() => ({ ...DEFAULT_SETTINGS, tmuxEnabled: false }))
+    ;(m as unknown as { tmuxPath: string | null }).tmuxPath = '/usr/bin/tmux'
     m.registerIpc()
     const { sessionId } = await create(ALICE)
     kill(ALICE, sessionId)
@@ -639,6 +603,7 @@ describe('control-mode shadow clients for released sessions', () => {
     const { PtyManager } = await import('./pty-manager')
     const m = new PtyManager({ controlSpawn: control })
     m.init(() => ({ ...DEFAULT_SETTINGS, ptyShadowClients: false }))
+    ;(m as unknown as { tmuxPath: string | null }).tmuxPath = '/usr/bin/tmux'
     m.registerIpc()
     const { sessionId } = await create(ALICE)
     kill(ALICE, sessionId)

@@ -56,8 +56,8 @@ function fakeAgent(sockPath: string, bindDelayMs = 0) {
 
 describe('agentSockPath', () => {
   it('is short, under the home dir, and differs per app instance', () => {
-    const a = agentSockPath('/Users/u/Library/Application Support/node-terminal')
-    const b = agentSockPath('/Users/u/dev/nodeterm-testdata')
+    const a = agentSockPath('/home/u/app-data/node-terminal')
+    const b = agentSockPath('/home/u/dev/nodeterm-testdata')
     expect(a).not.toBe(b) // NT_MULTI: a second instance must not unlink the first one's socket
     expect(a.startsWith(path.join(os.homedir(), '.nodeterm'))).toBe(true)
     // A unix socket path is capped near 104 bytes; userData paths blow that, which is the whole
@@ -155,7 +155,7 @@ describe('AppSshAgent', () => {
     // Remote PTYs (pty-manager) and remote git (remote-git) shell out to ssh from src/core, which
     // cannot import this main-process module - they find the agent through this env var. Losing
     // the publish reopens the pane-prompt / login-agent leak; losing the DELETE leaves core
-    // pointing at a socket that no longer exists after quit-in-place (macOS window close).
+    // pointing at a socket that no longer exists after shutdown.
     const p = await sock()
     const { spawnAgent } = fakeAgent(p)
     const agent = new AppSshAgent(spawnAgent, p)

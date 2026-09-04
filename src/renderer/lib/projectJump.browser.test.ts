@@ -7,7 +7,7 @@ import { liveProjectJumpTarget, type ProjectJumpEvent } from "./projectJump";
 // The BROWSER half of the live binding, in its own file because `markBrowserRuntime` is the boot
 // switch the WS bridge flips once and never unflips; vitest isolates module state per test file.
 //
-// REGRESSION GUARD (review #1): Chrome, Firefox and Safari all reserve Ctrl+1-9 (Cmd+1-9 on macOS)
+// REGRESSION GUARD (review #1): browser tabs reserve Ctrl+1-9
 // for tab switching and a page cannot `preventDefault()` them. In the Server Edition the switch
 // therefore cannot happen — and without this gate the terminals would still swallow Ctrl+2..Ctrl+8
 // (^@ ^[ ^\ ^] ^^ ^_) out of the pty for no benefit at all. Delete the `isBrowserRuntime()` check
@@ -26,7 +26,6 @@ function project(id: string): Project {
 const chord: ProjectJumpEvent = {
   type: "keydown",
   code: "Digit1",
-  metaKey: false,
   ctrlKey: true,
   altKey: false,
   shiftKey: false,
@@ -41,8 +40,5 @@ describe("liveProjectJumpTarget (Server Edition / browser tab)", () => {
   it("never claims the chord, even when the digit addresses an open project", () => {
     expect(liveProjectJumpTarget(chord)).toBeNull();
     expect(liveProjectJumpTarget({ ...chord, code: "Digit2" })).toBeNull();
-    expect(
-      liveProjectJumpTarget({ ...chord, ctrlKey: false, metaKey: true }),
-    ).toBeNull();
   });
 });

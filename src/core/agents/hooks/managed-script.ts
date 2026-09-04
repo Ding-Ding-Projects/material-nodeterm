@@ -4,8 +4,8 @@
 // raw hook payload to the loopback server. Fails open at every step.
 //
 // Endpoint failover: a session's env points at ONE
-// endpoint file ($NODETERM_HOOK_ENDPOINT). A Mac-spawned remote session points at the
-// reverse-tunnel endpoint the Mac's RemoteHooks wrote; when the Mac is offline that pipe
+// endpoint file ($NODETERM_HOOK_ENDPOINT). A remote session may point at a
+// reverse-tunnel endpoint whose desktop is offline; that pipe
 // is dead and the POST fails silently, so the session goes dark — even when the SAME host
 // runs an always-on headless Server Edition whose endpoint file is alive right next to it.
 // So the request POST captures curl's exit status and, on failure, walks the OTHER known endpoint
@@ -16,9 +16,9 @@
 //
 // FALLBACK ORDERING AND BOUND — both were wrong, and the failure was total.
 // v1 picked ONE candidate, the freshest by mtime, and retried exactly once. Measured on a live
-// host with the Mac closed and 8 agents running:
+// host with the desktop endpoint unavailable and 8 agents running:
 //     hook-endpoint-project-mrkigsjp-4.env  13:25  the primary — excluded as already tried
-//     hook-endpoint-project-msq9marh-4.env  12:52  another project's tunnel to the SAME Mac, dead
+//     hook-endpoint-project-msq9marh-4.env  12:52  another project's tunnel to the same desktop, dead
 //     .nodeterm-server/hook-endpoint.env    00:26  the host's own Server Edition — ALIVE
 // The single retry landed on the dead sibling and gave up; the live local endpoint was never
 // tried, and that host's mirror held 0 nodes and 0 events while 8 sessions worked. Two fixes:
@@ -36,9 +36,8 @@
 //      stale sibling. The bound is what keeps the cure from being its own outage: a dead
 //      reverse-tunnel socket is not cheap to fail — sshd ACCEPTS the connection and then never
 //      answers, so each attempt can burn the full `--max-time 1.5`. 3 is chosen against the
-//      candidate list, not picked round: at most 3 local slots exist and the two desktop userData
-//      paths are per-OS (mutually exclusive), so a real host has at most 2 locals — 3 attempts
-//      therefore always reaches a live local endpoint AND still leaves at least one tunnel slot,
+//      candidate list, not picked round: at most 2 local slots exist in this Linux layout, so 3
+//      attempts therefore always reaches a live local endpoint AND still leaves at least one tunnel slot,
 //      while capping the added latency at ~4.5s on a path that has already failed.
 // A single-desktop host — one project, one tunnel, no Server Edition — is untouched: the only
 // candidate is the tried one, the list comes back empty, and nothing else runs.
@@ -294,7 +293,7 @@ export function buildManagedScript(
     '}',
     '# Request POST with a BOUNDED fallback walk. On a failed primary POST, try the OTHER endpoint',
     '# files in most-likely-alive order (nt_candidates) — at most $nt_fallback_max of them — and stop',
-    '# at the first POST that succeeds. So a session whose primary endpoint is dead (offline Mac',
+    '# at the first POST that succeeds. So a session whose primary endpoint is dead (offline desktop',
     '# reverse-tunnel) still reaches an alive server (e.g. the headless Server Edition) sitting right',
     '# next to it, EVEN when several equally-dead sibling tunnels are listed ahead of it by mtime —',
     '# which is what a single freshest-only retry could never get past. In the perm-wait branch this',
@@ -306,8 +305,8 @@ export function buildManagedScript(
     '  nt_request_post && return 0',
     '  nt_list=$(nt_candidates "$NODETERM_HOOK_ENDPOINT")',
     '  [ -n "$nt_list" ] || return 1',
-    '  # Split the list on NEWLINES only, so a candidate path containing spaces survives (the macOS',
-    '  # "Application Support" entry already has one). `set -f` for the same span, so a path with a',
+    '  # Split the list on NEWLINES only, so a Linux Server Edition candidate path containing spaces',
+    '  # survives. `set -f` for the same span, so a path with a',
     '  # glob character in it is not re-expanded by the unquoted $nt_list.',
     '  nt_ifs="$IFS"',
     '  set -f',

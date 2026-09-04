@@ -1,6 +1,6 @@
-// Pure, Electron-free aggregation for the macOS Notch HUD (docs/notch-hud.md).
+// Pure, Electron-free aggregation for the Windows Agent HUD (docs/agent-hud.md).
 //
-// The HUD controller (notch-hud.ts) owns the BrowserWindow and the mirror/IPC subscriptions; this
+// The HUD controller (agent-hud.ts) owns the BrowserWindow and the mirror/IPC subscriptions; this
 // module owns the DATA: it folds the four feeds (main-state edges, now-changes, the full mirror
 // table, and the normalized agent-event stream for prompt + subagents, plus context-update for the
 // model) into the row array the HUD renderer draws. Kept separate from the window so vitest can
@@ -16,6 +16,49 @@ import { CONTEXT_STALE_AFTER_MS, CONTEXT_TELEMETRY_MATRIX, contextPercentFromCou
 
 /** A node dropped once it's gone from the mirror AND has been idle longer than this. */
 export const HUD_STALE_DROP_MS = 6 * 60 * 60 * 1000
+
+export interface AgentHudSettingsMigration {
+  changed: boolean
+  agentHud?: boolean
+  agentHudWidth?: number
+  agentHudHoverExpand?: boolean
+}
+
+/**
+ * Migrate the persisted HUD settings without making the settings store depend on this feature.
+ * New keys win when both generations are present. Legacy keys are removed by the caller after the
+ * values have been selected, so a migrated file cannot keep writing the old names forever.
+ */
+export function migrateAgentHudSettings(saved: unknown): AgentHudSettingsMigration {
+  if (!saved || typeof saved !== 'object') return { changed: false }
+  const record = saved as Record<string, unknown>
+  const hasLegacy =
+    Object.prototype.hasOwnProperty.call(record, 'notchHud') ||
+    Object.prototype.hasOwnProperty.call(record, 'notchWidth') ||
+    Object.prototype.hasOwnProperty.call(record, 'notchHoverExpand')
+  if (!hasLegacy) return { changed: false }
+
+  const result: AgentHudSettingsMigration = { changed: true }
+  result.agentHud =
+    typeof record.agentHud === 'boolean'
+      ? record.agentHud
+      : typeof record.notchHud === 'boolean'
+        ? record.notchHud
+        : undefined
+  result.agentHudWidth =
+    typeof record.agentHudWidth === 'number'
+      ? record.agentHudWidth
+      : typeof record.notchWidth === 'number'
+        ? record.notchWidth
+        : undefined
+  result.agentHudHoverExpand =
+    typeof record.agentHudHoverExpand === 'boolean'
+      ? record.agentHudHoverExpand
+      : typeof record.notchHoverExpand === 'boolean'
+        ? record.notchHoverExpand
+        : undefined
+  return result
+}
 
 /**
  * The HUD's belt-and-braces copy of the stale-working rule. The DECIDER is the mirror's sweep
@@ -70,7 +113,7 @@ export interface HudRow {
  *
  * `needsYou` → unread `done` → `working` → `idle`: what must be acted on, then what is new for
  * you, then what is merely live, then what has settled. This is the sessions sidebar's own section
- * order (`STATUS_GROUP_ORDER` in renderer/lib/sessionList.ts) — the model the owner asked the notch
+ * order (`STATUS_GROUP_ORDER` in renderer/lib/sessionList.ts) — the model shared with the Agent HUD
  * to follow — so the two surfaces rank a session the same way and can share its vocabulary.
  *
  * The rows used to be sorted `updatedAt` descending, and `updatedAt` is bumped by EVERY feed event

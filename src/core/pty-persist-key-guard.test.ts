@@ -45,12 +45,6 @@ vi.mock('node-pty', () => ({
   }
 }))
 
-// Same reason as pty-require-remote.test.ts: keep the developer's own pty pressure out of this.
-vi.mock('./pty-devices', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./pty-devices')>()),
-  readPtyDevices: () => ({ ceiling: 511, inUse: 8 })
-}))
-
 const ALICE = 1
 
 describe('pty create: an unsafe persistKey never reaches a spawn', () => {

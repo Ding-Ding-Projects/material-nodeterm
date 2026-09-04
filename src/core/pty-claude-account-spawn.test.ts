@@ -42,11 +42,6 @@ vi.mock('node-pty', () => ({
     }
   }
 }))
-vi.mock('./pty-devices', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./pty-devices')>()),
-  readPtyDevices: () => ({ ceiling: 511, inUse: 8 })
-}))
-
 const ALICE = 1
 const CODEX_ACCT = 'codexacct1'
 const CLAUDE_ACCT = 'claudeacct1'

@@ -85,7 +85,7 @@ vi.mock('child_process', () => {
  * `findTmux()` (pty-manager.ts) takes an entirely different branch on win32 — a bare PATH probe,
  * skipping every POSIX fixed-candidate and bundled-binary check, because Windows has none of those
  * targets (see the doc comment on `findTmux`). This suite is not ABOUT that branch difference
- * (unlike pty-bundled-tmux.test.ts, which is deliberately win32-vs-darwin) — it is ordinary
+ * (the multiplexer lookup itself has dedicated coverage), it is ordinary
  * tmux-session-management logic, driven entirely through the `child_process`/`node-pty` mocks
  * above, that must behave the same on every host. Running it on a machine with no real `tmux` on
  * PATH hit the win32 short-circuit and got `null` back for `findTmux()`, silently downgrading
@@ -175,21 +175,6 @@ const BOB = 2
 /** `ls\n` as the wire sees it: hex bytes, because a control-mode command is one text line. */
 const LS_KEYS = (target: string): string => `send-keys -t ${target} -H 6c 73 0a\n`
 
-/**
- * A machine with pty devices to spare, always.
- *
- * Without this the real probe runs a `readdir('/dev')` against the DEVELOPER's host, and
- * `spawnSession`'s pre-flight refuses every create once that host is within `PTY_DEVICE_HEADROOM`
- * of its own `kern.tty.ptmx_max` — which a machine running this app all day genuinely reaches (511
- * on macOS; this one sits in the 480s). Nothing below is about device pressure, so it is pinned
- * healthy rather than left to depend on who is running the suite and how many terminals they have
- * open. The pressure behaviour itself is tested in pty-spawn-preflight.test.ts.
- */
-vi.mock('./pty-devices', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./pty-devices')>()),
-  readPtyDevices: () => ({ ceiling: 511, inUse: 8 })
-}))
-
 describe('background writes into released sessions', () => {
   let fake: FakePlatform
   let userDataDir: string
@@ -222,6 +207,7 @@ describe('background writes into released sessions', () => {
     const { PtyManager } = await import('./pty-manager')
     const m = new PtyManager({ controlSpawn: control })
     m.init(() => DEFAULT_SETTINGS)
+    ;(m as unknown as { tmuxPath: string | null }).tmuxPath = '/usr/bin/tmux'
     m.registerIpc()
     return m
   }
@@ -230,6 +216,7 @@ describe('background writes into released sessions', () => {
     const { PtyManager } = await import('./pty-manager')
     const m = new PtyManager({ controlSpawn: control })
     m.init(() => ({ ...DEFAULT_SETTINGS, ...patch }))
+    ;(m as unknown as { tmuxPath: string | null }).tmuxPath = '/usr/bin/tmux'
     m.registerIpc()
     return m
   }
@@ -504,6 +491,7 @@ describe('background writes into released sessions', () => {
     const { PtyManager } = await import('./pty-manager')
     const m = new PtyManager({ controlSpawn: control })
     m.init(() => ({ ...DEFAULT_SETTINGS, tmuxEnabled: false }))
+    ;(m as unknown as { tmuxPath: string | null }).tmuxPath = '/usr/bin/tmux'
     m.registerIpc()
     const { sessionId } = await create(ALICE)
     kill(ALICE, sessionId)

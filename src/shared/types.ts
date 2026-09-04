@@ -1515,36 +1515,12 @@ export interface TmuxStatus {
   available: boolean
   /** One-shot install command for a terminal node; null = no known installer (text-only banner). */
   installCommand: string | null
-  /** Button caption for installCommand (e.g. "Install Homebrew + tmux" when brew must come first). */
+  /** Button caption for installCommand, such as "Install tmux" or "Install psmux". */
   installLabel: string | null
   /** `process.platform` of the core that owns the sessions/filesystem. `null` means the read
    *  failed; callers must not substitute the browser's platform for a server or relay core. */
   platform: string | null
 }
-
-/**
- * How close THIS MACHINE is to `kern.tty.ptmx_max`, the system-wide pty-device ceiling that took
- * the whole app down in the 2026-08-11 field report (every spawn failing with a bare
- * `posix_spawnp failed.`). See core/pty-pressure.ts for the bands.
- */
-export type PtyPressureLevel = 'none' | 'elevated' | 'critical'
-
-/** A pty-pressure reading, as broadcast on `IPC.ptyPressure`. `null` = could not be measured. */
-export interface PtyPressure {
-  level: PtyPressureLevel
-  /** `/dev/ttys*` entries in existence right now. */
-  usage: number | null
-  /** `kern.tty.ptmx_max`. */
-  ceiling: number | null
-}
-
-/** Outcome of the banner's "Fix automatically…" button (macOS only) — see main/ptmx-limit.ts. */
-export type PtyLimitFixResult =
-  | { ok: true; ceiling: number }
-  /** `canceled` = the user dismissed macOS's own admin-password dialog. Not an error to retry.
-   *  `busy` = a password dialog from another window/reload is already up. Both are SILENT for the
-   *  renderer: nothing failed, so neither may raise an error toast. */
-  | { ok: false; error: string; canceled?: boolean; busy?: boolean }
 
 /** Public profile category. Executable paths and launch arguments stay private to the core. */
 export type WindowsTerminalProfileKind =
@@ -2072,7 +2048,7 @@ export interface ClipboardWriteOptions {
 export interface ClipboardApi {
   /** Resolves true only after the host reports that the system clipboard write completed. */
   writeText(text: string, options?: ClipboardWriteOptions): Promise<boolean>
-  /** Copy local files so Finder and other file-aware macOS apps can paste them. */
+  /** Copy local files so File Explorer and other file-aware apps can paste them. */
   writeFiles(paths: string[]): Promise<boolean>
 }
 
@@ -2764,9 +2740,8 @@ export interface Settings {
   /** Multiplier for plain-wheel zoom exponent, bounded to 0.2–2 at point of use. The historical
    *  feel is preserved at 1; modifier zoom and trackpad pinch always use the fixed multiplier. */
   wheelZoomSpeed: number
-  /** macOS only: a two-finger trackpad scroll pans the canvas, independently of `wheelZoom`
-   *  (see canvas/wheel-gesture.ts). Off restores the pre-router behavior — `wheelZoom` alone
-   *  decides — which is also the recourse for a precise-pixel MOUSE that reads as a trackpad. */
+  /** A two-finger trackpad scroll pans the canvas independently of `wheelZoom`. Off restores the
+   * plain wheel path when a precise-pixel mouse is classified as a trackpad. */
   trackpadPan: boolean
   /** What a left-drag on EMPTY canvas does. 'select' (default) rubber-band selects, like
    *  Figma's move tool — pan stays on middle-drag / two-finger scroll. 'pan' drags the map
@@ -2786,9 +2761,7 @@ export interface Settings {
   /**
    * Reach a released tmux session with a control-mode (`tmux -C`) client instead of respawning its
    * terminal — the shadow clients in pty-manager.ts (`shadowAttach`) and the shared background-write
-   * client behind `backgroundWrite`. A control client holds ZERO pty devices, which is the whole
-   * point: the machine-wide `kern.tty.ptmx_max` ceiling is what a canvas of idle terminals runs into
-   * first (see pty-devices.ts).
+   * client behind `backgroundWrite`. A control client avoids a hidden terminal renderer and redraw.
    *
    * ON by default, and read at those two entry points only: switching it off means this process
    * spawns no `tmux -C` child at all, and a released session is simply unreachable again — exactly
@@ -3037,16 +3010,12 @@ export interface Settings {
    *  The auto-update "Restart to update" flow never asks — that decision was already made.
    *  Settings → Behavior. */
   confirmBeforeQuit: boolean
-  /** macOS Notch HUD (docs/notch-hud.md): a transparent always-on-top strip by the notch showing
-   *  walking agent mascots while agents work, expanding into a mini session panel. Default on;
-   *  macOS + desktop only (ignored on other platforms / Server Edition). */
-  notchHud: boolean
-  /** Assumed physical notch width in px. macOS exposes no API for it (Electron has no
-   *  `auxiliaryTopLeftArea`), so the capsule has to assume one — this is the knob that makes it sit
-   *  flush on YOUR Mac. Bigger = the capsule sits further left. */
-  notchWidth: number
-  /** Expand the notch panel on hover (after a short dwell). Off = click the capsule to expand. */
-  notchHoverExpand: boolean
+  /** Windows Agent HUD, a standalone always-on-top status tool window. Default on. */
+  agentHud: boolean
+  /** Collapsed Agent HUD indicator width in px. */
+  agentHudWidth: number
+  /** Expand the Agent HUD panel on hover after a short dwell. Off means click-only expansion. */
+  agentHudHoverExpand: boolean
   /** Dictation (desktop/server). Written as a whole object by the renderer. */
   speech: SpeechSettings
   /** Language nodeterm speaks to the user in: English, playful Hong Kong-style Cantonese, or
@@ -3323,10 +3292,10 @@ export const DEFAULT_SETTINGS: Settings = {
   // Confirm-before-quit default ON: sessions survive a quit anyway, but an accidental ⌘Q
   // tears down every window at once; the toggle is one switch away for who finds it noisy.
   confirmBeforeQuit: true,
-  // macOS Notch HUD default ON (guarded to darwin at runtime; a no-op elsewhere).
-  notchHud: true,
-  notchWidth: 168,
-  notchHoverExpand: true,
+  // Agent HUD default ON for the Windows desktop surface.
+  agentHud: true,
+  agentHudWidth: 168,
+  agentHudHoverExpand: true,
   languageMode: 'en',
   // New installations start at the maximum deliberate voice level. Existing saved values are
   // preserved by the versioned settings migration in core/settings-store.ts.
@@ -4001,9 +3970,8 @@ export interface UpdateInfo {
    */
   indeterminateProgress?: boolean
   /**
-   * The update cannot self-install and must be downloaded manually (Linux .deb/.rpm: no
-   * APPIMAGE env, so electron-updater's quitAndInstall would throw). The card shows a
-   * download link instead of the download-progress/restart flow. Absent/false = self-installs.
+   * The update source requires a user-directed download. The current Squirrel path does not set
+   * this flag, but retaining the neutral payload field keeps older renderer state readable.
    */
   manual?: boolean
 }
@@ -4184,19 +4152,16 @@ export interface MemInfo {
   availableMb: number
   totalMb: number
   /**
-   * Swap, and the kernel's own stall accounting. **Optional on purpose, and their absence is the
-   * darwin contract.**
+   * Swap and the kernel's own stall accounting. These fields are optional on hosts that do not
+   * expose the Linux measurements.
    *
    * `availableMb` alone cannot see a host that has already spent its overflow reserve: a machine
    * with 10.5 GB "available" and 84% of its swap consumed reads as healthy under a 10%-of-RAM
    * watermark, which is exactly the state the 2026-08-03 swap-thrash lockup was in. These fields
    * carry the two host-wide facts that DO see it.
    *
-   * Only the Linux reader populates them (`/proc/meminfo` for swap, `/proc/pressure/memory` for
-   * PSI — both world-readable, measured on a `hidepid=invisible` host where a non-root uid can read
-   * neither another user's processes nor their tmux socket). `parseVmStat` leaves every one of them
-   * undefined, so no macOS reading can ever satisfy a swap or PSI term: darwin cannot start firing
-   * on a signal that was never measured there.
+   * Only the Linux reader populates them (`/proc/meminfo` for swap and `/proc/pressure/memory` for
+   * PSI). Other readers leave them undefined.
    *
    * A consumer must treat `undefined` as NO SIGNAL, never as zero — a zero here reads as
    * "swap totally exhausted" / "no stall", and both are claims the reader has not earned.
@@ -4518,9 +4483,9 @@ export interface AccountSshCtx {
   projectId?: string
 }
 export interface ClaudeAccountsApi {
-  /** Mint a new managed account: create its config dir, install the hook, check the CLI version.
+  /** Mint a new managed account: create its config directory and install the hook.
    *  With an SSH `ctx` the dir + hook are created on the remote host instead of locally. */
-  add(ctx?: AccountSshCtx): Promise<{ id: string; configDir: string; versionSupported: boolean }>
+  add(ctx?: AccountSshCtx): Promise<{ id: string; configDir: string }>
   /** Poll the account's `.claude.json` for a completed login; null on timeout/cancel. With an SSH
    *  `ctx` the poll reads the remote host's copy over ssh. */
   waitLogin(id: string, ctx?: AccountSshCtx): Promise<{ email: string } | null>
@@ -4725,13 +4690,10 @@ export interface LicenseStatus {
 }
 
 /**
- * Where the entitlement behind this install came from. A verified entitlement's licenseId is NOT
- * always a keygen license id: an App Store purchase on a paired phone bridges Pro to the desktop
- * and mints `apple:<txn>`, and `free:` exists too. For those the server makes zero keygen calls
- * and answers `key: null, used: 0, seats: 0` — genuinely "device counting does not apply here",
- * which is a different fact from a failed read and from a keygen license with no devices yet.
+ * Where the entitlement behind this install came from. A `free` entitlement has no key or device
+ * count, which is distinct from a failed read and from a keygen license with no activated devices.
  */
-export type LicenseSource = 'keygen' | 'apple' | 'free'
+export type LicenseSource = 'keygen' | 'free'
 
 /** What Settings → License shows: the key to copy and how much of the device cap is in use.
  *  A failed read is an ERROR, never "0 devices" — the two are different facts. */
@@ -5031,14 +4993,10 @@ export interface PairingApi {
   stop(attemptId: string): Promise<void>
   /** Fires once when pairing finishes. Failure reasons keep a commit error distinct from timeout. */
   onDone(cb: (result: PairingDoneResult) => void): () => void
-  /** Live re-probe of 127.0.0.1:22, so the Remote Login warning can clear the moment the user
-   *  flips the toggle in System Settings (polled by the UI only while the warning is showing). */
+  /** Live re-probe of 127.0.0.1:22 so the OpenSSH warning clears when the service starts. */
   probeSsh(): Promise<boolean>
-  /** Open System Settings → General → Sharing (Remote Login). The deep link is a main-side
-   *  constant — x-apple.* schemes never pass shellOpenExternal's http(s) allowlist. macOS-only;
-   *  a no-op elsewhere. */
   /** What the help action actually did, so the renderer can say so rather than guess.
-   *  macOS/Windows open a real settings surface; Linux has no settings URL that is right
+   *  Windows opens a real settings surface; Linux has no settings URL that is right
    *  across desktops, so it returns the command to run instead of misfiring a button. */
   openRemoteLoginSettings(): Promise<RemoteLoginHelp>
   /** List paired devices from ~/.nodeterm/agent.json (never includes the token). */
@@ -5375,7 +5333,7 @@ export interface NodeTerminalApi {
    *  land in the WRONG application — `term.focus()` (DOM-only) can't fix that. Desktop raises the
    *  BrowserWindow; the browser bridge does a best-effort `window.focus()`. */
   focusWindow(): void
-  /** Set the macOS Dock badge to the unread-message count (0 clears it). */
+  /** Set the taskbar overlay to the unread-message count (0 clears it). */
   setBadgeCount(count: number): void
   /** Apply the UI-scale setting as page zoom for THIS window (desktop: `webFrame.setZoomFactor`).
    *  The preload re-clamps through `resolveUiScale` — the value originates in hand-editable
@@ -5387,10 +5345,10 @@ export interface NodeTerminalApi {
   getPathForFile(file: File): string
   /** Absolute writable base dir (Electron userData) for app-managed files like default worktrees. */
   userDataDir(): Promise<string>
-  /** Show an OS notification (main suppresses it if the window is focused). 'failed' =
-   *  the OS rejected it (e.g. macOS permission denied) — surface it, don't ignore it. */
+  /** Show an OS notification (main suppresses it if the window is focused). `failed` means the
+   * operating system rejected it, which the caller must surface through the in-app centre. */
   notify(payload: NotifyPayload): Promise<'shown' | 'failed' | 'skipped'>
-  /** Open the OS notification settings pane (macOS; no-op elsewhere) to re-grant permission. */
+  /** Open Windows notification settings so the user can re-grant permission. */
   openNotificationSettings(): Promise<void>
   /** Fires when a notification is clicked, asking the renderer to focus a node. Returns unsubscribe. */
   onFocusNode(listener: (nodeId: string) => void): () => void
@@ -5400,21 +5358,6 @@ export interface NodeTerminalApi {
    *  need only be idempotent, not cheap. Returns unsubscribe. Server Edition: never fires (the
    *  pressure levers run host-side there; a browser tab's memory belongs to the browser). */
   onMemoryPressure(listener: (severity: 'warning' | 'critical') => void): () => void
-  /** Fires when THIS MACHINE's pty-device pressure band changes (core/pty-pressure.ts): the
-   *  renderer raises/lowers the banner that warns before `kern.tty.ptmx_max` stops every new
-   *  terminal from opening. Band changes only, re-sent for a held band at most once every five
-   *  minutes; `level: 'none'` means the banner should come down. Returns unsubscribe.
-   *  Server Edition: never fires — the reaper leg runs host-side only (see src/server/index.ts). */
-  onPtyPressure(listener: (reading: PtyPressure) => void): () => void
-  /** Fires when the desktop main process observes a trackpad scroll or pinch edge. The payload is
-   *  the depth-safe active state, and only edge transitions are sent. Server Edition never fires:
-   *  its browser tab has no raw input stream and keeps the wheel router's heuristic path. */
-  onCanvasTrackpadGesture(listener: (active: boolean) => void): () => void
-  /** Raise this Mac's pty-device ceiling (`kern.tty.ptmx_max`) now AND across reboots, behind
-   *  macOS's own administrator-password dialog. Called ONLY from the banner's explicit
-   *  "Fix automatically…" click — never on the app's initiative. macOS only; a dismissed password
-   *  dialog resolves `{ ok: false, canceled: true }`, which is not an error to report or retry. */
-  raisePtyDeviceLimit(): Promise<PtyLimitFixResult>
   /** Answer a Claude permission request via the deterministic hook-reply channel (spec:
    *  docs/hook-reply-approvals.md). Writes the one-line answer file the held hook is polling
    *  (`~/.nodeterm/pending/<pendingId>.answer`) on the host the agent runs on — the LOCAL fs for a

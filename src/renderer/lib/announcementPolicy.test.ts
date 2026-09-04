@@ -18,7 +18,7 @@ describe('classifyAnnouncement', () => {
         classifyAnnouncement({
           title: 'Our new mobile app is here',
           body: 'Grab it and let us know what you think!',
-          url: 'https://apps.apple.com/app/example'
+          url: 'https://store.example.invalid/app/example'
         })
       ).toBe('promotional')
     })

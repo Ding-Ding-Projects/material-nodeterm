@@ -59,7 +59,7 @@ const assets = {
     ${iconGroup(96, 175, 280)}
     <text x="430" y="300" font-family="${FONT}" font-size="92" font-weight="800" fill="url(#word)" letter-spacing="-3">nodeterm</text>
     <text x="434" y="360" font-family="${FONT}" font-size="33" fill="#9a9aa2">Your terminals on an infinite canvas.</text>
-    <text x="434" y="408" font-family="${FONT}" font-size="24" fill="#6a6a72">node-based terminal manager · macOS · free</text>` },
+    <text x="434" y="408" font-family="${FONT}" font-size="24" fill="#6a6a72">node-based terminal manager · Windows · free</text>` },
 
   // Square avatar — icon centered with margin so circle crops stay clean.
   'avatar.png': { w: 1024, h: 1024, svg: (w, h) => `

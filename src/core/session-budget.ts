@@ -226,8 +226,7 @@ export const MAX_DETACHED_CEILING = 48
  * stops being a constant, because a constant is wrong in the other direction too — 48 detached
  * agent sessions is ~23 GB of nominal RSS, which is most of a 32 GB laptop and all of a 16 GB one.
  * Derived instead as `HOST_SHARE` of host RAM divided by `NOMINAL_SESSION_MB`, clamped to
- * [8, 48]. On the 62.7 GB host that is 32 (down from 48); on a 24 GB Mac it would be 12, which is
- * exactly why it is NOT derived when there is no host reading — see the `mem === null` case below.
+ * [8, 48]. On a 62.7 GB host that is 32, down from 48.
  *
  * Seven instances at 25% each over-subscribe the machine, and that is deliberate rather than
  * overlooked: an instance cannot know how many peers it has, and a share small enough to be safe
@@ -235,11 +234,8 @@ export const MAX_DETACHED_CEILING = 48
  * safe here precisely BECAUSE the memory term is host-wide — the backstop may be loose, because it
  * is not the thing standing between this host and a swap-thrash lockup.
  *
- * `mem === null` (darwin, or an unreadable /proc) keeps the historical 48. The count cap needs no
- * memory reading to work, so deriving it from `os.totalmem()` would quietly change reaping
- * behaviour on macOS — a cap of 12 on a 24 GB Mac — off a host figure whose meaning there this
- * module has already been burned by twice (see `hostMemReader`). A platform gets a new default
- * when it has been measured, not when a number happens to be available.
+ * `mem === null` keeps the historical 48. A platform gets a derived default only after the host
+ * reader has produced a real measurement.
  */
 export function sessionBudgetConfig(
   env: NodeJS.ProcessEnv,
@@ -338,17 +334,10 @@ export function hostUnderMemoryPressure(mem: MemInfo | null, cfg: SessionBudgetC
  * — see the header for why it separated nothing on a canvas app. Then:
  *   - memory below the watermark → up to `batchMax` (a failed memory read — `mem === null` — is
  *     NOT pressure: absence of evidence never triggers the primary path);
- *   - `externalPressure` → the same allowance, for a resource this module cannot measure (today:
- *     pty devices — see core/pty-pressure.ts). It exists because the 2026-08-11 host had HEALTHY
- *     memory and sat well under `maxIdle` while being unable to open a single terminal, so
- *     every term above was zero and the sweep the shell fired was a no-op;
  *   - idle count over `maxIdle` → the excess, even with healthy memory;
  * combined take is bounded by `batchMax`.
  *
- * An allowance is not an exemption: `externalPressure` raises how MANY of the eligible may go, and
- * touches nothing about which sessions are eligible. Sessions inside the grace window stay
- * unkillable under it, exactly as under memory pressure — that is this module's one hard rule and
- * no caller gets to spend it.
+ * Sessions inside the grace window remain ineligible under every trigger.
  *
  * The cap counts the ELIGIBLE population, not every nt- session: a host where fifty sessions are
  * all in active use is not accumulating anything, and a cap that fired on it would reap sessions
@@ -358,8 +347,7 @@ export function planReap(
   sessions: SessionInfo[],
   mem: MemInfo | null,
   nowSec: number,
-  cfg: SessionBudgetConfig,
-  externalPressure = false
+  cfg: SessionBudgetConfig
 ): string[] {
   if (cfg.disabled) return []
   const nt = sessions.filter((s) => s.name.startsWith('nt-'))
@@ -368,7 +356,7 @@ export function planReap(
     .sort((a, b) => a.outputSec - b.outputSec)
 
   const lowMem = hostUnderMemoryPressure(mem, cfg)
-  const pressure = lowMem || externalPressure ? cfg.batchMax : 0
+  const pressure = lowMem ? cfg.batchMax : 0
   const overCap = Math.max(0, eligible.length - cfg.maxIdle)
   const take = Math.min(cfg.batchMax, Math.max(pressure, overCap))
   return eligible.slice(0, take).map((s) => s.name)
@@ -448,20 +436,9 @@ export interface SessionReaperOpts {
   log?: (msg: string) => void
 }
 
-/**
- * A resource OUTSIDE this module's instruments that is exhausted right now, named by the shell
- * that measured it. Today only pty devices (`kern.tty.ptmx_max`, core/pty-pressure.ts).
- */
-export type SweepPressure = 'pty'
-
-export interface SweepOptions {
-  /** Grant this sweep the same allowance low memory would. Omitted ⇒ ordinary budget semantics. */
-  pressure?: SweepPressure
-}
-
 export interface SessionReaper {
   /** One sweep; resolves to the number of sessions killed. Never throws. */
-  sweep(opts?: SweepOptions): Promise<number>
+  sweep(): Promise<number>
   start(): void
   stop(): void
 }
@@ -482,16 +459,12 @@ export function createSessionReaper(opts: SessionReaperOpts): SessionReaper {
       const { stdout } = await runAsync(bin, args, { timeout: 15_000 })
       return stdout
     })
-  // The real reader BY DEFAULT — not injected by the shells. A wiring line can be deleted with
-  // the suite green (measured); a default cannot. (`hostMemReader`, which silenced this leg on
-  // darwin because available BYTES were not macOS's pressure signal, died with the macOS
-  // desktop: on Windows and Linux `readMemInfo` measures what its name says.)
+  // The real reader is the default, so shells cannot silently omit the memory leg.
   const readMem = opts.readMem ?? readMemInfo
   const env = opts.env ?? process.env
   const nowSec = opts.nowSec ?? ((): number => Math.floor(Date.now() / 1000))
   const log = opts.log ?? ((m: string): void => console.log(m))
-  // `mem`, not `mem.totalMb`: the detached cap is derived only where there is a real host reading,
-  // so the null case (darwin) has to reach sessionBudgetConfig as null rather than as a number.
+  // `mem`, not `mem.totalMb`: a failed read must reach sessionBudgetConfig as null.
   const cfg = sessionBudgetConfig(env, readMem(), Math.round(os.totalmem() / 1048576))
 
   // `list-windows -a`, not `list-sessions`: `#{window_activity}` is the only stamp that tracks
@@ -521,7 +494,7 @@ export function createSessionReaper(opts: SessionReaperOpts): SessionReaper {
     }
   }
 
-  const sweep = async (sweepOpts?: SweepOptions): Promise<number> => {
+  const sweep = async (): Promise<number> => {
     if (cfg.disabled) return 0
     const bin = opts.tmuxBin()
     if (!bin) return 0
@@ -535,7 +508,7 @@ export function createSessionReaper(opts: SessionReaperOpts): SessionReaper {
 
     const all = [...bySocket.entries()].flatMap(([, list]) => list)
     const now = nowSec()
-    const plan = new Set(planReap(all, readMem(), now, cfg, sweepOpts?.pressure !== undefined))
+    const plan = new Set(planReap(all, readMem(), now, cfg))
     if (plan.size === 0) return 0
     const h = (sec: number): string => ((now - sec) / 3600).toFixed(1)
     const clocks = new Map(all.map((s) => [s.name, `no pane output for ${h(s.outputSec)}h; last attach ${h(s.activitySec)}h ago`]))

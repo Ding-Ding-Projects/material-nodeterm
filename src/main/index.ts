@@ -39,6 +39,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeImage,
   Notification,
   powerMonitor,
   safeStorage,
@@ -53,10 +54,10 @@ import { IPC } from '../shared/ipc'
 // in-memory and redacted at its push boundary; the panel/IPC side is gated on the setting.
 const logBuffer = new LogBuffer()
 installLogSink(logBuffer)
-import { writeFilesToClipboard } from './clipboard-files'
+import { setWindowsFileDropList, writeFilesToClipboard } from './clipboard-files'
+import { taskbarBadgePlan } from './windows-taskbar-badge'
 import { NodeTermBrowserUseBackend } from './browser-use-backend'
 import { registerFsHandlers } from '../core/fs-handlers'
-import { TrackpadGestureLedger } from './trackpad-gesture'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
@@ -254,15 +255,15 @@ import {
   type TerminalShortcutPolicy
 } from '../shared/keybindings'
 import {
-  initNotchHud,
-  applyNotchHudSettings,
-  type NotchHudTunables,
-  destroyNotchHud,
-  notchHudOnAgentEvent,
-  notchHudOnContextUpdate,
-  notchHudOnSchoolModeChange,
-  assertRegularDockPresence
-} from './notch-hud'
+  initAgentHud,
+  applyAgentHudSettings,
+  type AgentHudTunables,
+  destroyAgentHud,
+  agentHudOnAgentEvent,
+  agentHudOnContextUpdate,
+  agentHudOnSchoolModeChange
+} from './agent-hud'
+import { migrateAgentHudSettings } from './agent-hud-model'
 import { registerCanvasWidgetIpc, closeAllCanvasWidgets } from './canvas-widget-window'
 import {
   initAgentStatusMirror,
@@ -299,8 +300,6 @@ import { startAuthenticatorService } from '../core/toylocks/authenticator-servic
 import { registerProviderAccountsHandlers } from '../core/provider-accounts-service'
 import { startUniverseDoorEntryService } from '../core/universe-door-entry-service'
 import { createMemoryPressureMonitor } from '../core/memory-pressure'
-import { createPtyPressureMonitor } from '../core/pty-pressure'
-import { registerPtmxLimitHandler } from './ptmx-limit'
 import { initKeepAwake } from './keep-awake'
 import type { KeepAwakeTracker } from '../core/keep-awake'
 import { getDeviceId } from '../core/device-id'
@@ -461,15 +460,6 @@ if (NT_MULTI && process.env.NT_USER_DATA) app.setPath('userData', process.env.NT
 // before app 'ready' or the switch is silently ignored.
 app.commandLine.appendSwitch('max-active-webgl-contexts', String(WEBGL_CONTEXT_CAP_DESKTOP))
 
-// A throwaway NT_MULTI sandbox must not touch the real Keychain. The "node-terminal Safe Storage"
-// entry is keyed by the app NAME, which a dev instance shares with the installed app, so every
-// launch prompted for the login password and logged a scary os_crypt error when dismissed. The
-// mock keychain keeps safeStorage available in-process (no prompt, no error) while storing
-// nothing in the OS; the only consumer is the relay identity keypair, which already has a
-// documented plaintext fallback. Never set this for a real build: it would silently downgrade
-// at-rest encryption of that key.
-if (NT_MULTI && process.platform === 'darwin') app.commandLine.appendSwitch('use-mock-keychain')
-
 // Windows identifies apps by this id, not by exe path or window title — it decides whether a
 // desktop `Notification` actually shows (an unset AppUserModelID renders under a generic
 // "Electron" identity, or silently not at all on some builds) and whether the taskbar groups this
@@ -513,6 +503,33 @@ function isSafeExternalUrl(url: unknown): url is string {
 }
 
 const settingsStore = new SettingsStore()
+
+/** Migrate the HUD's historical persisted keys before the settings IPC handler is registered. */
+async function migrateLegacyAgentHudSettings(): Promise<void> {
+  const settingsPath = join(app.getPath('userData'), 'settings.json')
+  let saved: unknown
+  try {
+    saved = JSON.parse(readFileSync(settingsPath, 'utf8'))
+  } catch {
+    return
+  }
+  const migration = migrateAgentHudSettings(saved)
+  if (!migration.changed) return
+
+  const next = { ...settingsStore.get() } as Settings & Record<string, unknown>
+  if (migration.agentHud !== undefined) next.agentHud = migration.agentHud
+  if (migration.agentHudWidth !== undefined) next.agentHudWidth = migration.agentHudWidth
+  if (migration.agentHudHoverExpand !== undefined) next.agentHudHoverExpand = migration.agentHudHoverExpand
+  delete next.notchHud
+  delete next.notchWidth
+  delete next.notchHoverExpand
+  try {
+    await settingsStore.save(next)
+  } catch (error) {
+    console.warn('[agent-hud] legacy settings migration will retry on the next launch', error)
+  }
+}
+
 const schoolModeStore = new SchoolModeStore()
 const kidsModeStore = new KidsModeStore()
 const scheduledSettingsRuntime = new ScheduledSettingsRuntime()
@@ -923,7 +940,7 @@ function confirmQuit(parentWin: BrowserWindow | null): Promise<boolean> {
   })
 }
 
-// Keep-awake tracker (created in whenReady next to the notch HUD, disposed in before-quit).
+// Keep-awake tracker, created beside the Agent HUD and disposed in before-quit.
 let keepAwake: KeepAwakeTracker | undefined
 
 // Browser <webview> guest webContents id → the browser node (and which of its two surfaces) it
@@ -1312,16 +1329,6 @@ function createWindow(): BrowserWindow {
   // its webContents are destroyed by then.)
   const presenceId = win.webContents.id
   presenceHub.join(presenceId, 'desktop')
-  // macOS reports trackpad scroll and pinch edges only to the main process. Reduce the raw input
-  // stream to depth-safe transitions before sending it over IPC, so the renderer receives facts
-  // per physical gesture rather than a message for every pointer packet.
-  const trackpadLedger = new TrackpadGestureLedger()
-  win.webContents.on('input-event', (_event, input) => {
-    const active = trackpadLedger.observe(input.type)
-    if (active !== null && !win.isDestroyed()) {
-      win.webContents.send(IPC.canvasTrackpadGesture, active)
-    }
-  })
   win.on('closed', () => {
     nativeCopyStore.detach(presenceId)
     presenceHub.leave(presenceId)
@@ -1609,6 +1616,7 @@ app.whenReady().then(async () => {
   })
 
   settingsStore.init()
+  await migrateLegacyAgentHudSettings()
   const gatewayCredentials = new ModelGatewayCredentialService(
     new ElectronSecretStore(app.getPath('userData'), safeStorage, MODEL_GATEWAY_SECRET_FILE)
   )
@@ -2309,14 +2317,16 @@ app.whenReady().then(async () => {
     writeFilesToClipboard(paths, {
       platform: process.platform,
       isFile: (path) => statSync(path).isFile(),
-      writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer)
+      writeFileDropList: setWindowsFileDropList
     })
   )
 
-  // Dock badge: number of Claude nodes with unread output (macOS only). '' clears it.
+  // Taskbar overlay: number of agent nodes with unread output. A null image clears it.
   ipcMain.on(IPC.appSetBadge, (_e, count: number) => {
-    if (process.platform !== 'darwin' || !app.dock) return
-    app.dock.setBadge(count > 0 ? String(count) : '')
+    const win = getMainWindow()
+    if (!win || win.isDestroyed()) return
+    const plan = taskbarBadgePlan(count)
+    win.setOverlayIcon(plan ? nativeImage.createFromDataURL(plan.dataUrl) : null, plan?.description ?? '')
   })
 
   // Show an OS notification — but only when the window is in the background. Clicking it
@@ -2370,13 +2380,9 @@ app.whenReady().then(async () => {
     }
   )
 
-  // Deep-link to the OS notification settings so the user can re-grant a denied
-  // permission (macOS never re-prompts once the app's record exists). The URL is a
-  // main-side constant — deliberately NOT routed through shellOpenExternal's
-  // http(s)-only allowlist, which must stay closed to renderer-supplied strings.
-  ipcMain.handle(IPC.appOpenNotificationSettings, () => {
-    if (process.platform !== 'darwin') return
-    void shell.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings.extension')
+  // This main-owned constant is not routed through the renderer's http(s)-only URL boundary.
+  ipcMain.handle(IPC.appOpenNotificationSettings, async () => {
+    await shell.openExternal('ms-settings:notifications')
   })
 
   // Native copy is an Electron-only, in-memory projection. Every request is bound to the current
@@ -2430,31 +2436,16 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle(IPC.pairingStop, (_event, attemptId: string) => pairingService.stop(attemptId))
   ipcMain.handle(IPC.pairingProbeSsh, () => pairingService.probeSsh())
-  // Same pattern as appOpenNotificationSettings: a main-side constant deep link, NOT routed
-    // Returns what it actually DID, because the renderer has to tell the truth about it. This used
-    // to be `if (process.platform !== 'darwin') return` — a silent no-op on Windows and Linux,
-    // reached from a button the renderer only rendered on macOS anyway. So a Windows user was told
-    // "Remote Login is off, turn it on", handed no control, and the one control that did exist
-    // would have done nothing for them: a dead end at the exact moment they knew what they wanted.
+    // Returns what it actually did so the renderer never guesses whether a settings surface opened.
     ipcMain.handle(IPC.pairingOpenRemoteLoginSettings, async (): Promise<RemoteLoginHelp> => {
-      if (process.platform === 'darwin') {
-        // Must open from MAIN: shellOpenExternal's http(s)-only allowlist silently drops x-apple.*
-        // URLs, which is why this button once did nothing when the renderer sent it.
-        await shell.openExternal(
-          'x-apple.systempreferences:com.apple.preferences.sharing?Services_RemoteLogin'
-        )
-        return { opened: 'settings' }
-      }
       if (process.platform === 'win32') {
-        // "Remote Login" on Windows is the OpenSSH Server optional feature plus its sshd service.
+        // OpenSSH Server is an optional feature, and its sshd service exists only after install.
         // Optional features is the right first stop: with the feature absent there is no service to
         // start, so the Services console would send them somewhere with nothing in it.
         await shell.openExternal('ms-settings:optionalfeatures')
         return { opened: 'settings', note: 'openssh-server' }
       }
-      // Linux has no settings URL that is right across desktops, and guessing one yields a button
-      // that opens the wrong thing or nothing. Hand back the command and let the renderer show it
-      // as copyable text — an honest instruction beats a control that misfires.
+      // Linux has no settings URL that is right across desktops. Return the command instead.
       return { opened: 'none', command: 'sudo systemctl enable --now ssh' }
     })
   ipcMain.handle(IPC.pairingListDevices, () => pairingService.listDevices())
@@ -2786,10 +2777,8 @@ app.whenReady().then(async () => {
   // hook POST dies against a dead port with zero symptoms beyond "statuses stay idle". The
   // listeners (setListener/setRawListener/setControlHandler) attach later, which the server
   // tolerates — early hook POSTs are simply dropped, never mis-routed.
-  // Network-git relay for the mobile companion: over SSH the macOS Keychain refuses a
-  // non-interactive session (-25308), so the phone's whitelisted push/pull/fetch operation runs
-  // here in the GUI session instead. Desktop-only: the Server Edition process has the same
-  // credential environment as an SSH exec channel, so a proxy there would change nothing.
+  // Network-git relay for the mobile companion: the phone's whitelisted push, pull, and fetch
+  // operations run in the desktop process that owns the configured credential environment.
   hookServer.setGitRemoteHandler((req) => runGitRemoteOp(req))
   hookServer.setCodexThreadStartHandler(async ({ nodeId, cwd, hookEndpoint, accountId }) => {
     if (ptyManager.sshRemoteForNode(nodeId)) {
@@ -3030,7 +3019,7 @@ app.whenReady().then(async () => {
   })
 
   /** The one display-title rule for everything the HOST sends out (push alerts, Live Activity
-   *  updates, the notch capsule): the live session name unless the node was hand-renamed. */
+   *  updates, the Agent HUD): the live session name unless the node was hand-renamed. */
   const displayTitleFor = (nodeId: string): string | undefined =>
     displayNodeTitle(nodeId, {
       sessionName: nodeSessionName,
@@ -3064,39 +3053,32 @@ app.whenReady().then(async () => {
     // get it wrong, and getting it wrong is invisible — the wrong list silently skips an agent's
     // nodes with every test still green.
   })
-  // macOS Notch HUD (docs/notch-hud.md): walking agent mascots by the notch. darwin + setting only;
-  // reads the same agent-status seams the mirror does. Live-toggled via settings below.
-  //
-  // Create the HUD only AFTER the main window is visible. The HUD is a focusable:false (non-
-  // activating) panel; if it is shown while the main window is still loading (created with
-  // show:false, shown on 'ready-to-show'), it can be the only orderFront-ed window on screen and
-  // demote the app to accessory — the Dock icon then disappears. Gating on the main window's first
-  // 'show' guarantees a regular window has established the app's Dock presence first.
-  const notchTunables = (): NotchHudTunables => {
+  // Agent HUD (docs/agent-hud.md): the standalone Windows status tool reads the same
+  // agent-status seams as the main window. It is live-toggled through settings below.
+  const agentHudTunables = (): AgentHudTunables => {
     const s = settingsStore.get()
     return {
-      enabled: s.notchHud,
-      notchWidth: s.notchWidth,
-      hoverExpand: s.notchHoverExpand,
+      enabled: s.agentHud,
+      agentHudWidth: s.agentHudWidth,
+      hoverExpand: s.agentHudHoverExpand,
       percentMode: s.usagePercentMode
     }
   }
-  const startNotchHud = (): void =>
-    initNotchHud({
+  const startAgentHud = (): void =>
+    initAgentHud({
       getNodeTitle: displayTitleFor,
       getSchoolMode: () => ({ enabled: schoolModeStore.get().enabled, hydrated: schoolModeStore.isHydrated() })
-    }, notchTunables())
-  if (win.isVisible()) startNotchHud()
-  else win.once('show', startNotchHud)
-  settingsStore.onChange(() => applyNotchHudSettings(notchTunables()))
-  schoolModeStore.onChange(() => notchHudOnSchoolModeChange())
+    }, agentHudTunables())
+  if (win.isVisible()) startAgentHud()
+  else win.once('show', startAgentHud)
+  schoolModeStore.onChange(() => agentHudOnSchoolModeChange())
   buildAppMenu(win)
   // Rebuild the native menu on every settings change so the View → Snap to Grid checkmark (and
   // any future live label) tracks the renderer's setting. The renderer is the sole settings
   // writer; a change persists through `settingsStore`, which fires this hook. No reverse IPC.
   // Keep-awake re-reads its enable flag on the same edge.
   settingsStore.onChange(() => {
-    applyNotchHudSettings(notchTunables())
+    applyAgentHudSettings(agentHudTunables())
     buildAppMenu(win)
     keepAwake?.refresh()
   })
@@ -3184,9 +3166,8 @@ app.whenReady().then(async () => {
       // last-known state; replacing it with false would misroute a transient read failure into the
       // fallback push-grant path and could make two channels speak for one destination.
     }
-    // No paired destination means no host-mode push can be sent. Avoid touching macOS
-    // Safe Storage at boot in that state: locally signed development builds otherwise trigger
-    // a Keychain ACL prompt even though there is nobody to notify.
+    // No paired destination means no host-mode push can be sent, so avoid opening the credential
+    // vault at boot when there is nobody to notify.
     if (!pushHasPairedPhone) {
       pushHostKeyB64 = null
       return
@@ -3348,7 +3329,7 @@ app.whenReady().then(async () => {
   /**
    * A tool RESULT landed in a tracked transcript. Only interesting while the node is still in
    * needs-you: an `AskUserQuestion` the user declined with Esc fires no PostToolUse and no Stop, so
-   * nothing ever moved the node off NEEDS YOU — badge, notch capsule and phone card all stuck until
+   * nothing ever moved the node off NEEDS YOU — badge, Agent HUD and phone card all stuck until
    * the next prompt. The result proves the ask settled; `working` is the honest next state (Claude
    * carries on with "User declined to answer questions"), and any real event corrects it anyway.
    */
@@ -3386,7 +3367,7 @@ app.whenReady().then(async () => {
     remoteSubagentTail.untrack(n.toolUseId)
     nodeSubagents.get(nodeId)?.delete(n.toolUseId)
   }
-  // Every context tail pushes through here, so an agent's meter reaches the renderer, the Notch HUD
+  // Every context tail pushes through here, so an agent's meter reaches the renderer and Agent HUD
   // and the phone's context ring identically whichever CLI produced the numbers.
   const pushContextUpdate = (payload: unknown): void => {
     if (!win.isDestroyed()) win.webContents.send(IPC.contextUpdate, payload)
@@ -3716,8 +3697,8 @@ app.whenReady().then(async () => {
     }
     if (continuation) agentContinuationService?.observe(continuation)
     sendToMain(IPC.agentStatus, enriched)
-    // Feed the macOS Notch HUD its prompt (ev.task on newTurn) + subagent grouping (no-op off/non-darwin).
-    notchHudOnAgentEvent(enriched)
+    // Feed the Agent HUD its prompt and subagent grouping.
+    agentHudOnAgentEvent(enriched)
     // Agent messaging taps the SAME stream: the sender's newTurn resets its fan-out budget, and
     // an open delivery receipt watch is satisfied by the target's verified advance.
     onMessagingAgentEvent(enriched)
@@ -3770,24 +3751,8 @@ app.whenReady().then(async () => {
   // Session budget: reap long-idle DETACHED nt- tmux sessions on THIS machine under memory
   // pressure or past a count cap (core/session-budget.ts — the tmux counterpart of the WebGL
   // budget). Attached sessions are never touched; a reaped node cold-restores on next open.
-  // Local sockets only — a remote SSH host's sessions are reaped by that host's own
-  // nodeterm-server, never across the wire. Timer is unref'd; no explicit stop needed.
-  // `shadowed` subtracts our own control-mode shadows from tmux's attached flag: a shadow is a real
-  // tmux client but NOT a watcher, so a shadowed session must stay exactly as cullable as an idle
-  // detached one (see PtyManager.shadowedTmuxSessions).
-  // `readMem: hostMemReader()` — the SAME platform-aware reader the memory-pressure monitor uses,
-  // and for the same reason. On darwin it returns null, so `planReap` sees no pressure signal and
-  // only the detached-count cap can trigger a cull.
-  //
-  // Available BYTES is not macOS's pressure signal. Measured on a 24 GB Mac (2026-08-12): 82% used,
-  // 8.38 GB compressed, 1.77 GB swap in use — and macOS's own Memory Pressure graph GREEN. A
-  // 10%-available watermark fires in states the OS itself calls healthy, so a byte trigger there
-  // culls sessions on a machine macOS says is fine. Fixing readMemInfo made the bytes HONEST; it
-  // did not make them the right instrument.
-  //
-  // This is not a regression of the reaper's purpose on macOS: the count cap still bounds
-  // accumulation, the pty-pressure monitor covers the resource that actually ran out, and the
-  // session-memory panel gives the user the visibility to cull deliberately.
+  // Local sockets only. A remote SSH host's sessions are reaped by that host's own server, never
+  // across the wire. Shadows are real clients but not watchers, so they remain cullable as idle.
   const sessionReaper = createSessionReaper({
     tmuxBin: () => ptyManager.getTmuxBin(),
     shadowed: (socket) => ptyManager.shadowedTmuxSessions(socket)
@@ -3798,37 +3763,13 @@ app.whenReady().then(async () => {
   // (hidden WebGL contexts, parked terminals) and a CRITICAL reading also sweeps the reaper NOW
   // rather than waiting out its timer. Both levers are idempotent and the monitor re-fires at most
   // once a minute. The send goes through `sendToMain`, which resolves the window AT SEND TIME and
-  // no-ops while it is closed (macOS keeps the app alive without one) — the monitor's own
-  // try/catch is the backstop, not the primary.
+  // no-ops while it is closed. The monitor's own try/catch is the backstop.
   createMemoryPressureMonitor({
     onPressure: (severity) => {
       sendToMain(IPC.appMemoryPressure, severity)
       if (severity === 'critical') void sessionReaper.sweep()
     }
   }).start()
-  // Pty-device pressure (core/pty-pressure.ts): the OTHER way this machine runs out, and the one
-  // that actually happened. The memory monitor above could not see it — during the 2026-08-11
-  // incident RAM was plentiful while `/dev/ttys*` was full, so the reaper never woke and the user
-  // got no warning at all, just terminals that stopped opening. Same shape as the memory leg: tell
-  // the renderer (which raises a banner) on every band change, and sweep the reaper NOW on
-  // critical — a reaped detached session returns its pty device, which is exactly the resource in
-  // short supply. Transitions only, re-announced at most every five minutes.
-  //
-  // The sweep is passed `pressure: 'pty'` because a bare `sweep()` here would plan NOTHING: the
-  // budget's own triggers are memory and a detached-count cap, and the incident profile clears
-  // both (healthy RAM, under the cap). The reason grants the same batch allowance low memory
-  // would and widens no exemption — attached and in-grace sessions stay untouchable.
-  const ptyPressure = createPtyPressureMonitor({
-    onLevel: (reading) => {
-      sendToMain(IPC.ptyPressure, reading)
-      if (reading.level === 'critical') void sessionReaper.sweep({ pressure: 'pty' })
-    }
-  })
-  ptyPressure.start()
-  // The banner's "Fix automatically…" button. Registered, never called on our own initiative: it
-  // raises `kern.tty.ptmx_max` behind macOS's own admin-password dialog. Its success re-announces
-  // through the monitor's funnel, so the banner clears without waiting out the next tick.
-  registerPtmxLimitHandler(corePlatform, { announce: (reading) => ptyPressure.announce(reading) })
   // Session memory (docs/superpowers/specs/2026-08-10-session-memory-panel-design.md): the pill's
   // cheap RAM read plus the on-demand per-session breakdown. An SSH project's sessions live on ITS
   // host, so they are read THERE over the project's ControlMaster — the same injection Context Link
@@ -5096,7 +5037,7 @@ app.on('before-quit', (e) => {
   // BOTH passes; the method itself no-ops for an instance already asked.
   minecraftServers?.requestGracefulStopAll()
   void virtualMachineManager?.dispose()
-  destroyNotchHud()
+  destroyAgentHud()
   const scheduledSettingsStop = scheduledSettingsRuntime.stop()
   const plannerStop = plannerRuntime.stop()
   const codexRelayStop = stopOwnedCodexRelayProcess(codexRelayProcess)

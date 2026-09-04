@@ -7,7 +7,7 @@
  * exactly where it was, so every keystroke after clicking away still went into that textarea.
  *
  * Space is only how it was noticed. The same focus keeps every canvas shortcut suppressed too —
- * undo, ⌘T, Delete all skip while an input has the keyboard — so from the user's side the canvas
+ * undo, Ctrl+T, Delete all skip while an input has the keyboard — so from the user's side the canvas
  * had simply stopped responding.
  *
  * True only for a real EDITING surface. A button or a node div that happens to be focused is

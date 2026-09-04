@@ -111,11 +111,11 @@ async function card(width, height) {
     <!-- Name + one honest line. No slogan, no star count: what it is, in words. -->
     <text x="${pad + markSize + Math.round(pad * 0.6)}"
           y="${shotH + band * 0.47}"
-          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif"
+          font-family="'Segoe UI', Inter, Arial, sans-serif"
           font-size="${nameSize}" font-weight="700" fill="#ffffff">nodeterm</text>
     <text x="${pad + markSize + Math.round(pad * 0.6)}"
           y="${shotH + band * 0.75}"
-          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif"
+          font-family="'Segoe UI', Inter, Arial, sans-serif"
           font-size="${subSize}" font-weight="500" fill="#b9b4c6">Real terminals and coding agents as live nodes on one canvas</text>
   </svg>`
 

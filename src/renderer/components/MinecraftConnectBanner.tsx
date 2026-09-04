@@ -4,7 +4,7 @@ import { useSession } from '../session/session'
 import { Button } from '@renderer/ui/md3'
 
 // A running Minecraft server's connect address, shown over the canvas the same way TmuxBanner and
-// PtyPressureBanner are: its own component subscribing for itself, so Canvas.tsx (already a hot
+// TmuxBanner is: its own component subscribing for itself, so Canvas.tsx (already a hot
 // file every branch touches) doesn't grow another block of polling logic. Its own reason for
 // existing rather than reusing one of those two: this needs to know WHICH canvas nodes are
 // Minecraft servers, which only Canvas has — so `minecraftNodeIds` arrives as a prop (the current

@@ -44,10 +44,10 @@ type GrokEnv = { GROK_HOME?: string }
 
 /** grok's config directory: `$GROK_HOME`, else `~/.grok`. Hooks AND sessions live under it.
  *
- *  KNOWN TRAP — the env this reads is the APP's, not the user's shell. A desktop app launched from
- *  Finder/Dock/a `.desktop` entry inherits the launcher's environment, which never sourced
- *  `.zshrc`/`.bashrc`; this repo already knows the class, which is why `findTmux()` resolves an
- *  absolute path "because GUI apps don't inherit the shell PATH". So for a user whose only
+ *  KNOWN TRAP — the env this reads is the APP's, not the user's shell. A desktop launcher inherits
+ *  the launcher's environment, which may not source the user's shell startup files; this repo
+ *  already knows the class, which is why executable discovery resolves an absolute path when GUI
+ *  apps do not inherit the shell PATH. So for a user whose only
  *  `export GROK_HOME=…` lives in a shell rc file, the two sides disagree: nodeterm writes the hook
  *  file (and looks for sessions) under `~/.grok`, while the grok CLI — started by the shell inside a
  *  tmux pane, which DID source that rc — reads the exported path. Nothing errors. The hook file is

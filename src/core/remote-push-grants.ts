@@ -4,7 +4,7 @@
 // mirror. That is the whole story when the phone and the mirror owner are the same box (a headless
 // Server Edition the phone SSHes into). It is NOT the story for the common desktop setup:
 //
-//   phone --SSH--> Linux dev host <--SSH-- macOS nodeterm (owns the canvas, the hooks, the mirror)
+//   phone --SSH--> Linux dev host <--SSH-- Windows nodeterm (owns the canvas, the hooks, the mirror)
 //
 // There the phone drops its grant on the HOST — the only machine it can reach — while the process
 // that has something to push runs on the Mac and scans only its own `$HOME`. Result: an SSH-only

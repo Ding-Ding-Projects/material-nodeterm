@@ -6,7 +6,7 @@
 // Sealing follows the exact convention core/agents/node-auth-secret.ts already established: use
 // the shell's OS-vault seal/unseal when the platform offers one (Desktop: Electron `safeStorage`);
 // otherwise store the payload as raw bytes in a 0600 file (the Server Edition's documented "no
-// keychain here" configuration — see CorePlatform.sealSecret's doc comment). Either way the file
+// credential vault here" configuration; see CorePlatform.sealSecret's doc comment). Either way the file
 // itself is written 0600 via an atomic tmp+rename, so a reader never observes a half-written file
 // and nothing but this process' own user can read it at rest.
 

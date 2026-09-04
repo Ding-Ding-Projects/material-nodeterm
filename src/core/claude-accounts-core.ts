@@ -135,12 +135,9 @@ export function isSafeRemoteTranscriptPath(abs: string, remoteHome: string | und
 
 /**
  * Where the usage indicator looks for a Claude OAuth token + identity, per account. With a
- * `configDir` (managed account) the file + identity live under that config dir; without (system
- * account) it's exactly the legacy layout under `~/.claude`. On Windows and Linux the claude CLI
- * stores credentials in `.credentials.json`, so the file pair is the complete answer. (The macOS
- * Keychain service names this also used to return — scoped per config dir on Claude Code ≥ 2.1 —
- * died with the macOS desktop.) Pure so it's unit-tested; the impure fs reads live in
- * usage-service.ts.
+ * `configDir` (managed account) the file and identity live under that directory; without it the
+ * system account uses the standard user layout. Pure so it is unit-tested; filesystem reads live
+ * in usage-service.ts.
  */
 export function usageCredsPaths(
   homeDir: string,
@@ -175,9 +172,6 @@ const AGENT_CONFIG_DIR_ENV: readonly string[] = ['CLAUDE_CONFIG_DIR', 'CODEX_HOM
  * three mechanisms, one list because they are one hazard (see `isReservedSpawnEnvKey`'s clause):
  *  - `LD_PRELOAD` / `LD_AUDIT` / `LD_LIBRARY_PATH` — the Linux dynamic loader loads a repo-supplied
  *    `.so` into the CLI's own address space before `main` runs.
- *  - `DYLD_INSERT_LIBRARIES` / `DYLD_LIBRARY_PATH` — the macOS equivalent. macOS strips DYLD_* only
- *    across a SIP-protected or hardened-runtime boundary, and a node/agent CLI is neither: it is a
- *    script run by the user's own `node`, so the pair applies exactly as on Linux.
  *  - `BASH_ENV` / `ENV` — sourced by a NON-interactive shell at startup, which is precisely the
  *    shell every launch line runs in; the file runs before the agent's first byte.
  *  - `GIT_SSH_COMMAND` / `GIT_EXTERNAL_DIFF` — git runs the named command verbatim the moment the
@@ -197,8 +191,6 @@ const INJECTION_ENV: readonly string[] = [
   'LD_PRELOAD',
   'LD_AUDIT',
   'LD_LIBRARY_PATH',
-  'DYLD_INSERT_LIBRARIES',
-  'DYLD_LIBRARY_PATH',
   'GIT_SSH_COMMAND',
   'GIT_EXTERNAL_DIFF',
   'BASH_ENV',
@@ -241,8 +233,7 @@ const INJECTION_ENV: readonly string[] = [
  *    and stealthier than PATH: the process still IS the real claude, from the real location, so
  *    nothing downstream — not the pane, not the identity probe — can tell. The dialog shows a flag
  *    string; the grant is code execution.
- *  - `INJECTION_ENV` — the same grant through the DYNAMIC LOADER (`LD_PRELOAD` and friends; the
- *    macOS `DYLD_*` pair, which a non-SIP-protected node/agent CLI honors just as Linux does), the
+ *  - `INJECTION_ENV` — the same grant through the dynamic loader (`LD_PRELOAD` and friends), the
  *    NON-interactive shell's own startup file (`BASH_ENV` / `ENV`, sourced by the very shell the
  *    launch line runs in), and git's command hooks (`GIT_SSH_COMMAND` / `GIT_EXTERNAL_DIFF`, run
  *    verbatim as soon as the agent shells out to git). One reserve-reason with NODE_OPTIONS: the
@@ -308,10 +299,3 @@ export function parseLoginCapture(rawClaudeJson: string): { email: string } | nu
   }
 }
 
-/** Claude Code < 2.1 uses one unscoped Keychain service for every config dir → accounts collide. */
-export function isSupportedClaudeVersion(versionOutput: string): boolean {
-  const m = versionOutput.match(/(\d+)\.(\d+)\./)
-  if (!m) return false
-  const [major, minor] = [Number(m[1]), Number(m[2])]
-  return major > 2 || (major === 2 && minor >= 1)
-}

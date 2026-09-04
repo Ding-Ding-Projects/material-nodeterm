@@ -1,9 +1,9 @@
-// Pure cap + overflow rule for the expanded Notch HUD panel (docs/notch-hud.md).
+// Pure cap and overflow rule for the expanded Agent HUD panel (docs/agent-hud.md).
 //
 // The panel is a GLANCE surface: it draws only the first few rows of the array main pushes. That
 // cap used to be an accident-limiter over a recency sort — the 6th row was whichever session had
 // ticked least recently, so it fell off and came back every few seconds and losing it cost
-// nothing. Now the array arrives in state-priority order (`hudRowRank`, src/main/notch-hud-model),
+// nothing. Now the array arrives in state-priority order (`hudRowRank`, src/main/agent-hud-model),
 // so the cap truncates a MEANINGFUL list: whatever it cuts is the least urgent, but it is still a
 // real omission, and a panel that silently shows 6 of 11 sessions is lying by omission about the
 // two that need you. Hence `overflowLabel` — the sessions sidebar answers the same question with a

@@ -7,7 +7,7 @@
  * project file or the renderer as an implicit readiness claim.
  */
 
-export type NodeDependencyPlatform = 'win32' | 'darwin' | 'linux'
+export type NodeDependencyPlatform = 'win32' | 'linux'
 export type NodeDependencyArchitecture = 'x64' | 'arm64'
 
 export type NodeDependencyArchiveFormat = 'zip' | 'tar.gz' | 'tar.xz' | 'msi' | 'binary'

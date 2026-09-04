@@ -118,8 +118,8 @@ call :phase_end "Dependencies"
 
 rem ---------------------------------------------------------------------------------------------
 rem Phase 1: package the installer through the project's own supported path. package.json keeps
-rem root forceCodeSigning and win.signExecutable false. signAndEditExecutable deliberately remains
-rem enabled at its default so electron-builder still writes the icon and version resources.
+rem root forceCodeSigning, win.signExecutable, and win.signAndEditExecutable false. The reviewed
+rem afterPack hook applies icon and version resources directly without invoking a signer.
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Package (npm run dist:win)"
 if exist "%SQUIRREL_OUT%" rd /s /q "%SQUIRREL_OUT%" >nul 2>nul

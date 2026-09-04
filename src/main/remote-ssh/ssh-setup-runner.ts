@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import path from 'node:path'
 import { childArgs } from '../../core/remote-ssh/control-master'
 import { findExecutableSync } from '../../core/exec-path'
 import type { ProjectSetupRunner, ProjectSetupTarget } from '../../core/project-setup-service'
@@ -58,7 +59,11 @@ let cachedSsh: string | null | undefined
  *  probe has settled, so an early call cannot pin `ssh` to the bare name forever. */
 function defaultSshPath(): string {
   if (cachedSsh !== undefined) return cachedSsh ?? 'ssh'
-  const found = findExecutableSync('ssh', ['/usr/bin/ssh', '/usr/local/bin/ssh', '/opt/homebrew/bin/ssh'])
+  const windowsRoot = process.env.WINDIR || process.env.SystemRoot || 'C:\\Windows'
+  const fallbacks = process.platform === 'win32'
+    ? [path.join(windowsRoot, 'System32', 'OpenSSH', 'ssh.exe')]
+    : ['/usr/bin/ssh', '/usr/local/bin/ssh']
+  const found = findExecutableSync('ssh', fallbacks)
   cachedSsh = found
   return found ?? 'ssh'
 }

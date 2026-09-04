@@ -191,14 +191,14 @@ describe('entitlement store — detail read vs release merge', () => {
     await useEntitlement.getState().releaseOthers()
     expect(useEntitlement.getState().detail!.retryAfterDays).toBe(12)
 
-    // The same install re-read after the entitlement moved to an App Store purchase: no key, no
-    // machines, source 'apple'. Merging here would keep a key that is no longer this license's
+    // The same install re-read after the entitlement moved to a keyless source. Merging here would
+    // keep a key that is no longer this license's
     // and a source that would keep offering a release the server can only refuse.
-    const apple: LicenseDetail = { key: null, used: 0, seats: 0, source: 'apple', error: null }
-    detail.mockResolvedValue(apple)
+    const keyless: LicenseDetail = { key: null, used: 0, seats: 0, source: 'free', error: null }
+    detail.mockResolvedValue(keyless)
     await useEntitlement.getState().loadDetail()
 
-    expect(useEntitlement.getState().detail).toEqual(apple)
+    expect(useEntitlement.getState().detail).toEqual(keyless)
     expect(useEntitlement.getState().detail!.retryAfterDays).toBeUndefined()
   })
 

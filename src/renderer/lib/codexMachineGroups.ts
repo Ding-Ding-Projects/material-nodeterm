@@ -35,9 +35,9 @@ export function codexRemoteTargets(
   return [...byHost.entries()]
 }
 
-/** One machine's panel: the machine, its SSH server (absent for this Mac), and its accounts. */
+/** One machine's panel: the machine, its SSH server (absent for the local computer), and its accounts. */
 export interface CodexMachineGroup {
-  /** Stable key: `''` for this Mac, else the host key. */
+  /** Stable key: `''` for the local computer, else the host key. */
   host: string
   /** True for a remote (SSH) machine. */
   remote: boolean
@@ -48,7 +48,7 @@ export interface CodexMachineGroup {
 }
 
 /**
- * Group the flat account list into ordered machine panels: **this Mac first** (accounts with no
+ * Group the flat account list into ordered machine panels: **the local computer first** (accounts with no
  * `host`), then one panel per remote target in target order. An account lands under exactly the
  * machine whose host key it carries; a remote account whose host is no longer a configured target
  * is dropped from the panels (it is surfaced as a stray in the JSX, not fabricated into a machine).

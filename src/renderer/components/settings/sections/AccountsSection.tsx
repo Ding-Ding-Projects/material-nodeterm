@@ -387,7 +387,6 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
   useEffect(() => {
     void useSshServers.getState().hydrate()
   }, [])
-  const [versionWarning, setVersionWarning] = useState(false)
   const [pendingRemove, setPendingRemove] = useState<PendingAccountRemoval | null>(null)
   const [removingAccountId, setRemovingAccountId] = useState<string | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
@@ -823,7 +822,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     }
     setAddingOn(host ?? LOCAL_TARGET)
     setAddError(null)
-    let added: { id: string; versionSupported: boolean }
+    let added: { id: string }
     try {
       added = await window.nodeTerminal.claudeAccounts.add(projectId ? { projectId } : undefined)
     } catch (e) {
@@ -847,9 +846,6 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
       // still going when the thing to do next is on the canvas.
       setAddingOn(null)
     }
-    // Non-blocking: the account still isolates config, but an old CLI's unscoped macOS keychain
-    // service would collide across accounts — surface a dismissable warning.
-    if (!added.versionSupported) setVersionWarning(true)
     const account: ClaudeAccount = {
       id: added.id,
       label: 'New account',

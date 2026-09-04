@@ -35,9 +35,9 @@ const ESC = '\x1b'
 const CR = '\r'
 const NONCE = 'REALTTY12345'
 
-/** bash's readline implements bracketed paste from 5.1 (macOS ships 3.2 as /bin/bash). */
+/** Linux bash's readline implements bracketed paste from version 5.1 onward. */
 function findPasteAwareBash(): string | null {
-  for (const c of ['/usr/local/bin/bash', '/opt/homebrew/bin/bash', '/bin/bash', '/usr/bin/bash']) {
+  for (const c of ['/usr/local/bin/bash', '/bin/bash', '/usr/bin/bash']) {
     if (!fs.existsSync(c)) continue
     try {
       const v = execFileSync(c, ['-c', 'echo "${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}"'], {
@@ -53,7 +53,7 @@ function findPasteAwareBash(): string | null {
 }
 
 function findTmux(): string | null {
-  for (const c of ['/usr/local/bin/tmux', '/opt/homebrew/bin/tmux', '/usr/bin/tmux', '/bin/tmux']) {
+  for (const c of ['/usr/local/bin/tmux', '/usr/bin/tmux', '/bin/tmux']) {
     if (fs.existsSync(c)) return c
   }
   return null
@@ -205,7 +205,7 @@ const req = (over: Partial<DeliveryRequest> = {}): DeliveryRequest => ({
   ...over
 })
 
-const suite = BASH && TMUX ? describe : describe.skip
+const suite = process.platform === 'linux' && BASH && TMUX ? describe : describe.skip
 
 suite('REAL tmux pane, REAL bash: what the delivery actually does', () => {
   it(

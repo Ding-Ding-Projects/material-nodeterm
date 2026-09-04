@@ -1,71 +1,70 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  FILE_LIST_PASTEBOARD_TYPE,
-  fileListPropertyList,
   writeFilesToClipboard,
   type FileClipboardDependencies
 } from './clipboard-files'
 
-const dependencies = (overrides: Partial<FileClipboardDependencies> = {}): FileClipboardDependencies => ({
-  platform: 'darwin',
+const absolute = (name: string): string => `${String.raw`C:\Files`}\\${name}`
+
+const dependencies = (
+  overrides: Partial<FileClipboardDependencies> = {}
+): FileClipboardDependencies => ({
+  platform: 'win32',
   isFile: () => true,
-  writeBuffer: vi.fn(),
+  writeFileDropList: vi.fn(),
   ...overrides
 })
 
 describe('writeFilesToClipboard', () => {
-  it('writes unique existing absolute files as a macOS filename pasteboard list', () => {
+  it('writes unique existing absolute files through the Windows file-drop boundary', async () => {
     const deps = dependencies()
-    expect(writeFilesToClipboard(['/tmp/a & b.png', '/tmp/a & b.png'], deps)).toBe(true)
-    expect(deps.writeBuffer).toHaveBeenCalledOnce()
-    const [format, buffer] = vi.mocked(deps.writeBuffer).mock.calls[0]
-    expect(format).toBe(FILE_LIST_PASTEBOARD_TYPE)
-    expect(buffer.toString()).toContain('<string>/tmp/a &amp; b.png</string>')
-    expect(buffer.toString().match(/<string>/g)).toHaveLength(1)
+    await expect(
+      writeFilesToClipboard([absolute('a & b.png'), absolute('a & b.png')], deps)
+    ).resolves.toBe(true)
+    expect(deps.writeFileDropList).toHaveBeenCalledWith([absolute('a & b.png')])
   })
 
-  it('rejects unsupported platforms and any selection containing an invalid file', () => {
-    expect(writeFilesToClipboard(['/tmp/a'], dependencies({ platform: 'linux' }))).toBe(false)
-    expect(writeFilesToClipboard(['/tmp/a'], dependencies({ isFile: () => false }))).toBe(false)
-    expect(writeFilesToClipboard(['/tmp/a', 'relative'], dependencies())).toBe(false)
-    expect(writeFilesToClipboard('not-an-array', dependencies())).toBe(false)
+  it('rejects unsupported platforms and any selection containing an invalid file', async () => {
+    await expect(
+      writeFilesToClipboard([absolute('a')], dependencies({ platform: 'linux' }))
+    ).resolves.toBe(false)
+    await expect(
+      writeFilesToClipboard([absolute('a')], dependencies({ isFile: () => false }))
+    ).resolves.toBe(false)
+    await expect(
+      writeFilesToClipboard([absolute('a'), 'relative'], dependencies())
+    ).resolves.toBe(false)
+    await expect(writeFilesToClipboard('not-an-array', dependencies())).resolves.toBe(false)
   })
 
-  it('caps the selection, counting only the files it kept', () => {
-    const paths = (n: number): string[] => Array.from({ length: n }, (_, i) => `/tmp/f${i}`)
+  it('caps the selection after de-duplication and never writes a partial list', async () => {
+    const paths = (count: number): string[] =>
+      Array.from({ length: count }, (_, index) => absolute(`f${index}`))
     const at = dependencies()
-    // Exactly at the cap is still one copy, not a truncated one.
-    expect(writeFilesToClipboard(paths(64), at)).toBe(true)
-    expect(vi.mocked(at.writeBuffer).mock.calls[0][1].toString().match(/<string>/g)).toHaveLength(64)
-    // One over refuses outright — a partial pasteboard is worse than none, because the user
-    // cannot see which files it dropped.
-    expect(writeFilesToClipboard(paths(65), dependencies())).toBe(false)
-    // Duplicates are folded before the cap is charged, so 65 entries naming 64 files still fit.
-    const dupes = dependencies()
-    expect(writeFilesToClipboard([...paths(64), '/tmp/f0'], dupes)).toBe(true)
-    expect(vi.mocked(dupes.writeBuffer).mock.calls[0][1].toString().match(/<string>/g)).toHaveLength(
-      64
+    await expect(writeFilesToClipboard(paths(64), at)).resolves.toBe(true)
+    expect(at.writeFileDropList).toHaveBeenCalledWith(paths(64))
+
+    const over = dependencies()
+    await expect(writeFilesToClipboard(paths(65), over)).resolves.toBe(false)
+    expect(over.writeFileDropList).not.toHaveBeenCalled()
+
+    const duplicate = dependencies()
+    await expect(writeFilesToClipboard([...paths(64), absolute('f0')], duplicate)).resolves.toBe(
+      true
     )
+    expect(duplicate.writeFileDropList).toHaveBeenCalledWith(paths(64))
   })
 
-  it('fails closed when the OS clipboard write fails', () => {
-    expect(
+  it('fails closed when the native clipboard bridge rejects', async () => {
+    await expect(
       writeFilesToClipboard(
-        ['/tmp/a'],
+        [absolute('a')],
         dependencies({
-          writeBuffer: () => {
+          writeFileDropList: async () => {
             throw new Error('clipboard unavailable')
           }
         })
       )
-    ).toBe(false)
-  })
-})
-
-describe('fileListPropertyList', () => {
-  it('escapes every XML-significant path character', () => {
-    expect(fileListPropertyList([`/tmp/<a>\"'&`]).toString()).toContain(
-      '&lt;a&gt;&quot;&apos;&amp;'
-    )
+    ).resolves.toBe(false)
   })
 })

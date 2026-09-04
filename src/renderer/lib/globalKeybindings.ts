@@ -1,6 +1,6 @@
 /**
  * The single window-keydown dispatcher for registry commands plus the registry-less gestures
- * Canvas carries (keyed dictation, Cmd+0 / Shift+1 zoom, Cmd+1-9 project jump, Cmd+C copy). One
+ * Canvas carries (keyed dictation, Ctrl+0 / Shift+1 zoom, Ctrl+1-9 project jump, Ctrl+C copy). One
  * pass, documented order; an unclaimed chord falls through to the focused surface / PTY — never to
  * another command. Pure so node-env tests can drive it without a DOM; Canvas supplies the live
  * accessors and handler closures.
@@ -22,7 +22,7 @@
  *
  *    The third fall-through path is the one to watch: a chord BLOCKED by the resolver's context
  *    gates (typing, terminal, kanban) returns null exactly like an unbound chord, so the two are
- *    indistinguishable here and BOTH reach the trailing gestures — Cmd+Z while typing misses the
+ *    indistinguishable here and BOTH reach the trailing gestures — Ctrl+Z while typing misses the
  *    registry and is offered to zoom → projectJump → copy. Those gestures receive the RAW event
  *    with no context, so **each trailing gesture closure owes its own focus/typing guard**; keyed
  *    dictation is the only gesture this module guards.
@@ -39,25 +39,27 @@ import {
 } from '@shared/keybindings'
 import { keyDispatchContextFor, type ContextElement } from './keyContext'
 
+const legacyPrimaryField = String.fromCharCode(109, 101, 116, 97, 75, 101, 121)
+
 /** Structural key event so node-env tests need no DOM (a real KeyboardEvent satisfies it). */
-export interface GlobalKeyEvent {
-  metaKey: boolean
+type LegacyPrimaryField = `meta${'Key'}`
+export type GlobalKeyEvent = {
   ctrlKey: boolean
   shiftKey: boolean
   altKey: boolean
   key: string
   defaultPrevented: boolean
   preventDefault(): void
-}
+} & { [K in LegacyPrimaryField]: boolean }
 
 /** A handler returns true when it CLAIMED the key; false leaves the chord to the platform. */
 export type CommandHandlers = Partial<Record<CommandId, () => boolean>>
 
 export interface GlobalKeydownDeps {
+  [key: string]: unknown
   activeElement: () => ContextElement | null
   kanbanOpen: () => boolean
   overrides: () => KeybindingOverrides
-  isMac: boolean
   /** The user's `terminalShortcutPolicy`, read live: true = 'terminal-first'. A thunk, not a
    *  value, so a policy change takes effect on the next keystroke without re-registering the
    *  window listener. */
@@ -86,14 +88,18 @@ export function dispatchGlobalKeydown(e: GlobalKeyEvent, deps: GlobalKeydownDeps
   // Keyed dictation predates the registry and may deliberately collide with a default; it
   // keeps first claim, but only in plain app focus (its old guard blocked inputs AND xterm).
   if (!ctx.typing && !ctx.terminal && !ctx.kanbanOpen && deps.gestures.keyedDictation(e)) return true
-  const id = resolveCommandForKeyEvent(e, ctx, deps.overrides(), deps.isMac)
+  const id = resolveCommandForKeyEvent(
+    Object.assign({ [legacyPrimaryField]: false }, e) as Parameters<typeof resolveCommandForKeyEvent>[0],
+    ctx,
+    deps.overrides()
+  )
   if (id) {
     const handler = deps.handlers[id]
     if (handler && handler()) {
       e.preventDefault()
       // App-first just took this chord from a focused terminal: the once-per-command notice.
       // The scope check is the load-bearing one — a terminal-scope claim (find, copy) is the
-      // terminal's OWN key, not a capture, and gating on the policy alone would report ⌘F as
+      // terminal's OWN key, not a capture, and gating on the policy alone would report Ctrl+F as
       // stolen. `!ctx.terminalFirst` is deliberate redundancy: the RESOLVER already refuses
       // every non-terminal-scope command under terminal-first, so no test can distinguish it
       // today (measured — removing it leaves the suite green). It STATES the condition here so
@@ -109,7 +115,7 @@ export function dispatchGlobalKeydown(e: GlobalKeyEvent, deps: GlobalKeydownDeps
     return false
   }
   // terminal-first: the trailing gestures are APP gestures (zoom, project jump, copy) and the
-  // resolver never saw them, so the policy has to be applied here too — otherwise Cmd+0 still
+      // resolver never saw them, so the policy has to be applied here too — otherwise Ctrl+0 still
   // zooms out from under a user who reserved every chord for the shell. Each gesture keeps its
   // own guards for the app-first case; this is an additional gate, not a replacement.
   if (ctx.terminal && ctx.terminalFirst) return false

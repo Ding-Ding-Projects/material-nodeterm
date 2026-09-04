@@ -117,7 +117,7 @@ export function LicenseSection({ isActive }: { isActive: boolean }): React.JSX.E
   const [copied, setCopied] = useState(false)
   const [confirming, setConfirming] = useState<'release' | 'deactivate' | null>(null)
   // The reason code of a release that did not land — NOT a boolean, and NOT merged into `detail`:
-  // "offline" and "this Mac is not authorized" owe the user different sentences, and neither of
+  // "offline" and "this computer is not authorized" owe the user different sentences, and neither
   // them is a statement about the license the panel is displaying. See `releaseFailureSentence`.
   const [releaseError, setReleaseError] = useState<string | null>(null)
   // `loadDetail` REJECTS on the Server Edition (`E_UNSUPPORTED` — there is no license layer in
@@ -248,8 +248,8 @@ export function LicenseSection({ isActive }: { isActive: boolean }): React.JSX.E
             </p>
             {detail ? (
               <>
-                {/* No key ⇒ no field. A row reading "not available" beside a sentence saying there
-                    IS no key (an App Store subscription, a failed read) contradicts itself on the
+                {/* No key means no field. A row reading "not available" beside a sentence saying there
+                    is no key or the read failed contradicts itself on the
                     first screen those users ever see — "not available" means "exists, could not be
                     fetched". The sentence below is the whole story in every keyless case. */}
                 {keyOnFile ? (
@@ -276,7 +276,7 @@ export function LicenseSection({ isActive }: { isActive: boolean }): React.JSX.E
                 {sentence ? <p className="text-sm text-muted">{sentence}</p> : null}
                 {canUseKeyElsewhere(detail) ? (
                   <p className="text-sm text-muted">
-                    To use Pro on another Mac, open Settings → License there and paste this key.
+                    To use Pro on another computer, open Settings → License there and paste this key.
                   </p>
                 ) : null}
                 {canReleaseDevices(detail) ? (
@@ -351,7 +351,7 @@ export function LicenseSection({ isActive }: { isActive: boolean }): React.JSX.E
           house pattern (a single phone revoke gets a ConfirmDialog; these are larger). */}
       {confirming === 'release' ? (
         <ConfirmDialog
-          message="Release every other device on this license? Your other Macs and every paired phone lose Pro until they are activated again — this Mac keeps it. Devices can only be released once every 30 days."
+          message="Release every other device on this license? Your other computers and every paired phone lose Pro until they are activated again; this computer keeps it. Devices can only be released once every 30 days."
           confirmLabel="Release others"
           onConfirm={runRelease}
           onCancel={() => setConfirming(null)}
@@ -364,8 +364,8 @@ export function LicenseSection({ isActive }: { isActive: boolean }): React.JSX.E
           // this sentence the buyer is back in the support queue this whole screen exists to end.
           message={
             keyOnFile
-              ? 'Deactivate Pro on this Mac? Copy your license key first — it is shown here only while Pro is active, and you need it to activate again.'
-              : 'Deactivate Pro on this Mac? Pro features stop here until this device is activated again.'
+              ? 'Deactivate Pro on this computer? Copy your license key first. It is shown here only while Pro is active, and you need it to activate again.'
+              : 'Deactivate Pro on this computer? Pro features stop here until this device is activated again.'
           }
           confirmLabel="Deactivate"
           onConfirm={() => {

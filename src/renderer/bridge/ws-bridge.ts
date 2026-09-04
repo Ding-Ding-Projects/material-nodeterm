@@ -2010,7 +2010,6 @@ export function buildClaudeAccountsApi(client: RpcClient): Pick<NodeTerminalApi,
         client.request(IPC.claudeAccountsAdd, ctx) as Promise<{
           id: string
           configDir: string
-          versionSupported: boolean
         }>,
       waitLogin: (id, ctx) =>
         client.request(IPC.claudeAccountsWaitLogin, id, ctx) as Promise<{ email: string } | null>,

@@ -3,16 +3,14 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
- * Guards on the notch HUD's theming (docs/notch-hud.md), in the shape of ../styles.theme.test.ts
+ * Guards on the Agent HUD's theming (docs/agent-hud.md), in the shape of ../styles.theme.test.ts
  * — but this file is NOT that one wearing a different path, because hud.css is not that kind of
  * stylesheet.
  *
  * styles.css is rendered inside the app shell, under a `<html data-theme>` that flips, so a raw
  * literal near-black/near-white slipped into a rule there is a bug: it silently keeps the DARK
  * value once someone switches to light. hud.css renders in its OWN standalone window, with no app
- * shell and no `<html data-theme>` to flip — the file's own top-of-file comment says so, because
- * the capsule it draws is physically fused to the notch, and the notch is black hardware
- * regardless of the system appearance. So hud.css is *supposed* to be permanently dark: every
+ * shell and no `<html data-theme>` to flip. The HUD surface is intentionally dark so every
  * `--md-*` role in here is a hand-picked DARK value, on purpose, forever. Copying styles.css's
  * "flag every near-extreme background" rule verbatim would flag that entire, correct, intentional
  * darkness as a defect.
@@ -32,8 +30,8 @@ import { join } from 'node:path'
  *    to one of the six sprite-geometry variables main.ts sets at runtime (the mascot/cmascot
  *    width, height and sheet-size custom properties) — see "every referenced var resolves".
  *
- * This cannot be verified by loading the HUD window itself — it is macOS-only, native-notch
- * chrome with no build on this host, so this is a static-source check, not a rendered one.
+ * This is a static-source check for the standalone HUD stylesheet. Runtime rendering is covered by
+ * the Windows built-application drive.
  */
 
 const CSS = readFileSync(join(__dirname, 'hud.css'), 'utf8')
@@ -127,9 +125,9 @@ describe('every background rule reads from a token', () => {
   })
 })
 
-describe('the fused capsule stays pinned to #000, on purpose', () => {
+describe('the HUD surface stays pinned to #000, on purpose', () => {
   // A generic scan cannot notice a value quietly drifting away from the one thing that makes it
-  // safe (pure opaque black, seamless against the notch's own black) — it can only notice that
+  // safe (pure opaque black for the standalone HUD surface) — it can only notice that
   // SOMETHING is declared. So this is hand-written, the same way ../styles.theme.test.ts hand-
   // writes the git-graph token inventory: the check that would catch a thing done wrongly is not
   // the same check that catches a thing quietly no longer being what it claims to be.
@@ -139,12 +137,12 @@ describe('the fused capsule stays pinned to #000, on purpose', () => {
     expect(token!.value).toBe('#000')
   })
 
-  it('carries a theme-exempt: marker naming notch fusion as the reason', () => {
+  it('carries a theme-exempt: marker naming the deliberate dark surface', () => {
     const token = TOKEN_BY_NAME.get('--capsule-bg')
     expect(token, '--capsule-bg must still be declared in hud.css').toBeTruthy()
     expect(token!.exempt).toBe(true)
     const commentLines = [LINES[token!.lineIndex - 1] ?? '', LINES[token!.lineIndex - 2] ?? ''].join('\n')
-    expect(commentLines).toMatch(/notch/i)
+    expect(commentLines).toMatch(/surface/i)
   })
 
   it('is actually used to paint the capsule, not just declared and orphaned', () => {
