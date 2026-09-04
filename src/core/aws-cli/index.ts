@@ -1,7 +1,7 @@
 export {
   awsCliHelpFallback,
   discoverAwsCliModels,
-  loadAwsCliIndex,
-  parseAwsCliModelFiles
+  loadAwsCliIndex
 } from './model-loader'
 export type { AwsCliIndexLoaderOptions, AwsCliModelDiscovery } from './model-loader'
+export { parseAwsCliModelFiles } from '../../shared/aws-cli'

@@ -23,6 +23,7 @@ function installWindow(opts?: { destroyed?: boolean; sendThrows?: boolean }): Se
     show: () => {},
     focus: () => {},
     on: () => {},
+    setOverlayIcon: () => {},
     webContents: {
       send: (channel: string, ...args: unknown[]) => {
         // Mirrors the real failure mode: webContents.send throws "Render frame was disposed"

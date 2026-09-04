@@ -83,3 +83,6 @@ export type { SnackbarProps, SnackbarAction, SnackbarTone } from './Snackbar'
 
 export { Divider } from './Divider'
 export type { DividerProps } from './Divider'
+
+export { FieldLabel } from './FieldLabel'
+export type { FieldLabelProps } from './FieldLabel'

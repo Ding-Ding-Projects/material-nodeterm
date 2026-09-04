@@ -4,7 +4,7 @@ import type { CorePlatform } from '../core/platform'
 import { mainWindowClientIds, sendToMain } from './main-window'
 import { peerRegistry } from './peer-registry'
 import { HOST_ONLY_REFUSAL, isHostOnlyChannel } from '../shared/host-control'
-import { E_NO_HANDLER, type RpcErr, type RpcOk, type RpcRequest } from '../shared/rpc'
+import { E_NO_HANDLER, rpcErrorDetails, type RpcErr, type RpcOk, type RpcRequest } from '../shared/rpc'
 import { IPC } from '../shared/ipc'
 import { stripSharedNodeExec } from '../shared/node-exec'
 import type {

@@ -210,7 +210,7 @@ function option(
   }
 }
 
-function stringValue(value: unknown, max = AWS_CLI_LIMITS.maxStringLength): string | null {
+function stringValue(value: unknown, max: number = AWS_CLI_LIMITS.maxStringLength): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed.slice(0, max) : null
@@ -631,7 +631,9 @@ export function parseAwsCliModelFiles(files: readonly AwsCliModelFileInput[], no
 }
 
 function serviceNameForCli(service: MutableService | AwsCliService): string {
-  const value = ('cliName' in service ? service.cliName : service.endpointPrefix) ?? service.id ?? service.name
+  // Both MutableService and AwsCliService always carry cliName, so this always resolves to it;
+  // kept as a plain field read (was an always-true type guard) rather than a fallback chain.
+  const value = service.cliName
   return value.toLowerCase().replace(/[^a-z0-9-]/g, '-')
 }
 

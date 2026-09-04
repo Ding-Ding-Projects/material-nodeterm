@@ -13882,3 +13882,20 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 .notif-center__row {
   border-radius: var(--md-shape-section);
 }
+
+/* The service node's address field is the shared dense outlined field now (`ui/Input` ->
+ * `.mdx-input`). Its legacy `.service-node__input` class stays on the element because behavioural
+ * tests select it, so its pre-MD3 shape/typography rules in `styles.css` are re-keyed onto the
+ * primitive class here rather than left to win on load order. */
+.mdx-input.service-node__input {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--md-shape-extra-small);
+  border-color: var(--md-outline);
+  background: transparent;
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+}
+.mdx-input.service-node__input[aria-invalid='true'] {
+  border-color: var(--md-error);
+}

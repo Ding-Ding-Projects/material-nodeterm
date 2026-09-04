@@ -6,8 +6,9 @@
  * provider, and network state.  Archive writers and importers can use the bytes without this
  * module acquiring filesystem or host capabilities.
  */
-
-import type { BridgeLink, CanvasNodeState, Project, Viewport, NodeKind } from '../shared/types'
+import type { BridgeLink, CanvasNodeState, Project, Viewport, NodeKind, Link, SavedCanvasLayout } from '../shared/types'
+import type { MultiverseState } from '../shared/multiverse'
+import { validatePortablePortalHierarchy, type PortablePortalHierarchy } from '../shared/portal-lifecycle'
 import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEMA_VERSION } from './portable-project-v3'
 import { sanitizeProjectIcon } from '../shared/project-icon'
 import type { PortableMediaManifest } from './portable-media-manifest'
@@ -205,6 +206,13 @@ export const PORTABLE_CANVAS_LIMITS = {
 
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'doors', 'portals', 'appearance', 'media', 'planner', 'debugBrowserProfiles'])
+const ALLOWED_MEDIA_REF = new Set(['assetId', 'kind', 'displayName', 'extension', 'sha256', 'bytes', 'source', 'resolution'])
+const ALLOWED_NODE_ENDPOINT = new Set(['ref', 'nodeId'])
+const ALLOWED_XNODE_ENDPOINT = new Set(['ref', 'projectId', 'nodeId'])
+const ALLOWED_BRANCH_ENDPOINT = new Set(['ref', 'repoPath', 'branch'])
+const ALLOWED_LINK_META = new Set(['purpose', 'displayOnly'])
+const ALLOWED_SAVED_LAYOUT = new Set(['version', 'id', 'name', 'createdAt', 'nodes'])
+const ALLOWED_SAVED_LAYOUT_NODE = new Set(['id', 'position', 'size', 'parentId', 'collapsed'])
 const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'depth', 'title', 'order', 'viewport', 'nodeIds'])
@@ -1020,10 +1028,14 @@ export function portableCanvasProjectionToProject(
   const nodeById = new Map(value.nodes.map((node) => [node.id, runtimeNode(node)]))
   const rootCanvas = value.canvases.find((canvas) => canvas.id === value.rootCanvasId)!
   const rootNodes = rootCanvas.nodeIds.map((id) => nodeById.get(id)).filter((node): node is CanvasNodeState => !!node)
+  const isLegacyRelationship = (link: PortableRelationshipV3): link is PortableLegacyRelationshipV3 =>
+    link.kind === 'bridge' || link.kind === 'rope'
   const bridgeLinks = value.relationships
+    .filter(isLegacyRelationship)
     .filter((link) => link.kind === 'bridge' && (link.canvasId ?? value.rootCanvasId) === value.rootCanvasId)
     .map((link) => ({ id: link.id, source: link.source, target: link.target }))
   const ropeLinks = value.relationships
+    .filter(isLegacyRelationship)
     .filter((link) => link.kind === 'rope' && (link.canvasId ?? value.rootCanvasId) === value.rootCanvasId)
     .map((link) => ({ id: link.id, source: link.source, target: link.target }))
   const icon = value.project.icon

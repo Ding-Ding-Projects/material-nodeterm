@@ -339,7 +339,7 @@ export function BrowserSurface({
           {showExtensions && (
             <BrowserExtensionsPanel partition={partition} onClose={() => setShowExtensions(false)} />
           )}
-        </div>}
+        </div>
       </div>
       <div className="browser-node__view nodrag nowheel">
         {/* The element is UNMOUNTED while discarded — that is what ends the guest process; an

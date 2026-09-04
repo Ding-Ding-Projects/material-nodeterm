@@ -16,6 +16,7 @@ import type {
   Link,
   NavStop,
   Project,
+  ProjectCanvas,
   ProjectMultiverseCanvas,
   ProjectChildCanvas,
   ProjectPortalState,
@@ -34,7 +35,7 @@ import { validatePortableDoorConstruction } from '../shared/door-construction'
 import { validateCalendarConfig } from '../shared/calendar'
 import { normalizeDebugBrowserProfiles } from '../shared/browser-debug-sessions'
 import { sanitizeTriggerSpec } from '../shared/trigger'
-import { sanitizeProviderBlueprint, validateProviderBlueprint, type ProviderBinding, type ProviderBlueprint } from '../shared/provider-accounts'
+import { sanitizeSessionIcon } from '../shared/session-icon'
 
 /**
  * Drop a browser node's persisted `partition` unless it is exactly the jar THIS project (its
@@ -181,40 +182,6 @@ function sharedLinkPaths(links: Link[] | undefined, cwd: string | undefined): Li
   }))
 }
 
-/**
- * Lift legacy bridge and rope arrays into the unified link substrate while reading a project.
- *
- * Bridge ids and rope ids remain unchanged so existing edge identity and deduplication survive
- * the migration. Ropes are explicitly marked display-only, preserving their historical
- * non-context semantics. An already-written links array wins over stale legacy fields, and an
- * empty legacy canvas stays empty so loading it does not create a needless file change.
- */
-export function migrateLinks(f: {
-  links?: Link[]
-  bridges?: BridgeLink[]
-  ropes?: BridgeLink[]
-}): Link[] | undefined {
-  if (f.links) return f.links
-  const out: Link[] = []
-  for (const bridge of f.bridges ?? []) {
-    out.push({
-      id: bridge.id,
-      kind: 'context',
-      source: { ref: 'node', nodeId: bridge.source },
-      target: { ref: 'node', nodeId: bridge.target }
-    })
-  }
-  for (const rope of f.ropes ?? []) {
-    out.push({
-      id: rope.id,
-      kind: 'lineage',
-      source: { ref: 'node', nodeId: rope.source },
-      target: { ref: 'node', nodeId: rope.target },
-      meta: { displayOnly: true }
-    })
-  }
-  return out.length > 0 ? out : undefined
-}
 
 /**
  * On-disk shape of <cwd>/.nodeterm/project.json — a GIT-SHARED document (users are asked to
@@ -382,8 +349,6 @@ export interface IndexEntryV3 {
    * with the flag already set. See `WorkspaceStore.execOverlay`.
    */
   execMigrated?: boolean
-  /** Machine-local links from this project to portable provider blueprints. */
-  providerBindings?: ProviderBinding[]
 }
 
 export interface WorkspaceIndexV3 {
@@ -520,13 +485,6 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
       typeof (p as BrowserProfile).name === 'string' &&
       typeof (p as BrowserProfile).color === 'string'
   )
-  return cleaned.length > 0 ? cleaned : undefined
-}
-
-/** Portable provider intent is hostile shared input too. Invalid rows are dropped individually. */
-export function validProviderBlueprints(v: unknown): ProviderBlueprint[] | undefined {
-  if (!Array.isArray(v)) return undefined
-  const cleaned = v.filter((item): item is ProviderBlueprint => validateProviderBlueprint(item)).map(sanitizeProviderBlueprint)
   return cleaned.length > 0 ? cleaned : undefined
 }
 
@@ -724,7 +682,6 @@ export function fileToProject(
      *  WITHOUT them — an adopted/cloned folder, a probe — gets the safe defaults, never the file's
      *  own `shell`/`ssh.extraArgs`. */
     localExec?: LocalNodeExecMap
-    providerBindings?: ProviderBinding[]
   }
 ): Project {
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
@@ -742,7 +699,6 @@ export function fileToProject(
   const icon = sanitizeProjectIcon(f.icon)
   const links = migrateLinks(f)
   const savedLayouts = validSavedLayouts(f.savedLayouts)
-  const providerBlueprints = validProviderBlueprints(f.providerBlueprints)
   return {
     id: base.id,
     name: f.name,

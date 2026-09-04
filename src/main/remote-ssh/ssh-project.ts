@@ -22,7 +22,7 @@ import { removeAtomic, renameAtomic } from '../../core/fs-atomic'
 import { isSafeRemoteHome } from '../../core/remote-safety'
 import { mediaCachePruneList, remoteMediaCacheName } from '../../core/remote-ssh/media-cache'
 import { allowMediaPath } from '../media-protocol'
-import { remoteAccountConfigDir, isSupportedClaudeVersion } from '../../core/claude-accounts-core'
+import { remoteAccountConfigDir } from '../../core/claude-accounts-core'
 import {
   parseRemoteClaudeSkillsOutput,
   remoteClaudeSkillEntries,

@@ -57,6 +57,7 @@ installLogSink(logBuffer)
 import { setWindowsFileDropList, writeFilesToClipboard } from './clipboard-files'
 import { taskbarBadgePlan } from './windows-taskbar-badge'
 import { NodeTermBrowserUseBackend } from './browser-use-backend'
+import { DebugBrowserSessionService } from './browser-debug-session'
 import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
@@ -166,7 +167,6 @@ import {
 import type { RemoteLogExec } from '../core/board-log'
 import { boardLogRemotePath } from '../core/board-log'
 import { PtyManager } from '../core/pty-manager'
-import { ModelGatewayCredentialService } from './model-gateway-credentials'
 import { WindowsTerminalProfileService } from '../core/windows-terminal-profiles'
 import { WorkspaceStore } from '../core/workspace-store'
 import type { RemoteNodeInput } from '../core/project-node-append'
@@ -330,7 +330,6 @@ import {
   remoteTranscriptRoots
 } from '../core/remote-transcript-locate'
 import { registerTranscriptIpc, resolveTranscript } from '../core/transcript-ipc'
-import { locateCodex, locateGemini } from '../core/handoff/locate'
 import { contextSourceForNode, contextPercentFromCounts } from '../shared/context-source'
 import { createRemoteContextTail } from './remote-context-tail'
 import { createRemoteSubagentTail } from './remote-subagent-tail'
@@ -350,14 +349,6 @@ import { buildHandoff, type HandoffRemote } from './handoff'
 import { initContextLink, setNodeTranscript } from '../core/context-link'
 import { transcriptPathOf } from '../core/context-link-core'
 import { initCanvasControl, installCanvasSkillInto } from './canvas-control'
-import {
-  createDeliveryQueue,
-  deliverFromControl,
-  isDeliverRequest,
-  onMessagingAgentEvent,
-  setDeliveryQueue,
-  type AgentMessagingDeps
-} from './agent-messaging'
 import { initTranscriptIndex } from '../core/transcript-index'
 import { initTelemetry } from './telemetry'
 import { initClaudeUsage } from './claude-usage'
@@ -432,8 +423,6 @@ import { WEBGL_CONTEXT_CAP_DESKTOP } from '../shared/webgl'
 import { APP_BAR_HEIGHT } from '../shared/layout'
 import { registerConfirmedRecycleIpc } from './confirmed-recycle-ipc'
 import { registerWindowsTerminalProfileIpc } from './windows-terminal-profiles'
-import { createWindowsDiagnosticsService } from '../core/windows-diagnostics'
-import { WINDOWS_DIAGNOSTIC_KINDS } from '../shared/windows-diagnostics'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
 import { createStartupHealthTracker } from './startup-health'
 import { settleShutdownWithin } from './bounded-shutdown'
@@ -580,7 +569,7 @@ const alarmPlannerRuntime = new AlarmPlannerRuntime(
 const interceptIsMac = process.platform === 'darwin'
 let interceptBindings: KeydownInterceptBindings | null = null
 const currentInterceptBindings = (): KeydownInterceptBindings =>
-  (interceptBindings ??= resolveInterceptBindings(settingsStore.get().keybindings, interceptIsMac))
+  (interceptBindings ??= resolveInterceptBindings(settingsStore.get().keybindings))
 // The user's terminal-shortcut policy, memoized on exactly the same terms and for exactly the same
 // reason as `interceptBindings` above: lazily on first keystroke (module load is before
 // `settingsStore.init()`, where every stored value still reads as DEFAULT_SETTINGS), recomputed on
@@ -596,7 +585,7 @@ let interceptPolicy: TerminalShortcutPolicy | null = null
 const currentInterceptPolicy = (): TerminalShortcutPolicy =>
   (interceptPolicy ??= normalizeTerminalShortcutPolicy(settingsStore.get().terminalShortcutPolicy))
 settingsStore.onChange((s) => {
-  interceptBindings = resolveInterceptBindings(s.keybindings, interceptIsMac)
+  interceptBindings = resolveInterceptBindings(s.keybindings)
   interceptPolicy = normalizeTerminalShortcutPolicy(s.terminalShortcutPolicy)
   // A policy flip changes the stood-down answer with no focus event behind it, so the menu leg
   // owes a sync here too. (`buildAppMenu` re-runs on this same hook and syncs at its end, so this
@@ -656,7 +645,6 @@ const windowsTerminalProfiles = new WindowsTerminalProfileService({
   getCustomExecutable: () => settingsStore.get().defaultShell,
   getNamedProfiles: () => settingsStore.get().namedTerminalProfiles
 })
-const windowsDiagnostics = createWindowsDiagnosticsService()
 const ptyManager = new PtyManager({ terminalProfiles: windowsTerminalProfiles })
 let agentContinuationService: AgentContinuationService | undefined
 // One tiny detached relay is shared by every Codex node/account. Keeping it outside the renderer
@@ -1225,7 +1213,7 @@ function syncMenuForStandDown(): void {
   const menu = Menu.getApplicationMenu()
   if (!menu) return
   const enabled = !menuStandsDown(shortcutRecording, currentInterceptPolicy(), terminalFocused)
-  for (const id of menuItemIdsToSuspend(interceptIsMac)) {
+  for (const id of menuItemIdsToSuspend()) {
     const item = menu.getMenuItemById(id)
     if (item) item.enabled = enabled
   }
@@ -1234,7 +1222,7 @@ function syncMenuForStandDown(): void {
   // kill-word. Applied ON TOP of the shared suspension — the item must never be MORE enabled than
   // the shared rule says. Mac has no close item in the template, so the lookup is null there and
   // this is a no-op by construction.
-  if (closeStandsDownInTerminal(interceptIsMac, terminalFocused)) {
+  if (closeStandsDownInTerminal(terminalFocused)) {
     const close = menu.getMenuItemById(MENU_ITEM_ID_CLOSE)
     if (close) close.enabled = false
   }
@@ -1422,11 +1410,8 @@ function createWindow(): BrowserWindow {
     startupHealth.record('window-shown')
     win.show()
   })
-  // The main window is a regular app window; establishing its Dock presence explicitly means the
-  // later focusable:false Notch HUD panel can never leave the app looking like an accessory.
   win.on('show', () => {
     startupHealth.record('window-shown')
-    assertRegularDockPresence()
   })
 
   // macOS: closing the window hides it instead of destroying it. The app deliberately
@@ -1491,11 +1476,10 @@ function createWindow(): BrowserWindow {
   installKeydownIntercepts(
     win,
     currentInterceptBindings,
-    interceptIsMac,
     () => shortcutRecording,
     () => policyStandsDown(currentInterceptPolicy(), terminalFocused),
     // The close leg's own, policy-independent stand-down (issue #383) — see the predicate's doc.
-    () => closeStandsDownInTerminal(interceptIsMac, terminalFocused)
+    () => closeStandsDownInTerminal(terminalFocused)
   )
 
   // The THIRD way the page that armed a recorder (or reported terminal focus) can go away: a
@@ -1665,15 +1649,6 @@ app.whenReady().then(async () => {
     )
     app.once('will-quit', disposeTerminalProfileIpc)
   }
-  // Native Windows diagnostics are machine-local and read-only. They deliberately stay out of
-  // the relay dispatch table, and neither channel has a mutation or elevation path.
-  ipcMain.handle(IPC.windowsDiagnosticsRead, (_event, kind: unknown) => {
-    if (typeof kind !== 'string' || !WINDOWS_DIAGNOSTIC_KINDS.includes(kind as never)) {
-      throw new Error('Unknown Windows diagnostic category.')
-    }
-    return windowsDiagnostics.read(kind as import('../shared/windows-diagnostics').WindowsDiagnosticKind)
-  })
-  ipcMain.handle(IPC.windowsDiagnosticsSnapshot, () => windowsDiagnostics.snapshot())
   await schoolModeStore.init()
   schoolModeStore.registerIpc()
   await kidsModeStore.init()
@@ -3371,8 +3346,8 @@ app.whenReady().then(async () => {
   // and the phone's context ring identically whichever CLI produced the numbers.
   const pushContextUpdate = (payload: unknown): void => {
     if (!win.isDestroyed()) win.webContents.send(IPC.contextUpdate, payload)
-    // Feed the macOS Notch HUD the model name (keyed by sessionId; no-op off/non-darwin).
-    notchHudOnContextUpdate(payload as { sessionId?: string; agentId?: string; source?: string; model?: string; usedTokens?: number; windowTokens?: number; updatedAt?: number })
+    // Feed the Agent HUD the model name (keyed by sessionId; no-op while disabled).
+    agentHudOnContextUpdate(payload as { sessionId?: string; agentId?: string; source?: string; model?: string; usedTokens?: number; windowTokens?: number; updatedAt?: number })
     // Feed the mirror's per-node context ring (mobile-usage-inbox). The context tail keys by
     // sessionId; map it back to the node via the raw-listener's nodeId↔sessionId association.
     const cw = payload as { sessionId?: string; usedPercent?: number; sourceKey?: string }

@@ -3,13 +3,12 @@
  * Settings → Speech capture field, the Dock mic tooltip, and ShortcutsPanel.
  *
  * Canonical string shape: modifier tokens joined by "+", optionally ending in one non-modifier
- * key token, e.g. `"Cmd+Shift+D"`, `"Cmd+F5"`, or (v3) a MODIFIER-ONLY chord with no trailing
- * key, e.g. `"Cmd+Alt"`. `Cmd` is the PLATFORM-ABSTRACTED primary modifier: ctrlKey on
- * Windows/Linux, and metaKey (⌘) for a Server Edition browser tab on a real Mac. `Ctrl` is a
- * separate literal Control modifier on every platform.
+ * key token, e.g. `"Ctrl+Shift+D"`, `"Ctrl+F5"`, or (v3) a MODIFIER-ONLY chord with no trailing
+ * key, e.g. `"Ctrl+Alt"`. `Ctrl` is the supported desktop's only primary modifier.
+ * `Cmd`/`Command` remain accepted parse-only aliases for `Ctrl`, never emitted. settings.json is
+ * forever: a pre-rewire install may still contain those spellings, and dropping the aliases would
+ * turn every one of that user's shortcuts dead on upgrade.
  *
- * `Command` remains an accepted parse-only alias for `Cmd`; settings.json is forever, so older
- * installs using `"Command+K"` continue to work after the canonical spelling change.
  * Modifier matching is EXACT on all four flags: a chord matches only when the event's meta/ctrl/
  * alt/shift state is precisely what the chord resolves to, so an extra modifier held on top never
  * fires a shorter binding.
@@ -250,27 +249,19 @@ export function chordHeld(e: ShortcutKeyEvent, s: string, _legacyPlatformFlag?: 
 
 /**
  * Build a canonical combo string from a captured keydown, for the Settings capture field.
- * Requires the platform's primary modifier (ctrlKey; metaKey on a mac browser client) plus a
- * non-modifier key; returns null while only modifier keys have been pressed so far, or when the
- * primary modifier is missing. It emits canonical `Cmd` for the abstract primary and adds literal
- * `Ctrl` when a mac user holds both controls.
- * Requires the platform's primary modifier (Cmd on mac / Ctrl elsewhere) plus a non-modifier
- * key; returns null while only modifier keys have been pressed so far, or when the primary
- * modifier is missing. (A modifier-only chord is captured separately — see `buildModifierChord`
- * below — because it commits on keyUP once every key is released, by which point the keyup
- * event's own modifier flags are already false and can't be read off it directly.)
- *
- * **A capture must describe the whole gesture**, because matching is exact: on mac a Control held
- * beside Cmd is recorded as the literal `Ctrl` token, and on non-mac a held Meta (Super/Win)
- * REFUSES the capture — that chord has no spelling in this grammar, and storing the bare `Cmd+…`
- * would save a binding the same gesture can never fire again.
+ * Requires Control plus a non-modifier key; returns null while only modifier keys have been pressed
+ * so far, or when Control is missing. Emits the canonical `Ctrl` token, never the legacy alias,
+ * which is parse-only compat for pre-rewire settings.json values. (A modifier-only chord is
+ * captured separately — see `buildModifierChord` below — because it commits on keyUP once every
+ * key is released, by which point the keyup event's own modifier flags are already false and
+ * can't be read off it directly.)
+ * A held Meta is refused because the grammar has no Meta spelling and matching is exact.
  */
 export function captureToShortcut(e: ShortcutKeyEvent, _legacyPlatformFlag?: boolean): string | null {
   if (!e.ctrlKey || e.metaKey) return null
   const key = normalizeKey(e.key)
   if (MODIFIER_KEYS.has(key)) return null
-  const parts = ['Cmd']
-  if (isMac && e.ctrlKey) parts.push('Ctrl')
+  const parts = ['Ctrl']
   if (e.altKey) parts.push('Alt')
   if (e.shiftKey) parts.push('Shift')
   parts.push(key)
@@ -287,15 +278,15 @@ export interface ChordModifiers {
   shift: boolean
 }
 
-/** `{cmd:true, alt:true, shift:false}` -> `"Cmd+Alt"`; `{cmd:false, ...}` -> `null` (the
- *  primary modifier is mandatory). A literal `ctrl` is retained when captured beside the primary.
+/** `{cmd:true, alt:true, shift:false}` -> `"Ctrl+Alt"` (canonical token, same rule as
+ *  `captureToShortcut`); `{cmd:false, ...}` -> `null` (Control is mandatory). The
  *  Settings capture field calls this at keyUp, once every key has been released, using the
  *  modifier state it remembered from the last keyDown while only modifier keys had been pressed
  *  (`isModifierEventKey`) — the keyup event itself no longer carries that state. */
 export function buildModifierChord(mods: ChordModifiers): string | null {
   if (!mods.cmd) return null
-  const parts = ['Cmd']
-  if (mods.ctrl) parts.push('Ctrl')
+  if (mods.ctrl) return null
+  const parts = ['Ctrl']
   if (mods.alt) parts.push('Alt')
   if (mods.shift) parts.push('Shift')
   return parts.join('+')

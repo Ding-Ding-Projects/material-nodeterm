@@ -4,7 +4,7 @@ import { join, basename } from 'node:path'
 import { spawn } from 'node:child_process'
 import { platform } from '../platform'
 import type {
-  AwsApi,
+  AwsApi as AwsLegacyIdentityManagerApi,
   AwsAssumeRoleInput,
   AwsAssumeRoleResult,
   AwsCallerIdentity,
@@ -197,7 +197,7 @@ function runAwsJson(
   })
 }
 
-export class AwsProfileManager implements AwsApi {
+export class AwsProfileManager implements AwsLegacyIdentityManagerApi {
   private readonly file: string
   private cached: CacheFile | null = null
 

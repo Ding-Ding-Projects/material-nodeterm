@@ -11,6 +11,10 @@ export interface MainWindowLike {
   show(): void
   focus(): void
   on(event: 'closed', cb: () => void): void
+  // Windows taskbar overlay icon (a real BrowserWindow method on every platform — a documented
+  // cross-platform no-op off Windows). Typed loosely to keep this module Electron-free; the real
+  // caller passes a `NativeImage | null`.
+  setOverlayIcon(overlay: unknown, description: string): void
   // `id` is Electron's webContents id — the same number CorePlatform addresses a UI by
   // (sendTo / the sender id of an ipcMain event). Optional so a test double may omit it.
   webContents: { id?: number; send(channel: string, ...args: unknown[]): void }

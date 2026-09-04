@@ -182,9 +182,9 @@ export class CloudflaredRuntimeManager implements CloudflaredRuntimeApi {
     const temp = `${this.tokenFile(entry)}.${randomUUID()}.tmp`
     try {
       await writeFile(temp, `${value}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
-      await protectTokenFile(temp)
+      await this.protectTokenFile(temp)
       await rename(temp, this.tokenFile(entry))
-      await protectTokenFile(this.tokenFile(entry))
+      await this.protectTokenFile(this.tokenFile(entry))
       entry.status = { ...entry.status, tokenFile: this.tokenFile(entry), detail: null }
       this.publish(nodeId, entry)
       return { ok: true }

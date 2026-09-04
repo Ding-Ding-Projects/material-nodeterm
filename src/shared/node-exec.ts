@@ -35,6 +35,9 @@ import { safeOpenWebUiLocalBinding, type OpenWebUiLocalBinding } from './open-we
 import { normalizeVirtualMachineLocalPaths, safeVirtualMachinePath, type VirtualMachineLocalPaths } from './virtual-machine'
 import { normalizeAwsIdentityBinding, type AwsIdentityBinding } from './aws-identity'
 import { validateNextcloudManagedBinding, type NextcloudManagedBinding } from './nextcloud-managed'
+import type { HostedServiceTunnelBinding } from './hosted-service-tunnel'
+import { validateHostedServiceTunnelBinding } from './hosted-service-tunnel'
+import type { CloudflareTunnelLocalBinding } from './cloudflare-tunnel'
 
 /** Per-node exec values the LOCAL machine typed. Persisted only in the machine-local index. */
 export interface LocalNodeExec {
@@ -50,6 +53,8 @@ export interface LocalNodeExec {
   sshExtraArgs?: string
   /** A delayed launch authorized on this machine; never accepted from project files or peers. */
   pendingLaunch?: PendingLaunch
+  /** One-shot provider reset requested locally for the next agent spawn. */
+  clearEnv?: boolean
   /**
    * `NodeState.serviceConnection` — where a service-manager node reaches the thing it manages.
    *

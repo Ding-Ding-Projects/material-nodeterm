@@ -4,6 +4,10 @@ import type { DockerHostManagerApi } from './docker-host-manager'
 import type { NextcloudAioManagerApi } from './nextcloud-aio'
 import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
 import type { AwsWizardSpec } from './aws-wizard'
+import type { SessionIcon } from './session-icon'
+import type { ProviderBlueprint, ProviderBinding } from './provider-accounts'
+import type { TunnelStateSnapshot } from './tunnel-state'
+import type { CloudflareAccount, CloudflareZone, CloudflareOriginTarget, CloudflareTunnelPlan, CloudflarePreflightCheck, CloudflareTunnelStatus } from './cloudflare-tunnel'
 // Types shared across the main, preload, and renderer processes.
 
 import { DEFAULT_WORKTREE_PATH_TEMPLATE } from './worktree'
@@ -175,8 +179,6 @@ export interface PtyCreateOptions {
    * terminal reattaches to the same session across remounts and app restarts.
    */
   persistKey?: string
-  /** Machine-local project identity used to prove pane ownership for agent messaging. */
-  ownerProjectId?: string
   /**
    * The machine-local id (`IndexEntryV3.id`) of the project this node belongs to, as the renderer
    * knows it at the create call. Recorded in the runtime pane-ownership ledger on a GENUINE FRESH
@@ -489,6 +491,8 @@ export type NodeKind =
   | 'veracrypt'
   /** Project-scoped source and dependency graph, with host-local derived state. */
   | 'repository-graph'
+  // A portal door. Doors are the only route into a special child canvas and the only route back.
+  | 'portal'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -641,6 +645,8 @@ export interface CanvasNodeState {
   /** Optional bounded local identity mark for this session. */
   sessionIcon?: SessionIcon
   group: string | null
+  /** Child-canvas membership. Absent means the root canvas. */
+  canvasId?: string
   /** Universe ownership for special-universe nodes. Safe display intent only, never credentials. */
   universeCanvasId?: string
   /** Scope of the owning universe canvas. The root canvas is never a Shop scope. */
@@ -943,6 +949,8 @@ export interface CanvasNodeState {
    * would restore a few px off — and root-space also survives the frame being ungrouped meanwhile.
    */
   premaxRect?: { x: number; y: number; width: number; height: number }
+  /** Portal nodes are inert until the owning canvas navigation controller authorizes the door. */
+  portal?: PortalDoor
 }
 
 /**
@@ -1286,7 +1294,6 @@ export interface BoardLogApi {
   read(projectId: string, opts?: BoardLogReadOpts): Promise<BoardLogReadResult>
   /** Subscribe to change pushes for one project; returns an unsubscribe. */
   onChanged(projectId: string, cb: () => void): () => void
-  readAttachment?(projectId: string, attachment: import('./board-log-attachments').BoardLogAttachment): Promise<{ ok: true; dataBase64: string } | { ok: false; error: string }>
   readRaw?(projectId: string): Promise<{ state: BoardLogReadState; dataBase64?: string; error?: string }>
 }
 
@@ -1376,10 +1383,6 @@ export interface Project {
   nodes: CanvasNodeState[]
   /** Named portable arrangements for this project's active canvas. */
   savedLayouts?: SavedCanvasLayout[]
-  /** Portable provider intent, with credentials excluded from the shared project file. */
-  providerBlueprints?: import('./provider-accounts').ProviderBlueprint[]
-  /** Machine-local provider links retained in the workspace index, never the shared project file. */
-  providerBindings?: import('./provider-accounts').ProviderBinding[]
   /** Safe, git-shared child canvases. Credentials, paths and runtime bindings stay on nodes' local overlays. */
   multiverseCanvases?: ProjectMultiverseCanvas[]
   /** Runtime-only selection. The shared project file stores hierarchy, never one person's current view. */
@@ -2236,6 +2239,18 @@ export interface BrowserApi {
   stopProject(projectId: string): void
 }
 
+/** Desktop-only owner for an isolated Chromium debugging session. */
+export interface DebugBrowserApi {
+  listExecutables(): Promise<import('./browser-debug').DebugBrowserExecutable[]>
+  start(
+    spec: import('./browser-debug').DebugBrowserSpec,
+    executablePath?: string
+  ): Promise<import('./browser-debug').DebugBrowserSessionResult>
+  status(sessionId: string): Promise<import('./browser-debug').DebugBrowserSessionSummary | undefined>
+  inspect(sessionId: string): Promise<import('./browser-debug').DebugBrowserInspectionResult>
+  stop(sessionId: string): Promise<boolean>
+}
+
 /** Browser control operations for the agent-driven browser node surface. */
 export interface BrowserControlApi {
   /** Push: the current set of browser nodes an agent is driving (chip / rope / kill row). `stopped`
@@ -2854,14 +2869,6 @@ export interface Settings {
    *  the builtin default, byte-identical to before this setting existed. Keyed by builtin id only
    *  — custom agents already own their `launchCmd`. Local only: never present in the git-shared
    *  `.nodeterm/project.json` (see `src/shared/node-exec.ts`). */
-  /** One gateway root + non-secret credential reference used by model-switch-capable harnesses. */
-  modelGateway: ModelGatewaySettings
-  /** Per-builtin-agent launch command overrides (Settings → Agents → Launch commands). The value
-   *  replaces the bare CLI name everywhere a launch line is built — new sessions, cold-restore
-   *  relaunches and in-place restarts, with the usual flags (`--resume`, `--permission-mode`, the
-   *  prompt) appended after it — so a wrapper script that picks an account or sets env vars runs
-   *  wherever the agent would. Empty/absent = the builtin default, byte-identical to before this
-   *  setting existed. Keyed by builtin id only: custom agents already own their `launchCmd`. */
   agentLaunchCommands: Partial<Record<BuiltinAgentId, string>>
   /** When true, fresh agent launches strip inherited gateway/provider variables and use the
    * agent's own subscription or default provider. */
@@ -2905,6 +2912,10 @@ export interface Settings {
   claudeUsageRotationEnabled: boolean
   /** Percentage threshold for default-account rotation, bounded to 1..100 at use time. */
   claudeUsageRotationThreshold: number
+  /** Live-usage-driven default-account rotation across all Claude nodes (distinct from the
+   *  new-node threshold above): enable, threshold, hysteresis and cooldown. See
+   *  `renderer/lib/claudeAccountRotation.ts`. */
+  claudeAccountRotation: ClaudeAccountRotationSettings
   /** Which agent the ⌘⇧C shortcut / quick-add launches. Always a launchable builtin. */
   defaultAgent: AgentId
   /** The permission mode Claude TERMINAL (CLI) sessions START in — passed as `--permission-mode`
@@ -2912,8 +2923,6 @@ export interface Settings {
    *  driver runs in `default`). Overridable per project via Project.defaultPermissionMode.
    *  `auto` is version-gated: CLIs below 2.1.71 reject the value, so it degrades to no flag. */
   claudePermissionMode: AgentPermissionMode
-  /** When enabled, every fresh eligible agent launch strips gateway/provider overrides. */
-  vanillaLaunchDefault: boolean
   /** "Eco": exit the agent CLI of a session that has been idle AND offscreen for
    *  `agentHibernationIdleMinutes`, reclaiming its RAM; the conversation is resumed automatically
    *  when the node is viewed again. Default OFF — opt-in, because it stops a real process.
@@ -3261,8 +3270,6 @@ export const DEFAULT_SETTINGS: Settings = {
   // Sessions start in auto mode out of the box. Existing users pick this up on hydrate
   // (settings hydrate merges over DEFAULT_SETTINGS) — a deliberate behavior change.
   claudePermissionMode: 'auto',
-  // Opt-in: fresh eligible launches use the agent's own provider instead of gateway overrides.
-  vanillaLaunchDefault: false,
   // Opt-in: hibernation exits a live CLI, so nobody gets it without asking. The 30-minute floor
   // is deliberately long — shorter windows exit sessions the user is between turns on.
   agentHibernationEnabled: false,
@@ -3747,6 +3754,27 @@ export interface GitStatus {
   ghAuthed: boolean
   staged: GitFileChange[]
   changes: GitFileChange[]
+}
+
+/** One discovered repository. `path` is runtime-only machine data; `relativePath` is portable. */
+export interface GitRepositoryDiscoveryEntry {
+  relativePath: string
+  path: string
+  name: string
+}
+
+/** Bounded nested-repository scan result. An incomplete result must never be read as "none". */
+export interface GitRepositoryDiscovery {
+  ok: boolean
+  complete: boolean
+  root: string
+  rootIsRepository: boolean
+  repositories: GitRepositoryDiscoveryEntry[]
+  scannedDirectories: number
+  skippedIgnoredDirectories: number
+  skippedSymlinks: number
+  truncated: boolean
+  message?: string
 }
 
 /** A verified Git repository found below a project's configured folder. */

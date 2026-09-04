@@ -1308,3 +1308,50 @@
 @media (prefers-reduced-motion: reduce) {
   .mdx-snackbar { animation: none; }
 }
+
+/* ============================================================================
+ * FieldLabel -- the label for a dense control. The outlined TextField's own label is a notch
+ * painted into its border and cannot stand alone, so every node body used to style a bare
+ * `<label>` and re-decide this typography per file. One definition, on the M3 label roles.
+ * ------------------------------------------------------------------------ */
+.mdx-field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.mdx-field-label--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.mdx-field-label__text {
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  line-height: 16px;
+}
+.mdx-field-label__support {
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-ui);
+  font-size: 11.5px;
+  line-height: 16px;
+}
+
+/* A dense field stretched to its row. The primitive is inline-sized by default, so a field sharing
+   a row with a trailing button needs to be told to take the remainder. */
+.mdx-input--fill,
+.mdx-select--fill {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* The invalid state is the border AND the sentence beneath it, never the border alone: a colour is
+   not information, and a red box that does not say why teaches nothing. */
+.mdx-input[aria-invalid='true'],
+.mdx-select[aria-invalid='true'] {
+  border-color: var(--md-error);
+}

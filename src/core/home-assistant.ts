@@ -80,6 +80,10 @@ function safeId(value: unknown): value is string {
   return isHomeAssistantInstanceId(value)
 }
 
+function safeTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
 function detailOf(error: unknown): string {
   const message = error instanceof Error ? error.message : 'Home Assistant request failed.'
   return message.length > MAX_DETAIL ? `${message.slice(0, MAX_DETAIL - 1)}…` : message
@@ -100,7 +104,7 @@ function parseInstance(value: unknown): HomeAssistantInstance | null {
   const label = safeLabel(value.label)
   const endpoint = baseUrl(value.baseUrl)
   if (!label || !endpoint || typeof value.enabled !== 'boolean') return null
-  if (!Number.isFinite(value.createdAt) || !Number.isFinite(value.updatedAt)) return null
+  if (!safeTimestamp(value.createdAt) || !safeTimestamp(value.updatedAt)) return null
   return {
     id: value.id,
     label,

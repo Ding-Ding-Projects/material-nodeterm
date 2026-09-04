@@ -17,7 +17,7 @@ import { NextcloudManagedPanel } from '../components/nextcloud/NextcloudManagedP
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
-import { Button, IconButton } from '@renderer/ui/md3'
+import { Button, FieldLabel, IconButton } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 
 /**
@@ -300,12 +300,11 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
 
         {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'cloudflare-tunnel' && kind !== 'awsidentity' && kind !== 'cloudflare-zero-trust' && kind !== 'nextcloud-aio' && kind !== 'nextcloud-managed' && kind !== 'cloudflare-core-managers' && (
           <div className="service-node__body">
-            <label className="service-node__field" htmlFor={`${id}-endpoint`}>
-              <span className="service-node__field-label">{vocab('Address')}</span>
+            <FieldLabel label="Address" htmlFor={`${id}-endpoint`}>
               <div className="service-node__field-row">
                 <Input
                   id={`${id}-endpoint`}
-                  className="service-node__input nodrag"
+                  className="service-node__input mdx-input--fill nodrag"
                   vocabularyMode="factual"
                   type="text"
                   spellCheck={false}
@@ -349,7 +348,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
                   </Button>
                 )}
               </div>
-            </label>
+            </FieldLabel>
 
             {/* Says what is wrong AND what to do about it. A bare red border teaches nothing, and
                 the password case in particular needs its reason stated: a user who pasted a URL

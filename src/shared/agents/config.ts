@@ -582,26 +582,6 @@ export function resumeCommandWith(
   }
 }
 
-/** Resume using a caller-supplied executable while retaining the effective built-in grammar. This
- * is the custom-agent harness path: a proxy CLI can inherit Claude, Codex, or Copilot resume
- * behavior without pretending its user-provided command is a built-in id. */
-export function resumeCommandWith(
-  launchCmd: string,
-  grammarId: AgentId,
-  sessionId: string
-): string | null {
-  if (!canResume(grammarId)) return null
-  const sid = sessionId.trim()
-  if (!sid || !SAFE_SESSION_ID.test(sid)) return null
-  const effective = capabilityAgentId(grammarId)
-  if (effective === 'codex') return `${launchCmd} resume ${sid}`
-  if (effective === 'opencode') return `${launchCmd} --session ${sid}`
-  if (effective === 'claude' || effective === 'gemini' || effective === 'grok' || effective === 'copilot') {
-    return `${launchCmd} --resume ${sid}`
-  }
-  return null
-}
-
 /**
  * The permission mode an agent session STARTS in. The user can still cycle modes at runtime
  * with Shift+Tab — this only decides the starting state, which is exactly what the CLI's

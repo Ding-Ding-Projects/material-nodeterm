@@ -32,6 +32,7 @@ function fakeWindow(): MainWindowLike & {
     on: (event: 'closed', cb: () => void) => {
       if (event === 'closed') closedListeners.push(cb)
     },
+    setOverlayIcon: vi.fn(),
     webContents: {
       id: undefined as number | undefined,
       send: (channel: string, ...args: unknown[]) => {

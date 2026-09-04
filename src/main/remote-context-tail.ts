@@ -251,7 +251,6 @@ export function createRemoteContextTail(
     untrack(sessionId) {
       if (!sessionId) return
       sessions.delete(sessionId)
-      generations.delete(sessionId)
       if (!sessions.size && timer) {
         clearInterval(timer)
         timer = null
