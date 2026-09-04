@@ -37,6 +37,7 @@ export type ShortcutAction =
   | 'toggleViewMode' // Ctrl+Shift+B
   | 'toggleSessionsPin' // Ctrl+Shift+L
   | 'toggleFocusMode' // Ctrl+Shift+F — one node fills the window, chrome yields
+  | 'maximizeNode' // Ctrl+Shift+Enter — resize the focused node and restore it
   | 'findInTerminal' // Ctrl+F
   | 'commitStaged' // Ctrl+↵ (inside the Source Control textarea)
   | 'copySelection' // Ctrl+C (markdown-view copy fallback)

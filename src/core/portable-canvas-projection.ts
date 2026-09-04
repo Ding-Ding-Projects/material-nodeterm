@@ -76,6 +76,7 @@ export interface PortableCanvasNodeV3 {
   nonDeletable?: boolean
   shopSelection?: string
   collapsed?: boolean
+  premaxRect?: { x: number; y: number; width: number; height: number }
   parentId?: string
   projectRef?: { projectId: string }
   tags?: string[]
@@ -225,6 +226,7 @@ const ALLOWED_RECOVERY_GAME = new Set(['player', 'energizedKeys', 'coreActivated
 const ALLOWED_RECOVERY_POINT = new Set(['x', 'y'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
+const ALLOWED_PREMAX_RECT = new Set(['x', 'y', 'width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
 const ALLOWED_ALARM_SCHEDULE = new Set(['recurrence', 'date', 'time', 'weekdays', 'monthDay'])
 const ALLOWED_ALARM_OCCURRENCE = new Set(['id', 'alarmId', 'scheduledAt', 'status', 'createdAt', 'resolvedAt', 'snoozedUntil', 'timeZone'])

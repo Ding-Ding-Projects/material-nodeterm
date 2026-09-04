@@ -11167,6 +11167,25 @@ export function Canvas() {
     store.focus(target)
   }, [goToNode])
 
+  const toggleMaximizeNode = useCallback(() => {
+    const active = document.activeElement?.closest('.react-flow__node')?.getAttribute('data-id')
+    const selected = nodesRef.current.filter((n) => n.selected)
+    const target = (active ? nodesRef.current.find((n) => n.id === active) : undefined) ??
+      (selected.length === 1 ? selected[0] : undefined)
+    if (!target || target.type === 'group') return
+    if (target.data.premaxRect) {
+      setNodes((ns) => restoreMaximizedNode(ns as CanvasNode[], target.id))
+      markDirty()
+      return
+    }
+    if (target.data.collapsed) return
+    const wrap = flowWrapRef.current?.getBoundingClientRect()
+    const rect = wrap ? maximizeTargetRect(getViewport(), wrap.width, wrap.height) : null
+    if (!rect) return
+    setNodes((ns) => maximizeNodeToRect(ns as CanvasNode[], target.id, rect))
+    markDirty()
+  }, [getViewport, markDirty, setNodes])
+
   const onNodeDoubleClick = useCallback(
     (_e: React.MouseEvent, node: Node) => {
       if (!useSettings.getState().settings.doubleClickFocus) return

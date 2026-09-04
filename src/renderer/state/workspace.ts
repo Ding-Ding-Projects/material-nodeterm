@@ -3355,6 +3355,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         icon: normalizeNodeIcon(n.icon),
         hideFanout: n.hideFanout,
         expandedHeight: n.size.height,
+        premaxRect: n.premaxRect,
         loopTask: n.loopTask,
         loopIntervalMs: n.loopIntervalMs,
         loopEnabled: n.loopEnabled,

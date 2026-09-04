@@ -287,6 +287,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
           {!isImage && !isPdf && dirty ? ' ●' : ''}
         </span>
         <span className="term-node__spacer" />
+        <MaximizeButton id={id} maximized={!!data.premaxRect} />
         {fileMissing ? null : isImage ? (
           imageDims && <span className="editor-node__dims">{imageDims}</span>
         ) : isPdf ? null : (
