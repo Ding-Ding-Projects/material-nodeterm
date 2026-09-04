@@ -1517,6 +1517,31 @@ export function createFilesNode(
   }
 }
 
+/** Creates a Kiosk/PWA node with a dedicated machine-local browser profile. */
+export function createKioskNode(
+  index: number,
+  url = '',
+  center?: { x: number; y: number }
+): CanvasNode {
+  const safeUrl = url.trim()
+  return {
+    id: nextId('kiosk'),
+    type: 'kiosk',
+    position: placeAt(center, index, KIOSK_SIZE.width, KIOSK_SIZE.height),
+    width: KIOSK_SIZE.width,
+    height: KIOSK_SIZE.height,
+    style: { width: KIOSK_SIZE.width, height: KIOSK_SIZE.height },
+    data: {
+      title: safeUrl ? safeUrl.replace(/^https?:\/\//, '').slice(0, 40) : 'Kiosk session',
+      color: '#32d74b',
+      group: null,
+      ...(safeUrl ? { url: safeUrl } : {}),
+      kioskMode: 'bounded',
+      kioskProfileLabel: 'Private kiosk profile'
+    }
+  }
+}
+
 /** Creates a diff editor node for a changed file (relative path + repo cwd). */
 export function createDiffNode(
   index: number,

@@ -18408,6 +18408,7 @@ export function Canvas() {
       { id: 'open-ollama', label: 'Ollama manager', icon: <IconOllama />, run: () => setOllamaOpen(true) },
       { id: 'open-unigetui', label: 'UniGetUI Global Universe', icon: <IconShapes />, run: () => setUnigetuiOpen(true) },
       { id: 'open-browser', label: 'New browser', icon: <IconRemote />, run: () => addBrowser() },
+      { id: 'open-kiosk', label: 'New Kiosk or PWA session', icon: <IconRemote />, run: () => addKiosk() },
       ...useSshServers.getState().servers.map(
         (srv): Command => ({
           id: `new-remote-${srv.id}`,

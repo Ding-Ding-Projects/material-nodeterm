@@ -7516,6 +7516,89 @@ button.group-node__setup:disabled {
   padding: 4px 8px;
 }
 
+/* Kiosk/PWA session node. The guest profile is isolated by the renderer's partition; these
+   controls are intentionally part of the node chrome so leaving full-screen never strands the
+   user inside a page that hid its own navigation. */
+.kiosk-node {
+  min-width: 420px;
+  min-height: 280px;
+  background: var(--md-surface-container-lowest);
+  overflow: hidden;
+}
+.kiosk-node--fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  border-radius: 0;
+  z-index: 1000;
+}
+.kiosk-node__control,
+.kiosk-node__mode,
+.kiosk-node__recovery button,
+.kiosk-node__invalid button {
+  min-height: 32px;
+  border: 1px solid var(--md-outline, var(--border));
+  border-radius: 999px;
+  background: var(--md-surface-container, var(--panel));
+  color: var(--md-on-surface, var(--text));
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.kiosk-node__control:hover,
+.kiosk-node__control:focus-visible,
+.kiosk-node__mode:hover,
+.kiosk-node__mode:focus-visible,
+.kiosk-node__recovery button:focus-visible,
+.kiosk-node__invalid button:focus-visible {
+  background: var(--md-secondary-container, var(--panel-header));
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.kiosk-node__profile {
+  color: var(--md-on-surface-variant, var(--muted));
+  font-size: 11px;
+  white-space: nowrap;
+}
+.kiosk-node__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--md-on-surface-variant, var(--muted));
+  font-size: 11px;
+}
+.kiosk-node__status > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kiosk-node__mode { margin-left: auto; flex: none; }
+.kiosk-node__recovery,
+.kiosk-node__invalid {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: var(--md-error-container, rgba(255, 69, 58, 0.12));
+  color: var(--md-on-error-container, var(--text));
+  font-size: 12px;
+}
+.kiosk-node__recovery span,
+.kiosk-node__invalid span { flex: 1; min-width: 0; }
+.kiosk-node__body { min-height: 0; }
+.kiosk-node__invalid {
+  height: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kiosk-node--fullscreen { transition: none; }
+}
+
 /* ── Browser start page (new-tab) ─────────────────────────────── */
 .startpage {
   position: absolute;
