@@ -2140,7 +2140,10 @@ export class PtyManager {
     // chip. `resolveCodexSessionScope` returns `{ unavailable: 'codex-account' }` for exactly that
     // case; we map it straight through to a real refusal and spawn NOTHING. The system account (no
     // id) always resolves. Remote (ssh) Codex sessions carry their account env via tmux `-e`.
-    if (needsCodexAccountScope(options.agentId, options.codexAccountId) && !options.sshRemote) {
+    if (
+      needsCodexAccountScope(options.agentId, options.codexAccountId, (id) => this.isCodexAccount(id)) &&
+      !options.sshRemote
+    ) {
       const scope = resolveCodexSessionScope(platform().userDataDir, options.codexAccountId)
       if (isCodexScopeRefusal(scope)) {
         return { sessionId: '', fresh: false, unavailable: 'codex-account' }
@@ -2820,7 +2823,10 @@ export class PtyManager {
     // The missing-explicit-account case already refused in spawnNew (fail-closed,
     // property 4), so `codexSessionEnv` here never resolves an explicit id to the system home. Also
     // strip env vars that would shadow the account's OAuth login with API-key auth.
-    if (needsCodexAccountScope(options.agentId, options.codexAccountId) && !options.sshRemote) {
+    if (
+      needsCodexAccountScope(options.agentId, options.codexAccountId, (id) => this.isCodexAccount(id)) &&
+      !options.sshRemote
+    ) {
       const codexScope = codexSessionEnv(platform().userDataDir, options.codexAccountId)
       env.CODEX_HOME = codexScope.CODEX_HOME
       env.NODETERM_CODEX_ACCOUNT_ID = codexScope.NODETERM_CODEX_ACCOUNT_ID
