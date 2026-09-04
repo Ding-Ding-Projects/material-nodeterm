@@ -62,8 +62,8 @@ export default function CloudflareTunnelNode({ id, data, selected }: NodeProps<C
   const hosts = useMemo(() => [...new Map(targets.map((target) => [target.hostId, { id: target.hostId, label: target.hostLabel }])).values()], [targets])
   const filteredHosts = useMemo(() => hosts.filter((item) => hostSearch.test(`${item.label} ${item.id}`)), [hosts, hostSearch])
   const hostTargets = useMemo(() => targets.filter((item) => item.hostId === hostId), [targets, hostId])
-  const containerChoices = useMemo(() => [...new Map(hostTargets.filter((item) => item.containerId).map((item) => [item.containerId, item.containerName ?? item.containerId!])).entries()], [hostTargets])
-  const networkChoices = useMemo(() => [...new Map(hostTargets.filter((item) => item.networkId).map((item) => [item.networkId, item.networkName ?? item.networkId!])).entries()], [hostTargets])
+  const containerChoices = useMemo(() => [...new Map(hostTargets.filter((item) => item.containerId).map((item) => [item.containerId!, item.containerName ?? item.containerId!])).entries()], [hostTargets])
+  const networkChoices = useMemo(() => [...new Map(hostTargets.filter((item) => item.networkId).map((item) => [item.networkId!, item.networkName ?? item.networkId!])).entries()], [hostTargets])
   const portChoices = useMemo(() => [...new Set(hostTargets.map((item) => item.port))].sort((a, b) => a - b), [hostTargets])
 
   const chooseTarget = (predicate: (target: CloudflareOriginTarget) => boolean): void => {

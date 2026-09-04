@@ -29,6 +29,7 @@ import {
 } from '../../shared/types'
 import type { HistoryListResult } from '../../shared/local-history'
 import type { CloudflareApi } from '../../shared/cloudflare'
+import type { AdvancedMediaApi } from '../../shared/advanced-media'
 import { E_UNSUPPORTED } from '../../shared/rpc'
 import { formatHostMessage, hostFact, hostText, mapLocalVocabularyText, mapNativeNotification } from '../lib/personalVocabulary/hostMessage'
 
@@ -584,14 +585,14 @@ export function buildStubApi(): Omit<
     // Cloudflared is machine-local process/service/Docker control. A browser or relay guest must
     // never inherit the desktop's local implementation, so every member fails closed here.
     cloudflared: {
-      status: () => U('cloudflared.status'),
-      setToken: () => U('cloudflared.setToken'),
-      clearToken: () => U('cloudflared.clearToken'),
-      start: () => U('cloudflared.start'),
-      stop: () => U('cloudflared.stop'),
-      uninstall: () => U('cloudflared.uninstall'),
-      reconcile: () => U('cloudflared.reconcile'),
-      installWindowsService: () => U('cloudflared.installWindowsService'),
+      status: U('cloudflared.status'),
+      setToken: U('cloudflared.setToken'),
+      clearToken: U('cloudflared.clearToken'),
+      start: U('cloudflared.start'),
+      stop: U('cloudflared.stop'),
+      uninstall: U('cloudflared.uninstall'),
+      reconcile: U('cloudflared.reconcile'),
+      installWindowsService: U('cloudflared.installWindowsService'),
       onStatus: noopUnsub
     },
     relayClient: {
@@ -788,6 +789,42 @@ export function buildStubApi(): Omit<
       execute: U('cloudflareZeroTrust.execute'),
       cancel: U('cloudflareZeroTrust.cancel'),
       onProgress: noopUnsub
+    },
+    // Private GitLab server hosting is machine-local Docker/service control; a browser or relay
+    // guest must never inherit the desktop's implementation, so every member fails closed.
+    gitlab: {
+      catalog: U('gitlab.catalog'),
+      status: U('gitlab.status'),
+      create: U('gitlab.create'),
+      handoffCredential: U('gitlab.handoffCredential'),
+      listBackups: U('gitlab.listBackups'),
+      createBackup: U('gitlab.createBackup'),
+      restoreBackup: U('gitlab.restoreBackup'),
+      update: U('gitlab.update'),
+      rollback: U('gitlab.rollback'),
+      start: U('gitlab.start'),
+      stop: U('gitlab.stop'),
+      tunnelHandoff: U('gitlab.tunnelHandoff')
+    },
+    // The ws-bridge serves the real durable-occurrence lane (buildRealApi); this fail-closed stub
+    // is what a bridge-less boot gets, so nothing silently reports an empty schedule as the truth.
+    durableOccurrences: {
+      load: U('durableOccurrences.load'),
+      save: U('durableOccurrences.save'),
+      reconcile: U('durableOccurrences.reconcile'),
+      claim: U('durableOccurrences.claim'),
+      snooze: U('durableOccurrences.snooze'),
+      dismiss: U('durableOccurrences.dismiss'),
+      exportSchedules: U('durableOccurrences.exportSchedules'),
+      importSchedules: U('durableOccurrences.importSchedules'),
+      timerTransition: U('durableOccurrences.timerTransition'),
+      timerLap: U('durableOccurrences.timerLap'),
+      timerTick: U('durableOccurrences.timerTick'),
+      upsertAlarm: U('durableOccurrences.upsertAlarm'),
+      upsertTimer: U('durableOccurrences.upsertTimer'),
+      removeSource: U('durableOccurrences.removeSource'),
+      acknowledge: U('durableOccurrences.acknowledge'),
+      onChanged: noopUnsub
     },
     advancedMedia: {
       catalog: U('advancedMedia.catalog'),

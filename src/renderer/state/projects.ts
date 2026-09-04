@@ -35,6 +35,7 @@ import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './
 import { markWorkspaceDirty } from './workspaceDirty'
 import { isNonDeletableCanvasNode } from '@shared/aws-shop'
 import { basenameForPathSyntax } from '@shared/path-basename'
+import { nodeEndpoints } from '../lib/noteLink'
 
 function nodeLinkFor(kind: Link['kind'], edge: BridgeLink): Link {
   return {
@@ -169,6 +170,8 @@ interface ProjectsState {
   /** Replaces the project's browser-profile list (create/rename/remove all funnel through this).
    *  See `BrowserProfile` in @shared/types and `shared/browser-profiles.ts`. */
   setProjectBrowserProfiles(id: string, browserProfiles: BrowserProfile[]): void
+  /** Replace a project's typed off-canvas link list. */
+  setProjectLinks(id: string, links: Link[]): void
   setProjectProviderBlueprints(id: string, providerBlueprints: ProviderBlueprint[]): void
   /** Replaces the named portable arrangements for a project. */
   setProjectSavedLayouts(id: string, savedLayouts: SavedCanvasLayout[]): void
@@ -831,6 +834,29 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     }))
   },
 
+  setProjectLinks(id, links) {
+    set((s) => ({
+      projects: s.projects.map((p) => {
+        if (p.id !== id) return p
+        const next = links.slice()
+        const bridges = next
+          .filter((link) => link.kind === 'context')
+          .map(nodeEndpoints)
+          .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+        const ropes = next
+          .filter((link) => link.kind === 'lineage')
+          .map(nodeEndpoints)
+          .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+        return {
+          ...p,
+          links: next,
+          ...(bridges.length ? { bridges } : { bridges: undefined }),
+          ...(ropes.length ? { ropes } : { ropes: undefined })
+        }
+      })
+    }))
+  },
+
   setProjectProviderBlueprints(id, providerBlueprints) {
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, providerBlueprints } : p))
@@ -949,11 +975,13 @@ export const useProjects = create<ProjectsState>((set, get) => ({
         const next = applyTypedLinkMutation(previous, mutation)
         if (next === previous) return p
         const bridges = next
-          .filter((link) => link.kind === 'context' && link.source.ref === 'node' && link.target.ref === 'node')
-          .map((link) => ({ id: link.id, source: link.source.nodeId, target: link.target.nodeId }))
+          .filter((link) => link.kind === 'context')
+          .map(nodeEndpoints)
+          .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
         const ropes = next
-          .filter((link) => link.kind === 'lineage' && link.source.ref === 'node' && link.target.ref === 'node')
-          .map((link) => ({ id: link.id, source: link.source.nodeId, target: link.target.nodeId }))
+          .filter((link) => link.kind === 'lineage')
+          .map(nodeEndpoints)
+          .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
         return {
           ...p,
           links: next,

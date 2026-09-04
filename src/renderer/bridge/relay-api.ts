@@ -33,7 +33,7 @@
 //    calls `buildRelayApi` while the approval dialog is still open, THEN awaits `ready()`. Building
 //    it after approval already fired leaves `ready()` pending forever and the api never comes up.
 
-import type { NodeTerminalApi } from '../../shared/types'
+import type { NativePickerOptions, NodeTerminalApi } from '../../shared/types'
 import type { ProviderAccountsApi } from '../../shared/provider-accounts'
 import { E_UNSUPPORTED } from '../../shared/rpc'
 import { type FrameTransport, RelayFrameTransport } from './frame-transport'
@@ -209,7 +209,7 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
       const startDir = '/' // navigable up/down from the host root; no cross-call memory in v1
       return {
         selectFolder: () => openDirectoryPicker({ mode: 'folder', startDir, list: files.fs.list }),
-        selectFile: (_options?: { extensions?: string[] }) => openDirectoryPicker({ mode: 'file', startDir, list: files.fs.list }),
+        selectFile: (_options?: NativePickerOptions) => openDirectoryPicker({ mode: 'file', startDir, list: files.fs.list }),
         // No host-side multi-file picker over the relay in v1 (the in-app browser above is
         // single-path only) — never fall back to a LOCAL multi-picker, which would pick paths on
         // the wrong machine. FileConverterPanel treats a null resolution as "not available here".

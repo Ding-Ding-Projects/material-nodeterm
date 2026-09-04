@@ -138,6 +138,8 @@ import TorrentNode from '../nodes/TorrentNode'
 import WindowsDiagnosticsNode from '../nodes/WindowsDiagnosticsNode'
 import VeraCryptNode from '../nodes/VeraCryptNode'
 import { AwsUniversePortalNode } from '../nodes/AwsUniversePortalNode'
+import { setPortalDoorActionHandler } from '../nodes/PortalNode'
+import { usePortalNavigation } from '../state/portalNavigation'
 import { UniGetUiUniverseNode } from '../nodes/UniGetUiUniverseNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
@@ -369,6 +371,7 @@ import type { PortableMediaCandidate, PortableMediaDecision, PortableMediaExport
 import { RemotePicker } from '../components/RemotePicker'
 import { WorktreeDialog } from '../components/WorktreeDialog'
 import { GroupPickerDialog, type GroupPickerOption } from '../components/canvas/GroupPickerDialog'
+import { SavedLayoutsPanel } from '../components/canvas/SavedLayoutsPanel'
 import { AgentLinkPickerDialog, type AgentLinkPickerOption } from '../components/canvas/AgentLinkPickerDialog'
 import { SpawnTeamDialog } from '../components/SpawnTeamDialog'
 import { conductorPrompt } from '../lib/spawnTeamPrompt'
@@ -571,7 +574,7 @@ import { useTeamAccessEvents } from '../state/teamAccess'
 import { useAgentNodes } from '../state/agentNodes'
 import { SubagentNode } from '../nodes/SubagentNode'
 import { LoopNode } from '../nodes/LoopNode'
-import { XProjectNode } from '../nodes/XProjectNode'
+import { XProjectNode, type XProjectSpawn } from '../nodes/XProjectNode'
 import { setTravelNodeHandler } from '../nodes/travel-handler'
 import { resolveForeignNodeProjections } from '../lib/foreignNodeProjection'
 import type { NormalizedAgentEvent } from '@shared/agents/normalize'
@@ -735,8 +738,9 @@ import { assignNode, assignedTo, defaultKanban, labelsForCard, migrateProjectTag
 import { registerWorkspaceDirty } from '../state/workspaceDirty'
 import { canClearDirty, commitActiveCanvas } from '../state/persistGuards'
 import { isHidden, tidySeparators } from '../lib/ui-visibility'
-import { ZONES, ZONE_ARROW_KEYS, zoneForPointer, zoneTargetRect, type ZoneId } from '../lib/nodeZones'
+import { ZONES, ZONE_ARROW_KEYS, zoneForPointer, zoneScreenRect, zoneTargetRect, type ZoneId } from '../lib/nodeZones'
 import { applySavedLayout, captureSavedLayout } from '../lib/nodeLayouts'
+import type { SavedLayoutApplyResult } from '../lib/savedLayouts'
 import { presentAccount, type AccountPresentation } from '../lib/accountPresentation'
 import { boardLogEvents } from '../lib/boardLogDiff'
 import { useBoardLog } from '../state/boardLog'
@@ -790,6 +794,8 @@ import {
   createAgentNode,
   createCanvasControlTerminalNode,
   createBrowserNode,
+  createDebugBrowserNode,
+  createKioskNode,
   createKioskPwaNode,
   defaultBrowserTabs,
   createDinoNode,
@@ -2253,7 +2259,15 @@ export function Canvas() {
   }, [getViewport, setViewport])
 
   const activeProjectId = useProjects((s) => s.activeProjectId)
+  const portalCanvasId = usePortalNavigation((s) => s.current(activeProjectId || '').currentCanvasId)
+  useEffect(() => {
+    if (activeProjectId) usePortalNavigation.getState().reset(activeProjectId)
+  }, [activeProjectId])
+  const savedLayouts = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.savedLayouts ?? EMPTY_SAVED_LAYOUTS)
+  const [savedLayoutsOpen, setSavedLayoutsOpen] = useState(false)
+  const [linkInspectorNodeId, setLinkInspectorNodeId] = useState<string | null>(null)
   const activeProject = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId))
+  const projectList = useProjects((s) => s.projects)
   const activeScheduledPlacement = useScheduledSettings((s) => s.active?.active?.effects?.placement)
 
   const restoreScheduledPlacement = useCallback(() => {
@@ -2939,12 +2953,21 @@ export function Canvas() {
   // ghosts) is what keeps a `<webview>`'s DOM element stationary across project switches — see
   // lib/webviewKeepAlive.ts for the order invariant this merge must never break.
   const keepAliveEntries = useWebviewKeepAlive((s) => s.entries)
+  const projectionNodes = useMemo(
+    () => foreignProjectionNodes(activeProject, nodes, projectList),
+    [activeProject, nodes, projectList]
+  )
   const allNodes = useMemo(
     // Keyed on the MOUNTED project (whose nodes `nodes` holds — see mergeWithKeepAlive's doc for
     // the one-commit window where that is not the active project). The ref only moves inside the
     // load effect, which also replaces `nodes`, so the deps below always cover it.
     () => {
-      const base = mergeWithKeepAlive(nodes, ephemeralNodes, keepAliveEntries, keepAliveFromRef.current)
+      const base = mergeWithKeepAlive(
+        nodes,
+        projectionNodes.length ? [...ephemeralNodes, ...projectionNodes] : ephemeralNodes,
+        keepAliveEntries,
+        keepAliveFromRef.current
+      )
       if (!adhdFocusId) return base
       return base.map((n) =>
         n.id === adhdFocusId
@@ -2957,7 +2980,7 @@ export function Canvas() {
       )
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [nodes, ephemeralNodes, keepAliveEntries, adhdFocusId]
+    [nodes, ephemeralNodes, projectionNodes, keepAliveEntries, adhdFocusId]
   )
 
   // Context-link edges, statically styled (no per-message activity in the pull model).
@@ -3078,6 +3101,63 @@ export function Canvas() {
   // hostile pre-declared rope (a cloned project.json can ship one) lights up nothing. Rendering-only:
   // ownership is still decided in main, never from `controlEdges`.
   const drivenLeaseEntries = useBrowserLease((s) => s.entries)
+  const typedDependencyEdges = useMemo(() => {
+    const links = (activeProject?.links ?? []).filter((link) => link.kind === 'dependency')
+    const liveIds = new Set(nodes.map((node) => node.id))
+    const nodeEdges = links
+      .filter(
+        (link) =>
+          link.source.ref === 'node' &&
+          link.target.ref === 'node' &&
+          liveIds.has(link.source.nodeId) &&
+          liveIds.has(link.target.nodeId)
+      )
+      .map(nodeEndpoints)
+      .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+      .map((edge) => {
+        const link = links.find((candidate) => candidate.id === edge.id)!
+        return {
+          id: `link-${edge.id}`,
+          source: edge.source,
+          target: edge.target,
+          type: 'default' as const,
+          selectable: false,
+          label: 'dependency',
+          labelStyle: { fill: offCanvasLinkColor(link), fontSize: 11, fontWeight: 600 },
+          labelBgStyle: { fill: '#1c1c1e', fillOpacity: 0.85 },
+          labelBgPadding: [6, 3] as [number, number],
+          labelBgBorderRadius: 5,
+          style: { stroke: offCanvasLinkColor(link), strokeWidth: 2, strokeDasharray: '8 5' },
+          markerEnd: { type: MarkerType.ArrowClosed, color: offCanvasLinkColor(link), width: 14, height: 14 }
+        }
+      })
+    const branches = new Map<string, string>()
+    for (const node of nodes) {
+      if (node.type !== 'group' || !node.data.worktree?.branch) continue
+      const branchName = node.data.worktree.branch
+      const repoPath = node.data.worktree.repoPath
+      branches.set(branchEndpointKey(repoPath, branchName), node.id)
+      if (activeProject?.cwd) branches.set(branchEndpointKey(activeProject.cwd, branchName), node.id)
+      if (!branches.has(branchName)) branches.set(branchName, node.id)
+    }
+    const branchEdges = depHostEdges(links, branches).map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: 'link-out',
+      targetHandle: 'link-in',
+      type: 'default' as const,
+      selectable: false,
+      label: edge.label,
+      labelStyle: { fill: '#f59e0b', fontSize: 11, fontWeight: 600 },
+      labelBgStyle: { fill: '#1c1c1e', fillOpacity: 0.85 },
+      labelBgPadding: [6, 3] as [number, number],
+      labelBgBorderRadius: 5,
+      style: { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '8 5' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#f59e0b', width: 14, height: 14 }
+    }))
+    return [...nodeEdges, ...branchEdges]
+  }, [activeProject?.links, activeProject?.cwd, nodes])
   const displayEdges = useMemo(() => {
     const stickyIds = new Set(stickySig ? stickySig.split('|') : [])
     const drivenTargets = drivingNodeIds(drivenLeaseEntries, Date.now())
@@ -3140,6 +3220,20 @@ export function Canvas() {
         }
       return e
     })
+    const projectionEdges = projectionNodes.map((projection) => ({
+      id: `xlink-${projection.id}`,
+      source: String(projection.data.xprojSourceNodeId ?? ''),
+      target: projection.id,
+      type: 'default' as const,
+      selectable: false,
+      label: 'foreign projection',
+      labelStyle: { fill: '#a855f7', fontSize: 11, fontWeight: 600 },
+      labelBgStyle: { fill: '#1c1c1e', fillOpacity: 0.85 },
+      labelBgPadding: [6, 3] as [number, number],
+      labelBgBorderRadius: 5,
+      style: { stroke: '#a855f7', strokeWidth: 1.5, strokeDasharray: '5 4' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#a855f7', width: 14, height: 14 }
+    }))
     // Waiting edges for armed nodes (`--after`): dep → dependent, dashed and animated while the
     // wait is on. Derived from node data rather than persisted — a pending dependency is a STATE
     // that ends when the launch fires, unlike the context bridge `--after` also draws, which is a
@@ -6452,6 +6546,24 @@ export function Canvas() {
         if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
+    },
+    [setNodes, markDirty, emptyNodePos]
+  )
+
+  const addDebugBrowser = useCallback(
+    (center?: { x: number; y: number }) => {
+      setNodes((ns) => [...ns, createDebugBrowserNode(ns.length, undefined, center ?? emptyNodePos())])
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos]
+  )
+
+  const addKiosk = useCallback(
+    (center?: { x: number; y: number }) => {
+      // KioskNode derives a fresh machine-local partition. Only safe URL/title intent is
+      // persisted, so importing a project cannot reuse another computer's profile.
+      setNodes((ns) => [...ns, createKioskNode(ns.length, '', center ?? emptyNodePos())])
+      markDirty()
     },
     [setNodes, markDirty, emptyNodePos]
   )
@@ -11740,6 +11852,81 @@ export function Canvas() {
     return node.selected && selected.length > 0 ? selected : [node.id]
   }, [])
 
+  const refreshActiveLinkEdges = useCallback(() => {
+    const store = useProjects.getState()
+    const project = store.getProject(store.activeProjectId)
+    if (!project) return
+    const links = project.links ?? []
+    const context = links
+      .filter((link) => link.kind === 'context')
+      .map(nodeEndpoints)
+      .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+    const lineage = links
+      .filter((link) => link.kind === 'lineage')
+      .map(nodeEndpoints)
+      .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+    const contextEdges = (context.length ? context : project.bridges ?? []).map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target
+    }))
+    const ropeEdges = (lineage.length ? lineage : project.ropes ?? []).map((edge) => {
+      const source = project.nodes.find((node) => node.id === edge.source)
+      const color = agentConfig((source?.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
+      return ropeEdge(edge.id, edge.source, edge.target, color)
+    })
+    linkEdgesRef.current = contextEdges
+    controlEdgesRef.current = ropeEdges
+    setLinkEdges(contextEdges)
+    setControlEdges(ropeEdges)
+    markDirty()
+  }, [markDirty, setLinkEdges, setControlEdges])
+
+  /** Route inspector edits through the live canvas refs before autosave or peer publication. */
+  const commitLinksFromInspector = useCallback(
+    (projectId: string, links: Link[]) => {
+      const store = useProjects.getState()
+      store.setProjectLinks(projectId, links)
+      if (projectId !== store.activeProjectId) {
+        markDirty()
+        return
+      }
+      const context = links
+        .filter((link) => link.kind === 'context')
+        .map(nodeEndpoints)
+        .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+      const lineage = links
+        .filter((link) => link.kind === 'lineage')
+        .map(nodeEndpoints)
+        .filter((edge): edge is { id: string; source: string; target: string } => edge !== null)
+      linkEdgesRef.current = context.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }))
+      controlEdgesRef.current = lineage.map((edge) => {
+        const source = nodesRef.current.find((node) => node.id === edge.source)
+        const color = agentConfig((source?.data.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
+        return ropeEdge(edge.id, edge.source, edge.target, color)
+      })
+      setLinkEdges(linkEdgesRef.current)
+      setControlEdges(controlEdgesRef.current)
+      // This is a local edit, so publish the typed relationship instead of adopting it as if it
+      // came from a peer. The explicit link override is needed because an xnode or branch link has
+      // no visible React Flow edge and therefore does not change either edge-state dependency.
+      publisherRef.current?.publish(
+        publishableLater(nodesRef.current, {
+          bridges: linkEdgesRef.current,
+          ropes: controlEdgesRef.current,
+          links
+        })
+      )
+      markDirty()
+    },
+    [markDirty, publishableLater, setControlEdges, setLinkEdges]
+  )
+
+  useEffect(() => {
+    setLinkCommitHandler(commitLinksFromInspector)
+    return () => setLinkCommitHandler(null)
+  }, [commitLinksFromInspector])
+
   const attachGitHubWorkItem = useCallback((item: GitHubWorkItem) => {
     const request = githubAttachment
     if (!request) return
@@ -12979,6 +13166,7 @@ export function Canvas() {
         at,
         screenPos
       )
+      const optionalIntegrationsAllowed = schoolModeAllowsOptionalFeatures(useSchoolMode.getState())
       setMenu({
         x: e.clientX,
         y: e.clientY,
@@ -20814,27 +21002,6 @@ export function Canvas() {
           is one z-0 stacking context, so nothing inside it could ever rise above the sidebar. The
           focused node's root is appended here imperatively by TerminalNode; the exit pill stays
           above it. Esc is deliberately NOT an exit key — it must reach the CLI in the pane. */}
-      {portableMediaPrompt && (
-        <PortableMediaDecisionDialog
-          candidates={portableMediaPrompt.candidates}
-          onDecisions={(decisions) => {
-            const requests = portableMediaPrompt.candidates.map((candidate) => ({
-              key: candidate.assetId,
-              path: candidate.sourcePath ?? '',
-              label: candidate.label,
-              decision: decisions.get(candidate.assetId) ?? 'include'
-            }))
-            const resolve = portableMediaPrompt.resolve
-            setPortableMediaPrompt(null)
-            resolve(requests)
-          }}
-          onCancel={() => {
-            const resolve = portableMediaPrompt.resolve
-            setPortableMediaPrompt(null)
-            resolve(null)
-          }}
-        />
-      )}
       <div id={FOCUS_SURFACE_ID} className={`focus-surface${focusedId ? ' is-active' : ''}`}>
         {focusedId && (
           <Button variant="tonal" size="small" className="focus-exit" title="Exit focus (⌘⇧F)" onClick={toggleFocusMode}>

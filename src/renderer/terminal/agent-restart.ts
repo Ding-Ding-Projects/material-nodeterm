@@ -9,6 +9,7 @@ import {
   canResumeWith,
   capabilityAgentId,
   resumeCommand,
+  resumeCommandWith,
   type AgentId
 } from '../../shared/agents/config'
 import { isShellCommand } from '@shared/agents/pane'
@@ -78,6 +79,16 @@ export function restartEligibility(
   // session would answer its dialog with the exit command (see BUSY_STATES).
   if (BUSY_STATES.has(state ?? '')) return { ok: false, reason: 'working' }
   // Without a provider session id there is nothing to resume into.
+  if (!sessionId) return { ok: false, reason: 'no-session' }
+  return { ok: true }
+}
+
+/** Model and provider changes use a recycle path, so they only need resumability and an id. */
+export function modelSwitchEligibility(
+  agentId: string | undefined,
+  sessionId: string | undefined
+): { ok: true } | { ok: false; reason: Exclude<IneligibleReason, 'working'> } {
+  if (!agentId || !canResume(agentId)) return { ok: false, reason: 'not-resumable' }
   if (!sessionId) return { ok: false, reason: 'no-session' }
   return { ok: true }
 }

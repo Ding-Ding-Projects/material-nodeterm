@@ -59,6 +59,8 @@ export interface ProjectNavItem {
 export interface SettingsSectionRef {
   id: SettingsSectionId
   title: string
+  /** Hides the row on non-macOS hosts (the sidebar and SettingsPage both honour it). */
+  macOnly?: boolean
   /** Project-section rows only (`project-${string}` ids): the project's own color/icon, so the
    *  sidebar can render its `ProjectGlyph` beside the title instead of the generic folder glyph
    *  every project section used to share. Absent on every static section. */

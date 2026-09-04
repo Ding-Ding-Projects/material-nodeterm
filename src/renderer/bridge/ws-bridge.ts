@@ -40,6 +40,7 @@ import type { HomeAssistantControlApi } from '../../shared/home-assistant-contro
 import type { HomeAssistantSensorApi } from '../../shared/home-assistant-sensor'
 import type { CloudflareTunnelApi } from '../../shared/cloudflare-tunnels'
 import type { CloudflareApi, CloudflareExecutionProgress } from '../../shared/cloudflare-zero-trust'
+import type { AdvancedMediaApi } from '../../shared/advanced-media'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -55,6 +56,7 @@ import {
   UNKNOWN_CODEX_IDENTITY_CAPS,
   type ContextApi,
   type DownloadTicket,
+  type DurableOccurrencesApi,
   type FilesApi,
   type FsApi,
   type GitApi,
@@ -409,6 +411,7 @@ export function buildRealApi(
   | 'projectSetup'
   | 'worktree'
   | 'settings'
+  | 'durableOccurrences'
   | 'agent'
   | 'userDataDir'
 > {
@@ -744,7 +747,8 @@ export function buildRealApi(
   }
   return {
     pty, workspace, timer, trigger, serverDeployment, settings, schoolMode, kidsMode,
-    scheduledSettings, planner, projectSettings, projectSetup, worktree, agent, userDataDir
+    scheduledSettings, planner, projectSettings, projectSetup, worktree, agent, userDataDir,
+    durableOccurrences
   }
 }
 

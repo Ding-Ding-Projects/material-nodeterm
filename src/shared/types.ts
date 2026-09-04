@@ -5300,6 +5300,10 @@ export interface NodeTerminalApi {
   // `core/cdk/register-ipc.ts` binds it — but neither shell registers it, so naming CdkLegacyApi
   // here would point the renderer at a contract nothing serves.
   cdk: import('./cdk').CdkApi
+  // The advanced media pipeline, alongside the express converter. Its ten IPC channels and a
+  // complete `buildAdvancedMediaApi` both exist; only this declaration was lost, which is why the
+  // Server Edition could not spread the builder it already had.
+  advancedMedia: import('./advanced-media').AdvancedMediaApi
   /** Shared automatic dependency lifecycle for node-feature installers. */
   nodeDependencies: import('./node-dependencies').NodeDependenciesApi
   /** Current installed AWS CLI model source for the AWS Shop operation wizard. */

@@ -27,6 +27,8 @@ import { ClaudeSkillsSection } from './sections/ClaudeSkillsSection'
 import { AppearanceEditorSection } from './sections/AppearanceEditorSection'
 import { AppearanceSection } from './sections/AppearanceSection'
 import { AppIdentitySection } from './sections/AppIdentitySection'
+import { AwsSection } from './sections/AwsSection'
+import { TunnelStateSection } from './sections/TunnelStateSection'
 import { AuthenticatorSection } from './sections/AuthenticatorSection'
 import { BehaviorSection } from './sections/BehaviorSection'
 import { CommitSection } from './sections/CommitSection'
@@ -124,6 +126,8 @@ const SETTINGS_SECTION_HOST_RENDERERS: Record<SettingsSectionId, SettingsSection
     <TeamAccessSection isActive={isActive} onClose={onClose} />
   ),
   ssh: ({ isActive, onNavigate }) => <SshSection isActive={isActive} onNavigate={onNavigate} />,
+  'tunnel-state': ({ isActive }) => <TunnelStateSection isActive={isActive} />,
+  aws: ({ isActive }) => <AwsSection isActive={isActive} />,
   updates: ({ isActive }) => <UpdatesSection isActive={isActive} />,
   privacy: ({ isActive }) => <PrivacySection isActive={isActive} />,
   language: ({ isActive }) => <LanguageSection isActive={isActive} />,

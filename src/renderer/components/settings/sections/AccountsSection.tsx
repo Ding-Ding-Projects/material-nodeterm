@@ -249,6 +249,19 @@ function AccountColorSwatches({
   )
 }
 
+/** Reads fresh settings then applies a transform to the accounts list (avoids stale closures
+ *  after an awaited login resolves late). */
+function applyAccounts(fn: (accs: ClaudeAccount[]) => ClaudeAccount[]): void {
+  const s = useSettings.getState()
+  s.update({ claudeAccounts: fn(s.settings.claudeAccounts) })
+}
+
+/** The same fresh-read/transform for the Codex account list. */
+function applyCodexAccounts(fn: (accs: CodexAccount[]) => CodexAccount[]): void {
+  const s = useSettings.getState()
+  s.update({ codexAccounts: fn(s.settings.codexAccounts) })
+}
+
 function captureCodexIdentity(id: string, captured: { email: string | null }): void {
   applyCodexAccounts((accs) =>
     accs.map((a) =>

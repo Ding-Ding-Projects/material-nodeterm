@@ -300,3 +300,22 @@ export function playSfx(kind: SfxKind, volume = 0.5): void {
     }
   })
 }
+
+/** Play the mapped local clip, falling back to the built-in effect. Narration is deliberately not
+ * consulted here: callers run both independently, so a user can hear a sound and a narrator. */
+export function playAlertSound(kind: SfxKind, volume: number, settings?: AlertSoundSettings): void {
+  if (settings && !alertSoundPolicy(settings)) return
+  const clip = settings?.mappings?.[kind] === 'custom' ? settings.clips?.[kind] : undefined
+  if (!clip || !clip.dataUrl.startsWith(`data:${clip.mime};base64,`) || clip.dataUrl.length > ALERT_SOUND_MAX_BYTES * 2) {
+    playSfx(kind, volume)
+    return
+  }
+  try {
+    const audio = new Audio(clip.dataUrl)
+    audio.volume = Math.max(0, Math.min(1, volume))
+    audio.addEventListener('ended', () => audio.remove(), { once: true })
+    void audio.play().catch(() => audio.remove())
+  } catch {
+    // A broken local decoder must never break agent-status handling.
+  }
+}
