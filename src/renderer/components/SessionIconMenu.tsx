@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { SessionIcon } from '@shared/session-icon'
 import { SESSION_ICON_LIMITS, sanitizeSessionIcon } from '@shared/session-icon'
-import { Dialog, Button } from '@renderer/ui/md3'
+import { Dialog, Button, FieldLabel } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 import { SessionIconGlyph } from './SessionIcon'
 
@@ -43,13 +43,15 @@ export function SessionIconMenu({ open, value, title, onPick, onClose }: {
   }
   return <Dialog open={open} onClose={onClose} title={`Session icon for ${title}`} className="session-icon-menu">
     <div className="session-icon-menu__preview" aria-live="polite"><SessionIconGlyph icon={value} size={32} title={title} /><span>{title}</span></div>
-    <label htmlFor="session-icon-emoji">Emoji</label>
+    <FieldLabel label="Emoji" htmlFor="session-icon-emoji" />
     <div className="session-icon-menu__row">
       <Input id="session-icon-emoji" ref={inputRef} value={emoji} maxLength={16} placeholder="🚀" onChange={(e) => setEmoji(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') chooseEmoji() }} />
       <Button variant="tonal" onClick={chooseEmoji}>Use</Button>
     </div>
-    <label htmlFor="session-icon-file">Local picture</label>
-    <input id="session-icon-file" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => chooseImage(e.target.files?.[0])} />
+    <FieldLabel label="Local picture" htmlFor="session-icon-file" />
+    {/* The native file picker stays native — only the app's M3 input wrapper is applied, so the
+        browser's own file-chooser affordance and its keyboard model are untouched. */}
+    <Input id="session-icon-file" className="mdx-input--bare" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => chooseImage(e.target.files?.[0])} />
     <p className="session-icon-menu__hint">Pictures stay on this machine. Remote URLs, animated images, and images over 400 KB are not accepted.</p>
     {error && <p role="alert" className="session-icon-menu__error">{error}</p>}
     <Button variant="text" onClick={() => { onPick(undefined); onClose() }}>Reset to colour</Button>

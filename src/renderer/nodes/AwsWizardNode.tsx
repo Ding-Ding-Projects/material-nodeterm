@@ -18,6 +18,7 @@ import { useRegexSearchField } from '@renderer/lib/regex/useRegexSearchField'
 import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
 import { Switch } from '../ui/Switch'
+import { Button, IconButton, TextArea } from '../ui/md3'
 import { MaterialSymbol } from '../components/MaterialSymbol'
 import { useI18n } from '../lib/i18n'
 
@@ -137,11 +138,11 @@ function FieldEditor({ field, path, values, setValue, setLocalFile, localFiles, 
         {items.map((_, index) => (
           <div className="aws-wizard__collection-row" key={`${key}-${index}`}>
             <FieldEditor field={field.items} path={[...path, index]} values={values} setValue={setValue} setLocalFile={setLocalFile} localFiles={localFiles} errors={errors} matches={() => true} />
-            <button type="button" className="mdx-btn mdx-btn--text aws-wizard__remove" onClick={() => setValue(path, items.filter((__, i) => i !== index))} aria-label={`Remove ${field.label} item ${index + 1}`}>Remove</button>
+            <Button variant="text" size="small" className="aws-wizard__remove nodrag" onClick={() => setValue(path, items.filter((__, i) => i !== index))} aria-label={`Remove ${field.label} item ${index + 1}`}>Remove</Button>
           </div>
         ))}
         {items.length === 0 && <p className="aws-wizard__empty">No items yet. Add one to start this repeatable list.</p>}
-        <button type="button" className="mdx-btn mdx-btn--tonal" disabled={items.length >= max} title={items.length >= max ? `This list is limited to ${max} items.` : undefined} onClick={() => setValue(path, [...items, defaultAwsWizardValue(field.items)])}>Add item</button>
+        <Button variant="tonal" size="small" className="nodrag" disabled={items.length >= max} title={items.length >= max ? `This list is limited to ${max} items.` : undefined} onClick={() => setValue(path, [...items, defaultAwsWizardValue(field.items)])}>Add item</Button>
         {feedback}
       </fieldset>
     )
@@ -165,15 +166,15 @@ function FieldEditor({ field, path, values, setValue, setLocalFile, localFiles, 
               setValue(path, next)
             }} placeholder="Key" />
             <FieldEditor field={field.values} path={[...path, entryKey]} values={values} setValue={setValue} setLocalFile={setLocalFile} localFiles={localFiles} errors={errors} matches={() => true} />
-            <button type="button" className="mdx-btn mdx-btn--text aws-wizard__remove" onClick={() => {
+            <Button variant="text" size="small" className="aws-wizard__remove nodrag" onClick={() => {
               const next = { ...(value as Record<string, unknown>) }
               delete next[entryKey]
               setValue(path, next)
-            }} aria-label={`Remove ${field.label} entry ${entryKey}`}>Remove</button>
+            }} aria-label={`Remove ${field.label} entry ${entryKey}`}>Remove</Button>
           </div>
         ))}
         {entries.length === 0 && <p className="aws-wizard__empty">No entries yet. Add a key and value to start this map.</p>}
-        <button type="button" className="mdx-btn mdx-btn--tonal" disabled={entries.length >= max} title={entries.length >= max ? `This map is limited to ${max} entries.` : undefined} onClick={() => setValue(path, { ...(value as Record<string, unknown>), [`key${entries.length + 1}`]: defaultAwsWizardValue(field.values) })}>Add entry</button>
+        <Button variant="tonal" size="small" className="nodrag" disabled={entries.length >= max} title={entries.length >= max ? `This map is limited to ${max} entries.` : undefined} onClick={() => setValue(path, { ...(value as Record<string, unknown>), [`key${entries.length + 1}`]: defaultAwsWizardValue(field.values) })}>Add entry</Button>
         {feedback}
       </fieldset>
     )
@@ -193,11 +194,11 @@ function FieldEditor({ field, path, values, setValue, setLocalFile, localFiles, 
         {label}{description}
         <div className="aws-wizard__file-row">
           <Input value={localFiles[key] ?? ''} readOnly placeholder="No local file selected" aria-label={`${field.label} path`} />
-          <button type="button" className="mdx-btn mdx-btn--tonal" onClick={async () => {
+          <Button variant="tonal" size="small" className="nodrag" onClick={async () => {
             const selected = await window.nodeTerminal.dialog.selectFile()
             if (selected) { setLocalFile(path, selected); setValue(path, '__local_file__') }
-          }}>Browse…</button>
-          <button type="button" className="mdx-btn mdx-btn--text" disabled={!localFiles[key]} onClick={() => { setLocalFile(path, undefined); setValue(path, '') }}>Clear</button>
+          }}>Browse…</Button>
+          <Button variant="text" size="small" className="nodrag" disabled={!localFiles[key]} onClick={() => { setLocalFile(path, undefined); setValue(path, '') }}>Clear</Button>
         </div>
         {feedback}
       </div>
@@ -268,7 +269,7 @@ export default function AwsWizardNode({ id, data, selected }: NodeProps<CanvasNo
         <MaterialSymbol name="database" label={ui('AWS wizard', 'AWS 精靈')} />
         <EditableNodeTitle value={data.title} onChange={(next) => updateNodeData(id, { title: next })} emptyLabel={ui('AWS request wizard', 'AWS 請求精靈')} title={ui('Click to rename', '撳一下改名')} ariaLabel={ui('AWS request wizard name', 'AWS 請求精靈名稱')} rejectEmpty={false} />
         <span className="term-node__spacer" />
-        <button className="term-node__close" title="Close" aria-label="Close AWS request wizard" onClick={() => deleteElements({ nodes: [{ id }] })}>×</button>
+        <IconButton className="term-node__close nodrag" title="Close" aria-label="Close AWS request wizard" onClick={() => deleteElements({ nodes: [{ id }] })}>×</IconButton>
       </div>
       <div className="aws-wizard__body nodrag nowheel">
         <div className="aws-wizard__intro"><strong>{schema.service} · {schema.operation}</strong><span>{schema.description}</span><span className="aws-wizard__offline-note">{ui('Review only. This wizard never executes an AWS request.', '只供檢視，呢個精靈唔會執行 AWS 請求。')}</span></div>
@@ -277,17 +278,17 @@ export default function AwsWizardNode({ id, data, selected }: NodeProps<CanvasNo
           {search.error && <span className="aws-wizard__error">{search.error}</span>}
         </div>
         <div className="aws-wizard__tabs" role="tablist" aria-label={ui('AWS wizard views', 'AWS 精靈檢視')}>
-          <button type="button" role="tab" aria-selected={advancedMode === 'json'} className={`mdx-seg ${advancedMode === 'json' ? 'is-active' : ''}`} onClick={() => { setAdvancedMode('json'); setAdvancedDraft(null); setAdvancedError(null) }}>{ui('Typed controls + JSON', '類型控制 + JSON')}</button>
-          <button type="button" role="tab" aria-selected={advancedMode === 'yaml'} className={`mdx-seg ${advancedMode === 'yaml' ? 'is-active' : ''}`} onClick={() => { setAdvancedMode('yaml'); setAdvancedDraft(null); setAdvancedError(null) }}>{ui('Typed controls + YAML', '類型控制 + YAML')}</button>
+          <Button variant={advancedMode === 'json' ? 'tonal' : 'text'} size="small" role="tab" aria-selected={advancedMode === 'json'} className={`nodrag ${advancedMode === 'json' ? 'is-active' : ''}`} onClick={() => { setAdvancedMode('json'); setAdvancedDraft(null); setAdvancedError(null) }}>{ui('Typed controls + JSON', '類型控制 + JSON')}</Button>
+          <Button variant={advancedMode === 'yaml' ? 'tonal' : 'text'} size="small" role="tab" aria-selected={advancedMode === 'yaml'} className={`nodrag ${advancedMode === 'yaml' ? 'is-active' : ''}`} onClick={() => { setAdvancedMode('yaml'); setAdvancedDraft(null); setAdvancedError(null) }}>{ui('Typed controls + YAML', '類型控制 + YAML')}</Button>
         </div>
         <div className="aws-wizard__editor-grid">
           <div className="aws-wizard__typed" role="tabpanel">
             <FieldEditor field={schema.input} path={[]} values={values} setValue={setValue} setLocalFile={setLocalFile} localFiles={localFiles} errors={errors} matches={search.test} />
           </div>
           <div className="aws-wizard__advanced" role="tabpanel">
-            <label className="aws-wizard__field"><span className="aws-wizard__label">Advanced {advancedMode.toUpperCase()}</span><textarea value={advancedText} onChange={(event) => { setAdvancedDraft(event.target.value); setAdvancedError(null) }} aria-label={`Advanced ${advancedMode} request view`} spellCheck={false} /></label>
+            <label className="aws-wizard__field"><span className="aws-wizard__label">Advanced {advancedMode.toUpperCase()}</span><TextArea className="nodrag nowheel" value={advancedText} onChange={(event) => { setAdvancedDraft(event.target.value); setAdvancedError(null) }} aria-label={`Advanced ${advancedMode} request view`} spellCheck={false} /></label>
             {advancedError && <div className="aws-wizard__error" role="alert">{advancedError}</div>}
-            <button type="button" className="mdx-btn mdx-btn--filled" onClick={applyAdvanced}>{ui('Apply', '套用')} {advancedMode.toUpperCase()}</button>
+            <Button variant="filled" size="small" className="nodrag" onClick={applyAdvanced}>{ui('Apply', '套用')} {advancedMode.toUpperCase()}</Button>
             <span className="aws-wizard__advanced-note">{ui('Applying validates the complete object against the same schema as the typed controls. Local file paths remain machine-local.', '套用前會用同一份結構驗證完整物件，本機檔案路徑只留喺本機。')}</span>
           </div>
         </div>

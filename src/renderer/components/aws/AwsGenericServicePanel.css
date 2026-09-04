@@ -84,3 +84,28 @@
 @media (prefers-reduced-motion: reduce) {
   .aws-generic-panel *, .aws-generic-panel *::before, .aws-generic-panel *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+
+/* The panel's controls are the shared Material Design 3 primitives now (`ui/md3`), so their
+ * legacy class rules above tie with the primitive classes on specificity and would be decided by
+ * stylesheet load order. Re-key the panel's own shape onto the primitive classes so this panel
+ * keeps the layout it was designed with. */
+.mdx-btn.mdx-btn--outlined.aws-choice-button,
+.mdx-btn.mdx-btn--filled.aws-primary-button,
+.mdx-btn.mdx-btn--text.aws-link-button { min-height: 42px; border-radius: 999px; padding: 8px 15px; font: inherit; }
+.mdx-btn.mdx-btn--outlined.aws-choice-button { border: 1px solid var(--md-primary); color: var(--md-primary); background: transparent; }
+.mdx-btn.mdx-btn--filled.aws-primary-button { border: 0; color: var(--md-on-primary); background: var(--md-primary); }
+.mdx-btn.mdx-btn--text.aws-link-button { border: 0; color: var(--md-primary); background: transparent; }
+.mdx-btn.mdx-btn--outlined.aws-choice-button:disabled,
+.mdx-btn.mdx-btn--filled.aws-primary-button:disabled { cursor: not-allowed; opacity: .5; }
+.mdx-btn.mdx-btn--text.aws-list-item {
+  display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 4px 0; padding: 10px 12px; border: 1px solid transparent; border-radius: 12px;
+  color: inherit; background: transparent; text-align: start; font: inherit;
+}
+.mdx-btn.mdx-btn--text.aws-list-item:hover,
+.mdx-btn.mdx-btn--text.aws-list-item:focus-visible,
+.mdx-btn.mdx-btn--text.aws-list-item.is-selected { border-color: var(--md-primary); background: var(--md-primary-container); }
+.aws-tabs .mdx-btn { min-height: 44px; padding: 0 14px; border: 0; border-bottom: 3px solid transparent; border-radius: 10px 10px 0 0; color: inherit; background: transparent; font: inherit; white-space: nowrap; }
+.aws-tabs .mdx-btn[aria-selected='true'] { border-bottom-color: var(--md-primary); background: var(--md-primary-container); font-weight: 700; }
+/* `ui/Select` wraps its native select in a positioned span for the drawn chevron. */
+.aws-field .mdx-select__wrap { display: block; width: 100%; }

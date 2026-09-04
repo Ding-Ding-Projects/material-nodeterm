@@ -691,26 +691,28 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
         />
       </div>
 
-      <div className="ss-tabs" role="tablist" aria-label="Group sessions by">
-        <button
-          type="button"
+      <Tablist className="ss-tabs" ariaLabel="Group sessions by">
+        <Chip
+          vocabularyMode="factual"
+          selected={grouping === 'project'}
           role="tab"
           aria-selected={grouping === 'project'}
           className={`ss-tab${grouping === 'project' ? ' is-active' : ''}`}
           onClick={() => updateSettings({ sidebarGrouping: 'project' })}
         >
           Project
-        </button>
-        <button
-          type="button"
+        </Chip>
+        <Chip
+          vocabularyMode="factual"
+          selected={grouping === 'status'}
           role="tab"
           aria-selected={grouping === 'status'}
           className={`ss-tab${grouping === 'status' ? ' is-active' : ''}`}
           onClick={() => updateSettings({ sidebarGrouping: 'status' })}
         >
           Status
-        </button>
-      </div>
+        </Chip>
+      </Tablist>
 
       <div
         className="sessions-sidebar__body"

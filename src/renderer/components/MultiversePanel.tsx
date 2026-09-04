@@ -6,6 +6,9 @@ import { MULTIVERSE_CATALOG, MULTIVERSE_MAX_DEPTH, MULTIVERSE_ROOT_CANVAS_ID } f
 import { uuid } from '../lib/uuid'
 import type { CanvasNodeState } from '@shared/types'
 import { markWorkspaceDirty } from '../state/workspaceDirty'
+import { Button, FieldLabel, IconButton, ListRow, SearchField } from '../ui/md3'
+import { Input } from '../ui/Input'
+import { Select } from '../ui/Select'
 
 /**
  * Lang gui child-canvas navigator. It deliberately lives inside the current project canvas rather
@@ -65,29 +68,36 @@ export function MultiversePanel({ projectId, onClose }: { projectId: string; onC
           <h2>Multiverse</h2>
           <p>Scoped child canvases stay inside this project. They are not project tabs.</p>
         </div>
-        <button type="button" className="md3-icon-button" aria-label="Close Multiverse" onClick={onClose}>×</button>
+        <IconButton size="dense" icon="close" aria-label="Close Multiverse" onClick={onClose} />
       </header>
       <div className="multiverse-panel__search">
-        <input ref={searchRef} value={search.value} onChange={(event) => search.setValue(event.target.value)} placeholder="Search child canvases" aria-label="Search child canvases" />
+        <SearchField ref={searchRef} value={search.value} onChange={(event) => search.setValue(event.target.value)} placeholder="Search child canvases" aria-label="Search child canvases" />
         <AnchoredRegexBuilder search={search} fieldRef={searchRef} label="Regex — Multiverse child canvas search" />
       </div>
       <div className="multiverse-panel__create" role="group" aria-label="Create child canvas">
-        <label>Child canvas name<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-        <label>Parent canvas<select value={parentId} onChange={(event) => setParentId(event.target.value)}>
-          <option value={MULTIVERSE_ROOT_CANVAS_ID}>Project root</option>
-          {children.map((child) => <option key={child.id} value={child.id} disabled={child.depth >= MULTIVERSE_MAX_DEPTH}>{child.title} · depth {child.depth}</option>)}
-        </select></label>
-        <button type="button" className="md3-button md3-button--filled" onClick={addChild} disabled={!title.trim()}>Create child canvas</button>
+        <FieldLabel label="Child canvas name">
+          <Input value={title} onChange={(event) => setTitle(event.target.value)} />
+        </FieldLabel>
+        <FieldLabel label="Parent canvas">
+          <Select value={parentId} onChange={(event) => setParentId(event.target.value)}>
+            <option value={MULTIVERSE_ROOT_CANVAS_ID}>Project root</option>
+            {children.map((child) => <option key={child.id} value={child.id} disabled={child.depth >= MULTIVERSE_MAX_DEPTH}>{child.title} · depth {child.depth}</option>)}
+          </Select>
+        </FieldLabel>
+        <Button variant="filled" onClick={addChild} disabled={!title.trim()}>Create child canvas</Button>
       </div>
       {notice && <p className="multiverse-panel__notice" role="status">{notice}</p>}
       <ul className="multiverse-panel__list" aria-label="Child canvas list">
         {visible.length === 0 && <li className="multiverse-panel__empty">No child canvases match this search.</li>}
         {visible.map((child) => (
           <li key={child.id} className={state?.activeCanvasId === child.id ? 'is-active' : ''}>
-            <button type="button" className="multiverse-panel__canvas" onClick={() => { if (setActive(projectId, child.id)) markWorkspaceDirty(); setNotice(`Opened ${child.title}.`) }}>
-              <span>{child.title}</span><small>Depth {child.depth} · {child.nodes.length} item{child.nodes.length === 1 ? '' : 's'} · {child.nodes.map((node) => node.title).join(', ') || 'empty child content'}</small>
-            </button>
-            <button type="button" className="md3-button md3-button--tonal" onClick={() => addNote(child.id)} aria-label={`Add a note to ${child.title}`}>Add note</button>
+            <ListRow
+              className="multiverse-panel__canvas"
+              onClick={() => { if (setActive(projectId, child.id)) markWorkspaceDirty(); setNotice(`Opened ${child.title}.`) }}
+              label={child.title}
+              sub={`Depth ${child.depth} · ${child.nodes.length} item${child.nodes.length === 1 ? '' : 's'} · ${child.nodes.map((node) => node.title).join(', ') || 'empty child content'}`}
+            />
+            <Button variant="tonal" size="small" onClick={() => addNote(child.id)} aria-label={`Add a note to ${child.title}`}>Add note</Button>
           </li>
         ))}
       </ul>

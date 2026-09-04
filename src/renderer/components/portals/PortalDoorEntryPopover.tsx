@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { PortalDoorEntryRecord } from '@shared/portal-door'
 import { AnchoredPopover } from '../../ui/AnchoredPopover'
+import { Button, FieldLabel } from '../../ui/md3'
+import { Input } from '../../ui/Input'
 
 /**
  * The real portal-entry surface. It is intentionally not the toy-lock UnlockPrompt: this
@@ -81,9 +83,8 @@ export function PortalDoorEntryPopover({
       <p className="portal-door-entry__explanation">
         This portal has its own {numeric ? 'numeric code' : 'passphrase'}. It is separate from toy locks and is checked in the local vault.
       </p>
-      <label className="portal-door-entry__field">
-        <span>{numeric ? 'Numeric code' : 'Passphrase'}</span>
-        <input
+      <FieldLabel className="portal-door-entry__field" label={numeric ? 'Numeric code' : 'Passphrase'}>
+        <Input
           ref={inputRef}
           type={numeric ? 'text' : 'password'}
           inputMode={numeric ? 'numeric' : 'text'}
@@ -97,27 +98,26 @@ export function PortalDoorEntryPopover({
           disabled={busy || retryAfterMs > 0}
           aria-describedby="portal-door-entry-status"
         />
-      </label>
+      </FieldLabel>
       <div id="portal-door-entry-status" className="portal-door-entry__status" aria-live="polite">
         {error}
         {retryAfterMs > 0 ? ` Try again in ${Math.ceil(retryAfterMs / 1000)}s.` : null}
       </div>
       <div className="portal-door-entry__actions">
-        <button type="button" className="md3-button md3-button--text" onClick={onClose}>
+        <Button variant="text" onClick={onClose}>
           Cancel
-        </button>
-        <button
-          type="button"
-          className="md3-button md3-button--filled"
+        </Button>
+        <Button
+          variant="filled"
           onClick={() => void submit()}
           disabled={busy || retryAfterMs > 0 || !value}
         >
           {busy ? 'Checking…' : 'Enter portal'}
-        </button>
+        </Button>
       </div>
-      <button type="button" className="portal-door-entry__recovery" onClick={onRecover}>
+      <Button variant="text" className="portal-door-entry__recovery" onClick={onRecover}>
         Forgotten the entry value? Open portal settings
-      </button>
+      </Button>
     </AnchoredPopover>
   )
 }

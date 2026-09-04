@@ -15,6 +15,7 @@ import {
   validateHostedServiceTunnelBinding,
   verifyHostedServiceHealth
 } from '@shared/hosted-service-tunnel'
+import { Button, SearchField, TextField } from '@renderer/ui/md3'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import type { RegexBuilderBinding } from '../lib/regex/useRegexSearchField'
@@ -57,18 +58,18 @@ function Picker({ label, options, value, onChange, search, inputRef, regexLabel 
   return (
     <div className="hosted-tunnel__picker">
       <span className="service-node__field-label">{label}</span>
-      <div className="hosted-tunnel__search-row">
-        <input
-          ref={inputRef}
-          className="service-node__input"
-          value={search.value}
-          onChange={(event) => search.setValue(event.target.value)}
-          placeholder={search.mode === 'regex' ? `Filter ${label.toLowerCase()} (regex)…` : `Filter ${label.toLowerCase()}…`}
-          aria-label={`Filter ${label.toLowerCase()}`}
-          aria-describedby={`${label.toLowerCase()}-picker-help`}
-        />
-        <AnchoredRegexBuilder search={search as RegexBuilderBinding} fieldRef={inputRef} label={regexLabel} />
-      </div>
+      <SearchField
+        ref={inputRef}
+        dense
+        className="hosted-tunnel__search-row"
+        vocabularyMode="factual"
+        value={search.value}
+        onChange={(event) => search.setValue(event.target.value)}
+        placeholder={search.mode === 'regex' ? `Filter ${label.toLowerCase()} (regex)…` : `Filter ${label.toLowerCase()}…`}
+        aria-label={`Filter ${label.toLowerCase()}`}
+        aria-describedby={`${label.toLowerCase()}-picker-help`}
+        trailingSlot={<AnchoredRegexBuilder search={search as RegexBuilderBinding} fieldRef={inputRef} label={regexLabel} />}
+      />
       <div id={`${label.toLowerCase()}-picker-help`} className="hosted-tunnel__picker-help">
         {options.length === 0
           ? `No ${label.toLowerCase()} catalog is available. Configure Cloudflare to populate this picker.`
@@ -76,9 +77,11 @@ function Picker({ label, options, value, onChange, search, inputRef, regexLabel 
       </div>
       <div className="hosted-tunnel__option-list" role="listbox" aria-label={label}>
         {visible.map((option) => (
-          <button
+          <Button
             key={option.id}
-            type="button"
+            variant="text"
+            size="small"
+            vocabularyMode="factual"
             role="option"
             aria-selected={value === option.id}
             className={`hosted-tunnel__option${value === option.id ? ' is-selected' : ''}`}
@@ -87,7 +90,7 @@ function Picker({ label, options, value, onChange, search, inputRef, regexLabel 
           >
             <span>{option.label}</span>
             {option.detail && <small>{option.detail}</small>}
-          </button>
+          </Button>
         ))}
         {options.length > 0 && visible.length === 0 && <p className="service-node__note">No matches. Adjust this picker filter.</p>}
       </div>
@@ -222,26 +225,25 @@ export function HostedServiceTunnelPanel({
       </p>
       <div className="hosted-tunnel__origins">
         <div className="service-node__field-label">Typed local origin</div>
-        <div className="hosted-tunnel__search-row">
-          <input
-            ref={originInputRef}
-            className="service-node__input"
-            value={originSearch.value}
-            onChange={(event) => originSearch.setValue(event.target.value)}
-            placeholder={originSearch.mode === 'regex' ? 'Filter origins (regex)…' : 'Filter origins…'}
-            aria-label="Filter typed local origins"
-          />
-          <AnchoredRegexBuilder search={originSearch} fieldRef={originInputRef} label="Regex - typed local origins" />
-        </div>
+        <SearchField
+          ref={originInputRef}
+          dense
+          className="hosted-tunnel__search-row"
+          value={originSearch.value}
+          onChange={(event) => originSearch.setValue(event.target.value)}
+          placeholder={originSearch.mode === 'regex' ? 'Filter origins (regex)…' : 'Filter origins…'}
+          aria-label="Filter typed local origins"
+          trailingSlot={<AnchoredRegexBuilder search={originSearch} fieldRef={originInputRef} label="Regex - typed local origins" />}
+        />
         <div className="hosted-tunnel__option-list" role="listbox" aria-label="Typed local origins">
           {visibleOrigins.map((candidate) => (
-            <button key={candidate.id} type="button" role="option" aria-selected={candidate.id === selectedOriginId} className={`hosted-tunnel__option${candidate.id === selectedOriginId ? ' is-selected' : ''}`} onClick={() => setSelectedOriginId(candidate.id)}>
+            <Button key={candidate.id} variant="text" size="small" vocabularyMode="factual" role="option" aria-selected={candidate.id === selectedOriginId} className={`hosted-tunnel__option${candidate.id === selectedOriginId ? ' is-selected' : ''}`} onClick={() => setSelectedOriginId(candidate.id)}>
               <span>{candidate.label}</span><small>{formatHostedServiceOrigin(candidate.origin)} · {candidate.health}</small>
-            </button>
+            </Button>
           ))}
           {visibleOrigins.length === 0 && <p className="service-node__note">No typed origin discovered yet. Save the local address, then choose Discover.</p>}
         </div>
-        <button type="button" className="service-node__local-btn" onClick={discover} disabled={!endpoint || busy} title={!endpoint ? 'Save a local service address first' : 'Discover the typed local service origin'}>Discover local origin</button>
+        <Button variant="outlined" size="small" className="service-node__local-btn" onClick={discover} disabled={!endpoint || busy} title={!endpoint ? 'Save a local service address first' : 'Discover the typed local service origin'}>Discover local origin</Button>
       </div>
 
       <div className="hosted-tunnel__grid">
@@ -249,16 +251,21 @@ export function HostedServiceTunnelPanel({
         <Picker label="Cloudflare zone" options={zones} value={zoneId} onChange={setZoneId} search={zoneSearch} inputRef={zoneInputRef} regexLabel="Regex - Cloudflare zone picker" />
       </div>
 
-      <label className="service-node__field" htmlFor="hosted-tunnel-hostname">
-        <span className="service-node__field-label">Public hostname</span>
-        <input id="hosted-tunnel-hostname" className="service-node__input" value={hostname} onChange={(event) => setHostname(event.target.value)} placeholder="service.example.com" aria-invalid={hostname !== '' && !validHostname} />
-        <span className="service-node__note">{hostname === '' ? 'Choose a verified account and zone, then enter the hostname to route.' : validHostname ? 'Hostname shape is valid. Availability is checked by the Cloudflare handoff.' : 'Use a DNS hostname with letters, numbers, dots, and hyphens.'}</span>
-      </label>
+      <TextField
+        id="hosted-tunnel-hostname"
+        className="service-node__field"
+        label="Public hostname"
+        value={hostname}
+        onChange={(event) => setHostname(event.target.value)}
+        placeholder="service.example.com"
+        invalid={hostname !== '' && !validHostname}
+        supportText={hostname === '' ? 'Choose a verified account and zone, then enter the hostname to route.' : validHostname ? 'Hostname shape is valid. Availability is checked by the Cloudflare handoff.' : 'Use a DNS hostname with letters, numbers, dots, and hyphens.'}
+      />
 
       <div className="hosted-tunnel__actions">
-        <button type="button" className="service-node__local-btn" onClick={() => void verify()} disabled={!canVerify} title={!selected ? 'Discover and select a local origin first' : 'Verify the local origin health'}>Verify local health</button>
-        <button type="button" className="service-node__local-btn" onClick={() => void handoff()} disabled={!canHandoff} title={!providerReady ? 'Cloudflare account and zone manager is not connected' : status.state !== 'ready' ? 'Verify local health before handoff' : !hasSelection ? 'Choose account, zone, hostname, and origin' : 'Hand off the verified origin with Access required'}>Hand off with Access</button>
-        {binding && <button type="button" className="service-node__local-btn" onClick={() => void rollback()} disabled={!onRollback || busy} title={!onRollback ? 'Cloudflare rollback manager is not connected' : 'Remove only this handoff binding'}>Rollback handoff</button>}
+        <Button variant="outlined" size="small" className="service-node__local-btn" onClick={() => void verify()} disabled={!canVerify} title={!selected ? 'Discover and select a local origin first' : 'Verify the local origin health'}>Verify local health</Button>
+        <Button variant="filled" size="small" className="service-node__local-btn" onClick={() => void handoff()} disabled={!canHandoff} title={!providerReady ? 'Cloudflare account and zone manager is not connected' : status.state !== 'ready' ? 'Verify local health before handoff' : !hasSelection ? 'Choose account, zone, hostname, and origin' : 'Hand off the verified origin with Access required'}>Hand off with Access</Button>
+        {binding && <Button variant="outlined" size="small" danger className="service-node__local-btn" onClick={() => void rollback()} disabled={!onRollback || busy} title={!onRollback ? 'Cloudflare rollback manager is not connected' : 'Remove only this handoff binding'}>Rollback handoff</Button>}
       </div>
       <p className="service-node__note" role="status">{status.message}</p>
       {!providerReady && <p className="hosted-tunnel__availability">Cloudflare account and zone pickers are ready for the Cloudflare manager. Handoff stays disabled until that manager supplies a verified catalog and mutation callback.</p>}

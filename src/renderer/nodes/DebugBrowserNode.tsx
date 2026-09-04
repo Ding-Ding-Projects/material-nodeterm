@@ -11,6 +11,9 @@ import {
 } from '@shared/browser-debug'
 import type { NodeTerminalApi } from '@shared/types'
 import type { CanvasNode } from '../state/workspace'
+import { Button, Checkbox, FieldLabel, IconButton, NumberField } from '../ui/md3'
+import { Input } from '../ui/Input'
+import { Select } from '../ui/Select'
 
 const DEFAULT_SPEC: DebugBrowserSpec = {
   version: 1,
@@ -119,29 +122,26 @@ export default function DebugBrowserNode({ id, data, selected }: NodeProps<Canva
       <div className="term-node__header">
         <span className="term-node__title-text">{spec.label}</span>
         <span className="term-node__spacer" />
-        <button className="term-node__close" title="Close" onClick={() => deleteElements({ nodes: [{ id }] })}>×</button>
+        <IconButton size="compact" className="term-node__close" icon="close" title="Close" aria-label="Close debug browser" onClick={() => deleteElements({ nodes: [{ id }] })} />
       </div>
       <div className="debug-browser-node__body">
         <p className="debug-browser-node__status" role="status">
           <strong>Isolated debugging browser</strong>: {displayState(session)}
         </p>
-        <label>
-          Browser
-          <select value={executablePath} onChange={(event) => setExecutablePath(event.target.value)}>
+        <FieldLabel label="Browser">
+          <Select className="nodrag" value={executablePath} onChange={(event) => setExecutablePath(event.target.value)}>
             {executables.map((item) => <option key={item.path} value={item.path}>{item.label}</option>)}
-          </select>
-        </label>
-        <label>
-          Session name
-          <input value={labelInput} maxLength={160} onChange={(event) => setLabelInput(event.target.value)} onBlur={() => patchSpec({ label: labelInput })} />
-        </label>
-        <label>
-          Start URL
-          <input value={urlInput} inputMode="url" onChange={(event) => setUrlInput(event.target.value)} onBlur={() => patchSpec({ startUrl: urlInput })} />
-        </label>
-        <label className="debug-browser-node__check">
-          <input
-            type="checkbox"
+          </Select>
+        </FieldLabel>
+        <FieldLabel label="Session name">
+          <Input className="nodrag" value={labelInput} maxLength={160} onChange={(event) => setLabelInput(event.target.value)} onBlur={() => patchSpec({ label: labelInput })} />
+        </FieldLabel>
+        <FieldLabel label="Start URL">
+          <Input className="nodrag" value={urlInput} inputMode="url" onChange={(event) => setUrlInput(event.target.value)} onBlur={() => patchSpec({ startUrl: urlInput })} />
+        </FieldLabel>
+        <FieldLabel className="debug-browser-node__check" label="Use a validated proxy" inline>
+          <Checkbox
+            className="nodrag"
             checked={proxyEnabled}
             onChange={(event) => {
               setProxyEnabled(event.target.checked)
@@ -149,24 +149,20 @@ export default function DebugBrowserNode({ id, data, selected }: NodeProps<Canva
               else patchSpec({ proxy: undefined })
             }}
           />
-          Use a validated proxy
-        </label>
+        </FieldLabel>
         {proxyEnabled && (
           <div className="debug-browser-node__proxy">
-            <label>
-              Scheme
-              <select value={spec.proxy?.scheme ?? 'http'} onChange={(event) => patchProxy({ scheme: event.target.value as DebugBrowserProxy['scheme'] })}>
+            <FieldLabel label="Scheme">
+              <Select className="nodrag" value={spec.proxy?.scheme ?? 'http'} onChange={(event) => patchProxy({ scheme: event.target.value as DebugBrowserProxy['scheme'] })}>
                 {DEBUG_BROWSER_SCHEMES.map((scheme) => <option key={scheme} value={scheme}>{scheme}</option>)}
-              </select>
-            </label>
-            <label>
-              Host
-              <input value={proxyHostInput} onChange={(event) => setProxyHostInput(event.target.value)} onBlur={() => patchProxy({ host: proxyHostInput })} />
-            </label>
-            <label>
-              Port
-              <input type="number" min={1} max={65535} value={proxyPortInput} onChange={(event) => setProxyPortInput(event.target.value)} onBlur={() => patchProxy({ port: Number(proxyPortInput) })} />
-            </label>
+              </Select>
+            </FieldLabel>
+            <FieldLabel label="Host">
+              <Input className="nodrag" value={proxyHostInput} onChange={(event) => setProxyHostInput(event.target.value)} onBlur={() => patchProxy({ host: proxyHostInput })} />
+            </FieldLabel>
+            <FieldLabel label="Port">
+              <NumberField className="nodrag" min={1} max={65535} value={proxyPortInput} onChange={(event) => setProxyPortInput(event.target.value)} onBlur={() => patchProxy({ port: Number(proxyPortInput) })} />
+            </FieldLabel>
           </div>
         )}
         <p className="debug-browser-node__hint">
@@ -175,8 +171,10 @@ export default function DebugBrowserNode({ id, data, selected }: NodeProps<Canva
         {executables.length === 0 && <p className="debug-browser-node__warning">No supported Chromium browser was detected on this computer, so Start is unavailable.</p>}
         {error && <p className="debug-browser-node__error">{error}</p>}
         <div className="debug-browser-node__actions">
-          {!session ? <button disabled={executables.length === 0 || !executablePath} onClick={() => void start()}>Start isolated session</button> : <button onClick={() => void stop()}>Stop session</button>}
-          {session && <button onClick={() => void inspect()}>Refresh CDP target</button>}
+          {!session
+            ? <Button variant="filled" size="small" disabled={executables.length === 0 || !executablePath} onClick={() => void start()}>Start isolated session</Button>
+            : <Button variant="outlined" size="small" onClick={() => void stop()}>Stop session</Button>}
+          {session && <Button variant="text" size="small" onClick={() => void inspect()}>Refresh CDP target</Button>}
         </div>
         {session?.endpoint && <p className="debug-browser-node__endpoint">CDP: {session.endpoint} (loopback only)</p>}
       </div>

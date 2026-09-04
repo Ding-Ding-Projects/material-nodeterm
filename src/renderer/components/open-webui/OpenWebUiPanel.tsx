@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { OPEN_WEBUI_DEFAULT_PORT, type OpenWebUiBackupSummary, type OpenWebUiConfigureInput, type OpenWebUiStatus } from '@shared/open-webui'
-import { Radio } from '@renderer/ui/md3'
+import { Button, FieldLabel, Radio, SearchField } from '@renderer/ui/md3'
+import { Input } from '@renderer/ui/Input'
+import { Select } from '@renderer/ui/Select'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 
@@ -60,45 +62,49 @@ export function OpenWebUiPanel({ nodeId }: { nodeId: string }): React.JSX.Elemen
       <p className="service-node__state">{status?.phase === 'awaiting-first-user' ? 'Ready for the first user' : status?.phase ?? 'Checking host state…'}</p>
       <p className="service-node__note">The official pinned image runs privately on loopback with persistent data. The first person who registers in Open WebUI becomes its owner; nodeterm never creates that account.</p>
       <div className="open-webui-panel__search">
-        <label className="service-node__field" htmlFor={`${nodeId}-openwebui-search`}>
-          <span className="service-node__field-label">Search Docker contexts</span>
-          <div className="regex-search-field">
-            <input ref={searchInputRef} id={`${nodeId}-openwebui-search`} className="service-node__input nodrag" value={search.value} onChange={(event) => search.setValue(event.target.value)} placeholder="Current context" />
-            <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label="Regex builder for Docker context search" />
-          </div>
-        </label>
+        <FieldLabel className="service-node__field" label="Search Docker contexts" htmlFor={`${nodeId}-openwebui-search`}>
+          <SearchField
+            ref={searchInputRef}
+            id={`${nodeId}-openwebui-search`}
+            dense
+            className="regex-search-field"
+            inputClassName="nodrag"
+            value={search.value}
+            onChange={(event) => search.setValue(event.target.value)}
+            placeholder="Current context"
+            trailingSlot={<AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label="Regex builder for Docker context search" />}
+          />
+        </FieldLabel>
       </div>
-      <label className="service-node__field" htmlFor={`${nodeId}-openwebui-context`}>
-        <span className="service-node__field-label">Docker context</span>
-        <select id={`${nodeId}-openwebui-context`} className="service-node__input nodrag" value={context} onChange={(event) => setContext(event.target.value)} disabled={busy}>
+      <FieldLabel className="service-node__field" label="Docker context" htmlFor={`${nodeId}-openwebui-context`}>
+        <Select id={`${nodeId}-openwebui-context`} className="nodrag" value={context} onChange={(event) => setContext(event.target.value)} disabled={busy}>
           <option value="">Current context</option>
           {filteredContexts.map((item) => <option key={item.name} value={item.name}>{item.name}{item.current ? ' · current' : ''}</option>)}
-        </select>
-      </label>
-      <label className="service-node__field" htmlFor={`${nodeId}-openwebui-port`}>
-        <span className="service-node__field-label">Private host port</span>
-        <input id={`${nodeId}-openwebui-port`} className="service-node__input nodrag" type="number" min={1024} max={65535} value={port} onChange={(event) => setPort(event.target.value)} disabled={busy} />
-      </label>
+        </Select>
+      </FieldLabel>
+      <FieldLabel className="service-node__field" label="Private host port" htmlFor={`${nodeId}-openwebui-port`}>
+        <Input id={`${nodeId}-openwebui-port`} className="nodrag" type="number" min={1024} max={65535} value={port} onChange={(event) => setPort(event.target.value)} disabled={busy} />
+      </FieldLabel>
       <fieldset className="open-webui-panel__providers">
         <legend>Model provider</legend>
         <label><Radio name={`${nodeId}-openwebui-provider`} checked={provider === 'ollama'} onChange={() => setProvider('ollama')} disabled={busy} /> Reuse existing local Ollama</label>
         <label><Radio name={`${nodeId}-openwebui-provider`} checked={provider === 'openai-compatible'} onChange={() => setProvider('openai-compatible')} disabled={busy} /> OpenAI-compatible endpoint</label>
       </fieldset>
       {provider === 'openai-compatible' && <>
-        <label className="service-node__field" htmlFor={`${nodeId}-openwebui-provider-url`}><span className="service-node__field-label">Provider HTTPS address</span><input id={`${nodeId}-openwebui-provider-url`} className="service-node__input nodrag" value={providerUrl} onChange={(event) => setProviderUrl(event.target.value)} placeholder="https://provider.example/v1" disabled={busy} /></label>
-        <label className="service-node__field" htmlFor={`${nodeId}-openwebui-credential`}><span className="service-node__field-label">OS credential reference</span><input id={`${nodeId}-openwebui-credential`} className="service-node__input nodrag" value={credentialKey} onChange={(event) => setCredentialKey(event.target.value)} placeholder="Vault entry name, not the key" disabled={busy} /></label>
+        <FieldLabel className="service-node__field" label="Provider HTTPS address" htmlFor={`${nodeId}-openwebui-provider-url`}><Input id={`${nodeId}-openwebui-provider-url`} className="nodrag" value={providerUrl} onChange={(event) => setProviderUrl(event.target.value)} placeholder="https://provider.example/v1" disabled={busy} /></FieldLabel>
+        <FieldLabel className="service-node__field" label="OS credential reference" htmlFor={`${nodeId}-openwebui-credential`}><Input id={`${nodeId}-openwebui-credential`} className="nodrag" value={credentialKey} onChange={(event) => setCredentialKey(event.target.value)} placeholder="Vault entry name, not the key" disabled={busy} /></FieldLabel>
         <p className="service-node__note">Only the opaque credential reference is stored. The key itself never enters the canvas file, Docker arguments, or logs.</p>
       </>}
       <div className="open-webui-panel__actions">
-        <button type="button" className="button-component" onClick={configure} disabled={busy}>Save host settings</button>
-        <button type="button" className="button-component" onClick={() => void run(() => window.nodeTerminal.openWebUi.start(nodeId))} disabled={busy || !status}>▶ {actionLabel}</button>
-        <button type="button" className="button-component" onClick={() => void run(() => window.nodeTerminal.openWebUi.stop(nodeId))} disabled={busy || status?.containerState !== 'running'}>Stop</button>
+        <Button variant="outlined" size="small" className="button-component" onClick={configure} disabled={busy}>Save host settings</Button>
+        <Button variant="outlined" size="small" className="button-component" onClick={() => void run(() => window.nodeTerminal.openWebUi.start(nodeId))} disabled={busy || !status}>▶ {actionLabel}</Button>
+        <Button variant="outlined" size="small" className="button-component" onClick={() => void run(() => window.nodeTerminal.openWebUi.stop(nodeId))} disabled={busy || status?.containerState !== 'running'}>Stop</Button>
       </div>
       <div className="open-webui-panel__actions">
-        <button type="button" className="button-component" onClick={() => void run(() => window.nodeTerminal.openWebUi.createBackup(nodeId))} disabled={busy || !status || status.phase === 'unconfigured'}>Back up data</button>
-        <button type="button" className="button-component" onClick={() => void run(() => window.nodeTerminal.openWebUi.update(nodeId))} disabled={busy || !status || status.phase === 'unconfigured'}>Update pinned image</button>
-        <button type="button" className="button-component" onClick={() => void run(() => window.nodeTerminal.openWebUi.rollback(nodeId))} disabled={busy || !status || !status.backups.some((backup) => backup.automatic)}>Rollback</button>
-        <button type="button" className="button-component" onClick={() => void window.nodeTerminal.openWebUi.tunnelHandoff(nodeId).then((result) => setMessage(result.reason))} disabled={busy || status?.health !== 'ready'}>Prepare private tunnel handoff</button>
+        <Button variant="outlined" size="small" className="button-component" onClick={() => void run(() => window.nodeTerminal.openWebUi.createBackup(nodeId))} disabled={busy || !status || status.phase === 'unconfigured'}>Back up data</Button>
+        <Button variant="outlined" size="small" className="button-component" onClick={() => void run(() => window.nodeTerminal.openWebUi.update(nodeId))} disabled={busy || !status || status.phase === 'unconfigured'}>Update pinned image</Button>
+        <Button variant="outlined" size="small" className="button-component" onClick={() => void run(() => window.nodeTerminal.openWebUi.rollback(nodeId))} disabled={busy || !status || !status.backups.some((backup) => backup.automatic)}>Rollback</Button>
+        <Button variant="outlined" size="small" className="button-component" onClick={() => void window.nodeTerminal.openWebUi.tunnelHandoff(nodeId).then((result) => setMessage(result.reason))} disabled={busy || status?.health !== 'ready'}>Prepare private tunnel handoff</Button>
       </div>
       <p className="service-node__note">Image: <code>ghcr.io/open-webui/open-webui:v0.8.3</code> · data: <code>{status?.dataVolume ?? 'not created'}</code> · health: {status?.health ?? 'unknown'}</p>
       {status?.backups.length ? <div className="open-webui-panel__backups"><strong>Backups</strong>{status.backups.map((backup: OpenWebUiBackupSummary) => <span key={backup.id}>{backup.id} · {backup.sizeBytes} bytes{backup.automatic ? ' · automatic' : ''}</span>)}</div> : null}

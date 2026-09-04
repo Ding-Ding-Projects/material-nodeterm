@@ -45,23 +45,25 @@ function CategoryBody({
   return (
     <div className="cv-cat__body">
       <div className="menu-filter cv-cat__search">
-        <div className="menu-filter__row">
-          <input
-            ref={inputRef}
-            type="search"
-            className="menu-filter__input"
-            placeholder={`Search ${CONVERTER_CATEGORY_LABELS[category].toLowerCase()}…`}
-            aria-label={`Search ${CONVERTER_CATEGORY_LABELS[category]} conversions`}
-            value={search.value}
-            onChange={(e) => search.setValue(e.target.value)}
-          />
-          <AnchoredRegexBuilder
-            search={search}
-            fieldRef={inputRef}
-            label={`Regex — ${CONVERTER_CATEGORY_LABELS[category]} conversions`}
-            zIndex={40}
-          />
-        </div>
+        <SearchField
+          ref={inputRef}
+          dense
+          className="menu-filter__row"
+          inputClassName="menu-filter__input"
+          vocabularyMode="factual"
+          placeholder={`Search ${CONVERTER_CATEGORY_LABELS[category].toLowerCase()}…`}
+          aria-label={`Search ${CONVERTER_CATEGORY_LABELS[category]} conversions`}
+          value={search.value}
+          onChange={(e) => search.setValue(e.target.value)}
+          trailingSlot={
+            <AnchoredRegexBuilder
+              search={search}
+              fieldRef={inputRef}
+              label={`Regex — ${CONVERTER_CATEGORY_LABELS[category]} conversions`}
+              zIndex={40}
+            />
+          }
+        />
         {search.error && <div className="menu-filter__error" role="alert">{search.error}</div>}
       </div>
       {visible.length === 0 && <p className="cv-empty-note">No conversions match “{search.value}”.</p>}
@@ -71,7 +73,9 @@ function CategoryBody({
           const isSelected = selectedId === row.id
           return (
             <li key={row.id}>
-              <button
+              <Chip
+                vocabularyMode="factual"
+                selected={isSelected}
                 className={`cv-row${row.available ? '' : ' cv-row--disabled'}${
                   isSelected ? ' cv-row--selected' : ''
                 }${isSuggested ? ' cv-row--suggested' : ''}`}
@@ -92,7 +96,7 @@ function CategoryBody({
                   <span className="cv-row__badge cv-row__badge--suggested">detected</span>
                 )}
                 {!row.available && <span className="cv-row__reason">{row.unavailableReason}</span>}
-              </button>
+              </Chip>
             </li>
           )
         })}

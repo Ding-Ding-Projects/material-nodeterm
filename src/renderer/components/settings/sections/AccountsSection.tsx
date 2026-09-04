@@ -305,8 +305,9 @@ function AccountColorSwatches({
   return (
     <div role="group" aria-label={`Default node colour for ${label}`} className="flex flex-wrap items-center gap-2 pt-1">
       <span className="text-[12px] text-muted">Node colour</span>
-      <button
-        type="button"
+      <Chip
+        vocabularyMode="factual"
+        selected={!color}
         aria-label="Default agent colour"
         aria-pressed={!color}
         title="Use the agent's own colour"
@@ -317,11 +318,12 @@ function AccountColorSwatches({
         )}
       >
         ×
-      </button>
+      </Chip>
       {NODE_COLORS.map((swatch) => (
-        <button
+        <Chip
           key={swatch}
-          type="button"
+          vocabularyMode="factual"
+          selected={color === swatch}
           aria-label={`Node colour ${swatch}`}
           aria-pressed={color === swatch}
           title={`Use ${swatch} for new nodes`}

@@ -424,10 +424,6 @@ import { nodeTravel, projectTravel } from '../lib/presenceTravel'
 import { backgroundNodeIds, mergeWithKeepAlive, overlayKeepAliveData } from '../lib/webviewKeepAlive'
 import { useWebviewKeepAlive } from '../state/webviewKeepAlive'
 import {
-  OPEN_AGENT_LINK_PICKER_EVENT,
-  type AgentLinkSelectionResult
-} from '../lib/agentLink'
-import {
   routeControlSource,
   needsLiveCanvas,
   sourceIsControlCapable,
@@ -6248,17 +6244,6 @@ export function Canvas() {
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
 
-  const addVirtualMachine = useCallback(
-    (center?: { x: number; y: number }, groupId?: string) => {
-      setNodes((ns) => {
-        const node = createVirtualMachineNode(ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
-      })
-      markDirty()
-    },
-    [setNodes, markDirty, emptyNodePos, parentInto]
-  )
-
   const addAwsUniverse = useCallback(
     (center?: { x: number; y: number }) => {
       setNodes((ns) => [...ns, createAwsUniverseNode(ns.length, center ?? emptyNodePos())])
@@ -6338,17 +6323,6 @@ export function Canvas() {
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
 
-  const addCalendar = useCallback(
-    (center?: { x: number; y: number }, groupId?: string) => {
-      setNodes((ns) => {
-        const node = createCalendarNode(ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
-      })
-      markDirty()
-    },
-    [setNodes, markDirty, emptyNodePos, parentInto]
-  )
-
   const addNativeLoop = useCallback(
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
@@ -6393,17 +6367,6 @@ export function Canvas() {
         if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
-    },
-    [setNodes, markDirty, emptyNodePos, parentInto]
-  )
-
-  const addTorrent = useCallback(
-    (center?: { x: number; y: number }, groupId?: string) => {
-      setNodes((ns) => {
-        const node = createTorrentNode(ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
-      })
-      markDirty()
     },
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
@@ -6505,18 +6468,6 @@ export function Canvas() {
       })
     },
     [setNodes, markDirty, emptyNodePos]
-  )
-
-  /** Adds the canvas-local file converter. Its queue is machine-local, while title, colour and placement persist. */
-  const addConverter = useCallback(
-    (center?: { x: number; y: number }, groupId?: string) => {
-      setNodes((ns) => {
-        const node = createConverterNode(ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
-      })
-      markDirty()
-    },
-    [setNodes, markDirty, emptyNodePos, parentInto]
   )
 
   const addTrigger = useCallback(
@@ -13731,90 +13682,6 @@ export function Canvas() {
     [nodes, kanbanOpen]
   )
 
-  /** One typed executor for catalog rows. Legacy factories may remain for compatibility, but a
-   * catalog-created node crosses this immutable event and bounded placement boundary exactly once. */
-  const createCatalogNode = useCallback(
-    (entry: NodeCatalogEntry, creationEventId: string, options?: { terminalProfileId?: string; at?: { x: number; y: number }; groupId?: string; universeCanvasId?: string; universeScope?: 'multiverse' | 'aws-universe'; universeDepth?: number }): ShopCreationResult => {
-      const project = useProjects.getState().getProject(activeProjectId)
-      const availability = nodeCatalogAvailability(entry, {
-        sessionSource,
-        hasProjectFolder: !!(project?.cwd || project?.ssh?.remoteCwd),
-        isSshProject: !!project?.ssh,
-        hasRemoteConnection: useSshServers.getState().servers.length > 0,
-        supportsWindowsTerminalProfiles: offersTerminalProfiles,
-        universeScope: options?.universeScope ?? 'root',
-        universeId: options?.universeCanvasId,
-        universeDepth: options?.universeDepth ?? 0,
-        hasShopNode: options?.universeScope !== undefined
-      })
-      if (!availability.available) return { status: 'refused', creationEventId, reason: availability.reason }
-      const center = options?.at ?? emptyNodePos() ?? viewCenter() ?? { x: 120, y: 120 }
-      let result: ShopCreationResult = { status: 'refused', creationEventId, reason: 'Node creation did not run.' }
-      setNodes((existing) => {
-        const factory = (candidate: NodeCatalogEntry, index: number, at: { x: number; y: number }): CanvasNode | null => {
-          if (candidate.id === 'terminal') return createTerminalNode(index, project?.cwd, at, undefined, project?.ssh, terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId))
-          if (candidate.id.startsWith('agent:')) {
-            const agentId = candidate.id.slice(6) as AgentId
-            const settings = useSettings.getState().settings
-            const codexAccounts = codexAccountsForCanvas(settings.codexAccounts, project)
-            const account = agentId === 'claude'
-              ? resolveNewNodeAccount(undefined, project, settings.claudeAccounts)
-              : agentId === 'codex' && codexAccounts.length > 0
-                ? codexAccounts[0].id
-                : undefined
-            const accountSsh = agentId === 'codex' ? sshForCodexAccount(account) : undefined
-            const ssh = accountSsh ?? project?.ssh
-            return createAgentNode(agentId, index, ssh?.remoteCwd ?? project?.cwd, at, undefined, ssh, account, activeAgentLaunchPlan('catalog-new-agent', agentId), terminalCreationOptionsFor(activeProjectId))
-          }
-          if (candidate.id === 'sticky') return createStickyNode(index, at)
-          if (candidate.id === 'group') return createGroupNode(at, undefined, index)
-          if (candidate.id === 'browser') return createBrowserNode(index, '', at)
-          if (candidate.id === 'web') return createWebNode(index, { url: '' }, at)
-          if (candidate.id === 'authenticator') return createAuthenticatorNode(index, at)
-          if (candidate.id === 'dino') return createDinoNode(index, at)
-          if (candidate.id === 'loop') return createNativeLoopNode(index, at)
-          if (candidate.id === 'nsis') return createNsisNode(index, at)
-          if (candidate.id.startsWith('service:')) return createServiceNode(candidate.nodeKind as ServiceNodeKind, index, at)
-          return null
-        }
-        const appended = nodeCreationCoordinatorRef.current.append(existing, { entry, creationEventId, center, groupId: options?.groupId, projectId: activeProjectId ?? undefined, universeCanvasId: options?.universeCanvasId, universeScope: options?.universeScope, universeDepth: options?.universeDepth }, factory, parentInto)
-        result = { status: appended.result.error ? 'refused' : appended.result.duplicate ? 'duplicate' : appended.result.node ? 'created' : 'refused', creationEventId, nodeId: appended.result.node?.id, reason: appended.result.error }
-        if (appended.result.node && options?.universeCanvasId) useProjects.getState().appendUniverseChildNode(activeProjectId ?? '', options.universeCanvasId, appended.result.node.id)
-        if (appended.result.node && !appended.result.duplicate) markDirty()
-        return appended.nodes
-      })
-      return result
-    },
-    [activeProjectId, emptyNodePos, markDirty, offersTerminalProfiles, parentInto, sessionSource, setNodes, terminalCreationOptionsFor, viewCenter]
-  )
-  const createCatalogChild = useCallback((entry: NodeCatalogEntry, creationEventId: string) => {
-    const projectId = activeProjectId
-    if (!projectId) return
-    const scope = entry.id === 'aws-universe' ? 'aws-universe' as const : 'multiverse' as const
-    const id = `${scope}-${creationEventId.slice(-12)}`
-    const result = useProjects.getState().createUniverseChild(projectId, {
-      id, scope, parentCanvasId: 'root', depth: 1, title: entry.label, order: (useProjects.getState().getProject(projectId)?.childCanvases?.length ?? 0) + 1
-    }, creationEventId)
-    if (!result.refused && result.canvasId) {
-      setNodes(nodeStatesToFlow(useProjects.getState().getProject(projectId)?.nodes ?? []))
-      markDirty()
-      void writeDisk()
-      setActiveUniverseCanvasId(result.canvasId)
-    }
-  }, [activeProjectId, markDirty, setNodes, writeDisk])
-  useEffect(() => {
-    registerUniverseShopCatalog(nodeCatalogShopProvider((entry, context) => {
-      const catalogEntry = NODE_CATALOG.find((candidate) => candidate.id === entry.id)
-      if (catalogEntry) return createCatalogNode(catalogEntry, context.creationEventId, {
-        universeCanvasId: context.canvasId,
-        universeScope: context.scope,
-        universeDepth: context.depth,
-        at: context.placement
-      })
-      return { status: 'refused', creationEventId: context.creationEventId, reason: 'Catalog entry no longer exists.' }
-    }), activeProjectId ?? 'default')
-    return () => registerUniverseShopCatalog(null, activeProjectId ?? 'default')
-  }, [activeProjectId, createCatalogNode])
 
   // Create a node from the board's per-column "+ New" menu: it lands on the canvas (view
   // center) and, for a real column, is assigned there. The assignment is written directly —
@@ -20612,8 +20479,12 @@ export function Canvas() {
           hasShopNode: nodeCatalog?.universeScope !== undefined
         }}
         terminalProfileChoices={terminalProfileMenuChoices}
-        onCreate={(entry, creationEventId, options) => createCatalogNode(entry, creationEventId, { ...options, at: nodeCatalog?.at, groupId: nodeCatalog?.groupId, universeCanvasId: nodeCatalog?.universeCanvasId, universeScope: nodeCatalog?.universeScope, universeDepth: nodeCatalog?.universeDepth })}
-        onCreateChild={createCatalogChild}
+        onCreate={(entry, creationEventId, options) => createCatalogNode(entry, creationEventId, nodeCatalog?.at, nodeCatalog?.groupId, options, {
+          universeScope: nodeCatalog?.universeScope ?? 'root',
+          universeId: nodeCatalog?.universeCanvasId,
+          universeDepth: nodeCatalog?.universeDepth ?? 0,
+          hasShopNode: nodeCatalog?.universeScope !== undefined
+        })}
         onOpenDocumentation={(path) => {
           setDocsInitialPath(path)
           setDocsOpen(true)

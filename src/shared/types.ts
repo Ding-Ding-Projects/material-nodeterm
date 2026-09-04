@@ -3522,6 +3522,27 @@ export interface SpeechModelInfo extends WhisperModelInfo {
   sizeMB?: number
 }
 
+/** Durable planner, alarm, and timer host surface. All mutations carry a generation so an old
+ * renderer cannot replace a newer host snapshot. */
+export interface DurableOccurrencesApi {
+  load(): Promise<import('./durable-occurrences').DurableOccurrenceLoadState>
+  save(snapshot: import('./durable-occurrences').DurableOccurrenceSnapshot, generation: number): Promise<{ ok: true; generation: number } | { ok: false; error: string }>
+  reconcile(wallMs?: number, monotonicMs?: number): Promise<void>
+  claim(id: string): Promise<import('./durable-occurrences').DurableDeliveryResult>
+  snooze(id: string, minutes: number): Promise<boolean>
+  dismiss(id: string): Promise<boolean>
+  exportSchedules(): Promise<{ filename: string; content: string }>
+  importSchedules(raw: unknown): Promise<{ ok: true; generation: number } | { ok: false; error: string }>
+  timerTransition(id: string, action: 'start' | 'pause' | 'resume' | 'cancel' | 'reset', wallMs?: number, monotonicMs?: number): Promise<import('./durable-occurrences').DurableTimerNode | null>
+  timerLap(id: string, wallMs?: number, monotonicMs?: number): Promise<number[] | null>
+  timerTick(wallMs?: number, monotonicMs?: number): Promise<void>
+  upsertAlarm(alarm: import('./durable-occurrences').DurableAlarmNode): Promise<{ ok: true; generation: number } | { ok: false; error: string }>
+  upsertTimer(timer: import('./durable-occurrences').DurableTimerNode): Promise<{ ok: true; generation: number } | { ok: false; error: string }>
+  removeSource(kind: 'planner' | 'alarm' | 'timer', id: string): Promise<{ ok: true; generation: number } | { ok: false; error: string }>
+  acknowledge(id: string, deliveryGeneration: number): Promise<boolean>
+  onChanged(listener: (snapshot: import('./durable-occurrences').DurableOccurrenceSnapshot) => void): () => void
+}
+
 export interface SpeechApi {
   /** Transcribe a chunk of mono PCM audio (16kHz Float32 samples) to text.
    *  `language` is a BCP-47-ish hint or 'auto'; defaults to the user's speech settings. */
@@ -5230,6 +5251,14 @@ export interface NodeTerminalApi {
   remoteOAuth?: import('./remote-oauth').RemoteOAuthApi
   /** Typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers. */
   cloudflareZeroTrust: import('./cloudflare-zero-trust').CloudflareApi
+  /** Bundled cloudflared runtime control for tunnel nodes. */
+  cloudflared: import('./cloudflared').CloudflaredRuntimeApi
+  /** Self-managed and SaaS GitLab server operations. */
+  gitlab: import('./gitlab').GitLabApi
+  /** Desktop-only CloudFormation stack manager; browser and relay surfaces omit it. */
+  cloudFormation?: import('./cloudformation').CloudFormationApi
+  /** Desktop-only AWS resource managers; browser and relay surfaces omit them. */
+  aws?: import('./aws').AwsApi
   timer: TimerApi
   /** Trigger controls are available on shells that register the scheduler. */
   trigger?: TriggerApi
@@ -5242,6 +5271,7 @@ export interface NodeTerminalApi {
   schoolMode: SchoolModeApi
   kidsMode: KidsModeApi
   scheduledSettings: ScheduledSettingsApi
+  durableOccurrences: DurableOccurrencesApi
   planner: PlannerApi
   /** Desktop exposes the host Alarm Clock mirror. Other shells may omit it and retain the
    * renderer-local fallback until their bridge supplies the same namespace. */
