@@ -646,6 +646,10 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
   }
   const rootCanvasId = text(value.rootCanvasId, 'root canvas id')
   if (value.canvases.length > PORTABLE_CANVAS_LIMITS.maxCanvases || value.nodes.length > PORTABLE_CANVAS_LIMITS.maxNodes || value.relationships.length > PORTABLE_CANVAS_LIMITS.maxRelationships) throw new PortableProjectV3Error('entry-limit', 'Portable canvas projection exceeds its bounds.')
+  let normalizedPortalHierarchy: PortablePortalHierarchy | undefined
+  if (value.portalHierarchy !== undefined) {
+    try { normalizedPortalHierarchy = validatePortablePortalHierarchy(value.portalHierarchy) } catch (error) { throw new PortableProjectV3Error('manifest', error instanceof Error ? error.message : 'Portable portal hierarchy is invalid.') }
+  }
   const ids = new Set<string>()
   const normalizedNodes: PortableCanvasNodeV3[] = []
   for (const node of value.nodes) {

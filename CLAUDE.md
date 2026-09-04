@@ -282,6 +282,14 @@ Persistence has two layers:
   (`markUnmirrored`); pending mirrors are flushed before the ControlMasters die at quit; and the
   SSH dialog **dedupes by endpoint+remoteCwd** (`openSshProject`, same contract as
   `openFolderProject`) instead of minting a fresh empty project for a folder that already has one.
+- **Portal lifecycle safety** lives in `shared/portal-lifecycle.ts`: child canvases are portable
+  content with one root, parent links, cycle detection, and a depth limit of eight. Every universe
+  owns exactly one deterministic Shop. Portal entry and return-door relationships are structural,
+  non-deletable records, and destructive portal or project actions must use the existing two-key
+  confirmation flow. Import repairs missing or duplicate Shops and detaches malformed children as
+  recoverable orphans rather than dropping their nodes. Deleting a root preserves child canvases
+  and marks their door records for recovery. Lifecycle event ids are append-only and idempotent for
+  restart and peer replay; undo emits a new recovery event and never removes a structural door.
 - **Live terminal sessions** (tmux or the Windows session host): terminals continue where they
   left off across node remounts *and* full app restarts, including running processes. See below.
 
