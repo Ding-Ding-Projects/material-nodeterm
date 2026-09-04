@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { WindowsTerminalProfile } from '@shared/types'
+import type { NamedTerminalProfile, WindowsTerminalProfile } from '@shared/types'
 import { useSettings } from '../../../state/settings'
 import {
   supportsWindowsTerminalProfiles,
@@ -80,12 +80,94 @@ function localizedRows(profileText: ProfileText): typeof BASE_ROWS {
       title: profileText('terminalProfiles.named.heading', 'Named terminal profiles'),
       keywords: localizeKeywords('named', BASE_ROWS.named.keywords)
     },
+    named: {
+      ...BASE_ROWS.named,
+      title: profileText('terminalProfiles.settings.namedTitle', 'Named terminal profiles')
+    },
     legacyShell: {
       ...BASE_ROWS.legacyShell,
       title: profileText('terminalProfiles.settings.legacyDefaultLabel', 'Default shell'),
       keywords: localizeKeywords('legacyShell', BASE_ROWS.legacyShell.keywords)
     }
   }
+}
+
+function NamedProfileControls({
+  rows,
+  profiles
+}: {
+  rows: typeof BASE_ROWS
+  profiles: readonly WindowsTerminalProfile[]
+}): React.JSX.Element {
+  const profileText = useLocalizedVocabularyText()
+  const named = useSettings((state) => state.settings.namedTerminalProfiles)
+  const accounts = useSettings((state) => state.settings.claudeAccounts)
+  const update = useSettings((state) => state.update)
+  const [name, setName] = useState('')
+  const [shellProfileId, setShellProfileId] = useState('auto')
+  const [startDirectory, setStartDirectory] = useState('')
+  const [startupCommand, setStartupCommand] = useState('')
+  const [accountId, setAccountId] = useState('')
+  const [envKey, setEnvKey] = useState('')
+  const [envValue, setEnvValue] = useState('')
+  const shellChoices = profiles.filter((profile) => profile.kind !== 'named' && profile.kind !== 'custom')
+  const canAdd = name.trim().length > 0 && shellProfileId.length > 0
+  const add = (): void => {
+    if (!canAdd) return
+    const now = new Date().toISOString()
+    const id = `profile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    const environment = envKey.trim() ? { [envKey.trim()]: envValue } : {}
+    const profile: NamedTerminalProfile = {
+      id,
+      name: name.trim(),
+      shellProfileId,
+      ...(startDirectory.trim() ? { startDirectory: startDirectory.trim() } : {}),
+      ...(startupCommand.trim() ? { startupCommand: startupCommand.trim() } : {}),
+      ...(accountId ? { accountId } : {}),
+      environment,
+      createdAt: now,
+      updatedAt: now
+    }
+    update({ namedTerminalProfiles: [...named, profile] })
+    setName(''); setStartDirectory(''); setStartupCommand(''); setAccountId(''); setEnvKey(''); setEnvValue('')
+  }
+  return (
+    <SearchableRow {...rows.named}>
+      <div className="space-y-3">
+        <div>
+          <h3 className="text-sm font-medium text-text">{profileText('terminalProfiles.settings.namedTitle', 'Named terminal profiles')}</h3>
+          <p className="mt-1 text-[13px] leading-relaxed text-muted">{profileText('terminalProfiles.settings.namedDescription', 'Save a shell, start directory, startup command, account, and safe environment values for this machine. These values never travel in a project file.')}</p>
+        </div>
+        {named.map((profile) => (
+          <div key={profile.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 px-3 py-2">
+            <span className="font-medium text-text">{profile.name}</span>
+            <span className="text-xs text-muted">{profile.shellProfileId}{profile.startDirectory ? ` · ${profile.startDirectory}` : ''}</span>
+            <Button variant="ghost" onClick={() => update({ namedTerminalProfiles: named.filter((item) => item.id !== profile.id) })}>{profileText('terminalProfiles.settings.removeNamed', 'Remove')}</Button>
+          </div>
+        ))}
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Input aria-label={profileText('terminalProfiles.settings.nameLabel', 'Profile name')} placeholder={profileText('terminalProfiles.settings.namePlaceholder', 'Projects')} value={name} onChange={(event) => setName(event.target.value)} />
+          <Select aria-label={profileText('terminalProfiles.settings.shellLabel', 'Shell profile')} value={shellProfileId} onChange={(event) => setShellProfileId(event.target.value)}>
+            {shellChoices.map((profile) => <option key={profile.id} value={profile.id} disabled={!profile.available}>{profile.label}{profile.available ? '' : ' — unavailable'}</option>)}
+          </Select>
+          <div className="flex gap-2">
+            <Input className="min-w-0 flex-1 font-mono" aria-label={profileText('terminalProfiles.settings.directoryLabel', 'Start directory')} placeholder="C:\\Users\\you\\Projects" value={startDirectory} onChange={(event) => setStartDirectory(event.target.value)} />
+            <Button aria-label={profileText('terminalProfiles.settings.chooseDirectory', 'Choose start directory')} onClick={() => void window.nodeTerminal.dialog.selectFolder().then((value) => { if (value) setStartDirectory(value) })}>…</Button>
+          </div>
+          <Input aria-label={profileText('terminalProfiles.settings.startupLabel', 'Startup command')} placeholder="claude" value={startupCommand} onChange={(event) => setStartupCommand(event.target.value)} />
+          <Select aria-label={profileText('terminalProfiles.settings.accountLabel', 'Account')} value={accountId} onChange={(event) => setAccountId(event.target.value)}>
+            <option value="">{profileText('terminalProfiles.settings.noAccount', 'No account binding')}</option>
+            {accounts.map((account) => <option key={account.id} value={account.id}>{account.label || account.id}</option>)}
+          </Select>
+          <div className="flex gap-2">
+            <Input className="min-w-0 flex-1 font-mono" aria-label={profileText('terminalProfiles.settings.envKey', 'Environment key')} placeholder="PROJECT_MODE" value={envKey} onChange={(event) => setEnvKey(event.target.value)} />
+            <Input className="min-w-0 flex-1 font-mono" aria-label={profileText('terminalProfiles.settings.envValue', 'Environment value')} placeholder="personal" value={envValue} onChange={(event) => setEnvValue(event.target.value)} />
+          </div>
+        </div>
+        <Button disabled={!canAdd} onClick={add}>{profileText('terminalProfiles.settings.addNamed', 'Save named profile')}</Button>
+      </div>
+    </SearchableRow>
+  )
 }
 
 function LegacyShellControl({ rows }: { rows: typeof BASE_ROWS }): React.JSX.Element {

@@ -622,7 +622,8 @@ const sshStore = new SshStore()
 // The getter is evaluated at use time so a Settings save updates Custom availability immediately;
 // the executable itself never crosses the profile IPC boundary.
 const windowsTerminalProfiles = new WindowsTerminalProfileService({
-  getCustomExecutable: () => settingsStore.get().defaultShell
+  getCustomExecutable: () => settingsStore.get().defaultShell,
+  getNamedProfiles: () => settingsStore.get().namedTerminalProfiles
 })
 const ptyManager = new PtyManager({ terminalProfiles: windowsTerminalProfiles })
 let agentContinuationService: AgentContinuationService | undefined

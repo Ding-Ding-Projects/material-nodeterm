@@ -1494,6 +1494,7 @@ export type WindowsTerminalProfileKind =
   | 'git-bash'
   | 'wsl'
   | 'custom'
+  | 'named'
 
 /** Renderer-safe description of a Windows terminal profile. */
 export interface WindowsTerminalProfile {

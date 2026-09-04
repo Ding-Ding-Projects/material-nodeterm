@@ -134,6 +134,9 @@ export function terminalProfileLabel(
       return `WSL — ${distribution}`
     }
   }
+  if (profileId.startsWith('named:')) {
+    return fallbacks.unavailable ?? 'Unavailable terminal profile'
+  }
   switch (profileId) {
     case 'auto':
       return fallbacks.automatic ?? 'Automatic'

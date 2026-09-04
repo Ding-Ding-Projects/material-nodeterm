@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import { promises as fs } from 'fs'
 import path from 'path'
-import type { WindowsTerminalProfile, WindowsTerminalProfileKind } from '../shared/types'
+import type { NamedTerminalProfile, WindowsTerminalProfile, WindowsTerminalProfileKind } from '../shared/types'
 
 const COMMAND_TIMEOUT_MS = 5_000
 const COMMAND_MAX_BUFFER = 1024 * 1024
@@ -57,6 +57,9 @@ export interface ResolvedWindowsTerminalProfile {
   shell: string
   shellArgs: string[]
   cwd: string
+  environment?: Record<string, string>
+  accountId?: string
+  startupCommand?: string
 }
 
 export interface WindowsTerminalProfileResolver {
@@ -136,6 +139,8 @@ export interface WindowsTerminalProfileServiceOptions {
   runtime?: WindowsTerminalProfileRuntime
   /** Machine-local settings getter. Its value is validated but never returned by list/refresh. */
   getCustomExecutable?: () => unknown
+  /** Machine-local named recipes. Values are validated at the trusted spawn boundary. */
+  getNamedProfiles?: () => unknown
 }
 
 interface ExecutableCandidate {
@@ -433,14 +438,55 @@ function validWslDistributionName(name: string): boolean {
   )
 }
 
+const SAFE_ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/u
+const MAX_NAMED_PROFILE_TEXT = 256
+
+function validNamedProfile(profile: NamedTerminalProfile): boolean {
+  if (
+    typeof profile.id !== 'string' ||
+    !/^[-a-zA-Z0-9_]{1,96}$/u.test(profile.id) ||
+    typeof profile.name !== 'string' ||
+    profile.name.length === 0 ||
+    profile.name.length > MAX_NAMED_PROFILE_TEXT ||
+    profile.name.trim() !== profile.name ||
+    /[\u0000-\u001f\u007f]/u.test(profile.name) ||
+    typeof profile.shellProfileId !== 'string' ||
+    profile.shellProfileId.length > MAX_NAMED_PROFILE_TEXT ||
+    (profile.startDirectory !== undefined &&
+      (typeof profile.startDirectory !== 'string' ||
+        !path.win32.isAbsolute(profile.startDirectory) ||
+        profile.startDirectory.length > 4096 ||
+        /[\u0000-\u001f\u007f"]/u.test(profile.startDirectory))) ||
+    (profile.startupCommand !== undefined &&
+      (typeof profile.startupCommand !== 'string' ||
+        profile.startupCommand.length > 4096 ||
+        /[\u0000-\u001f\u007f]/u.test(profile.startupCommand))) ||
+    !profile.environment ||
+    typeof profile.environment !== 'object' ||
+    Object.keys(profile.environment).length > 64
+  ) return false
+  for (const [key, value] of Object.entries(profile.environment)) {
+    if (
+      !SAFE_ENV_KEY.test(key) ||
+      /^(?:PATH|PATHEXT|COMSPEC|SystemRoot|WINDIR|HOME|USERPROFILE|TMP|TEMP|NODE_OPTIONS|NODE_PATH)$/iu.test(key) ||
+      typeof value !== 'string' ||
+      value.length > 2048 ||
+      /[\u0000-\u001f\u007f]/u.test(value)
+    ) return false
+  }
+  return true
+}
+
 export class WindowsTerminalProfileService implements WindowsTerminalProfileResolver {
   private cachedDetection: Promise<DetectionSnapshot> | null = null
   private readonly runtime: WindowsTerminalProfileRuntime
   private readonly getCustomExecutable: () => unknown
+  private readonly getNamedProfiles: () => unknown
 
   constructor(options: WindowsTerminalProfileServiceOptions = {}) {
     this.runtime = options.runtime ?? defaultRuntime()
     this.getCustomExecutable = options.getCustomExecutable ?? (() => undefined)
+    this.getNamedProfiles = options.getNamedProfiles ?? (() => [])
   }
 
   async list(): Promise<WindowsTerminalProfileDescriptor[]> {
@@ -448,7 +494,7 @@ export class WindowsTerminalProfileService implements WindowsTerminalProfileReso
     const active = this.cachedDetection
     try {
       const snapshot = await active
-      return this.withCurrentCustomProfile(snapshot.profiles)
+      return this.withNamedProfiles(this.withCurrentCustomProfile(snapshot.profiles))
     } catch (error) {
       if (this.cachedDetection === active) this.cachedDetection = null
       throw error
@@ -461,11 +507,11 @@ export class WindowsTerminalProfileService implements WindowsTerminalProfileReso
     this.cachedDetection = refreshed
     try {
       const snapshot = await refreshed
-      return this.withCurrentCustomProfile(
+      return this.withNamedProfiles(this.withCurrentCustomProfile(
         snapshot.profiles,
         hasCustomExecutableOverride,
         customExecutableOverride
-      )
+      ))
     } catch (error) {
       if (this.cachedDetection === refreshed) this.cachedDetection = null
       throw error
@@ -484,6 +530,10 @@ export class WindowsTerminalProfileService implements WindowsTerminalProfileReso
       )
     }
     this.assertWindows(request.profileId)
+
+    if (request.profileId.startsWith('named:')) {
+      return this.resolveNamed(request)
+    }
 
     switch (request.profileId) {
       case 'auto': {
@@ -528,6 +578,79 @@ export class WindowsTerminalProfileService implements WindowsTerminalProfileReso
           request.profileId,
           `Unknown Windows terminal profile “${printable(request.profileId, 120)}”. Refresh terminal profiles and choose a valid profile.`
         )
+    }
+  }
+
+  private withNamedProfiles(profiles: WindowsTerminalProfileDescriptor[]): WindowsTerminalProfileDescriptor[] {
+    const configured = this.getNamedProfiles()
+    if (!Array.isArray(configured)) return profiles
+    const byId = new Set(profiles.map((profile) => profile.id))
+    const named = configured.flatMap((candidate): WindowsTerminalProfileDescriptor[] => {
+      if (!candidate || typeof candidate !== 'object' || !validNamedProfile(candidate as NamedTerminalProfile)) return []
+      const profile = candidate as NamedTerminalProfile
+      if (byId.has(`named:${profile.id}`)) return []
+      const base = profiles.find((entry) => entry.id === profile.shellProfileId)
+      return [{
+        id: `named:${profile.id}`,
+        label: profile.name,
+        kind: 'named',
+        available: Boolean(base?.available),
+        ...(base?.available ? {} : { unavailableReason: base?.unavailableReason ?? 'The selected shell profile is unavailable on this machine.' })
+      }]
+    })
+    return [...profiles, ...named]
+  }
+
+  private async resolveNamed(
+    request: WindowsTerminalProfileResolveRequest
+  ): Promise<ResolvedWindowsTerminalProfile> {
+    const id = request.profileId.slice('named:'.length)
+    const raw = this.getNamedProfiles()
+    const profiles = Array.isArray(raw) ? raw : []
+    const profile = profiles.find((candidate): candidate is NamedTerminalProfile =>
+      candidate && typeof candidate === 'object' && (candidate as { id?: unknown }).id === id
+    )
+    if (!profile || !validNamedProfile(profile)) {
+      throw new WindowsTerminalProfileError(
+        'profile-unavailable',
+        request.profileId,
+        'The named terminal profile is unavailable or invalid on this machine. Edit or remove it in Settings.'
+      )
+    }
+    if (profile.shellProfileId.startsWith('named:') || profile.shellProfileId === 'custom') {
+      throw new WindowsTerminalProfileError(
+        'malformed-profile-id',
+        request.profileId,
+        'A named terminal profile must select a detected shell profile, not another named or custom recipe.'
+      )
+    }
+    const base = await this.resolveForSpawn({
+      profileId: profile.shellProfileId,
+      cwd: request.cwd,
+      customExecutable: request.customExecutable
+    })
+    let cwd = request.cwd
+    if (profile.startDirectory) {
+      const kind = await this.runtime.pathKind(profile.startDirectory)
+      if (kind !== 'directory') {
+        throw new WindowsTerminalProfileError(
+          'profile-unavailable',
+          request.profileId,
+          kind === 'unknown'
+            ? 'The named profile start directory could not be inspected. Choose another directory.'
+            : 'The named profile start directory no longer exists. Choose another directory.'
+        )
+      }
+      cwd = profile.startDirectory
+    }
+    return {
+      ...base,
+      profileId: request.profileId,
+      label: profile.name,
+      cwd,
+      ...(Object.keys(profile.environment).length ? { environment: { ...profile.environment } } : {}),
+      ...(profile.accountId ? { accountId: profile.accountId } : {}),
+      ...(profile.startupCommand ? { startupCommand: profile.startupCommand } : {})
     }
   }
 
