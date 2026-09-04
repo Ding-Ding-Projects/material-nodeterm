@@ -278,8 +278,15 @@ describe('SettingsStore nested-default merge', () => {
       expect(s.keybindings?.['speech.dictation']).toEqual(['Cmd+K'])
       // The read path is the renderer's sanitizer; assert its verdict here too so the
       // end-to-end claim is one test, not an inference across two files.
-      expect(sanitizeKeybindingOverrides(s.keybindings, true).overrides['speech.dictation'])
-        .toEqual(['Cmd+K'])
+      //
+      // The hole this guards is STRIPPING, and it is still closed. What changed is the
+      // spelling: the Windows-first rewire made Ctrl the one emitted primary modifier and
+      // Cmd a parse-only alias, so the sanitizer canonicalises rather than discards. Assert
+      // survival explicitly first, so a future regression that empties this cannot be read
+      // as another notation change.
+      const sanitized = sanitizeKeybindingOverrides(s.keybindings, true).overrides['speech.dictation']
+      expect(sanitized).toHaveLength(1)
+      expect(sanitized).toEqual(['Ctrl+K'])
     })
   })
 })
