@@ -28,7 +28,7 @@ import {
   type TunnelLiveState,
   type TunnelPortableIntent
 } from '@shared/tunnel-state'
-import { Chip } from '@renderer/ui/md3'
+import { Chip, Tablist } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
 
 const FIELD_NAMES: Partial<Record<CloudflareOperation, string[]>> = {
@@ -225,7 +225,7 @@ export default function CloudflareCoreManagersNode({ id, data, selected }: NodeP
       <Button disabled={busy || !credentialId || (!accountId && !zoneId && !zoneName)} onClick={() => void saveBinding()}>{map(binding ? 'Update binding' : 'Configure binding')}</Button>
       {binding ? <Button disabled={busy} onClick={() => void api?.unbind(id).then(() => setBinding(null))}>{map('Leave unbound')}</Button> : null}
     </section>
-    <div className="cloudflare-core-manager__tabs" role="tablist" aria-label={map('Cloudflare manager areas')}>{CLOUDFLARE_MANAGER_KINDS.map((item) => <Chip vocabularyMode="factual" selected={manager === item} key={item} role="tab" aria-selected={manager === item} onClick={() => chooseManager(item)}>{item}</Chip>)}</div>
+    <Tablist className="cloudflare-core-manager__tabs" ariaLabel={map('Cloudflare manager areas')}>{CLOUDFLARE_MANAGER_KINDS.map((item) => <Chip vocabularyMode="factual" selected={manager === item} key={item} role="tab" aria-selected={manager === item} onClick={() => chooseManager(item)}>{item}</Chip>)}</Tablist>
     <section aria-label={map('Guided Cloudflare operation')}>
       <label htmlFor={`${id}-operation`}>{map('Operation')}</label>
       <Select vocabularyMode="factual" id={`${id}-operation`} value={operation} onChange={(event) => { const next = event.target.value as CloudflareOperation; setOperation(next); setInput({}); setResult(null); persistIntent({ operation: next, input: {} }) }}>{operationChoices.map((item) => <option key={item} value={item}>{CLOUDFLARE_OPERATION_LABELS[item]}</option>)}</Select>

@@ -13,7 +13,7 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 import { saveBlobDownload } from '../lib/exportSave'
 import { normalizeRepositoryGraphIntent } from '@shared/repository-graph'
 import { graphEdgeEndpoints } from '../lib/repositoryGraphVisual'
-import { Button, Chip, IconButton } from '@renderer/ui/md3'
+import { Button, Chip, IconButton, Tablist } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
 
@@ -133,9 +133,9 @@ export default function RepositoryGraphNode({ id, data, selected }: NodeProps<Ca
       <div className="repository-graph-node__body nodrag nowheel">
         <p className={`repository-graph-node__status${error ? ' is-error' : ''}`} role={error ? 'alert' : 'status'}>{status}</p>
         <p className="repository-graph-node__hint">{vocab('The source root is resolved by this host from the active project. Derived graph data stays machine-local.')}</p>
-        <div className="repository-graph-node__tabs" role="tablist" aria-label={vocab('Repository graph views')}>
+        <Tablist className="repository-graph-node__tabs" ariaLabel={vocab('Repository graph views')}>
           {MODES.map((candidate) => <Chip vocabularyMode="factual" selected={mode === candidate} key={candidate} role="tab" aria-selected={mode === candidate} className={mode === candidate ? 'is-active' : ''} onClick={() => { setMode(candidate); setIntent({ mode: candidate }); search.setValue('') }}>{vocab(modeLabel(candidate))}</Chip>)}
-        </div>
+        </Tablist>
         <div className="repository-graph-node__toolbar">
           <div className="repository-graph-node__search"><Input vocabularyMode="factual" ref={searchRef} aria-label={vocab('Search graph nodes')} value={search.value} onChange={(event) => search.setValue(event.target.value)} placeholder={search.mode === 'regex' ? vocab('Regex pattern') : vocab('Search nodes, paths, symbols')} /><AnchoredRegexBuilder search={search} fieldRef={searchRef} label={vocab('Regex builder for graph nodes')} /></div>
           <Select vocabularyMode="factual" aria-label={vocab('Export graph format')} value={exportFormat} onChange={(event) => setExportFormat(event.target.value as RepositoryGraphExportInput['format'])}>{EXPORTS.map((format) => <option key={format} value={format}>{format.toUpperCase()}</option>)}</Select>

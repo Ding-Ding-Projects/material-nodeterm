@@ -68,6 +68,9 @@ export type { ProgressProps } from './Progress'
 
 export { Tabs } from './Tabs'
 export type { TabOption, TabsProps } from './Tabs'
+export { Tablist } from './Tablist'
+export type { TablistProps } from './Tablist'
+export { useTablistKeys } from './useTablistKeys'
 
 export { SearchField } from './SearchField'
 export type { SearchFieldProps } from './SearchField'

@@ -207,6 +207,26 @@ function requireSettingsSection(sectionId, label) {
 // ---------------------------------------------------------------------
 const FEATURES = [
   {
+    id: 'layout-floor-and-clipping-matrix',
+    label: 'Window minimum size and the clipping capture matrix',
+    files: [
+      'src/shared/window-minimum.ts',
+      'src/main/index.ts',
+      'src/main/window-minimum.test.ts',
+      'scripts/lib/capture-tuple.mjs',
+      'scripts/capture-shots.mjs',
+    ],
+    contentChecks: [
+      ['src/shared/window-minimum.ts', 'export const MIN_WINDOW_WIDTH ='],
+      ['src/shared/window-minimum.ts', 'export const MIN_WINDOW_HEIGHT ='],
+      ['src/main/index.ts', 'minWidth: MIN_WINDOW_WIDTH'],
+      ['scripts/lib/capture-tuple.mjs', 'export function readWindowMinimum('],
+      ['scripts/lib/capture-tuple.mjs', 'export function resolveCaptureTuple('],
+      ['scripts/capture-shots.mjs', 'const tuple = resolveCaptureTuple({'],
+    ],
+    docs: ['docs/window-minimum-size.md', 'docs/clipping-matrix.md'],
+  },
+  {
     id: 'veracrypt-mount-management',
     label: 'VeraCrypt mount management',
     files: [

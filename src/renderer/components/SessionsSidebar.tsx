@@ -32,7 +32,7 @@ import { useSession } from '../session/session'
 import { useWorktrees } from '../state/worktrees'
 import type { WorktreeEntry } from '@shared/worktree'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
-import { Button, Chip, IconButton } from '@renderer/ui/md3'
+import { Button, Chip, IconButton, Tablist } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 
 export interface SessionsSidebarProps {
@@ -631,7 +631,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
 
       {/* Grouping tabs: plain text with a 2px accent underline on the active one, sitting on the
           hairline that separates the header from the list — quieter than a pill toggle. */}
-      <div className="ss-tabs" role="tablist" aria-label="Group sessions by">
+      <Tablist className="ss-tabs" ariaLabel="Group sessions by">
         <Chip vocabularyMode="factual" selected={grouping === 'project'}
           role="tab"
           aria-selected={grouping === 'project'}
@@ -648,7 +648,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
         >
           Status
         </Chip>
-      </div>
+      </Tablist>
 
       <div className="sessions-sidebar__search">
         <Input

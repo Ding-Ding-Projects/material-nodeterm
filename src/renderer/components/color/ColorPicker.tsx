@@ -36,7 +36,7 @@ import {
 } from '@renderer/lib/color/convert'
 import { cn } from '@renderer/ui/cn'
 import { copyColorText } from './color-clipboard'
-import { Button, Chip } from '@renderer/ui/md3'
+import { Button, Chip, Tablist } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 
 export type ColorFormat = 'hex' | 'rgb' | 'hsl' | 'hsv' | 'hwb' | 'lab' | 'lch' | 'oklab' | 'oklch' | 'cmyk'
@@ -320,7 +320,7 @@ export function ColorPicker({
         )}
       </div>
 
-      <div className="color-picker__formats" role="tablist" aria-label={`${labelText} ${vocab('colour format')}`}>
+      <Tablist className="color-picker__formats" ariaLabel={`${labelText} ${vocab('colour format')}`}>
         {FORMATS.map((f) => (
           <Chip vocabularyMode="factual" selected={format === f.id}
             key={f.id}
@@ -333,7 +333,7 @@ export function ColorPicker({
             {f.label}
           </Chip>
         ))}
-      </div>
+      </Tablist>
 
       <div className="color-picker__entry">
         {format === 'hex' && (

@@ -330,7 +330,7 @@ are recorded below. Do not treat the source candidate as a published release.
       settings, onboarding, command palette, and documentation surfaces are repaired in
       `src/renderer/styles.clipping.css`, `src/renderer/ui/AnchoredPopover.tsx`, and
       `src/renderer/components/ContextMenu.tsx`. Source implementation is present; packaged
-      Windows captures at narrow widths and 100/125/150/200% display scale remain pending.
+      Windows captures at narrow widths and 100/125/150/200% display scale remain pending. **2026-09-03:** the two things that made those captures impossible are now fixed -- the window has a declared minimum (`src/shared/window-minimum.ts`, 640x540) and the harness takes a viewport/scale/theme/language tuple (`scripts/lib/capture-tuple.mjs`, `docs/clipping-matrix.md`). The matrix has still NOT been run: `build.bat` refuses to run as Administrator and that session was elevated, so no artifact was built. Unticked because the evidence does not exist, not because the machinery does not.
 - [ ] **WSL instance creator repair**: the guided Material Design 3 surface now has staged,
       cancellable operation plumbing and duplicate-submit protection in `src/core/wsl/`,
       `src/shared/wsl.ts`, the bridges, and `src/renderer/wsl/WslCreateDialog.tsx`. Focused
@@ -443,6 +443,25 @@ are recorded below. Do not treat the source candidate as a published release.
   - The `KIDS_DISCLOSURE` needle is comment-satisfiable.
   - `agent-status-mirror.ts:507` still rolls its own cross-dialect basename instead of using the
     sanctioned `core/path-basename.ts`.
+
+- [ ] **The Day Teet Hui copy-ownership migration is unfinished, and 10 tests fail on `main` because
+      of it.** `site/app/core/input-dialog.js` implements the owned-parts model and its tests expect
+      it, but `site/app/core/engine.js` never adopted it: `toggleLock` still takes a `promptFn` and
+      all three callers pass `window.prompt.bind(window)` -- a native browser prompt on a surface
+      that is meant to be Material, vocabulary-mapped and accessible -- and `notify`/`toast` carry
+      one ownership kind per field where the tests expect mixed `titleParts`/`bodyParts`. Verified
+      pre-existing on 2026-09-03 by restoring `site/` from `origin/main` and re-running. Deliberately
+      not half-migrated: it spans dialogs, toasts, notifications, narration, School mode and the
+      confirmation gate together.
+- [ ] **~69 of the node components have no containment rule at all.** `styles.clipping.css` carries
+      containment for only 6 node surfaces (`group-node`, `node-catalog-dialog`,
+      `repository-graph-node`, `trigger-node`, `unigetui-universe-node`, `veracrypt-node`). Writing
+      rules for the rest blind would be guesswork; the clipping matrix is what should say which of
+      them actually clip.
+- [ ] **No workflow runs the test suite, so a red `main` has no signal.** `ci.yml` runs
+      `npm run build` only and `release.yml` says in its own notes that nothing gates the release.
+      This is the documented policy, recorded here because it is why the 10 site failures above sat
+      unnoticed.
 
 ## Requested, not started
 
