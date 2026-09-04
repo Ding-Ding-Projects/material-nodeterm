@@ -406,6 +406,12 @@ are recorded below. Do not treat the source candidate as a published release.
   reduced-motion, School mode, and non-authenticating recovery semantics. Tests, build verification,
   runtime interaction, and captures remain outstanding.
 
+- [ ] **Home Assistant Control nodes (#27)**: schema-driven domain and service controls, searchable
+      instance/entity pickers, local binding separation, live state and reviewed calls now exist in
+      `src/shared/home-assistant.ts` and `src/renderer/components/homeassistant/`. Host bridge
+      registration, generated offline-doc bundle refresh, and the requested ultra-speed no-test
+      release evidence remain outstanding.
+
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the
       notification-filtering half of Low stimulation were wired 2026-08-20 (`d697f78f`). Still

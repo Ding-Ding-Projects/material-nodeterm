@@ -37,9 +37,10 @@ import { Input } from '@renderer/ui/Input'
  * plainly what it is and what it cannot do yet, and both controls it draws — the name and the
  * address — genuinely work and genuinely persist.
  *
- * The address is stored and validated but nothing DIALS it yet, and the copy says exactly that
- * rather than implying a connection. Storing where you would connect is a real, useful thing on
- * its own; pretending it connects would not be.
+ * The address is stored and validated but nothing dials it for those four kinds, and the copy says
+ * exactly that rather than implying a connection. Home Assistant is the one exception: its trusted
+ * host client discovers the instance catalog, renders typed controls, reads live state and requires
+ * a review before a service call.
  *
  * `minecraft` and `dockerhost` are the lanes that wire real managers. See `MinecraftServerPanel`
  * (docs/minecraft-server-manager.md). It runs a real local `java -jar server.jar` process on the

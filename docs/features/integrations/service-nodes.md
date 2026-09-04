@@ -135,7 +135,7 @@ retrofitted after one exists.
 The connection record is enforced at every boundary that could otherwise let a value in sideways
 (`src/shared/node-exec.ts`):
 
-- **`stripSharedNodeExec`** removes `serviceConnection` (along with `shell`, `terminalProfileId`,
+- **`stripSharedNodeExec`** removes `serviceConnection` and the Home Assistant binding (along with `shell`, `terminalProfileId`,
   `pendingLaunch`, and SSH's `extraArgs`/`execTrusted`) from every node before it is written to the
   shared project file — a strip, not a wipe, so everything else about the node (title, colour,
   position, the label) is untouched.
@@ -145,12 +145,13 @@ The connection record is enforced at every boundary that could otherwise let a v
   harvest whatever the peer set into *this* machine's own trusted index, silently re-attaching a
   stranger's endpoint as this machine's own on every future load.
 - **`localNodeExec`** — the collector that writes the machine-local index — re-validates the
-  connection with `safeServiceConnection` on the way **in**, not just the way out, because the live
+  connection and Home Assistant binding on the way **in**, not just the way out, because the live
   node it reads from can itself have been touched by a peer mutation moments earlier.
-- **`applyLocalNodeExec`** re-validates again with `safeServiceConnection` on the way the index is
-  read back out at load time, because `workspace.json` is still a file: a hand edit, a partial
-  write, or a record left behind by an older build can all reach this point, and a connection that
-  would be refused today is not grandfathered in merely because it is already on disk.
+- **`applyLocalNodeExec`** re-validates again with `safeServiceConnection` and the binding validator
+  on the way the index is read back out at load time, because `workspace.json` is still a file: a
+  hand edit, a partial write, or a record left behind by an older build can all reach this point,
+  and a value that would be refused today is not grandfathered in merely because it is already on
+  disk.
 
 ### Endpoint rules
 

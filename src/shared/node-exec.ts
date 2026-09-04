@@ -29,6 +29,7 @@
 import { BUILTIN_AGENT_IDS, isPermissionMode } from './agents/config'
 import { sshExtraArgsEnableLocalExec } from './ssh'
 import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from './types'
+import type { HomeAssistantLocalBinding } from './home-assistant'
 import type { NsisLocalPaths } from './nsis-form-types'
 import { safeOpenWebUiLocalBinding, type OpenWebUiLocalBinding } from './open-webui-hosting'
 import { normalizeVirtualMachineLocalPaths, safeVirtualMachinePath, type VirtualMachineLocalPaths } from './virtual-machine'
@@ -455,6 +456,19 @@ export function stripSharedNodeExec(nodes: CanvasNodeState[]): CanvasNodeState[]
  */
 export function sanitizeInboundNode(node: CanvasNodeState): CanvasNodeState {
   return stripNodeExec(node)
+}
+
+const SAFE_HA_INSTANCE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/
+const SAFE_HA_ENTITY_ID = /^[a-z0-9_]+\.[a-z0-9_]+$/i
+
+/** Keep only a discovered Home Assistant binding. Unknown or malformed values are unbound. */
+function safeHomeAssistantBinding(value: unknown): HomeAssistantLocalBinding | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const raw = value as Record<string, unknown>
+  const out: HomeAssistantLocalBinding = {}
+  if (typeof raw.instanceId === 'string' && SAFE_HA_INSTANCE_ID.test(raw.instanceId)) out.instanceId = raw.instanceId
+  if (typeof raw.entityId === 'string' && SAFE_HA_ENTITY_ID.test(raw.entityId)) out.entityId = raw.entityId
+  return out.instanceId || out.entityId ? out : undefined
 }
 
 /**
