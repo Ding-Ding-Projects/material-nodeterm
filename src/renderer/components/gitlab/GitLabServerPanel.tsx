@@ -3,6 +3,9 @@ import { useSession } from '../../session/session'
 import { openDestructiveGate } from '../../state/destructiveGate'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
+import { Button } from '../../ui/md3'
+import { Input } from '../../ui/Input'
+import { Select } from '../../ui/Select'
 import type {
   GitLabBackupSummary,
   GitLabImageProfile,
@@ -63,7 +66,7 @@ export function GitLabServerPanel({ nodeId, profileIntent, onProfileIntent }: { 
     }
   }
 
-  if (loadError) return <div className="service-node__body"><p className="service-node__note" role="alert">GitLab hosting is unavailable on this session: {loadError}</p><button className="sc-btn nodrag" type="button" onClick={() => { setLoadError(null); void refresh().catch((error: unknown) => setLoadError(error instanceof Error ? error.message : String(error))) }}>Retry</button></div>
+  if (loadError) return <div className="service-node__body"><p className="service-node__note" role="alert">GitLab hosting is unavailable on this session: {loadError}</p><Button variant="outlined" className="sc-btn nodrag" onClick={() => { setLoadError(null); void refresh().catch((error: unknown) => setLoadError(error instanceof Error ? error.message : String(error))) }}>Retry</Button></div>
   if (!status) return <div className="service-node__body"><p className="service-node__note">Loading GitLab hosting state…</p></div>
 
   const selected = catalog.find((profile) => profile.id === profileId) ?? catalog[0]
@@ -83,7 +86,7 @@ export function GitLabServerPanel({ nodeId, profileIntent, onProfileIntent }: { 
           <label className="service-node__field" htmlFor={`${idPrefix}-search`}>
             <span className="service-node__field-label">Search official profiles</span>
             <span className="gitlab-panel__search-row">
-              <input
+              <Input
                 ref={searchRef}
                 id={`${idPrefix}-search`}
                 className="service-node__input nodrag"
@@ -96,16 +99,16 @@ export function GitLabServerPanel({ nodeId, profileIntent, onProfileIntent }: { 
           </label>
           <label className="service-node__field" htmlFor={`${idPrefix}-profile`}>
             <span className="service-node__field-label">Edition and pinned release</span>
-            <select id={`${idPrefix}-profile`} className="service-node__input nodrag" value={selected?.id ?? ''} onChange={(event) => { setProfileId(event.target.value); onProfileIntent?.(event.target.value) }}>
+            <Select id={`${idPrefix}-profile`} className="service-node__input nodrag" value={selected?.id ?? ''} onChange={(event) => { setProfileId(event.target.value); onProfileIntent?.(event.target.value) }}>
               {filteredCatalog.map((profile) => <option key={profile.id} value={profile.id}>{profile.label} · {profile.digest.slice(0, 19)}…</option>)}
-            </select>
+            </Select>
             {!filteredCatalog.length && <span className="service-node__note">No profile matches this search.</span>}
           </label>
           <label className="service-node__field" htmlFor={`${idPrefix}-port`}>
             <span className="service-node__field-label">Private host port</span>
-            <input id={`${idPrefix}-port`} className="service-node__input nodrag" type="number" min={1024} max={65535} value={port} onChange={(event) => setPort(Number(event.target.value))} />
+            <Input id={`${idPrefix}-port`} className="service-node__input nodrag" type="number" min={1024} max={65535} value={port} onChange={(event) => setPort(Number(event.target.value))} />
           </label>
-          <button className="sc-btn nodrag" type="button" disabled={busy || !selected} onClick={() => void run(() => api.gitlab.create({ id: nodeId, profileId: selected?.id ?? '', hostPort: port }), 'GitLab start requested. Readiness is still being checked.')}>Create GitLab Server</button>
+          <Button variant="filled" className="sc-btn nodrag" disabled={busy || !selected} onClick={() => void run(() => api.gitlab.create({ id: nodeId, profileId: selected?.id ?? '', hostPort: port }), 'GitLab start requested. Readiness is still being checked.')}>Create GitLab Server</Button>
           <p className="service-node__note">Preflight checks Docker, available disk capacity, and port availability before any volume or container is created.</p>
         </section>
       )}
@@ -118,27 +121,27 @@ export function GitLabServerPanel({ nodeId, profileIntent, onProfileIntent }: { 
             <p className="service-node__note">Edition: {status.edition?.toUpperCase()} · {status.version} · <code>127.0.0.1:{status.hostPort}</code></p>
             <p className="service-node__note">Managed volumes: config, logs, data, backups. Initial root credential: {status.credentialHandedOff ? 'handed off once' : 'ready for one-time handoff'}.</p>
             <div className="gitlab-panel__actions">
-              {!status.credentialHandedOff && <button className="sc-btn nodrag" type="button" disabled={busy} onClick={() => void api.gitlab.handoffCredential(nodeId).then((credential) => setMessage(credential ? `Root credential: ${credential.username} / ${credential.password}` : 'The initial credential was already handed off.')).catch((error: unknown) => setMessage(error instanceof Error ? error.message : String(error)))}>Show initial credential once</button>}
-              {status.phase === 'stopped' && <button className="sc-btn nodrag" type="button" disabled={busy} onClick={() => void run(() => api.gitlab.start(nodeId), 'GitLab Server start requested. Readiness is being checked.')}>Start GitLab Server</button>}
-              <button className="sc-btn nodrag" type="button" disabled={busy} onClick={() => void run(() => api.gitlab.createBackup(nodeId), 'Backup completed and recorded locally.')}>Create backup</button>
-              <button className="sc-btn nodrag" type="button" disabled={busy || !status.ready} onClick={() => void run(() => api.gitlab.tunnelHandoff(nodeId), 'Private origin handed to the tunnel wizard.')}>Continue to tunnel wizard</button>
-              <button className="sc-btn nodrag" type="button" disabled={busy} onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); openDestructiveGate({ title: 'Stop GitLab Server', description: 'Stops the managed container. The four persistent volumes remain intact.', affected: status.containerName ? [status.containerName] : undefined, confirmLabel: 'Stop GitLab Server', anchor: { x: rect.left, y: rect.bottom }, restoreFocusEl: event.currentTarget, onConfirm: () => void run(() => api.gitlab.stop(nodeId), 'GitLab Server stopped; persistent volumes remain.') }) }}>Stop</button>
+              {!status.credentialHandedOff && <Button variant="outlined" className="sc-btn nodrag" disabled={busy} onClick={() => void api.gitlab.handoffCredential(nodeId).then((credential) => setMessage(credential ? `Root credential: ${credential.username} / ${credential.password}` : 'The initial credential was already handed off.')).catch((error: unknown) => setMessage(error instanceof Error ? error.message : String(error)))}>Show initial credential once</Button>}
+              {status.phase === 'stopped' && <Button variant="outlined" className="sc-btn nodrag" disabled={busy} onClick={() => void run(() => api.gitlab.start(nodeId), 'GitLab Server start requested. Readiness is being checked.')}>Start GitLab Server</Button>}
+              <Button variant="outlined" className="sc-btn nodrag" disabled={busy} onClick={() => void run(() => api.gitlab.createBackup(nodeId), 'Backup completed and recorded locally.')}>Create backup</Button>
+              <Button variant="outlined" className="sc-btn nodrag" disabled={busy || !status.ready} onClick={() => void run(() => api.gitlab.tunnelHandoff(nodeId), 'Private origin handed to the tunnel wizard.')}>Continue to tunnel wizard</Button>
+              <Button variant="outlined" className="sc-btn nodrag" disabled={busy} onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); openDestructiveGate({ title: 'Stop GitLab Server', description: 'Stops the managed container. The four persistent volumes remain intact.', affected: status.containerName ? [status.containerName] : undefined, confirmLabel: 'Stop GitLab Server', anchor: { x: rect.left, y: rect.bottom }, restoreFocusEl: event.currentTarget, onConfirm: () => void run(() => api.gitlab.stop(nodeId), 'GitLab Server stopped; persistent volumes remain.') }) }}>Stop</Button>
             </div>
           </section>
 
           <section className="gitlab-panel__section" aria-labelledby={`${idPrefix}-backup-title`}>
             <h3 id={`${idPrefix}-backup-title`}>Backups and recovery</h3>
-            {backups.length ? <ul>{backups.map((backup) => <li key={backup.id}><code>{backup.filename}</code> · {formatBytes(backup.sizeBytes)} <button className="sc-btn nodrag" type="button" disabled={busy || !status.ready} onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); openDestructiveGate({ title: 'Restore this GitLab backup', description: `Restores ${backup.filename} into the managed GitLab volumes. The current state is replaced by the selected backup.`, affected: [backup.filename], confirmLabel: 'Restore backup', anchor: { x: rect.left, y: rect.bottom }, restoreFocusEl: event.currentTarget, onConfirm: () => void run(() => api.gitlab.restoreBackup(nodeId, backup.id), 'GitLab backup restore requested.') }) }}>Restore</button></li>)}</ul> : <p className="service-node__note">No managed backups yet.</p>}
+            {backups.length ? <ul>{backups.map((backup) => <li key={backup.id}><code>{backup.filename}</code> · {formatBytes(backup.sizeBytes)} <Button variant="outlined" className="sc-btn nodrag" disabled={busy || !status.ready} onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); openDestructiveGate({ title: 'Restore this GitLab backup', description: `Restores ${backup.filename} into the managed GitLab volumes. The current state is replaced by the selected backup.`, affected: [backup.filename], confirmLabel: 'Restore backup', anchor: { x: rect.left, y: rect.bottom }, restoreFocusEl: event.currentTarget, onConfirm: () => void run(() => api.gitlab.restoreBackup(nodeId, backup.id), 'GitLab backup restore requested.') }) }}>Restore</Button></li>)}</ul> : <p className="service-node__note">No managed backups yet.</p>}
           </section>
 
           <section className="gitlab-panel__section" aria-labelledby={`${idPrefix}-update-title`}>
             <h3 id={`${idPrefix}-update-title`}>Update and rollback</h3>
-            <select className="service-node__input nodrag" value={profileId} onChange={(event) => { setProfileId(event.target.value); onProfileIntent?.(event.target.value) }} aria-label="GitLab update profile">
+            <Select className="service-node__input nodrag" value={profileId} onChange={(event) => { setProfileId(event.target.value); onProfileIntent?.(event.target.value) }} aria-label="GitLab update profile">
               {catalog.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
-            </select>
+            </Select>
             <div className="gitlab-panel__actions">
-              <button className="sc-btn nodrag" type="button" disabled={busy || profileId === status.profileId} onClick={() => void run(() => api.gitlab.update(nodeId, profileId), 'GitLab update requested. Persistent volumes were retained.')}>Update pinned release</button>
-              <button className="sc-btn nodrag" type="button" disabled={busy} onClick={() => void run(() => api.gitlab.rollback(nodeId), 'GitLab rollback requested using the previous pinned release.')}>Rollback</button>
+              <Button variant="filled" className="sc-btn nodrag" disabled={busy || profileId === status.profileId} onClick={() => void run(() => api.gitlab.update(nodeId, profileId), 'GitLab update requested. Persistent volumes were retained.')}>Update pinned release</Button>
+              <Button variant="outlined" className="sc-btn nodrag" disabled={busy} onClick={() => void run(() => api.gitlab.rollback(nodeId), 'GitLab rollback requested using the previous pinned release.')}>Rollback</Button>
             </div>
           </section>
         </>

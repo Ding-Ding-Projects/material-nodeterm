@@ -16,7 +16,6 @@ import type {
 } from '@shared/types'
 import type { ProviderBlueprint } from '@shared/provider-accounts'
 import type { ProjectIcon } from '@shared/project-icon'
-import type { ProviderBlueprint } from '@shared/provider-accounts'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
 import { applyEdgeMutation, applyLinkMutation as applyTypedLinkMutation } from '@shared/canvas-mutations'
 import { collisionSeed, derivedProjectId } from '@shared/project-id'

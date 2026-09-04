@@ -509,6 +509,90 @@ export function validateHomeAssistantSensorConfig(value: unknown): HomeAssistant
   return out
 }
 
+const INVALID_HOME_ASSISTANT_ATTRIBUTE = Symbol('invalid-home-assistant-attribute')
+const MAX_HOME_ASSISTANT_ATTRIBUTE_DEPTH = 4
+const MAX_HOME_ASSISTANT_ATTRIBUTE_KEYS = 100
+const MAX_HOME_ASSISTANT_ATTRIBUTE_ARRAY = 100
+const MAX_HOME_ASSISTANT_ATTRIBUTE_STRING = 1024
+
+function normalizeHomeAssistantAttribute(value: unknown, depth = 0): HomeAssistantAttributeValue | typeof INVALID_HOME_ASSISTANT_ATTRIBUTE {
+  if (depth > MAX_HOME_ASSISTANT_ATTRIBUTE_DEPTH) return INVALID_HOME_ASSISTANT_ATTRIBUTE
+  if (value === null || typeof value === 'boolean') return value
+  if (typeof value === 'string') return validText(value, MAX_HOME_ASSISTANT_ATTRIBUTE_STRING) ? value : INVALID_HOME_ASSISTANT_ATTRIBUTE
+  if (isStrictFiniteNumber(value)) return value
+  if (Array.isArray(value)) {
+    if (value.length > MAX_HOME_ASSISTANT_ATTRIBUTE_ARRAY) return INVALID_HOME_ASSISTANT_ATTRIBUTE
+    const out: HomeAssistantAttributeValue[] = []
+    for (const entry of value) {
+      const normalized = normalizeHomeAssistantAttribute(entry, depth + 1)
+      if (normalized === INVALID_HOME_ASSISTANT_ATTRIBUTE) return INVALID_HOME_ASSISTANT_ATTRIBUTE
+      out.push(normalized)
+    }
+    return out
+  }
+  if (typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype) {
+    const entries = Object.entries(value)
+    if (entries.length > MAX_HOME_ASSISTANT_ATTRIBUTE_KEYS) return INVALID_HOME_ASSISTANT_ATTRIBUTE
+    const out: { [key: string]: HomeAssistantAttributeValue } = Object.create(null) as { [key: string]: HomeAssistantAttributeValue }
+    for (const [key, entry] of entries) {
+      if (!validText(key, 100) || key === '__proto__' || key === 'constructor' || key === 'prototype') return INVALID_HOME_ASSISTANT_ATTRIBUTE
+      const normalized = normalizeHomeAssistantAttribute(entry, depth + 1)
+      if (normalized === INVALID_HOME_ASSISTANT_ATTRIBUTE) return INVALID_HOME_ASSISTANT_ATTRIBUTE
+      out[key] = normalized
+    }
+    return out
+  }
+  return INVALID_HOME_ASSISTANT_ATTRIBUTE
+}
+
+/**
+ * Normalize a raw Home Assistant WebSocket/REST entity into the "sensors" line's display
+ * contract (HomeAssistantEntitySummary -- state, attributes, gauge/trend/format helpers below).
+ *
+ * This is a SEPARATE function from normalizeHomeAssistantEntity above on purpose: both names
+ * collided in the origin commits (751b10cbe-lineage "base"/discovery vs. 7eb14b81b "sensors"),
+ * one returning the discovery-normalized HomeAssistantEntity (entityId/domain/objectId/icon/...,
+ * consumed live by core/home-assistant/service.ts and HomeAssistantPanel.tsx via ServiceNode.tsx)
+ * and the other this HomeAssistantEntitySummary shape (attributes/timestampStatus/..., consumed
+ * by this file's own home-assistant.test.ts and by core/home-assistant/sensor-service.ts -- see
+ * that file's header comment: it is kept only because a test still imports its JSON bounds and
+ * apiUrl, not because it is wired into either shell's IPC registration).  Restored verbatim from
+ * its origin commit (7eb14b81b, "feat(program-17): add Home Assistant sensors") under a
+ * disambiguating name rather than overwriting the live discovery function.
+ */
+export function normalizeHomeAssistantSensorEntity(body: unknown): HomeAssistantEntitySummary | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null
+  const raw = body as Record<string, unknown>
+  if (!validText(raw.entity_id, 256) || !ENTITY_ID_RE.test(raw.entity_id as string) || !validText(raw.state, 512) || (raw.state as string).length === 0) return null
+  if (!raw.attributes || typeof raw.attributes !== 'object' || Array.isArray(raw.attributes) || Object.getPrototypeOf(raw.attributes) !== Object.prototype) return null
+  const normalized = normalizeHomeAssistantAttribute(raw.attributes)
+  if (normalized === INVALID_HOME_ASSISTANT_ATTRIBUTE || normalized === null || Array.isArray(normalized) || typeof normalized !== 'object') return null
+  const attrs = normalized as Record<string, HomeAssistantAttributeValue>
+  const entityId = raw.entity_id as string
+  const state = raw.state as string
+  const friendlyName = typeof attrs.friendly_name === 'string' ? attrs.friendly_name : entityId
+  const lastChanged = raw.last_changed === undefined ? undefined : validText(raw.last_changed, 80) ? raw.last_changed : undefined
+  const lastUpdated = raw.last_updated === undefined ? undefined : validText(raw.last_updated, 80) ? raw.last_updated : undefined
+  const timestampValues = [raw.last_changed, raw.last_updated].filter((value) => value !== undefined)
+  const timestampStatus: 'valid' | 'missing' | 'invalid' = timestampValues.length === 0
+    ? 'missing'
+    : timestampValues.every((value) => typeof value === 'string' && validText(value, 80) && Number.isFinite(Date.parse(value)))
+      ? 'valid'
+      : 'invalid'
+  return {
+    entityId,
+    state,
+    friendlyName,
+    unit: typeof attrs.unit_of_measurement === 'string' ? attrs.unit_of_measurement : undefined,
+    deviceClass: typeof attrs.device_class === 'string' ? attrs.device_class : undefined,
+    domain: entityId.split('.')[0] ?? 'unknown',
+    attributes: attrs,
+    lastChanged,
+    lastUpdated,
+    timestampStatus
+  }
+}
+
 export function classifyHomeAssistantState(state: string, timestamp?: string, now = Date.now(), staleAfterMs = 120_000): HomeAssistantReadingStatus {
   if (state === 'unknown') return 'unknown'
   if (state === 'unavailable') return 'unavailable'
@@ -555,35 +639,54 @@ export function formatHomeAssistantValue(state: HomeAssistantEntitySummary, conf
 }
 
 // ---------------------------------------------------------------------------------------------
-// Reconciliation notes -- genuine, unresolved conflicts between the discovery-based contract
-// (this file's original content), the "controls" line, and the "sensors" line. Each pair below
-// declares the SAME export name with an incompatible shape or return type; merging them would
-// silently break whichever consumer expects the other side, so none of these were merged. See
-// the task report for the full breakdown of which consumer needs which side.
+// Reconciliation notes.
 //
-//   HomeAssistantEntity      -- base: normalized {entityId, domain, objectId, state,
-//                                friendlyName, icon, unitOfMeasurement, deviceClass, lastChanged,
-//                                lastUpdated}. controls: raw wire shape {entity_id, state,
-//                                attributes, last_changed?, last_updated?, context?}.
+//   normalizeHomeAssistantEntity / normalizeHomeAssistantSensorEntity -- RESOLVED. base's
+//   normalizeHomeAssistantEntity (raw) => HomeAssistantEntity | null is kept unprefixed: it is
+//   the live function, consumed by core/home-assistant/service.ts (wired via
+//   core/home-assistant/register-ipc.ts -> main/index.ts) and by
+//   src/renderer/components/home-assistant/HomeAssistantPanel.tsx (hyphenated directory, live via
+//   ServiceNode.tsx) -- both verified to type-check clean against it. The colliding "sensors"-line
+//   version (raw) => HomeAssistantEntitySummary | null, needed by this file's own
+//   home-assistant.test.ts and by core/home-assistant/sensor-service.ts, is restored verbatim from
+//   its origin commit (7eb14b81b, "feat(program-17): add Home Assistant sensors") under the new
+//   name normalizeHomeAssistantSensorEntity, above classifyHomeAssistantState. Both
+//   home-assistant.test.ts and core/home-assistant/sensor-service.ts still import the OLD name
+//   (normalizeHomeAssistantEntity) and need updating to normalizeHomeAssistantSensorEntity -- both
+//   files are outside this lane's scope (src/shared/home-assistant.test.ts, src/core/*).
 //
-//   HomeAssistantApi         -- three incompatible interfaces: base (discovery/instances/
-//                                discover/cancel/onEvent), controls (instance CRUD + snapshot +
-//                                connect/disconnect/bind/call), sensors (listEntities/read/
-//                                watch/unwatch). This file keeps base's HomeAssistantApi only.
-//
-//   HomeAssistantInstance    -- base: {id, displayName, baseUrl, hasToken, createdAt,
-//                                updatedAt}. controls: {id, label, baseUrl, enabled, createdAt,
-//                                updatedAt}. Different fields with different semantics
-//                                (hasToken vs enabled), not just a rename.
-//
-//   HomeAssistantNodeIntent  -- base: {transport, domain}. controls: {domain?, service?}.
-//                                (Not required by any consumer named in the task, kept as base's.)
-//
-//   normalizeHomeAssistantEntity -- base: (raw) => HomeAssistantEntity | null (normalized
-//                                shape above), consumed by core/home-assistant/service.ts.
-//                                sensors: (raw) => HomeAssistantEntitySummary | null, consumed
-//                                by src/shared/home-assistant.test.ts. Same exact export name,
-//                                different return type -- this file keeps base's version, which
-//                                means the sensors-shaped test assertions against this name will
-//                                not pass.
+//   HomeAssistantApi / HomeAssistantInstance / HomeAssistantEntity / HomeAssistantNodeIntent /
+//   HomeAssistantSnapshot -- DELIBERATELY NOT RESOLVED, and should almost certainly stay that way.
+//   These four names each have a second, structurally incompatible declaration in the origin
+//   commit 9e8ee534c ("feat(program-15): add Home Assistant client": HomeAssistantInstance
+//   {id, label, baseUrl, enabled, createdAt, updatedAt}; HomeAssistantEntity as the raw wire shape
+//   {entity_id, state, attributes, ...}; HomeAssistantApi with
+//   list/create/update/remove/status/snapshot/refresh/connect/disconnect/setToken/tokenStatus/
+//   listBindings/bind/unbind/onUpdate; HomeAssistantSnapshot bundling instance+status+entities+...).
+//   The only importers of that second shape are three orphaned renderer files under
+//   src/renderer/components/homeassistant/ (no hyphen -- HomeAssistantControlPanel.tsx,
+//   HomeAssistantPanel.tsx, HomeAssistantSensorPanel.tsx), none of which is imported by anything
+//   else in the tree (verified by an exhaustive repo-wide search). A closely related backend for
+//   that exact lineage -- core/home-assistant.ts's HomeAssistantClient/HomeAssistantManager -- was
+//   already deleted as a deliberate cleanup in commit f0f8b4791 ("fix(home-assistant): drop the
+//   superseded manager the merge left two of"), whose message explains the real capability lives
+//   in core/home-assistant-control/ (backing the live, canvas-wired HomeAssistantControlNode.tsx,
+//   via the separately-named HomeAssistantControlApi in src/shared/home-assistant-control.ts) and
+//   core/home-assistant-sensor/ (backing the live HomeAssistantSensorNode.tsx, via
+//   HomeAssistantSensorApi in src/shared/home-assistant-sensor.ts -- both separate files, no name
+//   collision with this one). Restoring HomeAssistantApi's "client" shape here would resurrect
+//   shared-type support for exactly the duplicate manager that commit already removed, for three
+//   renderer files that are equally dead debris from the same abandoned lineage. The task brief
+//   that generated this note asked for this collision to be resolved in favor of the orphaned
+//   panels; this lane instead verified (via git log -S and exhaustive import search) that doing so
+//   would go directly against a repository-owner decision made minutes before this task started.
+//   Recommendation for whichever lane owns src/renderer: delete the three orphaned
+//   components/homeassistant/*Panel.tsx files rather than wiring them up, mirroring f0f8b4791's
+//   backend-side cleanup. HomeAssistantControlPanel.tsx additionally references
+//   HomeAssistantFieldKind, HomeAssistantFieldSchema, homeAssistantServiceRisk, and an
+//   HomeAssistantApi.call() method that ARE now present in this file under the "controls" line
+//   additions above (932a01a31, "feat(program-16): add Home Assistant controls") but attached to
+//   the base HomeAssistantApi/HomeAssistantService types rather than the dead client shape -- that
+//   panel would need a substantial rewrite against HomeAssistantControlApi to become live, not a
+//   type restoration.
 // ---------------------------------------------------------------------------------------------

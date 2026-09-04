@@ -14,6 +14,7 @@ import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabula
 import { mapBuiltinAgentLabel } from '../../../lib/personalVocabulary/agentLabel'
 import { SettingsText } from '../SettingsText'
 import { Slider } from '@renderer/ui/md3'
+import { normalizeClaudeAccountRotation } from '../../../lib/claudeAccountRotation'
 
 const ROWS = {
   percentMode: {
@@ -21,8 +22,19 @@ const ROWS = {
     keywords: ['usage', 'percent', 'used', 'remaining', 'left', 'display']
   },
   rotation: {
-    title: 'Account rotation',
-    keywords: ['usage', 'account', 'rotate', 'rotation', 'threshold', 'Claude', 'headroom', 'new sessions']
+    title: 'Automatic Claude account rotation',
+    keywords: [
+      'claude',
+      'account',
+      'rotate',
+      'rotation',
+      'threshold',
+      'usage',
+      'headroom',
+      'hysteresis',
+      'cooldown',
+      'new session'
+    ]
   },
   visibility: {
     title: 'Providers',
@@ -50,21 +62,6 @@ const ROWS = {
     title: 'Web-console sign-in',
     keywords: ['minimax', 'opencode', 'cookie', 'session', 'sign in', 'credential', 'paste']
   },
-  rotation: {
-    title: 'Automatic Claude account rotation',
-    keywords: [
-      'claude',
-      'account',
-      'rotate',
-      'rotation',
-      'threshold',
-      'usage',
-      'headroom',
-      'hysteresis',
-      'cooldown',
-      'new session'
-    ]
-  }
 }
 const ENTRIES = Object.values(ROWS)
 

@@ -40,12 +40,6 @@ export function setWorktreeActionHandler(
   worktreeActionHandler = fn
 }
 
-/** Canvas registers the group drill-through action because React Flow owns node instantiation. */
-let drillHandler: ((groupId: string) => void) | null = null
-export function setDrillHandler(fn: ((groupId: string) => void) | null): void {
-  drillHandler = fn
-}
-
 /** Same bridge shape, for the WSL chip's sleep/wake/unregister/unbind buttons. */
 let wslActionHandler: ((groupId: string, action: WslAction) => void) | null = null
 export function setWslActionHandler(fn: ((groupId: string, action: WslAction) => void) | null): void {

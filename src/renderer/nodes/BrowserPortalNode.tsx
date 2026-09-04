@@ -9,6 +9,9 @@ import {
   type BrowserPortalLocalProfile
 } from '@shared/browser-portal'
 import type { CanvasNode } from '../state/workspace'
+import { Button, IconButton } from '../ui/md3'
+import { Input } from '../ui/Input'
+import { Select } from '../ui/Select'
 import {
   loadBrowserPortalProfileForNode,
   loadBrowserPortalProfiles,
@@ -110,26 +113,26 @@ export default function BrowserPortalNode({ id, data, selected }: BrowserPortalN
         <span className="term-node__spacer" />
         <label className="browser-portal__profile-label">
           <span className="sr-only">Local portal profile</span>
-          <select value={profileId} onChange={(event) => chooseProfile(event.target.value)} aria-label="Local portal profile">
+          <Select className="nodrag" value={profileId} onChange={(event) => chooseProfile(event.target.value)} aria-label="Local portal profile">
             {profiles.length === 0 && <option value={profileId}>Private local profile</option>}
             {profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
-          </select>
+          </Select>
         </label>
-        <button type="button" className="browser-node__btn" onClick={addProfile} title="Create an isolated local profile" aria-label="Create an isolated local profile">+</button>
-        <button className="term-node__close" title="Close" aria-label="Close Browser Portal" onClick={() => deleteElements({ nodes: [{ id }] })}>×</button>
+        <IconButton size="compact" className="browser-node__btn nodrag" icon="add" onClick={addProfile} title="Create an isolated local profile" aria-label="Create an isolated local profile" />
+        <IconButton size="compact" className="term-node__close nodrag" icon="close" title="Close" aria-label="Close Browser Portal" onClick={() => deleteElements({ nodes: [{ id }] })} />
       </div>
       <div className="browser-portal__controls nodrag">
         <label>
           <span>Preset</span>
-          <select value={preset.id} onChange={(event) => choosePreset(event.target.value)} aria-label="Browser Portal preset">
+          <Select value={preset.id} onChange={(event) => choosePreset(event.target.value)} aria-label="Browser Portal preset">
             {BROWSER_PORTAL_PRESETS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-          </select>
+          </Select>
         </label>
         <label className="browser-portal__url-field">
           <span>HTTP(S) URL</span>
-          <input value={urlDraft} onChange={(event) => setUrlDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') navigate(urlDraft) }} placeholder="https://example.com" inputMode="url" spellCheck={false} aria-describedby={`portal-status-${id}`} />
+          <Input value={urlDraft} onChange={(event) => setUrlDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') navigate(urlDraft) }} placeholder="https://example.com" inputMode="url" spellCheck={false} aria-describedby={`portal-status-${id}`} />
         </label>
-        <button type="button" className="browser-node__btn" onClick={() => navigate(urlDraft)} disabled={!validateBrowserPortalUrl(urlDraft)} title="Open this HTTP(S) URL">Open</button>
+        <Button variant="tonal" size="small" className="browser-node__btn" onClick={() => navigate(urlDraft)} disabled={!validateBrowserPortalUrl(urlDraft)} title="Open this HTTP(S) URL">Open</Button>
       </div>
       <p id={`portal-status-${id}`} className={`browser-portal__status browser-portal__status--${lifecycle}`} role="status">{statusText}</p>
       <div className="editor-node__body">

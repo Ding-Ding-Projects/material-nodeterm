@@ -15,6 +15,7 @@ import { homeAssistantServiceRisk, isHomeAssistantEntityId } from '@shared/home-
 import { Input } from '../../ui/Input'
 import { Select } from '../../ui/Select'
 import { Button } from '../../ui/Button'
+import { Checkbox } from '../../ui/md3'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '@renderer/lib/regex/useRegexSearchField'
 import { useI18n } from '@renderer/lib/i18n'
@@ -69,7 +70,7 @@ function Picker({ label, value, options, onChange, disabled = false }: { label: 
 
 function ServiceField({ field, value, entities, onChange }: { field: HomeAssistantFieldSchema; value: unknown; entities: ControlEntity[]; onChange: (value: unknown) => void }): React.JSX.Element {
   const selector = field.selector
-  if (selector?.kind === 'boolean') return <label className="homeassistant-node__field"><span className="homeassistant-node__label">{field.name}{field.required ? ' *' : ''}</span><input type="checkbox" checked={value === true} onChange={(event) => onChange(event.target.checked)} aria-label={field.name} /></label>
+  if (selector?.kind === 'boolean') return <label className="homeassistant-node__field"><span className="homeassistant-node__label">{field.name}{field.required ? ' *' : ''}</span><Checkbox className="nodrag" checked={value === true} onChange={(event) => onChange(event.target.checked)} aria-label={field.name} /></label>
   if (selector?.kind === 'number' || selector?.kind === 'duration') return <label className="homeassistant-node__field"><span className="homeassistant-node__label">{field.name}{field.required ? ' *' : ''}</span><Input type="number" value={typeof value === 'number' ? value : ''} min={selector.min} max={selector.max} step={selector.step ?? 'any'} onChange={(event) => onChange(event.target.value === '' ? '' : Number(event.target.value))} aria-label={field.name} /></label>
   if (selector?.kind === 'select' || selector?.kind === 'entity') {
     const options = selector.kind === 'entity' ? entities.map((entity) => ({ value: entity.entityId, label: `${entity.name} · ${entity.entityId}`, disabled: entity.canRead === false, reason: entity.permissionReason })) : (selector.options ?? []).map((option) => ({ value: option.value, label: option.label ?? option.value }))

@@ -22,7 +22,7 @@ import { usePersonalVocabulary } from '../state/personalVocabulary'
 import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
 import { applyVocabulary } from '../lib/personalVocabulary/apply'
 import { normalizeLanguageMode } from '@shared/i18n/validation'
-import { t as resolveText, formatText } from '@shared/i18n'
+import { t as resolveText, formatText, normalizeFunnyLevel } from '@shared/i18n'
 
 // Local mirror of the preload's HUD contract (src/preload/hud.ts) — kept self-contained so this
 // renderer entry has no cross-project (main/preload) type dependency.
@@ -114,9 +114,9 @@ function hudText(id: string, fallback: string, params?: Record<string, string>):
   const allowed = schoolModeAllowsOptionalFeatures({ enabled: school.enabled, hydrated: school.hydrated })
   const mode = allowed ? normalizeLanguageMode(settings.languageMode) : 'en'
   const levels = allowed
-    ? { en: settings.funnyLevelEn, yue: settings.funnyLevelYue }
-    : { en: 1, yue: 1 }
-  const resolved = resolveText(id, fallback, mode, levels)
+    ? { en: normalizeFunnyLevel(settings.funnyLevelEn, 1), yue: normalizeFunnyLevel(settings.funnyLevelYue, 1) }
+    : { en: normalizeFunnyLevel(1, 1), yue: normalizeFunnyLevel(1, 1) }
+  const resolved = resolveText(id, fallback, mode, levels).primary
   const prose = !school.hydrated || school.enabled ? resolved : applyVocabulary(resolved, usePersonalVocabulary.getState().entries)
   return params ? formatText(prose, params) : prose
 }

@@ -9,6 +9,7 @@ import type { KanbanSession } from './KanbanView'
 import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 import { SessionIconGlyph } from '../SessionIcon'
+import { contextSourceForNode } from '@shared/context-source'
 
 const PRIO_COLOR: Record<KanbanPriority, string> = {
   low: '#8e8e93',

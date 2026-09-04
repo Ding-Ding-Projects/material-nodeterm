@@ -37,6 +37,7 @@ import { BrowserDrivingIndicator } from '../../nodes/BrowserDrivingChip'
 import { NoteMarkdown } from '../NoteMarkdown'
 import { relativeTime } from '../../lib/relativeTime'
 import { Button } from '@renderer/ui/md3'
+import { contextSourceForNode } from '@shared/context-source'
 
 interface CardModalProps {
   session: KanbanSession

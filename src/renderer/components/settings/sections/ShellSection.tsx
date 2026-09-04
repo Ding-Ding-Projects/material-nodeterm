@@ -80,10 +80,6 @@ function localizedRows(profileText: ProfileText): typeof BASE_ROWS {
       title: profileText('terminalProfiles.named.heading', 'Named terminal profiles'),
       keywords: localizeKeywords('named', BASE_ROWS.named.keywords)
     },
-    named: {
-      ...BASE_ROWS.named,
-      title: profileText('terminalProfiles.settings.namedTitle', 'Named terminal profiles')
-    },
     legacyShell: {
       ...BASE_ROWS.legacyShell,
       title: profileText('terminalProfiles.settings.legacyDefaultLabel', 'Default shell'),

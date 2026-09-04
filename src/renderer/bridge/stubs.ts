@@ -369,13 +369,6 @@ export function buildStubApi(): Omit<
       setLinks: pnoop,
       info: U('contextLink.info')
     },
-    agent: {
-      envSnapshot: () => Promise.resolve({}),
-      discoverModels: U('agent.discoverModels'),
-      gatewayCredentialStatus: () => Promise.resolve({ hasStoredKey: false, storage: 'unavailable' as const }),
-      saveGatewayCredential: U('agent.saveGatewayCredential'),
-      clearGatewayCredential: U('agent.clearGatewayCredential')
-    },
     usage: {
       // Superseded by the real WS-backed namespace in ws-bridge (the core usage service runs in
       // the server shell too), so nothing reaches these in a live browser session. Kept only to
@@ -708,9 +701,6 @@ export function buildStubApi(): Omit<
     onMemoryPressure: noopUnsub,
     onAgentControl: noopUnsub,
     sendAgentControlResult: noop,
-    agentMessage: {
-      deliver: async () => ({ ok: false, error: 'agent messaging is unavailable on this surface' })
-    },
     // Both overridden with the REAL implementation by ws-bridge.ts's buildConverterApi/
     // buildOllamaApi (the Server Edition runs the identical core engine as desktop — see
     // docs/file-converter.md / docs/ollama-manager.md). This stub only matters where nothing

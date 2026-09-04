@@ -56,8 +56,6 @@ interface WorktreesState {
   orphans: WorktreeEntry[]
   staleGroupIds: string[]
   statusByPath: Record<string, WorktreeStatus>
-  /** Resolved roots for open projects, retained across active-project switches for sidebar grouping. */
-  repoRootByProject: Record<string, string | null>
   refresh(projectCwd: string, bound: BoundGroup[], projectId?: string): Promise<void>
   /**
    * Poll one bound worktree's status. Pass the bound group's id to also keep its staleness LIVE:

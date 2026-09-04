@@ -39,8 +39,6 @@ import type { NodeTerminalApi } from '@shared/types'
 export interface AgentNodeStatus {
   /** Live activity; undefined = idle/unknown. */
   state?: AgentState
-  /** Display-only state restored from the core after restart. Live evidence clears this marker. */
-  restored?: true
   /**
    * `state` was hydrated from the core's durable last-known ledger, not observed by this renderer.
    * Display-only: safety decisions must reject it. Cleared by the first live state transition.

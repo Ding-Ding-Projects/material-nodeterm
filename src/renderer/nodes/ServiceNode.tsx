@@ -122,7 +122,6 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
   const vocab = useVocabularyMapper()
   const { updateNodeData, setNodes } = useReactFlow()
   const { ts } = useI18n()
-  const vocab = useVocabularyMapper()
   const copy = (copyId: string, fallback: string): string => vocab(ts(copyId, fallback))
   /** Viewport anchor for the colour surface, or null when closed — coordinates rather than a
   *  boolean because ColorMenu is a body portal. */

@@ -449,3 +449,182 @@ export interface CloudflareDnsRecordInput {
   comment?: string
   tags?: string[]
 }
+
+/**
+ * Recovered from the "feat(remote): add Cloudflare tunnel settings" lineage (e9476a5b9), which the
+ * merge that produced this file dropped in favour of the generic Zero Trust contracts above.
+ * `src/renderer/components/settings/sections/CloudflareSection.tsx` (the tunnel-binding wizard
+ * settings section) still imports CloudflareConfigurationPreview, CloudflareDnsAdoptionPreview,
+ * and CloudflareTunnelInventory by these exact names from this module, so the lineage is restored
+ * verbatim rather than reinvented.
+ *
+ * None of the names below collide with anything else already declared in THIS file — the only
+ * three names from e9476a5b9 that do (CloudflareApi, CloudflareMutationResult, and the flat-shape
+ * CloudflareMutationPreview it never actually used) are deliberately NOT restored here, because no
+ * current consumer imports a tunnel-wizard-shaped version of any of them. Whoever eventually wires
+ * a `cloudflare: CloudflareApi` member onto NodeTerminalApi for this wizard will need to pick a
+ * distinct name for that interface (and for its CloudflareMutationResult) rather than reusing the
+ * Zero Trust CloudflareApi/CloudflareMutationResult already exported above — see the "still
+ * remains" note in the restoration report for this file rather than guessing at a merged shape
+ * here. CloudflareAccount, CloudflareZone, CloudflareDnsRecord, and CloudflareErrorInfo below are
+ * likewise this lineage's tunnel-wizard shapes only; a sibling e0ef7faff DNS/zone-manager lineage
+ * once wanted different shapes under these same names, but that whole stack (manager.ts,
+ * catalog.ts, token-vault.ts, CloudflareManagerPanel.tsx) was removed as unreferenced dead code
+ * before this restoration (commit 1ef81af14), so there is nothing left to collide with.
+ */
+
+export type CloudflareOperation =
+  | 'accounts'
+  | 'zones'
+  | 'tunnels'
+  | 'configuration'
+  | 'connections'
+  | 'routes'
+  | 'dns-records'
+
+export type CloudflareAvailability =
+  | 'not-configured'
+  | 'ready'
+  | 'partial-permissions'
+  | 'rate-limited'
+  | 'unauthorized'
+  | 'unreachable'
+  | 'unsupported'
+
+export interface CloudflareAccount {
+  id: string
+  name: string
+  status: string | null
+}
+
+export interface CloudflareZone {
+  id: string
+  name: string
+  status: string | null
+  accountId: string | null
+}
+
+export interface CloudflareTunnel {
+  id: string
+  name: string
+  createdAt: string | null
+  status: string | null
+  deletedAt: string | null
+}
+
+export interface CloudflareTunnelConnection {
+  id: string
+  coloName: string | null
+  clientId: string | null
+  connectedAt: string | null
+  isHealthy: boolean | null
+}
+
+export interface CloudflareTunnelRoute {
+  hostname: string
+  service: string
+  path: string | null
+  originRequest: Record<string, unknown> | null
+  managed: boolean
+}
+
+export interface CloudflareDnsRecord {
+  id: string
+  type: string
+  name: string
+  content: string
+  proxied: boolean | null
+  ttl: number | null
+}
+
+export interface CloudflareErrorInfo {
+  operation: CloudflareOperation
+  status: number | null
+  code: string
+  message: string
+  retryAfterSeconds: number | null
+  /** True when this operation may be retried without changing credentials or configuration. */
+  retryable: boolean
+}
+
+export interface CloudflareTunnelBinding {
+  /** Safe project intent. This is the only binding shape that may enter a portable projection. */
+  accountId: string
+  zoneId: string | null
+  tunnelId: string
+  hostname: string | null
+}
+
+export interface CloudflareLocalBinding extends CloudflareTunnelBinding {
+  /** Machine-local identity, never exported with the project. */
+  machineId: string
+  updatedAt: number
+}
+
+export type CloudflareMachineBinding = CloudflareLocalBinding
+
+export interface CloudflareTunnelInventory {
+  checkedAt: number
+  availability: CloudflareAvailability
+  tokenPresent: boolean
+  accounts: CloudflareAccount[]
+  zones: CloudflareZone[]
+  tunnels: CloudflareTunnel[]
+  connections: CloudflareTunnelConnection[]
+  routes: CloudflareTunnelRoute[]
+  dnsRecords: CloudflareDnsRecord[]
+  errors: CloudflareErrorInfo[]
+  binding: CloudflareMachineBinding | null
+  /** No connector runtime is included in this lane. */
+  connectorRuntime: 'not-included'
+}
+
+export interface CloudflareRouteInput {
+  hostname: string
+  service: string
+  path?: string | null
+  originRequest?: Record<string, unknown> | null
+}
+
+export interface CloudflareHostnameConflict {
+  hostname: string
+  kind: 'managed-route' | 'unmanaged-route' | 'dns-record' | 'invalid'
+  detail: string
+  blocking: boolean
+}
+
+export interface CloudflareConfigurationPreview {
+  previewId: string
+  accountId: string
+  tunnelId: string
+  desiredRoutes: CloudflareRouteInput[]
+  preservedRoutes: CloudflareTunnelRoute[]
+  conflicts: CloudflareHostnameConflict[]
+  allowed: boolean
+  /** Exactly what a mutation would change, with no token or private path. */
+  summary: string[]
+  generatedAt: number
+}
+
+export interface CloudflareDnsOwnershipProof {
+  zoneId: string
+  zoneName: string
+  recordId: string
+  recordName: string
+  recordType: string
+  recordContent: string
+  accountId: string
+  observedAt: number
+}
+
+export interface CloudflareDnsAdoptionPreview {
+  previewId: string
+  hostname: string
+  tunnelId: string
+  zoneId: string
+  ownershipProof: CloudflareDnsOwnershipProof | null
+  conflicts: CloudflareHostnameConflict[]
+  allowed: boolean
+  summary: string[]
+  generatedAt: number
+}

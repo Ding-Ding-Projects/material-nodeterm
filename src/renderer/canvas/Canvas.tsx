@@ -143,6 +143,7 @@ import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import PhotoNode from '../nodes/PhotoNode'
 import GalleryNode from '../nodes/GalleryNode'
+import PortableMediaNode from '../nodes/PortableMediaNode'
 import WildDimSumNode from '../nodes/WildDimSumNode'
 import WebNode from '../nodes/WebNode'
 import AwsResourceNode from '../nodes/AwsResourceNode'
@@ -2535,9 +2536,7 @@ export function Canvas() {
       gallery: withNodeBoundary(GalleryNode),
       'wild-dim-sum': withNodeBoundary(WildDimSumNode),
       video: withNodeBoundary(VideoNode),
-      photo: withNodeBoundary(PortableMediaNode),
       audio: withNodeBoundary(PortableMediaNode),
-      gallery: withNodeBoundary(PortableMediaNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
       files: withNodeBoundary(FilesNode),
@@ -19671,7 +19670,6 @@ export function Canvas() {
             onOpenKids={() => {
               void enterKidsModeFromRail()
             }}
-            onOpenCatalog={() => setNodeCatalog({})}
             onAddTerminal={defaultTerminalCreationHandler(addTerminal)}
             onOpenCatalog={() => setNodeCatalog({ at: viewCenter() ?? undefined })}
             offersTerminalProfiles={offersTerminalProfiles}
@@ -20505,7 +20503,6 @@ export function Canvas() {
         onProjectContextMenu={onProjectContextMenu}
         onSwitchProject={switchProject}
         onAddToProject={addToProject}
-        onBindWorktree={bindWorktreeFromSidebar}
         onMouseEnter={openSessionsPeek}
         onMouseLeave={closeSessionsPeekSoon}
       />

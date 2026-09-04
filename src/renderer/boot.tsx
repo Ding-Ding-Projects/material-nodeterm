@@ -7,8 +7,6 @@ import { ensureCodexIdentityCaps } from './state/codexIdentity'
 import { initAgentResolver } from './state/agent-resolver'
 import { refreshAgentEnv } from './lib/agentEnv'
 import './fonts.css'
-import { initAgentResolver } from './state/agent-resolver'
-import { refreshAgentEnv } from './lib/agentEnv'
 import './styles.css'
 import './styles.md3.css'
 // The MD3 primitive sheet (mdx-btn/-seg/-chip/-field/-dialog/…). `ui/md3/index.ts` imports it too,
