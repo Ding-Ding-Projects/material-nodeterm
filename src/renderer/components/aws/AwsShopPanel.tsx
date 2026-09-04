@@ -3,7 +3,7 @@ import { AWS_CATALOG, type AwsCatalogCategory, type AwsCatalogEntry } from '@sha
 import { searchAwsCatalog } from '@shared/aws-catalog'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
-import { Button, Checkbox, SearchField } from '../../ui/md3'
+import { Button, Checkbox, SearchField, Tablist } from '../../ui/md3'
 
 const CATEGORIES: Array<AwsCatalogCategory | 'all'> = [
   'all', 'Identity', 'Compute', 'Storage', 'Networking', 'Observability', 'Infrastructure', 'Developer tools'
@@ -62,7 +62,7 @@ export function AwsShopPanel({ universeId, onCreate, onClose }: AwsShopPanelProp
           Show unavailable entries
         </label>
       </div>
-      <div className="aws-shop__categories" role="tablist" aria-label="AWS catalog categories">
+      <Tablist className="aws-shop__categories" ariaLabel="AWS catalog categories">
         {CATEGORIES.map((item) => (
           <Button
             variant={category === item ? 'tonal' : 'text'}
@@ -76,7 +76,7 @@ export function AwsShopPanel({ universeId, onCreate, onClose }: AwsShopPanelProp
             {item === 'all' ? 'All' : item}
           </Button>
         ))}
-      </div>
+      </Tablist>
       {search.error || result.error ? <p className="aws-shop__error" role="alert">{search.error ?? result.error}</p> : null}
       <p className="aws-shop__count" aria-live="polite">{result.matchedCount} catalog entries shown in universe {universeId}</p>
       <div className="aws-shop__list" role="listbox" aria-label="AWS catalog entries">

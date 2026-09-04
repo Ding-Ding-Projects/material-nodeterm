@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { BranchSelect } from '../BranchSelect'
-import { Button, FieldLabel, SearchField } from '@renderer/ui/md3'
+import { Button, FieldLabel, SearchField, Tablist } from '@renderer/ui/md3'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
 import { useProjects } from '../../state/projects'
@@ -144,14 +144,14 @@ export function LinkTargetPicker({
     <div className="confirm-overlay link-picker-overlay" onClick={onCancel}>
       <div className="confirm link-picker" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <h2>New link</h2>
-        <div className="link-picker__tabs" role="tablist" aria-label="Target type">
+        <Tablist className="link-picker__tabs" ariaLabel="Target type">
           <Button variant="text" size="small" role="tab" aria-selected={targetMode === 'node'} onClick={() => setTargetMode('node')}>
             Node
           </Button>
           <Button variant="text" size="small" role="tab" aria-selected={targetMode === 'branch'} onClick={() => setTargetMode('branch')}>
             Branch
           </Button>
-        </div>
+        </Tablist>
         {targetMode === 'node' ? (
           <>
             <FieldLabel className="link-picker__field" label="Find a project or node" htmlFor="link-picker-query">

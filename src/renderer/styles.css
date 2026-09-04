@@ -138,12 +138,14 @@
      now scans styles.md3.css too, which is how these were found undefined. */
   --md-elevation-1: var(--md-sys-elevation-1);
   --md-sys-elevation-level2: var(--md-elevation-2);
+  --md-sys-elevation-2: var(--md-elevation-2);
   --md-sys-elevation-level3: var(--md-elevation-3);
   --md-shape-corner-full: var(--md-shape-full);
   --md-shape-corner-large: var(--md-shape-large);
   --md-sys-shape-corner-full: var(--md-shape-full);
   --md-sys-shape-corner-large: var(--md-shape-large);
   --md-sys-shape-corner-medium: var(--md-shape-medium);
+  --md-sys-shape-corner-small: var(--md-shape-small);
   --md-sys-color-error-container: var(--md-error-container);
   --md-sys-color-on-error-container: var(--md-on-error-container);
   --md-sys-color-on-primary-container: var(--md-on-primary-container);
@@ -422,7 +424,7 @@
    overlays into darken-the-surface, at the exact alpha each already used — text, borders, hover
    fills and gradient stops together. What is left is the handful of opaque surfaces, restated
    below as their own M3 literal per the design's light scheme. */
-:root[data-theme="light"] {
+:root[data-theme='light'] {
   color-scheme: light;
 
   /* Primary */
@@ -1460,13 +1462,11 @@ body,
    Never set `transform` on a React Flow handle: the side classes (.react-flow__handle-left/right/
    top/bottom) POSITION the dot with translate(±50%, ±50%), so any transform override replaces
    that and shifts the dot away from the cursor mid-hover. Hover feedback is a ring, not a scale. */
+/* width/height/border/opacity are declared by styles.md3.css, which is imported after this
+   sheet and therefore wins. They were dead here. */
 .react-flow__handle.bridge-handle {
-  width: 13px;
-  height: 13px;
   background: var(--accent);
-  border: 2px solid var(--panel);
   box-shadow: 0 1px 4px rgba(0, 0, 0, calc(0.5 * var(--shadow-k)));
-  opacity: 0.4;
   z-index: 20;
   transition:
     opacity 0.12s ease,
@@ -1477,7 +1477,7 @@ body,
   opacity: 1;
 }
 .react-flow__handle.bridge-handle:hover {
-  opacity: 1;
+  /* opacity: md3 declares it. */
   box-shadow:
     0 1px 4px rgba(0, 0, 0, calc(0.5 * var(--shadow-k))),
     0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
@@ -7574,8 +7574,8 @@ button.group-node__setup:disabled {
 .session-icon-menu__preview { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-bottom: 14px; font-weight: 600; }
 .session-icon-menu__row { display: flex; gap: 8px; align-items: center; margin: 6px 0 16px; }
 .session-icon-menu__row input { flex: 1; }
-.session-icon-menu__hint { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
-.session-icon-menu__error { color: var(--error); font-size: 12px; }
+.session-icon-menu__hint { color: var(--md-on-surface-variant); font-size: 12px; line-height: 1.45; }
+.session-icon-menu__error { color: var(--md-error); font-size: 12px; }
 
 /* Sessions sidebar — shell */
 .sessions-sidebar {

@@ -8,7 +8,7 @@ import {
 } from '@shared/aws-cli'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
-import { Button, SearchField } from '../../ui/md3'
+import { Button, SearchField, Tablist } from '../../ui/md3'
 
 export interface AwsCliDocsIndexPanelProps {
   snapshot: AwsCliIndexSnapshot | null
@@ -150,7 +150,7 @@ export function AwsCliDocsIndexPanel({ snapshot, onClose, onRefresh, onOpenHelp 
                 </div>
                 <a href={selectedService.documentationUrl} target="_blank" rel="noreferrer">Official service documentation</a>
               </div>
-              <div className="aws-cli-index__command-tabs" role="tablist" aria-label={`${selectedService.name} commands`}>
+              <Tablist className="aws-cli-index__command-tabs" ariaLabel={`${selectedService.name} commands`}>
                 {visibleCommands.slice(0, 200).map((command) => (
                   <Button
                     key={command.name}
@@ -163,7 +163,7 @@ export function AwsCliDocsIndexPanel({ snapshot, onClose, onRefresh, onOpenHelp 
                     {command.name}
                   </Button>
                 ))}
-              </div>
+              </Tablist>
               {selectedCommand && (
                 <article className="aws-cli-index__command" role="tabpanel">
                   <div className="aws-cli-index__command-heading">

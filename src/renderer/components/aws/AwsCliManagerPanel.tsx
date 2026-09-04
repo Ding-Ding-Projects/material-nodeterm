@@ -5,7 +5,7 @@ import { useActiveSessionApi } from '../../session/session'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { MaterialSymbol } from '../MaterialSymbol'
-import { Button, IconButton, SearchField } from '../../ui/md3'
+import { Button, IconButton, SearchField, Tablist } from '../../ui/md3'
 
 export interface AwsCliManagerPanelProps {
   onClose: () => void
@@ -95,7 +95,7 @@ export function AwsCliManagerPanel({ onClose }: AwsCliManagerPanelProps): React.
           <h2>AWS CLI v2 manager</h2>
           <IconButton className="drawer__close" icon="close" onClick={onClose} aria-label="Close AWS CLI manager" />
         </header>
-        <div className="aws-cli__tabs" role="tablist" aria-label="AWS CLI manager sections">
+        <Tablist className="aws-cli__tabs" ariaLabel="AWS CLI manager sections">
           <Button
             variant={tab === 'status' ? 'tonal' : 'text'}
             size="small"
@@ -117,7 +117,7 @@ export function AwsCliManagerPanel({ onClose }: AwsCliManagerPanelProps): React.
           >
             Foundation models
           </Button>
-        </div>
+        </Tablist>
         {tab === 'status' ? (
           <section className="aws-cli__section" role="tabpanel">
             <h3>Windows x64 CLI</h3>

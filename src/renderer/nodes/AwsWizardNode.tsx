@@ -18,7 +18,7 @@ import { useRegexSearchField } from '@renderer/lib/regex/useRegexSearchField'
 import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
 import { Switch } from '../ui/Switch'
-import { Button, IconButton, TextArea } from '../ui/md3'
+import { Button, IconButton, Tablist, TextArea } from '../ui/md3'
 import { MaterialSymbol } from '../components/MaterialSymbol'
 import { useI18n } from '../lib/i18n'
 
@@ -277,10 +277,10 @@ export default function AwsWizardNode({ id, data, selected }: NodeProps<CanvasNo
           <div className="menu-filter__row"><Input ref={inputRef} value={search.value} onChange={(event) => search.setValue(event.target.value)} placeholder={search.mode === 'regex' ? ui('Filter fields… (regex)', '篩選欄位…（正則表達式）') : ui('Filter fields…', '篩選欄位…')} aria-label={ui('Search AWS wizard fields', '搜尋 AWS 精靈欄位')} /><AnchoredRegexBuilder search={search} fieldRef={inputRef} label={ui('Regex builder for AWS wizard fields', 'AWS 精靈欄位正則表達式建立器')} zIndex={90} /></div>
           {search.error && <span className="aws-wizard__error">{search.error}</span>}
         </div>
-        <div className="aws-wizard__tabs" role="tablist" aria-label={ui('AWS wizard views', 'AWS 精靈檢視')}>
+        <Tablist className="aws-wizard__tabs" ariaLabel={ui('AWS wizard views', 'AWS 精靈檢視')}>
           <Button variant={advancedMode === 'json' ? 'tonal' : 'text'} size="small" role="tab" aria-selected={advancedMode === 'json'} className={`nodrag ${advancedMode === 'json' ? 'is-active' : ''}`} onClick={() => { setAdvancedMode('json'); setAdvancedDraft(null); setAdvancedError(null) }}>{ui('Typed controls + JSON', '類型控制 + JSON')}</Button>
           <Button variant={advancedMode === 'yaml' ? 'tonal' : 'text'} size="small" role="tab" aria-selected={advancedMode === 'yaml'} className={`nodrag ${advancedMode === 'yaml' ? 'is-active' : ''}`} onClick={() => { setAdvancedMode('yaml'); setAdvancedDraft(null); setAdvancedError(null) }}>{ui('Typed controls + YAML', '類型控制 + YAML')}</Button>
-        </div>
+        </Tablist>
         <div className="aws-wizard__editor-grid">
           <div className="aws-wizard__typed" role="tabpanel">
             <FieldEditor field={schema.input} path={[]} values={values} setValue={setValue} setLocalFile={setLocalFile} localFiles={localFiles} errors={errors} matches={search.test} />
