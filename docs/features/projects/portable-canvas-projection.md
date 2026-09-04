@@ -16,9 +16,10 @@ metadata only and carries no machine identity or runtime handle. The projection 
 safe text and browser tab presentation, service labels, deterministic universe Shop metadata,
 bridge and rope relationships, and an
 optional bounded global appearance record. Per-element appearance is postponed until its typed
-schema exists. Child canvases are represented now so later universe and portal
-features can add their own records without changing the root contract. A universe scope is either
-`multiverse` or `aws-universe`; the root scope is `root`.
+schema exists. Multiverse child canvases carry their own node content, viewport,
+`rootCanvasId`, `parentCanvasId`, and exact depth, so a portable save preserves the hierarchy
+without turning children into project tabs. A universe scope is either `multiverse` or
+`aws-universe`; the root scope is `root`.
 
 ## Excluded data
 

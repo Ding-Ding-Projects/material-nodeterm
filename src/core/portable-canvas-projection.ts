@@ -179,6 +179,8 @@ export interface PortableCanvasProjectionV3 {
 export interface PortableCanvasProjectionInput {
   /** Future child canvases may be supplied without changing the root Project type. */
   canvases?: Array<Omit<PortableCanvasV3, 'nodeIds'> & { nodeIds?: string[] }>
+  /** Project-owned Multiverse hierarchy and child content. */
+  multiverse?: MultiverseState
   appearance?: Record<string, unknown>
   /** Project-owned media manifest. Source paths and machine bindings are intentionally absent. */
   media?: PortableMediaManifest
@@ -790,6 +792,10 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
     if (canvasIds.has(id)) throw new PortableProjectV3Error('manifest', `Duplicate portable canvas: ${id}`)
     canvasIds.add(id)
     if (!['root', 'multiverse', 'aws-universe'].includes(String(canvas.scope))) throw new PortableProjectV3Error('manifest', 'Portable canvas scope is invalid.')
+    if (canvas.scope === 'multiverse') {
+      if (canvas.rootCanvasId !== 'root') throw new PortableProjectV3Error('manifest', 'Portable Multiverse canvas root identity is invalid.')
+      finite(canvas.depth, 'canvas depth')
+    }
     if (!Array.isArray(canvas.nodeIds)) throw new PortableProjectV3Error('manifest', 'Portable canvas nodeIds must be an array.')
     canvas.nodeIds.forEach((nodeId) => text(nodeId, 'canvas node id'))
     const members = new Set<string>()

@@ -1583,6 +1583,7 @@ export function Canvas() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [docsOpen, setDocsOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
+  const [multiverseOpen, setMultiverseOpen] = useState(false)
   const unreadNotifCount = useNotifications((s) => selectUnreadCount(s.items))
   // Quick phone-pair popover (top-right phone button); non-null = open, anchored to the button.
   const [phonePairAnchor, setPhonePairAnchor] = useState<{

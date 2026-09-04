@@ -1,6 +1,7 @@
 # Projects
 
-A project is one canvas — one page of nodes, with its own working directory and its own tab.
+A project owns a root canvas and one project tab. Multiverse child canvases are nested content
+scopes inside that project, never additional project tabs.
 
 - [Projects & tabs](./projects-and-tabs.md) — how projects are created, switched, closed,
   reopened, and persisted to disk; how a project binds to a folder.
