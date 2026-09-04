@@ -121,6 +121,7 @@ import { assertSupportedNodeRuntime } from '../core/node-runtime'
 import { TriggerArmStore } from '../core/trigger-arm-store'
 import { TriggerScheduler } from '../core/trigger-scheduler'
 import { registerTriggerIpc, triggerIpcNotify } from '../core/trigger-ipc'
+import { registerCloudFormationIpc } from '../core/cloudformation/service'
 
 // Same env-override + default as src/core/check.ts / license.ts / src/main/telemetry.ts — each
 // shell derives it locally rather than sharing an import (src/server must not import src/main).

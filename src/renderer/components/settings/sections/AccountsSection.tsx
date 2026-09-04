@@ -207,93 +207,6 @@ function AccountRow({
 }
 
 function AccountColorSwatches({
-  account,
-  onChange
-}: {
-  account: { id: string; label: string; color?: string }
-  onChange: (id: string, color?: string) => void
-}): React.JSX.Element {
-  return (
-    <div
-      role="group"
-      aria-label={`Default node color for ${account.label}`}
-      className="flex flex-wrap items-center gap-2 pt-1"
-    >
-      <span className="text-[12px] text-muted">Node color</span>
-      <Chip vocabularyMode="factual" selected={!account.color}
-       
-        aria-label="Default"
-        aria-pressed={!account.color}
-        title="Use the agent's own color"
-        onClick={() => onChange(account.id, undefined)}
-        className={cn(
-          'flex size-5 items-center justify-center rounded-full border-2 text-[11px] text-muted',
-          account.color ? 'border-transparent bg-fill-weak' : 'border-text bg-fill-weak'
-        )}
-      >
-        ×
-      </Chip>
-      {NODE_COLORS.map((color) => (
-        <Chip vocabularyMode="factual" selected={account.color === color}
-          key={color}
-         
-          aria-label={color}
-          aria-pressed={account.color === color}
-          title={`Use ${color}`}
-          onClick={() => onChange(account.id, color)}
-          style={{ background: color }}
-          className={cn(
-            'size-5 rounded-full border-2',
-            account.color === color ? 'border-text' : 'border-transparent'
-          )} />
-      ))}
-    </div>
-  )
-}
-
-/** Reads fresh settings then applies a transform to the accounts list (avoids stale closures
- *  after an awaited login resolves late). */
-function applyAccounts(fn: (accs: ClaudeAccount[]) => ClaudeAccount[]): void {
-  const s = useSettings.getState()
-  s.update({ claudeAccounts: fn(s.settings.claudeAccounts) })
-}
-
-/** Exact serialized bindings disclosed with an account removal, sorted for stable comparison. */
-function affectedNodesUsing(accountId: string): string[] | null {
-  const state = useProjects.getState()
-  const live = requestAccountRemovalScope(accountId, (detail) =>
-    window.dispatchEvent(new CustomEvent(ACCOUNT_REMOVAL_SCOPE_EVENT, { detail }))
-  )
-  if (!live) return null
-  return [
-    ...state.projects
-      .filter((project) => project.id !== state.activeProjectId)
-      .flatMap((project) =>
-      project.nodes
-        .filter((node) => node.accountId === accountId)
-        .map((node) =>
-          accountRemovalNodeTargetIdentity({
-            projectId: project.id,
-            id: node.id,
-            type: node.kind,
-            title: node.title,
-            accountId: node.accountId,
-            accountLogin: node.accountLogin === true,
-            incarnation: nodeDeletionTargetIncarnation(node)
-          })
-        )
-      ),
-    ...live
-  ].sort()
-}
-
-/** The same fresh-read/transform for the Codex account list. */
-function applyCodexAccounts(fn: (accs: CodexAccount[]) => CodexAccount[]): void {
-  const s = useSettings.getState()
-  s.update({ codexAccounts: fn(s.settings.codexAccounts) })
-}
-
-function AccountColorSwatches({
   label,
   color,
   onPick
@@ -361,6 +274,35 @@ function countNodesUsing(accountId: string): number {
       (sum, p) => sum + p.nodes.filter((n) => n.accountId === accountId).length,
       0
     )
+}
+
+/** Exact serialized bindings disclosed with an account removal, sorted for stable comparison. */
+function affectedNodesUsing(accountId: string): string[] | null {
+  const state = useProjects.getState()
+  const live = requestAccountRemovalScope(accountId, (detail) =>
+    window.dispatchEvent(new CustomEvent(ACCOUNT_REMOVAL_SCOPE_EVENT, { detail }))
+  )
+  if (!live) return null
+  return [
+    ...state.projects
+      .filter((project) => project.id !== state.activeProjectId)
+      .flatMap((project) =>
+      project.nodes
+        .filter((node) => node.accountId === accountId)
+        .map((node) =>
+          accountRemovalNodeTargetIdentity({
+            projectId: project.id,
+            id: node.id,
+            type: node.kind,
+            title: node.title,
+            accountId: node.accountId,
+            accountLogin: node.accountLogin === true,
+            incarnation: nodeDeletionTargetIncarnation(node)
+          })
+        )
+      ),
+    ...live
+  ].sort()
 }
 
 export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.Element {
@@ -764,7 +706,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                     pending
                   </span>
                 ) : null}
-                <AccountColorSwatches account={account} onChange={setCodexColor} />
+                <AccountColorSwatches label={account.label} color={account.color} onPick={(value) => setCodexColor(account.id, value)} />
               </div>
               <Button
                 variant="ghost"
@@ -1058,16 +1000,16 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
     >
       <SearchableRow {...ROWS.accounts}>
     <div className="space-y-4" data-easter-surface="account">
-          {versionWarning ? (
-            <div className="flex items-start justify-between gap-3 rounded-md border border-[color:var(--danger)]/40 bg-[color:var(--danger)]/10 px-3 py-2 text-[13px] leading-relaxed text-[color:var(--danger)]">
-              <span><SettingsText>Your installed Claude CLI is older than the version that scopes credentials per config dir. Accounts still isolate their config, but on macOS logins may collide in the shared keychain. Update the Claude CLI to keep them fully separate.</SettingsText></span>
-              <Md3Button variant="text" size="small"
-                onClick={() => setVersionWarning(false)}
-              >
-                <SettingsText>Dismiss</SettingsText>
-              </Md3Button>
-            </div>
-          ) : null}
+          {/* The macOS keychain-collision warning that lived here is GONE, not disabled: it was
+              driven by a `versionSupported` flag that `claudeAccounts.add()` no longer returns, and
+              by an `isSupportedClaudeVersion` probe that no longer exists anywhere in the tree. The
+              markup survived the merge that removed its data source, so it referenced an undeclared
+              `versionWarning` and crashed this whole section at render.
+          
+              Left removed rather than re-declared as a constant `false`: a warning that can never
+              fire is the decorative UI this codebase refuses everywhere else. If the gate is wanted
+              back, it needs the probe and the add() return value restored first — the UI is the
+              last part to bring back, not the first. */}
 
           <MachinePanel label="This Mac" remote={false}>
             <ProviderSection
@@ -1108,7 +1050,6 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                       value={account.label}
                       onChange={(event) => setLabel(account.id, event.target.value)}
                     />
-                    <AccountColorSwatches account={account} onChange={setColor} />
                   </>
                   }
                   details={
@@ -1170,7 +1111,6 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                   value={account.label}
                   onChange={(event) => setCodexLabel(account.id, event.target.value)}
                 />
-                <AccountColorSwatches account={account} onChange={setCodexColor} />
                 </>
               }
               details={
@@ -1243,7 +1183,6 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                       value={account.label}
                       onChange={(event) => setLabel(account.id, event.target.value)}
                     />
-                    <AccountColorSwatches account={account} onChange={setColor} />
                     </>
                   }
                   details={
@@ -1319,7 +1258,6 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                   value={account.label}
                   onChange={(event) => setCodexLabel(account.id, event.target.value)}
                 />
-                <AccountColorSwatches account={account} onChange={setCodexColor} />
                 </>
               }
               details={

@@ -21,8 +21,6 @@ export interface SessionRowProps {
   onContextMenu(e: React.MouseEvent): void
   onDragStart(): void
   onDragEnd(): void
-  /** Status-group mode only: elapsed time since the current state began. */
-  stateAgeLabel?: string
 }
 
 function dirName(p?: string): string {
@@ -43,7 +41,6 @@ export function SessionRow({
   onContextMenu,
   onDragStart,
   onDragEnd,
-  stateAgeLabel
 }: SessionRowProps): JSX.Element {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(row.title)

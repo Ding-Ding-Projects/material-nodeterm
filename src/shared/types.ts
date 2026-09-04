@@ -435,6 +435,14 @@ export type NodeKind =
   // Offline AWS request wizard. The schema and values are safe intent only; it never executes a
   // provider request, and machine-local file selections stay in the renderer overlay.
   | 'aws-wizard'
+  // Five literals the merge dropped from this union while keeping the factories that mint them.
+  // `workspace.ts` writes `type: 'kiosk'` and `type: 'portal-door'` today, so their absence here
+  // was a union that could not describe nodes the app already creates.
+  | 'browser-portal'
+  | 'debug-browser'
+  | 'kiosk'
+  | 'aws-service'
+  | 'portal-door'
   // The built-in authenticator, as a node. A VIEW of this machine's own TOTP generators: it
   // persists a title and a colour and nothing else, because an entry id names a credential in
   // this machine's OS vault while project.json is git-shared. See AuthenticatorNode.tsx.

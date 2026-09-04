@@ -204,13 +204,6 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
         : [],
     [open, grouping, projects, liveActiveNodes, activeProjectId, statusById, filter]
   )
-  const statusSections = useMemo(
-    () =>
-      open && grouping === 'status'
-        ? buildStatusList(projects, liveActiveNodes, activeProjectId, statusById, filter)
-        : [],
-    [open, grouping, projects, liveActiveNodes, activeProjectId, statusById, filter]
-  )
 
   useEffect(() => {
     if (!open || grouping !== 'status') return
@@ -518,21 +511,6 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
   // move-to-group are project-mode concepts — their drop targets (project headers, sub-groups)
   // aren't rendered in status mode, so the row is not draggable here. It stays clickable,
   // closable, renameable, and right-clickable.
-  const renderStatusRow = (row: SessionRowVM): JSX.Element => (
-    <div key={row.id} className="ss-rowdrop">
-      <SessionRow
-        row={row}
-        onClick={() => props.onFocusNode(row.id)}
-        onClose={() => props.onCloseSession(row.projectId!, row.id)}
-        onRename={(title) => props.onRenameSession(row.projectId!, row.id, title)}
-        onAiName={() => props.onAiNameSession(row.projectId!, row.id, row.cwd)}
-        onContextMenu={(e) => props.onRowContextMenu(e, row.projectId!, row.id)}
-        onDragStart={() => {}}
-        onDragEnd={() => {}}
-        stateAgeLabel={sessionStateAgeLabel(row.statusUpdatedAt, statusNow)}
-      />
-    </div>
-  )
 
   const renderAdoptable = (row: AdoptableWorktreeRow): JSX.Element => {
     const detached = !row.entry.branch
