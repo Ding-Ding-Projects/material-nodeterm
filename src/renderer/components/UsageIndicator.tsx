@@ -239,6 +239,8 @@ export function UsageIndicator({
   const [acctUsage, setAcctUsage] = useState<Record<string, ClaudeUsage | null>>({})
   const [providers, setProviders] = useState<ProviderUsage[]>([])
   const [remote, setRemote] = useState<RemoteAccountUsage[]>([])
+  const accountSearch = useRegexSearchField({ mode: 'text' })
+  const accountSearchInputRef = useRef<HTMLInputElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
   const pillRef = useRef<HTMLButtonElement>(null)
   const closeTimerRef = useRef<number | null>(null)
@@ -269,6 +271,9 @@ export function UsageIndicator({
     usageScopeKey(s.projects.find((p) => p.id === s.activeProjectId))
   )
   const scope = useMemo(() => scopeFromKey(scopeHostKey), [scopeHostKey])
+  const defaultAccountId = useProjects((s) =>
+    s.projects.find((p) => p.id === s.activeProjectId)?.defaultAccountId
+  )
 
   useEffect(() => {
     void window.nodeTerminal.usage.fetch().then((next) => {
