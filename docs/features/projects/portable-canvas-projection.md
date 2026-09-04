@@ -37,7 +37,7 @@ data; archive publication, local bindings, and runtime hydration remain separate
 ## Determinism and limits
 
 `projectToPortableCanvasV3` selects only safe fields and sorts nodes, child canvases, tags, and
-relationships. `serializePortableCanvasProjectionV3` recursively sorts object keys and emits
+relationships, and saved layouts. `serializePortableCanvasProjectionV3` recursively sorts object keys and emits
 compact UTF-8 JSON bytes suitable for `project.json`. The validator bounds canvases, nodes,
 relationships, nesting, strings, global appearance values, and total JSON bytes. Duplicate node or canvas
 identifiers, dangling relationship endpoints, invalid geometry, unsafe keys, invalid scopes, and

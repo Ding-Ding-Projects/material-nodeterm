@@ -946,6 +946,27 @@ export interface CanvasNodeState {
 }
 
 /**
+ * A named, portable canvas arrangement.  This deliberately records only presentation geometry
+ * and the parent relationship.  Credentials, process state, host paths, profiles, and runtime
+ * identifiers remain in the live node state and can never leak through a saved layout.
+ */
+export interface SavedCanvasLayoutNode {
+  id: string
+  position: { x: number; y: number }
+  size: { width: number; height: number }
+  parentId?: string
+  collapsed?: boolean
+}
+
+export interface SavedCanvasLayout {
+  version: 1
+  id: string
+  name: string
+  createdAt: string
+  nodes: SavedCanvasLayoutNode[]
+}
+
+/**
  * A snapshot of one canvas's nodes in the form sent over the remote mirror wire.
  * Reuses the persisted node shape (`CanvasNodeState`) so host and client agree on layout.
  */

@@ -157,6 +157,8 @@ export interface PortableProjectDisplayV3 {
   icon?: { type: string; name: string }
 }
 
+export interface PortableSavedCanvasLayoutV3 extends SavedCanvasLayout {}
+
 export interface PortableCanvasProjectionV3 {
   format: typeof PORTABLE_PROJECT_SCHEMA
   schemaVersion: typeof PORTABLE_PROJECT_SCHEMA_VERSION
@@ -672,6 +674,60 @@ function relationships(project: Project): PortableRelationshipV3[] {
     append(canvas.id, 'rope', canvas.ropes)
   }
   return all.sort((a, b) => a.kind.localeCompare(b.kind) || a.order - b.order || a.id.localeCompare(b.id)).map((link, order) => ({ ...link, order }))
+}
+
+function savedLayouts(project: Project): PortableSavedCanvasLayoutV3[] | undefined {
+  if (!project.savedLayouts?.length) return undefined
+  const layouts: PortableSavedCanvasLayoutV3[] = []
+  for (const layout of project.savedLayouts) {
+    if (!record(layout) || layout.version !== 1 || typeof layout.id !== 'string' || !layout.id.trim() ||
+        typeof layout.name !== 'string' || !layout.name.trim() || typeof layout.createdAt !== 'string' ||
+        !Array.isArray(layout.nodes)) continue
+    const nodes = layout.nodes.filter((node) => record(node) && typeof node.id === 'string' && node.id.trim() &&
+      record(node.position) && Number.isFinite(node.position.x) && Number.isFinite(node.position.y) &&
+      record(node.size) && Number.isFinite(node.size.width) && Number.isFinite(node.size.height) &&
+      node.size.width > 0 && node.size.height > 0 &&
+      (node.parentId === undefined || typeof node.parentId === 'string') &&
+      (node.collapsed === undefined || typeof node.collapsed === 'boolean'))
+      .map((node) => ({
+        id: node.id,
+        position: { x: node.position.x, y: node.position.y },
+        size: { width: node.size.width, height: node.size.height },
+        ...(node.parentId !== undefined ? { parentId: node.parentId } : {}),
+        ...(node.collapsed !== undefined ? { collapsed: node.collapsed } : {})
+      }))
+    if (nodes.length === 0 || nodes.length > 20_000 || layout.id.length > 128 || layout.name.length > 160 || layout.createdAt.length > 80) continue
+    layouts.push({ version: 1, id: layout.id, name: layout.name, createdAt: layout.createdAt, nodes })
+  }
+  return layouts.length ? layouts : undefined
+}
+
+function normalizedSavedLayouts(value: unknown): PortableSavedCanvasLayoutV3[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length > 256) throw new PortableProjectV3Error('entry-limit', 'Portable saved layout count exceeds its bound.')
+  const seen = new Set<string>()
+  const layouts: PortableSavedCanvasLayoutV3[] = []
+  for (const item of value) {
+    if (!record(item)) throw new PortableProjectV3Error('manifest', 'Portable saved layout is invalid.')
+    exactKeys(item, ALLOWED_SAVED_LAYOUT, 'saved layout')
+    if (item.version !== 1 || typeof item.id !== 'string' || !item.id.trim() || item.id.length > 128 || seen.has(item.id)) throw new PortableProjectV3Error('manifest', 'Portable saved layout id is invalid or duplicated.')
+    const rawNodes = item.nodes
+    if (typeof item.name !== 'string' || !item.name.trim() || item.name.length > 160 || typeof item.createdAt !== 'string' || item.createdAt.length > 80 || !Array.isArray(rawNodes) || rawNodes.length === 0 || rawNodes.length > PORTABLE_CANVAS_LIMITS.maxNodes) throw new PortableProjectV3Error('manifest', 'Portable saved layout metadata is invalid.')
+    const nodeIds = new Set<string>()
+    const nodes = rawNodes.map((raw) => {
+      if (!record(raw)) throw new PortableProjectV3Error('manifest', 'Portable saved layout node is invalid.')
+      exactKeys(raw, ALLOWED_SAVED_LAYOUT_NODE, 'saved layout node')
+      if (typeof raw.id !== 'string' || !raw.id.trim() || nodeIds.has(raw.id) || !record(raw.position) || !record(raw.size)) throw new PortableProjectV3Error('manifest', 'Portable saved layout node identity is invalid.')
+      nodeIds.add(raw.id)
+      const x = finite(raw.position.x, 'saved layout x'); const y = finite(raw.position.y, 'saved layout y')
+      const width = finite(raw.size.width, 'saved layout width'); const height = finite(raw.size.height, 'saved layout height')
+      if (width <= 0 || height <= 0 || (raw.parentId !== undefined && typeof raw.parentId !== 'string') || (raw.collapsed !== undefined && typeof raw.collapsed !== 'boolean')) throw new PortableProjectV3Error('manifest', 'Portable saved layout geometry is invalid.')
+      return { id: raw.id, position: { x, y }, size: { width, height }, ...(raw.parentId !== undefined ? { parentId: raw.parentId } : {}), ...(raw.collapsed !== undefined ? { collapsed: raw.collapsed } : {}) }
+    })
+    seen.add(item.id)
+    layouts.push({ version: 1, id: item.id, name: item.name, createdAt: item.createdAt, nodes })
+  }
+  return layouts.length ? layouts : undefined
 }
 
 /** Project only the portable presentation and safe intent fields. Forbidden live fields are never read. */

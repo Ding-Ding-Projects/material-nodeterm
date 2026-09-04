@@ -13,6 +13,12 @@ export type ZoneId =
   | 'right-half'
   | 'top-half'
   | 'bottom-half'
+  | 'left-third'
+  | 'center-third'
+  | 'right-third'
+  | 'top-third'
+  | 'middle-third'
+  | 'bottom-third'
   | 'top-left'
   | 'top-right'
   | 'bottom-left'
@@ -123,4 +129,19 @@ export function zoneTargetRect(
     width: (right - left) / viewport.zoom,
     height: (bottom - top) / viewport.zoom
   }
+}
+
+/** Screen-space geometry used by the drag overlay.  Keeping this conversion beside the flow
+ * geometry prevents the overlay and the eventual drop from disagreeing at non-100% zoom. */
+export function zoneScreenRect(
+  viewport: Viewport,
+  containerWidth: number,
+  containerHeight: number,
+  zone: ZoneId,
+  marginPx: number = ZONE_MARGIN_PX,
+  gutterPx: number = ZONE_GUTTER_PX
+): FlowRect | null {
+  const flow = zoneTargetRect(viewport, containerWidth, containerHeight, zone, marginPx, gutterPx)
+  if (!flow) return null
+  return { x: flow.x * viewport.zoom + viewport.x, y: flow.y * viewport.zoom + viewport.y, width: flow.width * viewport.zoom, height: flow.height * viewport.zoom }
 }

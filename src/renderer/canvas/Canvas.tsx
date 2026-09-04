@@ -732,7 +732,8 @@ import type {
   ProjectKanban,
   SshPassphraseRequest,
   SshProjectStatus,
-  TranscriptHit
+  TranscriptHit,
+  SavedCanvasLayout
 } from '@shared/types'
 import type { KanbanCreateChoice, KanbanSession } from '../components/kanban/KanbanView'
 import { modalSpawnFromNodeData } from '../components/kanban/modal-spawn'
@@ -873,6 +874,7 @@ import { setFocusNodeHandler } from '../nodes/focus-handler'
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 const GRID = 24
+const EMPTY_SAVED_LAYOUTS: SavedCanvasLayout[] = []
 
 /** Transient state for the single-node project-aware canvas view. */
 interface NodeFocusSession {
@@ -2153,6 +2155,9 @@ export function Canvas() {
   const browserPopupSpawnsRef = useRef<{ url: string; source: string; t: number }[]>([])
   const loadingRef = useRef(false)
   const flowWrapRef = useRef<HTMLDivElement>(null)
+  const layoutButtonRef = useRef<HTMLButtonElement>(null)
+  const [zoneOverlay, setZoneOverlay] = useState<{ nodeId: string; active: ZoneId | null; zones: ZoneId[] } | null>(null)
+  const zoneDragRef = useRef<{ nodeId: string; active: ZoneId | null }>({ nodeId: '', active: null })
   // Undo/redo history (snapshots of the nodes array; arrays are immutable per change).
   const pastRef = useRef<CanvasNode[][]>([])
   const futureRef = useRef<CanvasNode[][]>([])
@@ -10703,6 +10708,74 @@ export function Canvas() {
     }
     prevAutoAlignRef.current = on
   }, [settings.autoAlignGrid, alignToGrid])
+
+  /** Reveal all valid zones while a node is dragged with Ctrl/Meta, or when its pointer approaches
+   * an edge.  The active zone is kept in a ref so the drag-stop callback cannot lose the final
+   * hover when React has not painted the last pointer frame yet. */
+  const updateZoneOverlay = useCallback((event: MouseEvent | TouchEvent, nodeId: string) => {
+    const wrap = flowWrapRef.current
+    if (!wrap) return
+    const point = 'clientX' in event
+      ? { x: event.clientX, y: event.clientY }
+      : event.touches[0]
+        ? { x: event.touches[0].clientX, y: event.touches[0].clientY }
+        : null
+    if (!point) return
+    const bounds = wrap.getBoundingClientRect()
+    const x = point.x - bounds.left
+    const y = point.y - bounds.top
+    const modifier = 'ctrlKey' in event && (event.ctrlKey || event.metaKey)
+    const edge = 96
+    const shouldReveal = modifier || x < edge || x > bounds.width - edge || y < edge || y > bounds.height - edge
+    if (!shouldReveal) {
+      zoneDragRef.current = { nodeId, active: null }
+      setZoneOverlay(null)
+      return
+    }
+    const viewport = getViewport()
+    const shift = 'shiftKey' in event && event.shiftKey
+    const alt = 'altKey' in event && event.altKey
+    const availableZones: ZoneId[] = shift
+      ? ['left-third', 'center-third', 'right-third']
+      : alt
+        ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+        : ['left-half', 'right-half', 'top-half', 'bottom-half']
+    const rects = ZONES.filter((zone) => availableZones.includes(zone.id)).map((zone) => ({ zone: zone.id, rect: zoneScreenRect(viewport, bounds.width, bounds.height, zone.id) })).filter((item): item is { zone: ZoneId; rect: NonNullable<ReturnType<typeof zoneScreenRect>> } => !!item.rect)
+    let active = rects.find(({ rect }) => x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height)?.zone ?? null
+    if (!active && rects.length > 0) {
+      const nearest = rects.reduce((best, item) => {
+        const cx = item.rect.x + item.rect.width / 2
+        const cy = item.rect.y + item.rect.height / 2
+        const distance = (cx - x) ** 2 + (cy - y) ** 2
+        return distance < best.distance ? { item, distance } : best
+      }, { item: rects[0], distance: Number.POSITIVE_INFINITY }).item
+      active = nearest.zone
+    }
+    zoneDragRef.current = { nodeId, active }
+    setZoneOverlay({ nodeId, active, zones: availableZones })
+  }, [getViewport])
+
+  const saveCurrentLayout = useCallback((layout: import('@shared/types').SavedCanvasLayout) => {
+    if (!activeProjectId) return
+    const next = [...savedLayouts.filter((item) => item.id !== layout.id), layout]
+    useProjects.getState().setProjectSavedLayouts(activeProjectId, next)
+    markDirty()
+  }, [activeProjectId, savedLayouts, markDirty])
+
+  const applyLayout = useCallback((layout: import('@shared/types').SavedCanvasLayout, result: SavedLayoutApplyResult) => {
+    if (!result.appliedIds.length) return
+    const next = nodeStatesToFlow(result.nodes)
+    nodesRef.current = next
+    setNodes(next)
+    markDirty()
+    fitAll()
+    const details = [
+      `Applied layout "${layout.name}" to ${result.appliedIds.length} node${result.appliedIds.length === 1 ? '' : 's'}.`,
+      ...(result.missingIds.length ? [`${result.missingIds.length} saved node${result.missingIds.length === 1 ? '' : 's'} were not present.`] : []),
+      ...(result.collisionPairs.length ? [`${result.collisionPairs.length} collision${result.collisionPairs.length === 1 ? '' : 's'} remain; review the canvas.`] : [])
+    ]
+    setNotice({ kind: result.collisionPairs.length ? 'error' : 'info', text: details.join(' ') })
+  }, [setNodes, markDirty, fitAll])
 
   const selectAll = useCallback(() => {
     setNodes((ns) => ns.map((n) => ({ ...n, selected: true })))
@@ -20187,6 +20260,32 @@ export function Canvas() {
             <span className={`md3-canvas-actions__dirty${dirty ? ' dirty' : ''}`} />
           </IconButton>
         </div>
+        <SavedLayoutsPanel
+          anchorRef={layoutButtonRef}
+          open={savedLayoutsOpen}
+          layouts={savedLayouts}
+          nodes={flowToNodeStates(nodesRef.current)}
+          onClose={() => setSavedLayoutsOpen(false)}
+          onSave={saveCurrentLayout}
+          onApply={applyLayout}
+          onDelete={(layout) => {
+            const rect = layoutButtonRef.current?.getBoundingClientRect()
+            openDestructiveGate({
+              title: `Delete saved layout "${layout.name}"`,
+              description: 'This removes the named arrangement from the shared project file. The current canvas and its nodes are not deleted.',
+              affected: [layout.name],
+              confirmLabel: 'Delete layout',
+              anchor: rect ? { x: rect.left, y: rect.bottom + 6 } : undefined,
+              restoreFocusEl: layoutButtonRef.current,
+              onConfirm: () => {
+                if (!activeProjectId) return
+                const latest = useProjects.getState().projects.find((project) => project.id === activeProjectId)?.savedLayouts ?? []
+                useProjects.getState().setProjectSavedLayouts(activeProjectId, latest.filter((item) => item.id !== layout.id))
+                markDirty()
+              }
+            })
+          }}
+        />
         {/* ADHD 'one thing at a time': the person's own next action, kept visible so it survives a
             context switch. Written by them and never inferred — a guess here would be the app
             deciding what matters, which is exactly the judgement this feature must not make.
