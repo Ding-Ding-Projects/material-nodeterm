@@ -69,6 +69,43 @@ foreground agent process, recycles the persistent terminal so its current gatewa
 present, and resumes the same provider conversation. See [Per-node model switching](./model-switching.md)
 for the explicit-choice, failure-recovery, project-ownership, and relay boundaries.
 
+### Agent-to-agent drag contract
+
+The upstream interaction is a handle connection, not node reparenting. The source agent exposes a
+`link-out` handle on its right edge and the destination exposes a `link-in` handle on its left edge.
+Dragging the first handle onto the second creates one context-link edge when both terminal nodes
+resolve to an agent in the upstream `CONTEXT_LINK_CAPABLE` list (`claude`, `codex`, `gemini`, or
+`opencode`). The edge is bidirectional for reads, even though React Flow still stores one source and
+one target. Self-links, duplicate pairs, plain terminals, unsupported agents, and non-terminal
+targets are refused without changing the canvas.
+
+This behavior is evidenced by upstream `src/renderer/nodes/TerminalNode.tsx` (the `link-out` and
+`link-in` handles), `src/renderer/lib/noteLink.ts` (`classifyLink`, `pairKey`, and the link-map
+builders), and `src/renderer/canvas/Canvas.tsx` (`onConnect`, duplicate suppression, and the
+150-millisecond link-map write). The capability and lifecycle were introduced in upstream commits
+`9bf37b71` and `49f3336d`, extended for per-agent messages in `25820ae5`, hardened for hand-launched
+agents in `14aa9a97`, and made available in the Server Edition by `222e35cf`. The security fix in
+`1bdfcde0` keeps renamed node titles single-line before any idle discovery note is sent to a session.
+
+On success, the link is saved in the project's `bridges` data, the edge is included in the shared
+canvas scene, and the core writes a per-node link document below its private application data. Each
+agent reads only through its own hook-authenticated context-link route. The connection does not
+send a transcript automatically. The existing idle-only discovery note is skipped for a working
+session, and a failed context read returns an honest failure instead of granting another node
+access. Removing the edge by double-click or the canvas edge-delete action removes the persisted
+link; the existing canvas history treats link-edge state separately from node-array undo, so a link
+gesture is not reported as a node move or a credential/session change.
+
+The fork matches this upstream contract and additionally synchronizes bridge and lineage edges to
+connected peers through its existing canvas scene mutation protocol. That peer synchronization is a
+fork-specific extension, not a new meaning for the drag gesture. The fork also resolves its
+context-link directory from the active platform on each call rather than caching one directory for
+the process, which keeps a later server lifecycle from writing into an earlier lifecycle's data
+directory. The fork adds an accessible `Link to another agent` header action with a searchable
+keyboard picker; it invokes the same `onConnect` handler and therefore has the same capability,
+duplicate, persistence, failure, and deletion semantics as the handle drag. It does not add body-drop
+reparenting, automatic transcript exchange, new team roles, or a new session authority boundary.
+
 ## Configuration
 
 - **Settings → Accounts**: account labels and optional default node colours for each managed Claude

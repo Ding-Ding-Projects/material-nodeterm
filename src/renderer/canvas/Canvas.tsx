@@ -414,6 +414,10 @@ import { nodeTravel, projectTravel } from '../lib/presenceTravel'
 import { backgroundNodeIds, mergeWithKeepAlive, overlayKeepAliveData } from '../lib/webviewKeepAlive'
 import { useWebviewKeepAlive } from '../state/webviewKeepAlive'
 import {
+  OPEN_AGENT_LINK_PICKER_EVENT,
+  type AgentLinkSelectionResult
+} from '../lib/agentLink'
+import {
   routeControlSource,
   needsLiveCanvas,
   sourceIsControlCapable,
