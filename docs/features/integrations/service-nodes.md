@@ -68,6 +68,19 @@ Nextcloud web services, persistent local data, generated secret files, loopback 
 update, backup, restore, and rollback sequencing. Its operation surface is documented separately
 in [Managed Nextcloud, no socket](nextcloud-managed.md).
 
+## GitLab Server hosting exception
+
+The `gitlab` kind opens the guided GitLab Server panel rather than the generic address form. It
+offers only the pinned CE and EE profiles from `src/shared/gitlab.ts`, performs Docker, port, and
+capacity preflight, and manages a private-first container with four persistent volumes. The panel
+also exposes one-time credential handoff, readiness, backup, restore, update, rollback, stop, and
+the readiness-gated tunnel handoff. The core owns the full Docker argv and secret-file path; the
+renderer cannot provide an image, environment, Compose document, entrypoint, or shell command.
+
+The remaining `dockerhost`, `proxmox`, `homeassistant`, and `freepbx` kinds continue to use the
+generic address surface until their own guided managers land. `minecraft` has its separate local
+server manager described in [`minecraft-server.md`](minecraft-server.md).
+
 ### What you get, and its starting size
 
 `createServiceNode(kind, index, center?)` (`src/renderer/state/workspace.ts`) mints the node:

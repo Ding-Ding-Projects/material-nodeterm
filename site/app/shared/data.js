@@ -65,6 +65,7 @@ export const DOCS = [
   ['Cloudflare tunnels', 'inventory, route previews and DNS proof', 'cloudflare-tunnels'],
   ['School mode', 'plain English, locked with a PIN', 'school-mode'],
   ['Server Edition', 'self-host it in a browser', 'server-edition'],
+  ['GitLab Server hosting', 'guided private-first CE and EE hosting', 'gitlab-server'],
   ['Source control & worktrees', 'a git panel, and a branch per helper', 'source-control-worktrees'],
   ['Speech / dictation', 'on-device Whisper', 'speech-dictation'],
   ['Terminal sessions & continuity', 'tmux, and the Windows session host', 'terminal-sessions'],

@@ -789,7 +789,8 @@ export interface CanvasNodeState {
   recoveryGame?: import('./recovery-game').RecoveryGameSnapshot
   /**
    * service-kinds only: the display name the user gave this manager ("Home lab Proxmox", "Survival
-   * server"). This is the ONLY thing a service node persists, and the restraint is deliberate — the
+   * server"). This is the shared presentation state. GitLab also persists its safe catalog profile
+   * id, while the restraint remains deliberate — the
    * record travels in `.nodeterm/project.json` to every machine that clones the repository, so a
    * host, a username, a container id or a token here would be one person's environment appearing in
    * everybody else's checkout. The connection itself is machine-local and belongs beside

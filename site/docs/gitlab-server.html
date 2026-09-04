@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GitLab Server hosting | nodeterm</title>
+    <meta name="description" content="Guided private-first GitLab Server CE and EE hosting with pinned official images, persistent volumes, readiness, backup, restore, update, and rollback." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Remote and hosted services</p>
+      <h1>GitLab Server hosting</h1>
+      <p>Provision GitLab Community Edition or Enterprise Edition as a guided local service node. The app owns the image profile and Docker arguments, so there is no arbitrary image, environment, Compose, entrypoint, or shell field.</p>
+      <h2>Private-first setup</h2>
+      <p>Select a pinned official release, choose a bounded host port, and let the app check Docker, free capacity, and port availability before creating anything. The service binds only to <code>127.0.0.1</code> and keeps four persistent volumes for configuration, logs, application data, and backups.</p>
+      <h2>Readiness and initial credential</h2>
+      <p>The status surface probes the local <code>/users/sign_in</code> route and distinguishes starting, ready, stopped, and error states. A root credential is created in a protected secret file and can be handed off to the owner exactly once. It is not written to the project file or logs.</p>
+      <h2>Recovery lifecycle</h2>
+      <p>Use the node's guided controls for backup, restore, update, rollback, and stop. Restore and stop require the app's two-key confirmation surface. Updating changes only the pinned container image and retains all four volumes. The tunnel handoff appears only after the local readiness check passes, leaving external exposure as a separate explicit decision.</p>
+      <h2>Portability</h2>
+      <p>Project files carry only the node's safe identity, layout, label, and profile intent. Container names, volume names, host paths, secret state, backup metadata, and runtime state stay in local application data. Importing the project performs no deployment or network call and offers an explicit configure route on a new machine.</p>
+      <p class="doc-note"><strong>Verification boundary:</strong> this ultra-speed lane did not run tests, type checks, lint, security or accessibility review, installer execution, runtime interaction checks, or screenshots. The feature is not presented as runtime-verified.</p>
+    </article>
+  </body>
+</html>
