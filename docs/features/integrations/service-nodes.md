@@ -1,8 +1,8 @@
-# Service nodes (manager placeholders)
+# Service nodes (manager surfaces)
 
-Status: **implemented as canvas objects; not yet connected to anything.** This is the honest
-midpoint between "planned" and "working": the node exists, drags and resizes and persists like
-any other node, and it stores where it would reach a service — but nothing dials that address yet.
+Status: **implemented as canvas objects; most are not yet connected.** The node exists, drags and
+resizes and persists like any other node. Managed Nextcloud is the first service with a real typed
+local lifecycle; the other manager kinds still store where they would reach a service.
 Read this document alongside the "what does not work yet" section below before assuming a control
 does more than it says.
 
@@ -31,7 +31,7 @@ Assistant, and `freepbx` manages a running FreePBX box. `nextcloud-aio` manages 
 Nextcloud AIO master container through an explicitly disclosed Docker socket, without privileged
 mode. `minecraft` is the closest thing to an
 exception — a Minecraft server is realistically something *this* app would help stand up in Docker —
-but the node itself, as shipped, is exactly as inert as its five siblings; see
+but the node itself, as shipped, is exactly as inert as its other siblings; see
 [`minecraft-server.md`](minecraft-server.md) for the researched design of the part that would
 actually create one.
 
@@ -112,13 +112,14 @@ service nodes simply inherit it because they use the same colour helpers as ever
 
 ## What persists in the shared file, and what stays on this machine — and why
 
-A service node's persisted record has exactly two fields beyond the ordinary node shape
+A generic service node's persisted record has exactly two fields beyond the ordinary node shape
 (`id`, `kind`, `position`, `size`, `title`, `color`, `group`):
 
 | field | where it lives | why |
 | --- | --- | --- |
 | `serviceLabel` | `.nodeterm/project.json` — the **shared**, git-committed canvas file | It is a display name the user typed for their own node (`"Home server"`, `"Home lab"`), with nothing about a machine or a credential in it. Sharing it is exactly as safe as sharing a terminal node's title. |
 | `serviceConnection` (`{ endpoint, credentialKey? }`) | the **machine-local** `workspace.json` index, keyed by node id (`IndexEntryV3.localExec.serviceConnection`) | It names a real address — a host, a port, sometimes an internal-network name — and for some kinds it is *exec-adjacent* (see below). None of that is meaningful, or safe, to hand to everyone who clones the project. |
+| `nextcloudProfile` | `.nodeterm/project.json` as bounded non-secret choices | It records only the supported release, private port, safe volume names, and fixed no-socket flags. Container names, host paths, secret files, and runtime state stay local. |
 
 This split exists because `.nodeterm/project.json` is **hostile input**, not a private settings
 file: it is git-shared, hand-editable, auto-adopted the moment someone opens the folder, and — for
@@ -211,6 +212,16 @@ accepts only `http:`, `https:` and `ssh:` (see "Endpoint rules" above), so neith
 field could ever store. `ssh://localhost` is: bare `ssh://` with no `user@` defaults, on every
 platform and every OS the same way the plain `ssh` command does, to whoever is currently logged in
 — there is nothing to branch on per platform and nothing to go and ask the OS for.
+
+### Managed Nextcloud
+
+`nextcloud` is the first connected service manager in this family. Its panel is a guided,
+allowlisted profile with fixed PostgreSQL, Redis, and Nextcloud web services, secret files, private
+loopback binding, readiness, backups, restore, update, rollback, and a later tunnel-handoff action.
+The complete lifecycle and security boundary are documented in
+[`../hosting/nextcloud-managed-hosting.md`](../hosting/nextcloud-managed-hosting.md). It is not
+represented by the generic address field, and relay guests receive an explicit unsupported result
+rather than mutating the viewer's machine.
 
 ## What does not work yet
 

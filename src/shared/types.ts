@@ -448,9 +448,10 @@ export type NodeKind =
   // What they deliberately do NOT persist is how to reach anything. A node's `data` is written into
   // `.nodeterm/project.json`, which is git-shared and travels to every machine that clones the
   // repository, so a host, a username, a container id or an executable path in there would be one
-  // person's machine leaking into everybody else's checkout. Only `serviceLabel` — a display name
-  // the user chose — is persisted here. The connection record is machine-local and belongs beside
-  // `localExec` on the index entry; see `IndexEntryV3` and `projectToFile`.
+  // person's machine leaking into everybody else's checkout. Only a display label and, for the
+  // managed Nextcloud profile, bounded non-secret service choices are persisted here. Connection
+  // records and runtime bindings are machine-local and belong beside `localExec` on the index
+  // entry; see `IndexEntryV3` and `projectToFile`.
   | 'minecraft'
   | 'dockerhost'
   | 'proxmox'

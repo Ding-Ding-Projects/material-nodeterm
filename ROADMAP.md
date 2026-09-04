@@ -434,6 +434,12 @@ are recorded below. Do not treat the source candidate as a published release.
       Material surface. Built-artifact interaction at long-list, narrow-width, and high-display-
       scale states remains unverified.
 
+- [ ] **#53 Managed Nextcloud no-socket profile**: typed profile, fixed PostgreSQL/Redis/web
+      lifecycle, secret-file handoff, readiness, update, backup, restore, rollback, and
+      private-first tunnel eligibility are implemented in `src/core/nextcloud/` and the service
+      node. Tests, type checks, packaging, runtime interaction, and captures remain intentionally
+      unrun for the ultra-speed lane.
+
 ## Known open defects (filed, unfixed)
 
 - [ ] **#318** — `AgentsSection` capability toggles never persist (`setProjectCapability` writes
