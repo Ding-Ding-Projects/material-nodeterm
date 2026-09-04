@@ -6104,6 +6104,17 @@ export function Canvas() {
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
 
+  const addTorrent = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createTorrentNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
   const addDino = useCallback(
     (center?: { x: number; y: number }) => {
       // Seed with the project record, maxed with any live dino nodes (pre-record projects

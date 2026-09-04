@@ -119,6 +119,7 @@ const subscribeOllamaChatStream = subscribe<
 >(IPC.ollamaChatStream)
 const subscribeOpenWebUiProgress = subscribe<[OpenWebUiJobProgress]>(IPC.openWebUiProgress)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
+const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC.nodeDependencyState)
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
 const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)

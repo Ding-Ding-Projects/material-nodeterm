@@ -2132,7 +2132,7 @@ export async function installWsBridge(): Promise<boolean> {
       const startDir = '/' // navigable up/down from root; the picker remembers nothing across calls in v1
       return {
         selectFolder: () => openDirectoryPicker({ mode: 'folder', startDir, list: api.fs.list }),
-        selectFile: () => openDirectoryPicker({ mode: 'file', startDir, list: api.fs.list }),
+        selectFile: (_options?: { extensions?: string[] }) => openDirectoryPicker({ mode: 'file', startDir, list: api.fs.list }),
         // No native multi-file dialog in the browser. FileConverterPanel checks isBrowserRuntime()
         // and uses a plain <input type="file" multiple> + files.saveUploadBlob instead of calling
         // this (falling back to saveUpload for API compatibility).

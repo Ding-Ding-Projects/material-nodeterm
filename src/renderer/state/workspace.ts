@@ -1476,6 +1476,7 @@ const CALENDAR_SIZE = { width: 620, height: 520 }
 const HOME_ASSISTANT_CONTROL_SIZE = { width: 620, height: 620 }
 const HOME_ASSISTANT_SENSOR_SIZE = { width: 660, height: 560 }
 const NSIS_SIZE = { width: 460, height: 520 }
+export const TORRENT_SIZE = { width: 620, height: 520 }
 
 /**
  * A view of this machine's own TOTP generators, on the canvas.

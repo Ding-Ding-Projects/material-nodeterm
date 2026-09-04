@@ -85,6 +85,7 @@ export function registerCoreHandlers(
       : undefined,
     localProjectCwd: deps.localProjectCwd
   })
+  const localHistoryStore = new LocalHistoryStore(platform.userDataDir)
 
   // Universal file converter + local Ollama suite manager + local Minecraft server create-and-
   // manage + local Torrent Downloader — the SAME registrars main/index.ts calls, over the SAME
@@ -127,7 +128,6 @@ export function registerCoreHandlers(
   // uses (src/main/index.ts), over the generic platform.handle seam, so the browser gets the
   // identical feature acting on the SERVER's own machine (docs/exports.md, docs/local-history.md).
   registerVsCodeHandlers(platform)
-  const localHistoryStore = new LocalHistoryStore(platform.userDataDir)
   deps.workspaceStore?.setProjectHistoryRecorder((project, content, change) =>
     localHistoryStore.record({
       domain: `project_${project.id}`,
@@ -166,12 +166,15 @@ export function registerCoreHandlers(
   }
   registerLocalHistoryHandlers(platform, {
     historyStore: localHistoryStore,
-    domainFilenames: { settings: 'settings.json' },
+    domainFilenames: { settings: 'settings.json', torrent: 'tasks.json' },
     restoreHandlers: {
       settings: async (content: string, sha: string) => {
         if (!deps.settingsStore) throw new Error('Settings history is unavailable.')
         const parsed = JSON.parse(content) as Settings
         await deps.settingsStore.applyRestoredSettings(parsed, `Restored settings to ${sha.slice(0, 7)}`)
+      },
+      torrent: async (content: string) => {
+        await torrentService.restoreHistory(content)
       }
     }
   })

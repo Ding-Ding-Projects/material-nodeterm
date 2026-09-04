@@ -207,7 +207,7 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
       const startDir = '/' // navigable up/down from the host root; no cross-call memory in v1
       return {
         selectFolder: () => openDirectoryPicker({ mode: 'folder', startDir, list: files.fs.list }),
-        selectFile: () => openDirectoryPicker({ mode: 'file', startDir, list: files.fs.list }),
+        selectFile: (_options?: { extensions?: string[] }) => openDirectoryPicker({ mode: 'file', startDir, list: files.fs.list }),
         // No host-side multi-file picker over the relay in v1 (the in-app browser above is
         // single-path only) — never fall back to a LOCAL multi-picker, which would pick paths on
         // the wrong machine. FileConverterPanel treats a null resolution as "not available here".
