@@ -48,6 +48,7 @@ import {
   captureIsCurrent,
   inspectPng,
   mergeCaptureManifest,
+  validateAttachedTarget,
   validateExternalCaptureReceipt
 } from './lib/capture-evidence.mjs'
 
@@ -68,6 +69,9 @@ const attachPort = flag('attach')
 const doLaunch = flag('launch')
 const only = typeof flag('only') === 'string' ? String(flag('only')).split(',') : null
 const receiptPath = typeof flag('receipt') === 'string' ? resolve(String(flag('receipt'))) : null
+const outputRoot = typeof flag('output-root') === 'string' ? resolve(String(flag('output-root'))) : null
+if (doLaunch) throw new Error('--launch is retired: launch the packaged target through the cheap Lowlevel headless driver, then use --attach with --receipt')
+if (outputRoot && outputRoot.startsWith(ROOT + '\\')) throw new Error('--output-root must be outside the repository')
 
 // The capture tuple: the exact conditions one screenshot is taken under. Until this existed every
 // capture was pinned to 1600x1000 at scale 1, in one theme and one language, so the harness only
@@ -85,7 +89,8 @@ const isDefaultTuple = tuple.label === resolveCaptureTuple({}).label
 // A non-default tuple writes into its own labelled directory. Two captures taken under different
 // conditions must never land on one path: the loser is silently overwritten and the run still
 // reports both, which is a matrix claiming coverage it does not have.
-const TUPLE_OUT = isDefaultTuple ? OUT : join(OUT, 'matrix', tuple.label)
+const CAPTURE_ROOT = outputRoot ?? OUT
+const TUPLE_OUT = isDefaultTuple ? CAPTURE_ROOT : join(CAPTURE_ROOT, 'matrix', tuple.label)
 
 // ---------------------------------------------------------------------
 // Shared driver for the Kids surfaces (see their entries below for why they need one).
@@ -666,7 +671,7 @@ async function cdp(port) {
       }
     })
   }
-  return { send, close }
+  return { send, close, target: page }
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -699,9 +704,7 @@ if (attachPort && (tuple.theme !== 'dark' || tuple.languageMode !== 'en')) {
   )
 }
 if (!port) {
-  if (!doLaunch) {
-    throw new Error('Pass --attach <port> to attach, or --launch to start the app here.')
-  }
+  if (!doLaunch) throw new Error('Pass --attach <port> and --receipt <live cheap-headless receipt>.')
   port = '9222'
   const electron = join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe')
   realHomeBefore = captureManagedConfigSentinel({ home: homedir(), env: process.env })
@@ -755,6 +758,7 @@ if (receiptPath) {
   externalReceipt = validateExternalCaptureReceipt(JSON.parse(readFileSync(receiptPath, 'utf8')), sha)
 }
 connection = await cdp(port)
+if (externalReceipt) validateAttachedTarget(externalReceipt, connection.target, port)
 const { send } = connection
 
 await send('Runtime.enable')
@@ -986,7 +990,7 @@ for (const s of SURFACES) {
     writeFileSync(join(TUPLE_OUT, `${s.id}.png`), buf)
     // The site ships only the canonical set. A matrix capture is layout evidence, not a site
     // asset, so a narrow/scaled/translated run must not replace the picture the site serves.
-    if (isDefaultTuple) {
+    if (isDefaultTuple && !outputRoot) {
       mkdirSync(SITE_OUT, { recursive: true })
       writeFileSync(join(SITE_OUT, `${s.id}.png`), buf)
     }
@@ -1010,6 +1014,7 @@ for (const s of SURFACES) {
       provenance: {
         commit: sha,
         version: artifactVersion,
+        buildKind: 'packaged',
         method: externalReceipt
           ? 'Electron + CDP Page.captureScreenshot against an externally launched cheap Lowlevel MCP headless built artifact'
           : 'Electron + CDP Page.captureScreenshot against the built out/ artifact',
@@ -1095,11 +1100,18 @@ if (existsSync(manifestPath)) {
 }
 const manifestUpdatedAt = new Date().toISOString()
 const nextManifest = mergeCaptureManifest(previousManifest, captured, manifestUpdatedAt)
+if (!only) {
+  const roster = new Set(SURFACES.map((surface) => surface.id))
+  for (const id of Object.keys(nextManifest.entries)) if (!roster.has(id)) delete nextManifest.entries[id]
+}
 // Compatibility fields keep the existing in-app status reader honest: they describe this update,
 // while `entries` is authoritative for every individual capture's route and commit.
 nextManifest.commit = sha
 nextManifest.capturedAt = manifestUpdatedAt
 nextManifest.method = 'Per-entry provenance in schemaVersion 2 capture-manifest entries'
+// Compatibility is intentionally this run only. Preserved entries can belong to older commits;
+// representing them beside HEAD in the legacy array would make a status card assert false currentness.
+nextManifest.captured = captured
 nextManifest.skipped = skipped
 nextManifest.failures = failures
 nextManifest.current = Object.values(nextManifest.entries).filter((entry) =>

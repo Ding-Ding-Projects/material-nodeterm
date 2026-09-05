@@ -5,6 +5,7 @@ export const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x
 export const MIN_CAPTURE_BYTES = 6_000
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex')
+const crc32 = (bytes) => { let c = 0xffffffff; for (const b of bytes) { c ^= b; for (let i = 0; i < 8; i += 1) c = (c >>> 1) ^ (0xedb88320 & -(c & 1)) } return (c ^ 0xffffffff) >>> 0 }
 
 /**
  * Decode enough of a PNG to prove it is a real, bounded, non-interlaced raster.
@@ -31,6 +32,7 @@ export function inspectPng(bytes) {
     const end = offset + 12 + length
     if (end > bytes.length) throw new Error(`PNG ${type} chunk is truncated`)
     const data = bytes.subarray(offset + 8, offset + 8 + length)
+    if (bytes.readUInt32BE(offset + 8 + length) !== crc32(Buffer.concat([Buffer.from(type), data]))) throw new Error(`PNG ${type} chunk CRC is invalid`)
     if (type === 'IHDR') {
       if (length !== 13 || width || height) throw new Error('PNG has an invalid IHDR chunk')
       width = data.readUInt32BE(0)
@@ -39,10 +41,11 @@ export function inspectPng(bytes) {
       colourType = data[9]
       interlace = data[12]
     } else if (type === 'IDAT') idat.push(data)
-    else if (type === 'IEND') { sawIend = true; break }
+    else if (type === 'IEND') { sawIend = true; offset = end; break }
     offset = end
   }
   if (!width || !height || !sawIend || idat.length === 0) throw new Error('PNG is missing required raster chunks')
+  if (offset !== bytes.length) throw new Error('PNG has trailing bytes after IEND')
   if (bitDepth !== 8 || ![2, 6].includes(colourType) || interlace !== 0) {
     throw new Error(`PNG encoding ${bitDepth}-bit colourType=${colourType} interlace=${interlace} is not a CDP raster`)
   }
@@ -50,6 +53,28 @@ export function inspectPng(bytes) {
   const expected = height * (1 + width * channels)
   const decoded = inflateSync(Buffer.concat(idat))
   if (decoded.length !== expected) throw new Error(`PNG decoded payload is ${decoded.length} bytes; expected ${expected}`)
+  const stride = width * channels
+  let previous = Buffer.alloc(stride)
+  let uniform = true
+  let first = null
+  for (let row = 0; row < height; row += 1) {
+    const at = row * (stride + 1)
+    const filter = decoded[at]
+    if (filter > 4) throw new Error(`PNG has invalid filter type ${filter}`)
+    const line = Buffer.from(decoded.subarray(at + 1, at + 1 + stride))
+    for (let i = 0; i < line.length; i += 1) {
+      const left = i >= channels ? line[i - channels] : 0
+      const up = previous[i]
+      const upperLeft = i >= channels ? previous[i - channels] : 0
+      if (filter === 1) line[i] = (line[i] + left) & 255
+      else if (filter === 2) line[i] = (line[i] + up) & 255
+      else if (filter === 3) line[i] = (line[i] + Math.floor((left + up) / 2)) & 255
+      else if (filter === 4) { const p = left + up - upperLeft; const pa = Math.abs(p - left); const pb = Math.abs(p - up); const pc = Math.abs(p - upperLeft); line[i] = (line[i] + (pa <= pb && pa <= pc ? left : pb <= pc ? up : upperLeft)) & 255 }
+    }
+    for (let i = 0; i < line.length; i += channels) { const pixel = line.subarray(i, i + channels).toString('hex'); if (first === null) first = pixel; else if (pixel !== first) uniform = false }
+    previous = line
+  }
+  if (uniform) throw new Error('PNG decodes to a uniform raster')
   return { width, height, bytes: bytes.length, sha256: sha256(bytes) }
 }
 
@@ -99,15 +124,22 @@ export function captureIsCurrent(entry, { commit, tuple }) {
 /** Refuse a claimed external target unless its receipt proves the approved hidden route. */
 export function validateExternalCaptureReceipt(receipt, expectedCommit) {
   if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt)) throw new Error('capture receipt is not a JSON object')
-  const route = receipt.route ?? receipt.method
-  if (typeof route !== 'string' || !/cheap Lowlevel MCP headless/i.test(route)) {
+  if (receipt.schemaVersion !== 1 || receipt.route !== 'cheap-lowlevel-headless' || typeof receipt.method !== 'string' || !receipt.method.includes('cheap Lowlevel MCP headless')) {
     throw new Error('capture receipt does not name the cheap Lowlevel MCP headless route')
   }
   const commit = receipt.source?.gitHead ?? receipt.commit
-  if (commit !== expectedCommit) throw new Error(`capture receipt commit ${JSON.stringify(commit)} does not match ${expectedCommit}`)
+  if (commit !== expectedCommit || typeof receipt.source?.workingTreeDigest !== 'string' || typeof receipt.source?.provenanceSha256 !== 'string') throw new Error(`capture receipt source provenance does not match ${expectedCommit}`)
+  if (typeof receipt.candidate?.sha256 !== 'string' || typeof receipt.candidate?.appAsarSha256 !== 'string') throw new Error('capture receipt lacks candidate and app.asar hashes')
   const launch = receipt.launch ?? receipt
   if (launch.ok !== true || launch.focusStealing !== false || launch.terminalWindow !== false || typeof launch.desktop !== 'string' || launch.desktop.length === 0) {
     throw new Error('capture receipt lacks a successful non-visible named-headless-desktop launch')
   }
   return clone(receipt)
+}
+
+export function validateAttachedTarget(receipt, target, port) {
+  if (!receipt?.launch?.pid || !receipt?.cdp || receipt.cdp.count !== 1) throw new Error('capture receipt lacks one live process-bound CDP target')
+  if (receipt.cdp.id !== target.id || receipt.cdp.url !== target.url) throw new Error('attached CDP target does not match the receipt target')
+  const socket = new URL(String(target.webSocketDebuggerUrl))
+  if (socket.hostname !== '127.0.0.1' || Number(socket.port) !== Number(port)) throw new Error('attached CDP target is not on the receipt loopback endpoint')
 }
