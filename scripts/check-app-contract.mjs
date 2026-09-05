@@ -2934,6 +2934,8 @@ const NON_FEATURE_DOCS = new Map([
   ['app-design-tokens.md', 'design-token reference, not a user-facing surface'],
   ['building.md', 'build process'],
   ['ci-and-releases.md', 'release process'],
+  ['features/development/capture-evidence.md', 'capture provenance implementation note covered by the capture evidence inventory'],
+  ['release/capture-refresh-inventory.md', 'release capture roster and evidence bookkeeping, not a user-facing surface'],
   ['codex-shared-identity.md', 'agent internals — the agent-support row covers the surface'],
   ['gemini-agent.md', 'per-agent write-up — see the agent-support row'],
   ['grok-agent.md', 'per-agent write-up — see the agent-support row'],
