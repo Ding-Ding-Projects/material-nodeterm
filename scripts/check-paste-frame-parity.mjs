@@ -1,140 +1,112 @@
 #!/usr/bin/env node
-// Drift guard for the vendored paste-frame duplicate.
+// Drift guard for the deliberately vendored paste-frame sanitizer contract.
 //
-// material-nodeterm is a public repository; agent-whip's `@agent-whip/paste-frame` package is
-// not published to any registry. A `file:`-protocol dependency would resolve on the machine
-// that authored it and dangle (silent-green install, ERR_MODULE_NOT_FOUND at runtime) for
-// anyone who clones this repo on its own. So the implementation is vendored here as a real
-// file, `src/core/paste-injection.ts`, deliberately duplicating
-// `agent-whip/packages/paste-frame/src/index.ts` from a sibling checkout.
-//
-// This script is the mitigation for that duplication, not the fix. It makes the drift LOUD
-// instead of removing it: whenever both checkouts are present on the same machine, it compares
-// the two implementations' normative content (comments and formatting stripped) and fails when
-// they disagree. It skips cleanly — printing why — when the sibling checkout is absent, so a
-// standalone clone of this repo still builds.
-//
-// The real fix is publishing @agent-whip/paste-frame to a registry once rights exist; at that
-// point this file, the vendored copy, and this guard are all deleted in favor of one dependency.
+// The canonical sibling package still exports JS-side `bracketedInjection` and
+// `legacyInjection`. nodeterm deliberately does not: tmux 3.7 escapes ESC bytes supplied in a
+// paste buffer, rendering those frames as visible text. tmux now owns framing through
+// `paste-buffer -p`; restoring either helper would regress delivery. The shared contract is
+// therefore exactly PASTE_START, PASTE_END, and sanitizePasteText.
 
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import esbuild from 'esbuild'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '..')
-
 const LOCAL_PATH = path.join(repoRoot, 'src', 'core', 'paste-injection.ts')
-const SIBLING_REPO = path.resolve(repoRoot, '..', 'agent-whip')
-const SIBLING_PATH = path.join(SIBLING_REPO, 'packages', 'paste-frame', 'src', 'index.ts')
+const CANONICAL_SIBLING_REPO = path.resolve(repoRoot, '..', '..', 'agent-whip')
+const FALLBACK_SIBLING_REPO = path.resolve(repoRoot, '..', 'agent-whip')
+const SIBLING_RELATIVE_PATH = path.join('packages', 'paste-frame', 'src', 'index.ts')
 
-/** Strip //-comments and /* *\/-comments while respecting string/template literals. */
-function stripComments(src) {
-  let out = ''
-  let i = 0
-  const n = src.length
-  let inString = null // one of ' " ` or null
-  while (i < n) {
-    const c = src[i]
-    const next = src[i + 1]
-    if (inString) {
-      out += c
-      if (c === '\\') {
-        out += next ?? ''
-        i += 2
-        continue
-      }
-      if (c === inString) inString = null
-      i += 1
-      continue
-    }
-    if (c === '\'' || c === '"' || c === '`') {
-      inString = c
-      out += c
-      i += 1
-      continue
-    }
-    if (c === '/' && next === '/') {
-      while (i < n && src[i] !== '\n') i += 1
-      continue
-    }
-    if (c === '/' && next === '*') {
-      i += 2
-      while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i += 1
-      i += 2
-      continue
-    }
-    out += c
-    i += 1
+const SHARED_EXPORTS = ['PASTE_END', 'PASTE_START', 'sanitizePasteText']
+const INTENTIONALLY_EXCLUDED_SIBLING_EXPORTS = ['bracketedInjection', 'legacyInjection']
+const PAYLOADS = [
+  '',
+  'ordinary text',
+  'line one\nline two\r\n\tindented',
+  '\x1b[200~nested\x1b[201~',
+  '\x1b[201~\rctrl-u\x15',
+  'C1:\u009b201~',
+  'trailing\x1b'
+]
+
+function siblingRepo() {
+  for (const candidate of [CANONICAL_SIBLING_REPO, FALLBACK_SIBLING_REPO]) {
+    if (existsSync(candidate)) return candidate
   }
-  return out
+  return undefined
 }
 
-/** Collapse formatting differences (semicolons, whitespace, blank lines) that carry no meaning. */
-function normalize(src) {
-  return stripComments(src)
-    .replace(/\r\n/g, '\n')
-    .replace(/;/g, '')
-    .replace(/[ \t]+/g, ' ')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .join('\n')
+async function loadTypeScriptModule(sourcePath) {
+  const source = readFileSync(sourcePath, 'utf8')
+  const { code } = esbuild.transformSync(source, { loader: 'ts', format: 'esm', target: 'node18' })
+  return import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
 }
 
-function main() {
-  if (!existsSync(SIBLING_REPO)) {
-    console.log(
-      `check-paste-frame-parity: SKIP — sibling checkout not found at ${SIBLING_REPO}. ` +
-        'Cannot verify src/core/paste-injection.ts stays in step with ' +
-        '@agent-whip/paste-frame; this is expected for a standalone clone of this repo.'
-    )
+export function sharedContractProblems(localModule, siblingModule) {
+  const problems = []
+  const localExports = Object.keys(localModule).sort()
+  const siblingExports = Object.keys(siblingModule).sort()
+  const expectedLocal = [...SHARED_EXPORTS].sort()
+  const expectedSibling = [...SHARED_EXPORTS, ...INTENTIONALLY_EXCLUDED_SIBLING_EXPORTS].sort()
+
+  if (JSON.stringify(localExports) !== JSON.stringify(expectedLocal)) {
+    problems.push(`local export set changed: expected ${expectedLocal.join(', ')}, got ${localExports.join(', ') || '<none>'}`)
+  }
+  if (JSON.stringify(siblingExports) !== JSON.stringify(expectedSibling)) {
+    problems.push(`canonical sibling export set changed: expected ${expectedSibling.join(', ')}, got ${siblingExports.join(', ') || '<none>'}`)
+  }
+  for (const name of SHARED_EXPORTS) {
+    if (!(name in localModule)) problems.push(`local module is missing shared export ${name}`)
+    if (!(name in siblingModule)) problems.push(`canonical sibling module is missing shared export ${name}`)
+  }
+  if (localModule.PASTE_START !== siblingModule.PASTE_START) problems.push('PASTE_START differs from the canonical sibling')
+  if (localModule.PASTE_END !== siblingModule.PASTE_END) problems.push('PASTE_END differs from the canonical sibling')
+  if (typeof localModule.sanitizePasteText !== 'function' || typeof siblingModule.sanitizePasteText !== 'function') {
+    problems.push('sanitizePasteText must be a function in both modules')
+    return problems
+  }
+  for (const payload of PAYLOADS) {
+    const local = localModule.sanitizePasteText(payload)
+    const sibling = siblingModule.sanitizePasteText(payload)
+    if (local !== sibling) problems.push(`sanitizePasteText differs for payload ${JSON.stringify(payload)}`)
+    if (/[\x1b\u009b]/.test(local)) problems.push(`local sanitizePasteText leaves structural control bytes in ${JSON.stringify(payload)}`)
+  }
+  return problems
+}
+
+export async function checkPasteFrameParity({ localPath = LOCAL_PATH, siblingPath } = {}) {
+  const sibling = siblingPath ? undefined : siblingRepo()
+  const resolvedSiblingPath = siblingPath ?? (sibling && path.join(sibling, SIBLING_RELATIVE_PATH))
+  if (!resolvedSiblingPath) {
+    return { skipped: true, message: 'sibling checkout not found; standalone clone cannot compare the vendored sanitizer contract' }
+  }
+  if (!existsSync(resolvedSiblingPath)) {
+    return { problems: [`canonical sibling source is missing: ${resolvedSiblingPath}`] }
+  }
+  const [localModule, siblingModule] = await Promise.all([loadTypeScriptModule(localPath), loadTypeScriptModule(resolvedSiblingPath)])
+  return { problems: sharedContractProblems(localModule, siblingModule), siblingPath: resolvedSiblingPath }
+}
+
+async function main() {
+  const result = await checkPasteFrameParity()
+  if (result.skipped) {
+    console.log(`check-paste-frame-parity: SKIP — ${result.message}`)
     return
   }
-
-  if (!existsSync(SIBLING_PATH)) {
-    console.error(
-      `check-paste-frame-parity: FAIL — sibling checkout is present at ${SIBLING_REPO} but ` +
-        `its expected source file is missing: ${SIBLING_PATH}. Cannot verify parity.`
-    )
-    process.exit(1)
-  }
-
-  const localRaw = readFileSync(LOCAL_PATH, 'utf8')
-  const siblingRaw = readFileSync(SIBLING_PATH, 'utf8')
-  const localNorm = normalize(localRaw)
-  const siblingNorm = normalize(siblingRaw)
-
-  if (localNorm === siblingNorm) {
-    console.log(
-      'check-paste-frame-parity: PASS — ' +
-        `${path.relative(repoRoot, LOCAL_PATH)} matches ` +
-        `${SIBLING_PATH} (normalized: comments/semicolons/blank-lines stripped).`
-    )
+  if (result.problems.length) {
+    console.error('check-paste-frame-parity: FAIL — the shared sanitizer contract has drifted.')
+    for (const problem of result.problems) console.error(`  - ${problem}`)
+    process.exitCode = 1
     return
   }
-
-  console.error('check-paste-frame-parity: FAIL — the vendored paste-frame copy has drifted.')
-  console.error(`  local:   ${LOCAL_PATH}`)
-  console.error(`  sibling: ${SIBLING_PATH}`)
-  console.error('')
-  console.error('--- normalized local ---')
-  console.error(localNorm)
-  console.error('--- normalized sibling ---')
-  console.error(siblingNorm)
-  console.error('')
-  const localLines = localNorm.split('\n')
-  const siblingLines = siblingNorm.split('\n')
-  const max = Math.max(localLines.length, siblingLines.length)
-  for (let i = 0; i < max; i += 1) {
-    if (localLines[i] !== siblingLines[i]) {
-      console.error(`first differing line (${i + 1}):`)
-      console.error(`  local:   ${localLines[i] ?? '<missing>'}`)
-      console.error(`  sibling: ${siblingLines[i] ?? '<missing>'}`)
-      break
-    }
-  }
-  process.exit(1)
+  console.log(`check-paste-frame-parity: PASS — ${path.relative(repoRoot, LOCAL_PATH)} matches the shared sanitizer contract in ${result.siblingPath}.`)
 }
 
-main()
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error('check-paste-frame-parity: FAIL —', error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  })
+}
