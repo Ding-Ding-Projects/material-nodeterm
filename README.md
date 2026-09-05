@@ -194,6 +194,11 @@ pixel-identical.
 
 #### Main desktop surfaces
 
+| Launch | Command palette |
+| --- | --- |
+| ![The desktop application at launch with the top app bar, destination rail, project selector, empty canvas, zoom controls, and minimap](./docs/assets/shots/app-01-launch.png) | ![The command palette open over the desktop application with terminal and coding-agent creation actions](./docs/assets/shots/app-03-palette.png) |
+| The first visible application state. | The documented keyboard route to commands, destinations, and settings. |
+
 | Canvas | Board |
 | --- | --- |
 | ![The empty project canvas with the destination rail, project selector, sessions panel, zoom controls, status chips, and minimap](./docs/assets/shots/app-04-canvas.png) | ![The project board with Ungrouped, To Do, In Progress, and Done columns](./docs/assets/shots/app-05-kanban.png) |
@@ -219,6 +224,13 @@ The Status destination keeps operational state separate from promotional messagi
 | ![The per-element appearance editor with typography, color, shape, spacing, state, and reset controls](./docs/assets/shots/app-settings-appearance-editor.png) | ![Five independent attention accommodation switches with plain descriptions and a non-medical disclosure](./docs/assets/shots/app-adhd-modes.png) |
 
 ![App name and logo settings with preset marks, local custom-image controls, and reset actions](./docs/assets/shots/app-settings-app-identity.png)
+
+| Scheduled settings | Terminal profiles |
+| --- | --- |
+| ![Scheduled settings with local time windows for appearance and language changes](./docs/assets/shots/app-settings-schedule.png) | ![The Windows terminal-profile picker listing detected shell profiles for a new terminal](./docs/assets/shots/app-windows-terminal-profiles.png) |
+| A scheduled override returns to the stored base value when its window ends. | Profile selection is explicit before terminal creation. |
+
+![Terminal-profile availability settings with detected profiles, availability states, and an explanation for an unavailable profile](./docs/assets/shots/app-windows-terminal-profile-availability.png)
 
 #### Kids mode and grown-up controls
 
@@ -276,9 +288,9 @@ text, so this public README deliberately does not promote them.
 > This packaged run recorded partial acceptance, not complete installer acceptance. Its remaining
 > blockers were lossless clipboard restore and proof from an installed Squirrel artifact.
 
-### Current documentation and landing surface
+### Recorded documentation and landing surface
 
-The documentation and landing surface was recaptured from commit
+The documentation and landing surface was recorded from commit
 [`1ec54fa8`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/1ec54fa88552e9286090597d048534fcc8d51e93)
 after its Windows-only release copy was brought current. The static output was hashed, served from a
 task-owned loopback endpoint, and opened as the sole page in an isolated Microsoft Edge profile on an
@@ -288,21 +300,21 @@ interactive accessibility nodes, or body overflow.
 
 | Hallway | Home |
 | --- | --- |
-| ![The current nodeterm documentation hallway with searchable feature doors and a single Jump control](docs/assets/shots/site-current/site-hall-current.png) | ![The current nodeterm documentation Home room showing version 0.4.120, Windows download actions, feature cards, and the navigation rail](docs/assets/shots/site-current/site-home-current.png) |
+| ![The recorded nodeterm documentation hallway with searchable feature doors and a single Jump control](docs/assets/shots/site-current/site-hall-current.png) | ![The recorded nodeterm documentation Home room showing version 0.4.120, Windows download actions, feature cards, and the navigation rail](docs/assets/shots/site-current/site-home-current.png) |
 
 | Documentation | Changelog |
 | --- | --- |
-| ![The current nodeterm documentation index with bulk selection, per-article actions, local search, and 23 guide entries](docs/assets/shots/site-current/site-docs-current.png) | ![The current nodeterm changelog showing the published version 0.4.120 release and Windows-scope history](docs/assets/shots/site-current/site-changelog-current.png) |
+| ![The recorded nodeterm documentation index with bulk selection, per-article actions, local search, and 23 guide entries](docs/assets/shots/site-current/site-docs-current.png) | ![The recorded nodeterm changelog showing the published version 0.4.120 release and Windows-scope history](docs/assets/shots/site-current/site-changelog-current.png) |
 
 | Settings | Screenshot gallery |
 | --- | --- |
-| ![The current nodeterm settings room showing language, appearance, identity, School mode, narrator, and personal-vocabulary cards](docs/assets/shots/site-current/site-settings-current.png) | ![The current nodeterm screenshot room showing the built desktop capture gallery and searchable navigation](docs/assets/shots/site-current/site-screenshots-current.png) |
+| ![The recorded nodeterm settings room showing language, appearance, identity, School mode, narrator, and personal-vocabulary cards](docs/assets/shots/site-current/site-settings-current.png) | ![The recorded nodeterm screenshot room showing the built desktop capture gallery and searchable navigation](docs/assets/shots/site-current/site-screenshots-current.png) |
 
 | Pattern builder | Appearance controls |
 | --- | --- |
-| ![The current nodeterm pattern builder open beside the settings search with guided tokens, sample text, and apply controls](docs/assets/shots/site-current/site-search-regex-current.png) | ![The current nodeterm appearance settings card filtered in place with theme, color, preset, text-size, logo, save, load, and reset controls](docs/assets/shots/site-current/site-appearance-current.png) |
+| ![The recorded nodeterm pattern builder open beside the settings search with guided tokens, sample text, and apply controls](docs/assets/shots/site-current/site-search-regex-current.png) | ![The recorded nodeterm appearance settings card filtered in place with theme, color, preset, text-size, logo, save, load, and reset controls](docs/assets/shots/site-current/site-appearance-current.png) |
 
-![The current nodeterm documentation navigation at a 390 pixel emulated mobile viewport with touch-sized controls and no body overflow](docs/assets/shots/site-current/site-mobile-home-current.png)
+![The recorded nodeterm documentation navigation at a 390 pixel emulated mobile viewport with touch-sized controls and no body overflow](docs/assets/shots/site-current/site-mobile-home-current.png)
 
 The complete hashes, viewport tuples, audit summary, and raw-frame relationships are recorded in
 [`docs/assets/recordings/site/`](docs/assets/recordings/site/README.md).

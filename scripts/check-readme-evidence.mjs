@@ -3,6 +3,8 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { markdownImageEmbeds, validateCurrentCaptureLabels, validatePublicationCaptures } from './lib/publication-capture-inventory.mjs'
+import { screenshotsRoomHtml } from '../site/app/features/screenshots.js'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const MANIFEST_PATH = resolve(ROOT, 'docs/assets/recordings/site/capture-manifest.json')
@@ -33,8 +35,6 @@ const REJECTED_PUBLIC_REFERENCES = [
   'site-home-light.png',
   'site-home-dark.png',
   'site-narrow-390.png',
-  'app-03-palette.png',
-  'app-settings-schedule.png'
 ]
 
 function hash(path) {
@@ -80,11 +80,12 @@ function validate(manifest, inventory, readme, checkFiles = true) {
     exactIds(inventory.records, REQUIRED_KEY_IDS, 'evidence inventory', errors)
   }
 
+  const readmeEmbeds = markdownImageEmbeds(readme)
   for (const entry of manifest.keyCaptures) {
     if (!/^[0-9a-f]{64}$/.test(entry.sha256 || '')) errors.push(entry.id + ' has an invalid SHA-256')
     if (!Number.isSafeInteger(entry.width) || !Number.isSafeInteger(entry.height) || entry.width < 1 || entry.height < 1) errors.push(entry.id + ' has invalid dimensions')
     if (!entry.path || !entry.alt) errors.push(entry.id + ' lacks a path or alt text')
-    if (!readme.includes('![' + entry.alt + '](' + entry.path + ')')) errors.push('README lacks the exact visible link for ' + entry.id)
+    if (!readmeEmbeds.some((embed) => embed.path === entry.path)) errors.push('README lacks an actual visible image embed for ' + entry.id)
     if (insideDetails(readme, entry.path) !== false) errors.push(entry.id + ' must remain outside collapsible sections')
     if (checkFiles) {
       const path = resolve(ROOT, entry.path)
@@ -116,6 +117,9 @@ function validate(manifest, inventory, readme, checkFiles = true) {
   for (const value of REJECTED_PUBLIC_REFERENCES) {
     if (readme.includes(value)) errors.push('README retains rejected capture ' + value)
   }
+  const siteHtml = screenshotsRoomHtml({ state: { qSec: '', rxOn: {}, rxFlags: {} } })
+  errors.push(...validatePublicationCaptures({ readme, siteHtml }))
+  errors.push(...validateCurrentCaptureLabels({ readme, manifest, sourceCommit: manifest.commit ?? manifest.sourceCommit }))
   return errors
 }
 
@@ -139,4 +143,4 @@ for (const [index, mutant] of mutants.entries()) {
   }
 }
 
-console.log('README evidence: ' + manifest.keyCaptures.length + ' visible still captures, ' + manifest.recordings.length + ' feature GIFs, exact hashes, and three red-then-green negative regressions verified.')
+console.log('README evidence: ' + manifest.keyCaptures.length + ' visible still captures, ' + manifest.recordings.length + ' feature GIFs, exact hashes, publication roster coverage, and three red-then-green negative regressions verified.')
