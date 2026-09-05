@@ -43,6 +43,14 @@ import {
   terminateSpawnedChild
 } from './check-app-wired-core.mjs'
 import { resolveCaptureTuple, tupleSettings } from './lib/capture-tuple.mjs'
+import {
+  MIN_CAPTURE_BYTES,
+  captureIsCurrent,
+  inspectPng,
+  mergeCaptureManifest,
+  validateAttachedTarget,
+  validateExternalCaptureReceipt
+} from './lib/capture-evidence.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(ROOT, 'docs/assets/shots')
@@ -60,6 +68,10 @@ const flag = (name) => {
 const attachPort = flag('attach')
 const doLaunch = flag('launch')
 const only = typeof flag('only') === 'string' ? String(flag('only')).split(',') : null
+const receiptPath = typeof flag('receipt') === 'string' ? resolve(String(flag('receipt'))) : null
+const outputRoot = typeof flag('output-root') === 'string' ? resolve(String(flag('output-root'))) : null
+if (doLaunch) throw new Error('--launch is retired: launch the packaged target through the cheap Lowlevel headless driver, then use --attach with --receipt')
+if (outputRoot && outputRoot.startsWith(ROOT + '\\')) throw new Error('--output-root must be outside the repository')
 
 // The capture tuple: the exact conditions one screenshot is taken under. Until this existed every
 // capture was pinned to 1600x1000 at scale 1, in one theme and one language, so the harness only
@@ -77,7 +89,8 @@ const isDefaultTuple = tuple.label === resolveCaptureTuple({}).label
 // A non-default tuple writes into its own labelled directory. Two captures taken under different
 // conditions must never land on one path: the loser is silently overwritten and the run still
 // reports both, which is a matrix claiming coverage it does not have.
-const TUPLE_OUT = isDefaultTuple ? OUT : join(OUT, 'matrix', tuple.label)
+const CAPTURE_ROOT = outputRoot ?? OUT
+const TUPLE_OUT = isDefaultTuple ? CAPTURE_ROOT : join(CAPTURE_ROOT, 'matrix', tuple.label)
 
 // ---------------------------------------------------------------------
 // Shared driver for the Kids surfaces (see their entries below for why they need one).
@@ -424,42 +437,42 @@ const SURFACES = [
       required: true,
       title: 'Settings — Docker host',
       open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Docker host'] },
-      verify: '[class*="settings"]'
+      verify: '#remote[data-settings-section="remote"]'
     },
     {
       id: 'app-settings-language',
       required: true,
       title: 'Settings — Language',
       open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Language'] },
-      verify: '[class*="settings"]'
+      verify: '#language[data-settings-section="language"]'
     },
     {
       id: 'app-settings-narrator',
       required: true,
       title: 'Settings — Narrator',
       open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Narrator'] },
-      verify: '[class*="settings"]'
+      verify: '#narrator[data-settings-section="narrator"]'
     },
     {
       id: 'app-settings-schedule',
       required: true,
       title: 'Settings — Schedule',
       open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Schedule'] },
-      verify: '[class*="settings"]'
+      verify: '#schedule[data-settings-section="schedule"]'
     },
     {
       id: 'app-settings-app-identity',
       required: true,
       title: 'Settings — App name & logo',
       open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'App name & logo'] },
-      verify: '[class*="settings"]'
+      verify: '#app-identity[data-settings-section="app-identity"]'
     },
     {
       id: 'app-settings-appearance-editor',
       required: true,
       title: 'Settings — Appearance editor',
       open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Appearance editor'] },
-      verify: '[class*="settings"]'
+      verify: '#appearance-editor[data-settings-section="appearance-editor"]'
     },
     {
       // The README has always described this app as built for scattered workflows; until these
@@ -469,7 +482,7 @@ const SURFACES = [
       required: true,
       title: 'Settings — ADHD modes',
       open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'ADHD modes'] },
-      verify: '[class*="settings"]'
+      verify: '#adhd-modes[data-settings-section="adhd-modes"]'
     },
     // ── Windows terminal profiles ───────────────────────────────────────────────────────────────
     // The `app-` prefix is load-bearing twice over. scripts/check-site-shots.mjs mirrors and
@@ -658,14 +671,7 @@ async function cdp(port) {
       }
     })
   }
-  return { send, close }
-}
-
-/** Rule 3 — a capture is read back, never trusted. */
-function looksBlank(pngBuffer) {
-  // Cheap heuristic without decoding: a PNG of one flat colour compresses to almost nothing.
-  // A real interface screenshot at this size never does.
-  return pngBuffer.length < 6000
+  return { send, close, target: page }
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -698,9 +704,7 @@ if (attachPort && (tuple.theme !== 'dark' || tuple.languageMode !== 'en')) {
   )
 }
 if (!port) {
-  if (!doLaunch) {
-    throw new Error('Pass --attach <port> to attach, or --launch to start the app here.')
-  }
+  if (!doLaunch) throw new Error('Pass --attach <port> and --receipt <live cheap-headless receipt>.')
   port = '9222'
   const electron = join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe')
   realHomeBefore = captureManagedConfigSentinel({ home: homedir(), env: process.env })
@@ -744,7 +748,17 @@ if (!port) {
 }
 
 const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim()
+const artifactVersion = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version
+// An attached target was launched outside this script. It is accepted only with a receipt proving
+// the exact cheap headless route and commit. `--attach` alone remains useful for local developer
+// inspection, but cannot claim canonical external capture provenance.
+let externalReceipt = null
+if (receiptPath) {
+  if (!attachPort || doLaunch) throw new Error('--receipt requires --attach and cannot be combined with --launch')
+  externalReceipt = validateExternalCaptureReceipt(JSON.parse(readFileSync(receiptPath, 'utf8')), sha)
+}
 connection = await cdp(port)
+if (externalReceipt) validateAttachedTarget(externalReceipt, connection.target, port)
 const { send } = connection
 
 await send('Runtime.enable')
@@ -962,18 +976,51 @@ for (const s of SURFACES) {
 
     const shot = await send('Page.captureScreenshot', { format: 'png' })
     const buf = Buffer.from(shot.data, 'base64')
-    if (looksBlank(buf)) {
+    if (buf.length < MIN_CAPTURE_BYTES) {
       failures.push({ id: s.id, why: `capture is uniform/blank (${buf.length} bytes) — nothing rendered` })
+      continue
+    }
+    let raster
+    try {
+      raster = inspectPng(buf)
+    } catch (error) {
+      failures.push({ id: s.id, why: `capture could not be decoded as a real PNG: ${error.message}` })
       continue
     }
     writeFileSync(join(TUPLE_OUT, `${s.id}.png`), buf)
     // The site ships only the canonical set. A matrix capture is layout evidence, not a site
     // asset, so a narrow/scaled/translated run must not replace the picture the site serves.
-    if (isDefaultTuple) {
+    if (isDefaultTuple && !outputRoot) {
       mkdirSync(SITE_OUT, { recursive: true })
       writeFileSync(join(SITE_OUT, `${s.id}.png`), buf)
     }
-    captured.push({ id: s.id, title: s.title, bytes: buf.length, hadOpener: !!s.open })
+    captured.push({
+      id: s.id,
+      title: s.title,
+      file: `${s.id}.png`,
+      bytes: raster.bytes,
+      sha256: raster.sha256,
+      width: raster.width,
+      height: raster.height,
+      hadOpener: !!s.open,
+      capturedAt: new Date().toISOString(),
+      tuple: {
+        label: tuple.label,
+        viewport: { width: tuple.viewport.width, height: tuple.viewport.height },
+        deviceScaleFactor: tuple.scale,
+        theme: tuple.theme,
+        languageMode: tuple.languageMode
+      },
+      provenance: {
+        commit: sha,
+        version: artifactVersion,
+        buildKind: 'packaged',
+        method: externalReceipt
+          ? 'Electron + CDP Page.captureScreenshot against an externally launched cheap Lowlevel MCP headless built artifact'
+          : 'Electron + CDP Page.captureScreenshot against the built out/ artifact',
+        receipt: externalReceipt
+      }
+    })
     console.log(`✓ ${s.id}.png  ${(buf.length / 1024).toFixed(0)} KB`)
     // Return to a known state so the next surface does not open on top of this one.
     await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
@@ -1042,33 +1089,35 @@ for (const s of SURFACES) {
   }
 }
 
-// Rule 4 — provenance, written next to the images.
-writeFileSync(
-  join(TUPLE_OUT, 'capture-manifest.json'),
-  JSON.stringify(
-    {
-      commit: sha,
-      capturedAt: new Date().toISOString(),
-      method:
-        'Electron + CDP Page.captureScreenshot against the built out/ artifact, at the tuple below',
-      // The tuple IS the identity of this evidence. A capture with no recorded viewport, scale,
-      // theme and language cannot be re-taken, and a fix cannot be re-proved at the conditions
-      // that found the defect.
-      tuple: {
-        label: tuple.label,
-        viewport: { width: tuple.viewport.width, height: tuple.viewport.height },
-        deviceScaleFactor: tuple.scale,
-        theme: tuple.theme,
-        languageMode: tuple.languageMode
-      },
-      captured,
-      skipped,
-      failures
-    },
-    null,
-    2
-  ) + '\n'
-)
+// Rule 4 — each entry owns its provenance. A filtered `--only` run replaces only its requested
+// rows, preserving valid evidence for the rest of the inventory instead of rewriting it away.
+const manifestPath = join(TUPLE_OUT, 'capture-manifest.json')
+let previousManifest = null
+if (existsSync(manifestPath)) {
+  try { previousManifest = JSON.parse(readFileSync(manifestPath, 'utf8')) } catch (error) {
+    throw new Error(`existing capture manifest is not valid JSON: ${error.message}`)
+  }
+}
+const manifestUpdatedAt = new Date().toISOString()
+const nextManifest = mergeCaptureManifest(previousManifest, captured, manifestUpdatedAt)
+if (!only) {
+  const roster = new Set(SURFACES.map((surface) => surface.id))
+  for (const id of Object.keys(nextManifest.entries)) if (!roster.has(id)) delete nextManifest.entries[id]
+}
+// Compatibility fields keep the existing in-app status reader honest: they describe this update,
+// while `entries` is authoritative for every individual capture's route and commit.
+nextManifest.commit = sha
+nextManifest.capturedAt = manifestUpdatedAt
+nextManifest.method = 'Per-entry provenance in schemaVersion 2 capture-manifest entries'
+// Compatibility is intentionally this run only. Preserved entries can belong to older commits;
+// representing them beside HEAD in the legacy array would make a status card assert false currentness.
+nextManifest.captured = captured
+nextManifest.skipped = skipped
+nextManifest.failures = failures
+nextManifest.current = Object.values(nextManifest.entries).filter((entry) =>
+  captureIsCurrent(entry, { commit: sha, tuple: entry.tuple })
+).map((entry) => entry.id)
+writeFileSync(manifestPath, JSON.stringify(nextManifest, null, 2) + '\n')
 
 // Two required surfaces that produce IDENTICAL bytes are not two surfaces. Either a chord did
 // nothing and the previous screen was filed under a second name, or the two entries genuinely
