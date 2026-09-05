@@ -14,6 +14,15 @@ are recorded below. Do not treat the source candidate as a published release.
 
 ---
 
+## Screenshot evidence refresh (2026-09-05)
+
+- [x] **Evidence machinery and publication inventory:** per-image provenance, portable receipt IDs, real PNG validation, expanded README and Day Teet Hui rosters, and generated offline documentation are dewed on `main` at `388106505dcae0d059035e4d3e0549acc5d52e5a`.
+- [ ] **Current replacement HuiShots:** blocked because the packaged candidate opens its debugging port but does not answer `/json/list` on the approved hidden-desktop route. No old image is relabelled as current.
+- [ ] **Design-reference parity:** ten runtime reference and built-app comparisons remain pending.
+- [ ] **Release and Mat Day closeout:** the unsigned lap saps are locally verified, but no new release was published and no deletion pass is authorized while capture evidence and parity remain incomplete.
+
+---
+
 ## Settings registry parity repair (2026-08-31)
 
 - [x] **Static settings host parity:** `SettingsPage.tsx` now consumes an exhaustive renderer map

@@ -1,5 +1,13 @@
 # Handoff
 
+## 2026-09-05, screenshot evidence refresh and packaged capture blocker
+
+The evidence and release-readiness lanes landed on `main` at `388106505dcae0d059035e4d3e0549acc5d52e5a` and were dewed to the hui. Capture provenance is now schema version 2 with per-image hashes, dimensions, tuple data, source commit, build kind, and portable external receipt identifiers. Filtered captures preserve unrelated entries, while full captures retire removed surface IDs. Publication checks cover the expanded README and Day Teet Hui rosters, actual rendered gallery output, and portable receipt resolution.
+
+The supported source build passed after the vocabulary lock was refreshed. The supported unsigned Squirrel.Windows build passed with Setup.exe, RELEASES, and one full package. A provenance seal bound 11 lap saps to the frozen source snapshot. The packaged hidden-desktop capture route remains blocked: the packaged app opens its debugging port but does not answer `/json/list`, so no verified target receipt or replacement HuiShot exists. A repeated manual cheap Lowlevel launch reproduced the same condition. The exact task app tree, relay child, hidden desktops, and temporary profiles were cleaned up.
+
+Ten design-parity rows remain `pending-runtime`, and the feature inventory retains open evidence rows. The release is therefore not shipped and Mat Day deletion was not activated. Status Hub registration was refused by deployed schema drift, HTTP 400 for the canonical schema-v2 private-emission metadata; one factual Tidbyt frame was delivered through the owner-contained route.
+
 ## 2026-09-03, the clipping floor, the tab-strip keyboard contract, and what the suite actually says
 
 Two commits landed on `main`. Both fix a class of defect rather than one instance, and both carry a
