@@ -88,6 +88,7 @@ and then never edited this file.
 | Vocabulary hash lock | `scripts/check-vocabulary.mjs` | `scripts/check-vocabulary.mjs` (the script's own header is the documentation, deliberately — the subject is private and no separate docs article covers it) | `scripts/check-vocabulary.mjs` |
 | Dim-sum release code names | `scripts/dim-sum-code-name.mjs` | `docs/ci-and-releases.md` | `scripts/dim-sum-code-name.test.mjs` |
 | Design-reference parity app | `design/v2-preview/main.js` | `docs/md3-render-verification.md` | `scripts/capture-shots.mjs` |
+| Capture evidence provenance and publication inventory | `scripts/capture-shots.mjs`, `scripts/lib/capture-evidence.mjs` | `docs/features/development/capture-evidence.md` | `scripts/lib/capture-evidence.test.mjs`, `scripts/lib/publication-capture-inventory.test.mjs` |
 | In-app documentation browser | `src/renderer/components/DocsBrowser.tsx` | `docs/features/help/README.md` | `scripts/check-docs-bundle.mjs` |
 | External-editor handoff | `src/core/vscode-detect.ts` | `docs/exports.md` | `src/core/vscode-detect.test.ts` |
 | Line count in every release | `scripts/count-lines.mjs` | `docs/ci-and-releases.md` | `scripts/release-notes.test.mjs` |
