@@ -55,6 +55,12 @@ export const SHOTS = [
     note: 'Session memory, local settings history and the changelog viewer behind one rail destination.'
   },
   {
+    file: 'app-status-surface.png',
+    title: 'Status',
+    alt: 'The application status destination with operational state cards and evidence-oriented reporting.',
+    note: 'Operational state is visible in the product, with evidence kept separate from promotional copy.'
+  },
+  {
     file: 'app-03-palette.png',
     title: 'Command palette',
     alt: 'The command palette open over the app, listing create actions for terminals and each supported agent.',
@@ -95,6 +101,30 @@ export const SHOTS = [
     title: 'Scheduled settings',
     alt: 'The Schedule settings section, where appearance and language values can be changed on a timetable.',
     note: 'Language, theme and appearance on a schedule, with the timezone stated.'
+  },
+  {
+    file: 'app-adhd-modes.png',
+    title: 'Attention accommodations',
+    alt: 'The attention accommodations settings section with five independently controlled modes and factual descriptions.',
+    note: 'Focus, low stimulation, time awareness, one thing at a time, and momentum remain off until selected.'
+  },
+  {
+    file: 'app-settings-docker-host.png',
+    title: 'Docker host settings',
+    alt: 'The Docker host settings section with local host configuration, search controls, and explicit availability states.',
+    note: 'A host that cannot be reached is described as unavailable rather than guessed into a working state.'
+  },
+  {
+    file: 'app-windows-terminal-profiles.png',
+    title: 'Terminal profiles',
+    alt: 'The Windows terminal-profile picker listing detected shell profiles before a terminal is created.',
+    note: 'Profile selection happens before the session exists, so a chosen shell is visible and reviewable.'
+  },
+  {
+    file: 'app-windows-terminal-profile-availability.png',
+    title: 'Profile availability',
+    alt: 'The Windows terminal-profile availability settings with detected profiles and a plain-language reason for an unavailable choice.',
+    note: 'Unavailable choices remain visible with their reason instead of disappearing from the picker.'
   },
   {
     file: 'app-kids-home.png',
