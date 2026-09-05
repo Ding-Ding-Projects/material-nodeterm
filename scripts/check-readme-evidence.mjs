@@ -119,7 +119,7 @@ function validate(manifest, inventory, readme, checkFiles = true) {
   }
   const siteHtml = screenshotsRoomHtml({ state: { qSec: '', rxOn: {}, rxFlags: {} } })
   errors.push(...validatePublicationCaptures({ readme, siteHtml }))
-  errors.push(...validateCurrentCaptureLabels({ readme, manifest, sourceCommit: manifest.commit ?? manifest.sourceCommit }))
+  errors.push(...validateCurrentCaptureLabels({ readme, manifest, sourceCommit: manifest.commit ?? manifest.sourceCommit, root: ROOT, receiptRoot: process.env.NODETERM_CAPTURE_RECEIPT_ROOT || '' }))
   return errors
 }
 
