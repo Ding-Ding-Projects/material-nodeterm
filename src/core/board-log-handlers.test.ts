@@ -25,6 +25,16 @@ const append = (f: FakePlatform, projectId: string, e: BoardLogEntry) =>
 const read = (f: FakePlatform, projectId: string, opts?: unknown) =>
   f.handlers[IPC.boardLogRead](projectId, opts) as Promise<BoardLogReadResult>
 
+const duplicateRejectingPlatform = (): FakePlatform => {
+  const f = fakePlatform()
+  const register = f.handle.bind(f)
+  f.handle = (channel, handler) => {
+    if (Object.hasOwn(f.handlers, channel)) throw new Error(`duplicate IPC handler: ${channel}`)
+    register(channel, handler)
+  }
+  return f
+}
+
 describe('registerBoardLogHandlers — routing', () => {
   let dir: string
   beforeEach(() => {
@@ -32,6 +42,10 @@ describe('registerBoardLogHandlers — routing', () => {
   })
   afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  })
+
+  it('registers every request handler exactly once', () => {
+    expect(() => registerBoardLogHandlers(duplicateRejectingPlatform(), routerFor({ kind: 'local', cwd: dir }))).not.toThrow()
   })
 
   it('local: append writes and read returns the entry newest-first', async () => {
