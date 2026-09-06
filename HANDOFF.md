@@ -1,12 +1,12 @@
 # Handoff
 
-## 2026-09-05, screenshot evidence refresh and packaged capture blocker
+## 2026-09-05, v1.0.26 release publication and remaining runtime evidence
 
-The evidence and release-readiness lanes landed on `main` at `388106505dcae0d059035e4d3e0549acc5d52e5a` and were dewed to the hui. Capture provenance is now schema version 2 with per-image hashes, dimensions, tuple data, source commit, build kind, and portable external receipt identifiers. Filtered captures preserve unrelated entries, while full captures retire removed surface IDs. Publication checks cover the expanded README and Day Teet Hui rosters, actual rendered gallery output, and portable receipt resolution.
+Release `v1.0.26` is published and non-draft at [the release record](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v1.0.26). It targets commit `4af7ae545a9bec256f0fb9fc07a9f3ba6aff1705`, and Release workflow run `33953016865` completed successfully. This corrects the earlier statement that the release had not shipped.
 
-The supported source build passed after the vocabulary lock was refreshed. The supported unsigned Squirrel.Windows build passed with Setup.exe, RELEASES, and one full package. A provenance seal bound 11 lap saps to the frozen source snapshot. The packaged hidden-desktop capture route remains blocked: the packaged app opens its debugging port but does not answer `/json/list`, so no verified target receipt or replacement HuiShot exists. A repeated manual cheap Lowlevel launch reproduced the same condition. The exact task app tree, relay child, hidden desktops, and temporary profiles were cleaned up.
+Runtime evidence remains incomplete. `docs/release/completeness-audit.md` and `docs/evidence/windows/interaction-ledger.json` are absent. `design/v2/design-parity-inventory.json` lists 10 rows, while all 40 referenced reference, built, comparison, and diff files are absent. The current pass is investigating the capture route and does not claim capture, packaged interaction, or design-parity completion.
 
-Ten design-parity rows remain `pending-runtime`, and the feature inventory retains open evidence rows. The release is therefore not shipped and Mat Day deletion was not activated. Status Hub registration was refused by deployed schema drift, HTTP 400 for the canonical schema-v2 private-emission metadata; one factual Tidbyt frame was delivered through the owner-contained route.
+The previously recorded source-build, unsigned Squirrel.Windows packaging, and provenance facts remain historical evidence. They do not replace the missing runtime records above.
 
 ## 2026-09-03, the clipping floor, the tab-strip keyboard contract, and what the suite actually says
 
@@ -44,7 +44,7 @@ guard found **18 files**, not the 7 a source review reported -- the review had o
 components, so `SessionsSidebar`, the appearance editor, the colour picker and the icon picker were
 all missed.
 
-Two poke guys fell out of that sweep:
+Two failures fell out of that sweep:
 
 - **The Ollama panel rendered its tab strip twice.** A dead hand-rolled chip strip sat directly
   above a correct `<Tabs>` with the same class and the same four items, left behind by an
@@ -63,7 +63,7 @@ was re-run in isolation before being attributed:
 | `src/core/build-bat.test.ts` (48 tests) | **Environmental, and the guard working.** `build.bat:41` refuses to run as Administrator and this session was elevated. Not a code defect. |
 | `site/app/core/input-dialog.test.js`, `runtime-safety.test.js` (10 tests) | **Real, pre-existing, and still open.** See below. |
 
-### Open: the Day Teet Hui copy-ownership migration is unfinished
+### Open: the GitHub Pages copy-ownership migration is unfinished
 
 Ten tests fail on `main` today, and they failed before these commits -- proved by restoring `site/`
 from `origin/main` and re-running. They are not flaky and they are not contention.
@@ -100,7 +100,7 @@ no signal anywhere.
 ### Branch state, measured rather than repeated
 
 The 2026-09-01 entry above says "every local branch except `feat/windows-only-yum-tong-20260828` is
-an ancestor of `main`". That is not true of the hui today: **92** `origin/*` branches are not
+an ancestor of `main`". That is not true of the Git remote today: **92** `origin/*` branches are not
 ancestors of `origin/main`, and one of them, `origin/fix/settings-exact-boundaries`, shares **no
 merge base with `main` at all** -- an orphan snapshot rather than a lane. The lane-preservation
 branches (`feat/program-*`, `feat/*-reconciliation`) genuinely hold work absent from `main` and were

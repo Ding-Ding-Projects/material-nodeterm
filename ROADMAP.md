@@ -6,27 +6,23 @@ issues. A ticked item is implemented **and** verified — where it claims someth
 means captured from the real built artifact, not asserted from source. Anything unticked names
 its real state next to it rather than being silently omitted.
 
-Source candidate package version in `package.json`: `1.0.0`. The latest published release tag is
-`v1.0.6`, targeting `707713ec971193437f3ffcde2cdaf348b69a44ee`. Version `1.0.0` is the
-deliberate human-selected source major; ordinary stable patch releases remain workflow-planned and
-have reached `1.0.6`. The tree currently contains 1,054 test files. Candidate check evidence and remaining runtime receipt blockers
-are recorded below. Do not treat the source candidate as a published release.
+The latest published release is [`v1.0.26`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v1.0.26), a non-draft release targeting `4af7ae545a9bec256f0fb9fc07a9f3ba6aff1705`. Release workflow run `33953016865` completed successfully. Historical source-candidate entries below retain their original context and do not supersede this release baseline. The tree currently contains 1,054 test files.
 
 ---
 
-## Screenshot evidence refresh (2026-09-05)
+## Release publication and runtime evidence recovery (2026-09-05)
 
-- [x] **Evidence machinery and publication inventory:** per-image provenance, portable receipt IDs, real PNG validation, expanded README and Day Teet Hui rosters, and generated offline documentation are dewed on `main` at `388106505dcae0d059035e4d3e0549acc5d52e5a`.
-- [ ] **Current replacement HuiShots:** blocked because the packaged candidate opens its debugging port but does not answer `/json/list` on the approved hidden-desktop route. No old image is relabelled as current.
-- [ ] **Design-reference parity:** ten runtime reference and built-app comparisons remain pending.
-- [ ] **Release and Mat Day closeout:** the unsigned lap saps are locally verified, but no new release was published and no deletion pass is authorized while capture evidence and parity remain incomplete.
+- [x] **Published release:** `v1.0.26` is non-draft, targets `4af7ae545a9bec256f0fb9fc07a9f3ba6aff1705`, and was published by successful Release workflow run `33953016865`.
+- [ ] **Current replacement screenshots:** the capture route is under investigation. No completion claim is made for packaged interaction or replacement screenshots.
+- [ ] **Runtime evidence records:** `docs/release/completeness-audit.md` and `docs/evidence/windows/interaction-ledger.json` are absent.
+- [ ] **Design-reference parity:** `design/v2/design-parity-inventory.json` contains 10 rows, and all 40 referenced reference, built, comparison, and diff files are absent.
 
 ---
 
 ## Settings registry parity repair (2026-08-31)
 
 - [x] **Static settings host parity:** `SettingsPage.tsx` now consumes an exhaustive renderer map
-      for every static entry in `SETTINGS_SECTION_REGISTRY`. The focused parity Chut passes 2 of 2,
+      for every static entry in `SETTINGS_SECTION_REGISTRY`. The focused parity check passes 2 of 2,
       `nav.test.ts` passes 8 of 8, and the deliberate missing-renderer mutation turned both parity
       cases red before restoration. No runtime capture was required for this registry-only repair.
 
@@ -488,7 +484,7 @@ are recorded below. Do not treat the source candidate as a published release.
   - `agent-status-mirror.ts:507` still rolls its own cross-dialect basename instead of using the
     sanctioned `core/path-basename.ts`.
 
-- [ ] **The Day Teet Hui copy-ownership migration is unfinished, and 10 tests fail on `main` because
+- [ ] **The GitHub Pages copy-ownership migration is unfinished, and 10 tests fail on `main` because
       of it.** `site/app/core/input-dialog.js` implements the owned-parts model and its tests expect
       it, but `site/app/core/engine.js` never adopted it: `toggleLock` still takes a `promptFn` and
       all three callers pass `window.prompt.bind(window)` -- a native browser prompt on a surface
