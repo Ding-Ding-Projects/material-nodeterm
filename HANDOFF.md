@@ -6,7 +6,11 @@ Release `v1.0.26` is published and non-draft at [the release record](https://git
 
 Runtime evidence remains incomplete. `docs/release/completeness-audit.md` and `docs/evidence/windows/interaction-ledger.json` are absent. `design/v2/design-parity-inventory.json` lists 10 rows, while all 40 referenced reference, built, comparison, and diff files are absent. The current pass is investigating the capture route and does not claim capture, packaged interaction, or design-parity completion.
 
-The previously recorded source-build, unsigned Squirrel.Windows packaging, and provenance facts remain historical evidence. They do not replace the missing runtime records above.
+### Historical build and capture-route evidence
+
+The source build passed after the vocabulary lock refresh. Unsigned Squirrel.Windows packaging produced `Setup.exe`, `RELEASES`, and one full package. Provenance bound 11 artifacts to the frozen source snapshot. The packaged application opened its debugging port but did not answer `/json/list`; the approved hidden-desktop capture route reproduced that blocker twice. The owned application process, relay child, hidden desktops, and temporary profiles were cleaned up after those attempts.
+
+Status Hub registration previously returned HTTP 400 because of deployed schema drift against the canonical schema-v2 private-emission metadata. One factual Tidbyt frame was delivered through the owner-contained route. These are historical observations and do not replace the missing runtime records above.
 
 ## 2026-09-03, the clipping floor, the tab-strip keyboard contract, and what the suite actually says
 

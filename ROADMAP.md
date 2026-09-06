@@ -13,9 +13,11 @@ The latest published release is [`v1.0.26`](https://github.com/Ding-Ding-Project
 ## Release publication and runtime evidence recovery (2026-09-05)
 
 - [x] **Published release:** `v1.0.26` is non-draft, targets `4af7ae545a9bec256f0fb9fc07a9f3ba6aff1705`, and was published by successful Release workflow run `33953016865`.
+- [x] **Evidence machinery and publication inventory:** per-image provenance, portable receipt IDs, real PNG validation, expanded README and GitHub Pages rosters, and generated offline documentation were pushed on `main` at `388106505dcae0d059035e4d3e0549acc5d52e5a`.
 - [ ] **Current replacement screenshots:** the capture route is under investigation. No completion claim is made for packaged interaction or replacement screenshots.
 - [ ] **Runtime evidence records:** `docs/release/completeness-audit.md` and `docs/evidence/windows/interaction-ledger.json` are absent.
 - [ ] **Design-reference parity:** `design/v2/design-parity-inventory.json` contains 10 rows, and all 40 referenced reference, built, comparison, and diff files are absent.
+- [ ] **Release closeout:** runtime evidence remains incomplete. A cleanup pass is authorized, but no deletion has occurred in this pass.
 
 ---
 
