@@ -72,10 +72,6 @@ function sources(root: ScanRoot, out: string[] = [], dir = root.directory): stri
 const RENAME_ALLOWED = new Map<string, string>([
   ['core/fs-atomic.ts', 'the async/core helper; this is its one real rename'],
   [
-    'session-host/state-file.ts',
-    'the standalone host cannot import core; this helper owns its bounded synchronous rename retry'
-  ],
-  [
     'scripts/lib/rename-atomic.mjs',
     'scripts cannot import core TypeScript; this shared helper owns their bounded rename retries'
   ]
@@ -83,6 +79,39 @@ const RENAME_ALLOWED = new Map<string, string>([
 
 function isRenameAllowed(relativeFile: string): boolean {
   return RENAME_ALLOWED.has(normalizedSourcePath(relativeFile))
+}
+
+/** The session host is a process-boundary bundle, so it cannot import core/fs-atomic. Its one
+ * synchronous retry helper is independently behavior-tested. Remove only that helper body from
+ * this source scan: skipping the whole file let a later bare rename beside it pass quietly. */
+function withoutSessionHostRetryHelper(relativeFile: string, text: string): string {
+  if (normalizedSourcePath(relativeFile) !== 'session-host/state-file.ts') return text
+  const signature = 'export function renameSessionHostStateAtomic('
+  const start = text.indexOf(signature)
+  if (start === -1 || text.indexOf(signature, start + signature.length) !== -1) return text
+  let parametersDepth = 0
+  let parametersEnd = -1
+  for (let index = start + signature.length - 1; index < text.length; index++) {
+    if (text[index] === '(') parametersDepth++
+    if (text[index] !== ')') continue
+    parametersDepth--
+    if (parametersDepth === 0) {
+      parametersEnd = index
+      break
+    }
+  }
+  if (parametersEnd === -1) return text
+  const bodyStart = text.indexOf('{', parametersEnd + 1)
+  if (bodyStart === -1) return text
+
+  let depth = 0
+  for (let index = bodyStart; index < text.length; index++) {
+    if (text[index] === '{') depth++
+    if (text[index] !== '}') continue
+    depth--
+    if (depth === 0) return text.slice(0, start) + text.slice(index + 1)
+  }
+  return text
 }
 
 describe('every store publishes through renameAtomic', () => {
@@ -190,13 +219,17 @@ describe('every store publishes through renameAtomic', () => {
     return hits
   }
 
+  function renameHitsForSource(relativeFile: string, text: string): string[] {
+    return renameHits(withoutSessionHostRetryHelper(relativeFile, text))
+  }
+
   it('no bare rename, in ANY spelling, outside the helper', () => {
     const offenders: string[] = []
     for (const f of files) {
       const text = readFileSync(f, 'utf8')
       const rel = sourceRelativePath(f)
       if (isRenameAllowed(rel)) continue
-      const hits = renameHits(text)
+      const hits = renameHitsForSource(rel, text)
       if (hits.length) offenders.push(`${rel}  [${hits.join(', ')}]`)
     }
     expect(
@@ -256,8 +289,8 @@ describe('every store publishes through renameAtomic', () => {
     expect(normalizedSourcePath(String.raw`core\fs-atomic.ts`)).toBe('core/fs-atomic.ts')
     expect(isRenameAllowed('core/fs-atomic.ts')).toBe(true)
     expect(isRenameAllowed(String.raw`core\fs-atomic.ts`)).toBe(true)
-    expect(isRenameAllowed('session-host/state-file.ts')).toBe(true)
-    expect(isRenameAllowed(String.raw`session-host\state-file.ts`)).toBe(true)
+    expect(isRenameAllowed('session-host/state-file.ts')).toBe(false)
+    expect(isRenameAllowed(String.raw`session-host\state-file.ts`)).toBe(false)
     expect(isRenameAllowed('scripts/lib/rename-atomic.mjs')).toBe(true)
     expect(isRenameAllowed(String.raw`scripts\lib\rename-atomic.mjs`)).toBe(true)
     expect(isRenameAllowed('nested/session-host/state-file.ts')).toBe(false)
@@ -267,6 +300,22 @@ describe('every store publishes through renameAtomic', () => {
     expect(isRenameAllowed('session-host/state-file.ts.bak')).toBe(false)
     const scanned = new Set(files.map(sourceRelativePath))
     for (const allowed of RENAME_ALLOWED.keys()) expect(scanned.has(allowed)).toBe(true)
+  })
+
+  it('permits only the proven session-host retry helper, never a bare rename beside it', () => {
+    const stateFile = readFileSync(join(SOURCE_ROOT, 'session-host', 'state-file.ts'), 'utf8')
+    expect(renameHitsForSource('session-host/state-file.ts', stateFile)).toEqual([])
+
+    const source = [
+      "import { renameSync } from 'fs'",
+      'export function renameSessionHostStateAtomic(tmp: string, target: string) {',
+      '  renameSync(tmp, target)',
+      '}',
+      'export function unsafeSecondPublisher(tmp: string, target: string) {',
+      '  renameSync(tmp, target)',
+      '}'
+    ].join('\n')
+    expect(renameHitsForSource('session-host/state-file.ts', source)).toEqual(['renameSync('])
   })
 })
 
