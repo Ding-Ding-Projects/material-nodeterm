@@ -5,11 +5,14 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { describe, it } from 'vitest'
 import { README_CAPTURE_ROSTER, SITE_CAPTURE_ROSTER, markdownImageEmbeds, renderedImagePaths, validateCurrentCaptureLabels, validatePublicationCaptures } from './publication-capture-inventory.mjs'
 import { screenshotsRoomHtml } from '../../site/app/features/screenshots.js'
 
-const readme = README_CAPTURE_ROSTER.map((file) => `![Recorded ${file}](./docs/assets/shots/${file})`).join('\n')
-const gallery = SITE_CAPTURE_ROSTER.map((file) => `<img class="shot-card__img" src="./assets/shots/${file}" alt="Recorded ${file}">`).join('\n')
+describe('publication capture inventory', () => {
+  it('validates the roster, rendered embeds, and semantic provenance', () => {
+    const readme = README_CAPTURE_ROSTER.map((file) => `![Recorded ${file}](./docs/assets/shots/${file})`).join('\n')
+    const gallery = SITE_CAPTURE_ROSTER.map((file) => `<img class="shot-card__img" src="./assets/shots/${file}" alt="Recorded ${file}">`).join('\n')
 
 assert.deepEqual(markdownImageEmbeds('Mention docs/assets/shots/app-01-launch.png only.\n![Launch](./docs/assets/shots/app-01-launch.png)'), [
   { alt: 'Launch', path: 'docs/assets/shots/app-01-launch.png' }
@@ -89,4 +92,6 @@ assert.equal(validatePublicationCaptures({ readme, siteHtml: renderedGallery }).
 const disabledRenderer = renderedGallery.replace(/<img\b[^>]*>/g, '<span>dead screenshot renderer</span>')
 assert.match(validatePublicationCaptures({ readme, siteHtml: disabledRenderer }).join('\n'), /rendered site gallery lacks required capture/)
 
-console.log('publication capture inventory: roster, actual embed, site renderer, and stale-current negative cases verified')
+    console.log('publication capture inventory: roster, actual embed, site renderer, and stale-current negative cases verified')
+  })
+})
