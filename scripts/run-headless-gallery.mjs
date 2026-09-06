@@ -10,6 +10,7 @@ import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
+import { renameAtomicSync } from './lib/rename-atomic.mjs'
 
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(import.meta.url)
@@ -30,7 +31,7 @@ function atomicJson(file, payload) {
   fs.mkdirSync(path.dirname(file), { recursive: true })
   const temp = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`
   fs.writeFileSync(temp, `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
-  fs.renameSync(temp, file)
+  renameAtomicSync(temp, file)
 }
 function invoke(tool, payload, timeout = 45) {
   const result = spawnSync(options.cheap, [tool, '--json', JSON.stringify(payload)], { encoding: 'utf8', windowsHide: true, timeout: timeout * 1000, maxBuffer: 4 * 1024 * 1024, env: options.launchEnvironment })

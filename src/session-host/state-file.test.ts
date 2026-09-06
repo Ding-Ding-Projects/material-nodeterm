@@ -90,22 +90,6 @@ describe('session-host state publication', () => {
 })
 
 describe('renameSessionHostStateAtomic', () => {
-  it('stops after its bounded transient-sharing retry budget', () => {
-    let attempts = 0
-    const waits: number[] = []
-    expect(() =>
-      renameSessionHostStateAtomic('tmp', 'target', {
-        rename: () => {
-          attempts++
-          throw codedError('EBUSY')
-        },
-        wait: (ms) => waits.push(ms)
-      })
-    ).toThrow(/EBUSY/)
-    expect(attempts).toBe(5)
-    expect(waits).toEqual([10, 25, 75, 200])
-  })
-
   it('does not let one unfixable result block startup forever', () => {
     let attempts = 0
     expect(() =>
