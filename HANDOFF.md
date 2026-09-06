@@ -6,6 +6,10 @@ Release `v1.0.26` is published and non-draft at [the release record](https://git
 
 Runtime evidence remains incomplete. `docs/release/completeness-audit.md` and `docs/evidence/windows/interaction-ledger.json` are absent. `design/v2/design-parity-inventory.json` lists 10 rows, while all 40 referenced reference, built, comparison, and diff files are absent. The current pass is investigating the capture route and does not claim capture, packaged interaction, or design-parity completion.
 
+### Active capture-route repair
+
+The local packaged candidate stops at startup with `DUPLICATE_HANDLER`. `src/core/board-log-handlers.ts` registers `IPC.boardLogReadAttachment` twice, at lines 70 and 89, and both registrations are present in the extracted ignored bundle. The separate startup-repair lane committed source repair `5156134ae5e5a59ae41148331740b2af052a4d2c`; its focused behavior test was red before duplicate removal and passed 10 of 10 after. Runtime verification remains unverified. The old executable SHA-256 is `0706874795294FBBE6231B4B81C8D9A7C520EB32A796B34B2591135CEF597D32` and has no commit provenance. Both the hidden process and hidden desktop were safely closed.
+
 ### Historical build and capture-route evidence
 
 The source build passed after the vocabulary lock refresh. Unsigned Squirrel.Windows packaging produced `Setup.exe`, `RELEASES`, and one full package. Provenance bound 11 artifacts to the frozen source snapshot. The packaged application opened its debugging port but did not answer `/json/list`; the approved hidden-desktop capture route reproduced that blocker twice. The owned application process, relay child, hidden desktops, and temporary profiles were cleaned up after those attempts.

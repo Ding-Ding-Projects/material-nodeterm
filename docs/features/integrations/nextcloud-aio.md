@@ -128,7 +128,7 @@ Portable import cannot recover credentials or host-specific files because it nev
 
 This lane deliberately did not run tests, type checking, linting, security checks, builds, packaging,
 installer execution, runtime interaction checks, or UI captures. The fixed profile implementation and
-documentation are present, but those evidence Chuts remain open for the complete release pass.
+documentation are present, but those evidence gates remain open for the complete release pass.
 
 ## Suggested articles
 

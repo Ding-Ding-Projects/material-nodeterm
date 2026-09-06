@@ -49,9 +49,9 @@ The earlier ultra-speed lane did not run tests, type-checking, lint, runtime int
 accessibility review, or screenshots. That historical note remains attached to the earlier
 implementation record.
 
-The settings registry parity Chut is `src/renderer/components/settings/SettingsPage.registry.test.tsx`.
+The settings registry parity gate is `src/renderer/components/settings/SettingsPage.registry.test.tsx`.
 It checks that every static navigation entry materializes one host and deliberately verifies the
-missing-renderer failure path. The focused Chut and `nav.test.ts` pass locally; the complete app
+missing-renderer failure path. The focused gate and `nav.test.ts` pass locally; the complete app
 runtime and visual interaction remain outside this registry-only check.
 
 ## Suggested articles

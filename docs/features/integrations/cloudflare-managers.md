@@ -132,7 +132,7 @@ state that credentials, response bodies, and machine-local provider data were om
 This implementation lane intentionally did not run tests, type checks, lint, security checks,
 accessibility checks, builds, packaging, installer execution, runtime interaction checks, or UI
 captures. The source and documentation describe the shipped boundary, but artifact and runtime
-verification remain the explicit next Chut for the parent release lane.
+verification remain the explicit next gate for the parent release lane.
 
 ## Suggested articles
 

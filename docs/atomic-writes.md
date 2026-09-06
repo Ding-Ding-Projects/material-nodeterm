@@ -326,7 +326,7 @@ credential is gone while its bearer bytes remain next door.
 are `core/fs-atomic.ts` and `session-host/state-file.ts` (the standalone host cannot import core).
 It flags a bare `rename`/`renameSync` only when the file
 actually imported that name from `fs`: several stores have a `rename()` method of their own (kids
-mode, School mode and the Ollama chat store each rename something), and a guard that cries wolf is
+mode, School mode and the Ollama chat store each rename something), and a guard that cries colliding Codex session is
 a guard somebody deletes. It is a scan rather than a convention because the convention
 is unverifiable by reading: a store added next year gets the retry because the test refuses the
 alternative, not because its author read this page.
@@ -343,7 +343,7 @@ matches nothing otherwise reports clean, which is the same class of silent failu
 `src/core/fs-atomic.guard.test.ts` scans `src/core`, `src/main` and `src/server`, and fails on any
 bare rename in all three spellings. The only exemption is `core/fs-atomic.ts` itself. It flags a
 bare `rename`/`renameSync` only when the file actually imported that name from `fs` — several
-stores have a `rename()` method of their own, and a guard that cries wolf is a guard somebody
+stores have a `rename()` method of their own, and a guard that cries colliding Codex session is a guard somebody
 deletes.
 
 The temp-name half checks the PROPERTY, not the helper: an inline `randomUUID()` path is also

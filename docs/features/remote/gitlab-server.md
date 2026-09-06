@@ -66,7 +66,7 @@ offers the same explicit CE/EE Configure path.
 | Node integration | `src/renderer/nodes/ServiceNode.tsx` |
 
 This ultra-speed lane intentionally did not run tests, type checks, lint, security review,
-accessibility review, installer execution, runtime interaction checks, or HuiShots. The implementation
+accessibility review, installer execution, runtime interaction checks, or screenshots. The implementation
 is therefore not presented as runtime-verified.
 
 ## Suggested articles

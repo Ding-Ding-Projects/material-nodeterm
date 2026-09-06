@@ -82,7 +82,7 @@ canvas as a credential oracle.
 This implementation lane was intentionally delivered without running tests, type checks, lint,
 security checks, builds, packaging, installer execution, runtime interaction, or UI captures. The
 implementation therefore remains **unverified** until a later verification lane runs the focused
-Chuts against the built artifact. Those Chuts must cover both modes, invalid and bounded values,
+gates against the built artifact. Those gates must cover both modes, invalid and bounded values,
 vault sealing, no portable secret fields, rate-limit timing, every duration and relock, store
 failure, keyboard and screen-reader paths, focus return, narrow layouts, and the absence of any
 recovery-game or toy-lock call.

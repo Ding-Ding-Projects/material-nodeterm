@@ -1223,7 +1223,7 @@
 
 - Add optional portal-door numeric code or passphrase entry as a credential service independent of
   toy locks, with sealed local verifiers, bounded rate limits, expiry/relock, accessible anchored
-  entry and settings recovery, and portable presence-only metadata. Focused Chuts and built-artifact
+   entry and settings recovery, and portable presence-only metadata. Focused gates and built-artifact
   verification remain pending for this implementation lane.
 
 - Add the platform-free schema 3 portable-project manifest validator with canonical required

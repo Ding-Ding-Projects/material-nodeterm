@@ -30,7 +30,7 @@ geometry, and content shape before adopting the hierarchy. Invalid child state i
 unit and never partially applied. Import makes no network request, deployment, provider mutation,
 process launch, or download.
 
-## Lang gui surface
+## Material Design 3 surface
 
 The canvas command palette includes **Open Multiverse canvases**, and the canvas app bar exposes the
 same action. The anchored panel provides a searchable child-canvas list with its own full regex
@@ -38,7 +38,7 @@ builder, a guided child name field, a parent picker with depth information, acti
 and a catalog summary. Child content can be inspected and notes can be added through the catalog
 seam. Empty and rejected states remain visible and explain the depth or scope boundary.
 
-The panel uses the app's Lang gui tokens, keyboard-reachable controls, visible focus, a painted
+The panel uses the app's Material Design 3 tokens, keyboard-reachable controls, visible focus, a painted
 bounded overlay, and a narrow-layout reflow. No child canvas is represented as a project tab.
 
 ## Suggested articles
