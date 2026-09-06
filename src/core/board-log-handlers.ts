@@ -67,13 +67,6 @@ export function registerBoardLogHandlers(platform: CorePlatform, router: BoardLo
     if (r.kind === 'remote') return new BoardLogStore({ remote: r.exec }).removeAttachments(r.remoteCwd, sessionId, ids)
     return false
   })
-  platform.handle(IPC.boardLogReadAttachment, async (projectId: string, attachment) => {
-    const r = router.route(projectId)
-    if (r.kind === 'local') return new BoardLogStore({}).readAttachment(r.cwd, attachment)
-    if (r.kind === 'remote') return new BoardLogStore({ remote: r.exec }).readAttachment(r.remoteCwd, attachment)
-    return { ok: false, error: 'This project has no reachable folder.' }
-  })
-
   platform.handle(
     IPC.boardLogRead,
     async (projectId: string, opts?: BoardLogReadOpts): Promise<BoardLogReadResult> => {
