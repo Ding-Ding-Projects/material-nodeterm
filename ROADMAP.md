@@ -6,7 +6,7 @@ issues. A ticked item is implemented **and** verified — where it claims someth
 means captured from the real built artifact, not asserted from source. Anything unticked names
 its real state next to it rather than being silently omitted.
 
-The latest published release is [`v1.0.26`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v1.0.26), a non-draft release targeting `4af7ae545a9bec256f0fb9fc07a9f3ba6aff1705`. Release workflow run `33953016865` completed successfully. Historical source-candidate entries below retain their original context and do not supersede this release baseline. The tree currently contains 1,054 test files.
+The verified published baseline entering this recovery pass is [`v1.0.26`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v1.0.26), a non-draft release targeting `4af7ae545a9bec256f0fb9fc07a9f3ba6aff1705`. Release workflow run `33953016865` completed successfully. Historical source-candidate entries below retain their original context and do not supersede this dated release baseline.
 
 ---
 

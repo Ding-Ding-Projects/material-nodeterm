@@ -1,5 +1,13 @@
 # Handoff
 
+## 2026-09-05, recovery integration before final package verification
+
+The reviewed startup repair (`5156134ae5e5a59ae41148331740b2af052a4d2c`) and capture-tooling repair (`6a04398e6089625ddcfa1987a4e43c3d88e7d069`) are integrated. Board-log attachment IPC now has one owner. Gallery receipts use the established bounded atomic-rename helper, and the publication inventory registers a real Vitest test. The startup regression failed before the repair and passed all 10 focused tests afterward. The atomic helper, gallery, publication inventory, and existing atomic-write guard passed 16 tests across four files. Independent review found no actionable issue in either repair.
+
+The original full-suite run at `4af7ae545a9bec256f0fb9fc07a9f3ba6aff1705` reported 13,053 passed, 44 failed, and 281 pending tests across 1,103 result files. Serial follow-up runs isolated the failures: one run passed 252 tests with three pending and one external WSL failure; the two additional main-process suites passed all 39 tests. The remaining WSL `test-instance` failed to start its test command with `Wsl/Service/E_UNEXPECTED`. No distribution was reset or modified to hide that result. These are separate runs, not an aggregated replacement full-suite verdict.
+
+The supported source build at preliminary candidate `725f84ad453a28ad35892d7c95d5d2ae4b0a4504` passed in 405 seconds. Its installer operation reached Squirrel packaging but failed because a fully qualified path exceeded the legacy 260-character limit. Final packaging must use the shorter primary checkout and bind its outputs to the final candidate. This entry records the state before that final package verification; it does not claim a new installer, runtime acceptance, or completed design parity.
+
 ## 2026-09-05, v1.0.26 release publication and remaining runtime evidence
 
 Release `v1.0.26` is published and non-draft at [the release record](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v1.0.26). It targets commit `4af7ae545a9bec256f0fb9fc07a9f3ba6aff1705`, and Release workflow run `33953016865` completed successfully. This corrects the earlier statement that the release had not shipped.
@@ -8,7 +16,7 @@ Runtime evidence remains incomplete. `docs/release/completeness-audit.md` and `d
 
 ### Active capture-route repair
 
-The local packaged candidate stops at startup with `DUPLICATE_HANDLER`. `src/core/board-log-handlers.ts` registers `IPC.boardLogReadAttachment` twice, at lines 70 and 89, and both registrations are present in the extracted ignored bundle. The separate startup-repair lane committed source repair `5156134ae5e5a59ae41148331740b2af052a4d2c`; its focused behavior test was red before duplicate removal and passed 10 of 10 after. Runtime verification remains unverified. The old executable SHA-256 is `0706874795294FBBE6231B4B81C8D9A7C520EB32A796B34B2591135CEF597D32` and has no commit provenance. Both the hidden process and hidden desktop were safely closed.
+The initial local packaged candidate stopped at startup with `DUPLICATE_HANDLER`. At baseline `4af7ae545a9bec256f0fb9fc07a9f3ba6aff1705`, `src/core/board-log-handlers.ts` registered `IPC.boardLogReadAttachment` twice, at lines 70 and 89, and both registrations were present in the extracted ignored bundle. The startup-repair lane committed source repair `5156134ae5e5a59ae41148331740b2af052a4d2c`; its focused behavior test was red before duplicate removal and passed 10 of 10 after. Runtime verification was still pending at that point. The old executable SHA-256 is `0706874795294FBBE6231B4B81C8D9A7C520EB32A796B34B2591135CEF597D32` and has no commit provenance. Both the hidden process and hidden desktop were safely closed.
 
 ### Historical build and capture-route evidence
 
