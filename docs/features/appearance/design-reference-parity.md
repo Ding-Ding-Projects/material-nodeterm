@@ -33,6 +33,8 @@ deviation approval. The route and tuple are part of the evidence identity, not d
 
 ## Runtime evidence boundary
 
+The preview launcher accepts exactly the ten inventory screen names. It always opens the dark 1440 x 940, scale-1 reference window, renders the checked-in HTML through its existing runtime support, and blocks popups, top-level navigation, and non-file requests. Time and animation are not frozen by this launcher, so captures remain pending until the deterministic capture route controls them.
+
 The current receipt manifest at
 [`docs/assets/design-parity/receipt-manifest.json`](../../assets/design-parity/receipt-manifest.json)
 has ten `pending-runtime` receipts. No image, comparison, or diff is claimed by those records, and
