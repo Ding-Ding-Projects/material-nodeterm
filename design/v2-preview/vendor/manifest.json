@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "url": "https://unpkg.com/react@18.3.1/umd/react.production.min.js",
+      "file": "react-18.3.1.production.min.js",
+      "contentType": "text/javascript",
+      "sha256": "d949f1c3687aedadcedac85261865f29b17cd273997e7f6b2bfc53b2f9d4c4dd",
+      "bytes": 10751
+    },
+    {
+      "url": "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js",
+      "file": "react-dom-18.3.1.production.min.js",
+      "contentType": "text/javascript",
+      "sha256": "35f4f974f4b2bcd44da73963347f8952e341f83909e4498227d4e26b98f66f0d",
+      "bytes": 131835
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0",
+      "file": "fonts-0.css",
+      "contentType": "text/css",
+      "sha256": "65d0320b6551b3a4a55813ed18c435f7444165d0dc857881507af1ac5256c799",
+      "bytes": 1813
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/materialsymbolsrounded/v370/syl0-zNym6YjUruM-QrEh7-nyTnjDwKNJ_190FjpZIvDmUSVOK7BDB_Qb9vUSzq3wzLK-P0J-V_Zs-QtQth3-jOcbTCVpeRL2w5rwZu2rNmlXxI.ttf",
+      "file": "font-0.ttf",
+      "contentType": "font/ttf",
+      "sha256": "adcb1bdce531439474a70771c7b1899bac812f31eb703f638523d08247173128",
+      "bytes": 1244512
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/materialsymbolsrounded/v370/syl0-zNym6YjUruM-QrEh7-nyTnjDwKNJ_190FjpZIvDmUSVOK7BDB_Qb9vUSzq3wzLK-P0J-V_Zs-QtQth3-jOcbTCVpeRL2w5rwZu2rIelXxI.ttf",
+      "file": "font-1.ttf",
+      "contentType": "font/ttf",
+      "sha256": "bbc8714b3e83b5745d8d6316a981b6d908cb37aa4db79a9fcb59ffb9225623c2",
+      "bytes": 1209204
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/materialsymbolsrounded/v370/syl0-zNym6YjUruM-QrEh7-nyTnjDwKNJ_190FjpZIvDmUSVOK7BDB_Qb9vUSzq3wzLK-P0J-V_Zs-QtQth3-jOcbTCVpeRL2w5rwZu2rLWlXxI.ttf",
+      "file": "font-2.ttf",
+      "contentType": "font/ttf",
+      "sha256": "034a61ff6bde6c9ebdf8d10fff8b6b6c19393dcec30a1caa85e127da7ebbb7f6",
+      "bytes": 1210208
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/materialsymbolsrounded/v370/syl0-zNym6YjUruM-QrEh7-nyTnjDwKNJ_190FjpZIvDmUSVOK7BDB_Qb9vUSzq3wzLK-P0J-V_Zs-QtQth3-jOcbTCVpeRL2w5rwZu2rFmiXxI.ttf",
+      "file": "font-3.ttf",
+      "contentType": "font/ttf",
+      "sha256": "4a8c28f6aa73aacebad7f08e2570daef3f01fe2b0e5c16fed067e27d2e458d41",
+      "bytes": 1210400
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/materialsymbolsrounded/v370/syl0-zNym6YjUruM-QrEh7-nyTnjDwKNJ_190FjpZIvDmUSVOK7BDB_Qb9vUSzq3wzLK-P0J-V_Zs-QtQth3-jOcbTCVpeRL2w5rwZu2rGCiXxI.ttf",
+      "file": "font-4.ttf",
+      "contentType": "font/ttf",
+      "sha256": "d2bf3c83499ead3dd3d6156bc22198080c3f43b0ba0896541ed26bd4a8cf3ffd",
+      "bytes": 1208372
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap",
+      "file": "fonts-1.css",
+      "contentType": "text/css",
+      "sha256": "737113c428ca7bacd992f820f0d9dee52d7b4836231ef71facc475f0507836cf",
+      "bytes": 1322
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/outfit/v15/QGYyz_MVcBeNP4NjuGObqx1XmO1I4TC1C4E.ttf",
+      "file": "font-5.ttf",
+      "contentType": "font/ttf",
+      "sha256": "6a8c9be856a6b9e09c66615634904616152c9de5e44db343a3ced240479c586a",
+      "bytes": 47844
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/outfit/v15/QGYyz_MVcBeNP4NjuGObqx1XmO1I4QK1C4E.ttf",
+      "file": "font-6.ttf",
+      "contentType": "font/ttf",
+      "sha256": "9a9f465776e653cd6175661d844555e08684d432518f1d2c621bcb3006598f9c",
+      "bytes": 47800
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/outfit/v15/QGYyz_MVcBeNP4NjuGObqx1XmO1I4e6yC4E.ttf",
+      "file": "font-7.ttf",
+      "contentType": "font/ttf",
+      "sha256": "8900df5726b5a6f23e723594f11d5ea27e695bd85c884f18d88ed080544fe205",
+      "bytes": 48456
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/outfit/v15/QGYyz_MVcBeNP4NjuGObqx1XmO1I4deyC4E.ttf",
+      "file": "font-8.ttf",
+      "contentType": "font/ttf",
+      "sha256": "49dcdf653a004a2575b3de649f5e4c549d774fecddf317812330edd0ad70685a",
+      "bytes": 48340
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/robotomono/v31/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_3vqPQw.ttf",
+      "file": "font-9.ttf",
+      "contentType": "font/ttf",
+      "sha256": "329949c551e04130eeb43580e149a2d548090e71359d05d925329ae123fac5c9",
+      "bytes": 78948
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/robotomono/v31/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_7PqPQw.ttf",
+      "file": "font-10.ttf",
+      "contentType": "font/ttf",
+      "sha256": "9c0842c2df23beb4b0e22d3152393127fb737d5315713776be66154f009d4266",
+      "bytes": 78936
+    },
+    {
+      "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap",
+      "file": "fonts-2.css",
+      "contentType": "text/css",
+      "sha256": "1b632667454d8ec2470e5a849d57aa268c4cab9baa5bbc189d87ab479a34ecc8",
+      "bytes": 1553
+    },
+    {
+      "url": "https://fonts.gstatic.com/s/robotomono/v31/L0xuDF4xlVMF-BfR8bXMIhJHg45mwgGEFl0_Of2PQw.ttf",
+      "file": "font-11.ttf",
+      "contentType": "font/ttf",
+      "sha256": "5231999c0ede4f61cc74b39415c35edcaf48d4d29d2e85ed1547ddbc8e531ab6",
+      "bytes": 79124
+    }
+  ]
+}
