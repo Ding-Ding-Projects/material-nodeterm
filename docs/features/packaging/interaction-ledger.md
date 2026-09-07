@@ -116,6 +116,34 @@ The suite's PNG fixtures exist only in temporary directories. They are not final
 and are not promoted into the repository. Final receipts and captures require a real run of the
 cheap Lowlevel MCP headless route against the exact packaged commit.
 
+## Planned coverage before evidence exists
+
+[`docs/assets/shots/interaction-ledger.json`](../../assets/shots/interaction-ledger.json) may be
+checked in as a `pending-provenance` capture plan before a packaged build is available. It is valid
+JSON for the plan record, but it is deliberately **not** a validator input and is not evidence. The
+strict validator accepts only `status: "verified"` records containing a frozen commit, executable
+digest, real PNG records, observed interaction results, privacy verdicts, and all five clipping
+rows. Passing a pending plan to the validator must refuse rather than quietly promote it.
+
+The plan must list the exact language modes, themes, viewports, display scales, interaction states,
+and design-reference tuples to be exercised. For this refresh those dimensions are English,
+Cantonese, bilingual; light, dark, high-contrast; 320 × 720, 1280 × 720, and 1440 × 940; and
+100%, 125%, 150%, and 200% display scale. The 108-tuple cross-product is a capture obligation, not
+a claim that any tuple has passed. The ten design-reference tuples retain their independently
+recorded dark 1440 × 940 scale-1 identity.
+
+Use two passes to retain that distinction:
+
+1. Freeze the source commit, packaged executable hash, optional installed Setup hash, and genuine
+   cheap-headless launch receipt.
+2. Drive the planned interactions against that single build, write observed outcomes and PNG
+   metadata, validate with the independently supplied build identity, and promote only after the
+   validator succeeds.
+
+Never fill a hash, path, timestamp, observation, privacy verdict, or capture file with a stand-in.
+An unavailable build is pending provenance, not a failed validation that can be repaired by a
+placeholder.
+
 ## Suggested articles
 
 - [Packaging and auto-update](./packaging-and-auto-update.md)

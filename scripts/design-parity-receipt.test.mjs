@@ -16,13 +16,15 @@ describe('design parity inventory and receipts', () => {
   })
 
   it('proves every exact inventory boundary turns red and then green again', () => {
-    expect(runDesignParitySelfTest()).toEqual({ mutations: 16, restored: true })
+    expect(runDesignParitySelfTest()).toEqual({ mutations: 19, restored: true })
   })
 
   it.each([
     ['renamed id', (copy) => { copy.screens[0].id = 'md3-canvas-renamed' }],
     ['descendant reference path', (copy) => { copy.screens[0].referenceFile = 'design/v2/MD3 Canvas.dc.html/child' }],
     ['missing comparison path', (copy) => { delete copy.screens[0].labelledComparison }],
+    ['missing immutable reference hash', (copy) => { delete copy.screens[0].referenceSha256 }],
+    ['missing deterministic policy', (copy) => { delete copy.screens[0].deterministic.network }],
   ])('rejects an exact-boundary mutation: %s', (_label, mutate) => {
     const inventory = loadDesignParityInventory()
     mutate(inventory)

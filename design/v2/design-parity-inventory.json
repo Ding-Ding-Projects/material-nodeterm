@@ -6,6 +6,15 @@
     "designReferenceCommand": "npm run design:v2 -- <screen>",
     "builtApp": "out/ desktop application",
     "captureMethod": "approved Lowlevel headless route",
+    "designReferencePreparation": "design/v2-preview/readiness.js",
+    "referenceLocale": "en-US",
+    "deterministicReferencePolicy": {
+      "time": "frozen",
+      "motion": "disabled",
+      "random": "seeded",
+      "fonts": "local-bundled",
+      "network": "blocked"
+    },
     "runtimeEvidenceRequired": true,
     "expectedReferenceCount": 10
   },
@@ -13,6 +22,9 @@
     {
       "id": "md3-canvas",
       "referenceFile": "design/v2/MD3 Canvas.dc.html",
+      "referenceSha256": "9c0da0fafb2064f1c8d6177000a27bbac67653dcdc236f2f2700738b17e5889b",
+      "locale": "en-US",
+      "deterministic": { "fixture": "empty-project-canvas", "time": "frozen", "motion": "disabled", "random": "seeded", "fonts": "local-bundled", "network": "blocked" },
       "designReferenceRoute": { "screen": "Canvas", "command": "npm run design:v2 -- Canvas" },
       "builtAppRoute": { "id": "desktop.canvas", "navigation": "launch the built desktop app with an empty project and select Canvas" },
       "state": "empty-project-canvas",
@@ -29,6 +41,9 @@
     {
       "id": "md3-board",
       "referenceFile": "design/v2/MD3 Board.dc.html",
+      "referenceSha256": "027a917aca2c118eb91185da00ad75dbfff9a0e9513d3c73ea06896aaa630018",
+      "locale": "en-US",
+      "deterministic": { "fixture": "project-board-with-session-cards", "time": "frozen", "motion": "disabled", "random": "seeded", "fonts": "local-bundled", "network": "blocked" },
       "designReferenceRoute": { "screen": "Board", "command": "npm run design:v2 -- Board" },
       "builtAppRoute": { "id": "desktop.board", "navigation": "launch the built desktop app with a project and select Board from the navigation rail" },
       "state": "project-board-with-session-cards",
@@ -45,6 +60,9 @@
     {
       "id": "md3-files",
       "referenceFile": "design/v2/MD3 Files.dc.html",
+      "referenceSha256": "5f5015b88c7bb79c390bd648d1be77cb1809fc1d64156004d065bc54b2698916",
+      "locale": "en-US",
+      "deterministic": { "fixture": "project-files-source-control-history", "time": "frozen", "motion": "disabled", "random": "seeded", "fonts": "local-bundled", "network": "blocked" },
       "designReferenceRoute": { "screen": "Files", "command": "npm run design:v2 -- Files" },
       "builtAppRoute": { "id": "desktop.files", "navigation": "launch the built desktop app with a project and select Files from the navigation rail" },
       "state": "project-files-source-control-history",
@@ -61,6 +79,9 @@
     {
       "id": "md3-settings",
       "referenceFile": "design/v2/MD3 Settings.dc.html",
+      "referenceSha256": "0aaa5a2dc6af894c55d58aef44bc7d9e1af97494d22628032450df10818be376",
+      "locale": "en-US",
+      "deterministic": { "fixture": "settings-language-section", "time": "frozen", "motion": "disabled", "random": "seeded", "fonts": "local-bundled", "network": "blocked" },
       "designReferenceRoute": { "screen": "Settings", "command": "npm run design:v2 -- Settings" },
       "builtAppRoute": { "id": "desktop.settings", "navigation": "launch the built desktop app and select Settings from the navigation rail" },
       "state": "settings-language-section",
@@ -77,6 +98,9 @@
     {
       "id": "md3-overlays",
       "referenceFile": "design/v2/MD3 Overlays.dc.html",
+      "referenceSha256": "7554dcfc2cf13f652860aa9135104b914e62affdc1127e96f00807f7aef1e27e",
+      "locale": "en-US",
+      "deterministic": { "fixture": "command-palette-context-menu-confirmation-notifications", "time": "frozen", "motion": "disabled", "random": "seeded", "fonts": "local-bundled", "network": "blocked" },
       "designReferenceRoute": { "screen": "Overlays", "command": "npm run design:v2 -- Overlays" },
       "builtAppRoute": { "id": "desktop.overlays", "navigation": "launch the built desktop app, open the command palette, context menu, notification panel, and destructive confirmation states" },
       "state": "command-palette-context-menu-confirmation-notifications",
@@ -93,6 +117,9 @@
     {
       "id": "md3-regex-builder",
       "referenceFile": "design/v2/MD3 Regex Builder.dc.html",
+      "referenceSha256": "5ecc83a37feb75ccb79bd1c5fb9b56247398b48cb672c651d1878b0f2e180b22",
+      "locale": "en-US",
+      "deterministic": { "fixture": "anchored-builder-open-with-live-pattern", "time": "frozen", "motion": "disabled", "random": "seeded", "fonts": "local-bundled", "network": "blocked" },
       "designReferenceRoute": { "screen": "Regex Builder", "command": "npm run design:v2 -- \"Regex Builder\"" },
       "builtAppRoute": { "id": "desktop.regex-builder", "navigation": "launch the built desktop app, focus a search field, and open its anchored regex builder" },
       "state": "anchored-builder-open-with-live-pattern",
@@ -109,6 +136,9 @@
     {
       "id": "md3-welcome",
       "referenceFile": "design/v2/MD3 Welcome.dc.html",
+      "referenceSha256": "e48c27cb1374f7fdf8beb8702085f1ca71b0e27438df43790b0601a1d3e74309",
+      "locale": "en-US",
+      "deterministic": { "fixture": "first-run-empty-project", "time": "frozen", "motion": "disabled", "random": "seeded", "fonts": "local-bundled", "network": "blocked" },
       "designReferenceRoute": { "screen": "Welcome", "command": "npm run design:v2 -- Welcome" },
       "builtAppRoute": { "id": "desktop.welcome", "navigation": "launch the built desktop app with a fresh profile before creating a project" },
       "state": "first-run-empty-project",
@@ -125,6 +155,9 @@
     {
       "id": "md3-kids-mode",
       "referenceFile": "design/v2/MD3 Kids Mode.dc.html",
+      "referenceSha256": "964b0b71d1c8de72852918adca6fdf2c287378b5e8100f3c385626ea3f266e4c",
+      "locale": "en-US",
+      "deterministic": { "fixture": "kids-home-parent-gate-grown-up-screen", "time": "frozen", "motion": "disabled", "random": "seeded", "fonts": "local-bundled", "network": "blocked" },
       "designReferenceRoute": { "screen": "Kids Mode", "command": "npm run design:v2 -- \"Kids Mode\"" },
       "builtAppRoute": { "id": "desktop.kids-mode", "navigation": "launch the built desktop app and enter Kids mode through its own navigation entry" },
       "state": "kids-home-parent-gate-grown-up-screen",
@@ -141,6 +174,9 @@
     {
       "id": "md3-tools",
       "referenceFile": "design/v2/MD3 Tools.dc.html",
+      "referenceSha256": "2a6f1ace0f5160065778f475922698033b0da9e7ecbb362b71547619f0ae0f34",
+      "locale": "en-US",
+      "deterministic": { "fixture": "ollama-converter-authenticator-exports", "time": "frozen", "motion": "disabled", "random": "seeded", "fonts": "local-bundled", "network": "blocked" },
       "designReferenceRoute": { "screen": "Tools", "command": "npm run design:v2 -- Tools" },
       "builtAppRoute": { "id": "desktop.tools", "navigation": "launch the built desktop app and select Tools from the navigation rail" },
       "state": "ollama-converter-authenticator-exports",
@@ -157,6 +193,9 @@
     {
       "id": "md3-history",
       "referenceFile": "design/v2/MD3 History.dc.html",
+      "referenceSha256": "ebb5ada44677465f19a0d1aa59c159e2493d5b30c0edf0b617c62dd3737a706b",
+      "locale": "en-US",
+      "deterministic": { "fixture": "session-memory-local-history-changelog", "time": "frozen", "motion": "disabled", "random": "seeded", "fonts": "local-bundled", "network": "blocked" },
       "designReferenceRoute": { "screen": "History", "command": "npm run design:v2 -- History" },
       "builtAppRoute": { "id": "desktop.history", "navigation": "launch the built desktop app and select History from the navigation rail" },
       "state": "session-memory-local-history-changelog",
