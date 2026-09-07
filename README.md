@@ -10,6 +10,10 @@ Instead of hiding every shell behind another tab, nodeterm makes each session a 
 Projects can be viewed as a canvas or a board, agent sessions keep their context visible, and
 Windows terminals can reconnect through a dedicated session host.
 
+Developer verification: the [offline design reference](docs/features/appearance/design-reference-parity.md)
+and [packaged gallery launcher](docs/features/development/packaged-gallery-launcher.md) document
+their focused checks and the remaining real-product capture boundary.
+
 [![Latest release](https://img.shields.io/github/v/release/Ding-Ding-Projects/material-nodeterm?sort=semver)](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/latest)
 [![Release pipeline](https://github.com/Ding-Ding-Projects/material-nodeterm/actions/workflows/release.yml/badge.svg)](https://github.com/Ding-Ding-Projects/material-nodeterm/actions/workflows/release.yml)
 [![Platform](https://img.shields.io/badge/current%20package-Windows%20x64-0078D4)](#platforms)

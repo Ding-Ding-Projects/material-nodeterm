@@ -1,5 +1,10 @@
 # Contributing to nodeterm
 
+Developer capture tooling has a [dedicated guide](docs/features/development/packaged-gallery-launcher.md).
+Keep fixture verification distinct from packaged-product capture evidence. The production gallery
+wrapper requires PowerShell 7 in its documented Program Files location; test fixtures can use an
+installed portable PowerShell 7 runtime.
+
 Thanks for looking. This file is the short door: enough to get running, plus the house rules that
 actually get a pull request sent back. The long version — every subsystem and the reasoning behind
 its invariants — lives in `CLAUDE.md` at the repo root, which is also loaded automatically if you

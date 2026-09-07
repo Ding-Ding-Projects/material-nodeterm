@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve and reconcile offline reference-preview and gallery lifecycle tooling. Use jsdom 30
+  request interceptors for offline preview tests, retain exact vendor bytes, and resolve portable
+  PowerShell in lifecycle fixtures. The focused suites passed 23 and 13 tests respectively;
+  new packaged-gallery and visual-parity evidence remains pending.
+
 - Finish the app-wide move onto the Material 3 primitives. Every node kind (terminal, sticky,
   group frame, annotation, editor, files, browser, and the thirty-odd service, hosting, game and
   utility nodes), the welcome screen, onboarding, Kids mode, the project switcher, sessions

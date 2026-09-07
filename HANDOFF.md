@@ -6,7 +6,7 @@ The latest verified baseline is `8c43271f773a857be262ad218e7327faddcad7df`. Its 
 
 The offline design-reference work was preserved in `a423b360d` and repaired in `56e94f35c`: the preview serves integrity-checked local assets, validates semantic readiness, and its fixture uses the jsdom 30 request-interceptor API. All 23 focused tests passed. Vendor files disable checkout text conversion so their recorded hashes remain stable. This is source-tooling verification, not a new built-product interaction or design-parity capture claim. Remaining runtime evidence stays tracked in issue #222.
 
-The gallery work was preserved in `752a61fdf`, and merge `c7b1eb557` retains both previously divergent transport histories. Its exact process-identity ledger and child-first teardown are under focused verification. Archive verification, final remote proof, and cleanup are pending at this entry.
+The gallery work was preserved in `752a61fdf`, and merge `c7b1eb557` retains both previously divergent transport histories. Fixture repair `02de3473b` resolves the installed PowerShell 7 runtime rather than assuming its installation directory. All 13 focused tests passed across `scripts/run-headless-gallery.test.mjs` (6) and `scripts/lib/gallery-process-lifecycle.test.mjs` (7), including real child teardown and lost-response recovery. The combined integration also passed `npm run typecheck`. The production launcher still requires PowerShell 7 at its documented Program Files location; no packaged-gallery or visual-parity completion is claimed. Final archive verification and cleanup results are recorded on issue #222 after the final remote proof, without creating a publication loop.
 
 ## 2026-09-05, recovery integration before final package verification
 

@@ -4,7 +4,8 @@
 
 - [x] Preserve offline preview source and repair its jsdom 30 fixtures, with 23 focused tests passing.
 - [x] Preserve gallery lifecycle source and reconcile both transport histories without rewriting either.
-- [ ] Finish gallery verification, final integration, verified archive, and safe branch cleanup.
+- [x] Verify the gallery lifecycle tooling with all 13 focused tests passing, including real process teardown.
+- [ ] Final remote integration, verified archive, and safe branch cleanup: terminal evidence is recorded on issue #222.
 - [ ] Complete the built-product interaction and design-parity evidence tracked in #222.
 
 A checklist of where nodeterm actually stands, built from `git log`, `HANDOFF.md` (checked

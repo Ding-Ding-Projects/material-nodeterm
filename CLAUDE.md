@@ -1,5 +1,11 @@
 # CLAUDE.md
 
+Gallery lifecycle invariants are documented in
+[`docs/features/development/packaged-gallery-launcher.md`](docs/features/development/packaged-gallery-launcher.md).
+Recorded PID, parent PID, executable, and UTC creation ticks jointly identify an owned process.
+A changed identity is retained, never terminated by PID alone. Source-fixture success does not
+replace the packaged capture and cleanup receipt.
+
 This is the deep-reference for working in this repo: the invariants, why each exists, and the
 measurements behind them. It is loaded automatically by Claude Code.
 
