@@ -7,9 +7,11 @@ import { OwnedProcessLedger, childFirst, listenerProbeScript, processInventorySc
 import { reviewedPowerShellWrapper } from './cheap-mcp-transport.mjs'
 
 const identity = (pid, parentPid, ticks = '638000000000000000') => ({ pid, parentPid, creationTime: ticks, executable: 'C:\\fixture\\child.exe' })
-const shell7 = path.join(process.env.ProgramFiles, 'PowerShell', '7', 'pwsh.exe')
+// Exercise the installed PowerShell 7 runtime, including portable installations.
+const shell7 = spawnSync('where.exe', ['pwsh.exe'], { encoding: 'utf8', windowsHide: true }).stdout.split(/\r?\n/u).map((value) => value.trim()).find((value) => path.isAbsolute(value) && fs.existsSync(value))
 const shell5 = path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
 function ps(source, shell = shell5) {
+  if (!shell || !fs.existsSync(shell)) throw new Error('Required PowerShell runtime is unavailable.')
   const result = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(source, 'utf16le').toString('base64')], { windowsHide: true, encoding: 'utf8', timeout: 15_000 })
   if (result.error || result.status !== 0) throw new Error(result.stderr || result.error?.message || 'PowerShell failed')
   return JSON.parse(result.stdout)
@@ -56,6 +58,7 @@ describe('exact launch process lifecycle', () => {
     expect(ps(`function Get-CimInstance { $null };${processProbeScript(123)}`)).toEqual({ process: null })
   }, 30_000)
   for (const partial of [false, true]) it(`recovers durable wrapper ownership with ${partial ? 'lost launch response' : 'normal response'} and terminates real children`, async () => {
+    expect(shell7 && fs.existsSync(shell7)).toBeTruthy()
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gallery-lifecycle-'))
     const receipt = path.join(root, 'launch.json')
     const childScript = path.join(root, 'child.ps1')
