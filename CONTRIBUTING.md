@@ -109,8 +109,8 @@ boundary tests cannot tell you a feature is *missing*.
 A feature is not done until you have decided how it behaves on each — even if the decision is "not
 applicable here":
 
-1. **Desktop** (Electron, Windows — the delivery target; Linux packages are also built)
-2. **Server Edition** (Linux, browser)
+1. **Desktop** (Electron on Windows, the active packaged delivery target)
+2. **Server Edition** (self-hosted browser surface; not a current packaged desktop target)
 3. **Mobile companion** — *nodeterm mobile*, a **private** repo (`nodeterm-ios`, SwiftUI). You
    cannot open a PR against it, so this is normally a follow-up note rather than same-PR
    work: say in your PR what the mobile side would need, and **mention @eneskirca** so it
