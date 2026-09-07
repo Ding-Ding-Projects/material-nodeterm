@@ -33,6 +33,10 @@ deviation approval. The route and tuple are part of the evidence identity, not d
 
 ## Runtime evidence boundary
 
+The developer preview now snapshots the selected reference and 17 pinned vendor resources before creating its renderer. It checks exact byte counts and SHA-256 hashes, serves the recorded URLs locally, blocks unknown requests, and waits for rendered content, styles, and fonts before marking the reference ready. The vendor directory preserves exact bytes across Git checkout. The 23-case `scripts/design-v2-preview.test.mjs` suite exercises offline rendering and readiness using jsdom 30 request interceptors; this source fixture does not replace a real desktop capture.
+
+The preview launcher accepts exactly the ten inventory screen names. It always opens the dark 1440 x 940, scale-1 reference window, renders the checked-in HTML through its existing runtime support, and blocks popups, top-level navigation, and non-file requests. Time and animation are not frozen by this launcher, so captures remain pending until the deterministic capture route controls them.
+
 The current receipt manifest at
 [`docs/assets/design-parity/receipt-manifest.json`](../../assets/design-parity/receipt-manifest.json)
 has ten `pending-runtime` receipts. No image, comparison, or diff is claimed by those records, and

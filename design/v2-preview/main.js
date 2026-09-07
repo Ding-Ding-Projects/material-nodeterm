@@ -1,28 +1,41 @@
-// A plain Electron shell that renders one v2 design prototype at its own 1440x900 frame, so the
-// design and the running app can be captured under identical conditions and set side by side.
-//
-// Deliberately minimal: no preload, no node integration, nothing but a window pointed at a file.
-// The prototypes are third-party design references — this shell renders them, it never trusts
-// them. `support.js` beside them is prototype runtime and is never loaded by the app itself.
-const { app, BrowserWindow } = require('electron')
-const path = require('node:path')
+// Developer-only reference renderer. Reference code never receives a host bridge.
+const { app, BrowserWindow, nativeTheme, session } = require('electron')
+const { parseScreen, referenceFile, windowOptions } = require('./launch-config')
+const { createAssetStore, installAssetRoutes } = require('./offline-assets')
+const { readinessScript, waitForReference } = require('./readiness')
 
-// Which prototype to show. `npm run design:v2 -- Board` picks another; the default is the screen
-// that carries the whole shell (app bar, rail, FAB, nodes), which is what a comparison is usually
-// about.
-const screen = process.argv.slice(2).find((a) => !a.startsWith('-')) || 'Canvas'
-const file = path.join(__dirname, '..', 'v2', `MD3 ${screen}.dc.html`)
+app.commandLine.appendSwitch('force-device-scale-factor', '1')
+app.commandLine.appendSwitch('disable-background-networking')
+app.commandLine.appendSwitch('host-resolver-rules', 'MAP * ~NOTFOUND')
+nativeTheme.themeSource = 'dark'
 
-app.whenReady().then(() => {
-  const win = new BrowserWindow({
-    width: 1440,
-    height: 940,
-    show: true,
-    backgroundColor: '#0A090D',
-    title: `MD3 ${screen} — design reference`,
-    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
-  })
-  void win.loadFile(file)
-})
-
+async function start() {
+  const screen = parseScreen(process.argv.slice(2))
+  const file = referenceFile(screen)
+  // Snapshot bytes before the renderer exists. A later junction swap cannot change them.
+  const assets = createAssetStore(file)
+  await app.whenReady()
+  const isolated = session.fromPartition(`design-reference-${process.pid}`)
+  const failures = []
+  installAssetRoutes(isolated, assets, (reason) => failures.push(reason))
+  isolated.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
+  isolated.setPermissionCheckHandler(() => false)
+  isolated.on('will-download', (event) => event.preventDefault())
+  const win = new BrowserWindow({ ...windowOptions(screen), webPreferences: {
+    ...windowOptions(screen).webPreferences, session: isolated
+  } })
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  win.webContents.on('will-navigate', (event) => event.preventDefault())
+  win.webContents.on('will-attach-webview', (event) => event.preventDefault())
+  win.webContents.on('render-process-gone', () => app.exit(3))
+  win.webContents.on('did-fail-load', (_event, code) => failures.push(`load failed (${code})`))
+  const deadline = setTimeout(() => { console.error('Design reference boot timed out'); app.exit(3) }, 15000)
+  try {
+    await win.loadFile(file, { query: { theme: 'dark' } })
+    await waitForReference({ probe: () => win.webContents.executeJavaScript(readinessScript), failures, timeoutMs: 12000 })
+    await win.webContents.executeJavaScript("document.documentElement.dataset.designReferenceReady = 'true'")
+    console.info(`Design reference ready: ${screen}; dark; 1440x940; scale=1; offline assets=${assets.size}`)
+  } finally { clearTimeout(deadline) }
+}
+start().catch((error) => { console.error('Design reference failed:', error.message); app.exit(3) })
 app.on('window-all-closed', () => app.quit())

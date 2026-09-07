@@ -1,0 +1,2 @@
+# Integrity-checked upstream assets must retain their exact bytes on every checkout.
+* -text

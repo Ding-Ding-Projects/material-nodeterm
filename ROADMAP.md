@@ -1,5 +1,12 @@
 # Roadmap
 
+## Preservation and integration (2026-09-07)
+
+- [x] Preserve offline preview source and repair its jsdom 30 fixtures, with 23 focused tests passing.
+- [x] Preserve gallery lifecycle source and reconcile both transport histories without rewriting either.
+- [ ] Finish gallery verification, final integration, verified archive, and safe branch cleanup.
+- [ ] Complete the built-product interaction and design-parity evidence tracked in #222.
+
 A checklist of where nodeterm actually stands, built from `git log`, `HANDOFF.md` (checked
 against the tree rather than copied), `node scripts/check-app-contract.mjs`, and open GitHub
 issues. A ticked item is implemented **and** verified — where it claims something visible, that

@@ -1,5 +1,13 @@
 # Handoff
 
+## 2026-09-07, preservation and integration pass
+
+The latest verified baseline is `8c43271f773a857be262ad218e7327faddcad7df`. Its Release workflow `34005210532` succeeded and published `v1.0.27`. Older failed runs do not describe that baseline.
+
+The offline design-reference work was preserved in `a423b360d` and repaired in `56e94f35c`: the preview serves integrity-checked local assets, validates semantic readiness, and its fixture uses the jsdom 30 request-interceptor API. All 23 focused tests passed. Vendor files disable checkout text conversion so their recorded hashes remain stable. This is source-tooling verification, not a new built-product interaction or design-parity capture claim. Remaining runtime evidence stays tracked in issue #222.
+
+The gallery work was preserved in `752a61fdf`, and merge `c7b1eb557` retains both previously divergent transport histories. Its exact process-identity ledger and child-first teardown are under focused verification. Archive verification, final remote proof, and cleanup are pending at this entry.
+
 ## 2026-09-05, recovery integration before final package verification
 
 The reviewed startup repair (`5156134ae5e5a59ae41148331740b2af052a4d2c`) and capture-tooling repair (`6a04398e6089625ddcfa1987a4e43c3d88e7d069`) are integrated. Board-log attachment IPC now has one owner. Gallery receipts use the established bounded atomic-rename helper, and the publication inventory registers a real Vitest test. The startup regression failed before the repair and passed all 10 focused tests afterward. The atomic helper, gallery, publication inventory, and existing atomic-write guard passed 16 tests across four files. Independent review found no actionable issue in either repair.
