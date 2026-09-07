@@ -2,6 +2,10 @@
 
 ## 2026-09-07, preservation and integration pass
 
+The source integration and cleanup are complete. Commit `5a07ef9c180893d02e79e9deb630c2fa69f44332` was verified on remote main before deletion. A complete 639,359,157-byte private backup passed full archive integrity testing and an exact 43,364-entry inventory comparison; 216,468 ignored files were excluded. All 11 linked worktree directories, 11 non-default local branches, and 6 remote branches were removed after ancestry proof. The primary checkout is clean, main is the only local and origin branch, and no stashes or stale worktree metadata remain. Upstream tracking refs and release tags were preserved.
+
+Deletion recovery used ordinary non-forced removal after the initial Git cleanup hit a long path. Two remaining dependency junctions were removed as links, leaving their shared target intact. The final release pipeline is still pending verification, and the existing runtime-evidence scope in #222 is not complete. Wiki synchronization could not run because its Git endpoint returned `Repository not found`; Projects discovery lacked `read:project`. Neither limitation was treated as successful synchronization.
+
 The latest verified baseline is `8c43271f773a857be262ad218e7327faddcad7df`. Its Release workflow `34005210532` succeeded and published `v1.0.27`. Older failed runs do not describe that baseline.
 
 The offline design-reference work was preserved in `a423b360d` and repaired in `56e94f35c`: the preview serves integrity-checked local assets, validates semantic readiness, and its fixture uses the jsdom 30 request-interceptor API. All 23 focused tests passed. Vendor files disable checkout text conversion so their recorded hashes remain stable. This is source-tooling verification, not a new built-product interaction or design-parity capture claim. Remaining runtime evidence stays tracked in issue #222.
