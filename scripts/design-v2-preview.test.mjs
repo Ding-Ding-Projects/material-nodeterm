@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { JSDOM, ResourceLoader, VirtualConsole } from 'jsdom'
+import { JSDOM, requestInterceptor, VirtualConsole } from 'jsdom'
 import config from '../design/v2-preview/launch-config.js'
 import offline from '../design/v2-preview/offline-assets.js'
 import readiness from '../design/v2-preview/readiness.js'
@@ -70,19 +70,17 @@ describe('design v2 offline reference renderer', () => {
 
   for (const screen of config.SCREENS) it(`boots the untouched ${screen} reference with real local React and support.js`, async () => {
     const file = config.referenceFile(screen); const assets = offline.createAssetStore(file); const blocked = []
-    class LocalResources extends ResourceLoader {
-      fetch(url) {
-        const asset = assets.get(url)
-        if (!asset) { blocked.push(url); return Promise.reject(new Error('blocked asset')) }
-        return Promise.resolve(Buffer.from(asset.bytes))
-      }
-    }
+    const resources = { interceptors: [requestInterceptor((request) => {
+      const asset = assets.get(request.url)
+      if (!asset) { blocked.push(request.url); return new Response('', { status: 403 }) }
+      return new Response(asset.bytes, { headers: { 'Content-Type': asset.contentType } })
+    })] }
     const errors = []
     const virtualConsole = new VirtualConsole()
     virtualConsole.on('error', (...args) => errors.push(args.join(' ')))
     virtualConsole.on('jsdomError', (error) => { if (error.type !== 'css-parsing') errors.push(error.message) })
     const dom = new JSDOM(fs.readFileSync(file, 'utf8'), {
-      url: `${pathToFileURL(file).href}?theme=dark`, runScripts: 'dangerously', resources: new LocalResources(), virtualConsole,
+      url: `${pathToFileURL(file).href}?theme=dark`, runScripts: 'dangerously', resources, virtualConsole,
       beforeParse(window) {
         window.fetch = async (url) => {
           const asset = assets.get(String(url)); if (!asset) { blocked.push(url); throw new Error('blocked') }
