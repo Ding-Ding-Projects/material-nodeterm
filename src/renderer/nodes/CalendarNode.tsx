@@ -207,7 +207,11 @@ export default function CalendarNode({ id, data, selected }: NodeProps<CanvasNod
     if (result.state === 'ready' && result.authorizationUrl) {
       await api.shell.openExternal(result.authorizationUrl)
       setStatus(vocab('Complete consent in the provider window, then refresh the account list. Tokens stay in machine-local credential storage.'))
-    } else setStatus(result.reason ? vocab(result.reason) : vocab('This provider is unavailable.'))
+    // `reason` comes from the selected provider. It can contain an account, policy, or service
+    // detail, so it is a fact at this display boundary rather than application-owned prose.
+    // Mapping it would both misstate the provider's result and let a local vocabulary bleed into
+    // an external diagnostic.
+    } else setStatus(result.reason ?? vocab('This provider is unavailable.'))
   }
 
   const disconnect = (target: HTMLButtonElement): void => {

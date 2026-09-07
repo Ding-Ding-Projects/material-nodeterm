@@ -67,10 +67,11 @@ beforeEach(() => {
       Agenda: 'Today',
       Duration: 'Length',
       Start: 'Go',
-      'Timer title': 'Clock label'
+      'Timer title': 'Clock label',
+      provider: 'REPLACED'
     },
     status: 'loaded',
-    entryCount: 10,
+    entryCount: 11,
     loadedAt: Date.now(),
     lastError: null
   })
@@ -130,6 +131,30 @@ describe('time nodes personal-vocabulary boundaries', () => {
     expect(host.textContent).toContain('Find events')
     expect(host.querySelector('[role="tab"]')?.textContent).toBe('Today')
     expect(host.querySelector('option')?.textContent).toBe('Local calendar')
+  })
+
+  it('keeps a provider refusal literal while retaining the local display boundary', async () => {
+    renderNode(<CalendarNode {...({ id: 'calendar-provider-refusal', selected: false, data: {
+      title: 'Team calendar', color: '#0a84ff', calendarConfig: {
+        provider: 'microsoft365', accountId: null, calendarId: null, timezone: 'UTC', view: 'agenda',
+        showWeekends: true, cacheEnabled: true
+      }
+    } } as unknown as Parameters<typeof CalendarNode>[0])} />)
+
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
+
+    const connect = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
+      button.textContent?.includes('Connect another account')
+    )
+    expect(connect).toBeTruthy()
+    await act(async () => {
+      connect?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(host.querySelector('.calendar-node__state')?.textContent).toBe('provider unavailable')
+    expect(host.querySelector('.calendar-node__state')?.textContent).not.toContain('REPLACED')
   })
 
   it('restores original authored copy immediately in School mode without changing fact segments', () => {

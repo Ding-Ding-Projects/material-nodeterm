@@ -35,6 +35,9 @@ export function useI18n(): {
   showEmojiInDialogs: boolean
   t: (id: string, fallback: string, params?: Record<string, string>) => LocalizedText
   ts: (id: string, fallback: string, params?: Record<string, string>) => string
+  /** Localized application copy before the local display-only vocabulary boundary. Use this only
+   *  when storing authored copy for a later display sink that applies that boundary itself. */
+  tsUnmapped: (id: string, fallback: string, params?: Record<string, string>) => string
   /** Non-semantic decoration only — never for button/label/control text. Empty string when the
    *  toggle is off, so `` `${emoji('🗑️')} Delete this file` `` degrades cleanly either way. */
   emoji: (e: string) => string
@@ -101,6 +104,14 @@ export function useI18n(): {
     [mode, levels, languageFeaturesAllowed, vocabularyEntries]
   )
 
+  const tsUnmapped = useCallback(
+    (id: string, fallback: string, params?: Record<string, string>): string => {
+      const resolved = resolveString(id, fallback, mode, levels)
+      return params ? formatText(resolved, params) : resolved
+    },
+    [mode, levels]
+  )
+
   const emoji = useCallback((e: string) => (showEmojiInDialogs ? e : ''), [showEmojiInDialogs])
 
   return {
@@ -110,6 +121,7 @@ export function useI18n(): {
     showEmojiInDialogs,
     t,
     ts,
+    tsUnmapped,
     emoji
   }
 }

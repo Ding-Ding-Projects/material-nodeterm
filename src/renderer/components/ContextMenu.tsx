@@ -13,6 +13,7 @@ import { keyLabel } from '@shared/platform-utils'
 import type { AccountPresentation } from '../lib/accountPresentation'
 import { AccountIdentityPills } from './AccountIdentityPills'
 import { useVocabularyMapper, type VocabularyTextMode } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
 type AccountMenuPresentation = {
   accountPresentation?: AccountPresentation
@@ -402,7 +403,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
             />
           )}
           {subFilterable && subFilter.filtered.length === 0 && (
-            <div className="ctx-empty">No matches</div>
+            <div className="ctx-empty">{vocab('No matches')}</div>
           )}
           {openSubmenu.children.map((child, j) => {
             if (subFilterable && !subRowVisible[j]) return null
@@ -492,7 +493,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
           />
         )}
         {filterable && menuFilter.filtered.length === 0 && (
-          <div className="ctx-empty">No matches</div>
+          <div className="ctx-empty">{vocab('No matches')}</div>
         )}
         {visibleItems.map((item, i) => {
           if (filterable && !rowVisible[i]) return null
@@ -506,7 +507,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
                     <button
                       key={c}
                       style={{ background: c }}
-                      aria-label={`Colour ${c}`}
+                      aria-label={mapOwnedSentence(vocab, [copy('Colour '), fact(c)])}
                       onClick={() => {
                         item.onPick(c)
                         onClose()
@@ -519,8 +520,8 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
                   <button
                     className={`ctx-colors__custom${customOpen ? ' is-open' : ''}`}
                     aria-expanded={customOpen}
-                    aria-label="Custom colour"
-                    title="Custom colour…"
+                    aria-label={vocab('Custom colour')}
+                    title={vocab('Custom colour…')}
                     onClick={() => setCustomOpen((o) => !o)}
                   />
                   {/* The rainbow sits in the swatch row rather than behind the custom picker, and
@@ -533,9 +534,9 @@ export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) 
                       See renderer/lib/nodeColor.ts. */}
                   <button
                     className={`nt-rainbow-swatch ctx-colors__rainbow${isRainbowColor(item.value) ? ' is-active' : ''}`}
-                    aria-label="Rainbow, cycles continuously"
+                    aria-label={vocab('Rainbow, cycles continuously')}
                     aria-pressed={isRainbowColor(item.value)}
-                    title="Rainbow — cycles continuously. Speed is in Settings."
+                    title={vocab('Rainbow: cycles continuously. Speed is in Settings.')}
                     onClick={() => {
                       item.onPick(RAINBOW_COLOR)
                       onClose()

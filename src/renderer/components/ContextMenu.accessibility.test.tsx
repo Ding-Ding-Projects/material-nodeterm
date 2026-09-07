@@ -3,6 +3,8 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ContextMenu, type MenuItem } from './ContextMenu'
+import { usePersonalVocabulary } from '../state/personalVocabulary'
+import { useSchoolMode } from '../state/schoolMode'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -21,6 +23,8 @@ beforeAll(() => {
 
 afterEach(() => {
   document.body.replaceChildren()
+  usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0, loadedAt: null, lastError: null })
+  useSchoolMode.setState({ enabled: false, hydrated: false })
 })
 
 function renderMenu(items: MenuItem[], onClose = vi.fn()) {
@@ -40,6 +44,47 @@ function menuItem(label: string): HTMLButtonElement {
 }
 
 describe('ContextMenu submenu accessibility', () => {
+  it('maps its authored menu chrome while preserving raw caller-provided rows and colour facts', () => {
+    useSchoolMode.setState({ enabled: false, hydrated: true })
+    usePersonalVocabulary.setState({
+      entries: {
+        'No matches': 'Nothing found',
+        Colour: 'Hue',
+        Custom: 'Personal',
+        'Fixed external row': 'MUST-NOT-REPLACE'
+      },
+      status: 'loaded',
+      entryCount: 4,
+      loadedAt: Date.now(),
+      lastError: null
+    })
+    const { root } = renderMenu([
+      { label: 'Fixed external row', onClick: vi.fn() },
+      { label: 'Two', onClick: vi.fn() },
+      { label: 'Three', onClick: vi.fn() },
+      { label: 'Four', onClick: vi.fn() },
+      { label: 'Five', onClick: vi.fn() },
+      { label: 'Six', onClick: vi.fn() },
+      { label: 'Seven', onClick: vi.fn() },
+      { type: 'colors', onPick: vi.fn() }
+    ])
+
+    expect(menuItem('Fixed external row')).toBeTruthy()
+    expect(document.body.querySelector('[aria-label="Hue #0a84ff"]')).toBeTruthy()
+    expect(document.body.querySelector('[aria-label="Personal colour"]')).toBeTruthy()
+
+    const filter = document.body.querySelector<HTMLInputElement>('.menu-filter__input')
+    if (!filter) throw new Error('missing context-menu filter')
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+    act(() => {
+      setter.call(filter, 'not-present')
+      filter.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(document.body.querySelector('.ctx-empty')?.textContent).toBe('Nothing found')
+
+    act(() => root.unmount())
+  })
+
   it('opens a submenu from the keyboard, moves focus into it, and restores focus on Escape', () => {
     const run = vi.fn()
     const { root } = renderMenu([
