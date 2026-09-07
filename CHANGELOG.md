@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Record the verified `v1.0.30` publication baseline: non-draft release commit
+  `4b267fb4a20e9c1d05affc3eb98d25f3e9bd9f04`, Release workflow run `34082019435`, and its
+  unsigned Squirrel installer, full package, and update index. Built-product interaction and
+  design-parity evidence remain pending; this documentation update does not promote a capture.
+
 - Preserve and reconcile offline reference-preview and gallery lifecycle tooling. Use jsdom 30
   request interceptors for offline preview tests, retain exact vendor bytes, and resolve portable
   PowerShell in lifecycle fixtures. The focused suites passed 23 and 13 tests respectively;

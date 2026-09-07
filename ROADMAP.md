@@ -7,6 +7,7 @@
 - [x] Verify the gallery lifecycle tooling with all 13 focused tests passing, including real process teardown.
 - [x] Final remote integration, verified archive, and safe branch cleanup: all 11 linked worktrees and non-default local branches, plus 6 remote branches, were removed after ancestry proof. Only the clean primary checkout and main remain. Terminal evidence is recorded on issue #222.
 - [ ] Complete the built-product interaction and design-parity evidence tracked in #222.
+- [x] Publish `v1.0.30`, a non-draft release targeting `4b267fb4a20e9c1d05affc3eb98d25f3e9bd9f04`; Release workflow run `34082019435` completed successfully.
 
 A checklist of where nodeterm actually stands, built from `git log`, `HANDOFF.md` (checked
 against the tree rather than copied), `node scripts/check-app-contract.mjs`, and open GitHub
@@ -14,7 +15,7 @@ issues. A ticked item is implemented **and** verified — where it claims someth
 means captured from the real built artifact, not asserted from source. Anything unticked names
 its real state next to it rather than being silently omitted.
 
-The verified published baseline entering this recovery pass is [`v1.0.26`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v1.0.26), a non-draft release targeting `4af7ae545a9bec256f0fb9fc07a9f3ba6aff1705`. Release workflow run `33953016865` completed successfully. Historical source-candidate entries below retain their original context and do not supersede this dated release baseline.
+The current verified published baseline is [`v1.0.30`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v1.0.30), a non-draft release targeting `4b267fb4a20e9c1d05affc3eb98d25f3e9bd9f04`. Release workflow run `34082019435` completed successfully. Historical source-candidate entries below retain their original context and do not supersede this current release baseline.
 
 ---
 
@@ -23,7 +24,7 @@ The verified published baseline entering this recovery pass is [`v1.0.26`](https
 - [x] **Published release:** `v1.0.26` is non-draft, targets `4af7ae545a9bec256f0fb9fc07a9f3ba6aff1705`, and was published by successful Release workflow run `33953016865`.
 - [x] **Evidence machinery and publication inventory:** per-image provenance, portable receipt IDs, real PNG validation, expanded README and GitHub Pages rosters, and generated offline documentation were pushed on `main` at `388106505dcae0d059035e4d3e0549acc5d52e5a`.
 - [ ] **Current replacement screenshots:** the capture route is under investigation. No completion claim is made for packaged interaction or replacement screenshots.
-- [ ] **Runtime evidence records:** `docs/release/completeness-audit.md` and `docs/evidence/windows/interaction-ledger.json` are absent.
+- [ ] **Runtime evidence records:** `docs/release/completeness-audit.md` and the canonical `docs/assets/shots/interaction-ledger.json` are absent.
 - [ ] **Design-reference parity:** `design/v2/design-parity-inventory.json` contains 10 rows, and all 40 referenced reference, built, comparison, and diff files are absent.
 - [ ] **Release closeout:** runtime evidence remains incomplete. A cleanup pass is authorized, but no deletion has occurred in this pass.
 

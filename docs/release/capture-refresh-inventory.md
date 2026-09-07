@@ -23,3 +23,7 @@ The capture refresh does not infer freshness from filesystem timestamps. Checkou
 ## Follow-up capture inputs
 
 The full refresh needs semantic evidence records for every roster entry. The capture owner must supply the image hash, source commit, running version, route, viewport, scale, theme, language, and built, packaged, or installed classification. The documentation publisher then changes an image label to current only after that record validates.
+
+The canonical interaction-ledger destination is `docs/assets/shots/interaction-ledger.json`. It is
+currently absent, so no current-build capture label or packaged-interaction completion claim may
+be added until a real acceptance run validates and promotes that ledger.

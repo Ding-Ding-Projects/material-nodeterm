@@ -1,12 +1,18 @@
 # Handoff
 
+## 2026-09-07, v1.0.30 release publication and current evidence boundary
+
+The latest verified published baseline is [`v1.0.30`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v1.0.30), a non-draft release targeting `4b267fb4a20e9c1d05affc3eb98d25f3e9bd9f04`. Release workflow run [`34082019435`](https://github.com/Ding-Ding-Projects/material-nodeterm/actions/runs/34082019435) completed successfully. The release provides `nodeterm-Setup-1.0.30.exe`, `node-terminal-1.0.30-full.nupkg`, and `RELEASES`; the installer remains unsigned.
+
+Built-product interaction and design-parity evidence remain incomplete. `docs/release/completeness-audit.md` and the canonical `docs/assets/shots/interaction-ledger.json` are absent, so this release record is not a claim that a new packaged interaction run, capture refresh, or design-parity comparison has completed. The catalog-link-only dim-sum policy remains in force: no image has been copied into this documentation update.
+
 ## 2026-09-07, preservation and integration pass
 
 The source integration and cleanup are complete. Commit `5a07ef9c180893d02e79e9deb630c2fa69f44332` was verified on remote main before deletion. A complete 639,359,157-byte private backup passed full archive integrity testing and an exact 43,364-entry inventory comparison; 216,468 ignored files were excluded. All 11 linked worktree directories, 11 non-default local branches, and 6 remote branches were removed after ancestry proof. The primary checkout is clean, main is the only local and origin branch, and no stashes or stale worktree metadata remain. Upstream tracking refs and release tags were preserved.
 
 Deletion recovery used ordinary non-forced removal after the initial Git cleanup hit a long path. Two remaining dependency junctions were removed as links, leaving their shared target intact. The final release pipeline is still pending verification, and the existing runtime-evidence scope in #222 is not complete. Wiki synchronization could not run because its Git endpoint returned `Repository not found`; Projects discovery lacked `read:project`. Neither limitation was treated as successful synchronization.
 
-The latest verified baseline is `8c43271f773a857be262ad218e7327faddcad7df`. Its Release workflow `34005210532` succeeded and published `v1.0.27`. Older failed runs do not describe that baseline.
+At the time of this preservation pass, the latest verified baseline was `8c43271f773a857be262ad218e7327faddcad7df`. Its Release workflow `34005210532` succeeded and published `v1.0.27`. The newer published baseline is recorded above; older failed runs do not describe either baseline.
 
 The offline design-reference work was preserved in `a423b360d` and repaired in `56e94f35c`: the preview serves integrity-checked local assets, validates semantic readiness, and its fixture uses the jsdom 30 request-interceptor API. All 23 focused tests passed. Vendor files disable checkout text conversion so their recorded hashes remain stable. This is source-tooling verification, not a new built-product interaction or design-parity capture claim. Remaining runtime evidence stays tracked in issue #222.
 
@@ -24,7 +30,7 @@ The supported source build at preliminary candidate `725f84ad453a28ad35892d7c95d
 
 Release `v1.0.26` is published and non-draft at [the release record](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v1.0.26). It targets commit `4af7ae545a9bec256f0fb9fc07a9f3ba6aff1705`, and Release workflow run `33953016865` completed successfully. This corrects the earlier statement that the release had not shipped.
 
-Runtime evidence remains incomplete. `docs/release/completeness-audit.md` and `docs/evidence/windows/interaction-ledger.json` are absent. `design/v2/design-parity-inventory.json` lists 10 rows, while all 40 referenced reference, built, comparison, and diff files are absent. The current pass is investigating the capture route and does not claim capture, packaged interaction, or design-parity completion.
+Runtime evidence remained incomplete at this historical point. `docs/release/completeness-audit.md` and the canonical `docs/assets/shots/interaction-ledger.json` are absent. `design/v2/design-parity-inventory.json` lists 10 rows, while all 40 referenced reference, built, comparison, and diff files are absent. The current record does not claim capture, packaged interaction, or design-parity completion.
 
 ### Active capture-route repair
 

@@ -24,10 +24,11 @@ their focused checks and the remaining real-product capture boundary.
 [Screenshots](#real-application-screenshots) · [Build](#build-from-source) ·
 [Documentation](#documentation) · [Contributing](#contributing) · [License](#license)
 
-**Latest published release baseline:** [v1.0.5](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v1.0.5),
-published 2026-08-30 at 02:40:59 UTC from commit `e7ca458eaba7`. The source package remains at the
-deliberate `1.0.0` major baseline; the release workflow has planned and published stable patch
-releases through `1.0.5` without rewriting that source version.
+**Latest published release baseline:** [v1.0.30](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v1.0.30),
+published 2026-09-07 at 04:55:14 UTC from commit `4b267fb4a20e9c1d05affc3eb98d25f3e9bd9f04`.
+Release workflow run `34082019435` completed successfully. The source package remains at the
+deliberate `1.0.0` major baseline; the release workflow publishes stable patch releases without
+rewriting that source version.
 
 </div>
 
@@ -54,15 +55,15 @@ custom domain belongs to the upstream repository, so this fork publishes its doc
 instead — note the trailing `/material-nodeterm/`.
 ## Install
 
-The latest verified release baseline for this document is **v1.0.5**:
+The latest verified release baseline for this document is **v1.0.30**:
 
-[**Download nodeterm Setup 1.0.5 for Windows x64**](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v1.0.5/nodeterm-Setup-1.0.5.exe)
+[**Download nodeterm Setup 1.0.30 for Windows x64**](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v1.0.30/nodeterm-Setup-1.0.30.exe)
 
 | Release file | Purpose | SHA-256 |
 | --- | --- | --- |
-| [`nodeterm-Setup-1.0.5.exe`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v1.0.5/nodeterm-Setup-1.0.5.exe) | Squirrel.Windows installer | `1598bb130653973569e3488f73073f656ea90c5549e1f7c3929d1f1efb82d592` |
-| [`node-terminal-1.0.5-full.nupkg`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v1.0.5/node-terminal-1.0.5-full.nupkg) | Full Squirrel package | `6b6a2a2af984df2fa7f805940075e3ee1c74b13073d7fd88fda75f08881d7c57` |
-| [`RELEASES`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v1.0.5/RELEASES) | Squirrel update index | `a6463e4b4c28b3c336fe7c010452462478136ba3814f0b4502043b94fa884dda` |
+| [`nodeterm-Setup-1.0.30.exe`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v1.0.30/nodeterm-Setup-1.0.30.exe) | Squirrel.Windows installer | `a93493f155d2c0f3fa7c51111a7867cdc732809cfe5f6173a357e9c6c1890960` |
+| [`node-terminal-1.0.30-full.nupkg`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v1.0.30/node-terminal-1.0.30-full.nupkg) | Full Squirrel package | `34c3fbec9e1f802a1022e58e56fd6ffff90340372aaf56403d73ab28837ff902` |
+| [`RELEASES`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v1.0.30/RELEASES) | Squirrel update index | `f60429fbc06514e64f378821e508fbc90299543fa8d3d7653e8d57fd16d17479` |
 
 > [!WARNING]
 > **The installer is unsigned.** Code signing is intentionally not used. Windows SmartScreen
