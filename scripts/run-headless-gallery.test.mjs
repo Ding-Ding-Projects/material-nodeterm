@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import http from 'node:http'
 import os from 'node:os'
@@ -170,14 +170,17 @@ describe('run-headless-gallery CLI boundaries', () => {
     const found = spawnSync('where.exe', ['pwsh.exe'], { encoding: 'utf8', windowsHide: true })
     const powershell = found.stdout.split(/\r?\n/u).find((value) => path.isAbsolute(value.trim()))?.trim()
     expect(powershell).toBeTruthy()
-    fs.writeFileSync(childScriptFile, '[IO.File]::WriteAllText($env:RESULT,($env:APPDATA+"|"+$env:NODE_OPTIONS+"|"+($args -join ",")))', 'utf8')
+    fs.writeFileSync(childScriptFile, '[IO.File]::WriteAllText($env:RESULT,($env:APPDATA+"|"+$env:NODE_OPTIONS+"|"+($args -join ",")));Start-Sleep -Milliseconds 800', 'utf8')
     try {
       const wrapper = reviewedPowerShellWrapper(powershell, powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', childScriptFile, 'first value', "O'Hara", '雪', ''], { APPDATA: 'C:\\isolated-appdata', NODE_OPTIONS: '', NODE_PATH: '', RESULT: result }, receipt)
-      const launched = spawnSync(wrapper.executable, wrapper.arguments, { encoding: 'utf8', windowsHide: true, timeout: 10_000 })
-      expect(launched.status).toBe(0)
+      const launched = spawn(wrapper.executable, wrapper.arguments, { windowsHide: true, stdio: 'ignore' })
+      const exited = new Promise((resolve) => launched.once('exit', resolve))
       await expect.poll(() => fs.existsSync(receipt), { timeout: 5_000 }).toBe(true)
       await expect.poll(() => fs.existsSync(result), { timeout: 5_000 }).toBe(true)
-      expect(JSON.parse(fs.readFileSync(receipt, 'utf8'))).toMatchObject({ pid: expect.any(Number), parentPid: expect.any(Number), creationTime: expect.any(String), executable: powershell })
+      expect(JSON.parse(fs.readFileSync(receipt, 'utf8'))).toMatchObject({ version: 1, wrapper: { pid: launched.pid }, child: { pid: expect.any(Number), parentPid: launched.pid, creationTime: expect.stringMatching(/^\d{17,19}$/), executable: powershell } })
+      expect(launched.exitCode).toBeNull()
+      fs.writeFileSync(receipt + '.release', '')
+      expect(await exited).toBe(0)
       expect(fs.readFileSync(result, 'utf8')).toBe("C:\\isolated-appdata||first value,O'Hara,雪,")
       expect(() => reviewedPowerShellWrapper(powershell, powershell, [], { APPDATA: 'C:\\bad\u0000value' }, receipt)).toThrow(/environment/)
     } finally { fs.rmSync(root, { recursive: true, force: true }) }

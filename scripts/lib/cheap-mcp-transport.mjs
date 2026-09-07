@@ -1,3 +1,4 @@
+import { identityPowerShell } from './gallery-process-lifecycle.mjs'
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 const PROTOCOL_VERSION = '2025-03-26'
 
@@ -15,10 +16,15 @@ export function reviewedPowerShellWrapper(shell, candidate, arguments_, environm
   const source = [
     "$ErrorActionPreference='Stop'",
     `$r=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${request}'))|ConvertFrom-Json`,
+    identityPowerShell,
+    'function Save-Proof { $tmp=([string]$r.receipt)+"."+$PID+".tmp";[IO.File]::WriteAllText($tmp,($proof|ConvertTo-Json -Depth 4 -Compress),[Text.UTF8Encoding]::new($false));Move-Item -LiteralPath $tmp -Destination ([string]$r.receipt) -Force }',
+    '$proof=@{version=1;wrapper=(Identity (Get-CimInstance Win32_Process -Filter ("ProcessId = "+$PID) -ErrorAction Stop));child=$null;phase="starting"};Save-Proof',
+    'try {',
     'foreach($p in $r.environment.psobject.Properties){Set-Item -LiteralPath ("Env:"+$p.Name) -Value ([string]$p.Value)}',
     '$psi=[Diagnostics.ProcessStartInfo]::new();$psi.FileName=[string]$r.candidate;$psi.UseShellExecute=$false;foreach($p in $r.environment.psobject.Properties){$psi.Environment[$p.Name]=[string]$p.Value};foreach($a in @($r.arguments)){$null=$psi.ArgumentList.Add([string]$a)};$child=[Diagnostics.Process]::Start($psi)',
-    '$live=Get-CimInstance Win32_Process -Filter ("ProcessId = "+[int]$child.Id);if($null -eq $live){throw "Child process disappeared before receipt"};$proof=@{pid=[int]$live.ProcessId;parentPid=[int]$live.ParentProcessId;creationTime=[string]$live.CreationDate;executable=[string]$live.ExecutablePath};if(-not $proof.creationTime -or -not $proof.executable){throw "Child identity is incomplete"}',
-    '$tmp=([string]$r.receipt)+"."+$PID+".tmp";[IO.File]::WriteAllText($tmp,($proof|ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false));Move-Item -LiteralPath $tmp -Destination ([string]$r.receipt) -Force;$child.WaitForExit()'
+    '$proof.child=Identity (Get-CimInstance Win32_Process -Filter ("ProcessId = "+[int]$child.Id) -ErrorAction Stop);if($null -eq $proof.child){throw "Child disappeared before identity could be recorded"};$proof.phase="running";Save-Proof;$child.WaitForExit();$proof.phase="child-exited";Save-Proof',
+    '} catch { $proof.phase="failed";Save-Proof }',
+    '$deadline=[DateTime]::UtcNow.AddMinutes(20);while(-not [IO.File]::Exists(([string]$r.receipt)+".release") -and [DateTime]::UtcNow -lt $deadline){Start-Sleep -Milliseconds 100}'
   ].join(';')
   const encoded = Buffer.from(source, 'utf16le').toString('base64')
   const args = ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded]

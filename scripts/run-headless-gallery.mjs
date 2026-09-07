@@ -10,6 +10,7 @@ import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
+import { OwnedProcessLedger, processInventoryScript, processProbeScript, listenerProbeScript, sameIdentity, validIdentity } from './lib/gallery-process-lifecycle.mjs'
 import { renameAtomicSync } from './lib/rename-atomic.mjs'
 import { PersistentCheapMcpClient, cleanupUncertainCreatedDesktop, requireDesktopAbsent, reviewedPowerShellWrapper, validateMcpEndpoint } from './lib/cheap-mcp-transport.mjs'
 
@@ -42,10 +43,9 @@ function selectWindow(payload, pid) {
   return { hwnd: Number(window.handle), className: String(window.class), title: String(window.title), outerWidth: Number(window.width), outerHeight: Number(window.height) }
 }
 function shellWrappedLaunch(candidate, port, profile, environment, receipt) {
-  const found = spawnSync('where.exe', ['pwsh.exe'], { encoding: 'utf8', windowsHide: true, timeout: 5_000 })
-  const shell = found.status === 0 ? found.stdout.split(/\r?\n/u).find((value) => path.isAbsolute(value.trim()))?.trim() : null
-  if (!shell || !fs.existsSync(shell)) fail('PowerShell 7 pwsh.exe is unavailable for the reviewed process-local environment wrapper with ArgumentList support.')
-  return { ...reviewedPowerShellWrapper(shell, candidate, [`--remote-debugging-port=${port}`, `--user-data-dir=${profile}`], environment, receipt), wrapper: true }
+  const shell = path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'PowerShell', '7', 'pwsh.exe')
+  if (!fs.existsSync(shell)) fail('Trusted Program Files PowerShell 7 executable is unavailable.')
+  return { ...reviewedPowerShellWrapper(shell, candidate, [`--remote-debugging-port=${port}`, `--user-data-dir=${profile}`], environment, receipt), wrapper: true, sha256: sha256(shell) }
 }
 function hasWindowForPid(payload, pid) { return (payload.windows ?? []).some((window) => Number(window.process_id) === pid) }
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)) }
@@ -71,91 +71,70 @@ async function nativeGeometry(hwnd) {
   const result = await invoke('run_command', { command: `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`, cwd: options.repo, shell: false, timeout: 20 }, 30_000)
   return JSON.parse(result.stdout)
 }
-async function processIdentity(pid, candidate) {
-  const source = [
-    "$ErrorActionPreference='Stop'",
-    `$p=Get-CimInstance Win32_Process -Filter ('ProcessId = ' + ${pid})`,
-    "if($null -eq $p){throw 'Recorded PID no longer exists'}",
-    '[pscustomobject]@{pid=[int]$p.ProcessId;executable=[string]$p.ExecutablePath}|ConvertTo-Json -Compress'
-  ].join(';')
+async function powershellJson(source) {
   const encoded = Buffer.from(source, 'utf16le').toString('base64')
-  const result = await invoke('run_command', { command: `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`, cwd: options.repo, shell: false, timeout: 20 }, 30_000)
-  const identity = JSON.parse(result.stdout)
-  if (path.resolve(identity.executable).toLocaleLowerCase('en-US') !== path.resolve(candidate).toLocaleLowerCase('en-US')) fail(`PID ${pid} no longer belongs to the packaged candidate.`)
-  return identity
+  const shell = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+  const result = await invoke('run_command', { command: `${quote(shell)} -NoProfile -NonInteractive -EncodedCommand ${encoded}`, cwd: options.repo, shell: false, timeout: 20 }, 30_000)
+  return JSON.parse(result.stdout)
 }
-async function processIdentityRecord(pid) {
-  const source = ["$ErrorActionPreference='Stop'", `$p=Get-CimInstance Win32_Process -Filter ('ProcessId = ' + ${pid})`, "if($null -eq $p){throw 'Recorded PID no longer exists'}", '[pscustomobject]@{pid=[int]$p.ProcessId;parentPid=[int]$p.ParentProcessId;creationTime=[string]$p.CreationDate;executable=[string]$p.ExecutablePath}|ConvertTo-Json -Compress'].join(';')
-  const result = await invoke('run_command', { command: `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${Buffer.from(source, 'utf16le').toString('base64')}`, cwd: options.repo, shell: false, timeout: 20 }, 30_000)
-  const value = JSON.parse(result.stdout)
-  if (!Number.isInteger(value?.pid) || !value.creationTime || !value.executable) fail('Process identity record is incomplete.')
-  return value
+async function processIdentityRecord(pid) { return (await powershellJson(processProbeScript(pid))).process }
+async function inventoryProcesses() { return (await powershellJson(processInventoryScript)).processes }
+async function revalidateCandidate() {
+  if (!candidateProcess || !sameIdentity(candidateProcess, await processIdentityRecord(candidateProcess.pid))) fail('Candidate process identity changed; retained.')
 }
-async function candidateChild(launcherPid, candidate) {
-  const request = Buffer.from(JSON.stringify({ launcherPid, candidate }), 'utf8').toString('base64')
-  const source = [
-    "$ErrorActionPreference='Stop'",
-    `$r=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${request}'))|ConvertFrom-Json`,
-    '$all=@(Get-CimInstance Win32_Process);$root=$all|Where-Object ProcessId -eq ([int]$r.launcherPid)|Select-Object -First 1;if($null -eq $root){throw "Launcher PID no longer exists"}',
-    '$ids=New-Object System.Collections.Generic.HashSet[int];[void]$ids.Add([int]$root.ProcessId);do{$added=$false;foreach($p in $all){if($ids.Contains([int]$p.ParentProcessId) -and -not $ids.Contains([int]$p.ProcessId)){[void]$ids.Add([int]$p.ProcessId);$added=$true}}}while($added)',
-    '$want=[IO.Path]::GetFullPath([string]$r.candidate).ToLowerInvariant();$matches=@($all|Where-Object {$ids.Contains([int]$_.ProcessId) -and $_.ExecutablePath -and [IO.Path]::GetFullPath([string]$_.ExecutablePath).ToLowerInvariant() -eq $want});if($matches.Count -ne 1){throw "Expected exactly one packaged candidate descendant, found $($matches.Count)"};[pscustomobject]@{pid=[int]$matches[0].ProcessId;launcherPid=[int]$root.ProcessId}|ConvertTo-Json -Compress'
-  ].join(';')
-  const encoded = Buffer.from(source, 'utf16le').toString('base64')
-  const result = await invoke('run_command', { command: `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`, cwd: options.repo, shell: false, timeout: 20 }, 30_000)
-  const child = JSON.parse(result.stdout)
-  if (!Number.isInteger(child.pid) || child.pid <= 0) fail('Candidate descendant proof returned an invalid PID.')
-  await processIdentity(child.pid, candidate)
-  return child
-}
-async function candidateFromWrapperReceipt(receipt, candidate, wrapperIdentity) {
+async function wrapperReceiptRecord(receipt, requireChild = true) {
   const deadline = Date.now() + 15_000
   while (Date.now() < deadline) {
     try {
-      const raw = fs.readFileSync(receipt, 'utf8')
-      if (Buffer.byteLength(raw, 'utf8') > 4096) fail('Wrapper child receipt exceeds 4 KiB.')
-      const value = JSON.parse(raw)
-      if (!Number.isInteger(value?.pid) || value.pid <= 0 || !Number.isInteger(value.parentPid) || !value.creationTime || typeof value.executable !== 'string' || Object.keys(value).some((key) => !['pid', 'parentPid', 'creationTime', 'executable'].includes(key))) fail('Wrapper child receipt is invalid.')
-      if (value.parentPid !== wrapperIdentity.pid) fail('Wrapper child receipt does not bind to the exact launcher PID.')
-      const live = await processIdentityRecord(value.pid)
-      if (live.parentPid !== value.parentPid || live.creationTime !== value.creationTime || path.resolve(live.executable).toLocaleLowerCase('en-US') !== path.resolve(value.executable).toLocaleLowerCase('en-US')) fail('Wrapper child identity changed after receipt.')
-      await processIdentity(value.pid, candidate)
-      return { pid: value.pid }
-    } catch (error) { if (error instanceof Error && !/ENOENT/u.test(error.message)) throw error; await sleep(Math.min(100, Math.max(0, deadline - Date.now()))) }
+      const stat = fs.statSync(receipt)
+      if (!stat.isFile() || stat.size > 4096) fail('Wrapper receipt exceeds 4 KiB or is not a regular file.')
+      const value = JSON.parse(fs.readFileSync(receipt, 'utf8'))
+      if (value.version !== 1 || !validIdentity(value.wrapper)) fail('Wrapper identity receipt is invalid.')
+      if (path.resolve(value.wrapper.executable).toLowerCase() !== path.resolve(requestedLaunch.executable).toLowerCase()) fail('Wrapper executable identity mismatch.')
+      if (!sameIdentity(value.wrapper, await processIdentityRecord(value.wrapper.pid))) fail('Wrapper identity changed; retained.')
+      wrapperIdentity = value.wrapper
+      if (!ledger) ledger = new OwnedProcessLedger(wrapperIdentity, (state) => atomicJson(path.join(runRoot, 'owned-processes.json'), state))
+      ledger.observe(await inventoryProcesses())
+      if (value.child !== null) {
+        if (!validIdentity(value.child) || value.child.parentPid !== wrapperIdentity.pid || path.resolve(value.child.executable).toLowerCase() !== candidate.toLowerCase()) fail('Candidate receipt identity is invalid.')
+        if (!ledger.records.some((record) => sameIdentity(record, value.child))) fail('Candidate identity is not in the exact wrapper tree.')
+        candidateProcess = value.child
+      }
+      if (!requireChild || candidateProcess) return value
+      if (value.phase === 'failed' || value.phase === 'child-exited') fail('Wrapper child failed or exited before launch proof.')
+    } catch (error) { if (!/ENOENT/u.test(error.message)) throw error }
+    await sleep(100)
   }
-  fail('PowerShell wrapper did not produce a valid packaged-candidate receipt.')
+  fail('PowerShell wrapper did not produce a complete launch receipt; ownership remains unknown.')
 }
 async function assertCdpPortUnused(port) {
-  const source = `$items=@(Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction SilentlyContinue);[pscustomobject]@{count=$items.Count}|ConvertTo-Json -Compress`
-  const result = await invoke('run_command', { command: `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${Buffer.from(source, 'utf16le').toString('base64')}`, cwd: options.repo, shell: false, timeout: 10 }, 15_000)
-  if (JSON.parse(result.stdout).count !== 0) fail(`CDP port ${port} is already listening.`)
+  const result = await powershellJson(listenerProbeScript(port))
+  if (!Array.isArray(result.owners) || result.owners.length !== 0) fail(`CDP port ${port} is already listening or its probe is invalid.`)
 }
 async function assertCdpListenerOwner(port, pid) {
-  const source = `$items=@(Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction Stop);[pscustomobject]@{owners=@($items|ForEach-Object {[int]$_.OwningProcess})}|ConvertTo-Json -Compress`
-  const result = await invoke('run_command', { command: `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${Buffer.from(source, 'utf16le').toString('base64')}`, cwd: options.repo, shell: false, timeout: 10 }, 15_000)
-  const owners = JSON.parse(result.stdout).owners ?? []
+  await revalidateCandidate()
+  const { owners } = await powershellJson(listenerProbeScript(port))
   if (!Array.isArray(owners) || owners.length !== 1 || owners[0] !== pid) fail(`CDP port ${port} is not owned exclusively by packaged PID ${pid}.`)
+  await revalidateCandidate()
 }
-async function ownedProcessTree(root) {
-  const request = Buffer.from(JSON.stringify(root), 'utf8').toString('base64')
-  const source = ["$ErrorActionPreference='Stop'", `$r=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${request}'))|ConvertFrom-Json`, '$all=@(Get-CimInstance Win32_Process);$root=$all|Where-Object ProcessId -eq ([int]$r.pid)|Select-Object -First 1;if($null -eq $root){@()|ConvertTo-Json -Compress;exit 0};if([string]$root.CreationDate -ne [string]$r.creationTime -or [string]$root.ExecutablePath -ne [string]$r.executable){throw "Wrapper identity changed"}', '$ids=New-Object System.Collections.Generic.HashSet[int];[void]$ids.Add([int]$root.ProcessId);do{$added=$false;foreach($p in $all){if($ids.Contains([int]$p.ParentProcessId) -and -not $ids.Contains([int]$p.ProcessId)){[void]$ids.Add([int]$p.ProcessId);$added=$true}}}while($added)', '@($all|Where-Object {$ids.Contains([int]$_.ProcessId)}|ForEach-Object {[pscustomobject]@{pid=[int]$_.ProcessId;parentPid=[int]$_.ParentProcessId;creationTime=[string]$_.CreationDate;executable=[string]$_.ExecutablePath}})|ConvertTo-Json -Compress'].join(';')
-  const result = await invoke('run_command', { command: `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${Buffer.from(source, 'utf16le').toString('base64')}`, cwd: options.repo, shell: false, timeout: 20 }, 30_000)
-  const tree = JSON.parse(result.stdout)
-  return Array.isArray(tree) ? tree : (tree ? [tree] : [])
-}
-async function cleanupUnknownWrapper(desktop, wrapper) {
-  const tree = await ownedProcessTree(wrapper)
-  if (!tree.length) fail('Wrapper disappeared before its owned process tree could be proven absent.')
-  for (const expected of [...tree].sort((a, b) => b.parentPid - a.parentPid)) {
-    const live = await processIdentityRecord(expected.pid)
-    if (live.parentPid !== expected.parentPid || live.creationTime !== expected.creationTime || path.resolve(live.executable).toLocaleLowerCase('en-US') !== path.resolve(expected.executable).toLocaleLowerCase('en-US')) fail('Owned wrapper process identity changed during cleanup.')
-    await invoke('kill_process', { pid: expected.pid, force: true }, 20_000)
+async function cleanupOwnedLaunch() {
+  if (!ledger) await wrapperReceiptRecord(wrapperReceipt, false)
+  ledger.observe(await inventoryProcesses())
+  if (window && candidateProcess) {
+    await revalidateCandidate()
+    const before = selectWindow(await invoke('list_headless_windows', { name: desktop }, 5_000), candidateProcess.pid)
+    if (before.hwnd !== window.hwnd) fail('Cleanup refused stale HWND.')
+    await revalidateCandidate()
+    await invoke('window_action', { handle: window.hwnd, action: 'close' }, 10_000)
+    await sleep(500)
   }
-  const after = await ownedProcessTree(wrapper)
-  if (after.length) fail('Owned wrapper process tree remains after cleanup.')
+  const result = await ledger.terminate({ inventory: inventoryProcesses, probe: processIdentityRecord, kill: (pid) => invoke('kill_process', { pid, force: true }, 20_000) })
+  const remainingWindows = await invoke('list_headless_windows', { name: desktop }, 5_000)
+  if (!Array.isArray(remainingWindows.windows) || remainingWindows.windows.length) fail('Windows remain on owned desktop; retained.')
   const close = await invoke('close_headless_desktop', { name: desktop }, 10_000)
   const desktops = await invoke('list_headless_desktops', {}, 5_000)
-  if (close.closed !== true || (desktops.desktops ?? []).some((entry) => String(entry?.name ?? entry) === desktop)) fail('Owned desktop was not closed after wrapper cleanup.')
-  return { attempted: true, desktop, method: 'proved-wrapper-tree-kill', desktopRemoved: true }
+  if (close.closed !== true || !Array.isArray(desktops.desktops) || desktops.desktops.some((entry) => String(entry?.name ?? entry) === desktop)) fail('Owned desktop removal was not proven.')
+  return { attempted: true, desktop, ...result, desktopRemoved: true, method: 'recorded-identity-child-first' }
 }
 async function cdpTarget(port, expectedUrl) {
   const deadline = Date.now() + 30_000
@@ -188,38 +167,6 @@ async function cdpClientSize(socketUrl) {
   return result
 }
 function gitHead() { return spawnSync('git', ['rev-parse', 'HEAD'], { cwd: options.repo, encoding: 'utf8', windowsHide: true }).stdout.trim() }
-async function closeOwned(desktop, pid, hwnd, candidate) {
-  const before = selectWindow(await invoke('list_headless_windows', { name: desktop }, 5_000), pid)
-  if (before.hwnd !== hwnd) fail('Cleanup refused stale HWND.')
-  await processIdentity(pid, candidate)
-  await invoke('window_action', { handle: hwnd, action: 'close' }, 10_000)
-  const deadline = Date.now() + 25_000
-  while (Date.now() < deadline) {
-    try {
-      const inventory = await invoke('list_headless_windows', { name: desktop }, 5_000)
-      try { selectWindow(inventory, pid) } catch (error) {
-        if (hasWindowForPid(inventory, pid)) throw error
-        const identity = await invoke('run_command', { command: `powershell.exe -NoProfile -NonInteractive -Command "if(Get-Process -Id ${pid} -ErrorAction SilentlyContinue){exit 9}"`, cwd: options.repo, shell: false, timeout: 10 }, 15_000)
-        if (identity.returncode !== 0) fail(`PID ${pid} exit probe did not complete.`)
-        const close = await invoke('close_headless_desktop', { name: desktop }, 10_000)
-        const desktops = await invoke('list_headless_desktops', {}, 5_000)
-        const stillPresent = (desktops.desktops ?? []).some((entry) => String(entry.name ?? entry) === desktop)
-        if (stillPresent || close.closed !== true) fail(`Owned desktop ${desktop} was not closed.`)
-        return { attempted: true, desktop, pid, hwnd, method: 'window_action.close', mainProcessExited: true, desktopRemoved: true }
-      }
-      await sleep(Math.min(250, Math.max(0, deadline - Date.now())))
-    } catch (error) { throw error }
-  }
-  fail(`Owned PID ${pid} did not exit after its exact HWND close.`)
-}
-async function cleanupLaunchWithoutWindow(desktop, pid, candidate) {
-  await processIdentity(pid, candidate)
-  await invoke('kill_process', { pid, force: true }, 20_000)
-  const close = await invoke('close_headless_desktop', { name: desktop }, 10_000)
-  const desktops = await invoke('list_headless_desktops', {}, 5_000)
-  if ((desktops.desktops ?? []).some((entry) => String(entry.name ?? entry) === desktop) || close.closed !== true) fail(`Owned desktop ${desktop} was not closed after launch-without-window cleanup.`)
-  return { attempted: true, desktop, pid, method: 'revalidated-pid-kill-after-window-timeout', mainProcessExited: true, desktopRemoved: true }
-}
 
 const execute = process.argv.includes('--execute')
 const candidate = absolute('--candidate')
@@ -268,12 +215,13 @@ let candidateProcess
 let requestedLaunch
 let wrapperIdentity
 let creationAttempted = false
-let desktopCreated = false
+let launchAttempted = false
+let ledger
+const wrapperReceipt = path.join(runRoot, 'wrapper-child.json')
 try {
   options.mcp = new PersistentCheapMcpClient(mcpEndpoint)
   await options.mcp.initialize()
   options.mcp.requireTools(['create_headless_desktop', 'launch_on_headless_desktop', 'list_headless_windows', 'resize_window', 'window_action', 'run_command', 'kill_process', 'close_headless_desktop', 'list_headless_desktops'])
-  const launchEnvironment = options.mcp.launchEnvironmentArgument(options.isolatedEnvironment)
   if (fs.existsSync(receiptFile)) fail('Refusing to overwrite an existing receipt.')
   fs.mkdirSync(runRoot, { recursive: true })
   const profile = path.join(runRoot, 'chromium-profile')
@@ -283,18 +231,19 @@ try {
   await assertCdpPortUnused(port)
   creationAttempted = true
   await invoke('create_headless_desktop', { name: desktop }, 10_000)
-  desktopCreated = true
-  const wrapperReceipt = path.join(runRoot, 'wrapper-child.json')
-  requestedLaunch = launchEnvironment
-    ? { command: `${quote(candidate)} --remote-debugging-port=${port} --user-data-dir=${quote(profile)}`, wrapper: false, environment: launchEnvironment }
-    : shellWrappedLaunch(candidate, port, profile, options.isolatedEnvironment, wrapperReceipt)
-  launch = await invoke('launch_on_headless_desktop', { name: desktop, command: requestedLaunch.command, ...(requestedLaunch.environment ?? {}) }, 60_000)
-  if (!Number.isInteger(Number(launch.pid)) || Number(launch.pid) <= 0 || launch.focus_stealing !== false || launch.terminal_window !== false || launch.desktop !== desktop) fail('Launch receipt did not prove an owned non-foreground non-terminal launch.')
-  wrapperIdentity = requestedLaunch.wrapper ? await processIdentityRecord(Number(launch.pid)) : null
-  candidateProcess = requestedLaunch.wrapper ? { ...(await candidateFromWrapperReceipt(wrapperReceipt, candidate, wrapperIdentity)), launcherPid: Number(launch.pid), launcherCreationTime: wrapperIdentity.creationTime } : { pid: Number(launch.pid), launcherPid: Number(launch.pid) }
+  requestedLaunch = shellWrappedLaunch(candidate, port, profile, options.isolatedEnvironment, wrapperReceipt)
+  plan.wrapper = { executable: requestedLaunch.executable, sha256: requestedLaunch.sha256, receipt: wrapperReceipt }
+  if (fs.existsSync(wrapperReceipt)) fail('Refusing an existing wrapper receipt.')
+  atomicJson(path.join(runRoot, 'launch-intent.json'), plan)
+  launchAttempted = true
+  launch = await invoke('launch_on_headless_desktop', { name: desktop, command: requestedLaunch.command }, 60_000)
+  await wrapperReceiptRecord(wrapperReceipt)
+  if (Number(launch.pid) !== wrapperIdentity.pid || launch.focus_stealing !== false || launch.terminal_window !== false || launch.desktop !== desktop) fail('Launch receipt did not prove an owned non-foreground non-terminal launch.')
+  await revalidateCandidate()
   window = await windowFor(desktop, candidateProcess.pid)
   const before = await nativeGeometry(window.hwnd)
   // Resize by measured non-client deltas, then prove client dimensions twice: native and CDP.
+  await revalidateCandidate()
   await invoke('resize_window', { handle: window.hwnd, width: width + before.outerWidth - before.clientWidth, height: height + before.outerHeight - before.clientHeight })
   const native = await nativeGeometry(window.hwnd)
   const target = await cdpTarget(port, expectedUrl)
@@ -302,27 +251,28 @@ try {
   const renderer = await cdpClientSize(target.webSocketDebuggerUrl)
   if (native.clientWidth !== width || native.clientHeight !== height || renderer.width !== width || renderer.height !== height) fail(`Client geometry mismatch: native ${native.clientWidth}x${native.clientHeight}, renderer ${renderer.width}x${renderer.height}, requested ${width}x${height}.`)
   const boundTarget = { ...target, pid: candidateProcess.pid, targetIsolationVerified: true }
-  const launchReceipt = { ok: true, desktop, pid: candidateProcess.pid, launcherPid: Number(launch.pid), wrapper: requestedLaunch.wrapper, hwnd: window.hwnd, focusStealing: false, terminalWindow: false }
+  const launchReceipt = { ok: true, desktop, pid: candidateProcess.pid, launcherPid: Number(launch.pid), wrapper: requestedLaunch.wrapper, process: candidateProcess, wrapperProcess: wrapperIdentity, hwnd: window.hwnd, focusStealing: false, terminalWindow: false }
   const liveReceipt = { ok: true, live: true, ...plan, launch: launchReceipt, nativeClientGeometry: native, rendererClientGeometry: renderer, cdp: boundTarget, cleanup: { attempted: false } }
   atomicJson(receiptFile, liveReceipt)
   const captureArgs = JSON.parse(fs.readFileSync(captureArgsFile, 'utf8'))
   if (!Array.isArray(captureArgs) || captureArgs.some((entry) => typeof entry !== 'string')) fail('Capture arguments must be a JSON array of strings.')
+  await assertCdpListenerOwner(port, candidateProcess.pid)
+  const currentTarget = await cdpTarget(port, expectedUrl)
+  if (currentTarget.id !== target.id || currentTarget.webSocketDebuggerUrl !== target.webSocketDebuggerUrl) fail('CDP target changed before capture.')
+  ledger.observe(await inventoryProcesses())
+  await revalidateCandidate()
   const capture = spawnSync(process.execPath, [captureScript, ...captureArgs], { cwd: repo, env: { ...process.env, ...options.isolatedEnvironment }, encoding: 'utf8', windowsHide: true, timeout: 15 * 60_000, maxBuffer: 8 * 1024 * 1024 })
   if (capture.error || capture.status !== 0) fail(`Capture driver failed: ${capture.error?.message ?? capture.stderr ?? 'unknown failure'}`)
-  cleanup = await closeOwned(desktop, candidateProcess.pid, window.hwnd, candidate)
+  cleanup = await cleanupOwnedLaunch()
   const receipt = { ok: true, live: false, ...plan, launch: launchReceipt, nativeClientGeometry: native, rendererClientGeometry: renderer, cdp: boundTarget, cleanup, capture: { stdout: capture.stdout.trim() }, completedAt: new Date().toISOString() }
   atomicJson(receiptFile, receipt)
   process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`)
 } catch (error) {
-  if (launch && window && candidateProcess && !cleanup) { try { cleanup = await closeOwned(desktop, candidateProcess.pid, window.hwnd, candidate) } catch { /* preserve the original refusal */ } }
-  if (launch && !window && candidateProcess && !cleanup) { try { cleanup = await cleanupLaunchWithoutWindow(desktop, candidateProcess.pid, candidate) } catch { /* preserve the original refusal */ } }
-  if (launch && !candidateProcess && !cleanup && requestedLaunch?.wrapper && wrapperIdentity) { try { cleanup = await cleanupUnknownWrapper(desktop, wrapperIdentity) } catch { /* preserve the original refusal */ } }
-  if (launch && !candidateProcess && !cleanup) { try { cleanup = await cleanupUncertainCreatedDesktop(options.mcp, desktop) } catch { /* preserve the original refusal */ } }
-  if (!launch && creationAttempted && !cleanup) {
-    try {
-      cleanup = await cleanupUncertainCreatedDesktop(options.mcp, desktop)
-    } catch { /* preserve the original refusal */ }
+  if (launchAttempted && !cleanup) {
+    try { cleanup = await cleanupOwnedLaunch() }
+    catch (cleanupError) { cleanup = { attempted: true, desktopRemoved: false, processesExited: false, retained: true, error: cleanupError.message, ledger: ledger ? { root: ledger.root, processes: ledger.records } : null } }
   }
+  if (!launchAttempted && creationAttempted && !cleanup) cleanup = await cleanupUncertainCreatedDesktop(options.mcp, desktop)
   const receipt = { ok: false, ...plan, launch: launch ? { pid: Number(launch.pid), desktop: launch.desktop } : null, cleanup: cleanup ?? null, error: error instanceof Error ? error.message : String(error), completedAt: new Date().toISOString() }
   try { atomicJson(receiptFile, receipt) } catch { /* run-root evidence is best effort after a refusal */ }
   process.stderr.write(`${receipt.error}\n`)
