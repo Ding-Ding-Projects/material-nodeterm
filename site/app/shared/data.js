@@ -19,7 +19,7 @@ export const REPO_BLOB_DOCS = REPO_URL + '/blob/main/docs/features/README.md'
 export const REPO_RELEASES = REPO_URL + '/releases'
 export const REPO_ISSUES = REPO_URL + '/issues'
 export const REPO_CHANGELOG = REPO_URL + '/blob/main/CHANGELOG.md'
-export const CURRENT_VERSION = '0.4.120'
+export const CURRENT_VERSION = '1.0.30'
 export const WINDOWS_SETUP_URL = REPO_URL + '/releases/download/v' + CURRENT_VERSION + '/nodeterm-Setup-' + CURRENT_VERSION + '.exe'
 
 export const FEATURES = [

@@ -55,8 +55,8 @@ Every article follows the same shape, so you can skim for the part you need:
 Most features exist on more than one of nodeterm's three shells, and behave slightly
 differently (or not at all) on each:
 
-1. **Desktop** — the Electron app for Windows (the delivery target; Linux packages are also built).
-2. **Server Edition** — the same renderer, self-hosted and reached from any browser.
+1. **Desktop** — the Electron app for Windows, the active packaged delivery target.
+2. **Server Edition** — the same renderer, self-hosted and reached from any browser. It is not a current packaged desktop target.
 3. **Mobile companion** — a separate iOS app that attaches to the same live sessions.
 
 Each article says explicitly which surfaces a feature reaches and how it degrades on the

@@ -206,7 +206,7 @@ function renderRoom(store) {
       <a class="brand" href="./index.html" data-no-room>
         <img class="brand__mark" src="./assets/mark.svg" alt="" width="34" height="34" style="padding:3px;background:var(--yellow)" />
         <span class="brand__name">${fact('nodeterm')}</span>
-        <span class="brand__ver">${fact('v0.4.120')}</span>
+        <span class="brand__ver">${fact('v1.0.30')}</span>
       </a>
       ${searchBar({ id: 'qGlobal', value: s.qGlobal, placeholder: 'Search the whole playground…', ariaLabel: 'the big search', rxKey: 'global', state: s, cls: 'header-search' })}
       <div class="header-actions">

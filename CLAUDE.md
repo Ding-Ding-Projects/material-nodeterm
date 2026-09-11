@@ -26,9 +26,10 @@ UI rewrite (see Transport abstraction below).
 
 ## Platform support
 
-macOS, Linux, and a browser Server Edition are the shipping targets; Windows is being brought up
-as a first-class desktop target (extraction from external PR #276). The policy for what "supported"
-means — and what you may assume when writing a feature — is three tiers, not "100% parity":
+Windows is the active packaged desktop delivery target. The browser Server Edition remains a
+supported self-hosted surface, while macOS and Linux release packaging is historical and not part of
+the current delivery scope. The policy for what "supported" means — and what you may assume when
+writing a feature — is three tiers, not "100% parity":
 
 - **Core is first-class everywhere.** The terminal + agent + canvas + session-continuity
   experience must work on every desktop platform. Continuity is tmux on POSIX and, where there is
