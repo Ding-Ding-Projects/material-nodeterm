@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "status": "pending-provenance",
+  "kind": "interaction-ledger-capture-plan",
+  "contract": "scripts/interaction-ledger.mjs verified ledger input after provenance is frozen",
+  "truthfulness": {
+    "capturesRecorded": false,
+    "captureReceiptsRecorded": false,
+    "sourceCommit": null,
+    "executableSha256": null,
+    "setupSha256": null,
+    "reason": "No frozen packaged build, cheap-headless launch receipt, observed interaction, or PNG capture was supplied when this bounded roster was created."
+  },
+  "requiredCaptureRoute": {
+    "route": "cheap-lowlevel-headless",
+    "tool": "lowlevel-computer-use-cheap",
+    "source": "built-artifact",
+    "window": "named-headless-desktop"
+  },
+  "provenanceBinding": {
+    "passOne": "Freeze one full source commit, packaged executable path and SHA-256, optional installed Setup.exe path and SHA-256, and a successful cheap-headless launch receipt before any interaction is recorded.",
+    "passTwo": "Drive every rostered interaction against that one frozen build, record only observed before/after state, read each PNG back for dimensions and SHA-256, then validate and promote with scripts/interaction-ledger.mjs.",
+    "promotion": "Promotion is prohibited while this file remains pending-provenance. The validator accepts only status verified and refuses missing provenance, images, route evidence, or matrix rows."
+  },
+  "coverage": {
+    "languageModes": ["english", "cantonese", "bilingual"],
+    "themes": ["light", "dark", "high-contrast"],
+    "viewports": [
+      { "id": "narrow-320", "width": 320, "height": 720 },
+      { "id": "desktop-1280", "width": 1280, "height": 720 },
+      { "id": "parity-1440", "width": 1440, "height": 940 }
+    ],
+    "displayScales": [1, 1.25, 1.5, 2],
+    "requiredCartesianTupleCount": 108,
+    "tupleRule": "For each of the 3 language modes, 3 themes, 3 viewports, and 4 display scales, capture the designated representative interaction in the matching frozen build. No tuple may inherit a result from another language, theme, viewport, or scale.",
+    "requiredClippingRows": [
+      { "id": "narrow-320", "viewport": { "width": 320, "height": 720 }, "scale": 1 },
+      { "id": "scale-100", "viewport": { "width": 1280, "height": 720 }, "scale": 1 },
+      { "id": "scale-125", "viewport": { "width": 1280, "height": 720 }, "scale": 1.25 },
+      { "id": "scale-150", "viewport": { "width": 1280, "height": 720 }, "scale": 1.5 },
+      { "id": "scale-200", "viewport": { "width": 1280, "height": 720 }, "scale": 2 }
+    ]
+  },
+  "interactionRoster": [
+    { "id": "md3-canvas", "screen": "desktop.canvas", "state": "empty-project-canvas", "plannedTarget": "Canvas navigation destination", "plannedRole": "navigation", "input": "keyboard-or-pointer", "observedResult": null, "screenshot": null },
+    { "id": "md3-board", "screen": "desktop.board", "state": "project-board-with-session-cards", "plannedTarget": "Board navigation destination", "plannedRole": "navigation", "input": "keyboard-or-pointer", "observedResult": null, "screenshot": null },
+    { "id": "md3-files", "screen": "desktop.files", "state": "project-files-source-control-history", "plannedTarget": "Files navigation destination", "plannedRole": "navigation", "input": "keyboard-or-pointer", "observedResult": null, "screenshot": null },
+    { "id": "md3-settings", "screen": "desktop.settings", "state": "settings-language-section", "plannedTarget": "Language settings destination", "plannedRole": "navigation", "input": "keyboard-or-pointer", "observedResult": null, "screenshot": null },
+    { "id": "md3-overlays", "screen": "desktop.overlays", "state": "command-palette-context-menu-confirmation-notifications", "plannedTarget": "Command palette control", "plannedRole": "button", "input": "keyboard", "observedResult": null, "screenshot": null },
+    { "id": "md3-regex-builder", "screen": "desktop.regex-builder", "state": "anchored-builder-open-with-live-pattern", "plannedTarget": "Open regex builder", "plannedRole": "button", "input": "keyboard-or-pointer", "observedResult": null, "screenshot": null },
+    { "id": "md3-welcome", "screen": "desktop.welcome", "state": "first-run-empty-project", "plannedTarget": "Create project action", "plannedRole": "button", "input": "keyboard-or-pointer", "observedResult": null, "screenshot": null },
+    { "id": "md3-kids-mode", "screen": "desktop.kids-mode", "state": "kids-home-parent-gate-grown-up-screen", "plannedTarget": "Kids mode control", "plannedRole": "switch", "input": "keyboard-or-pointer", "observedResult": null, "screenshot": null },
+    { "id": "md3-tools", "screen": "desktop.tools", "state": "ollama-converter-authenticator-exports", "plannedTarget": "Tools navigation destination", "plannedRole": "navigation", "input": "keyboard-or-pointer", "observedResult": null, "screenshot": null },
+    { "id": "md3-history", "screen": "desktop.history", "state": "session-memory-local-history-changelog", "plannedTarget": "History navigation destination", "plannedRole": "navigation", "input": "keyboard-or-pointer", "observedResult": null, "screenshot": null }
+  ],
+  "designParityTuples": [
+    { "id": "md3-canvas", "referenceFile": "design/v2/MD3 Canvas.dc.html", "screen": "desktop.canvas", "state": "empty-project-canvas", "theme": "dark", "viewport": { "width": 1440, "height": 940 }, "scale": 1 },
+    { "id": "md3-board", "referenceFile": "design/v2/MD3 Board.dc.html", "screen": "desktop.board", "state": "project-board-with-session-cards", "theme": "dark", "viewport": { "width": 1440, "height": 940 }, "scale": 1 },
+    { "id": "md3-files", "referenceFile": "design/v2/MD3 Files.dc.html", "screen": "desktop.files", "state": "project-files-source-control-history", "theme": "dark", "viewport": { "width": 1440, "height": 940 }, "scale": 1 },
+    { "id": "md3-settings", "referenceFile": "design/v2/MD3 Settings.dc.html", "screen": "desktop.settings", "state": "settings-language-section", "theme": "dark", "viewport": { "width": 1440, "height": 940 }, "scale": 1 },
+    { "id": "md3-overlays", "referenceFile": "design/v2/MD3 Overlays.dc.html", "screen": "desktop.overlays", "state": "command-palette-context-menu-confirmation-notifications", "theme": "dark", "viewport": { "width": 1440, "height": 940 }, "scale": 1 },
+    { "id": "md3-regex-builder", "referenceFile": "design/v2/MD3 Regex Builder.dc.html", "screen": "desktop.regex-builder", "state": "anchored-builder-open-with-live-pattern", "theme": "dark", "viewport": { "width": 1440, "height": 940 }, "scale": 1 },
+    { "id": "md3-welcome", "referenceFile": "design/v2/MD3 Welcome.dc.html", "screen": "desktop.welcome", "state": "first-run-empty-project", "theme": "dark", "viewport": { "width": 1440, "height": 940 }, "scale": 1 },
+    { "id": "md3-kids-mode", "referenceFile": "design/v2/MD3 Kids Mode.dc.html", "screen": "desktop.kids-mode", "state": "kids-home-parent-gate-grown-up-screen", "theme": "dark", "viewport": { "width": 1440, "height": 940 }, "scale": 1 },
+    { "id": "md3-tools", "referenceFile": "design/v2/MD3 Tools.dc.html", "screen": "desktop.tools", "state": "ollama-converter-authenticator-exports", "theme": "dark", "viewport": { "width": 1440, "height": 940 }, "scale": 1 },
+    { "id": "md3-history", "referenceFile": "design/v2/MD3 History.dc.html", "screen": "desktop.history", "state": "session-memory-local-history-changelog", "theme": "dark", "viewport": { "width": 1440, "height": 940 }, "scale": 1 }
+  ],
+  "pending": {
+    "captureRunId": null,
+    "capturedAt": null,
+    "launchReceipt": null,
+    "clicks": [],
+    "clippingMatrix": [],
+    "designParityReceipts": [],
+    "privacyVerdicts": []
+  }
+}

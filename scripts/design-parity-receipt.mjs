@@ -23,6 +23,14 @@ const EXPECTED_REFERENCE_DIR = 'design/v2'
 const EXPECTED_MATERIAL_AUDIT = 'docs/features/appearance/material-3-audit.md'
 const EXPECTED_DESIGN_APP = 'design/v2-preview/main.js'
 const EXPECTED_METHOD = 'approved Lowlevel headless route against the design-reference Electron app and the real built desktop application'
+const EXPECTED_REFERENCE_LOCALE = 'en-US'
+const EXPECTED_DETERMINISTIC_POLICY = Object.freeze({
+  time: 'frozen',
+  motion: 'disabled',
+  random: 'seeded',
+  fonts: 'local-bundled',
+  network: 'blocked'
+})
 
 const EXPECTED_SCREENS = Object.freeze([
   ['md3-canvas', 'Canvas', 'design/v2/MD3 Canvas.dc.html'],
@@ -95,6 +103,16 @@ function validateTuple(row, label) {
   }
   assertion(viewport.deviceScaleFactor === 1, `${label}.viewport.deviceScaleFactor must be exactly 1`)
   assertion(row.scale === 1, `${label}.scale must be exactly 1`)
+  exact(row.locale, EXPECTED_REFERENCE_LOCALE, `${label}.locale`)
+}
+
+function validateDeterministic(value, label, expectedFixture) {
+  const deterministic = object(value, label)
+  exact(deterministic.fixture, expectedFixture, `${label}.fixture`)
+  for (const [key, expected] of Object.entries(EXPECTED_DETERMINISTIC_POLICY)) {
+    exact(deterministic[key], expected, `${label}.${key}`)
+  }
+  return deterministic
 }
 
 function validateInventoryDocument(inventory, { repoRoot = ROOT } = {}) {
@@ -106,6 +124,12 @@ function validateInventoryDocument(inventory, { repoRoot = ROOT } = {}) {
   exact(scope.designReferenceCommand, 'npm run design:v2 -- <screen>', 'design parity inventory scope.designReferenceCommand')
   exact(scope.builtApp, 'out/ desktop application', 'design parity inventory scope.builtApp')
   exact(scope.captureMethod, 'approved Lowlevel headless route', 'design parity inventory scope.captureMethod')
+  exact(scope.designReferencePreparation, 'design/v2-preview/readiness.js', 'design parity inventory scope.designReferencePreparation')
+  exact(scope.referenceLocale, EXPECTED_REFERENCE_LOCALE, 'design parity inventory scope.referenceLocale')
+  const scopePolicy = object(scope.deterministicReferencePolicy, 'design parity inventory scope.deterministicReferencePolicy')
+  for (const [key, expected] of Object.entries(EXPECTED_DETERMINISTIC_POLICY)) {
+    exact(scopePolicy[key], expected, `design parity inventory scope.deterministicReferencePolicy.${key}`)
+  }
   exact(scope.runtimeEvidenceRequired, true, 'design parity inventory scope.runtimeEvidenceRequired')
   exact(scope.expectedReferenceCount, EXPECTED_SCREENS.length, 'design parity inventory scope.expectedReferenceCount')
 
@@ -139,6 +163,9 @@ function validateInventoryDocument(inventory, { repoRoot = ROOT } = {}) {
     seenFiles.add(row.referenceFile)
     const referencePath = path.resolve(repoRoot, row.referenceFile)
     assertion(existsSync(referencePath), `${label}.referenceFile is missing: ${row.referenceFile}`)
+    const referenceSha256 = nonEmpty(row.referenceSha256, `${label}.referenceSha256`).toLowerCase()
+    assertion(SHA256.test(referenceSha256), `${label}.referenceSha256 must be 64 hexadecimal characters`)
+    exact(referenceSha256, hashFile(referencePath), `${label}.referenceSha256`)
 
     const designRoute = object(row.designReferenceRoute, `${label}.designReferenceRoute`)
     exact(designRoute.screen, expected[1], `${label}.designReferenceRoute.screen`)
@@ -149,6 +176,7 @@ function validateInventoryDocument(inventory, { repoRoot = ROOT } = {}) {
     nonEmpty(builtRoute.navigation, `${label}.builtAppRoute.navigation`)
 
     validateTuple(row, label)
+    validateDeterministic(row.deterministic, `${label}.deterministic`, row.state)
 
     const captures = object(row.rawCaptures, `${label}.rawCaptures`)
     const referenceCapture = safeRelative(captures.reference, `${label}.rawCaptures.reference`, '.png')
@@ -241,7 +269,13 @@ function validateDesignParityReceiptManifest(manifest, inventory, { repoRoot = R
     validateVerifiedArtifact(artifacts.built, row.rawCaptures.built, `${label}.artifacts.built`, repoRoot)
     validateVerifiedArtifact(artifacts.comparison, row.labelledComparison, `${label}.artifacts.comparison`, repoRoot)
     validateVerifiedArtifact(artifacts.visualDiff, row.visualDiffEvidence, `${label}.artifacts.visualDiff`, repoRoot)
-    exact(artifacts.tuple, JSON.stringify({ state: row.state, theme: row.theme, viewport: row.viewport, scale: row.scale }), `${label}.artifacts.tuple`)
+    exact(
+      artifacts.tuple,
+      JSON.stringify({ state: row.state, theme: row.theme, viewport: row.viewport, scale: row.scale, locale: row.locale }),
+      `${label}.artifacts.tuple`
+    )
+    exact(receipt.referenceSha256, row.referenceSha256, `${label}.referenceSha256`)
+    exact(JSON.stringify(receipt.deterministic), JSON.stringify(row.deterministic), `${label}.deterministic`)
   }
 
   exact(seen.size, EXPECTED_SCREENS.length, 'design parity receipt ids')
@@ -283,6 +317,9 @@ export function runDesignParitySelfTest() {
     ['design reference route', (copy) => { delete copy.screens[0].designReferenceRoute.command }],
     ['built app route', (copy) => { delete copy.screens[0].builtAppRoute.id }],
     ['deterministic state', (copy) => { delete copy.screens[0].state }],
+    ['reference content hash', (copy) => { delete copy.screens[0].referenceSha256 }],
+    ['reference locale', (copy) => { delete copy.screens[0].locale }],
+    ['deterministic fixture policy', (copy) => { delete copy.screens[0].deterministic.motion }],
     ['theme tuple', (copy) => { delete copy.screens[0].theme }],
     ['viewport tuple', (copy) => { delete copy.screens[0].viewport.width }],
     ['scale tuple', (copy) => { delete copy.screens[0].scale }],

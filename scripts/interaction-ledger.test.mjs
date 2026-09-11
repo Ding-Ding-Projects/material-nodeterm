@@ -11,13 +11,18 @@ import {
   CHEAP_HEADLESS_TOOL,
   InteractionLedgerRefusal,
   REQUIRED_CLIPPING_IDS,
+  REQUIRED_LANGUAGE_MODES,
+  REQUIRED_PLAN_VIEWPORTS,
+  REQUIRED_THEMES,
   createCheapHeadlessLaunchReceipt,
   promoteInteractionLedger,
+  validateInteractionLedgerPlan,
   validateInteractionLedger
 } from './interaction-ledger.mjs'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const REAL_COMMIT = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8' }).trim()
+const PLAN_FILE = path.join(REPO_ROOT, 'docs', 'assets', 'shots', 'interaction-ledger.json')
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
@@ -185,6 +190,34 @@ describe('interaction ledger validation', () => {
     const ledger = makeLedger()
     mutate(ledger)
     expect(() => validate(ledger)).toThrow(expected)
+  })
+})
+
+describe('pending interaction capture plan', () => {
+  function plan() {
+    return JSON.parse(fs.readFileSync(PLAN_FILE, 'utf8'))
+  }
+
+  it('locks every required language, theme, viewport, scale, clipping, and design-parity tuple without claiming evidence', () => {
+    const result = validateInteractionLedgerPlan(plan())
+    expect(result).toEqual({ tupleCount: 108, interactions: 10, designParityTuples: 10 })
+    expect(plan().coverage.languageModes).toEqual([...REQUIRED_LANGUAGE_MODES])
+    expect(plan().coverage.themes).toEqual([...REQUIRED_THEMES])
+    expect(plan().coverage.viewports).toEqual([...REQUIRED_PLAN_VIEWPORTS])
+  })
+
+  it.each([
+    ['a fake capture claim', (copy) => { copy.truthfulness.capturesRecorded = true }],
+    ['a missing language', (copy) => { copy.coverage.languageModes.pop() }],
+    ['a missing scale', (copy) => { copy.coverage.displayScales.pop() }],
+    ['a missing clipping tuple', (copy) => { copy.coverage.requiredClippingRows.pop() }],
+    ['an invented screenshot', (copy) => { copy.interactionRoster[0].screenshot = 'invented.png' }],
+    ['a missing design tuple', (copy) => { copy.designParityTuples.pop() }],
+    ['a pending run claim', (copy) => { copy.pending.captureRunId = 'not-a-real-run' }]
+  ])('mutation-proves refusal for %s', (_label, mutate) => {
+    const copy = plan()
+    mutate(copy)
+    expect(() => validateInteractionLedgerPlan(copy)).toThrow(InteractionLedgerRefusal)
   })
 })
 

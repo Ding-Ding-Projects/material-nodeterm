@@ -28,6 +28,13 @@ export const REQUIRED_CLIPPING_IDS = Object.freeze([
   'scale-150',
   'scale-200'
 ])
+export const REQUIRED_LANGUAGE_MODES = Object.freeze(['english', 'cantonese', 'bilingual'])
+export const REQUIRED_THEMES = Object.freeze(['light', 'dark', 'high-contrast'])
+export const REQUIRED_PLAN_VIEWPORTS = Object.freeze([
+  { id: 'narrow-320', width: 320, height: 720 },
+  { id: 'desktop-1280', width: 1280, height: 720 },
+  { id: 'parity-1440', width: 1440, height: 940 }
+])
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 const FULL_SHA = /^[0-9a-f]{40}$/u
 const SHA256 = /^[0-9a-f]{64}$/u
@@ -257,6 +264,106 @@ function validateCheapRoute(value) {
     source: 'built-artifact',
     window: 'named-headless-desktop'
   }
+}
+
+function exactArray(value, expected, label) {
+  if (!Array.isArray(value) || JSON.stringify(value) !== JSON.stringify(expected)) {
+    refuse(`${label} must be exactly ${JSON.stringify(expected)}`)
+  }
+  return value
+}
+
+function planObject(value, label) {
+  return object(value, label)
+}
+
+/**
+ * Validate the checked-in pending capture plan. It is intentionally separate from a verified
+ * interaction ledger: no runtime claim can become valid merely because a future capture roster
+ * was authored. The plan locks the complete tuple and screen set before a build exists.
+ */
+export function validateInteractionLedgerPlan(plan, options = {}) {
+  const value = planObject(plan, 'interaction ledger capture plan')
+  if (value.schemaVersion !== SCHEMA_VERSION) refuse('interaction ledger capture plan schemaVersion must be 1')
+  if (value.status !== 'pending-provenance') refuse('interaction ledger capture plan must remain pending-provenance')
+  if (value.kind !== 'interaction-ledger-capture-plan') refuse('interaction ledger capture plan kind is invalid')
+  const truthfulness = planObject(value.truthfulness, 'interaction ledger capture plan truthfulness')
+  if (truthfulness.capturesRecorded !== false || truthfulness.captureReceiptsRecorded !== false) {
+    refuse('pending interaction ledger capture plan must not claim captures or receipts')
+  }
+  for (const field of ['sourceCommit', 'executableSha256', 'setupSha256']) {
+    if (truthfulness[field] !== null) refuse(`pending interaction ledger capture plan truthfulness.${field} must be null`)
+  }
+  text(truthfulness.reason, 'interaction ledger capture plan truthfulness.reason')
+  exactJson(validateCheapRoute(value.requiredCaptureRoute), {
+    route: CHEAP_HEADLESS_ROUTE,
+    tool: CHEAP_HEADLESS_TOOL,
+    source: 'built-artifact',
+    window: 'named-headless-desktop'
+  }, 'interaction ledger capture plan requiredCaptureRoute')
+
+  const coverage = planObject(value.coverage, 'interaction ledger capture plan coverage')
+  exactArray(coverage.languageModes, REQUIRED_LANGUAGE_MODES, 'interaction ledger capture plan coverage.languageModes')
+  exactArray(coverage.themes, REQUIRED_THEMES, 'interaction ledger capture plan coverage.themes')
+  exactArray(coverage.viewports, REQUIRED_PLAN_VIEWPORTS, 'interaction ledger capture plan coverage.viewports')
+  exactArray(coverage.displayScales, REQUIRED_SCALES, 'interaction ledger capture plan coverage.displayScales')
+  const tupleCount = REQUIRED_LANGUAGE_MODES.length * REQUIRED_THEMES.length * REQUIRED_PLAN_VIEWPORTS.length * REQUIRED_SCALES.length
+  if (coverage.requiredCartesianTupleCount !== tupleCount) {
+    refuse(`interaction ledger capture plan coverage.requiredCartesianTupleCount must be ${tupleCount}`)
+  }
+  text(coverage.tupleRule, 'interaction ledger capture plan coverage.tupleRule')
+  const expectedClipping = [
+    { id: 'narrow-320', viewport: { width: 320, height: 720 }, scale: 1 },
+    { id: 'scale-100', viewport: { width: 1280, height: 720 }, scale: 1 },
+    { id: 'scale-125', viewport: { width: 1280, height: 720 }, scale: 1.25 },
+    { id: 'scale-150', viewport: { width: 1280, height: 720 }, scale: 1.5 },
+    { id: 'scale-200', viewport: { width: 1280, height: 720 }, scale: 2 }
+  ]
+  exactArray(coverage.requiredClippingRows, expectedClipping, 'interaction ledger capture plan coverage.requiredClippingRows')
+
+  const roster = value.interactionRoster
+  if (!Array.isArray(roster) || roster.length !== 10) refuse('interaction ledger capture plan interactionRoster must contain exactly ten planned interactions')
+  const rosterIds = new Set()
+  for (const entry of roster) {
+    const row = planObject(entry, 'interaction ledger capture plan interactionRoster entry')
+    const rowId = id(row.id, 'interaction ledger capture plan interactionRoster entry.id')
+    if (rosterIds.has(rowId)) refuse(`interaction ledger capture plan duplicate interaction ${rowId}`)
+    rosterIds.add(rowId)
+    for (const field of ['screen', 'state', 'plannedTarget', 'plannedRole', 'input']) text(row[field], `interaction ledger capture plan ${rowId}.${field}`)
+    if (row.observedResult !== null || row.screenshot !== null) refuse(`pending interaction ledger capture plan ${rowId} must not claim an observation or screenshot`)
+  }
+
+  const parity = value.designParityTuples
+  if (!Array.isArray(parity) || parity.length !== 10) refuse('interaction ledger capture plan designParityTuples must contain exactly ten rows')
+  const inventoryPath = options.designParityInventoryPath ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'design', 'v2', 'design-parity-inventory.json')
+  let inventory
+  try {
+    inventory = JSON.parse(fs.readFileSync(inventoryPath, 'utf8'))
+  } catch (error) {
+    refuse(`interaction ledger capture plan cannot read design parity inventory: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  if (!Array.isArray(inventory.screens) || inventory.screens.length !== 10) refuse('interaction ledger capture plan design parity inventory is incomplete')
+  const inventoryById = new Map(inventory.screens.map((row) => [row.id, row]))
+  const parityIds = new Set()
+  for (const raw of parity) {
+    const row = planObject(raw, 'interaction ledger capture plan designParityTuples entry')
+    const rowId = id(row.id, 'interaction ledger capture plan designParityTuples entry.id')
+    if (parityIds.has(rowId)) refuse(`interaction ledger capture plan duplicate design parity tuple ${rowId}`)
+    parityIds.add(rowId)
+    const source = inventoryById.get(rowId)
+    if (!source) refuse(`interaction ledger capture plan has unlisted design parity tuple ${rowId}`)
+    exactJson(
+      { referenceFile: row.referenceFile, screen: row.screen, state: row.state, theme: row.theme, viewport: row.viewport, scale: row.scale },
+      { referenceFile: source.referenceFile, screen: source.builtAppRoute?.id, state: source.state, theme: source.theme, viewport: { width: source.viewport?.width, height: source.viewport?.height }, scale: source.scale },
+      `interaction ledger capture plan design parity tuple ${rowId}`
+    )
+  }
+  for (const expectedId of inventoryById.keys()) if (!parityIds.has(expectedId)) refuse(`interaction ledger capture plan is missing design parity tuple ${expectedId}`)
+
+  const pending = planObject(value.pending, 'interaction ledger capture plan pending')
+  for (const field of ['captureRunId', 'capturedAt', 'launchReceipt']) if (pending[field] !== null) refuse(`pending interaction ledger capture plan pending.${field} must be null`)
+  for (const field of ['clicks', 'clippingMatrix', 'designParityReceipts', 'privacyVerdicts']) exactArray(pending[field], [], `pending interaction ledger capture plan pending.${field}`)
+  return { tupleCount, interactions: rosterIds.size, designParityTuples: parityIds.size }
 }
 
 /** Validate the receipt returned by the cheap headless launch wrapper. */
@@ -494,6 +601,7 @@ async function main(argv) {
     allowPositionals: true,
     options: {
       evidence: { type: 'string' },
+      plan: { type: 'string' },
       out: { type: 'string' },
       'shots-dir': { type: 'string' },
       repo: { type: 'string' },
@@ -506,8 +614,14 @@ async function main(argv) {
     }
   })
   const command = positionals[0]
+  if (command === 'plan') {
+    if (!values.plan) throw new Error('usage: interaction-ledger.mjs plan --plan <pending-plan.json>')
+    const result = validateInteractionLedgerPlan(JSON.parse(fs.readFileSync(path.resolve(values.plan), 'utf8')))
+    process.stdout.write(`interaction ledger plan: ${result.tupleCount} required tuple(s), ${result.interactions} planned interaction(s), ${result.designParityTuples} design parity tuple(s)\n`)
+    return
+  }
   if (!command || !['validate', 'promote'].includes(command) || !values.evidence || !values.repo || !values.commit || !values.executable) {
-    throw new Error('usage: interaction-ledger.mjs validate|promote --evidence <ledger.json> --repo <root> --commit <sha> --executable <path> [--executable-sha256 <sha>] [--setup <path>] [--installed] [--out <manifest>] [--shots-dir <dir>] [--dry-run]')
+    throw new Error('usage: interaction-ledger.mjs plan --plan <pending-plan.json> | validate|promote --evidence <ledger.json> --repo <root> --commit <sha> --executable <path> [--executable-sha256 <sha>] [--setup <path>] [--installed] [--out <manifest>] [--shots-dir <dir>] [--dry-run]')
   }
   const executableSha256 = values['executable-sha256'] ?? sha256File(path.resolve(values.executable))
   const result = command === 'validate'
