@@ -23,3 +23,20 @@ export function useLocalizedVocabularyText(): (
     [ts]
   )
 }
+
+/**
+ * Resolve authored, localized copy for a durable record that will cross the personal-vocabulary
+ * boundary only when it is rendered. Storing mapped display copy would make a later vocabulary
+ * change impossible to apply correctly and risks mapping it twice in a toast or history view.
+ */
+export function useLocalizedCopy(): (
+  id: string,
+  fallback: string,
+  params?: Record<string, string>
+) => string {
+  const { tsUnmapped } = useI18n()
+  return useCallback(
+    (id: string, fallback: string, params?: Record<string, string>): string => tsUnmapped(id, fallback, params),
+    [tsUnmapped]
+  )
+}

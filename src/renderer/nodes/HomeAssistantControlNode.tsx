@@ -6,7 +6,7 @@ import type { CanvasNode } from '../state/workspace'
 import { useSession } from '../session/session'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
-import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { useLocalizedCopy, useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 import { notify } from '../lib/adhdNotify'
 import { MaterialSymbol } from '../components/MaterialSymbol'
 import { Button, Checkbox, Slider, TextArea } from '@renderer/ui/md3'
@@ -50,6 +50,7 @@ function coerceSchemaValues(service: HomeAssistantServiceSchema | undefined, val
 export default function HomeAssistantControlNode({ id, data, selected }: NodeProps<CanvasNode>): React.JSX.Element {
   const { api } = useSession()
   const text = useLocalizedVocabularyText()
+  const notificationCopy = useLocalizedCopy()
   const { updateNodeData } = useReactFlow()
   const config = validateHomeAssistantControlConfig(data.homeAssistantControlConfig ?? DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG)
   const [connections, setConnections] = useState<HomeAssistantConnectionSummary[]>([])
@@ -88,12 +89,24 @@ export default function HomeAssistantControlNode({ id, data, selected }: NodePro
       setEntities(nextEntities)
       setServices(nextServices)
       setMessage(text('homeAssistantControl.status.discovered', '{entities} entities and {services} services loaded from the bound instance.', { entities: String(nextEntities.length), services: String(nextServices.length) }))
-      notify({ kind: 'success', title: text('homeAssistantControl.notification.discoveryComplete', 'Home Assistant discovery complete'), body: text('homeAssistantControl.notification.discoveryAvailable', '{entities} entities and {services} services are available.', { entities: String(nextEntities.length), services: String(nextServices.length) }) })
+      notify({
+        kind: 'success',
+        title: notificationCopy('homeAssistantControl.notification.discoveryComplete', 'Home Assistant discovery complete'),
+        titleKind: 'authored',
+        body: notificationCopy('homeAssistantControl.notification.discoveryAvailable', '{entities} entities and {services} services are available.', { entities: String(nextEntities.length), services: String(nextServices.length) }),
+        bodyKind: 'authored'
+      })
     } catch (error) {
-      const reason = error instanceof Error ? error.message : text('homeAssistantControl.status.connectionNoAnswer', 'the local connection did not answer')
+      const reason = error instanceof Error ? error.message : notificationCopy('homeAssistantControl.status.connectionNoAnswer', 'the local connection did not answer')
       const failure = text('homeAssistantControl.status.discoveryIncomplete', 'Discovery did not complete: {reason}. Retry or rebind.', { reason })
       setMessage(failure)
-      notify({ kind: 'error', title: text('homeAssistantControl.notification.discoveryIncomplete', 'Home Assistant discovery did not complete'), body: text('homeAssistantControl.notification.discoveryRetry', '{reason}. Retry or rebind.', { reason }) })
+      notify({
+        kind: 'error',
+        title: notificationCopy('homeAssistantControl.notification.discoveryIncomplete', 'Home Assistant discovery did not complete'),
+        titleKind: 'authored',
+        body: notificationCopy('homeAssistantControl.notification.discoveryRetry', '{reason}. Retry or rebind.', { reason }),
+        bodyKind: 'authored'
+      })
     } finally { setBusy(false) }
   }, [api.homeAssistantControl, id, text])
 
@@ -114,9 +127,15 @@ export default function HomeAssistantControlNode({ id, data, selected }: NodePro
     try {
       const result = await api.homeAssistantControl.call({ nodeId: id, domain, service, entityId: selectedEntity.entityId, data: coerceSchemaValues(services.find((candidate) => candidate.domain === domain && candidate.service === service), values) })
       setMessage(result.message)
-      notify({ kind: 'success', title: text('homeAssistantControl.notification.actionConfirmed', 'Home Assistant action confirmed'), body: result.message })
+      notify({
+        kind: 'success',
+        title: notificationCopy('homeAssistantControl.notification.actionConfirmed', 'Home Assistant action confirmed'),
+        titleKind: 'authored',
+        body: result.message,
+        bodyKind: 'fact'
+      })
       await discover()
-    } catch (error) { const reason = error instanceof Error ? error.message : text('homeAssistantControl.status.instanceNoAnswer', 'the instance did not answer'); setMessage(text('homeAssistantControl.status.actionNotConfirmed', 'Action was not confirmed: {reason}.', { reason })); notify({ kind: 'error', title: text('homeAssistantControl.notification.actionNotConfirmed', 'Home Assistant action was not confirmed'), body: reason }) }
+    } catch (error) { const reason = error instanceof Error ? error.message : notificationCopy('homeAssistantControl.status.instanceNoAnswer', 'the instance did not answer'); setMessage(text('homeAssistantControl.status.actionNotConfirmed', 'Action was not confirmed: {reason}.', { reason })); notify({ kind: 'error', title: notificationCopy('homeAssistantControl.notification.actionNotConfirmed', 'Home Assistant action was not confirmed'), titleKind: 'authored', body: reason, bodyKind: 'fact' }) }
     finally { setBusy(false) }
   }
 

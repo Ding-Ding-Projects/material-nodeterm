@@ -99,7 +99,8 @@ beforeEach(() => {
     entries: {
       'Home Assistant control': 'House controls',
       'Search connections': 'Find local links',
-      'Turn on': 'Wake up'
+      'Turn on': 'Wake up',
+      'Home Assistant discovery complete': 'MAPPED DISCOVERY TITLE'
     },
     status: 'loaded',
     entryCount: 3,
@@ -151,6 +152,74 @@ describe('HomeAssistantControlNode vocabulary boundary', () => {
 
     expect(node.textContent).toContain('Provider says Kitchen hub is offline')
     expect(node.textContent).toContain('Find local links')
+  })
+
+  it('stores localized notification copy unmapped with explicit ownership while preserving provider facts', async () => {
+    const node = render()
+    await settle()
+
+    const discover = [...node.querySelectorAll('button')].find((button) => button.textContent === 'Discover or retry')
+    expect(discover).toBeTruthy()
+    await act(async () => {
+      discover?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(fixtures.notify).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'success',
+      title: 'Home Assistant discovery complete',
+      titleKind: 'authored',
+      body: '1 entities and 1 services are available.',
+      bodyKind: 'authored'
+    }))
+
+    const turnOn = [...node.querySelectorAll('button')].find((button) => button.textContent === 'Wake up')
+    expect(turnOn).toBeTruthy()
+    await act(async () => {
+      turnOn?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(fixtures.notify).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'success',
+      title: 'Home Assistant action confirmed',
+      titleKind: 'authored',
+      body: 'Provider result: light.kitchen on',
+      bodyKind: 'fact'
+    }))
+    expect(fixtures.notify.mock.calls.flat().some((value) => value === 'MAPPED DISCOVERY TITLE')).toBe(false)
+  })
+
+  it('marks a provider action failure as a literal notification fact', async () => {
+    vi.mocked(fixtures.api.call).mockRejectedValueOnce(new Error('Provider operation declined: light.kitchen'))
+    const node = render()
+    await settle()
+
+    const discover = [...node.querySelectorAll('button')].find((button) => button.textContent === 'Discover or retry')
+    expect(discover).toBeTruthy()
+    await act(async () => {
+      discover?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const turnOn = [...node.querySelectorAll('button')].find((button) => button.textContent === 'Wake up')
+    expect(turnOn).toBeTruthy()
+    await act(async () => {
+      turnOn?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(fixtures.notify).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'error',
+      title: 'Home Assistant action was not confirmed',
+      titleKind: 'authored',
+      body: 'Provider operation declined: light.kitchen',
+      bodyKind: 'fact'
+    }))
   })
 
   it('restores shipped authored copy under School mode without rewriting provider facts', async () => {
