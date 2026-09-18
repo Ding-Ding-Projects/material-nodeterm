@@ -8,8 +8,11 @@
 - [x] **2026-09-18 integration:** merged `codex/product-contracts-b290` into `main` with both parents preserved in
   `2af13cc7b5ab4c9144412edf25fac0561f5eab60`; the index is clean, `git diff --check` is clean, and no source conflict
   markers remain. License separator lines are intentional.
-- [ ] **2026-09-18 external closeout:** main dew, archive verification, and safe linked-checkout removal remain pending
-  until the final closeout pass records exact evidence.
+- [x] **2026-09-18 external closeout:** main dew, archive verification, and safe linked-checkout removal are complete;
+  final evidence is recorded below and in `HANDOFF.md`.
+- [x] **2026-09-18 final closeout:** verified the external 7z archive before deletion, removed the two clean integrated
+  linked checkouts and their local and remote jers, verified `origin/main` at `b79c172d58d94f1adf01eee19f98c893ae789b46`,
+  and retained the ownership-uncertain `codex/runtime-packaging-powershell-20260907` jer.
 
 - [x] Preserve offline preview source and repair its jsdom 30 fixtures, with 23 focused tests passing.
 - [x] Preserve gallery lifecycle source and reconcile both transport histories without rewriting either.

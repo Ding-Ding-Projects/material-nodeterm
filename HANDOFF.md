@@ -5483,3 +5483,23 @@ The older local `codex/runtime-packaging-powershell-20260907` jer points at
 `4b267fb4a20e9c1d05affc3eb98d25f3e9bd9f04`, which is already an ancestor of `main`, but it is not a linked checkout and
 ownership is not established by this task. It is therefore retained and documented. The two linked checkouts are kept
 until the required external archive, main dew, ref verification, and ownership proof are complete.
+
+# 2026-09-18, final cleanup evidence
+
+The external archive was verified before removal at
+`C:\Users\cntow\OneDrive\OakKayBackups\material-nodeterm\zips\material-nodeterm-20260918T172751Z.7z`.
+It is a valid 7z archive of 346,629,318 bytes containing 12,475 files, 258 folders, and 12,734 listed paths;
+7-Zip reported `Everything is Ok`. It contains the Git administrative directory, the primary checkout, and both
+linked checkout inventories.
+
+After the archive and ancestry proofs, the linked checkouts at
+`C:\Users\cntow\.codex\worktrees\8503\material-nodeterm` and
+`C:\Users\cntow\.codex\worktrees\b290\material-nodeterm` were removed. Their jers
+`codex/evidence-parity` and `codex/product-contracts-b290` were deleted locally and from the hui. Direct
+`git ls-remote origin` verification now returns `b79c172d58d94f1adf01eee19f98c893ae789b46 refs/heads/main` and no
+matching ref for either removed jer. The remote deletion command printed a ref-lock warning after a partial deletion,
+but the final direct ref query is clear.
+
+The local `codex/runtime-packaging-powershell-20260907` jer remains because it is not a linked checkout and ownership
+is uncertain. Its tip `4b267fb4a20e9c1d05affc3eb98d25f3e9bd9f04` is an ancestor of dewed `main`, and it has no uncommitted
+files. No Lap Sap Tongs were present. The final primary checkout has one Gerk Tong Hui, `main`, and a 🧹 status.
