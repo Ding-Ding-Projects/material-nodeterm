@@ -5458,3 +5458,28 @@ consumer, fact reason, School/cache policy, documentation row, focused tests, an
 state where implementation work remains. Native notification documentation now permits only the
 already-rendered typed payload and control metadata across IPC while prohibiting vocabulary JSON,
 entries, cache envelopes, paths, credentials, exports, and history payloads.
+
+# 2026-09-18, repository closeout preservation and integration
+
+This closeout was limited to the primary checkout at `C:\Users\cntow\Documents\GitHub\material-nodeterm` and its two linked
+checkouts under `C:\Users\cntow\.codex\worktrees`. The fetch completed from both `origin` and `upstream` before any
+write. The primary checkout carried `.gitignore` and `opencode.json`; both were preserved in
+`8e379bc3647f6e30ffec369307b96fe05576831e`. The commit author and committer are `Claude Fable 5.1
+<noreply@anthropic.com>` and the required co-author trailer is present. Its body contains literal `\\n` text because
+PowerShell quoting was incorrect; history was not rewritten or force-pushed.
+
+`codex/evidence-parity` was already represented by the existing local merge parent and its linked checkout was clean
+at `05efa5f266356adbe95389e127ce28ce37a5d231`, matching `origin/codex/evidence-parity`. The clean linked checkout
+`codex/product-contracts-b290` was merged with both parents preserved in
+`2af13cc7b5ab4c9144412edf25fac0561f5eab60`, whose parents are
+`8e379bc3647f6e30ffec369307b96fe05576831e` and `7994dea49eca1fb60c00bf1e7b176b1c17628579`.
+
+The merge had no unmerged index entries. `git diff --check` was clean. A repository scan found no conflict markers in
+the merged source; the remaining `=======` lines are ordinary separators in the two tracked libevent license files.
+No non-obvious conflict choice was required. No tests, builds, packaging, release work, or unrelated Oak Kay paths were
+run or changed during this closeout.
+
+The older local `codex/runtime-packaging-powershell-20260907` jer points at
+`4b267fb4a20e9c1d05affc3eb98d25f3e9bd9f04`, which is already an ancestor of `main`, but it is not a linked checkout and
+ownership is not established by this task. It is therefore retained and documented. The two linked checkouts are kept
+until the required external archive, main dew, ref verification, and ownership proof are complete.

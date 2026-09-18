@@ -2,6 +2,15 @@
 
 ## Preservation and integration (2026-09-07)
 
+- [x] **2026-09-18 closeout preservation:** fetched `origin` and `upstream`, preserved primary checkout lat tat in
+  `8e379bc3647f6e30ffec369307b96fe05576831e`, and recorded the literal `\\n` commit-message formatting poke guy in
+  `HANDOFF.md` without rewriting history.
+- [x] **2026-09-18 integration:** merged `codex/product-contracts-b290` into `main` with both parents preserved in
+  `2af13cc7b5ab4c9144412edf25fac0561f5eab60`; the index is clean, `git diff --check` is clean, and no source conflict
+  markers remain. License separator lines are intentional.
+- [ ] **2026-09-18 external closeout:** main dew, archive verification, and safe linked-checkout removal remain pending
+  until the final closeout pass records exact evidence.
+
 - [x] Preserve offline preview source and repair its jsdom 30 fixtures, with 23 focused tests passing.
 - [x] Preserve gallery lifecycle source and reconcile both transport histories without rewriting either.
 - [x] Verify the gallery lifecycle tooling with all 13 focused tests passing, including real process teardown.
