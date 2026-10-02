@@ -1,10 +1,8 @@
 name: Deploy Pages site
 
-# Publishes site/ to GitHub Pages. This is a pure static-file deploy: no build step, no
-# bundler, no npm dependency — the workflow uploads site/ exactly as it is committed. Per
-# this project's CI policy, workflows run NO tests and NO lint and nothing gates a release;
-# that applies here too, so this workflow has exactly three steps: configure Pages, upload
-# the artifact, deploy it.
+# Publishes site/ to GitHub Pages. This is a pure static-file deploy: no bundler or npm
+# dependency. The focused metadata contract below updates and verifies the HTML artifact;
+# desktop application tests and lint are not part of this Pages workflow.
 #
 # IMPORTANT — this repository is a fork. Upstream owns the custom domain, and a custom
 # domain verifies to exactly one repository, so this fork publishes at the GitHub Pages
@@ -39,6 +37,15 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+
+      - name: Apply search-index exclusions to published HTML
+        run: node scripts/apply-pages-noindex.mjs site
+
+      - name: Verify search-index exclusion behavior and final site
+        run: |
+          node scripts/test-pages-noindex.mjs
+          python3 scripts/verify_pages_noindex.py --self-test
+          python3 scripts/verify_pages_noindex.py site
 
       - name: Upload site/ as the Pages artifact
         uses: actions/upload-pages-artifact@v3
