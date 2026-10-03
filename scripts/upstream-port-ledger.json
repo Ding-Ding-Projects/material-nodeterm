@@ -946,7 +946,7 @@
     "src/renderer/lib/directionalFocus.ts": "215857e2b58a8de38acda45befbbb913770481e3",
     "src/renderer/lib/download.test.ts": "215857e2b58a8de38acda45befbbb913770481e3",
     "src/renderer/lib/download.ts": "215857e2b58a8de38acda45befbbb913770481e3",
-    "src/renderer/lib/explorerCreate.test.ts": "215857e2b58a8de38acda45befbbb913770481e3",
+    "src/renderer/lib/explorerCreate.test.ts": "fb7a3696ae4d99b318e733dbfeb1888e413e2cb9",
     "src/renderer/lib/explorerCreate.ts": "215857e2b58a8de38acda45befbbb913770481e3",
     "src/renderer/lib/explorerPin.test.ts": "215857e2b58a8de38acda45befbbb913770481e3",
     "src/renderer/lib/explorerPin.ts": "215857e2b58a8de38acda45befbbb913770481e3",
