@@ -11,10 +11,14 @@ and `scripts/upstream-port-ledger.json`, and each tranche records its waypoint a
 commit; see
 [docs/features/development/upstream-sync.md](docs/features/development/upstream-sync.md).
 
-- [ ] **Tranche 0:** pin refresh, port tool, ledger, focused test, `check:upstream-port` in the
-  build chain, baseline typecheck and test counts, docs, changelog, handoff. (In progress on
-  `port/upstream-v0.4.1-foundation`; state is recorded on issue #225.)
-- [ ] **Tranche 1:** upstream security and safety fixes cherry-picked per commit.
+- [x] **Tranche 0:** pin refresh, port tool, ledger, focused test, `check:upstream-port` in the
+  build chain, baseline typecheck and test counts, docs, changelog, handoff. (Landed on `main` as
+  `21b5799b` and `69b4db92e`; state is recorded on issue #225.)
+- [ ] **Tranche 1:** upstream security and safety fixes cherry-picked per commit. (Landed on
+  `main` as `faa6a90b9` and `8ad74dd47`: 6 upstream fixes ported, 13 examined and skipped with the
+  reason recorded on issue #225, 4 follow-up chains listed in
+  `docs/features/development/upstream-sync.md`. Source-verified only: the node-icon picker's new
+  refusal message owes a built-app capture, tracked with issue #222.)
 - [ ] **Tranche 2:** watch-link live links, github, usage, native SSH transport, each through the
   Material 3 adaptation checklist.
 - [ ] **Tranche 3:** windows/session-host/updater, terminal/pty.

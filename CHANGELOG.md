@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Port the first upstream security tranche (issue #225, upstream `1bf6fadb`, `60714074`, `fee5b244`,
+  `23a7282b`, `9fa879d0`, `2d3e54cb`): a plain terminal keeps its inherited provider credentials in
+  subscription mode (both strip sites in this fork); a Linux desktop with no keyring stores the
+  node-auth secret raw at mode 0600 and names the instance-level cause in verified-only refusals;
+  the node-icon picker accepts Windows absolute paths, refuses UNC paths and colon segments, closes
+  the backslash traversal out of the project folder and checks the extension before copying; the
+  builtin-agent binary lookup is own-property only and skips malformed custom-agent records; a
+  worktree location that came from the git-shared settings file must stay beside or inside the
+  repository and never resolve into `.git` or a hidden folder under the home directory (dialog,
+  open-worktree verb and `GitService.worktreeAdd` all refuse it); `applyLocalNodeExec` no longer
+  mutates the parsed node and `clonePendingLaunch` keeps the setup gate. Thirteen upstream fixes
+  were examined and skipped because the feature they guard is absent here; their prerequisite chains
+  are listed in `docs/features/development/upstream-sync.md`.
+
 - Refresh the canonical upstream submodule pin to `9d5572e2984d5a3c8a68ac7883755221838ebccc`
   (upstream `v0.4.1-12`) and add `scripts/port-upstream.mjs` with the per-path port ledger
   `scripts/upstream-port-ledger.json`, its focused test, and the `check:upstream-port` build guard.

@@ -1,5 +1,23 @@
 # Handoff
 
+## 2026-10-03, upstream v0.4.1 port, tranche 1 (issue #225)
+
+The security tranche is on `main` at `8ad74dd47` (lanes 1 and 2 merged as `faa6a90b9`, lane 3 as
+`8ad74dd47`), pushed and read back from the remote. Six upstream fixes were ported through
+`scripts/port-upstream.mjs apply --commit` as per-file three-way merges, thirteen were examined and
+skipped with the reason recorded on issue #225, and four prerequisite chains are listed in
+`docs/features/development/upstream-sync.md` as follow-up lanes. Each ported commit names the
+upstream commit, the conflicts and how they were resolved; the ledger advanced only for paths with
+no other unabsorbed upstream commit. Verification on the merged tree under Node 24.19.0:
+`npm run typecheck` 0 errors; `port-upstream check`, `check-md3-controls`, `check-changelog`,
+`check-docs-bundle` green; `check-canonical-upstream` verified at `9d5572e2`; `check-app-contract`
+unchanged at its one known design-reference parity failure; focused vitest over the ported files,
+their neighbours, `src/shared` and the workspace store: 170 files, 2,434 tests green. Two
+`agent-message.realtty` cases failed once under a parallel batch and passed on isolated reruns and
+on the pre-merge tree. Not run: the full vitest suite on the merged tree, built-app interaction,
+packaged Windows captures. Tranche 2 (watch-link, github, usage, native SSH transport) is next,
+one lane per family on `port/upstream-t2-*` branches.
+
 ## 2026-10-03, upstream v0.4.1 port, tranche 0 (issue #225)
 
 The canonical upstream pin moved from `abb351bfd98a2ced036cb8768c67cf832a7611f6` (2026-08-29) to

@@ -98,6 +98,27 @@ fork's Material 3 primitives and tokens, gets a row in the Material 3 audit, a f
 changelog entry and localized copy. Fork-only features are preserved by three-way merging, never
 replaced.
 
+### Tranche 1 record (2026-10-03)
+
+Landed on `main` as `faa6a90b9` (lanes 1 and 2) and `8ad74dd47` (lane 3). Ported: upstream
+`1bf6fadb`, `60714074`, `fee5b244`, `23a7282b`, `9fa879d0` and the applicable part of `2d3e54cb`.
+Examined and skipped because the feature they guard does not exist in this fork: `498a79b3`
+(closed-session history), `8dadacdf` (gemini long-header fallback; the fork already reads one
+descriptor), `92a31309` (pending structured answers), `7f6beebb` (`adoptFolder`), `c4124767` (chat
+tool-body view), `1546a087` / `3cae489a` / `e8e7bc80` (on-disk alert sounds; the fork keeps them
+as data URLs in settings). Skipped because they are follow-ups to upstream chains not yet absorbed,
+to be ported as their own lanes in this order:
+
+- markdown navigation guard: `46a13215` → `da1a207d` → `e514b595`
+- hook-endpoint failover and owner token: `bd895ba1` → `bbb3a291` → `8b0009ec` → `9fad4769` → `ba1d8731`
+- hook settings-file preservation and guarded SSH symlink updates: `54fc5ca2` → `8cc40414` → `9f4e3410` → `b0d00189`
+- Windows cmd shim argv/stdin and PATHEXT: `0c3268d3` → `4718d5d9` → `34e4826d` → `fafb9b79`
+  (the grok-cli pieces also need `877d1e5e`, `80f2181d`, `3753f10a`, `cfd26d01`)
+
+A separate fork gap found while porting: `armForColdOpen` into a background project still emits
+the legacy launch shape that the typed `pendingLaunch` boundary rejects, so cold-open arming is
+not functional there.
+
 Deliberate exclusions, recorded in the ledger's `declined` map as they are reached: the upstream
 Liquid Glass theme as a visual language (this fork's Material 3 contract wins; non-visual fixes
 are evaluated individually), `.github/workflows` changes (this fork's release lane is its own),
