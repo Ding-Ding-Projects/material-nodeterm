@@ -228,6 +228,7 @@ import {
 } from '../state/permissionMode'
 import {
   buildSshArgs,
+  sshChipRepeatsProject,
   sshConnectionIdForProject,
   sshHostKey,
   type SshConnection
@@ -1826,6 +1827,17 @@ export function TerminalNode({
   // node (`isRemoteSessionNode` — an SSH-project terminal carries `data.ssh`/`data.sshRemoteTmux`).
   // The affordance is absent, not merely refused on click.
   const sshProject = useProjects((s) => !!s.projects.find((p) => p.id === s.activeProjectId)?.ssh)
+  // The project's SSH endpoint, as two primitives: the project object is rebuilt on every node
+  // serialization, so selecting `ssh.server` itself would re-render this node on each canvas edit.
+  const projectSshHost = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.ssh?.server.host)
+  const projectSshUser = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.ssh?.server.user)
+  const showSshChip =
+    !!data.ssh &&
+    !sshChipRepeatsProject(
+      data.ssh as SshConnection,
+      !!data.sshRemoteTmux,
+      projectSshHost !== undefined ? { host: projectSshHost, user: projectSshUser ?? '' } : undefined
+    )
   const remoteSession = sshProject || isRemoteSessionNode(data)
   const contextSource = contextSourceForNode({
     agentId,
@@ -5612,7 +5624,8 @@ export function TerminalNode({
               <StatusChip tone="attention" size="compact">{vocab('Not persistent · retry')}</StatusChip>
             </Button>
           )}
-          {data.ssh && !accountPresentation ? (
+          {/* Only where it says something the project tab does not — see `sshChipRepeatsProject`. */}
+          {showSshChip && !accountPresentation ? (
             <span
               className="term-ssh-chip"
               title={`ssh ${(data.ssh as SshConnection).user}@${(data.ssh as SshConnection).host}`}

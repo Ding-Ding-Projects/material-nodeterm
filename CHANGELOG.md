@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Port the upstream SSH transport family, step by step (issue #225, tranche 2). The ssh argument
+  builders refuse a host or user that `ssh` would parse as an option, gain a master round-trip
+  probe, a one-round-trip session-age read and a pane-cwd read, and the `SSH user@host` header chip
+  is hidden where it only repeated the project's own host. A state change in the agent-status slice
+  pushed to an SSH host now ships at once instead of waiting out the two-second throttle.
+
+  SSH 傳輸嗰柞嘢由上游逐步搬過嚟：ssh 參數唔再收會畀 `ssh` 當成選項嘅 host 或者 user，加咗
+  master 來回探測、一次過讀 session 歲數同 pane 目錄；同 project 一樣嘅 host 唔再喺每粒
+  terminal 頂頭重複顯示 `SSH user@host`；推去 SSH host 嘅 agent 狀態一轉就即刻送，唔使等兩秒。
+
 - Refresh the canonical upstream submodule pin to `9d5572e2984d5a3c8a68ac7883755221838ebccc`
   (upstream `v0.4.1-12`) and add `scripts/port-upstream.mjs` with the per-path port ledger
   `scripts/upstream-port-ledger.json`, its focused test, and the `check:upstream-port` build guard.

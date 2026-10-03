@@ -32,6 +32,18 @@ on the remote host, keyed by that host, just as a local account gets one on your
 way they work locally, reading from the remote host over the same control connection rather
 than a second, separate mechanism.
 
+**The `SSH user@host` header chip appears only where it says something new.** Inside an SSH
+project every terminal on the project's own host used to carry the same chip; it is now hidden for
+the nodes the project's own connection serves (the same host test as the connection id), and kept
+for a node on a different host, any SSH node in a local project, and a plain `ssh` node logging in
+as a different user on the project's host. A remote-tmux node saved under another user runs as the
+project's user, so hiding its chip also removes a label that was wrong.
+
+**The phone's status slice follows state edges promptly.** The per-project agent-status file
+pushed to an SSH host is throttled to one write every two seconds, but a change of a node's
+`state` (working, blocked, done) now ships immediately unless the previous push was less than
+500 ms ago, so a short turn's `done` no longer waits behind its `working`.
+
 ## Configuration
 
 - Add an SSH project from the connection dialog: host, user, and the remote folder to open —
@@ -41,6 +53,9 @@ than a second, separate mechanism.
 
 ## Failure modes
 
+- **A malformed host or user** (empty, starting with `-`, or containing whitespace or control
+  characters) is refused when the ssh argument list is built, so a saved value can never be read
+  by `ssh` as an option such as `-oProxyCommand=…`.
 - **The connection is down** (network loss, host unreachable, `ssh` not installed locally):
   affected nodes show as offline with a reconnect action, rather than either hanging or
   silently switching to a local shell. This is checked on *both* sides — the UI won't even
@@ -69,6 +84,11 @@ than a second, separate mechanism.
 
 ## Verification
 
+- `src/core/remote-ssh/control-master.destination.test.ts` proves the destination refusal;
+  `session-age.realsh.test.ts` runs the generated session-age line under a real POSIX shell
+  (through `src/core/testing/posix-shell.ts`, so Windows uses Git Bash);
+  `src/shared/ssh.test.ts` covers the chip decision and
+  `src/main/remote-ssh/remote-status-push.test.ts` the state-edge push.
 - Open an SSH project, create a remote terminal node, and confirm commands actually execute on
   the remote host (`hostname` should print the remote machine's name).
 - Disconnect network access to the remote host, attempt to open a new remote terminal node, and
