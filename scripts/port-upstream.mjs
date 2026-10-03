@@ -25,6 +25,7 @@
  * style) so the resolution is reviewable; `apply` exits 2 while any conflict remains, and
  * `ledger update` refuses a path that still carries markers.
  */
+import { randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import {
   chmodSync,
@@ -240,7 +241,7 @@ export function saveLedger(ctx, ledger) {
 
 function writeAtomic(target, content, mode) {
   mkdirSync(path.dirname(target), { recursive: true })
-  const temporary = `${target}.port-${process.pid}-${Math.random().toString(16).slice(2)}.tmp`
+  const temporary = `${target}.port-${process.pid}-${randomUUID()}.tmp`
   writeFileSync(temporary, content)
   if (mode) chmodSync(temporary, mode)
   renameAtomicSync(temporary, target)
