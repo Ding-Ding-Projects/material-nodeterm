@@ -2,6 +2,7 @@
 
 import { copy, fact, mapOwnedSentence } from './personalVocabulary/ownedCopy'
 import { mapLocalVocabularyText } from './personalVocabulary/hostMessage'
+import { formatText } from '@shared/i18n'
 
 function usageCopy(parts: Parameters<typeof mapOwnedSentence>[1]): string {
   return mapOwnedSentence(mapLocalVocabularyText, parts)
@@ -15,6 +16,61 @@ export function formatTimeAgo(ts: number): string {
   if (mins < 60) return usageCopy([fact(String(mins)), copy('m ago')])
   const hours = Math.floor(mins / 60)
   return usageCopy([fact(String(hours)), copy('h ago')])
+}
+
+/**
+ * Resolves one piece of usage copy: a catalogue id, the English fallback template and the facts it
+ * interpolates. The indicator passes `useI18n().ts`, so the language mode, playfulness level and
+ * the local vocabulary all apply; the pure default keeps these helpers testable in English, mapping
+ * only the local vocabulary over the prose template before the facts are filled in.
+ */
+export type UsageTranslate = (id: string, fallback: string, params?: Record<string, string>) => string
+
+export const plainUsageTranslate: UsageTranslate = (_id, fallback, params) =>
+  formatText(mapLocalVocabularyText(fallback), params ?? {})
+
+/**
+ * The line for a Claude read that failed with no numbers to show. A 429 is named: the usage
+ * endpoint's budget is shared with every Claude CLI using the same login, and a generic
+ * "could not read" sent people debugging an SSH link and credentials that were both fine.
+ * `where` qualifies only the generic wording — a 429 says nothing about the host's link.
+ */
+export function usageFailureText(
+  u: { rateLimited?: boolean } | null | undefined,
+  where: '' | 'on this host' = '',
+  tr: UsageTranslate = plainUsageTranslate
+): string {
+  if (u?.rateLimited) {
+    return tr(
+      'usage.failure.rateLimited',
+      'Rate limited by the usage endpoint (HTTP 429) — try again in a few minutes.'
+    )
+  }
+  return where
+    ? tr('usage.failure.onHost', 'Could not read usage on this host.')
+    : tr('usage.failure.generic', 'Could not read usage.')
+}
+
+/**
+ * The note under bars the service KEPT because the latest read failed (`holdLastGood`: status
+ * 'error' with limits). Null for anything else. Says how old the numbers are, since the pill
+ * above shows them without a stamp.
+ */
+export function heldUsageText(
+  u: {
+    status: string
+    limits: readonly unknown[]
+    updatedAt: number
+    rateLimited?: boolean
+  },
+  tr: UsageTranslate = plainUsageTranslate
+): string | null {
+  if (u.status !== 'error' || u.limits.length === 0) return null
+  const fresh = Date.now() - u.updatedAt < 60_000
+  const ago = fresh ? tr('usage.held.momentAgo', 'a moment ago') : formatTimeAgo(u.updatedAt)
+  return u.rateLimited
+    ? tr('usage.held.rateLimited', 'Latest read was rate limited (HTTP 429) — showing numbers from {ago}.', { ago })
+    : tr('usage.held.failed', 'Latest read failed — showing numbers from {ago}.', { ago })
 }
 
 /** "Resets now" / "Resets in 1h 2m" / "Resets in 2d 4h". */

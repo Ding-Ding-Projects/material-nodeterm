@@ -4251,9 +4251,18 @@ export interface UsageLimit {
  * One provider's usage snapshot. `ClaudeUsage` below is the Claude-shaped superset kept for the
  * existing pill; new providers use this leaner shape (they have no per-account story yet).
  */
+/** Safe billing diagnostics: never include URLs, response bodies, or exception messages. */
+export type UsageDiagnostic = {
+  view: 'credits' | 'default'
+} & ({ reason: 'http'; httpStatus: number } | {
+  reason: 'timeout' | 'network' | 'invalid-response'
+})
+
 export interface ProviderUsage {
   /** Agent id the limits belong to: 'claude' | 'codex' | … */
   provider: string
+  /** Failed billing views, including failures recovered by a successful fallback. */
+  diagnostics?: UsageDiagnostic[]
   limits: UsageLimit[]
   /** Signed-in identity, when the provider exposes one cheaply (email / account label). */
   account: string | null
@@ -4394,6 +4403,14 @@ export interface LocalHistoryApi {
   restore(domain: string, sha: string): Promise<HistoryRestoreResult>
 }
 
+/** Best-effort active organization from this account's Claude identity file. */
+export interface ClaudeUsageOrganization {
+  name: string
+  uuid?: string
+  type?: string
+  rateLimitTier?: string
+}
+
 /** Claude Code subscription usage snapshot for the bottom-left indicator. */
 export interface ClaudeUsage {
   /**
@@ -4405,30 +4422,45 @@ export interface ClaudeUsage {
   weekly: ClaudeUsageWindow | null
   /** Signed-in account email, read-only and best-effort (null if unknown). */
   email: string | null
+  /** Active organization, absent when its metadata is unavailable. */
+  organization?: ClaudeUsageOrganization
   /** Unix ms when this snapshot was produced. */
   updatedAt: number
   /**
    * 'unavailable' = no OAuth subscription token (API-key billing / logged out) → hide pill.
-   * 'fetching' = request in flight. 'ok' = windows present. 'error' = fetch failed.
+   * 'fetching' = request in flight. 'ok' = windows present. 'error' = fetch failed — and when
+   * `limits` is non-empty alongside it, those are the LAST GOOD numbers the service kept
+   * (`holdLastGood`), still stamped with their own `updatedAt`.
    */
   status: 'unavailable' | 'fetching' | 'ok' | 'error'
+  /**
+   * The latest read was refused with HTTP 429. The usage endpoint's request budget is also
+   * spent by every Claude CLI using the same login (the CLI reads this endpoint itself), so a
+   * host running dozens of sessions can exhaust it without us. Absent = not rate limited (or
+   * not known to be).
+   */
+  rateLimited?: boolean
 }
 
 /**
- * One REMOTE (SSH host) Claude identity's usage, read on that host over the project's
+ * One REMOTE (SSH host) Claude or Codex identity's usage, read on that host over the project's
  * ControlMaster. Separate from the local per-account rows because the identity is only
  * meaningful together with the host it lives on — the same email can be logged in on two
  * machines with two different quotas in flight.
  */
-export interface RemoteAccountUsage {
+interface RemoteAccountUsageBase {
   /** `user@host` of the connection the numbers came from. */
   hostKey: string
-  /** Managed remote account id, or null for that host's system `~/.claude`. */
+  /** Managed remote account id, or null for that provider's system identity on the host. */
   accountId: string | null
   /** Display label: the managed account's label, else the host key. */
   label: string
-  usage: ClaudeUsage
 }
+
+export type RemoteAccountUsage = RemoteAccountUsageBase & (
+  | { provider?: 'claude'; usage: ClaudeUsage }
+  | { provider: 'codex'; usage: ProviderUsage }
+)
 
 /** What the usage indicator wants from the remote hosts right now. */
 export interface RemoteUsageQuery {

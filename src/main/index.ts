@@ -357,6 +357,7 @@ import { initTranscriptIndex } from '../core/transcript-index'
 import { initTelemetry } from './telemetry'
 import { initClaudeUsage } from './claude-usage'
 import { remoteUsageTargets } from '../core/usage/remote-claude-usage'
+import { remoteCodexUsageTargets } from '../core/usage/remote-codex-usage'
 import { initLicense, isPremium, getStoredEntitlement } from '../core/license'
 import { WhisperModelStore } from '../core/speech/whisper-models'
 import { SpeechService } from '../core/speech/speech-service'
@@ -4608,15 +4609,22 @@ app.whenReady().then(async () => {
     // command and the parsing, main owns the ControlMaster. `sshProjectManager` is assigned just
     // below, so both closures read it lazily — they only ever run after a project has connected.
     remote: {
-      targets: () =>
-        remoteUsageTargets(
-          sshProjectManager?.connectedHosts() ?? [],
-          settingsStore.get().claudeAccounts ?? []
-        ),
+      targets: () => {
+        const connected = sshProjectManager?.connectedHosts() ?? []
+        return [...remoteUsageTargets(connected, settingsStore.get().claudeAccounts ?? []),
+          ...remoteCodexUsageTargets(connected.map(c => ({ ...c,
+            remoteHome: sshProjectManager?.remoteHomeFor(c.projectId),
+            connectionKey: sshProjectManager?.connectionKeyFor(c.projectId)
+          })), settingsStore.get().codexAccounts ?? [])]
+      },
       run: async (target, command) => {
         const mgr = sshProjectManager
         const ref = mgr?.refForProject(target.projectId)
         if (!mgr || !ref) return null
+        if (mgr.hostKeyFor(target.projectId) !== target.hostKey) return null
+        if (target.provider === 'codex' &&
+            (mgr.connectionKeyFor(target.projectId) !== target.connectionKey ||
+             mgr.remoteHomeFor(target.projectId) !== target.remoteHome)) return null
         try {
           const { stdout } = await mgr.sshRun(childArgs(ref.conn, ref.controlPath, command))
           // Deliberately not gated on the exit code: the remote script exits 0 on its own

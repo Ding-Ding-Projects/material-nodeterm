@@ -6859,9 +6859,25 @@ button.group-node__setup:disabled {
   border: 1px solid rgba(var(--tint-rgb), 0.1);
   box-shadow: 0 12px 40px rgba(0, 0, 0, calc(0.5 * var(--shadow-k)));
   color: var(--text-strong);
+  /* Issue #503: each account is a tall block (label + Session/Weekly/Opus meters), so past about
+     four accounts the panel grew off the TOP of the window. Capped to the space between the pill
+     (bottom: 34px) and the top app bar, with the blocks scrolling inside __body while the heading
+     stays put. */
+  max-height: calc(100vh - var(--app-bar-h) - 34px - 8px);
+  display: flex;
+  flex-direction: column;
+}
+.usage-popover__body {
+  /* Every account is rendered: the list SCROLLS rather than truncating. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Without this a flex child refuses to shrink below its content height and the max-height
+     above would do nothing. */
+  min-height: 0;
 }
 .usage-popover__head {
   margin-bottom: 12px;
+  flex: none;
 }
 .usage-popover__title {
   display: block;

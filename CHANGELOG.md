@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Port the upstream usage-indicator family onto the Material 3 popover. A failed Claude usage read
+  now keeps the last good numbers (up to an hour, same account, no window reset since) with a note
+  saying how old they are, and an HTTP 429 is named as a rate limit rather than "could not read".
+  Each Claude account row shows its active organization. The single-account Claude block holds its
+  meters, account and "Switch Claude Code account…" action together, and the popover body scrolls
+  so every account stays reachable. Grok billing failures print a safe per-view reason. On an SSH
+  project the popover also reads the host's Codex accounts on the host itself (the token is piped
+  into `curl --config -` and never leaves the host). The pill names the project's managed "Use for
+  new sessions" account when it shows that account's limits, and ⟳ re-reads the other providers
+  past their debounce. The Codex app-server fallback uses the `never` approval policy every current
+  CLI accepts. New copy is localized under `usage.*`.
+
 - Refresh the canonical upstream submodule pin to `9d5572e2984d5a3c8a68ac7883755221838ebccc`
   (upstream `v0.4.1-12`) and add `scripts/port-upstream.mjs` with the per-path port ledger
   `scripts/upstream-port-ledger.json`, its focused test, and the `check:upstream-port` build guard.

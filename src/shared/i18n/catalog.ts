@@ -2192,6 +2192,38 @@ export const CATALOG: Catalog = {
 
   // Torrent downloader node. Every visible product message has five voice variants in both
   // languages; values such as paths, byte counts, hashes and peer counts stay caller-owned facts.
+  // Usage indicator (upstream usage port): failure, held-number, diagnostic and identity copy.
+  // Every value in braces is a fact supplied by the caller and is interpolated after
+  // localization, so provider names, HTTP statuses, hosts and organization names stay exact.
+  'usage.empty': { en: flat('No usage data.'), yue: flat('冇用量資料。') },
+  'usage.failure.generic': { en: flat('Could not read usage.'), yue: flat('讀唔到用量。') },
+  'usage.failure.onHost': { en: flat('Could not read usage on this host.'), yue: flat('讀唔到呢部主機嘅用量。') },
+  'usage.failure.rateLimited': { en: flat('Rate limited by the usage endpoint (HTTP 429) — try again in a few minutes.'), yue: flat('用量端點限咗速（HTTP 429），過幾分鐘再試。') },
+  'usage.held.momentAgo': { en: flat('a moment ago'), yue: flat('啱啱') },
+  'usage.held.failed': { en: flat('Latest read failed — showing numbers from {ago}.'), yue: flat('最新一次讀取失敗，而家顯示 {ago} 嘅數字。') },
+  'usage.held.rateLimited': { en: flat('Latest read was rate limited (HTTP 429) — showing numbers from {ago}.'), yue: flat('最新一次讀取被限速（HTTP 429），而家顯示 {ago} 嘅數字。') },
+  'usage.diagnostic.view.credits': { en: flat('Credits view'), yue: flat('額度檢視') },
+  'usage.diagnostic.view.default': { en: flat('Default view'), yue: flat('預設檢視') },
+  'usage.diagnostic.timeout': { en: flat('Usage request timed out. Try again later.'), yue: flat('用量請求逾時，遲啲再試。') },
+  'usage.diagnostic.network': { en: flat('Could not reach {provider}. Check the connection and try again.'), yue: flat('連唔到 {provider}，檢查下連線再試。') },
+  'usage.diagnostic.invalidResponse': { en: flat('Usage response could not be read. Try again later.'), yue: flat('用量回應讀唔到，遲啲再試。') },
+  'usage.diagnostic.httpAuth': { en: flat('{provider} authentication failed (HTTP {status}). Check the CLI authentication on the machine running this project.'), yue: flat('{provider} 驗證失敗（HTTP {status}）。檢查下運行呢個專案嗰部機嘅 CLI 驗證。') },
+  'usage.diagnostic.httpRateLimited': { en: flat('Usage request rate limited (HTTP 429). Try again later.'), yue: flat('用量請求被限速（HTTP 429），遲啲再試。') },
+  'usage.diagnostic.httpServer': { en: flat('{provider} returned HTTP {status}. Try again later.'), yue: flat('{provider} 回應咗 HTTP {status}，遲啲再試。') },
+  'usage.diagnostic.httpOther': { en: flat('Usage request failed (HTTP {status}). Check the provider service and CLI configuration.'), yue: flat('用量請求失敗（HTTP {status}）。檢查下供應商服務同 CLI 設定。') },
+  'usage.diagnostic.line': { en: flat('{views}: {message}'), yue: flat('{views}：{message}') },
+  'usage.diagnostic.viewsJoined': { en: flat('{first} and {last}'), yue: flat('{first} 同 {last}') },
+  'usage.organization.label': { en: flat('Organization: {name}'), yue: flat('機構：{name}') },
+  'usage.organization.type': { en: flat('Type: {type}'), yue: flat('類型：{type}') },
+  'usage.organization.rateLimitTier': { en: flat('Rate limit tier: {tier}'), yue: flat('限速級別：{tier}') },
+  'usage.organization.id': { en: flat('Organization ID: {id}'), yue: flat('機構 ID：{id}') },
+  'usage.claude.account': { en: flat('Account'), yue: flat('帳戶') },
+  'usage.switchAccount.label': { en: flat('⇄ Switch {agent} account…'), yue: flat('⇄ 切換 {agent} 帳戶…') },
+  'usage.switchAccount.title': { en: flat('Opens a terminal running `claude /login` for the system account (~/.claude). Completing it switches the org/account all system sessions use. Running sessions carry on under the new one. Managed accounts keep their own logins.'), yue: flat('開一個終端機為系統帳戶（~/.claude）運行 `claude /login`。完成之後，所有系統工作階段用嘅機構／帳戶都會切換；運行緊嘅工作階段會喺新帳戶下繼續。受管帳戶保留自己嘅登入。') },
+  'usage.remote.readOn': { en: flat('Read on {host} over SSH'), yue: flat('經 SSH 喺 {host} 讀取') },
+  'usage.remote.notYet': { en: flat('No usage from this host yet. It is read once the project connects.'), yue: flat('呢部主機仲未有用量。專案連線之後就會讀取。') },
+  'usage.pill.defaultAccount': { en: flat('Account used for new sessions in this project'), yue: flat('呢個專案新工作階段用嘅帳戶') },
+  'usage.pill.otherAccount': { en: flat('Account these limits belong to'), yue: flat('呢啲限額所屬嘅帳戶') },
   'torrent.title': { en: flat('Torrent downloader'), yue: flat('種子下載器') },
   'torrent.rename': { en: flat('Click to rename'), yue: flat('撳一下改名') },
   'torrent.nodeName': { en: flat('Torrent downloader node name'), yue: flat('種子下載器節點名稱') },

@@ -4,7 +4,8 @@ import {
   mapCodexLimits,
   readCodexAuth,
   codexHome,
-  fetchCodexUsage
+  fetchCodexUsage,
+  CODEX_APP_SERVER_ARGS
 } from './codex-usage'
 import { primaryLimit, limitShortLabel } from '../../shared/usage-limits'
 import fs from 'fs'
@@ -15,16 +16,19 @@ import { EventEmitter } from 'events'
 let appServerMode: 'throw' | 'success' = 'throw'
 
 // Keep the app-server transport hermetic while still exercising its real JSON-RPC fallback path.
-vi.mock('child_process', () => ({
+// The rest of `child_process` stays real so unrelated imports keep working.
+vi.mock('child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('child_process')>()),
   spawn: () => {
     if (appServerMode === 'throw') throw new Error('app-server disabled in test')
     const child = new EventEmitter() as EventEmitter & {
       stdout: EventEmitter
-      stdin: { write: (line: string) => void }
+      stdin: { write: (line: string) => void; on: (event: string, listener: () => void) => void }
       kill: () => void
     }
     child.stdout = new EventEmitter()
     child.stdin = {
+      on: () => undefined,
       write: (line: string) => {
         const message = JSON.parse(line) as { id?: number }
         if (message.id === 1) child.stdout.emit('data', Buffer.from('{"id":1}\n'))
@@ -261,5 +265,14 @@ describe('codexHome', () => {
     expect(codexHome()).toBe(path.join(os.homedir(), '.codex'))
     if (prev === undefined) delete process.env.CODEX_HOME
     else process.env.CODEX_HOME = prev
+  })
+})
+
+describe('codex app-server invocation', () => {
+  it('asks for the read-only sandbox with the `never` approval policy every codex accepts', () => {
+    // `untrusted` was removed from codex's vocabulary in 0.149.0 and clap refuses the whole
+    // invocation, so this tier silently returned nothing on every current CLI (issue #785).
+    expect([...CODEX_APP_SERVER_ARGS]).toEqual(['-s', 'read-only', '-a', 'never', 'app-server'])
+    expect(CODEX_APP_SERVER_ARGS).not.toContain('untrusted')
   })
 })
