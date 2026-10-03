@@ -1,5 +1,38 @@
 # Handoff
 
+## 2026-10-03, upstream v0.4.1 port, tranche 0 (issue #225)
+
+The canonical upstream pin moved from `abb351bfd98a2ced036cb8768c67cf832a7611f6` (2026-08-29) to
+`9d5572e2984d5a3c8a68ac7883755221838ebccc` (2026-10-04, `v0.4.1-12`), and
+`node scripts/check-canonical-upstream.mjs` reports `verified` against it. The fork and upstream
+share the merge base `215857e2b58a8de38acda45befbbb913770481e3` (upstream PR #434, 2026-08-26);
+since then the fork carries 2,621 commits of its own and upstream 2,021 across 2,229 paths. A
+hosted session's shallow clone hides that shared root, which is why an earlier reading of this
+task called the fork a squashed import; `git fetch --unshallow origin` restored the full history
+and `git merge-base` settled it. The new `scripts/port-upstream.mjs` ports changes as per-file
+three-way merges against the upstream commit each path last absorbed, recorded in
+`scripts/upstream-port-ledger.json` (seeded with 1,498 paths at the merge base). Its `classify`
+subcommand measures from that base: 1,494 new, 208 fast-forward, 177 merge-clean, 331 conflict, 12
+already current, 7 deleted upstream; a `git merge-tree` dry run of `upstream/main` agrees on about
+three hundred content conflicts. `check:upstream-port` runs in the `build` chain. The design,
+the tranche order, and the deliberate exclusions are in
+`docs/features/development/upstream-sync.md` and the roadmap.
+
+Verification bound to the lane tree at `2d79b48` plus scripts and docs only, under Node 24.19.0 on
+2026-10-03: `npm run typecheck` passed with zero errors (the paste-frame parity script skips in a
+standalone checkout); `vitest run` reported 23 failed and 13,289 passed tests with 110 skipped
+across 1,106 files (19 failed), in 220 seconds, with no unhandled errors. That replaces the older
+"164 failed files, 763 failed tests, typecheck red" figures, which described an earlier tree.
+`check-changelog` needs full history (it resolves commit ids named in the changelog) and passed
+130 assertions once the clone was unshallowed; `check-app-contract` has one remaining failure,
+the pre-existing design-reference parity inventory; `check-design-parity` still reports its 10
+pending runtime receipts. No built-app interaction or packaged capture ran from this container.
+
+Private conversation wording that earlier sessions had left in `HANDOFF.md`, `ROADMAP.md`,
+`src/renderer/styles.durable-occurrences.css`, `src/core/durable-occurrence-service.test.ts` and
+five path-handling source comments was replaced with ordinary English in this task, and every
+changed file was rescanned clean.
+
 ## 2026-09-07, v1.0.30 release publication and current evidence boundary
 
 The latest verified published baseline is [`v1.0.30`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v1.0.30), a non-draft release targeting `4b267fb4a20e9c1d05affc3eb98d25f3e9bd9f04`. Release workflow run [`34082019435`](https://github.com/Ding-Ding-Projects/material-nodeterm/actions/runs/34082019435) completed successfully. The release provides `nodeterm-Setup-1.0.30.exe`, `node-terminal-1.0.30-full.nupkg`, and `RELEASES`; the installer remains unsigned.
@@ -513,7 +546,7 @@ task-owned cleanup candidates, so no deletion or forced integration was performe
 
 The open issues scan found #198 and #11 still requiring separate product work. Issue #104 has
 the current release and settings-repair progress records. PR #463 has the same release milestone
-comment. The private vocabulary update is recorded separately in agent-global-memory repository and is not copied into this
+comment. The private vocabulary update is recorded separately in the maintainer's private instructions repository and is not copied into this
 public document.
 
 ## 2026-08-28, settings persistence and filter crash repairs
@@ -5476,13 +5509,13 @@ at `05efa5f266356adbe95389e127ce28ce37a5d231`, matching `origin/codex/evidence-p
 
 The merge had no unmerged index entries. `git diff --check` was clean. A repository scan found no conflict markers in
 the merged source; the remaining `=======` lines are ordinary separators in the two tracked libevent license files.
-No non-obvious conflict choice was required. No tests, builds, packaging, release work, or unrelated Oak Kay paths were
+No non-obvious conflict choice was required. No tests, builds, packaging, release work, or unrelated repository paths were
 run or changed during this closeout.
 
-The older local `codex/runtime-packaging-powershell-20260907` jer points at
+The older local `codex/runtime-packaging-powershell-20260907` branch points at
 `4b267fb4a20e9c1d05affc3eb98d25f3e9bd9f04`, which is already an ancestor of `main`, but it is not a linked checkout and
 ownership is not established by this task. It is therefore retained and documented. The two linked checkouts are kept
-until the required external archive, main dew, ref verification, and ownership proof are complete.
+until the required external archive, main push, ref verification, and ownership proof are complete.
 
 # 2026-09-18, final cleanup evidence
 
@@ -5494,12 +5527,12 @@ linked checkout inventories.
 
 After the archive and ancestry proofs, the linked checkouts at
 `C:\Users\cntow\.codex\worktrees\8503\material-nodeterm` and
-`C:\Users\cntow\.codex\worktrees\b290\material-nodeterm` were removed. Their jers
-`codex/evidence-parity` and `codex/product-contracts-b290` were deleted locally and from the hui. Direct
+`C:\Users\cntow\.codex\worktrees\b290\material-nodeterm` were removed. Their branches
+`codex/evidence-parity` and `codex/product-contracts-b290` were deleted locally and from the remote. Direct
 `git ls-remote origin` verification now returns `b79c172d58d94f1adf01eee19f98c893ae789b46 refs/heads/main` and no
-matching ref for either removed jer. The remote deletion command printed a ref-lock warning after a partial deletion,
+matching ref for either removed branch. The remote deletion command printed a ref-lock warning after a partial deletion,
 but the final direct ref query is clear.
 
-The local `codex/runtime-packaging-powershell-20260907` jer remains because it is not a linked checkout and ownership
-is uncertain. Its tip `4b267fb4a20e9c1d05affc3eb98d25f3e9bd9f04` is an ancestor of dewed `main`, and it has no uncommitted
-files. No Lap Sap Tongs were present. The final primary checkout has one Gerk Tong Hui, `main`, and a 🧹 status.
+The local `codex/runtime-packaging-powershell-20260907` branch remains because it is not a linked checkout and ownership
+is uncertain. Its tip `4b267fb4a20e9c1d05affc3eb98d25f3e9bd9f04` is an ancestor of pushed `main`, and it has no uncommitted
+files. No stashes were present. The final primary checkout has one worktree, `main`, and a clean status.

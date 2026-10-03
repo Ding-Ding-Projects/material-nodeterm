@@ -8,7 +8,7 @@ describe('basenameForPathSyntax', () => {
     expect(basenameForPathSyntax('/home/u/Documents/GitHub/material-nodeterm')).toBe('material-nodeterm')
   })
 
-  it('takes the leaf from a drive-absolute Deen No path', () => {
+  it('takes the leaf from a drive-absolute Windows path', () => {
     // The defect this exists to stop: splitting on '/' alone returns the WHOLE string here.
     expect(basenameForPathSyntax('C:\\Users\\cntow\\Documents\\GitHub\\material-nodeterm')).toBe('material-nodeterm')
   })

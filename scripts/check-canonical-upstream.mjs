@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 export const CANONICAL_PATH = 'upstream/nodeterm'
 export const CANONICAL_URL = 'https://github.com/eneskirca/nodeterm.git'
 export const CANONICAL_BRANCH = 'main'
-export const CANONICAL_COMMIT = 'abb351bfd98a2ced036cb8768c67cf832a7611f6'
+export const CANONICAL_COMMIT = '9d5572e2984d5a3c8a68ac7883755221838ebccc'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 

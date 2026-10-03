@@ -1,0 +1,129 @@
+# Upstream sync and the port ledger
+
+This fork tracks the canonical [`eneskirca/nodeterm`](https://github.com/eneskirca/nodeterm)
+repository through the `upstream/nodeterm` submodule. It is a true fork: the two histories share
+the merge base `215857e2b58a8de38acda45befbbb913770481e3` (upstream PR #434, 2026-08-26), after
+which the fork carries 2,621 commits of its own and upstream carries 2,021. A single native
+`git merge upstream/main` is therefore possible but would resolve roughly three hundred
+content conflicts in one commit; `scripts/port-upstream.mjs` exists so the same three-way merge
+can land path by path, in themed tranches, each verified on its own. A shallow clone hides the
+shared root (the clone depth used by hosted sessions shows only the newest commits), so run
+`git fetch --unshallow origin` and `git merge-base HEAD upstream/main` before reasoning about
+lineage.
+
+## Behavior
+
+A port is a per-file three-way merge:
+
+| Side | Source |
+| --- | --- |
+| base | the path at the upstream commit the fork last absorbed (from the ledger, seeded at the merge base, or `--from`) |
+| theirs | the path at the target upstream commit (`--to`, default: the reviewed submodule pin) |
+| ours | the fork's working-tree file |
+
+Upstream objects are read only from the initialized submodule checkout
+(`git -C upstream/nodeterm show <sha>:<path>`); the tool never writes there. Conflicts are written
+**with** `diff3` markers so the resolution stays reviewable, and `apply` exits with status 2 while
+any conflict remains.
+
+### Subcommands
+
+```bash
+node scripts/port-upstream.mjs classify --from <sha> --to <sha> [--json] [--out <file>]
+node scripts/port-upstream.mjs apply --paths <file> [--from <sha>] [--to <sha>] [--write] [--force]
+node scripts/port-upstream.mjs apply --commit <sha> [--write] [--force] [--advance]
+node scripts/port-upstream.mjs ledger init --at <sha>
+node scripts/port-upstream.mjs ledger update --to <sha> --paths <file> [--declined] [--accept-delete]
+node scripts/port-upstream.mjs check
+```
+
+- `classify` buckets every path that differs between two upstream commits against the fork tree
+  without downloading blobs for anything but the diverged files: `new` (absent in the fork),
+  `fast-forward` (fork equals the old upstream version), `current` (fork already equals the new
+  version), `merge-clean`, `conflict`, `binary-manual` and `deleted-upstream`.
+- `apply` is a dry run unless `--write` is given, refuses a path with uncommitted changes unless
+  `--force` is given (without shared history, Git is the only undo), copies new files, reports an
+  upstream deletion without applying it, and keeps conflict markers.
+- `apply --commit <sha>` is the cherry-pick: base is `<sha>^`, theirs is `<sha>`. It does not
+  advance the ledger unless `--advance` is given and the ledger base equals `<sha>^`, because
+  intermediate upstream commits touching the same path have not been absorbed.
+- `ledger update` records that a path now carries a given upstream commit. It refuses a path that
+  still carries markers and writes nothing on failure. `--declined` records a path deliberately not
+  taken so it is never proposed again.
+- `check` is offline and runs in the `build` chain (`npm run check:upstream-port`): it fails on
+  conflict markers in any tracked text file, a ledger path missing from the tree, a malformed
+  commit id, unsorted keys, or a wrong ledger version.
+
+## Configuration
+
+The ledger is `scripts/upstream-port-ledger.json`: sorted keys, one entry per line, with
+`version`, `upstream`, `baseline`, `paths` (fork path to the upstream commit last absorbed) and
+`declined` (paths deliberately not taken). It was seeded at the merge base
+`215857e2b58a8de38acda45befbbb913770481e3` for every path the fork shares with that commit, which
+is the same base `git merge` would use.
+
+The submodule pin is refreshed only through the reviewed workflow in `CONTRIBUTING.md`, and
+`CANONICAL_COMMIT` in `scripts/check-canonical-upstream.mjs` moves with it. The port tool defaults
+its target to that constant.
+
+## The v0.4.1 port
+
+Measured on 2026-10-03 between the merge base `215857e2…` (2026-08-26) and the reviewed pin
+`9d5572e2…` (2026-10-04, `v0.4.1-12`); the previous pin `abb351bf…` sat 32 upstream commits past
+the merge base:
+
+| Bucket | Files |
+| --- | --- |
+| new upstream files absent in the fork | 1,494 |
+| fast-forward (fork byte-identical to the merge base) | 208 |
+| diverged, three-way merge clean | 177 |
+| diverged, three-way conflict | 331 |
+| already at the new upstream version | 12 |
+| deleted upstream | 7 |
+
+The range holds 2,021 upstream commits. A `git merge-tree --write-tree HEAD upstream/main` dry run
+agrees: about three hundred content conflicts plus 29 add/add conflicts, while merging only the
+previous pin would conflict in 81 paths. Each tranche ends by recording its waypoint as a real
+merge commit once the ported tree matches the resolution, so Git's own merge base advances with
+the port and a later sync stays incremental. Eleven shared files take nearly every upstream theme
+(`Canvas.tsx`, `styles.css`, `types.ts`, `TerminalNode.tsx`, `main/index.ts`, `preload/index.ts`,
+`server/index.ts`, `pty-manager.ts`, `ipc.ts`, `workspace-store.ts`, `ws-bridge.ts`); they are
+merged once per tranche against a waypoint commit, never against the final tip, and `styles.css`
+is never merged wholesale.
+
+The port lands in themed tranches, tracked in `ROADMAP.md` and in issue #225: security fixes
+first, then the self-contained families (watch-link live links, github, usage, native SSH
+transport), then the entangled ones. Every ported user-facing surface is re-expressed on this
+fork's Material 3 primitives and tokens, gets a row in the Material 3 audit, a feature article, a
+changelog entry and localized copy. Fork-only features are preserved by three-way merging, never
+replaced.
+
+Deliberate exclusions, recorded in the ledger's `declined` map as they are reached: the upstream
+Liquid Glass theme as a visual language (this fork's Material 3 contract wins; non-visual fixes
+are evaluated individually), `.github/workflows` changes (this fork's release lane is its own),
+and wholesale `CLAUDE.md` / `CONTRIBUTING.md` merges.
+
+## Failure modes
+
+- A port against a target commit that is not in the submodule checkout fails before touching
+  anything, naming the fetch to run.
+- A path with no ledger entry and no `--from` is reported as `no-base` and left alone.
+- A binary file on any side is reported as `binary-manual` and left alone.
+- `ledger update` on a path with markers writes nothing, so the ledger can never point past a
+  half-resolved merge.
+
+## Security considerations
+
+The tool reads the submodule checkout and the fork tree only; it runs no upstream code and
+fetches nothing on its own. Upstream content is ordinary source under review, never executed by
+the port. Writes go through a temporary file and an atomic rename.
+
+## Verification
+
+- `scripts/port-upstream.test.mjs` builds two throwaway Git repositories and proves bucket
+  placement, `--write` merge, new-file copy, deletion reported untouched, conflict markers with
+  three labels and exit 2, a dry run that writes nothing, a cherry-pick that takes only its hunk,
+  `ledger update` refusing markers and leaving bytes identical, and `check` turning red for a
+  missing ledger path and for a marker-bearing tracked file.
+- `node scripts/check-canonical-upstream.mjs` must report `verified` after every pin refresh.
+- `node scripts/port-upstream.mjs check` runs in `npm run build`.

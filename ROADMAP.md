@@ -1,18 +1,46 @@
 # Roadmap
 
+## Upstream v0.4.1 port (2026-10-03, issue #225)
+
+The upstream pin moved from `abb351bfd98a2ced036cb8768c67cf832a7611f6` to
+`9d5572e2984d5a3c8a68ac7883755221838ebccc`. The fork and upstream share the merge base
+`215857e2b58a8de38acda45befbbb913770481e3` (2026-08-26); since then upstream carries 2,021 commits
+touching 2,229 paths (1,494 new, 208 fast-forward, 177 merge-clean, 331 conflict, 12 current, 7
+deleted upstream). Ports land path by path in themed tranches through `scripts/port-upstream.mjs`
+and `scripts/upstream-port-ledger.json`, and each tranche records its waypoint as a real merge
+commit; see
+[docs/features/development/upstream-sync.md](docs/features/development/upstream-sync.md).
+
+- [ ] **Tranche 0:** pin refresh, port tool, ledger, focused test, `check:upstream-port` in the
+  build chain, baseline typecheck and test counts, docs, changelog, handoff. (In progress on
+  `port/upstream-v0.4.1-foundation`; state is recorded on issue #225.)
+- [ ] **Tranche 1:** upstream security and safety fixes cherry-picked per commit.
+- [ ] **Tranche 2:** watch-link live links, github, usage, native SSH transport, each through the
+  Material 3 adaptation checklist.
+- [ ] **Tranche 3:** windows/session-host/updater, terminal/pty.
+- [ ] **Tranche 4:** server, settings/workspace.
+- [ ] **Tranche 5:** agents/grok/codex/accounts/hooks.
+- [ ] **Tranche 6:** canvas/control (zones, layouts, portals and triggers live here; most review).
+- [ ] **Tranche 7:** chat, kanban.
+- [ ] **Tranche 8:** relay/hosted team.
+- [ ] **Tranche 9:** ui chrome, release/docs.
+- ~~Liquid Glass theme as a visual language~~ (deliberately not porting: this fork's Material 3
+  contract wins; non-visual fixes are evaluated individually and recorded in the ledger).
+- ~~`.github/workflows` changes~~ (deliberately not porting: this fork's release lane is its own).
+
 ## Preservation and integration (2026-09-07)
 
-- [x] **2026-09-18 closeout preservation:** fetched `origin` and `upstream`, preserved primary checkout lat tat in
-  `8e379bc3647f6e30ffec369307b96fe05576831e`, and recorded the literal `\\n` commit-message formatting poke guy in
+- [x] **2026-09-18 closeout preservation:** fetched `origin` and `upstream`, preserved primary checkout uncommitted work in
+  `8e379bc3647f6e30ffec369307b96fe05576831e`, and recorded the literal `\\n` commit-message formatting defect in
   `HANDOFF.md` without rewriting history.
 - [x] **2026-09-18 integration:** merged `codex/product-contracts-b290` into `main` with both parents preserved in
   `2af13cc7b5ab4c9144412edf25fac0561f5eab60`; the index is clean, `git diff --check` is clean, and no source conflict
   markers remain. License separator lines are intentional.
-- [x] **2026-09-18 external closeout:** main dew, archive verification, and safe linked-checkout removal are complete;
+- [x] **2026-09-18 external closeout:** main push, archive verification, and safe linked-checkout removal are complete;
   final evidence is recorded below and in `HANDOFF.md`.
 - [x] **2026-09-18 final closeout:** verified the external 7z archive before deletion, removed the two clean integrated
-  linked checkouts and their local and remote jers, verified `origin/main` at `b79c172d58d94f1adf01eee19f98c893ae789b46`,
-  and retained the ownership-uncertain `codex/runtime-packaging-powershell-20260907` jer.
+  linked checkouts and their local and remote branches, verified `origin/main` at `b79c172d58d94f1adf01eee19f98c893ae789b46`,
+  and retained the ownership-uncertain `codex/runtime-packaging-powershell-20260907` branch.
 
 - [x] Preserve offline preview source and repair its jsdom 30 fixtures, with 23 focused tests passing.
 - [x] Preserve gallery lifecycle source and reconcile both transport histories without rewriting either.

@@ -77,7 +77,7 @@ describe('durable planner/alarm/timer source Chuts', () => {
     const store = new MemoryStore()
     let wall = Date.parse('2026-01-01T13:00:30Z')
     let crashes = true
-    const service = new DurableOccurrenceService({ store, nowWallMs: () => wall, nowMonotonicMs: () => wall, deliver: () => { if (crashes) throw new Error('consumer oofed'); return 'delivered' } })
+    const service = new DurableOccurrenceService({ store, nowWallMs: () => wall, nowMonotonicMs: () => wall, deliver: () => { if (crashes) throw new Error('consumer crashed'); return 'delivered' } })
     await service.start()
     const base = service.getState()
     base.schedules = [schedule('2026-01-01T08:00')]
