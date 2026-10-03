@@ -182,6 +182,18 @@ describe('binariesFor', () => {
   it('treats an unrecognised NON-custom id as its own command, mirroring resolveAgent', () => {
     expect(binariesFor('aider')).toEqual(['aider'])
   })
+
+  it('never resolves a prototype key as a builtin, and skips null/non-object records', () => {
+    expect(binariesFor('constructor')).toEqual(['constructor'])
+    expect(binariesFor('__proto__')).toEqual(['__proto__'])
+    expect(binariesFor('toString')).toEqual(['toString'])
+    const list = [null, 7, 'x', { id: 'custom:ok', launchCmd: 'ok-agent' }] as unknown as {
+      id: string
+      launchCmd: string
+    }[]
+    expect(binariesFor('custom:ok', list)).toEqual(['ok-agent'])
+    expect(binariesFor('custom:missing', list)).toBeNull()
+  })
 })
 
 
