@@ -2739,7 +2739,9 @@ export class PtyManager {
     // capability, not a terminal default.
     const stripRe =
       options.clearEnv || this.getSettings().vanillaLaunchDefault
-        ? vanillaEnvStripPattern((options.agentId ?? 'claude') as AgentId)
+        ? options.agentId
+          ? vanillaEnvStripPattern(options.agentId)
+          : null
         : null
     const gatewayEnv = options.agentId && !stripRe
       ? modelGatewayEnv(
@@ -2796,8 +2798,12 @@ export class PtyManager {
 
     const settings = this.getSettings()
     const customAgent = settings.customAgents.find((agent) => agent.id === requestedAgentId)
+    // A plain terminal has no agentId: its inherited provider credentials are the user's own and
+    // are never stripped, whatever the subscription-mode setting says.
     const stripProviderEnv =
-      (options.clearEnv || settings.vanillaLaunchDefault) && vanillaEnvStripPattern(requestedAgentId)
+      options.agentId && (options.clearEnv || settings.vanillaLaunchDefault)
+        ? vanillaEnvStripPattern(requestedAgentId)
+        : null
     const gateway = options.agentId && !stripProviderEnv
       ? modelGatewayEnv(
           settings.modelGateway,

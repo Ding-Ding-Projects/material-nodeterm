@@ -677,6 +677,8 @@ export async function startServer(
     await armServerNodeIdentity(hookServer, () => workspaceStore.persistedCanvases())
   } catch (error) {
     console.warn('[node-identity] no secret — hook identity unavailable, running legacy', error)
+    // Issue #1088: a verified-only refusal must be able to say the cause is this instance.
+    hookServer.setNodeIdentityUnavailable(error)
   }
 
   // Context Link: core owns the whole feature (read handler, shim, skill, instruction blocks) and

@@ -430,6 +430,41 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
     }
   })
 
+  it.each([
+    { vanillaLaunchDefault: true, clearEnv: undefined },
+    { vanillaLaunchDefault: false, clearEnv: true }
+  ])('preserves a plain terminal environment in subscription mode: %j', async (mode) => {
+    const inherited = {
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+      ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL
+    }
+    process.env.ANTHROPIC_API_KEY = 'plain-terminal-key'
+    process.env.ANTHROPIC_BASE_URL = 'https://plain-terminal-provider.example.test'
+    try {
+      const { PtyManager } = await import('./pty-manager')
+      const m = new PtyManager()
+      m.init(() => ({
+        ...DEFAULT_SETTINGS,
+        vanillaLaunchDefault: mode.vanillaLaunchDefault,
+        modelGateway: { baseUrl: 'https://bifrost.example.test', apiKey: 'vk-gateway' }
+      }))
+      m.registerIpc()
+
+      await create(80, 24, 'subscription-plain-terminal', { clearEnv: mode.clearEnv })
+
+      expect(spawnArgs[0].env.ANTHROPIC_API_KEY).toBe('plain-terminal-key')
+      expect(spawnArgs[0].env.ANTHROPIC_BASE_URL).toBe(
+        'https://plain-terminal-provider.example.test'
+      )
+      expect(spawnArgs[0].args.join(' ')).not.toContain('vk-gateway')
+    } finally {
+      for (const [key, value] of Object.entries(inherited)) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+    }
+  })
+
   // ── `fresh` drives scrollback replay + agent resume: it must still be computed from tmux ──
   it('fresh:false on a WARM reattach (tmux session already exists) — no cold restore', async () => {
     await tmuxManager()

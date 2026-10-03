@@ -348,8 +348,9 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
     // Seal / unseal node secrets at rest with the OS keychain. Byte-in byte-out, mirroring #167's
     // codex-node-auth-key.json shape: encrypt the UTF-8 content of the passed buffer, decrypt back to
     // the same bytes. Both are supplied together (a shell must supply BOTH hooks or NEITHER — see
-    // CorePlatform). If the keychain is unavailable safeStorage throws, which node-auth-secret.ts
-    // surfaces as a rejected load; both shells catch that and run legacy (fail-open), never crash.
+    // CorePlatform). If the keychain is unavailable safeStorage throws: node-auth-secret.ts then stores
+    // a NEW secret raw at 0600 (issue #1088 — Linux with no keyring), and only a sealed key it cannot
+    // unseal rejects the load, which the shell catches into legacy (fail-open), never a crash.
     sealSecret: (b) => safeStorage.encryptString(b.toString('utf8')),
     unsealSecret: (b) => Buffer.from(safeStorage.decryptString(b), 'utf8'),
   }
