@@ -23,6 +23,9 @@ Two different ways nodeterm reaches a machine that isn't the one in front of you
 - [Kiosk and PWA sessions](./kiosk-pwa-sessions.md) - guided secure URL and installed web-app
   sessions with isolated local profiles, portable intent, explicit permissions, lifecycle recovery,
   and honest unavailable states.
+- [Live links (protocol foundation)](./live-links.md) - the viewer protocol, key derivation,
+  output filter and sealed link store for read-only browser links to one terminal; no link can be
+  created or watched yet, because hosting needs the core relay host this fork has not taken.
 - [Proxy and isolated debugging browser sessions](./browser-debug-sessions.md) - host-owned
   debugging sessions with explicit proxy and certificate intent, local-only bindings, and no
   silent fallback to ordinary browsing.

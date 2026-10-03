@@ -3061,6 +3061,7 @@ const NON_FEATURE_DOCS = new Map([
   ,['features/remote/cloudflared-runtimes.md', 'open runtime integration article, not a verified shipped feature']
   ,['features/remote/kiosk-pwa-sessions.md', 'remote session implementation note, covered by Server Edition']
   ,['features/remote/oauth-callbacks.md', 'authentication implementation note, covered by Server Edition']
+  ,['features/remote/live-links.md', 'protocol foundation only: no app surface, IPC channel or setting exists yet; guarded by the src/shared/watch-link and src/core/watch-link vitest suites and the host-control namespace test']
   ,['features/source-control/dependency-operations.md', 'supporting source-control article, covered by source-control-worktrees']
   ,['features/torrents/README.md', 'torrent category index, with its open feature article inventoried separately']
   ,['features/torrents/torrent-downloader.md', 'open torrent integration article, not a verified shipped feature']
