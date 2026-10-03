@@ -20,6 +20,10 @@ import { IPC } from './ipc'
  *    settings. Alone it is prompt spam on someone else's screen; paired with an admitted
  *    consent-submit it is the same self-approval loop as run+consent-submit, ending in a shared
  *    `launchCmd`/`env` (or shell) approved for the host's own agent launches.
+ *  - `watchLink:*` — the owner channels of live links (docs/features/remote/live-links.md): a link
+ *    publishes one of the host's terminals to anyone holding its URL, and the owner's list carries
+ *    every link's secret. Reserved as a namespace before any channel exists, so a verb added later
+ *    is refused to relay peers the day it is added. The viewer protocol is `watch:*`, outside it.
  *
  * DELIBERATELY NOT LISTED: `project-setup:subscribe`/`unsubscribe` and the `project-setup:event:*`
  * push. They neither start nor authorize anything, and a peer that can see the canvas can already
@@ -29,7 +33,7 @@ import { IPC } from './ipc'
  * This lives in `shared/` because it is a policy question, not a shell mechanism: two shells each
  * carrying their own `startsWith` is exactly how one of them ends up a release behind the other.
  */
-export const HOST_ONLY_CHANNEL_PREFIXES: readonly string[] = ['githubControl:', 'githubCliAccounts:']
+export const HOST_ONLY_CHANNEL_PREFIXES: readonly string[] = ['githubControl:', 'githubCliAccounts:', 'watchLink:']
 
 export const HOST_ONLY_CHANNELS: ReadonlySet<string> = new Set([
   IPC.projectSetupRun,

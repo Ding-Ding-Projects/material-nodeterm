@@ -15,6 +15,24 @@
   mutates the parsed node and `clonePendingLaunch` keeps the setup gate. Thirteen upstream fixes
   were examined and skipped because the feature they guard is absent here; their prerequisite chains
   are listed in `docs/features/development/upstream-sync.md`.
+- Port the protocol foundation of upstream live links (read-only, expiring browser links to one
+  terminal). The viewer protocol, key derivation, URL format and test vectors
+  (`src/shared/watch-link/`), the output filter that removes clipboard, title, hyperlink and other
+  string escape sequences, the byte-rate limiter, the visible-capture and read-only watcher tmux
+  argument builders, and the sealed link store (`src/core/watch-link/`) are copied from upstream
+  with their tests, and the relay host policy now reserves the `watchLink:` channel namespace as
+  host-only. No live link can be created, listed or watched yet and no control is shown: hosting
+  needs the core relay host, hosted scheduler and host-token mint that upstream builds in
+  `src/core/relay/`, which this fork has not taken. `src/shared/presence.ts` now also strips the
+  Arabic letter mark (U+061C) from display names. The status, the missing pieces and the security
+  properties of the landed code are in `docs/features/remote/live-links.md`.
+
+  搬咗上游 live link（唯讀、會過期、喺瀏覽器睇一個 terminal）嘅底層：viewer protocol、條匙點樣
+  由 secret 推出嚟、URL 格式同 test vectors，仲有會剷走剪貼簿、標題、超連結等 escape sequence
+  嘅輸出過濾器、限速 bucket、tmux 只截可見畫面同唯讀 watcher 嘅參數、同埋封印咗嘅 link store，
+  全部連測試一齊搬。Relay 而家預留咗成個 `watchLink:` namespace 俾 host 自己用。暫時仲未開得、
+  睇得任何 link，介面亦冇加任何掣：要 host 一條 link 需要上游 `src/core/relay/` 嗰套 relay host，
+  呢個 fork 未搬。
 
 - Refresh the canonical upstream submodule pin to `9d5572e2984d5a3c8a68ac7883755221838ebccc`
   (upstream `v0.4.1-12`) and add `scripts/port-upstream.mjs` with the per-path port ledger
