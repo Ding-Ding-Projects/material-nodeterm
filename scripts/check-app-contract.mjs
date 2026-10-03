@@ -1868,6 +1868,29 @@ const FEATURES = [
     docs: ['docs/features/agents/usage-popover-account-default.md'],
   },
   {
+    id: 'usage-indicator-reliability',
+    label: 'Usage indicator held numbers, identities, diagnostics and SSH-host Codex usage',
+    files: [
+      'src/core/usage/claude-usage-map.ts',
+      'src/core/usage/usage-service.ts',
+      'src/core/usage/remote-codex-usage.ts',
+      'src/core/usage/grok-usage.ts',
+      'src/renderer/components/UsageIndicator.tsx',
+      'src/renderer/components/UsageOrganization.tsx',
+      'src/renderer/lib/usageDiagnostic.ts',
+      'src/renderer/lib/usageFormat.ts',
+    ],
+    contentChecks: [
+      ['src/core/usage/claude-usage-map.ts', 'export function holdLastGood('],
+      ['src/core/usage/remote-codex-usage.ts', "'--config', '-'"],
+      ['src/core/usage/usage-service.ts', 'fetchRemoteCodexUsage(target, deps.run'],
+      ['src/renderer/components/UsageIndicator.tsx', 'className="usage-popover__body"'],
+      ['src/renderer/components/UsageIndicator.tsx', 'usageDiagnosticLines(label, u.diagnostics, tr)'],
+      ['src/renderer/lib/usageFormat.ts', "'usage.held.failed'"],
+    ],
+    docs: ['docs/features/agents/usage-indicator-reliability.md'],
+  },
+  {
     id: 'aws-wizard-generator',
     label: 'Schema-driven AWS wizard generator node',
     files: [

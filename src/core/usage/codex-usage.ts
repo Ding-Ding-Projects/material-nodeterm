@@ -17,7 +17,7 @@ import { spawn } from 'child_process'
 import type { ProviderUsage, UsageLimit } from '../../shared/types'
 import { parseResetTimestamp } from './claude-usage-map'
 
-const BACKEND_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage'
+export const CODEX_BACKEND_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage'
 const FETCH_TIMEOUT_MS = 8000
 const APP_SERVER_TIMEOUT_MS = 10_000
 
@@ -141,7 +141,7 @@ async function fetchViaBackend(home: string): Promise<ProviderUsage | null> {
 
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
-  const res = await fetch(BACKEND_USAGE_URL, { signal: ctrl.signal, headers }).finally(() =>
+  const res = await fetch(CODEX_BACKEND_USAGE_URL, { signal: ctrl.signal, headers }).finally(() =>
     clearTimeout(t)
   )
   if (!res.ok) return null
@@ -157,14 +157,32 @@ async function fetchViaBackend(home: string): Promise<ProviderUsage | null> {
 
 /**
  * Tier 2: `codex app-server` speaks JSON-RPC over stdio. Costs a subprocess, so it runs only
- * when the backend tier declined. Sandboxed read-only/untrusted — this must never be a way for
- * a quota refresh to touch the user's files.
+ * when the backend tier declined. Sandboxed read-only — this must never be a way for a quota
+ * refresh to touch the user's files.
+ *
+ * The approval policy is `never`, and it used to be `untrusted`. That value was removed from
+ * codex's vocabulary in 0.149.0 and clap refuses the whole invocation rather than ignoring it:
+ *
+ *   error: invalid value 'untrusted' for '--ask-for-approval <APPROVAL_POLICY>'
+ *
+ * so on every current CLI this tier exited 2 before it spoke a word of JSON-RPC and silently
+ * returned null forever (issue #785). Unlike the launch path there is nothing to probe for here:
+ * `never` is accepted by EVERY codex we have measured, 0.146.0 through 0.154.0 (checked by running
+ * `-s read-only -a never app-server` against each binary), so one value serves both vocabularies.
+ * It is also the right value on its own terms — this is a non-interactive read with no user to
+ * prompt, and `-s read-only` is what actually keeps it away from the user's files; an approval
+ * policy that escalates would only have hung it.
  */
-async function fetchViaAppServer(home: string): Promise<ProviderUsage | null> {
+export const CODEX_APP_SERVER_ARGS = ['-s', 'read-only', '-a', 'never', 'app-server'] as const
+
+export async function fetchCodexUsageViaAppServerAt(
+  bin: string,
+  home: string
+): Promise<ProviderUsage | null> {
   return new Promise<ProviderUsage | null>((resolve) => {
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn('codex', ['-s', 'read-only', '-a', 'untrusted', 'app-server'], {
+      child = spawn(bin, [...CODEX_APP_SERVER_ARGS], {
         env: { ...process.env, CODEX_HOME: home },
         stdio: ['pipe', 'pipe', 'ignore']
       })
@@ -191,6 +209,11 @@ async function fetchViaAppServer(home: string): Promise<ProviderUsage | null> {
     // A missing `codex` binary surfaces here, not as a spawn throw.
     child.on('error', () => finish(null))
     child.on('exit', () => finish(null))
+    // codex can exit before draining a request (an older CLI without `app-server` prints usage
+    // and quits) — the EPIPE from the stdin writes below is an async 'error' EVENT on the pipe,
+    // not a throw at the call site, and unhandled it kills the main process (issue #382's
+    // class). A broken pipe means no reply is coming, so settle instead of waiting the timer out.
+    child.stdin?.on('error', () => finish(null))
 
     let buf = ''
     child.stdout?.on('data', (chunk: Buffer) => {
@@ -228,6 +251,16 @@ async function fetchViaAppServer(home: string): Promise<ProviderUsage | null> {
       }) + '\n'
     )
   })
+}
+
+/**
+ * The bare command name is resolved by the operating system, as before. Resolving a Windows
+ * `.cmd` shim safely needs the executable-invocation helpers in `../exec-path`, which belong to
+ * a separate port; until then a shim-only Windows install declines this tier and the backend
+ * tier answers on its own.
+ */
+async function fetchViaAppServer(home: string): Promise<ProviderUsage | null> {
+  return fetchCodexUsageViaAppServerAt('codex', home)
 }
 
 /**

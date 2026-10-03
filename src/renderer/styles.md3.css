@@ -1211,6 +1211,41 @@
   left: 232px;
 }
 
+/* Usage popover detail rows (upstream port, re-expressed on tokens). Each is quiet supporting
+   text inside an account block: the note under numbers kept through a failed read, the active
+   organization, the account row of the single-account Claude block, and the managed account the
+   collapsed pill describes. */
+.usage-popover__held {
+  display: block;
+  margin-top: 10px;
+  font: var(--md-typescale-body-small);
+  color: var(--md-on-surface-variant);
+}
+.usage-account__organization {
+  font: var(--md-typescale-body-small);
+  color: var(--md-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+/* A personal organization's name repeats the email printed right above it ("<email>'s
+   Organization"): kept, because it is the real name, but quieter. */
+.usage-account__organization--derived {
+  color: var(--md-outline);
+}
+.usage-claude__account .usage-row__title {
+  margin-bottom: 2px;
+}
+.usage-pill__account {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--md-typescale-body-small);
+  color: var(--md-on-surface-variant);
+}
+.usage-popover__switch {
+  margin-top: 10px;
+}
+
 /* ---------------------------------------------------------------------------------------------
    Geometry: floating overlays that assumed a 44px bar and no left rail
    --------------------------------------------------------------------------------------------- */

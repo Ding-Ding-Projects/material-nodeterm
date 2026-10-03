@@ -11,10 +11,16 @@ import {
   barFillPercent,
   formatResetCountdown,
   formatTimeAgo,
+  heldUsageText,
   percentNumber,
   percentText,
-  severityColor
+  severityColor,
+  usageFailureText,
+  type UsageTranslate
 } from '../lib/usageFormat'
+import { usageDiagnosticLines } from '../lib/usageDiagnostic'
+import { UsageOrganization } from './UsageOrganization'
+import { useI18n } from '../lib/i18n'
 import {
   enabledProviders,
   hasAnyUsage,
@@ -34,6 +40,11 @@ import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 /** Grace period before a hover-opened popover closes, so the pointer can cross the pill's own
  *  gap (or clip a corner en route elsewhere) without the panel flickering shut. */
 const USAGE_HOVER_CLOSE_MS = 220
+
+/** How often the collapsed pill re-asks for a MANAGED default account's snapshot. Only the system
+ *  account is polled + pushed by the service; the service caches managed reads for its own
+ *  debounce, so a re-ask inside that window is free. */
+const DEFAULT_ACCOUNT_POLL_MS = 5 * 60 * 1000
 
 /**
  * A single limit row in the popover: bar, "% left"/"% used", reset countdown. The bar's fill
@@ -65,6 +76,12 @@ function LimitRow({ limit, mode }: { limit: UsageLimit; mode: 'used' | 'remainin
   )
 }
 
+/** Why the bars above are old — only for numbers kept through a failed read. */
+function HeldNote({ u, tr }: { u: ClaudeUsage | null | undefined; tr: UsageTranslate }) {
+  const text = u ? heldUsageText(u, tr) : null
+  return text ? <span className="usage-popover__held">{text}</span> : null
+}
+
 /**
  * One account's limit bars under a label, for the multi-account popover. Reuses LimitRow's
  * markup — `u` is null while its on-demand fetch is in flight.
@@ -77,7 +94,9 @@ function AccountUsageBlock({
   accountId,
   selected,
   onSelect,
-  selectable
+  selectable,
+  tr,
+  action
 }: {
   label: string
   email?: string
@@ -87,19 +106,32 @@ function AccountUsageBlock({
   selected: boolean
   onSelect: (accountId: string | undefined) => void
   selectable: boolean
+  tr: UsageTranslate
+  /** An action that belongs to THIS account (the system row's "Switch Claude account…"). */
+  action?: React.ReactNode
 }) {
+  // The live read names the identity that actually answered; the settings email is the fallback
+  // while that read is in flight.
+  const shownEmail = u?.email ?? email
   return (
     <div className="usage-account">
       <span className="usage-account__label">
         <span>{label}</span>
         {selected && <span className="usage-account__default" aria-hidden>✓</span>}
       </span>
-      {(email ?? u?.email) && <span className="usage-account__email">{email ?? u?.email}</span>}
+      {shownEmail && <span className="usage-account__email">{shownEmail}</span>}
+      <UsageOrganization organization={u?.organization} email={shownEmail} />
       {u?.limits.map((l) => (
         <LimitRow key={limitKey(l)} limit={l} mode={mode} />
       ))}
-      {u && u.limits.length === 0 && <span className="usage-popover__empty">No usage data.</span>}
+      <HeldNote u={u} tr={tr} />
+      {u && u.limits.length === 0 && (
+        <span className="usage-popover__empty">
+          {u.status === 'error' ? usageFailureText(u, '', tr) : tr('usage.empty', 'No usage data.')}
+        </span>
+      )}
       {!u && <span className="usage-popover__empty usage-pill__pulse">···</span>}
+      {action}
       {selectable && (
         <Chip vocabularyMode="factual" selected={selected}
          
@@ -131,9 +163,11 @@ function RemoteUsageBlock({
   accountId,
   selected,
   onSelect,
-  selectable
+  selectable,
+  tr
 }: {
-  row: RemoteAccountUsage
+  row: Extract<RemoteAccountUsage, { provider?: 'claude' }>
+  tr: UsageTranslate
   mode: 'used' | 'remaining' | 'tokens'
   accountId: string | undefined
   selected: boolean
@@ -155,9 +189,12 @@ function RemoteUsageBlock({
       {row.usage.limits.map((l) => (
         <LimitRow key={limitKey(l)} limit={l} mode={mode} />
       ))}
+      <HeldNote u={row.usage} tr={tr} />
       {row.usage.limits.length === 0 && (
         <span className="usage-popover__empty">
-          {row.usage.status === 'error' ? 'Could not read usage on this host.' : 'No usage data.'}
+          {row.usage.status === 'error'
+            ? usageFailureText(row.usage, 'on this host', tr)
+            : tr('usage.empty', 'No usage data.')}
         </span>
       )}
       {selectable && (
@@ -191,27 +228,51 @@ function labelFor(provider: string): string {
 function ProviderBlock({
   u,
   mode,
-  identity
+  identity,
+  hostKey,
+  tr
 }: {
   u: ProviderUsage
   mode: 'used' | 'remaining' | 'tokens'
   identity?: string | null
+  /** Set for a row read on an SSH host (remote Codex): the badge says where the numbers came from. */
+  hostKey?: string
+  tr: UsageTranslate
 }) {
   const vocab = useVocabularyMapper()
   if (u.status === 'unavailable') return null
   const label = mapBuiltinAgentLabel(vocab, u.provider, labelFor(u.provider))
   return (
     <div className="usage-account">
-      <div className="usage-account__label">{label}</div>
+      <div className="usage-account__label">
+        {label}
+        {hostKey && (
+          <span
+            className="usage-account__host"
+            title={tr('usage.remote.readOn', 'Read on {host} over SSH', { host: hostKey })}
+          >
+            {hostKey} · SSH
+          </span>
+        )}
+      </div>
       {(identity || u.account) && (
         <div className="usage-account__email">{identity || u.account}</div>
       )}
       {u.limits.map((l) => (
         <LimitRow key={limitKey(l)} limit={l} mode={mode} />
       ))}
-      {u.limits.length === 0 && (
+      {/* One line per distinct reason (issue #912): two views failing the same way are one
+          failure of this provider, not two paragraphs of the same sentence. */}
+      {usageDiagnosticLines(label, u.diagnostics, tr).map((line) => (
+        <div className="usage-popover__empty" key={line}>
+          {line}
+        </div>
+      ))}
+      {u.limits.length === 0 && !u.diagnostics?.length && (
         <div className="usage-popover__empty">
-          {u.status === 'error' ? 'Could not read usage.' : 'No usage data.'}
+          {u.status === 'error'
+            ? tr('usage.failure.generic', 'Could not read usage.')
+            : tr('usage.empty', 'No usage data.')}
         </div>
       )}
     </div>
@@ -234,6 +295,8 @@ export function UsageIndicator({
 }): JSX.Element | null {
   const mapVocabulary = useVocabularyMapper()
   const claudeLabel = mapBuiltinAgentLabel(mapVocabulary, 'claude')
+  const { ts } = useI18n()
+  const tr: UsageTranslate = ts
   const [usage, setUsage] = useState<ClaudeUsage | null>(null)
   const [open, setOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -251,6 +314,7 @@ export function UsageIndicator({
   const codexAccounts = useSettings((s) => s.settings.codexAccounts)
   const systemCodexLabel = useSettings((s) => s.settings.systemCodexAccountLabel)
   const systemCodexEmail = useSystemCodexAccount((s) => s.email)
+  const remoteSystemCodexEmails = useSystemCodexAccount((s) => s.remoteEmails)
   const systemLabelSetting = useSettings((s) => s.settings.systemAccountLabel)
   const hiddenProviders = useSettings((s) => s.settings.hiddenUsageProviders)
   const percentMode = useSettings((s) => s.settings.usagePercentMode)
@@ -306,7 +370,18 @@ export function UsageIndicator({
   // pill stays empty until you click it). Never polled: each row is an ssh exec plus an HTTPS
   // request made on the host, which is not a price to pay every 15 minutes for a pill nobody may
   // be looking at.
-  const sshUp = useSshConn((s) => !!s.byProject[activeProjectId])
+  const sshConnection = useSshConn((s) => s.byProject[activeProjectId])
+  const sshUp = !!sshConnection
+  // The identity of the read a ⟳ starts with: a reply that lands after a project switch or a
+  // reconnect belongs to a machine (or connection) the panel no longer describes, and is dropped.
+  const remoteScope = useRef({ activeProjectId, scopeHostKey, sshConnection })
+  if (
+    remoteScope.current.activeProjectId !== activeProjectId ||
+    remoteScope.current.scopeHostKey !== scopeHostKey ||
+    remoteScope.current.sshConnection !== sshConnection
+  ) {
+    remoteScope.current = { activeProjectId, scopeHostKey, sshConnection }
+  }
   useEffect(() => {
     if (!scopeHostKey || !sshUp) {
       // Leaving the rows up after a switch would attribute one machine's numbers to another.
@@ -320,7 +395,7 @@ export function UsageIndicator({
     return () => {
       cancelled = true
     }
-  }, [open, scopeHostKey, sshUp])
+  }, [open, scopeHostKey, sshUp, sshConnection])
 
   // Fetch each account's usage on demand when the popover opens (system row uses `usage`).
   // Skipped entirely on an SSH project: those identities are not what this project spends.
@@ -337,6 +412,43 @@ export function UsageIndicator({
       cancelled = true
     }
   }, [accounts, scope.kind])
+
+  // The project's "Use for new sessions" account, validated exactly as node creation validates
+  // it (resolveNewNodeAccount): only an account THIS project can launch — local accounts on a
+  // local project, that host's accounts on an SSH project — and never a pending login. A stale id
+  // falls back to the system identity. The collapsed pill describes this identity.
+  const eligibleAccounts = useMemo(
+    () =>
+      claudeAccounts.filter(
+        (a) => !a.pending && (scopeHostKey ? a.host === scopeHostKey : !a.host)
+      ),
+    [claudeAccounts, scopeHostKey]
+  )
+  const pillDefaultId =
+    defaultAccountId && eligibleAccounts.some((a) => a.id === defaultAccountId)
+      ? defaultAccountId
+      : undefined
+  const pillDefaultLabel = eligibleAccounts.find((a) => a.id === pillDefaultId)?.label
+
+  // The LOCAL managed default's snapshot, kept fresh while the popover is CLOSED too — the pill
+  // spells it out. The mount-time read above is one-off; this re-asks on a slow cadence.
+  const localDefaultId = scope.kind === 'local' ? pillDefaultId : undefined
+  useEffect(() => {
+    if (!localDefaultId) return
+    let cancelled = false
+    const load = (): void => {
+      void window.nodeTerminal.usage.fetch(localDefaultId).then((u) => {
+        if (!cancelled) setAcctUsage((m) => ({ ...m, [localDefaultId]: u }))
+        recordClaudeUsage(localDefaultId, u)
+      })
+    }
+    load()
+    const timer = window.setInterval(load, DEFAULT_ACCOUNT_POLL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [localDefaultId])
 
   // Close the popover on an outside click.
   useEffect(() => {
@@ -405,17 +517,38 @@ export function UsageIndicator({
     accounts,
     providers: providers.filter((p) => !hidden.has(p.provider)),
     // Its own switch, not Claude's: hiding the local rows must not silently take the SSH hosts
-    // down with them, and vice versa.
-    remote: hidden.has('claude-remote') ? [] : remote
+    // down with them, and vice versa. A host's Codex rows follow the Codex switch.
+    remote: remote.filter((r) => !hidden.has(r.provider === 'codex' ? 'codex' : 'claude-remote')),
+    defaultAccountId: pillDefaultId,
+    defaultUsage:
+      localDefaultId && !hidden.has('claude') ? (acctUsage[localDefaultId] ?? null) : null
   })
   const claudeUsage = scoped.claude
   const visibleProviders = scoped.providers
   const visibleRemote = scoped.remote
-  const selectableRemote = visibleRemote.some((row) => row.accountId !== null)
+  // A host's Claude identities and its Codex identities share the remote rows; only the Claude
+  // ones can be a project's "Use for new sessions" account.
+  const claudeRemote = visibleRemote.filter(
+    (row): row is Extract<RemoteAccountUsage, { provider?: 'claude' }> => row.provider !== 'codex'
+  )
+  const codexRemote = visibleRemote.filter(
+    (row): row is Extract<RemoteAccountUsage, { provider: 'codex' }> => row.provider === 'codex'
+  )
+  const remoteCodexUsages = new Set<ProviderUsage>(codexRemote.map((row) => row.usage))
+  // A host's SYSTEM Codex row carries no account label; its identity is that host's own login,
+  // resolved once per host and never borrowed from this machine (fail-closed to the host key).
+  const hostSystemCodexShown =
+    scope.kind === 'ssh' && sshUp && codexRemote.some((row) => row.accountId === null)
+  useEffect(() => {
+    if (hostSystemCodexShown && scope.kind === 'ssh' && activeProjectId) {
+      useSystemCodexAccount.getState().ensureRemote(scope.hostKey, activeProjectId)
+    }
+  }, [hostSystemCodexShown, scope, activeProjectId])
+  const selectableRemote = claudeRemote.some((row) => row.accountId !== null)
   const availableAccountIds =
     scope.kind === 'local'
       ? scoped.accounts.map((account) => account.id)
-      : visibleRemote.flatMap((row) => (row.accountId === null ? [] : [row.accountId]))
+      : claudeRemote.flatMap((row) => (row.accountId === null ? [] : [row.accountId]))
   const effectiveDefault = availableAccountIds.includes(defaultAccountId ?? '')
     ? defaultAccountId
     : undefined
@@ -423,23 +556,47 @@ export function UsageIndicator({
   // Only providers the user has actually enabled reach the pill; render whenever ANY of them
   // (Claude included) has something to say. Both rules are pure and pinned by tests — gating on
   // Claude alone, which is what this did, left a Codex-only user with no pill at all.
-  const enabled = enabledProviders(visibleProviders)
-  if (!hasAnyUsage(claudeUsage, visibleProviders, visibleRemote)) return null
+  const enabled = enabledProviders([...visibleProviders, ...codexRemote.map((row) => row.usage)])
+  if (!hasAnyUsage(claudeUsage, visibleProviders, visibleRemote) && scoped.pillLimits.length === 0)
+    return null
+  // Name the identity when the pill shows a managed account, so its numbers are never read as the
+  // system account's. The system identity stays unlabelled — exactly the pill as it always was.
+  const pillAccountLabel =
+    scoped.pillAccountId === null
+      ? null
+      : scope.kind === 'local'
+        ? pillDefaultLabel
+        : claudeRemote.find((r) => r.accountId === scoped.pillAccountId)?.label
 
   // On an SSH project these are the HOST's limits — same shape, same labels, read somewhere else.
   const limits = scoped.pillLimits
-  const status = claudeUsage?.status ?? visibleRemote[0]?.usage.status ?? 'unavailable'
   const hasData = limits.length > 0 || enabled.length > 0
   const fetching = refreshing
-  const isError = status === 'error'
+  const providerError =
+    visibleProviders.some((p) => p.status === 'error') ||
+    codexRemote.some((r) => r.usage.status === 'error')
+  const claudeError =
+    claudeUsage?.status === 'error' || claudeRemote.some((r) => r.usage.status === 'error')
+  const isError = claudeError || providerError
   // The pill leads with whatever is closest to biting, so a scoped model cap that is nearly
   // exhausted can't hide behind a comfortable 5h window. Considers every enabled provider, not
   // just Claude, so an exhausted Codex window drives the bar too.
   const primary = primaryLimit([...limits, ...enabled.flatMap((p) => p.limits)])
   const updatedAt = claudeUsage?.updatedAt ?? visibleRemote[0]?.usage.updatedAt ?? null
+  // The single-account Claude block: its meters, its account and its action together (issue #912).
+  // The heading appears once another provider shares the panel, exactly as before.
+  const claudeAccountShown = !!(claudeUsage?.email || claudeUsage?.organization)
+  const claudeHasContent = limits.length > 0 || claudeError || claudeAccountShown
   const providerIdentity = (p: ProviderUsage): string | null | undefined =>
     p.provider !== 'codex'
       ? p.account
+      : remoteCodexUsages.has(p)
+        ? // A host's Codex identity: the managed account's label, else the host itself — never
+          // this machine's system Codex login.
+          p.account ||
+          (scope.kind === 'ssh'
+            ? remoteSystemCodexEmails[scope.hostKey] || scope.hostKey
+            : null)
       : p.accountId
         ? codexAccounts.find((a) => a.id === p.accountId)?.email ||
           codexAccounts.find((a) => a.id === p.accountId)?.label
@@ -453,19 +610,62 @@ export function UsageIndicator({
       // ⟳ refreshes what is actually on screen. On an SSH project that is the host — forced past
       // its debounce, since this is the only way to make it re-read before the cache expires —
       // and the local snapshot is left alone rather than spending a request on rows nobody can see.
+      const requestedScope = remoteScope.current
       if (scope.kind === 'ssh') {
-        setRemote(
-          await window.nodeTerminal.usage
-            .remote({ hostKey: scope.hostKey, force: true })
-            .catch((): RemoteAccountUsage[] => [])
-        )
+        const rows = await window.nodeTerminal.usage
+          .remote({ hostKey: scope.hostKey, force: true })
+          .catch((): RemoteAccountUsage[] => [])
+        if (remoteScope.current === requestedScope) setRemote(rows)
       } else {
-        setUsage(await window.nodeTerminal.usage.refresh())
+        // The other providers sit behind the same debounce, so a stale failure (an expired token
+        // the CLI has since renewed) would otherwise stay on screen until it runs out. Settled
+        // separately: one read failing must not throw away the others' fresh answers.
+        const [sys, def, ps] = await Promise.allSettled([
+          window.nodeTerminal.usage.refresh(),
+          localDefaultId ? window.nodeTerminal.usage.refresh(localDefaultId) : Promise.resolve(null),
+          window.nodeTerminal.usage.providers(true)
+        ])
+        if (sys.status === 'fulfilled') {
+          setUsage(sys.value)
+          recordClaudeUsage(undefined, sys.value)
+        }
+        if (localDefaultId && def.status === 'fulfilled' && def.value) {
+          const fresh = def.value
+          setAcctUsage((m) => ({ ...m, [localDefaultId]: fresh }))
+          recordClaudeUsage(localDefaultId, fresh)
+        }
+        if (ps.status === 'fulfilled') setProviders(ps.value)
       }
     } finally {
       setRefreshing(false)
     }
   }
+
+  // Issue #420 — "Switch account" where the limit is displayed: opens a terminal running the
+  // SYSTEM-scoped `claude /login`, so picking the other org is one click from the panel that said
+  // you need to. Nothing changes until the user completes the login IN that terminal, which is why
+  // there is no confirm dialog in front of it: the terminal is the confirmation surface, and the
+  // tooltip names what completing it changes. LOCAL scope only: on an SSH project a system login
+  // would rewrite the HOST's ~/.claude. Hidden with the Claude provider.
+  // Issue #912: it is rendered INSIDE the block of the account it switches (the Claude block, or
+  // the System row when managed accounts are listed). As a popover footer it sat under whichever
+  // provider happened to be last, and read as that provider's action.
+  const switchAction =
+    scope.kind === 'local' && !hidden.has('claude') ? (
+      <Button variant="outlined" size="small" vocabularyMode="factual"
+        className="usage-popover__switch"
+        title={ts(
+          'usage.switchAccount.title',
+          'Opens a terminal running `claude /login` for the system account (~/.claude). Completing it switches the org/account all system sessions use. Running sessions carry on under the new one. Managed accounts keep their own logins.'
+        )}
+        onClick={() => {
+          setOpen(false)
+          window.dispatchEvent(new CustomEvent('nodeterm:switch-system-account'))
+        }}
+      >
+        {ts('usage.switchAccount.label', '⇄ Switch {agent} account…', { agent: claudeLabel })}
+      </Button>
+    ) : null
 
   let pillBody: JSX.Element
   if (!hasData && fetching) {
@@ -475,6 +675,18 @@ export function UsageIndicator({
   } else {
     pillBody = (
       <>
+        {pillAccountLabel && (
+          <span
+            className="usage-pill__account"
+            title={
+              scoped.pillAccountId === pillDefaultId
+                ? ts('usage.pill.defaultAccount', 'Account used for new sessions in this project')
+                : ts('usage.pill.otherAccount', 'Account these limits belong to')
+            }
+          >
+            {pillAccountLabel}
+          </span>
+        )}
         {primary && (
           <span className="usage-pill__minibar" aria-hidden>
             <span
@@ -500,7 +712,7 @@ export function UsageIndicator({
           const worst = primaryLimit(p.limits)
           if (!worst) return null
           return (
-            <span key={p.provider} className="usage-pill__provider">
+            <span key={providerRowKey(p)} className="usage-pill__provider">
               {(limits.length > 0 || i > 0) && <span className="usage-pill__sep">·</span>}
               <span className="usage-pill__num">
               {percentNumber(worst.usedPercent, percentMode)}% {providerIdentity(p) || mapBuiltinAgentLabel(mapVocabulary, p.provider, labelFor(p.provider))}
@@ -552,60 +764,101 @@ export function UsageIndicator({
               <span className="usage-popover__ago">Updated {formatTimeAgo(updatedAt)}</span>
             )}
           </div>
-          {/* The local Claude section belongs to a LOCAL project only. On an SSH project the
-              remote blocks below carry the same limits, and rendering both would print the
-              host's numbers twice under two different headings. */}
-          {scope.kind === 'local' &&
-            (scoped.accounts.length > 0 && claudeUsage ? (
-              <div role="radiogroup" aria-label={`Default ${claudeLabel} account for new sessions`} onKeyDown={moveRadioFocus}>
-                <AccountUsageBlock
-                  mode={percentMode}
-                  label={systemAccountDisplay(systemLabelSetting, claudeUsage.email)}
-                  // Avoid printing the email twice when it's already the display label.
-                  email={systemLabelSetting.trim() ? (claudeUsage.email ?? undefined) : undefined}
-                  u={claudeUsage}
-                  accountId={undefined}
-                  selected={effectiveDefault === undefined}
-                  onSelect={selectDefaultAccount}
-                  selectable
-                />
-                {scoped.accounts.map((a) => (
+          {/* Issue #503: the account blocks SCROLL, the heading does not. Each account is a tall
+              block (name + Session/Weekly/Opus meters), so past about four accounts the popover
+              grew off the top of the window. Every row is rendered and the list scrolls. The switch
+              action scrolls WITH its block since issue #912 — it belongs to the Claude / System
+              block, which is always first. */}
+          <div className="usage-popover__body">
+            {/* The local Claude section belongs to a LOCAL project only. On an SSH project the
+                remote blocks below carry the same limits, and rendering both would print the
+                host's numbers twice under two different headings. */}
+            {scope.kind === 'local' &&
+              (scoped.accounts.length > 0 && claudeUsage ? (
+                <div role="radiogroup" aria-label={`Default ${claudeLabel} account for new sessions`} onKeyDown={moveRadioFocus}>
                   <AccountUsageBlock
-                    key={a.id}
                     mode={percentMode}
-                    label={a.label}
-                    email={a.email}
-                    u={acctUsage[a.id] ?? null}
-                    accountId={a.id}
-                    selected={effectiveDefault === a.id}
+                    label={systemAccountDisplay(systemLabelSetting, claudeUsage.email)}
+                    // Avoid printing the email twice when it's already the display label.
+                    email={systemLabelSetting.trim() ? (claudeUsage.email ?? undefined) : undefined}
+                    u={claudeUsage}
+                    accountId={undefined}
+                    selected={effectiveDefault === undefined}
                     onSelect={selectDefaultAccount}
                     selectable
+                    tr={tr}
+                    action={switchAction}
+                  />
+                  {scoped.accounts.map((a) => (
+                    <AccountUsageBlock
+                      key={a.id}
+                      mode={percentMode}
+                      label={a.label}
+                      email={a.email}
+                      u={acctUsage[a.id] ?? null}
+                      accountId={a.id}
+                      selected={effectiveDefault === a.id}
+                      onSelect={selectDefaultAccount}
+                      selectable
+                      tr={tr}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="usage-claude">
+                  {/* Claude's rows are bare when it is the only provider; once others share the
+                      panel they need a heading of their own to stay attributable. */}
+                  {enabled.length > 0 && claudeHasContent && (
+                    <div className="usage-account__label">{claudeLabel}</div>
+                  )}
+                  {limits.map((l) => (
+                    <LimitRow key={limitKey(l)} limit={l} mode={percentMode} />
+                  ))}
+                  <HeldNote u={claudeUsage} tr={tr} />
+                  {/* Another provider's data must not hide a failed Claude read. Keep any
+                      last-known Claude bars instead of replacing them with the empty state. */}
+                  {((!hasData && !providerError) || (claudeError && limits.length === 0)) && (
+                    <div className="usage-popover__empty">
+                      {claudeError ? usageFailureText(claudeUsage, '', tr) : tr('usage.empty', 'No usage data.')}
+                    </div>
+                  )}
+                  {/* Issue #912: the account is part of Claude's block, set like a meter row under
+                      the provider heading, not a peer section between Claude and the next provider. */}
+                  {claudeAccountShown && (
+                    <div className="usage-row usage-claude__account">
+                      <div className="usage-row__title">{tr('usage.claude.account', 'Account')}</div>
+                      {claudeUsage?.email && (
+                        <div className="usage-account__email">{claudeUsage.email}</div>
+                      )}
+                      <UsageOrganization
+                        organization={claudeUsage?.organization}
+                        email={claudeUsage?.email}
+                      />
+                    </div>
+                  )}
+                  {switchAction}
+                </div>
+              ))}
+            {/* On an SSH project these are the whole panel; the host badge is what says the numbers
+                were read somewhere other than this machine. Only the host's Claude identities are
+                selectable for new sessions; its Codex identities are a read-out. */}
+            {selectableRemote ? (
+              <div role="radiogroup" aria-label={`Default ${claudeLabel} account for new sessions`} onKeyDown={moveRadioFocus}>
+                {claudeRemote.map((r) => (
+                  <RemoteUsageBlock
+                    key={`${r.hostKey}#${r.accountId ?? ''}`}
+                    row={r}
+                    mode={percentMode}
+                    accountId={r.accountId ?? undefined}
+                    selected={(r.accountId ?? undefined) === effectiveDefault}
+                    onSelect={selectDefaultAccount}
+                    selectable
+                    tr={tr}
                   />
                 ))}
               </div>
             ) : (
-              <>
-                {/* No Claude snapshot is available, but enabled providers may still have limits. */}
-                {enabled.length > 0 && limits.length > 0 && (
-                  <div className="usage-account__label">{claudeLabel}</div>
-                )}
-                {limits.map((l) => (
-                  <LimitRow key={limitKey(l)} limit={l} mode={percentMode} />
-                ))}
-                {!hasData && <div className="usage-popover__empty">No usage data.</div>}
-                {claudeUsage?.email && (
-                  <div className="usage-account">
-                    <div className="usage-account__label">{claudeLabel} Account</div>
-                    <div className="usage-account__email">{claudeUsage.email}</div>
-                  </div>
-                )}
-              </>
-            ))}
-          {/* On an SSH project these are the whole panel; the host badge is what says the numbers
-              were read somewhere other than this machine. */}
-          {selectableRemote ? (
-            <div role="radiogroup" aria-label={`Default ${claudeLabel} account for new sessions`} onKeyDown={moveRadioFocus}>
-              {visibleRemote.map((r) => (
+              claudeRemote.map((r) => (
                 <RemoteUsageBlock
                   key={`${r.hostKey}#${r.accountId ?? ''}`}
                   row={r}
@@ -613,51 +866,36 @@ export function UsageIndicator({
                   accountId={r.accountId ?? undefined}
                   selected={(r.accountId ?? undefined) === effectiveDefault}
                   onSelect={selectDefaultAccount}
-                  selectable
+                  selectable={false}
+                  tr={tr}
                 />
-              ))}
-            </div>
-          ) : (
-            visibleRemote.map((r) => (
-              <RemoteUsageBlock
-                key={`${r.hostKey}#${r.accountId ?? ''}`}
-                row={r}
+              ))
+            )}
+            {codexRemote.map((r) => (
+              <ProviderBlock
+                key={`codex:${r.hostKey}:${r.accountId ?? ''}`}
+                u={r.usage}
                 mode={percentMode}
-                accountId={r.accountId ?? undefined}
-                selected={(r.accountId ?? undefined) === effectiveDefault}
-                onSelect={selectDefaultAccount}
-                selectable={false}
+                identity={providerIdentity(r.usage)}
+                hostKey={r.hostKey}
+                tr={tr}
               />
-            ))
-          )}
-          {scope.kind === 'ssh' && visibleRemote.length === 0 && (
-            <div className="usage-popover__empty">
-              No usage from this host yet — it is read once the project connects.
-            </div>
-          )}
-          {/* U8 (owed from PR 7): Codex emits one row per account, all `provider: 'codex'`.
-              Key on provider+accountId so each account renders distinctly, and reduce true
-              duplicates (two settings entries → the same underlying account) to one row. */}
-          {dedupeProviderRows(visibleProviders).map((p) => (
-            <ProviderBlock key={providerRowKey(p)} u={p} mode={percentMode} identity={providerIdentity(p)} />
-          ))}
-          {scope.kind === 'local' && !hidden.has('claude') && (
-            <Button variant="outlined" size="small" vocabularyMode="factual"
-             
-              className="usage-popover__switch"
-              title={
-                'Opens a terminal running \`claude /login\` for the system account (~/.claude). ' +
-                'Completing it switches the org/account all system sessions use. Running ' +
-                'sessions carry on under the new one. Managed accounts keep their own logins.'
-              }
-              onClick={() => {
-                setOpen(false)
-                window.dispatchEvent(new CustomEvent('nodeterm:switch-system-account'))
-              }}
-            >
-              ⇄ Switch account…
-            </Button>
-          )}
+            ))}
+            {scope.kind === 'ssh' && visibleRemote.length === 0 && (
+              <div className="usage-popover__empty">
+                {tr(
+                  'usage.remote.notYet',
+                  'No usage from this host yet. It is read once the project connects.'
+                )}
+              </div>
+            )}
+            {/* U8 (owed from PR 7): Codex emits one row per account, all `provider: 'codex'`.
+                Key on provider+accountId so each account renders distinctly, and reduce true
+                duplicates (two settings entries → the same underlying account) to one row. */}
+            {dedupeProviderRows(visibleProviders).map((p) => (
+              <ProviderBlock key={providerRowKey(p)} u={p} mode={percentMode} identity={providerIdentity(p)} tr={tr} />
+            ))}
+          </div>
         </div>
       )}
       <IconButton size="compact" icon="refresh" vocabularyMode="factual" aria-label="Refresh usage"

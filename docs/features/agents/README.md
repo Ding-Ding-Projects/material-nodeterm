@@ -10,6 +10,9 @@ Cognition Devin are built in; any other CLI can be added as a custom agent.
   and connected remote configuration scopes, with explicit missing and unavailable states.
 - [Usage-threshold account rotation](./usage-account-rotation.md) - opt-in account selection for
   new default Claude sessions when the active account reaches a configured usage threshold.
+- [Usage indicator reliability and identity](./usage-indicator-reliability.md) — last good numbers
+  through a failed read, named rate limits, per-account organizations, Grok diagnostics, SSH-host
+  Codex usage, and the pill's default-account label.
 - [Custom agent harnesses](./custom-agent-harness.md) — builtin capability inheritance, persisted
   harness identity, launch previews, environment expansion, and host-owned execution boundaries.
 - [Devin CLI](./devin-cli.md) — measured Cognition Devin CLI 3000.4.25 launch forms, lifecycle
