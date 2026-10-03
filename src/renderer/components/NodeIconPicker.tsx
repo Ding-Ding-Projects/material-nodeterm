@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { create } from 'zustand'
-import { normalizeNodeIcon, portableIconPath, type NodeIcon } from '@shared/node-icon'
+import {
+  iconFileName,
+  type NodeIcon,
+  nodeIconMime,
+  normalizeNodeIcon,
+  portableIconPath
+} from '@shared/node-icon'
 import { canvasImportRefusal } from '../canvas/canvas-image-import'
 import { useProjects } from '../state/projects'
 import { sessionForProject } from '../session/session'
@@ -79,6 +85,15 @@ function NodeIconPicker({ title, icon, onDone }: { title: string; icon?: NodeIco
     const api = sessionForProject(project.id).api
     const picked = await api.dialog.selectFile()
     if (!picked) return
+    // Checked BEFORE the copy, not after it. `selectFile` applies no filter, so a .heic is one
+    // click away — and validating afterwards meant the bytes had already been written into the
+    // project's git-shared `.nodeterm/images/`, leaving an orphan file behind every refusal.
+    // Nothing later removes it: `saveCanvasImage` creates exclusively, so the next pick would sit
+    // beside it as `photo (2).heic`.
+    if (!nodeIconMime(picked)) {
+      setError(map('That file type cannot be used as an icon. Try PNG, JPEG, GIF, WEBP or SVG.'))
+      return
+    }
     setBusy(true)
     try {
       const base64 = await api.fs.readBinary(picked)
@@ -86,7 +101,10 @@ function NodeIconPicker({ title, icon, onDone }: { title: string; icon?: NodeIco
         setError(map('Could not read that file.'))
         return
       }
-      const name = picked.replace(/\\/g, '/').split('/').pop() || 'icon.png'
+      // Both separators, because `selectFile` answers in the HOST's dialect: on Windows it is
+      // `C:\\Users\\me\\logo.png`, which `split('/')` returned whole, so the copy was named after
+      // the entire path and `safeUploadName` then had to salvage it.
+      const name = iconFileName(picked) || 'icon.png'
       const saved = await api.files.saveCanvasImage(project.id, name, base64)
       if (!saved) {
         setError(map('Could not save the image. Check that this project folder is writable.'))
@@ -95,7 +113,10 @@ function NodeIconPicker({ title, icon, onDone }: { title: string; icon?: NodeIco
       const stored = portableIconPath(saved, project.ssh ? undefined : project.cwd)
       const next = normalizeNodeIcon({ type: 'image', path: stored })
       if (!next) {
-        setError(map('That file type cannot be used as an icon. Try PNG, JPEG, GIF, WEBP or SVG.'))
+        // The extension was already accepted above, so this is no longer "wrong file type": it
+        // means the SAVED path is one the validator will not vouch for (a UNC share, a path with
+        // no root).
+        setError(map('Could not use that file\u2019s location as an icon path.'))
         return
       }
       onDone(next)
