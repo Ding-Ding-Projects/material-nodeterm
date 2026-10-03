@@ -92,8 +92,12 @@ merged once per tranche against a waypoint commit, never against the final tip, 
 is never merged wholesale.
 
 The port lands in themed tranches, tracked in `ROADMAP.md` and in issue #225: security fixes
-first, then the self-contained families (watch-link live links, github, usage, native SSH
-transport), then the entangled ones. Every ported user-facing surface is re-expressed on this
+first, then the families measured as least entangled (github, usage, native SSH transport, and
+the protocol half of watch-link live links), then the entangled ones. Watch-link was first listed
+here as self-contained; porting it showed that its link host, service, watcher policy and every
+renderer surface depend on upstream's core relay stack (`src/core/relay`, 28 files), which this
+fork still carries under `src/main/remote` without hooks, so only the protocol foundation landed
+(see `docs/features/remote/live-links.md`) and the rest waits for the relay tranche. Every ported user-facing surface is re-expressed on this
 fork's Material 3 primitives and tokens, gets a row in the Material 3 audit, a feature article, a
 changelog entry and localized copy. Fork-only features are preserved by three-way merging, never
 replaced.
@@ -118,6 +122,10 @@ to be ported as their own lanes in this order:
 A separate fork gap found while porting: `armForColdOpen` into a background project still emits
 the legacy launch shape that the typed `pendingLaunch` boundary rejects, so cold-open arming is
 not functional there.
+
+Tranche 1 was a set of cherry-picks scattered across upstream history, so it records no single
+waypoint merge; the first waypoint merge is owed by the tranche that first absorbs a contiguous
+upstream range.
 
 Deliberate exclusions, recorded in the ledger's `declined` map as they are reached: the upstream
 Liquid Glass theme as a visual language (this fork's Material 3 contract wins; non-visual fixes
