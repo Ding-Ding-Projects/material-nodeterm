@@ -4,7 +4,7 @@
  * a project name derived from a folder is one of the places this rule is needed most.
  *
  * Recorded paths outlive and cross the machine that wrote them: a native `basename` parses a
- * Deen No record incorrectly on Linux, and parses a legal backslash in a POSIX filename
+ * Windows record incorrectly on Linux, and parses a legal backslash in a POSIX filename
  * incorrectly on Windows.
  *
  * Drive-absolute and UNC syntax are unambiguously Windows-shaped. Everything else uses POSIX

@@ -674,7 +674,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       get().reopenProject(existing.id)
       return existing
     }
-    // Syntax-aware: a Deen No folder has no '/', so a POSIX-only split returns the WHOLE path
+    // Syntax-aware: a Windows folder has no '/', so a POSIX-only split returns the WHOLE path
     // and the project tab ends up named 'C:\Users\...' instead of its folder.
     const name = basenameForPathSyntax(folder) || 'Project'
     const project = get().addProject(name, folder)

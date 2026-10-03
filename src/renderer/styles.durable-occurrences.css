@@ -1,4 +1,4 @@
-/* Planner/alarm/timer controls use the same Lang gui surface roles as the rest of the renderer. */
+/* Planner/alarm/timer controls use the same Material 3 surface roles as the rest of the renderer. */
 .planner-section,
 .timer-node,
 .alarm-node { min-width: 0; color: var(--md-on-surface); background: var(--md-surface-container); border-radius: var(--md-shape-medium, 12px); }

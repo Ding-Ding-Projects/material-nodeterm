@@ -19,7 +19,7 @@ export interface ProjectForOpen {
  * defense, never a second resolution.
  */
 export function normalizeProjectCwd(resolvedCwd: string): string {
-  // Both dialects: a POSIX-only trim leaves a Deen No path's trailing separator in place, and
+  // Both dialects: a POSIX-only trim leaves a Windows path's trailing separator in place, and
   // `C:\foo` vs `C:\foo\` then key two projects onto one folder.
   return normalizePathTail(resolvedCwd)
 }

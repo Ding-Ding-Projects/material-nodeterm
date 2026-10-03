@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Refresh the canonical upstream submodule pin to `9d5572e2984d5a3c8a68ac7883755221838ebccc`
+  (upstream `v0.4.1-12`) and add `scripts/port-upstream.mjs` with the per-path port ledger
+  `scripts/upstream-port-ledger.json`, its focused test, and the `check:upstream-port` build guard.
+  Upstream changes since the shared merge base `215857e2` (2,021 commits) are ported as per-file
+  three-way merges tracked in the ledger, in themed tranches that each record their waypoint as a
+  merge commit; the measured delta and the tranche plan are documented in
+  `docs/features/development/upstream-sync.md` and tracked on issue #225. Private conversation
+  wording that earlier sessions left in `HANDOFF.md`, `ROADMAP.md`, one stylesheet comment, one
+  test string and five source comments was replaced with ordinary English.
+
 - Record the verified `v1.0.30` publication baseline: non-draft release commit
   `4b267fb4a20e9c1d05affc3eb98d25f3e9bd9f04`, Release workflow run `34082019435`, and its
   unsigned Squirrel installer, full package, and update index. Built-product interaction and
