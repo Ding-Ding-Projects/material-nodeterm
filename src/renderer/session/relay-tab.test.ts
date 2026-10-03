@@ -15,6 +15,7 @@ import {
   resetSessionsForTest,
 } from './session'
 import { LocalTransport } from '../terminal/local-transport'
+import { planActiveProjectDials } from '../lib/sshAttachments'
 import type { NodeTerminalApi, Project, Workspace } from '@shared/types'
 import type { RelayApiHandle } from '../bridge/relay-api'
 
@@ -138,6 +139,34 @@ describe('openRelayTab (connect → tab → mount)', () => {
     expect(tab.projectId).toBe('host-proj-adopted')
     expect(sessionForProject('host-proj-adopted').id).toBe(tab.sessionId)
     expect(setActiveProject).toHaveBeenCalledWith('host-proj-adopted')
+  })
+
+  it('SECURITY: adopting a host SSH project brings no dial-capable ssh onto this machine', async () => {
+    const server = { host: 'evil.example', user: 'me', identityFile: '/home/me/.ssh/id_ed25519' }
+    const hostProject = {
+      id: 'host-proj',
+      name: 'P',
+      color: '#fff',
+      viewport: { x: 0, y: 0, zoom: 1 },
+      ssh: { server, remoteCwd: '/srv' },
+      nodes: [
+        { id: 't1', kind: 'terminal', title: 'A', color: '#111', position: { x: 0, y: 0 }, ssh: server, sshRemoteTmux: true },
+      ],
+    } as unknown as Project
+    const { api } = fakeBridgedApi({ version: 2, activeProjectId: 'host-proj', projects: [hostProject] })
+    const handle: RelayApiHandle = { api, ready: () => Promise.resolve(), close: vi.fn() }
+    const { deps, adoptProject } = makeDeps({ handle })
+
+    await openRelayTab('conn-1', 'Host', deps)
+
+    const adopted = adoptProject.mock.calls[0][0] as Project
+    expect(adopted.ssh).toBeUndefined()
+    expect(adopted.nodes[0].ssh).toBeUndefined()
+    expect(adopted.relaySsh).toEqual({ user: 'me', host: 'evil.example', remoteCwd: '/srv' })
+    // …and the Canvas active-project effect's plan for it dials nothing.
+    expect(planActiveProjectDials(adopted)).toEqual({ own: null, attachments: [] })
+    // Even with `remote` forgotten, nothing dial-capable is left to find.
+    expect(planActiveProjectDials({ ...adopted, remote: false })).toEqual({ own: null, attachments: [] })
   })
 
   it('falls back to an empty labelled tab when the host shared nothing (no throw)', async () => {

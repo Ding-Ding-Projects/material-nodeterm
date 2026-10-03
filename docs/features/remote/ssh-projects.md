@@ -82,6 +82,15 @@ pushed to an SSH host is throttled to one write every two seconds, but a change 
   features explicitly need (transcript directories for agent hooks, for example) — never
   widened to the remote user's entire home directory.
 
+- **A relay tab never makes this machine dial SSH.** When another machine shares an SSH project
+  over the relay, its `ssh.server` (host, user, port, identity file, extra arguments) is that
+  machine's connection. The adopt boundary and every relay canvas-sync update strip the
+  dial-capable connection objects (`src/renderer/session/relay-ssh.ts`), and each dial site — the
+  active-project connect, the host-attachment pre-warm, the reconnect coordinator and a terminal's
+  master lookup — independently refuses a relay project. The tab keeps only display strings for
+  its `SSH user@host` chip; a relay SSH-project terminal is created on the sharing machine's core
+  with `requireRemote`, so it joins a live session there or is refused, never spawned locally.
+
 ## Verification
 
 - `src/core/remote-ssh/control-master.destination.test.ts` proves the destination refusal;
@@ -89,6 +98,9 @@ pushed to an SSH host is throttled to one write every two seconds, but a change 
   (through `src/core/testing/posix-shell.ts`, so Windows uses Git Bash);
   `src/shared/ssh.test.ts` covers the chip decision and
   `src/main/remote-ssh/remote-status-push.test.ts` the state-edge push.
+- `src/renderer/session/relay-ssh.test.ts`, `relay-ssh.wiring.test.ts`, `relay-tab.test.ts` and
+  `src/renderer/lib/sshAttachments.test.ts` prove a relay tab carries no dial-capable connection
+  and that every guest-side dial site refuses it.
 - Open an SSH project, create a remote terminal node, and confirm commands actually execute on
   the remote host (`hostname` should print the remote machine's name).
 - Disconnect network access to the remote host, attempt to open a new remote terminal node, and

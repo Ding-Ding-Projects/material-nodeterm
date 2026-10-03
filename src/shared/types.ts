@@ -1504,6 +1504,12 @@ export interface Project {
    * peer's disk, so it must never land in this client's workspace.json.
    */
   remote?: boolean
+  /**
+   * Relay tabs only: the host's SSH endpoint as DISPLAY strings (the tab's `SSH user@host` chip).
+   * A relay tab never carries `ssh` — it would make this machine dial the host's server with this
+   * machine's credentials (see renderer/session/relay-ssh.ts). Runtime-only like `remote`.
+   */
+  relaySsh?: { user: string; host: string; remoteCwd: string }
 }
 
 export type ProjectCanvasScope = 'multiverse' | 'aws-universe'
