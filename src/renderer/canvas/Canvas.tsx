@@ -597,6 +597,7 @@ import {
   type WorktreeCreateValue,
   type WorktreeEntry
 } from '@shared/worktree'
+import { sharedBasePathOf, sharedWorktreeLocationRefusal } from '@shared/worktree-location'
 import { normWorktreePath, type BoundGroup } from '@shared/worktree-reconcile'
 import {
   canManageWslDistro,
@@ -8852,6 +8853,19 @@ export function Canvas() {
     async (v: WorktreeCreateValue) => {
       const target = worktreeDialog
       if (!target) return
+      // The dialog's suggested path can come from the git-shared settings file: a location it
+      // produced must stay beside the repository (@shared/worktree-location). A path the person
+      // typed is theirs — the rule judges only the one the shared setting derives for this branch.
+      const locationRefusal = sharedWorktreeLocationRefusal({
+        path: v.path,
+        repoRoot: v.repoPath,
+        branch: v.branch,
+        sharedBasePath: sharedBasePathOf(projectLaunchInfoNow(target.projectId)?.resolved.worktree)
+      })
+      if (locationRefusal) {
+        setWorktreeError(locationRefusal)
+        return
+      }
       setWorktreeBusy(true)
       setWorktreeError(null)
       // A REJECTED ipc is not the same as a failed op, and both have to land here. The Server
@@ -16182,6 +16196,18 @@ export function Canvas() {
             })
             if (!wtPath) {
               reply({ ok: false, error: 'open-worktree: could not derive a worktree path — pass --path' })
+              return
+            }
+            // A location the git-shared settings file produced must stay beside the repository
+            // (@shared/worktree-location). An explicit `--path` is the caller's own and not judged.
+            const locationRefusal = sharedWorktreeLocationRefusal({
+              path: wtPath,
+              repoRoot,
+              branch,
+              sharedBasePath: args.path?.trim() ? undefined : sharedBasePathOf(pw)
+            })
+            if (locationRefusal) {
+              reply({ ok: false, error: `open-worktree: ${locationRefusal}` })
               return
             }
             const res = await api.git
