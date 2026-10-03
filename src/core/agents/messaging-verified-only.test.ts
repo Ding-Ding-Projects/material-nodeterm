@@ -123,6 +123,33 @@ describe('send/reply require `verified` — and controlPolicy is NOT the decider
   })
 })
 
+describe('issue #1088: a refusal caused by the INSTANCE says so', () => {
+  it('names the unavailable node identity and the shell-reported cause, still refusing', async () => {
+    // A keyring-less Linux desktop could not arm a secret at all, so EVERY session was legacy and
+    // `send` was refused forever with only the flat sentence — no visible cause.
+    hookServer.clearNodeAuthSecretForTests()
+    hookServer.setNodeIdentityUnavailable(new Error('Encryption is not available.'))
+    try {
+      for (const verb of ['send'] as const) {
+        const res = await post(verb, 'n-src', undefined, 'text/plain')
+        expect(res.status, verb).toBe(403)
+        const text = (await res.text()).trim()
+        expect(text.startsWith(verifiedRefusalFor(verb)), verb).toBe(true)
+        expect(text, verb).toContain('Node identity is unavailable in this NodeTerm instance')
+        expect(text, verb).toContain('Encryption is not available.')
+        const json = (await (await post(verb, 'n-src')).json()) as { error: string }
+        expect(json.error, verb).toContain('Node identity is unavailable')
+      }
+      expect(handled).toEqual([])
+    } finally {
+      hookServer.setNodeAuthSecret(SECRET)
+    }
+    // Arming a secret supersedes the recorded failure: back to the flat, diagnosis-free sentence.
+    const res = await post('send', 'n-src', undefined, 'text/plain')
+    expect((await res.text()).trim()).toBe(MESSAGING_CONTROL_REFUSAL)
+  })
+})
+
 describe('where the verbs sit in the routing tables', () => {
   // `needsLiveCanvas('send'/'reply') === false` is pinned where the function lives —
   // `src/renderer/lib/controlRouting.test.ts` — because this core project cannot import the

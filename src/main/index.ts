@@ -1554,6 +1554,8 @@ app.whenReady().then(async () => {
     initNodeTokens({ canvases: () => workspaceStore.persistedCanvases() })
   } catch (error) {
     console.warn('[node-identity] no secret — hook identity unavailable, running legacy', error)
+    // Issue #1088: a verified-only refusal must be able to say the cause is this instance.
+    hookServer.setNodeIdentityUnavailable(error)
   }
 
   await browserUseBackend.start().catch((error) => {
