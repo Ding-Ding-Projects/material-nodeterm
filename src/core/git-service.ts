@@ -16,6 +16,7 @@ import type {
 } from '../shared/types'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
 import * as worktreeOps from '../shared/worktree-ops'
+import { worktreeTargetRefusal } from './worktree-target'
 import type { WorktreeListResult, SubmoduleListResult } from '../shared/worktree'
 import { branchParentConfigKey, isValidGitRef, parseSubmoduleStatus } from '../shared/worktree'
 import {
@@ -646,6 +647,11 @@ export class GitService {
     // `wtPath` is computed from the LOCAL data dir, so adding it through a remote git would create a
     // worktree at a nonsense path on the host. Refuse (see `isRemoteRepo`).
     if (isRemoteRepo(repoPath)) return Promise.resolve(REMOTE_WORKTREE_REFUSAL())
+    // Every caller's backstop (dialog, `open-worktree`, a relay or browser client): never into the
+    // repository's `.git`, never REDIRECTED by a symlink into a hidden folder of the home directory
+    // (see `worktree-target.ts`). Judged on real paths, which no renderer can see.
+    const refusal = worktreeTargetRefusal(wtPath, repoPath)
+    if (refusal) return Promise.resolve({ ok: false, message: refusal })
     return this.createOwnedWorktree(repoPath, wtPath, branch, baseRef, isNew)
   }
 
