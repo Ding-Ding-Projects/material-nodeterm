@@ -6,131 +6,90 @@
 import fs from 'fs'
 import path from 'path'
 import { spawn } from 'child_process'
-import { createHash, randomUUID } from 'crypto'
-import { renameAtomic } from './fs-atomic'
-
-const RUNTIME_MARKER = 'session-host-runtime.json'
-const RUNTIME_EXECUTABLE = process.platform === 'win32' ? 'session-host-runtime.exe' : 'session-host-runtime'
+import {
+  ensureStagedHostRuntime,
+  type StageOptions,
+  type StagedHostRuntime
+} from './session-host-runtime'
 
 export type PreparedSessionHostRuntime = {
   executablePath: string
   scriptPath: string
 }
 
-type RuntimeMarker = {
-  schemaVersion: 1
-  executableBytes: number
-  hostScriptSha256: string
-}
-
-function sha256(bytes: Buffer): string {
-  return createHash('sha256').update(bytes).digest('hex')
-}
-
-async function readMarker(runtimeDir: string): Promise<RuntimeMarker | null> {
-  try {
-    const parsed = JSON.parse(await fs.promises.readFile(path.join(runtimeDir, RUNTIME_MARKER), 'utf8'))
-    if (
-      parsed?.schemaVersion !== 1 ||
-      !Number.isSafeInteger(parsed.executableBytes) ||
-      parsed.executableBytes <= 0 ||
-      typeof parsed.hostScriptSha256 !== 'string' ||
-      !/^[a-f0-9]{64}$/.test(parsed.hostScriptSha256)
-    ) {
-      return null
-    }
-    return parsed as RuntimeMarker
-  } catch {
-    return null
-  }
-}
-
-async function preparedRuntime(runtimeDir: string): Promise<PreparedSessionHostRuntime | null> {
-  const executablePath = path.join(runtimeDir, RUNTIME_EXECUTABLE)
-  const scriptPath = path.join(runtimeDir, 'session-host', 'host.cjs')
-  const nativePackage = path.join(runtimeDir, 'session-host', 'node_modules', 'node-pty', 'package.json')
-  const marker = await readMarker(runtimeDir)
-  if (!marker) return null
-  try {
-    const executable = await fs.promises.stat(executablePath)
-    if (!executable.isFile() || executable.size !== marker.executableBytes) return null
-    const hostScript = await fs.promises.readFile(scriptPath)
-    if (sha256(hostScript) !== marker.hostScriptSha256) return null
-    const native = await fs.promises.stat(nativePackage)
-    if (!native.isFile()) return null
-    return { executablePath, scriptPath }
-  } catch {
-    return null
-  }
-}
+/** How long a host launch waits for the first staging of a new version (copy, hash and smoke run).
+ *  A staging that has not finished in time keeps running in the background and serves the next
+ *  launch; this launch is refused rather than run from the install directory. */
+export const STAGED_RUNTIME_WAIT_MS = 45_000
 
 /**
- * Copy the packaged Electron-as-Node executable and complete session-host bundle into a stable,
- * versioned local runtime outside Squirrel's replaceable app-* tree. Publication is a directory
- * rename, so another process sees either no runtime or a complete one. Existing hosts are always
- * connected before this function is called, so staging never replaces a live owner.
+ * The executable and script to launch the host with.
+ *
+ * Dev (no `runtimeDir`): the running executable and the repo's bundle, as before.
+ *
+ * Packaged (`runtimeDir`, the staging root the desktop shell supplies): a private, verified copy
+ * of the host runtime outside Squirrel's replaceable `app-*` directory (`session-host-runtime.ts`:
+ * the Electron executable under its own image name, its DLLs, ICU data, resource paks and locales,
+ * and the complete `resources/session-host` bundle with its own node-pty, hash-verified and
+ * smoke-run before a marker makes it launchable). If no staged runtime can be produced, this
+ * REFUSES: a packaged host is never run from the install directory, because a host mapping that
+ * directory would pin the old `app-*` tree for as long as its sessions live. Existing hosts are
+ * always connected before this is called, so staging never replaces a live owner.
  */
 export async function prepareSessionHostRuntime(options: {
   scriptPath: string
   userDataDir: string
   runtimeDir?: string | null
   executablePath?: string
+  resourcesPath?: string | null
+  appVersion?: string
+  platform?: NodeJS.Platform | string
+  log?: (line: string) => void
+  /** Test seam: the staging implementation (production: the memoized `ensureStagedHostRuntime`). */
+  stage?: (opts: StageOptions) => Promise<StagedHostRuntime | null>
+  waitMs?: number
 }): Promise<PreparedSessionHostRuntime> {
   const sourceExecutable = path.resolve(options.executablePath ?? process.execPath)
   const sourceScript = path.resolve(options.scriptPath)
   if (!options.runtimeDir) return { executablePath: sourceExecutable, scriptPath: sourceScript }
 
-  const runtimeDir = path.resolve(options.runtimeDir)
+  const runtimeRoot = path.resolve(options.runtimeDir)
   const sourceHostDir = path.dirname(sourceScript)
   for (const source of [path.dirname(sourceExecutable), sourceHostDir, path.resolve(options.userDataDir)]) {
-    const relative = path.relative(source, runtimeDir)
+    const relative = path.relative(source, runtimeRoot)
     if (!relative || (!relative.startsWith('..') && !path.isAbsolute(relative))) {
       throw new Error('session-host runtime directory overlaps a replaceable or state directory')
     }
   }
 
-  const existing = await preparedRuntime(runtimeDir)
-  if (existing) return existing
-  if (fs.existsSync(runtimeDir)) {
-    throw new Error('session-host stable runtime exists but failed validation')
-  }
-
-  const parent = path.dirname(runtimeDir)
-  await fs.promises.mkdir(parent, { recursive: true })
-  const stage = path.join(parent, `.${path.basename(runtimeDir)}.stage-${process.pid}-${randomUUID()}`)
+  const stage = options.stage ?? ensureStagedHostRuntime
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let staged: StagedHostRuntime | null
   try {
-    await fs.promises.mkdir(stage, { recursive: false })
-    const stagedExecutable = path.join(stage, RUNTIME_EXECUTABLE)
-    const stagedHostDir = path.join(stage, 'session-host')
-    await fs.promises.copyFile(sourceExecutable, stagedExecutable, fs.constants.COPYFILE_EXCL)
-    await fs.promises.cp(sourceHostDir, stagedHostDir, {
-      recursive: true,
-      errorOnExist: true,
-      force: false,
-    })
-    const [executable, hostScript] = await Promise.all([
-      fs.promises.stat(stagedExecutable),
-      fs.promises.readFile(path.join(stagedHostDir, 'host.cjs')),
+    staged = await Promise.race([
+      stage({
+        platform: options.platform ?? process.platform,
+        execPath: sourceExecutable,
+        resourcesPath: options.resourcesPath,
+        script: sourceScript,
+        appVersion: options.appVersion ?? 'unknown',
+        runtimeRoot,
+        log: options.log
+      }).catch(() => null),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), options.waitMs ?? STAGED_RUNTIME_WAIT_MS)
+      })
     ])
-    const marker: RuntimeMarker = {
-      schemaVersion: 1,
-      executableBytes: executable.size,
-      hostScriptSha256: sha256(hostScript),
-    }
-    await fs.promises.writeFile(path.join(stage, RUNTIME_MARKER), `${JSON.stringify(marker)}\n`, {
-      flag: 'wx',
-    })
-    await renameAtomic(stage, runtimeDir)
-  } catch (error) {
-    await fs.promises.rm(stage, { recursive: true, force: true })
-    const wonRace = await preparedRuntime(runtimeDir)
-    if (wonRace) return wonRace
-    throw error
+  } finally {
+    if (timer) clearTimeout(timer)
   }
-
-  const prepared = await preparedRuntime(runtimeDir)
-  if (!prepared) throw new Error('session-host stable runtime publication failed validation')
-  return prepared
+  if (!staged) {
+    throw new Error(
+      'session-host staged runtime is unavailable; a packaged host is never launched from the ' +
+        'replaceable install directory (see session-host.log for the staging step that failed)'
+    )
+  }
+  return { executablePath: staged.exe, scriptPath: staged.script }
 }
 
 /**

@@ -147,12 +147,16 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
       return process.resourcesPath
     },
     get sessionHostRuntimeDir() {
-      if (!app.isPackaged) return undefined
+      // Staging is a Windows concern (Squirrel's replaceable app-* tree); elsewhere the host is
+      // launched as before.
+      if (!app.isPackaged || process.platform !== 'win32') return undefined
       const localAppData = process.env.LOCALAPPDATA
       const version = app.getVersion()
       if (!localAppData || !path.isAbsolute(localAppData)) return undefined
       if (!/^[A-Za-z0-9._-]{1,64}$/.test(version)) return undefined
-      return path.join(localAppData, 'node-terminal-session-host-runtime', `app-${version}`)
+      // The staging ROOT: session-host-runtime.ts publishes each verified copy under it as
+      // `app-<version>-<fingerprint>` and collects old ones nothing runs from.
+      return path.join(localAppData, 'node-terminal-session-host-runtime')
     },
     // The ipcMain half of each registration is UNCHANGED — the local window's call is bit-identical
     // to what it was before the table existed (same event-stripping, same sender id).

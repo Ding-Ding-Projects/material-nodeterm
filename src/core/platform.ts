@@ -10,8 +10,9 @@ export interface CorePlatform {
   readonly isPackaged: boolean
   /** Electron's packaged resource root. Optional because Server Edition has no such directory. */
   readonly resourcesPath?: string
-  /** Stable, versioned runtime directory for the detached Windows session host. The desktop
-   *  keeps this outside Squirrel's replaceable app-* directories; other shells omit it. */
+  /** Root under which the detached Windows session host's runtime is staged
+   *  (`%LOCALAPPDATA%/node-terminal-session-host-runtime`), one verified `app-<version>-<fp>`
+   *  copy per version, outside Squirrel's replaceable app-* directories. Other shells omit it. */
   readonly sessionHostRuntimeDir?: string
   /** Seal / unseal a secret at rest, byte-in byte-out. Present together on a shell that can
    *  encrypt (Desktop: Electron safeStorage). Their ABSENCE is a supported configuration, not a

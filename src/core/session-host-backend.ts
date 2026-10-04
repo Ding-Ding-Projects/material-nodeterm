@@ -5,10 +5,14 @@ import type { TextDeliveryResult } from '../shared/text-delivery'
 // sites need a session-host equivalent for. Nothing here is tmux-specific or Electron-specific;
 // see docs/windows-session-host.md for how each of these maps onto the underlying protocol.
 
+import fs from 'fs'
+import path from 'path'
 import { platform } from './platform'
 import {
   SessionHostClient,
-  SessionHostProtocolCompatibilityError
+  SessionHostProtocolCompatibilityError,
+  type HostShutdownOutcome,
+  type HostUpdateInspection
 } from './session-host-client'
 import { SessionHostPty } from './session-host-pty'
 import type { ExecuteLaunchResult, SessionHostSpawnOptions } from '../session-host/protocol'
@@ -37,6 +41,16 @@ function getClient(): SessionHostClient {
       userDataDir: platform().userDataDir,
       resourcesPath: platform().resourcesPath,
       runtimeDir: platform().sessionHostRuntimeDir,
+      appVersion: platform().appVersion,
+      // Into the host's own log, so a device report carries why a host ran from where.
+      stageLog: (line) => {
+        void fs.promises
+          .appendFile(
+            path.join(platform().userDataDir, 'session-host.log'),
+            `${new Date().toISOString()} [app] ${line}\n`
+          )
+          .catch(() => undefined)
+      },
       // Dev-mode fallback, mirroring `findTmux`'s own `process.cwd()` use: under `electron-vite
       // dev` the cwd is the repo root, which is where `npm run host:build` writes its bundle.
       repoRoot: process.cwd()
@@ -137,4 +151,14 @@ export async function sessionHostHasSession(name: string): Promise<boolean> {
  *  (`listNodetermSessions` — the relay host's session browser). */
 export async function sessionHostListSessions(): Promise<string[]> {
   return getClient().listSessions()
+}
+
+/** Prepare-for-update (issue #829): what the running host holds, without ever launching one. */
+export async function sessionHostInspectForUpdate(): Promise<HostUpdateInspection> {
+  return getClient().inspectForUpdate()
+}
+
+/** Prepare-for-update (issue #829): ask the running host to end every session and exit. */
+export async function sessionHostShutdownForUpdate(): Promise<HostShutdownOutcome> {
+  return getClient().shutdownForUpdate()
 }
