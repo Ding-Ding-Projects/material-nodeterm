@@ -6,7 +6,7 @@ import { installCodexHooks, removeCodexHooks } from './codex'
 import { installGeminiHooks, removeGeminiHooks } from './gemini'
 import { installOpencodeHooks, removeOpencodeHooks } from './opencode'
 import { installGrokHooks, removeGrokHooks } from './grok'
-import { ensureGrokHomeProbed, grokHomeDir } from '../grok-paths'
+import { ensureGrokHomeProbed, grokHomeDir, grokHomeFallbackWasSilent } from '../grok-paths'
 import { installCopilotHooks, removeCopilotHooks } from './copilot'
 import { installDevinHooksInto } from './devin'
 
@@ -49,6 +49,18 @@ export function installManagedAgentHooks(): void {
   // that we fell back without evidence, which is the diagnostic this bug never had.
   const grokHomeAtInstall = grokHomeDir()
   void ensureGrokHomeProbed().then(() => {
+    // The diagnostic the flag exists for. Without this line `grokHomeFallbackWasSilent` promised an
+    // explanation the user never saw, which is the very failure it was written to close.
+    // Linux only: that is the one host where the login-shell probe runs, so it is the one host where
+    // "the probe returned nothing" is a fact rather than a skipped question.
+    if (process.platform === 'linux' && grokHomeFallbackWasSilent()) {
+      console.warn(
+        `[agent-hooks] grok: could not confirm $GROK_HOME (the login-shell probe returned nothing), ` +
+          `so hooks were installed into the default ${grokHomeDir()}. If grok reads a different ` +
+          `GROK_HOME, its nodes will show no status, no session name and no notifications, silently. ` +
+          `Set GROK_HOME in the environment nodeterm itself is launched from to make this definite.`
+      )
+    }
     if (grokHomeDir() === grokHomeAtInstall) return
     try {
       installGrokHooks()
