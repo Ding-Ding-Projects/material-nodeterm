@@ -125,6 +125,7 @@ import { vaultRootFor } from '../core/password-manager/vault-location'
 import { vaultPathFor } from '../core/password-manager/vault-store'
 import { pickProjectIcon } from './project-icon-upload'
 import { allowGuestNavigation } from './webview-nav'
+import { appEntryUrlFor, decideMainFrameNavigation, isSafeExternalUrl } from './navigation-guard'
 import { BrowserControlLedger } from './browser-control-ledger'
 import {
   recordOpenProjectGrant,
@@ -492,19 +493,6 @@ let minecraftServers: ReturnType<typeof registerMinecraftIpc>['manager'] | undef
 let virtualMachineManager: ReturnType<typeof registerVirtualMachineIpc>['manager'] | undefined
 let timerOccurrences: TimerOccurrenceService | undefined
 let triggerScheduler: TriggerScheduler | undefined
-
-// Only hand the OS a URL with a vetted scheme. Blocks file://, smb://, and custom
-// protocol-handler schemes that could be smuggled in via remote announcement feeds or
-// rendered markdown links. Used by both the window-open handler and the IPC handler.
-function isSafeExternalUrl(url: unknown): url is string {
-  if (typeof url !== 'string') return false
-  try {
-    const { protocol } = new URL(url)
-    return protocol === 'http:' || protocol === 'https:' || protocol === 'mailto:'
-  } catch {
-    return false
-  }
-}
 
 const settingsStore = new SettingsStore()
 
@@ -1524,19 +1512,24 @@ function createWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
-  // Block any in-page top-level navigation away from the app origin (defense in depth).
+  // Main-frame navigation is allowed ONLY back to the entry document (reload / dev HMR); a safe
+  // external URL goes to the OS; everything else is blocked. "Any file://" used to be allowed, and
+  // a relative link in rendered markdown resolved to another file:// path and wiped the canvas —
+  // policy + reasoning in navigation-guard.ts.
+  const rendererIndexPath = buildPaths.mainRenderer
+  const appEntryUrl = appEntryUrlFor(process.env['ELECTRON_RENDERER_URL'], rendererIndexPath)
   win.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith('file://') && !url.startsWith(process.env['ELECTRON_RENDERER_URL'] ?? '\0')) {
-      e.preventDefault()
-      if (isSafeExternalUrl(url)) void shell.openExternal(url)
-    }
+    const decision = decideMainFrameNavigation(url, appEntryUrl)
+    if (decision === 'allow') return
+    e.preventDefault()
+    if (decision === 'external') void shell.openExternal(url)
   })
 
   // Load the electron-vite dev server if present, otherwise the built file.
   if (process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    win.loadFile(buildPaths.mainRenderer)
+    win.loadFile(rendererIndexPath)
   }
 
   return win

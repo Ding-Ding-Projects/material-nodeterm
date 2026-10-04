@@ -41,7 +41,7 @@ export default function GitHubWorkItemNode({ data, selected }: NodeProps<CanvasN
       ])}</p>
       {item.updatedAt && <p>{mapOwnedSentence(vocab, [copy('Updated: '), fact(item.updatedAt)])}</p>}
       {html
-        ? <div aria-label={vocab('Work item description')} dangerouslySetInnerHTML={{ __html: html }} />
+        ? <div className="github-work-item-node__description" aria-label={vocab('Work item description')} dangerouslySetInnerHTML={{ __html: html }} />
         : <p>{vocab('No description provided.')}</p>}
       {(item.refreshState === 'offline' || item.refreshState === 'forbidden') && (
         <p role="status">{mapOwnedSentence(vocab, [fact('GitHub'), copy(' is unavailable here. The last safe snapshot remains visible.')])}</p>

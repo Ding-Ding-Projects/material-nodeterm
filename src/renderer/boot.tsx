@@ -6,6 +6,7 @@ import { ensureClaudeCliCaps } from './state/permissionMode'
 import { ensureCodexIdentityCaps } from './state/codexIdentity'
 import { initAgentResolver } from './state/agent-resolver'
 import { refreshAgentEnv } from './lib/agentEnv'
+import { installMarkdownLinkGuard, LOCAL_LINK_MESSAGE } from './lib/markdownLinks'
 import './fonts.css'
 import './styles.css'
 import './styles.md3.css'
@@ -19,6 +20,20 @@ import './ui/md3/primitives.css'
 import './tailwind.css'
 import './styles.clipping.css'
 import './styles.durable-occurrences.css'
+
+// Links in rendered markdown (terminal ⌘M view, transcript bubbles, sticky notes, editor preview,
+// the kanban card modal) must never navigate this window: a relative link used to wipe the canvas
+// on the desktop, and any link navigated the Server Edition's tab away. One delegated listener for
+// every surface — contract and reasoning in lib/markdownLinks.ts. Web links go through the bridge
+// (system browser on desktop, a new tab in the Server Edition). The toast is kind 'error' because
+// that is the only kind Canvas renders — an 'info' toast would be a silent no-op.
+installMarkdownLinkGuard(document, {
+  openExternal: (url) => window.nodeTerminal.shell.openExternal(url),
+  notifyLocal: () =>
+    window.dispatchEvent(
+      new CustomEvent('nodeterm:toast', { detail: { kind: 'error', message: LOCAL_LINK_MESSAGE } })
+    )
+})
 
 // Register the custom-agent → baseAgent resolver so the capability predicates (hasHooks, canResume,
 // canControlCanvas, …) resolve a custom agent's inherited harness. Reads the live settings store.
