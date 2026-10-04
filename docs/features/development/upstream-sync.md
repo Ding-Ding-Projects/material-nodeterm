@@ -123,6 +123,22 @@ A separate fork gap found while porting: `armForColdOpen` into a background proj
 the legacy launch shape that the typed `pendingLaunch` boundary rejects, so cold-open arming is
 not functional there.
 
+### Tranche 2 record (2026-10-04)
+
+Landed on `main` as `b1711431d` (watch-link, protocol foundation only), `0229467d7` (usage),
+`4cd61252e` (github) and `6364df8bb` (ssh), each lane merged `--no-ff` after its own gates and
+again on the merged tree. Every ported surface is on this fork's Material 3 primitives with audit
+rows, localized copy and an article: `docs/features/remote/live-links.md`,
+`docs/features/agents/usage-indicator-reliability.md`,
+`docs/features/kanban/github-issues-and-pull-requests.md`, `docs/features/remote/ssh-projects.md`.
+Deferred with the reason recorded on issue #225: the live-link host, service and renderer (need
+upstream `src/core/relay`); the account-session move and the dock-space layout test (usage; need
+the accounts lane and a nav-rail equivalent); `report-issue` wiring (needs the capability-default
+system); the native `ssh2` transport, codex context probes, remote-file paging, pty spawn gate and
+cold self-heal, share-team and port-forward (ssh; dependencies or other families). The ledger
+records only byte-identical absorptions, so three-way merged files surface as conflicts again on
+the next port; a "merged but adapted" state is a known gap of the tool.
+
 Tranche 1 was a set of cherry-picks scattered across upstream history, so it records no single
 waypoint merge; the first waypoint merge is owed by the tranche that first absorbs a contiguous
 upstream range.

@@ -20,7 +20,12 @@ commit; see
   `docs/features/development/upstream-sync.md`. Source-verified only: the node-icon picker's new
   refusal message owes a built-app capture, tracked with issue #222.)
 - [ ] **Tranche 2:** watch-link live links, github, usage, native SSH transport, each through the
-  Material 3 adaptation checklist.
+  Material 3 adaptation checklist. (Landed on `main` as `b1711431d` (watch-link protocol
+  foundation only; host, service and UI wait for the relay core), `0229467d7` (usage),
+  `4cd61252e` (github core, issues/prs verbs, pull request cards) and `6364df8bb` (ssh argv
+  builders, remote writes, tunnel repair, pre-warm; the native ssh2 transport waits on the
+  dependency). Source-verified only; the new surfaces (usage popover blocks, pull request cards,
+  close-reason choice, SSH connection banner) owe built-app captures, tracked with issue #222.)
 - [ ] **Tranche 3:** windows/session-host/updater, terminal/pty.
 - [ ] **Tranche 4:** server, settings/workspace.
 - [ ] **Tranche 5:** agents/grok/codex/accounts/hooks.

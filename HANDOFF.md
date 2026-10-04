@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-10-04, upstream v0.4.1 port, tranche 2 (issue #225)
+
+Tranche 2 is on `main` at `6364df8bb`, pushed and read back: watch-link (`b1711431d`, protocol
+foundation only), usage (`0229467d7`), github (`4cd61252e`) and ssh (`6364df8bb`), one lane
+branch each from `8ad74dd47`, each merged `--no-ff` after its gates and the merged tree's gates.
+Conflicts between lanes were confined to `CHANGELOG.md`, the audit tuple list and the port ledger
+(both sides kept, ledger unioned); every hot-file hunk auto-merged. Verification on the final
+merged tree under Node 24.19.0: `npm run typecheck` 0 errors; `port-upstream check`,
+`check-md3-controls`, `check-material-audit`, `check-docs-bundle`, `check-changelog`,
+`check-personal-vocabulary-coverage` green; `check-canonical-upstream` verified at `9d5572e2`;
+`check-app-contract` unchanged at its one known design-reference parity failure; focused vitest
+over every lane's files and their neighbours: 659 files, 7,791 tests green. Each lane's own full
+suite matched the tranche-0 failing set (22 or 23 failures, all environment-bound). Not run: a
+built-app session, packaged Windows captures (the new surfaces owe them, issue #222), a live sshd,
+real GitHub traffic. Deferred work and the reason for each item are recorded in
+`docs/features/development/upstream-sync.md` and on issue #225; the port tool's inability to
+record a "merged but adapted" path is a known gap. Next: tranche 3 (windows/session-host/updater,
+terminal/pty) per the roadmap, or the relay core first if live links are wanted sooner.
+
 ## 2026-10-03, upstream v0.4.1 port, tranche 1 (issue #225)
 
 The security tranche is on `main` at `8ad74dd47` (lanes 1 and 2 merged as `faa6a90b9`, lane 3 as
