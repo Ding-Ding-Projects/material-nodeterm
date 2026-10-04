@@ -5557,6 +5557,8 @@ export interface NodeTerminalApi {
   githubCliAccounts: import('./github-issues').GitHubCliAccountsApi
   usage: UsageApi
   sessionMemory: SessionMemoryApi
+  /** Dev-server ports listening in each node's session, and SSH same-port forwards. */
+  devPorts: import('./dev-ports').DevPortsApi
   /** Encrypted, bounded Codex continuation packets for explicit cold-relaunch review. */
   agentContinuation?: AgentContinuationApi
   vscode: VsCodeApi

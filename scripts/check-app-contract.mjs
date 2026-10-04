@@ -2440,6 +2440,24 @@ const FEATURES = [
     docs: ['docs/features/terminals/stale-working-directory.md'],
   },
   {
+    id: 'terminal-dev-ports',
+    label: 'Dev-server ports chip and SSH same-port forwarding',
+    files: [
+      'src/core/dev-ports.ts',
+      'src/core/dev-ports-service.ts',
+      'src/core/remote-ssh/port-forward.ts',
+      'src/renderer/components/PortsChip.tsx',
+      'src/renderer/canvas/useDevPortScanner.ts',
+    ],
+    contentChecks: [
+      ['src/core/dev-ports-service.ts', 'export function startDevPortsService('],
+      ['src/renderer/components/PortsChip.tsx', 'export const PortsChip'],
+      ['src/renderer/bridge/ws-bridge.ts', 'export function buildDevPortsApi('],
+      ['src/server/index.ts', 'startDevPortsService({'],
+    ],
+    docs: ['docs/features/terminals/dev-server-ports.md'],
+  },
+  {
     id: 'session-icons',
     label: 'Per-session icons',
     files: [

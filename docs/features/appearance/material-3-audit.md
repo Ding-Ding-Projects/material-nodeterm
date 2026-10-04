@@ -309,6 +309,7 @@ The concrete source remediations in this pass are:
 | `status-node-boundary` | Node error boundary | `src/renderer/components/NodeBoundary.tsx` | `export function withNodeBoundary` | `node-error` | Source reviewed; runtime proof pending |
 | `status-ssh-terminal-chip` | Terminal SSH host chip (hidden when it repeats the project host) | `src/renderer/nodes/TerminalNode.tsx` | `sshChipRepeatsProject(` | `term-ssh-chip` | Source reviewed; runtime proof pending |
 | `status-terminal-stale-cwd` | Terminal stale working-directory banner with Restart in folder | `src/renderer/nodes/TerminalNode.tsx` | `term-node__stalecwd-restart` | `term-node__stalecwd` | Source reviewed; runtime proof pending |
+| `status-terminal-dev-ports` | Dev-server ports chip and menu on the terminal node and card modal | `src/renderer/components/PortsChip.tsx` | `export const PortsChip` | `ports-chip` | Source reviewed; runtime proof pending |
 | `status-ssh-relay-chip` | Relay tab SSH display chip (display strings only) | `src/renderer/components/ProjectSwitcher.tsx` | `activeProject?.relaySsh` | `md3-remote-chip` | Source reviewed; runtime proof pending |
 | `status-ssh-connection-banner` | SSH connection banner (connecting, error with Reconnect, lost hook tunnel) | `src/renderer/components/SshConnectionBanner.tsx` | `export function SshConnectionBanner` | `md3-ssh-banner` | Source reviewed; runtime proof pending |
 | `site-home` | Landing page home | `site/index.html` | `<body` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |

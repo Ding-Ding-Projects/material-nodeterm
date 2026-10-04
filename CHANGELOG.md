@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Port upstream dev-server port discovery (upstream `4e6e8607`, `6bad4a60`). A terminal node and
+  its kanban card modal show the ports the session listens on as a Material 3 chip; a row opens
+  `http://localhost:<port>` in a browser node beside the terminal, and on an SSH project forwards
+  the same port over the project's SSH connection first (loopback only, never a privileged or
+  re-mapped port without asking). The Server Edition serves the same scan for its own machine and
+  lists the ports without an open action. See `docs/features/terminals/dev-server-ports.md`.
+
+  搬咗上游「開發伺服器 port」功能：terminal node 同 kanban 卡片會顯示個 session 監聽緊嘅 port，
+  撳一下就喺旁邊開個瀏覽器 node；SSH project 會先經 SSH 連線將同一個 port 轉駁返嚟（只綁本機，
+  1024 以下或者換 port 都會先問你）。Server Edition 會列出伺服器自己嘅 port，但唔會幫你打開。
 - Port upstream terminal session pacing and co-attach fixes (upstream `8df485d9`, `3570a287`,
   `48e86eb8`, `8379470f`, `cd83267f`, `978c7191`). The cold-restore scrollback snapshot of a busy
   session is captured on a paced cadence, serialized, skipped when unchanged and retried after a

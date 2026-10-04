@@ -92,6 +92,7 @@ import { createGrantsAccessor } from '../core/push-grants'
 import { createAckSweeper } from '../core/ack-sweep'
 import { createSessionReaper } from '../core/session-budget'
 import { startSessionMemoryService, sshScopePredicate } from '../core/session-memory-service'
+import { startDevPortsService } from '../core/dev-ports-service'
 import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
 import { registerWindowsDiagnosticsIpc } from '../core/windows-diagnostics'
 import { startToyLockService } from '../core/toylocks/toylock-service'
@@ -761,6 +762,17 @@ export async function startServer(
   // so reordering the two would change nothing. The requirement is that the load happens and is
   // complete before the server serves — not that it precedes this line.
   startSessionMemoryService({
+    tmuxBin: () => ptyManager.getTmuxBin(),
+    remote: {
+      isRemoteProject: sshScopePredicate({ sshProjectIds: () => workspaceStore.sshProjectIds() })
+    }
+  })
+
+  // Dev-server ports: this machine's scan is real (the server's own terminals). An SSH project
+  // answers `unsupported` by identity — there is no ControlMaster here — and nothing is forwarded:
+  // a page the viewer opened would load on the VIEWER's machine, so the browser tab lists the
+  // ports without an open action (components/PortsChip, isBrowserRuntime).
+  startDevPortsService({
     tmuxBin: () => ptyManager.getTmuxBin(),
     remote: {
       isRemoteProject: sshScopePredicate({ sshProjectIds: () => workspaceStore.sshProjectIds() })

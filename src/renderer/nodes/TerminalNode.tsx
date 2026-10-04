@@ -165,6 +165,7 @@ import { markNodeActivity, markNodeOpened } from '../lib/nodeActivity'
 import { Localized } from '../ui/Localized'
 import { StatusChip } from '../ui/md3/StatusChip'
 import { Button, IconButton } from '../ui/md3'
+import { PortsChip } from '../components/PortsChip'
 import { Input } from '../ui/Input'
 import { AccountIdentityPills } from '../components/AccountIdentityPills'
 import { presentAccount } from '../lib/accountPresentation'
@@ -1866,6 +1867,7 @@ export function TerminalNode({
   // node (`isRemoteSessionNode` — an SSH-project terminal carries `data.ssh`/`data.sshRemoteTmux`).
   // The affordance is absent, not merely refused on click.
   const sshProject = useProjects((s) => !!s.projects.find((p) => p.id === s.activeProjectId)?.ssh)
+  const portsProjectId = useProjects((s) => s.activeProjectId)
   // The project's SSH endpoint, as two primitives: the project object is rebuilt on every node
   // serialization, so selecting `ssh.server` itself would re-render this node on each canvas edit.
   const projectSshHost = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.ssh?.server.host)
@@ -5739,6 +5741,17 @@ export function TerminalNode({
           {/* ADHD time awareness — beside the session chip, because a clock in a menu does nothing
             for time blindness. Renders nothing at all while the mode is off. */}
           <AdhdElapsedChip nodeId={id} />
+          {/* Dev servers this session listens on. On an SSH project a row forwards the SAME port over
+            the project's master before opening it. The card modal draws the same component. */}
+          <PortsChip
+            nodeId={id}
+            projectId={portsProjectId}
+            remote={sshProject}
+            onOpenUrl={(url) =>
+              window.dispatchEvent(new CustomEvent('nodeterm:open-url-node', { detail: { url, sourceNodeId: id } }))
+            }
+            menuZIndex={60}
+          />
           {/* Cold-relaunch recovery is an explicit anchored review card. It reads encrypted provider
             state only; mounting never sends text and the Continue action owns the only delivery. */}
           <AgentContinuationReview

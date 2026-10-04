@@ -1635,6 +1635,84 @@ export const CATALOG: Catalog = {
   },
   // Stale working-directory banner on a terminal node. {folder} is the node's own folder path,
   // a fact supplied by the renderer.
+  // Dev-server ports chip on a terminal node and its card modal. Port numbers, local ports and
+  // command names are facts supplied by the renderer.
+  'devPorts.chip.count': {
+    en: flat('{count} ports'),
+    yue: flat('{count} 個 port')
+  },
+  'devPorts.chip.aria': {
+    en: flat('Listening ports: {ports}'),
+    yue: flat('監聽緊嘅 port：{ports}')
+  },
+  'devPorts.chip.titleLocal': {
+    en: flat('Dev servers listening in this session; click to open'),
+    yue: flat('呢個 session 入面監聽緊嘅開發伺服器；撳一下打開')
+  },
+  'devPorts.chip.titleRemote': {
+    en: flat('Dev servers listening on the server; click to forward and open'),
+    yue: flat('伺服器上面監聽緊嘅開發伺服器；撳一下轉駁再打開')
+  },
+  'devPorts.chip.titleBrowser': {
+    en: flat('Dev servers listening on the server; click to list them'),
+    yue: flat('伺服器上面監聽緊嘅開發伺服器；撳一下列出嚟')
+  },
+  'devPorts.menu.session': {
+    en: flat('Listening in this session'),
+    yue: flat('喺呢個 session 監聽緊')
+  },
+  'devPorts.menu.server': {
+    en: flat('Listening on the server'),
+    yue: flat('喺伺服器監聽緊')
+  },
+  'devPorts.menu.other': {
+    en: flat('Other ports ({count})'),
+    yue: flat('其他 port（{count}）')
+  },
+  'devPorts.row.open': {
+    en: flat('Open {row}'),
+    yue: flat('打開 {row}')
+  },
+  'devPorts.row.openLocal': {
+    en: flat('Open http://localhost:{port} in a browser node'),
+    yue: flat('喺瀏覽器 node 打開 http://localhost:{port}')
+  },
+  'devPorts.row.openForward': {
+    en: flat('Forward port {port} from the server to the same port here, then open it in a browser node'),
+    yue: flat('將伺服器嘅 port {port} 轉駁去呢部電腦同一個 port，再喺瀏覽器 node 打開')
+  },
+  'devPorts.row.openForwarded': {
+    en: flat('Forwarded to localhost:{local} on this computer; open it in a browser node'),
+    yue: flat('已經轉駁到呢部電腦嘅 localhost:{local}；喺瀏覽器 node 打開')
+  },
+  'devPorts.row.stop': {
+    en: flat('Stop forwarding :{port}'),
+    yue: flat('停止轉駁 :{port}')
+  },
+  'devPorts.row.stopHint': {
+    en: flat('Close localhost:{local} on this computer'),
+    yue: flat('關閉呢部電腦嘅 localhost:{local}')
+  },
+  'devPorts.row.browserTab': {
+    en: flat('Listening on the server. A browser tab cannot open the server’s localhost; open it on the server or from the desktop app.'),
+    yue: flat('喺伺服器監聽緊。瀏覽器分頁開唔到伺服器嘅 localhost；請喺伺服器或者桌面版 app 打開。')
+  },
+  'devPorts.confirm.privileged': {
+    en: flat('{reason} Forward it to this computer anyway? Binding a port below 1024 may need administrator rights here.'),
+    yue: flat('{reason} 照樣轉駁去呢部電腦？用 1024 以下嘅 port 可能要管理員權限。')
+  },
+  'devPorts.confirm.forwardAnyway': {
+    en: flat('Forward anyway'),
+    yue: flat('照樣轉駁')
+  },
+  'devPorts.confirm.otherPort': {
+    en: flat('{reason} Forward it to local port {alt} instead? Links the tool prints (http://localhost:{port}) will not reach it; use the browser node this opens.'),
+    yue: flat('{reason} 改為轉駁去本機 port {alt}？工具印出嚟嘅連結（http://localhost:{port}）會去唔到；請用呢度開嘅瀏覽器 node。')
+  },
+  'devPorts.confirm.usePort': {
+    en: flat('Use port {alt}'),
+    yue: flat('用 port {alt}')
+  },
   'terminal.staleCwd.message': {
     en: [
       'This terminal\u2019s folder was deleted or replaced, so the shell\u2019s working directory no longer exists.',

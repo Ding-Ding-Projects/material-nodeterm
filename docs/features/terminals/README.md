@@ -16,6 +16,8 @@ standalone Windows session host.
   a focused terminal, Windows Ctrl+V paste, input-method Caps Lock and DOM row spacing.
 - [Stale working directory banner](./stale-working-directory.md) — a reattached shell whose
   folder was deleted or replaced, and the explicit Restart in folder recovery.
+- [Dev-server ports](./dev-server-ports.md) — the ports a terminal's session listens on, opening
+  them in a browser node, and same-port forwarding for SSH projects.
 
 See also [Canvas → Node kinds](../canvas/README.md) for how a terminal node fits alongside
 agent, sticky, editor and diff nodes, and [Agents](../agents/README.md) for the agent-specific

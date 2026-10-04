@@ -9,6 +9,7 @@ import {
   buildRealApi,
   buildServerFilesApi,
   buildSessionMemoryApi,
+  buildDevPortsApi,
   buildTranscriptApi,
   saveUploadBlobOverHttp,
   saveUploadOverHttp
@@ -411,6 +412,27 @@ describe('buildRealApi: host platform', () => {
       installLabel: null,
       platform: null
     })
+  })
+})
+
+describe('buildRealApi: devPorts', () => {
+  // A real WS namespace: the server shell registers the same core service for its own machine.
+  // The query decides which machine answers, so it must reach the RPC call unmodified.
+  it('scan, forward and unforward hit the real channels with the caller\'s arguments', async () => {
+    const c = fakeClient()
+    const api = buildDevPortsApi(c as never)
+    const q = { projectId: 'p1', remote: true }
+    const req = { projectId: 'p1', nodeId: 'n1', port: 5173 }
+    await api.devPorts.scan(q)
+    await api.devPorts.forward(req)
+    await api.devPorts.unforward({ projectId: 'p1', localPort: 5173 })
+    expect(c.calls.map((x) => ({ kind: x.kind, method: x.method }))).toEqual([
+      { kind: 'request', method: IPC.devPortsScan },
+      { kind: 'request', method: IPC.devPortsForward },
+      { kind: 'request', method: IPC.devPortsUnforward }
+    ])
+    expect(c.calls[0].args).toEqual([q])
+    expect(c.calls[1].args).toEqual([req])
   })
 })
 
