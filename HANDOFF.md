@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-10-04, upstream v0.4.1 port, tranche 3 wave 1B (issue #225)
+
+Wave 1B is on `main` at `ed63353d8` plus the follow-up dedupe commit, pushed and read back: the
+Windows session-host and updater lane (`af608d5be`, 8 lane commits) and the terminal, pty, launch
+and dev-ports lane (`ed63353d8`, 6 lane commits), both from `00797a2c2`. The two implementing
+agents reached their session limit after their last commit and never returned a report, and no
+reviewer ran; the lanes were judged from their trees (typecheck, focused suites, source checks,
+commit-message scan, a hand read of the hot-file deletions against the terminal invariants in
+`CLAUDE.md`) and merged `--no-ff`. Eight conflicts in the terminal merge were resolved by shape;
+the update-exit registry both lanes had ported was deduplicated (that file missed the merge commit
+and landed as the next commit, which is why the merge commit itself does not typecheck); a
+dev-ports test fixture was moved to a documentation address. Gates on the merged tree under Node
+24.19.0: `npm run typecheck` 0 errors; focused vitest over 64 files 892 passed, 2 failed
+(`src/core/session-host-client.test.ts` attach rollback, red on the pre-merge base too,
+environment-bound); `port-upstream check`, `check-md3-controls`, `check-material-audit`,
+`check-docs-bundle`, `check-changelog`, `check-personal-vocabulary-coverage`, `check-uh-inventory`
+green; `check-app-contract` unchanged at its one known failure. Not run: a built-app session,
+packaged Windows captures (issue #222). Parked: `port/upstream-w1-terminal-filelinks-wip`
+(file-link hover, menu and token port; does not typecheck). Upstream `main` moved to `ba3ddfc4`
+(29 live-links commits) during the wave; the pin is refreshed in its own commit and the lineage
+check reads `ok` again. Next: wave 2 (relay core, the codex CLI chain, the account bulk-move
+chain, grok subagent cards), then the remaining tranches per the roadmap.
+
 ## 2026-10-04, upstream v0.4.1 port, tranche 3 wave 1A (issue #225)
 
 Wave 1A is on `main` at `0de6b6868`, pushed and read back: five lane merges from `00797a2c2`,

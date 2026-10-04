@@ -161,6 +161,28 @@ probe and taken-id read through an SSH project's connection, and the relay-tab c
 grok and claude CLI capability reads. The session-host/updater and terminal/pty families (wave 1B)
 follow in their own record.
 
+### Tranche 3 record, wave 1B (2026-10-04)
+
+The two tranche-3 families landed on `main` as `af608d5be` (Windows session host and updater:
+session-host hardening, agent messaging backends for Windows panes, updater fixes, shared-session
+sizing, co-attach alternate screen and resync, the staged runtime outside the install directory
+with the host shutdown command, Prepare for update; articles
+`docs/features/terminals/windows-session-host-runtime.md` and `docs/windows-session-host.md`) and
+`ed63353d8` (terminal, pty, launch and dev ports: in-place restart quit and late-exit window, the
+park window and cap as settings with the memory levers, key and rendering fixes, the stale working
+directory banner, snapshot pacing and co-attach screen modes, dev-server port discovery with SSH
+forwarding; article `docs/features/terminals/dev-server-ports.md`). The reviewer step did not run
+for these two lanes (the implementing agents ended at their session limit after their last commit),
+so the merge was reviewed by hand against the fork's terminal invariants, the eight terminal-lane
+conflicts were resolved by shape, and the update-exit registry both lanes had ported was
+deduplicated (the deduplicated file missed the merge commit and landed as the next commit). Gates
+on the merged tree: typecheck green, 892 focused tests passed with the two session-host client
+rollback cases red on the pre-merge base as well, every source check green but the known
+design-parity row. Parked for a later lane: the file-link hover, menu and token port
+(`port/upstream-w1-terminal-filelinks-wip`, does not typecheck yet). Upstream `main` moved 29
+live-links commits past the pin during this wave; the pin follows in its own commit and those
+commits join the watch-link backlog.
+
 Tranche 1 was a set of cherry-picks scattered across upstream history, so it records no single
 waypoint merge; the first waypoint merge is owed by the tranche that first absorbs a contiguous
 upstream range.

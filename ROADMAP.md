@@ -29,7 +29,8 @@ commit; see
 - [ ] **Tranche 3:** windows/session-host/updater, terminal/pty. (Wave 1A landed on `main` as
   `169699c11`, `7d5c78d33`, `fb544762f`, `8ff05afc7` and `0de6b6868`: the four tranche-1 follow-up
   chains and the context-meter rehydration fix, source-verified only, captures tracked with issue
-  #222; the session-host/updater and terminal/pty families are wave 1B, in progress.)
+  #222; the session-host/updater and terminal/pty families landed as `af608d5be` and `ed63353d8`, wave 1B,
+  source-verified only; the file-link hover and menu port is parked on its own branch.)
 - [ ] **Tranche 4:** server, settings/workspace.
 - [ ] **Tranche 5:** agents/grok/codex/accounts/hooks.
 - [ ] **Tranche 6:** canvas/control (zones, layouts, portals and triggers live here; most review).
