@@ -397,7 +397,9 @@ export function ProjectSwitcher({
             activeProject
               ? activeProject.ssh
                 ? `${activeProject.ssh.server.user}@${activeProject.ssh.server.host}:${activeProject.ssh.remoteCwd}`
-                : activeProject.cwd || activeProject.name
+                : activeProject.relaySsh
+                  ? `${activeProject.relaySsh.user}@${activeProject.relaySsh.host}:${activeProject.relaySsh.remoteCwd}`
+                  : activeProject.cwd || activeProject.name
               : vocab('No project open')
           }
           onClick={() => (switcherOpen ? closeMenu() : openSwitcher())}
@@ -460,6 +462,15 @@ export function ProjectSwitcher({
             title={`${activeProject.ssh.server.user}@${activeProject.ssh.server.host}`}
           >
             {sshHostKey(activeProject.ssh.server)}
+          </span>
+        )}
+        {/* A relay tab of the host's SSH project: display strings only (session/relay-ssh.ts). */}
+        {!activeProject?.ssh && activeProject?.relaySsh && (
+          <span
+            className="md3-remote-chip"
+            title={`${activeProject.relaySsh.user}@${activeProject.relaySsh.host}`}
+          >
+            {activeProject.relaySsh.user ? `${activeProject.relaySsh.user}@${activeProject.relaySsh.host}` : activeProject.relaySsh.host}
           </span>
         )}
 
@@ -586,7 +597,9 @@ export function ProjectSwitcher({
                             : mapOwnedSentence(vocab, [fact(p.name), copy(' disconnected, click to reconnect')])
                           : p.ssh
                             ? `${p.ssh.server.user}@${p.ssh.server.host}:${p.ssh.remoteCwd}`
-                            : p.cwd || undefined
+                            : p.relaySsh
+                              ? `${p.relaySsh.user}@${p.relaySsh.host}:${p.relaySsh.remoteCwd}`
+                              : p.cwd || undefined
                       }
                     >
                       <ProjectGlyph
@@ -599,10 +612,10 @@ export function ProjectSwitcher({
                       {/* An SSH project looks identical to a local one once it is named, and the
                           difference matters: its terminals, git and file ops all run on another
                           machine. The chip says so at a glance; the row title carries user@host. */}
-                      {p.ssh && (
+                      {(p.ssh || p.relaySsh) && (
                         <span
                           className="md3-switcher-row__ssh"
-                          title={`${p.ssh.server.user}@${p.ssh.server.host}`}
+                          title={p.ssh ? `${p.ssh.server.user}@${p.ssh.server.host}` : `${p.relaySsh!.user}@${p.relaySsh!.host}`}
                         >
               {vocab('SSH')}
                         </span>

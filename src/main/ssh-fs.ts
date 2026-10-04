@@ -14,7 +14,7 @@ import {
   QUICK_OPEN_FILE_CAP
 } from '../shared/quick-open-filter'
 import type { DirEntry } from '../shared/types'
-import { remoteAtomicWrite } from './remote-atomic-write'
+import { REMOTE_WRITE_SHORT_BODY, remoteAtomicWrite } from './remote-atomic-write'
 
 export interface SshFsRef {
   conn: SshConnection
@@ -36,12 +36,15 @@ export function sshReadArgs(conn: SshConnection, cp: string, path: string): stri
 export function sshReadBinaryArgs(conn: SshConnection, cp: string, path: string): string[] {
   return childArgs(conn, cp, `base64 ${quoteRemotePath(path)}`)
 }
-export function sshWriteArgs(conn: SshConnection, cp: string, path: string): string[] {
+export function sshWriteArgs(conn: SshConnection, cp: string, path: string, content: string): string[] {
   // Atomic: `cat > file` truncates on open, so a connection dropped (or the ControlMaster killed
   // at app quit) mid-write leaves a half/empty file — fatal for .nodeterm/project.json. Stream to
-  // a unique sibling temp and mv into place; a write that dies leaves the target untouched.
+  // a unique sibling temp and mv into place; a write that dies leaves the target untouched. The
+  // byte count is what makes that true: `cat` exits 0 on a channel that ended early, and the
+  // rename alone published the short temp. `content` MUST be what the caller sends on stdin.
   // Per-call uniqueness is load-bearing: two app instances can write this remote path at once.
-  return childArgs(conn, cp, remoteAtomicWrite(path).command)
+  // An editor may legitimately save an empty file, so this generic write allows one.
+  return childArgs(conn, cp, remoteAtomicWrite(path, content, { allowEmpty: true }).command)
 }
 
 function remoteNoLinkCheck(path: string): string {
@@ -49,14 +52,18 @@ function remoteNoLinkCheck(path: string): string {
 }
 /** Same atomic stdin route for base64 attachment payloads, avoiding binary shell arguments. */
 export function sshWriteBase64Args(conn: SshConnection, cp: string, path: string, expectedBytes?: number): string[] {
-  const atomic = remoteAtomicWrite(path, { makeParent: false })
+  // The body arrives base64-encoded, so the generic UTF-8 byte gate is replaced by the DECODED
+  // size gate below; `allowEmpty` only lets the empty placeholder build the command.
+  const atomic = remoteAtomicWrite(path, '', { makeParent: false, allowEmpty: true })
   const parent = dirname(path)
   const grand = dirname(parent)
   // GNU uses -d while BSD/macOS uses -D. Probe help without consuming the payload, and reject
   // symlink ancestors before mkdir so a project cannot redirect writes outside itself.
   const temp = quoteRemotePath(atomic.temporaryPath)
   const limit = Number.isSafeInteger(expectedBytes) ? expectedBytes : 4 * 1024 * 1024
-  const atomicDecode = atomic.command.replace(`cat > ${temp}`, `{ if [ "$(printf 'Tg==' | base64 -d 2>/dev/null)" = 'N' ]; then base64 -d; else base64 -D; fi; } > ${temp} && test "$(wc -c < ${temp})" -eq ${limit}`)
+  const generic = `cat > ${temp} && { [ "$(wc -c < ${temp})" -eq 0 ] || (exit ${REMOTE_WRITE_SHORT_BODY}); }`
+  if (!atomic.command.includes(generic)) throw new Error('remote atomic write shape changed; base64 decode cannot be spliced')
+  const atomicDecode = atomic.command.replace(generic, `{ if [ "$(printf 'Tg==' | base64 -d 2>/dev/null)" = 'N' ]; then base64 -d; else base64 -D; fi; } > ${temp} && { test "$(wc -c < ${temp})" -eq ${limit} || (exit ${REMOTE_WRITE_SHORT_BODY}); }`)
   const encoded = `${remoteNoLinkCheck(path)} && test ! -L ${quoteRemotePath(grand)} && test ! -L ${quoteRemotePath(parent)} && mkdir -p ${quoteRemotePath(parent)} && ${atomicDecode}`
   return childArgs(conn, cp, encoded)
 }
@@ -215,7 +222,7 @@ export class SshFs {
 
   async writeText(ref: SshFsRef, path: string, content: string): Promise<boolean> {
     try {
-      const { code } = await this.run(sshWriteArgs(ref.conn, ref.controlPath, path), content)
+      const { code } = await this.run(sshWriteArgs(ref.conn, ref.controlPath, path, content), content)
       return code === 0
     } catch {
       return false

@@ -1752,6 +1752,33 @@ export const CATALOG: Catalog = {
   },
 
   // ---------------------------------------------------------------------------------------
+  // SSH connection banner (SshConnectionBanner.tsx). `{label}` is the saved server's label and
+  // `{cause}` the one line ssh printed — both caller-owned facts, inserted verbatim.
+  // ---------------------------------------------------------------------------------------
+  'ssh.banner.connecting': { en: flat('Connecting to {label}…'), yue: flat('連緊去 {label}…') },
+  'ssh.banner.reconnecting': { en: flat('Reconnecting to {label}…'), yue: flat('重新連緊去 {label}…') },
+  'ssh.banner.disconnected': { en: flat('Disconnected from {label}'), yue: flat('同 {label} 斷咗線') },
+  'ssh.banner.errorCause': { en: flat('{label}: {cause}'), yue: flat('{label}：{cause}') },
+  'ssh.banner.error': { en: flat('SSH connection error: {label}'), yue: flat('SSH 連線出錯：{label}') },
+  'ssh.banner.hooksLost': {
+    en: [
+      '{label}: Agent status and canvas control lost their verified connection. Retrying automatically…',
+      '{label}: agent status and canvas control lost their verified link. Retrying on its own…',
+      '{label}: the verified link for agent status and canvas control dropped. Trying again by itself…',
+      '{label}: agent status and canvas control lost their verified line home. Patching it back up…',
+      '{label}: agent status and canvas control lost their verified line home. Re-plugging it, no action needed…'
+    ],
+    yue: [
+      '{label}：agent 狀態同 canvas 控制冇咗已驗證嘅連線，自動重試緊…',
+      '{label}：agent 狀態同 canvas 控制條已驗證連線斷咗，自己重試緊…',
+      '{label}：agent 狀態同 canvas 控制嘅已驗證連線甩咗，自動再試緊…',
+      '{label}：agent 狀態同 canvas 控制返屋企條已驗證線斷咗，自己駁緊返…',
+      '{label}：agent 狀態同 canvas 控制返屋企條已驗證線鬆咗，自己插返緊，你唔使做嘢…'
+    ]
+  },
+  'ssh.banner.reconnect': { en: flat('Reconnect'), yue: flat('重新連線') },
+
+  // ---------------------------------------------------------------------------------------
   // Announcement banner (AnnouncementBanner.tsx). The title/body TEXT itself comes from the
   // remote feed and is not localized here — only the surrounding chrome is.
   // ---------------------------------------------------------------------------------------

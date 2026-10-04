@@ -49,7 +49,7 @@ import {
 import { fileLinkDialect } from '../terminal/file-link-dialect'
 import { hostPlatformFor } from '../terminal/host-platform'
 import { sshFs } from '../terminal/ssh-fs'
-import type { FsApi, LaunchIntentExecutionResult, PendingLaunch } from '@shared/types'
+import type { FsApi, LaunchIntentExecutionResult, PendingLaunch, PtyApi } from '@shared/types'
 import { detectRemoteOAuthAuthorizeUrl, REMOTE_OAUTH_MAX_OUTPUT, type RemoteOAuthDetection } from '@shared/remote-oauth'
 import {
   attachReplay,
@@ -228,6 +228,7 @@ import {
 } from '../state/permissionMode'
 import {
   buildSshArgs,
+  sshChipRepeatsProject,
   sshConnectionIdForProject,
   sshHostKey,
   type SshConnection
@@ -270,6 +271,8 @@ import { AgentMascot } from './AgentMascot'
 import { MaximizeButton } from './MaximizeButton'
 import { focusNode } from './focus-handler'
 import { connectHostAttachment } from '../lib/sshAttachments'
+import { projectMayDialSsh } from '../session/relay-ssh'
+import { waitForSshRemote } from '../lib/sshRemoteWait'
 import { appearanceId } from '../lib/appearance/registry'
 import { uuid } from '../lib/uuid'
 import { runPendingLaunchOnce } from '../lib/pendingLaunch'
@@ -391,7 +394,17 @@ export function currentControlPath(conn?: SshConnection): string | undefined {
  */
 export async function resolveSshRemote(
   conn: SshConnection,
-  cwd: string | undefined
+  cwd: string | undefined,
+  /**
+   * Opt in to the EARLY attach path: spawn as soon as the ControlMaster answers `-O check`,
+   * without waiting for the connect's remote setup chain — but ONLY once the host has positively
+   * listed this node's remote tmux session (see `waitForSshRemote`). Absent ⇒ the pre-feature
+   * behavior, wait for the full `connected`.
+   *
+   * `pty` is the CALLER'S SESSION-BOUND api, not the global: the confirmation has to be answered
+   * by the same core that will run `create` a moment later.
+   */
+  early?: { nodeId: string; pty: Pick<PtyApi, 'remoteSessionConfirmed'> }
 ): Promise<
   | {
       controlPath: string
@@ -407,6 +420,10 @@ export async function resolveSshRemote(
   | undefined
 > {
   const activeProjectId = useProjects.getState().activeProjectId
+  // A relay tab's node belongs to another machine: never dial or wait for a master for it here
+  // (session/relay-ssh.ts). The caller treats undefined as "no master"; the relay spawn path does
+  // not call this at all — this is the second half.
+  if (!projectMayDialSsh(useProjects.getState().getProject(activeProjectId))) return undefined
   const projectId = sshConnectionScope(conn)
   // A HOST ATTACHMENT dials for itself, HERE, because nothing else will. Canvas's active-project
   // effect pre-warms the attachments it can SEE in the stored canvas, but a node created at
@@ -427,45 +444,34 @@ export async function resolveSshRemote(
       (scopeId) => window.nodeTerminal.sshProject.disconnect(scopeId)
     )
   }
-  let controlPath = useSshConn.getState().getControlPath(projectId)
-  if (!controlPath) {
-    controlPath = await new Promise<string | undefined>((resolve) => {
-      let settled = false
-      const finish = (v?: string) => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        unsub()
-        resolve(v)
-      }
-      const unsub = useSshConn.subscribe((s) => {
-        const v = s.byProject[projectId]?.controlPath
-        if (v) finish(v)
-      })
-      const timer = setTimeout(
-        () => finish(useSshConn.getState().getControlPath(projectId)),
-        SSH_REMOTE_WAIT_MS
-      )
-    })
+  // The optional facts below (remote hook endpoint, remote tmux.conf path, remote $HOME, the Codex
+  // runtime) are produced by the connect's SETUP chain and are read at session CREATION only — the
+  // tmux `-e` hook/account env and the `-f` config. That is exactly why a node whose session already
+  // exists may attach over the master before any of them exist; see `waitForSshRemote`.
+  const outcome = await waitForSshRemote({
+    getFull: () => useSshConn.getState().byProject[projectId],
+    getEarly: () => useSshConn.getState().getEarlyControlPath(projectId),
+    subscribe: (cb) => useSshConn.subscribe(cb),
+    confirmSession: early
+      ? (controlPath) => early.pty.remoteSessionConfirmed(early.nodeId, { controlPath, conn })
+      : null,
+    waitMs: SSH_REMOTE_WAIT_MS
+  })
+  if (outcome.kind === 'none') return undefined
+  const remoteCwd = cwd || '~'
+  if (outcome.kind === 'early') {
+    // Warm attach over a master whose setup chain is still running. No setup facts by
+    // construction: `new-session -A` on a live session only attaches, so there is nothing for a
+    // `-f` or an `-e` to apply to, and passing a half-built value would be a lie about what the
+    // session carries.
+    return { controlPath: outcome.controlPath, conn, remoteCwd }
   }
-  if (!controlPath) return undefined
-  // The remote hook endpoint (reverse tunnel + remote install) is set up alongside the master;
-  // pass it through so the remote tmux session carries the hook env. Optional (fail-open).
-  const hookEndpointPath = useSshConn.getState().getHookEndpointPath(projectId)
-  // The remote tmux config (mouse off, so a drag is the emulator's own selection; set-clipboard on
-  // so an app that emits OSC 52 itself still reaches the local clipboard; history-limit) is written
-  // + sourced alongside the master; pass its path so a fresh remote session launches with `-f`.
-  // Optional.
-  const tmuxConfPath = useSshConn.getState().getTmuxConfPath(projectId)
-  // The connection's resolved remote $HOME, used to build an ABSOLUTE remote CLAUDE_CONFIG_DIR for a
-  // managed remote account (Task 12). Optional (fail-open): absent → the remote account env is
-  // skipped and the session runs under the remote system default `~/.claude`.
-  const remoteHome = useSshConn.getState().getRemoteHome(projectId)
+  const { controlPath, hookEndpointPath, tmuxConfPath, remoteHome } = outcome.facts
   const codexRuntime = useSshConn.getState().getCodexRuntime(projectId)
   return {
     controlPath,
     conn,
-    remoteCwd: cwd || '~',
+    remoteCwd,
     hookEndpointPath,
     tmuxConfPath,
     remoteHome,
@@ -1826,6 +1832,17 @@ export function TerminalNode({
   // node (`isRemoteSessionNode` — an SSH-project terminal carries `data.ssh`/`data.sshRemoteTmux`).
   // The affordance is absent, not merely refused on click.
   const sshProject = useProjects((s) => !!s.projects.find((p) => p.id === s.activeProjectId)?.ssh)
+  // The project's SSH endpoint, as two primitives: the project object is rebuilt on every node
+  // serialization, so selecting `ssh.server` itself would re-render this node on each canvas edit.
+  const projectSshHost = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.ssh?.server.host)
+  const projectSshUser = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.ssh?.server.user)
+  const showSshChip =
+    !!data.ssh &&
+    !sshChipRepeatsProject(
+      data.ssh as SshConnection,
+      !!data.sshRemoteTmux,
+      projectSshHost !== undefined ? { host: projectSshHost, user: projectSshUser ?? '' } : undefined
+    )
   const remoteSession = sshProject || isRemoteSessionNode(data)
   const contextSource = contextSourceForNode({
     agentId,
@@ -3294,6 +3311,10 @@ export function TerminalNode({
     // `ssh` as a LOCAL pty program. Only the latter sets shell:'ssh' + buildSshArgs.
     const sshRemoteTmux = !!data.sshRemoteTmux
     const localSsh = !!ssh && !sshRemoteTmux
+    // A RELAY tab's SSH-project node lives on the HOST's side: this machine never dials for it
+    // (session/relay-ssh.ts). Its create goes to the host's core with `requireRemote`, which joins
+    // the session when the host holds it live and refuses otherwise — never a local spawn.
+    const dialsSsh = sshRemoteTmux && session.source !== 'relay'
     // Connection SCOPE of a remote terminal, captured at spawn time for the exit-255 drop report
     // below. Same choice `resolveSshRemote` makes: the owning project for an SSH project's own
     // node, the host attachment for a node attached to another endpoint — so the reconnect
@@ -3356,15 +3377,15 @@ export function TerminalNode({
       // or an unreachable host, and a terminal that is silently blank for that long reads as
       // broken. Only when there is nothing to wait FOR is nothing printed (the common case: the
       // master is already up and this resolves in a microtask).
-      if (sshRemoteTmux && ssh && !currentControlPath(ssh)) {
+      if (dialsSsh && ssh && !currentControlPath(ssh)) {
         // Drop the overlay for the duration of the attempt (this respawn IS the retry the user or
         // the coordinator asked for) so the line below is visible; it comes back if we fail.
         setCo(termKey, { offline: false })
         term.write(`\x1b[90m[${vocabRef.current('connecting to')} ${ssh.user}@${ssh.host}…]\x1b[0m\r\n`)
       }
       const sshRemote =
-        sshRemoteTmux && ssh
-          ? await resolveSshRemote(ssh, data.cwd as string | undefined)
+        dialsSsh && ssh
+          ? await resolveSshRemote(ssh, data.cwd as string | undefined, { nodeId: id, pty: api.pty })
           : undefined
       if (disposed) return
       // The host is unreachable (no master within the window). SPAWN NOTHING: a create with no
@@ -3373,7 +3394,7 @@ export function TerminalNode({
       // scrollback snapshot, and (agent nodes) running the cold-restore `--resume` on the wrong
       // machine. `requireRemote` below refuses the same thing core-side; this is the near half,
       // which also saves the round-trip. Report the node so the reconnect coordinator retries.
-      if (sshRemoteTmux && !sshRemote) {
+      if (dialsSsh && !sshRemote) {
         setCo(termKey, { offline: true })
         term.write(
           `\r\n\x1b[90m[${vocabRef.current('not connected')} — ${vocabRef.current('this session lives on')} ${ssh ? `${ssh.user}@${ssh.host}` : vocabRef.current('the remote host')}; ${vocabRef.current('nothing was started locally')}]\x1b[0m\r\n`
@@ -3468,7 +3489,7 @@ export function TerminalNode({
                     ? `\r\n\x1b[90m[${vocabRef.current('Codex account unavailable')} — ${vocabRef.current('nothing was started')}; ${vocabRef.current('open Settings')} → ${vocabRef.current('Accounts')}]\x1b[0m\r\n`
                     : `\r\n\x1b[90m[${vocabRef.current('not connected')} — ${vocabRef.current('nothing was started locally')}]\x1b[0m\r\n`
                 )
-              if (sshProjectId) reportSshDrop(sshProjectId, id)
+              if (sshProjectId && dialsSsh) reportSshDrop(sshProjectId, id)
               return
             }
             // REFUSED: core's tombstone says another client deleted this node while we weren't
@@ -3783,7 +3804,7 @@ export function TerminalNode({
                 // ssh exiting 255 on an SSH-project terminal is a CONNECTION drop (sleep/wake,
                 // network change, NAT idle) — the remote tmux session survives. Report it so the
                 // reconnect coordinator can re-establish the master and respawn this node.
-                if (code === 255 && sshProjectId) sshDropHandler?.(sshProjectId, id)
+                if (code === 255 && sshProjectId && dialsSsh) sshDropHandler?.(sshProjectId, id)
               })
             )
             cleanups.push(
@@ -5612,7 +5633,8 @@ export function TerminalNode({
               <StatusChip tone="attention" size="compact">{vocab('Not persistent · retry')}</StatusChip>
             </Button>
           )}
-          {data.ssh && !accountPresentation ? (
+          {/* Only where it says something the project tab does not — see `sshChipRepeatsProject`. */}
+          {showSshChip && !accountPresentation ? (
             <span
               className="term-ssh-chip"
               title={`ssh ${(data.ssh as SshConnection).user}@${(data.ssh as SshConnection).host}`}

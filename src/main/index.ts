@@ -356,6 +356,7 @@ import {
   remotePaneCommandArgs
 } from '../core/remote-ssh/control-master'
 import { planRemoteWorkspacePoll } from './remote-workspace-poll'
+import { planSshPrewarm, runSshPrewarm } from '../core/remote-ssh/ssh-prewarm'
 import { sessionName } from '../core/tmux-naming'
 import { posixQuote, sshHostKey, type SshConnection } from '../shared/ssh'
 import { buildHandoff, type HandoffRemote } from './handoff'
@@ -2217,6 +2218,16 @@ app.whenReady().then(async () => {
     ptyManager.captureSession(persistKey, full)
   )
 
+  // The early-attach gate (see PtyManager.remoteSessionConfirmed). Registered here rather than in
+  // core's shared pty block because only the desktop shell has SSH projects at all; the browser
+  // bridge answers a documented `false`. Deliberately NOT in the relay allowlist: a relay tab's
+  // bridge answers `false` itself and never dials SSH for the host's nodes.
+  corePlatform.handle(
+    IPC.ptyRemoteSessionConfirmed,
+    (persistKey: string, sshRemote: { controlPath: string; conn: SshConnection }) =>
+      ptyManager.remoteSessionConfirmed(persistKey, sshRemote)
+  )
+
   // Gemini's title read needs the transcript path its own context tail already tracks (nothing
   // scans for it). That tail is created ~600 lines below with the rest of the hook plumbing, while
   // this deps object is consumed by the ptyReadSessionName handler just under here and by the
@@ -3650,7 +3661,7 @@ app.whenReady().then(async () => {
       if (!rt || !sshProjectManager) return false
       try {
         const { code } = await sshProjectManager.sshRun(
-          sshWriteArgs(rt.conn, rt.controlPath, filePath),
+          sshWriteArgs(rt.conn, rt.controlPath, filePath, content),
           content
         )
         return code === 0
@@ -4900,14 +4911,63 @@ app.whenReady().then(async () => {
     loadCodexRelayBundle,
     // Lead-pane width (issue #119) for the remote tmux conf, read at connect time so the host
     // carries the value the user last saved. 0 (the default) keeps the conf byte-identical.
-    () => settingsStore.get().tmuxLeadPaneWidth
+    () => settingsStore.get().tmuxLeadPaneWidth,
+    // The managed Claude accounts pinned to a host, whose config dirs there hold their own copies of
+    // the canvas/context skills — kept current by the connect-time agent-tools check. Read per
+    // check, so an account added mid-run is included. A pending account has no finished login and
+    // is skipped; the refresh re-validates every id before it becomes a path.
+    (hostKey) =>
+      (settingsStore.get().claudeAccounts ?? []).filter((a) => a.host === hostKey && !a.pending).map((a) => a.id)
   )
+  // Pre-warm the ControlMasters of OPEN SSH projects, in the background, one host at a time.
+  //
+  // Without this the master for a project is dialed only when the user first switches to it, so the
+  // first visit of every app run pays the cold establish (0.44 s at 50 ms RTT) and then the whole
+  // connect-time setup chain (~3.5 s) before a terminal can attach. Both are wall-clock spent in
+  // front of blank panes, and neither depends on the user having switched — so spend it while
+  // nobody is waiting. Measured numbers and the planner's rules: core/remote-ssh/ssh-prewarm.ts.
+  //
+  // Silent by construction: `prewarm` marks the attempt quiet, so no status event (and therefore no
+  // connection banner) can come out of a project the user is not looking at — and any real connect
+  // for the same project lifts that mark and takes over the attempt.
+  {
+    /** Let the window, the workspace load and the first canvas settle before dialing anything. */
+    const PREWARM_START_MS = 4_000
+    /** Gap between hosts. Sequential dialing already paces the logins; this widens it so a machine
+     *  with many saved servers does not look like a login burst to a shared bastion. */
+    const PREWARM_GAP_MS = 750
+    setTimeout(() => {
+      void (async () => {
+        const mgr = sshProjectManager
+        if (!mgr) return
+        // The index is normally already loaded by boot; load() is idempotent and cheap, and
+        // without it a slow first load would make the pre-warm a no-op for the whole run.
+        // sideline:false — a read-only caller must never rename a mid-merge project.json.
+        await workspaceStore.load({ sideline: false }).catch(() => {})
+        const targets = planSshPrewarm({
+          projects: workspaceStore.openSshProjects(),
+          busy: (projectId) => mgr.isBusy(projectId)
+        })
+        await runSshPrewarm(targets, {
+          connect: (t) => mgr.prewarm(t.projectId, t.conn, t.remoteCwd),
+          busy: (projectId) => mgr.isBusy(projectId),
+          delay: (ms) => new Promise((res) => setTimeout(res, ms)),
+          gapMs: PREWARM_GAP_MS
+          // No `stopped` predicate: nothing here is awaited by a user-facing path, and a dial in
+          // flight is abandoned with the process on quit.
+        })
+      })().catch(() => {
+        // A pre-warm that cannot even be planned changes nothing about how projects connect.
+      })
+    }, PREWARM_START_MS)
+  }
   // Wake-from-sleep: re-validate every SSH master NOW instead of letting ServerAlive discover the
-  // dead TCP ~60s later — until it does, every remote terminal looks alive and is dead (no echo,
-  // no scroll). The small delay lets the network interface come back up first; connect() is
-  // idempotent so a master that survived the nap is a cheap `-O check` no-op.
+  // dead TCP ~60-75s later — until it does, every remote terminal looks alive and is dead (no
+  // echo, no scroll). The small delay lets the network interface come back up first. `roundTrip`
+  // is the load-bearing part: `-O check` alone answers "Master running" for a master whose TCP
+  // died in the sleep (measured), so without a real round trip this pass was a no-op.
   powerMonitor.on('resume', () => {
-    setTimeout(() => void sshProjectManager?.revalidateAll(), 2000)
+    setTimeout(() => void sshProjectManager?.revalidateAll({ roundTrip: true }), 2000)
   })
   // While connected, poll each SSH project's server file: the mobile companion appends the
   // sessions it starts to <remoteCwd>/.nodeterm/project.json, and this is how those nodes reach

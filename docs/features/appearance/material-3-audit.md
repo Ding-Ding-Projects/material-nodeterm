@@ -307,6 +307,9 @@ The concrete source remediations in this pass are:
 | `status-facepile` | Presence facepile | `src/renderer/components/Facepile.tsx` | `export function Facepile` | `presence-facepile` | Source reviewed; runtime proof pending |
 | `status-account-pills` | Account identity pills | `src/renderer/components/AccountIdentityPills.tsx` | `export function AccountIdentityPills` | `account-identity-pills` | Source reviewed; runtime proof pending |
 | `status-node-boundary` | Node error boundary | `src/renderer/components/NodeBoundary.tsx` | `export function withNodeBoundary` | `node-error` | Source reviewed; runtime proof pending |
+| `status-ssh-terminal-chip` | Terminal SSH host chip (hidden when it repeats the project host) | `src/renderer/nodes/TerminalNode.tsx` | `sshChipRepeatsProject(` | `term-ssh-chip` | Source reviewed; runtime proof pending |
+| `status-ssh-relay-chip` | Relay tab SSH display chip (display strings only) | `src/renderer/components/ProjectSwitcher.tsx` | `activeProject?.relaySsh` | `md3-remote-chip` | Source reviewed; runtime proof pending |
+| `status-ssh-connection-banner` | SSH connection banner (connecting, error with Reconnect, lost hook tunnel) | `src/renderer/components/SshConnectionBanner.tsx` | `export function SshConnectionBanner` | `md3-ssh-banner` | Source reviewed; runtime proof pending |
 | `site-home` | Landing page home | `site/index.html` | `<body` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |
 | `site-docs-index` | Documentation index page | `site/docs/index.html` | `<article` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |
 | `site-docs-agent-support` | Agent support article | `site/docs/agent-support.html` | `Agent support` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |

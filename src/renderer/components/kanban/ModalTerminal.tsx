@@ -324,7 +324,9 @@ export function ModalTerminal({
           : useProjects.getState().activeProjectId
       // SSH-project node: resolve the live ControlMaster (may not be up yet on a cold load).
       const sshRemote =
-        spawn.sshRemoteTmux && spawn.ssh ? await resolveSshRemote(spawn.ssh, spawn.cwd) : undefined
+        spawn.sshRemoteTmux && spawn.ssh
+          ? await resolveSshRemote(spawn.ssh, spawn.cwd, { nodeId, pty: api.pty })
+          : undefined
       if (dead) return
       // The host is unreachable: spawn NOTHING. A create with no `sshRemote` falls through to
       // core's LOCAL tmux branch, and opening a card for a remote session would silently start a

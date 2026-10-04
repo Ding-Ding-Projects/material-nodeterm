@@ -84,8 +84,11 @@ import {
   useSharedGlyphActive
 } from './SharedGlyphLayer'
 import { SshReconnector } from '../lib/sshReconnect'
+import { projectMayDialSsh, receivedCanvasMutation } from '../session/relay-ssh'
+import { SshConnectionBanner } from '../components/SshConnectionBanner'
 import {
   hostAttachmentsFor,
+  planActiveProjectDials,
   connectHostAttachment,
   type SshConnectFn
 } from '../lib/sshAttachments'
@@ -1801,6 +1804,9 @@ export function Canvas() {
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false)
   // Live SSH ControlMaster status per project id (drives the thin connection banner).
   const [sshStatus, setSshStatus] = useState<Record<string, SshProjectStatus>>({})
+  // Projects whose reverse hook tunnel failed two liveness probes in a row while the master stayed
+  // up (`hookTunnelVerified: false`): the banner says agent status is deaf, without a reconnect.
+  const [lostHookTunnels, setLostHookTunnels] = useState<Record<string, boolean>>({})
   // The cause that came with an `error` status. Kept beside the status because the banner used to
   // render a bare "SSH connection error", throwing away the one line ssh gave us (permission
   // denied, host unreachable, host key mismatch) that tells the user what to actually fix.
@@ -3470,8 +3476,11 @@ export function Canvas() {
     // SSH project: (re)open its ControlMaster and record the controlPath so this project's
     // terminal nodes can run over it. Idempotent in main (a live master is reused), so a tab
     // switch back to a connected project is a no-op. Remote tmux is unaffected by the master.
-    if (project.ssh) {
-      const ssh = project.ssh
+    // A RELAY tab dials nothing (`planActiveProjectDials`): its project and nodes are another
+    // machine's, and connecting them would log THIS machine into a server the host named.
+    const dials = planActiveProjectDials({ ...project, nodes: canvasView.nodes })
+    if (dials.own) {
+      const ssh = dials.own
       // SSH remote projects are free (Core). Only phone/relay remote access is Pro-gated.
       window.nodeTerminal.sshProject
         .connect(project.id, ssh.server, ssh.remoteCwd)
@@ -3498,7 +3507,7 @@ export function Canvas() {
     // locally.
     // NOTE: git routing is deliberately NOT armed for an attachment. The project's own cwd is what
     // the Source Control panel is about, and an attached node must not repoint it at another host.
-    for (const attachment of hostAttachmentsFor(project.id, canvasView.nodes, project.ssh?.server)) {
+    for (const attachment of dials.attachments) {
       void connectHostAttachment(
         attachment.scopeId,
         {
@@ -4448,7 +4457,11 @@ export function Canvas() {
     // mount-time local one (the bug). Byte-identical on a local tab (`activeSession.api` IS
     // `window.nodeTerminal`). Re-keyed on the api OBJECT below, in lockstep with the publisher, so a
     // tab switch tears down + re-binds both together (and a local→local switch does neither).
-    return activeSession.api.canvas.onMutation((projectId, mutation) => {
+    // A relay peer's node never brings a dial-capable SSH connection onto this machine
+    // (session/relay-ssh.ts).
+    const relay = activeSession.source === 'relay'
+    return activeSession.api.canvas.onMutation((projectId, received) => {
+      const mutation = receivedCanvasMutation(received, relay)
       hasPeersRef.current = true // proof of a peer, whatever the presence table says
       if (!orderRef.current?.accept(mutation)) return
       // Typed links have a separate key space from the legacy edge arrays. Apply them to the
@@ -4615,6 +4628,7 @@ export function Canvas() {
     })
   }, [
     activeSession.api,
+    activeSession.source,
     setNodes,
     setLinkEdges,
     setControlEdges,
@@ -17683,6 +17697,8 @@ export function Canvas() {
         if (attached) return connectHostAttachment(scopeId, attached, sshConnect, sshDisconnect)
         const projectId = scopeId
         const project = useProjects.getState().getProject(projectId)
+        // Never a relay tab's endpoint — see session/relay-ssh.ts.
+        if (!projectMayDialSsh(project)) return false
         const projectAttachment = useSshConn.getState().byProject[projectId]
         const ssh =
           project?.ssh ??
@@ -17745,6 +17761,10 @@ export function Canvas() {
   // Track SSH project connection status for the thin connection banner (keyed by project id).
   useEffect(() => {
     return window.nodeTerminal.sshProject.onStatus((e) => {
+      if (e.hookTunnelVerified !== undefined) {
+        setLostHookTunnels((prev) => ({ ...prev, [e.projectId]: !e.hookTunnelVerified }))
+        return // A health probe must never trigger terminal reconnection.
+      }
       setSshStatus((prev) => ({ ...prev, [e.projectId]: e.status }))
       // Keep the cause for the banner. Cleared on any non-error status so a stale reason can
       // never be shown next to a healthy connection.
@@ -17752,6 +17772,14 @@ export function Canvas() {
       // Feed the auto-reconnect coordinator: ANY successful connect (its own loop, the
       // active-project effect on a tab switch) respawns that project's dropped terminals.
       if (e.status === 'connected') sshReconnectorRef.current?.onConnected(e.projectId)
+      // The ControlMaster answered `-O check`, published BEFORE the connect's remote setup chain
+      // (see SshProjectStatusEvent.masterControlPath). A terminal whose remote tmux session already
+      // exists may attach over it right away instead of waiting out the chain; a cold one still
+      // waits for `connected`, which is what carries the creation-time tmux `-f`/`-e` facts. Kept
+      // OUT of `byProject` on purpose — that map means "connected" to a dozen other readers.
+      if (e.masterControlPath) {
+        useSshConn.getState().setEarlyControlPath(e.projectId, e.masterControlPath)
+      }
       // The remote claude probe runs AFTER connect (its login shell is slow) and pushes its answer
       // on a later `connected` event — record it so this project's next Claude launch can use
       // `--permission-mode auto`. Absent = nothing new to record (keep omitting the flag).
@@ -17766,6 +17794,13 @@ export function Canvas() {
       // reusing the previous host's stale `true`.
       if (e.status === 'disconnected' || e.status === 'reconnecting') {
         useSshConn.getState().invalidateAutoPermissionMode(e.projectId)
+      }
+      // The master is gone (or never came up): the early path must not outlive it, or the next
+      // node to mount would attach over a socket nothing is listening on. `error` is included —
+      // the early signal fires before the setup chain, which is exactly where a connect can still
+      // fail. The full `byProject` entry is left alone; only `connect`'s own result writes that.
+      if (e.status === 'disconnected' || e.status === 'reconnecting' || e.status === 'error') {
+        useSshConn.getState().clearEarlyControlPath(e.projectId)
       }
     })
   }, [])
@@ -19634,74 +19669,16 @@ export function Canvas() {
             }}
           />
         )}
-        {activeSshServer &&
-          sshStatus[activeProjectId] &&
-          sshStatus[activeProjectId] !== 'connected' &&
-          (() => {
-            const st = sshStatus[activeProjectId]
-            const isError = st === 'error' || st === 'disconnected'
-            // The reason ssh gave, already trimmed to one line by lastSshErrorLine in main. Shown
-            // inline: a bare "SSH connection error" leaves the user with nothing to act on.
-            const cause = sshError[activeProjectId]
-            const text =
-              st === 'connecting'
-                ? `Connecting to ${activeSshServer.label}…`
-                : st === 'reconnecting'
-                  ? `Reconnecting to ${activeSshServer.label}…`
-                  : st === 'disconnected'
-                    ? `Disconnected from ${activeSshServer.label}`
-                    : cause
-                      ? `${activeSshServer.label}: ${cause}`
-                      : `SSH connection error: ${activeSshServer.label}`
-            return (
-              <div
-                title={`${activeSshServer.user}@${activeSshServer.host}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '6px 12px',
-                  fontSize: 12,
-                  color: 'var(--text)',
-                  background: isError ? 'rgba(120,40,40,0.92)' : 'rgba(90,72,30,0.92)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 8
-                }}
-              >
-                {isError ? (
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: '#ff6b6b'
-                    }}
-                  />
-                ) : (
-                  // connecting/reconnecting: the shared spinner instead of a static dot, so a
-                  // wait that can legitimately sit for minutes (passphrase prompt, slow host)
-                  // reads as in-progress rather than hung.
-                  <span className="ui-spinner" aria-hidden />
-                )}
-                <span style={{ flex: 1 }}>{text}</span>
-                {/* The banner used to be read-only: a failed connect left the user with a red strip
-                    and nowhere to click — the only ways back were switching tabs (which re-runs the
-                    active-project connect) or restarting the app. Reconnect runs the SAME attempt
-                    the auto-loop makes, jumping its backoff; on success the coordinator flushes the
-                    project's pending nodes, so terminals that refused to spawn locally come up
-                    remotely. Hidden while an attempt is already in flight (connecting/reconnecting)
-                    so it can't queue a second one on top. */}
-                {isError && (
-                  <Button variant="tonal" size="small"
-                    className="ssh-banner__retry"
-                    onClick={() => sshReconnectorRef.current?.retryNow(activeProjectId)}
-                  >
-                    Reconnect
-                  </Button>
-                )}
-              </div>
-            )
-          })()}
+        {activeSshServer && (
+          <SshConnectionBanner
+            label={activeSshServer.label || `${activeSshServer.user}@${activeSshServer.host}`}
+            endpoint={`${activeSshServer.user}@${activeSshServer.host}`}
+            status={sshStatus[activeProjectId]}
+            cause={sshError[activeProjectId]}
+            hooksLost={!!lostHookTunnels[activeProjectId]}
+            onReconnect={() => sshReconnectorRef.current?.retryNow(activeProjectId)}
+          />
+        )}
       </div>
       {kanbanOpen && !activeTabLocked && (
         <KanbanView

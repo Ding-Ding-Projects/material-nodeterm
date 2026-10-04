@@ -1,3 +1,6 @@
+import { createHash, randomUUID } from 'crypto'
+import { parseEndpointEnv } from '../../core/agents/hook-endpoint-parse'
+import { legacyEndpointMigration } from './legacy-hook-endpoint'
 // Connection-time remote hook setup for SSH projects: opens the reverse unix-socket tunnel
 // (local loopback hook server → remote socket), writes the owner-only remote endpoint file,
 // and installs the managed hook into the remote agent configs (claude + gemini JSON settings,
@@ -6,11 +9,23 @@
 // simply runs without status). Takes an INJECTED runner so the flow is unit-testable without real
 // ssh/electron.
 import { childArgs, hookForwardArgs, hookForwardCancelArgs, remoteEndpointFileContents } from '../../core/remote-ssh/control-master'
-import { CLAUDE_HOOK_EVENTS, GEMINI_HOOK_EVENTS, GROK_HOOK_EVENTS } from '@shared/agents/hook-events'
+import { CLAUDE_HOOK_EVENTS, GEMINI_HOOK_EVENTS, GROK_HOOK_EVENTS, type ManagedHookEvent } from '@shared/agents/hook-events'
 import { GROK_HOOK_FILE, isSafeRemoteGrokHome } from '../../core/agents/grok-paths'
 import { isSafeNodeId, isSafeRemoteHome } from '../../core/remote-safety'
 import { hookServer } from '../../core/agents/hook-server'
-import { remoteAtomicWrite } from '../remote-atomic-write'
+import {
+  updateRemoteSettingsFile,
+  updateRemoteSettingsFileResult,
+  updateRemoteTextFile,
+  type RemoteTextResult
+} from '../../core/agents/hooks/remote-settings-file'
+import {
+  REMOTE_WRITE_NO_DIR,
+  RemoteWriteError,
+  remoteAtomicWrite,
+  runRemoteAtomicWrite,
+  type RemoteAtomicWriteOptions
+} from '../remote-atomic-write'
 import { curlHeaderConfigLine } from '../../core/agents/hook-curl-config-sh'
 import { buildManagedScript } from '../../core/agents/hooks/managed-script'
 import {
@@ -34,27 +49,48 @@ import {
   buildManagedCommand as buildCodexManagedCommand,
   type HooksConfig as CodexHooksConfig
 } from '../../core/agents/hooks/codex'
-import { upsertHookTrustEntriesInContent } from '../../core/agents/hooks/codex-trust'
-import { ensureFullscreenTui, type TuiSettings } from '../../core/agents/hooks/claude-tui'
+import { upsertHookTrustEntriesInContent, type CodexTrustEntry } from '../../core/agents/hooks/codex-trust'
+import { ensureFullscreenTui } from '../../core/agents/hooks/claude-tui'
 import {
+  CANVAS_CONTROL_MARKERS,
   CONTROL_SHIM_SCRIPT,
   buildCanvasControlInstructions,
   buildCanvasSkillBody,
+  frameCanvasControlBlock,
   mergeCanvasControlBlock
 } from '../canvas-control-core'
 import {
   CONTEXT_SHIM_SCRIPT,
+  LINKED_CONTEXT_MARKERS,
   buildContextLinkSkillBody,
   buildLinkedContextInstructions,
+  frameInstructionsBlock,
   mergeInstructionsBlock
 } from '../../core/context-link-core'
+import { isSafeAccountId } from '../../core/claude-accounts-core'
+import { formatCksum, posixCksum } from '../../core/remote-ssh/posix-cksum'
 import { posixQuote, type SshConnection } from '../../shared/ssh'
+import { describeTunnelProbe } from './tunnel-repair'
+import {
+  agentToolsCheckCommand,
+  agentToolsCheckDue,
+  parseAgentToolsReport,
+  recordAgentToolsCheck,
+  type AgentToolsHostState,
+  type AgentToolsReport,
+  type AgentToolsTrigger,
+  type ProbeEntry
+} from './agent-tools-freshness'
 
-/** POSIX dirname of an absolute remote path. `path.dirname` would apply the LOCAL separator
- *  rules, which is wrong the moment the desktop is Windows and the host is Linux. */
-function dirnameOf(p: string): string {
-  const i = p.lastIndexOf('/')
-  return i > 0 ? p.slice(0, i) : '/'
+/**
+ * Every install step in this file fails OPEN for the connect — a host that cannot take a hook must
+ * not cost the user their terminals — but never SILENTLY. A failed write here once looked exactly
+ * like a successful one, and agents then ran against empty shims for a whole session. The message
+ * names the step and the error; a `RemoteWriteError` names only the path and the exit status, never
+ * file contents.
+ */
+function warnNotInstalled(what: string, e: unknown): void {
+  console.warn(`[remote-hooks] ${what} not installed on the host: ${e instanceof Error ? e.message : String(e)}`)
 }
 
 /**
@@ -97,17 +133,148 @@ export interface RemoteRunner {
 // here and had drifted: claude was missing StopFailure/PermissionRequest (an errored remote turn
 // stuck on "working"), and gemini was subscribed to CLAUDE's event names, which it never fires —
 // so remote gemini nodes reported nothing at all.
-const AGENT_TARGETS: { agentId: string; config: string; events: readonly string[] }[] = [
+const AGENT_TARGETS: { agentId: string; config: string; events: readonly ManagedHookEvent[] }[] = [
   { agentId: 'claude', config: '.claude/settings.json', events: CLAUDE_HOOK_EVENTS },
   { agentId: 'gemini', config: '.gemini/settings.json', events: GEMINI_HOOK_EVENTS }
 ]
+
+/** Where the host's instruction files live — one marker block per feature in each. */
+type InstructionTarget = 'codex' | 'gemini' | 'copilot' | 'opencode'
+const CANVAS_TARGETS: readonly InstructionTarget[] = ['codex', 'gemini', 'copilot', 'opencode']
+const CONTEXT_TARGETS: readonly InstructionTarget[] = ['codex', 'gemini', 'opencode']
+
+/**
+ * One thing the agent tools put on a host, as DATA. The installers write these and the freshness
+ * check (`refreshAgentTools`) probes these — one list, so the check can never judge a file the
+ * installer does not write, or at a path the installer does not use.
+ *
+ * `group` is the unit that fails together: a shim that did not land stops the rest of its group
+ * (a skill pointing at a missing shim is worse than no skill), and `label` is what the warning
+ * names.
+ */
+type AgentToolArtifact = { group: string; label: string } & (
+  | { kind: 'file'; path: string; body: string; mode?: '755'; gateDir?: string }
+  | {
+      kind: 'block'
+      target: InstructionTarget
+      block: string
+      /** The exact bytes the merge places from the start marker through the end marker. */
+      framed: string
+      markers: { start: string; end: string }
+      merge: (existing: string, block: string) => string
+    }
+)
+
+export type AgentToolsOutcome = 'current' | 'refreshed' | 'skipped' | 'failed'
+
+const canvasShimPath = (home: string) => `${home}/.nodeterm/nodeterm.sh`
+const contextShimPath = (home: string) => `${home}/.nodeterm/context.sh`
+const skillFilePath = (configDir: string, name: string) => `${configDir}/skills/${name}/SKILL.md`
+const accountConfigDir = (home: string, accountId: string) => `${home}/.nodeterm/claude-accounts/${accountId}`
+
+function canvasControlArtifacts(home: string): AgentToolArtifact[] {
+  const shim = canvasShimPath(home)
+  const block = buildCanvasControlInstructions(shim)
+  const g = { group: 'canvas', label: 'canvas control' }
+  return [
+    { ...g, kind: 'file', path: shim, body: CONTROL_SHIM_SCRIPT, mode: '755' },
+    { ...g, kind: 'file', path: skillFilePath(`${home}/.claude`, 'manage-nodeterm-canvas'), body: buildCanvasSkillBody(shim) },
+    ...CANVAS_TARGETS.map((target): AgentToolArtifact => ({
+      ...g,
+      kind: 'block',
+      target,
+      block,
+      framed: frameCanvasControlBlock(block),
+      markers: CANVAS_CONTROL_MARKERS,
+      merge: mergeCanvasControlBlock
+    }))
+  ]
+}
+
+function contextLinkArtifacts(home: string): AgentToolArtifact[] {
+  const shim = contextShimPath(home)
+  const block = buildLinkedContextInstructions(shim)
+  const g = { group: 'context', label: 'context link' }
+  return [
+    { ...g, kind: 'file', path: shim, body: CONTEXT_SHIM_SCRIPT, mode: '755' },
+    { ...g, kind: 'file', path: skillFilePath(`${home}/.claude`, 'get-linked-context'), body: buildContextLinkSkillBody(shim) },
+    ...CONTEXT_TARGETS.map((target): AgentToolArtifact => ({
+      ...g,
+      kind: 'block',
+      target,
+      block,
+      framed: frameInstructionsBlock(block),
+      markers: LINKED_CONTEXT_MARKERS,
+      merge: mergeInstructionsBlock
+    }))
+  ]
+}
+
+/** A managed account's two skills. Gated on the account dir ALREADY existing on the host: the
+ *  refresh keeps an account's skills current, it never recreates the dir of an account the host
+ *  no longer has. (Creating it is `remoteAccountAdd`'s job.) */
+function accountSkillArtifacts(home: string, accountId: string): AgentToolArtifact[] {
+  const dir = accountConfigDir(home, accountId)
+  const g = { group: `account:${accountId}`, label: 'a managed-account skill' }
+  return [
+    { ...g, kind: 'file', path: skillFilePath(dir, 'manage-nodeterm-canvas'), body: buildCanvasSkillBody(canvasShimPath(home)), gateDir: dir },
+    { ...g, kind: 'file', path: skillFilePath(dir, 'get-linked-context'), body: buildContextLinkSkillBody(contextShimPath(home)), gateDir: dir }
+  ]
+}
+
+/** Where `resolveCopilotHome` would put copilot's instructions, from the host's raw `$COPILOT_HOME`
+ *  (the installer's validator: a value it refuses means `~/.copilot`, never the refused value). */
+function copilotHomeFromReported(reported: string, home: string): string {
+  const trimmed = reported.trim()
+  const stripped = trimmed.replace(/\/+$/, '') || '/'
+  return isSafeRemoteCopilotHome(trimmed) ? stripped : `${home}/.copilot`
+}
+
+/** What a human reads in a log line about one artifact. */
+function describeArtifact(a: AgentToolArtifact): string {
+  return a.kind === 'file' ? a.path : `the ${a.target} instructions file (${a.label} block)`
+}
 
 export class RemoteHooks {
   // Remember the absolute sock path + hook port used at setup per project so teardown cancels
   // the exact `-R` spec (teardown does not re-resolve $HOME).
   private specs = new Map<string, { sock: string; port: number }>()
+  /** Per HOST (user, host, port, remote $HOME — several projects share one host's files): what the
+   *  last agent-tools check confirmed, and the backoff after failed ones. See agent-tools-freshness. */
+  private agentToolsState = new Map<string, AgentToolsHostState>()
+  /** One check per host at a time; a caller arriving mid-check shares it. */
+  private agentToolsInFlight = new Map<string, Promise<AgentToolsOutcome>>()
+  /** The expected bytes are fixed for an app build + home + account set, and the reuse branch asks
+   *  every 45 s per project — do not rebuild ~150 KB of skill text and its checksums each time. */
+  private agentToolsPlans = new Map<string, { plan: AgentToolArtifact[]; expected: string[]; setId: string }>()
 
   constructor(private r: RemoteRunner) {}
+
+  /**
+   * Is THIS project's reverse hook tunnel still answering? (issue #735)
+   *
+   * The connect() reuse branch used to assume a master that answered `-O check` still carried its
+   * `-R` forward. It does not, and the mechanism is our own self-heal: `childArgs` uses
+   * `ControlMaster=auto` + `ControlPersist` precisely so that when a master dies the next child
+   * command rebuilds one on the same ControlPath. That rebuilt master answers `-O check` — but
+   * nothing ever handed it `ssh -O forward -R`, because `setup()` is the only caller of
+   * `hookForwardArgs` and it runs only on the "master just came up" branch.
+   *
+   * A missing spec answers FALSE: it means nothing of ours is bound for this project in this app
+   * run, which is a tunnel that cannot deliver, not an unknown. The caller repairs by re-running
+   * `setup()`, which is idempotent and re-verifies end-to-end.
+   */
+  async tunnelAlive(
+    projectId: string,
+    conn: SshConnection,
+    controlPath: string,
+    token: string
+  ): Promise<{ alive: boolean; detail: string }> {
+    const spec = this.specs.get(projectId)
+    if (!spec) return { alive: false, detail: 'no forward registered for this project in this app run' }
+    if (!token) return { alive: false, detail: 'no hook token' }
+    return this.probeTunnel(conn, controlPath, spec.sock, token)
+  }
 
   async setup(
     projectId: string,
@@ -144,7 +311,11 @@ export class RemoteHooks {
         return null
       }
       const remoteDir = `${home}/.nodeterm`
-      const sock = `${remoteDir}/hook-${projectId}.sock`
+      // A stable public hash of the installation identity namespaces discovery. If identity
+      // initialization failed, the run bearer still isolates this degraded run.
+      // Fresh bind names mean setup cannot unlink a local server or another desktop's tunnel.
+      const owner = createHash('sha256').update(hookServer.nodeAuthSecretOrNull() ?? hook.token).digest('hex').slice(0, 16)
+      let sock = ''
       // PER-PROJECT endpoint file. The sock is already per-project, but the endpoint file used to
       // be a single shared `hook-endpoint.env`: every connect — a real project AND every transient
       // folder-picker browse (projectId `ssh-browse-*`, same connect() path) — overwrote it with
@@ -152,7 +323,7 @@ export class RemoteHooks {
       // pointing at a dead socket, so every real project's hook POSTs (`curl --unix-socket`) failed
       // silently → no status badge / context meter / subagent cards / session-name sync on ANY SSH
       // node. A per-project file means each session sources ITS OWN project's live sock.
-      const endpoint = `${remoteDir}/hook-endpoint-${projectId}.env`
+      const endpoint = `${remoteDir}/hook-endpoint-${projectId}-${owner}.env`
       // 1. reverse unix-socket forward, VERIFIED end-to-end before anything advertises it.
       // A reused live-orphan master (app relaunch; ControlMaster children outlive the app) can
       // carry a stale forward from the previous run — same path, DEAD port. sshd even serves
@@ -167,70 +338,94 @@ export class RemoteHooks {
           // Our own spec may already be registered (a reconnect this run) — clear it first.
           await this.r.run(hookForwardCancelArgs(conn, controlPath, sock, hook.port)).catch(() => {})
         }
-        await this.r.run(
-          childArgs(conn, controlPath, `mkdir -p ${posixQuote(remoteDir)} && rm -f ${posixQuote(sock)}`)
-        )
+        sock = `${remoteDir}/hook-${randomUUID().replace(/-/g, '').slice(0, 20)}.sock`
+        await this.r.run(childArgs(conn, controlPath, `mkdir -p ${posixQuote(remoteDir)}`))
         const fwd = await this.r.run(hookForwardArgs(conn, controlPath, sock, hook.port))
         if (fwd.code !== 0) continue
         verified = await this.verifyTunnel(conn, controlPath, sock, hook.token)
       }
       if (!verified) {
+        await this.r.run(hookForwardCancelArgs(conn, controlPath, sock, hook.port)).catch(() => {})
         console.warn(
           `[remote-hooks] reverse hook tunnel failed verification for ${projectId} — remote agents run without status hooks`
         )
         return null
       }
-      this.specs.set(projectId, { sock, port: hook.port })
+      const previous = this.specs.get(projectId)
+      // Read the installation-qualified file BEFORE replacing it: its prior bearer can prove
+      // ownership after a normal app quit removed the local endpoint advertisement.
+      const prior = await this.r.run(childArgs(conn, controlPath,
+        `test ! -L ${posixQuote(endpoint)} && cat ${posixQuote(endpoint)} 2>/dev/null`)).catch(() => null)
+      const previousToken = prior?.code === 0 ? parseEndpointEnv(prior.stdout).NODETERM_HOOK_TOKEN : ''
       // 2. Remote endpoint file — written only after the tunnel proved live, so sessions are
       // never pointed at a socket that answers nothing. The file carries the hook bearer. A
       // direct `cat > endpoint` both exposed partial bytes and preserved an old permissive mode;
       // publish a new 0600 inode through an invocation-owned temp instead.
-      const endpointWrite = remoteAtomicWrite(endpoint, {
-        restrictPermissions: true,
-        chmod600: true,
-        makeParent: false
-      })
+      const endpointWrite = remoteAtomicWrite(
+        endpoint,
+        remoteEndpointFileContents(sock, hook.token, hook.version, `${remoteDir}/node-tokens`),
+        { restrictPermissions: true, mode: '600', makeParent: false }
+      )
       const endpointResult = await this.r.run(
         childArgs(conn, controlPath, endpointWrite.command),
-        remoteEndpointFileContents(sock, hook.token, hook.version, `${remoteDir}/node-tokens`)
+        endpointWrite.stdin
       )
-      if (endpointResult.code !== 0) return null
-      // 3. install the managed hook for each JSON agent (script + merged config).
-      for (const t of AGENT_TARGETS) {
-        const script = `${remoteDir}/agent-hooks/${t.agentId}.sh`
-        const config = `${home}/${t.config}`
-        await this.r.run(
-          childArgs(
-            conn,
-            controlPath,
-            `mkdir -p ${posixQuote(`${remoteDir}/agent-hooks`)} && cat > ${posixQuote(script)} && chmod 755 ${posixQuote(script)}`
-          ),
-          buildManagedScript(t.agentId, REMOTE_IDENTITY_ROOT)
-        )
-        const { stdout: cfgRaw } = await this.r.run(
-          childArgs(conn, controlPath, `cat ${posixQuote(config)} 2>/dev/null || echo '{}'`)
-        )
-        let cfg: HookSettings = {}
-        try {
-          cfg = JSON.parse(cfgRaw || '{}') as HookSettings
-        } catch {
-          cfg = {}
-        }
-        const merged = mergeManagedHook(cfg, buildManagedHookCommand(script), t.events)
-        await this.r.run(
-          // `$(dirname …)` is itself QUOTED (same reason as installGrokRemote): a home with a
-          // space would otherwise word-split into two mkdir args, the directory would never be
-          // created, and the correctly-quoted `cat >` would then fail — silently, fail-open.
-          childArgs(conn, controlPath, `mkdir -p "$(dirname ${posixQuote(config)})" && cat > ${posixQuote(config)}`),
-          JSON.stringify(merged, null, 2)
-        )
+      if (endpointResult.code !== 0) {
+        await this.r.run(hookForwardCancelArgs(conn, controlPath, sock, hook.port)).catch(() => {})
+        return null
       }
-      // 4. codex: hooks.json merge + config.toml trust (its own shape — not a JSON-settings agent).
-      await this.installCodexRemote(conn, controlPath, home, remoteDir)
-      // 5. grok: our own file in its hooks DIRECTORY, under the HOST's $GROK_HOME.
-      await this.installGrokRemote(conn, controlPath, home, remoteDir)
-      // 6. copilot: its own file/grammar under the HOST's $COPILOT_HOME hooks directory.
-      await this.installCopilotRemote(conn, controlPath, home, remoteDir)
+      const legacy = `${remoteDir}/hook-endpoint-${projectId}.env`
+      try {
+        const old = await this.r.run(childArgs(conn, controlPath,
+          `test ! -L ${posixQuote(legacy)} && cat ${posixQuote(legacy)} 2>/dev/null`))
+        if (old.code === 0 && old.stdout) {
+          const migration = legacyEndpointMigration(legacy, old.stdout,
+            remoteEndpointFileContents(sock, hook.token, hook.version, `${remoteDir}/node-tokens`),
+            [hook.token, previousToken ?? '', hookServer.getPreviousEndpointToken()])
+          const migrated = migration && await this.r.run(childArgs(conn, controlPath, migration.command), migration.stdin)
+          if (!migrated || migrated.code !== 0) {
+            console.warn('[remote-hooks] Legacy hook endpoint was preserved because ownership or unchanged contents could not be proven. ' +
+              'Existing sessions use endpoint discovery; restart affected agent sessions to adopt the new endpoint directly.')
+          }
+        }
+      } catch {
+        console.warn('[remote-hooks] Legacy hook endpoint migration unavailable; restart affected agent sessions to adopt the new endpoint directly.')
+      }
+      this.specs.set(projectId, { sock, port: hook.port })
+      if (previous) {
+        await this.r.run(hookForwardCancelArgs(conn, controlPath, previous.sock, previous.port)).catch(() => {})
+      }
+      // 3-6. Per-agent hook installs — CONCURRENT, because they are independent of each other.
+      //
+      // Each one writes its own script under `<remoteDir>/agent-hooks/` and merges its own agent's
+      // config file; no two touch the same remote path, and the only shared statement is an
+      // idempotent `mkdir -p` of that one directory. Run serially they were ~16 remote round trips
+      // in a row — MEASURED at 3.54 s on a 50 ms-RTT link, which is wall-clock every terminal of a
+      // switched-to project used to wait through (the master is not published until `connected`;
+      // see `connectOnce`). The `SshChildGate` (cap 6 per ControlMaster) is what makes the fan-out
+      // safe against a stock host's `MaxSessions`, and is the whole reason it exists.
+      //
+      // ORDER IS STILL LOAD-BEARING ABOVE THIS LINE: the tunnel must be verified and the endpoint
+      // file written first, because that file is what every one of these hooks POSTs through.
+      //
+      // `allSettled`, not `all`: the endpoint is already written and the tunnel already verified by
+      // the time we get here, so ONE agent's installer failing must not discard a working setup for
+      // every other agent. Each installer already catches its own errors, so today nothing rejects —
+      // this is the guard for the next one that forgets to.
+      const installs = await Promise.allSettled([
+        ...AGENT_TARGETS.map((t) => this.installJsonAgentRemote(conn, controlPath, home, remoteDir, t)),
+        // codex: hooks.json merge + config.toml trust (its own shape — not a JSON-settings agent).
+        this.installCodexRemote(conn, controlPath, home, remoteDir),
+        // grok: our own file in its hooks DIRECTORY, under the HOST's $GROK_HOME.
+        this.installGrokRemote(conn, controlPath, home, remoteDir),
+        // copilot: its own file/grammar under the HOST's $COPILOT_HOME hooks directory.
+        this.installCopilotRemote(conn, controlPath, home, remoteDir)
+      ])
+      for (const r of installs) {
+        if (r.status === 'rejected') {
+          console.warn('[remote-hooks] one agent hook install failed; the others are installed', r.reason)
+        }
+      }
       return { endpointPath: endpoint }
     } catch {
       return null // fail-open: agent runs without hooks
@@ -323,15 +518,12 @@ export class RemoteHooks {
         try {
           // chmod on the TMP, so the mode is right before the name exists; `mv` within one dir is
           // a rename, which carries the tmp's 0600 over whatever the destination's mode was.
-          const write = remoteAtomicWrite(filePath, {
-            restrictPermissions: true,
-            chmod600: true,
-            makeParent: false
-          })
-          const w = await this.r.run(
-            childArgs(conn, controlPath, write.command),
-            `${token}\n` // newline-terminated: the client reads it with `head -n 1`
+          const write = remoteAtomicWrite(
+            filePath,
+            `${token}\n`, // newline-terminated: the client reads it with `head -n 1`
+            { restrictPermissions: true, mode: '600', makeParent: false }
           )
+          const w = await this.r.run(childArgs(conn, controlPath, write.command), write.stdin)
           // The runner RESOLVES on a non-zero exit — a failed write is a `code`, not a throw, and
           // reading only the throw is how this failure stayed invisible.
           wrote = w.code === 0
@@ -366,6 +558,37 @@ export class RemoteHooks {
    *
    * Fail-open at every step; an unparseable remote hooks.json is left untouched (never clobbered).
    */
+  /**
+   * Install the managed hook for ONE json-settings agent (claude, gemini): write its script, read
+   * its settings file, merge our handler in, write it back.
+   *
+   * Extracted from `setup`'s loop so the four per-agent installs can run concurrently, and given
+   * the same fail-open try/catch its three siblings already have — a per-agent failure must cost
+   * that agent its status hooks and nothing else. The three steps INSIDE stay strictly ordered:
+   * the merge reads the file the write then replaces.
+   */
+  private async installJsonAgentRemote(
+    conn: SshConnection,
+    controlPath: string,
+    home: string,
+    remoteDir: string,
+    target: { agentId: string; config: string; events: readonly ManagedHookEvent[] }
+  ): Promise<void> {
+    try {
+      const script = `${remoteDir}/agent-hooks/${target.agentId}.sh`
+      const config = `${home}/${target.config}`
+      await this.writeOwnedFile(conn, controlPath, script, buildManagedScript(target.agentId, REMOTE_IDENTITY_ROOT), {
+        mode: '755'
+      })
+      await updateRemoteSettingsFile(config,
+        (cmd, stdin) => this.r.run(childArgs(conn, controlPath, cmd), stdin),
+        (cfg) => mergeManagedHook(cfg, buildManagedHookCommand(script), target.events))
+    } catch (e) {
+      // Fail-open for the connect, not silent: this agent's remote sessions run without status hooks.
+      warnNotInstalled(`${target.agentId} status hook`, e)
+    }
+  }
+
   private async installCodexRemote(
     conn: SshConnection,
     controlPath: string,
@@ -374,14 +597,10 @@ export class RemoteHooks {
   ): Promise<void> {
     try {
       const script = `${remoteDir}/agent-hooks/codex.sh`
-      await this.r.run(
-        childArgs(
-          conn,
-          controlPath,
-          `mkdir -p ${posixQuote(`${remoteDir}/agent-hooks`)} && cat > ${posixQuote(script)} && chmod 755 ${posixQuote(script)}`
-        ),
-        buildManagedScript('codex', REMOTE_IDENTITY_ROOT)
-      )
+      await this.writeOwnedFile(conn, controlPath, script, buildManagedScript('codex', REMOTE_IDENTITY_ROOT), {
+        mode: '755'
+      })
+      // POSIX: the host runs the sh one-liner whatever this desktop's platform is.
       const command = buildCodexManagedCommand(script)
       const codexHome = `${home}/.codex`
       const hooksFile = `${codexHome}/hooks.json`
@@ -397,44 +616,34 @@ export class RemoteHooks {
         )
       )
       const sourcePath = canonRaw.trim() || hooksFile
+      const runCmd = (cmd: string, stdin?: string) => this.r.run(childArgs(conn, controlPath, cmd), stdin)
 
-      // Read the current hooks.json. `|| echo '{}'` only fires when the file is MISSING, so a
-      // present-but-malformed file reaches JSON.parse and throws → we skip (never clobber it).
-      const { stdout: hooksRaw } = await this.r.run(
-        childArgs(conn, controlPath, `cat ${posixQuote(hooksFile)} 2>/dev/null || echo '{}'`)
-      )
-      let existing: CodexHooksConfig | null
-      try {
-        const parsed = JSON.parse(hooksRaw || '{}') as unknown
-        existing =
-          parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-            ? (parsed as CodexHooksConfig)
-            : null
-      } catch {
-        existing = null
-      }
-      const built = buildCodexHooksAndTrust(existing, command, sourcePath)
-      if (!built) return // missing is fine ({}); unparseable/odd shape → leave the host's file alone
+      // hooks.json and config.toml are the USER's files, so both go through the guarded
+      // transaction: symlinks kept, mode kept, exactly-the-body-arrived and the-file-is-still-what-
+      // we-read both checked before anything is published. A missing file merges as `{}`; a
+      // present-but-malformed one fails the parse and is left alone (never clobbered), and so is
+      // an odd shape `buildCodexHooksAndTrust` refuses.
+      // A holder, not a `let`: TS narrows a closure-assigned `let` back to its initial `null`.
+      const trust: { entries: CodexTrustEntry[] | null } = { entries: null }
+      const hooks = await updateRemoteSettingsFileResult(hooksFile, runCmd, (cfg) => {
+        const built = buildCodexHooksAndTrust(cfg as CodexHooksConfig, command, sourcePath)
+        if (!built) return cfg
+        trust.entries = built.trustEntries
+        return built.config as Record<string, unknown>
+      })
+      // Trust only a handler hooks.json now carries: a failed write leaves nothing to trust.
+      const entries = trust.entries
+      if (hooks === 'failed' || !entries) return
 
-      await this.r.run(
-        childArgs(conn, controlPath, `mkdir -p ${posixQuote(codexHome)} && cat > ${posixQuote(hooksFile)}`),
-        `${JSON.stringify(built.config, null, 2)}\n`
-      )
-
-      // Trust LAST: read config.toml, line-merge our trust blocks (preserving all other content),
-      // write back only if it changed. `|| true` so a missing config.toml reads as empty.
-      const { stdout: tomlRaw } = await this.r.run(
-        childArgs(conn, controlPath, `cat ${posixQuote(configToml)} 2>/dev/null || true`)
-      )
-      const nextToml = upsertHookTrustEntriesInContent(tomlRaw, built.trustEntries)
-      if (nextToml !== tomlRaw) {
-        await this.r.run(
-          childArgs(conn, controlPath, `mkdir -p ${posixQuote(codexHome)} && cat > ${posixQuote(configToml)}`),
-          nextToml
-        )
-      }
-    } catch {
-      /* fail-open: the remote codex session simply runs without status hooks */
+      // Trust LAST: line-merge our trust blocks (preserving all other content), write back only if
+      // it changed. A missing config.toml reads as empty; 600 because it can hold credentials.
+      await updateRemoteTextFile(configToml, runCmd, (before) => {
+        const raw = before ?? ''
+        const next = upsertHookTrustEntriesInContent(raw, entries)
+        return next === raw ? null : next
+      })
+    } catch (e) {
+      warnNotInstalled('codex status hook', e)
     }
   }
 
@@ -473,14 +682,9 @@ export class RemoteHooks {
       const config = `${grokHome.replace(/\/$/, '')}/hooks/${GROK_HOOK_FILE}`
       const script = `${remoteDir}/agent-hooks/grok.sh`
 
-      await this.r.run(
-        childArgs(
-          conn,
-          controlPath,
-          `mkdir -p ${posixQuote(`${remoteDir}/agent-hooks`)} && cat > ${posixQuote(script)} && chmod 755 ${posixQuote(script)}`
-        ),
-        buildManagedScript('grok', REMOTE_IDENTITY_ROOT)
-      )
+      await this.writeOwnedFile(conn, controlPath, script, buildManagedScript('grok', REMOTE_IDENTITY_ROOT), {
+        mode: '755'
+      })
       // `|| echo '{}'` fires ONLY when the file is missing — still the read that distinguishes a
       // missing file from an unreadable one. An unreadable one is then HEALED, not preserved: this
       // file is ours by name and we rewrite it wholesale, so there is no user content to lose.
@@ -494,14 +698,11 @@ export class RemoteHooks {
         cfg = {}
       }
       const merged = mergeManagedHook(cfg, buildManagedHookCommand(script), GROK_HOOK_EVENTS)
-      // The `$(dirname …)` is QUOTED: a valid $GROK_HOME may contain spaces, which would otherwise
-      // word-split into two mkdir args, leave the directory absent, and fail the quoted `cat >`.
-      await this.r.run(
-        childArgs(conn, controlPath, `mkdir -p "$(dirname ${posixQuote(config)})" && cat > ${posixQuote(config)}`),
-        JSON.stringify(merged, null, 2)
-      )
-    } catch {
-      /* fail-open: the remote grok session simply runs without status hooks */
+      // The parent is created by the atomic write as ONE quoted argument, so a valid $GROK_HOME
+      // containing spaces still installs (an unquoted `$(dirname …)` split it into two mkdir args).
+      await this.writeOwnedFile(conn, controlPath, config, JSON.stringify(merged, null, 2))
+    } catch (e) {
+      warnNotInstalled('grok status hook', e)
     }
   }
 
@@ -516,24 +717,17 @@ export class RemoteHooks {
       const copilotHome = await this.resolveCopilotHome(conn, controlPath, home)
       const config = `${copilotHome.replace(/\/$/, '')}/hooks/${COPILOT_HOOK_FILE}`
       const script = `${remoteDir}/agent-hooks/copilot.sh`
-      await this.r.run(
-        childArgs(
-          conn,
-          controlPath,
-          `mkdir -p ${posixQuote(`${remoteDir}/agent-hooks`)} && cat > ${posixQuote(script)} && chmod 755 ${posixQuote(script)}`
-        ),
-        buildManagedScript('copilot', REMOTE_IDENTITY_ROOT)
-      )
-      await this.r.run(
-        childArgs(
-          conn,
-          controlPath,
-          `mkdir -p "$(dirname ${posixQuote(config)})" && cat > ${posixQuote(config)}`
-        ),
+      await this.writeOwnedFile(conn, controlPath, script, buildManagedScript('copilot', REMOTE_IDENTITY_ROOT), {
+        mode: '755'
+      })
+      await this.writeOwnedFile(
+        conn,
+        controlPath,
+        config,
         `${JSON.stringify(buildCopilotHookConfig(buildManagedHookCommand(script)), null, 2)}\n`
       )
-    } catch {
-      /* fail-open: the remote copilot session simply runs without status hooks */
+    } catch (e) {
+      warnNotInstalled('copilot status hook', e)
     }
   }
 
@@ -545,9 +739,7 @@ export class RemoteHooks {
     const { stdout } = await this.r.run(
       childArgs(conn, controlPath, 'printf %s "${COPILOT_HOME:-}"')
     )
-    const reported = stdout.trim()
-    const stripped = reported.replace(/\/+$/, '') || '/'
-    return isSafeRemoteCopilotHome(reported) ? stripped : `${home}/.copilot`
+    return copilotHomeFromReported(stdout, home)
   }
 
   /**
@@ -573,27 +765,30 @@ export class RemoteHooks {
       const config = `${accountDir}/settings.json`
       const events = AGENT_TARGETS.find((t) => t.agentId === 'claude')?.events ?? []
       // Idempotently (re)write the shared hook script — setup() may not have run (fail-open) yet.
-      await this.r.run(
-        childArgs(conn, controlPath, `mkdir -p ${posixQuote(`${remoteDir}/agent-hooks`)} && cat > ${posixQuote(script)} && chmod 755 ${posixQuote(script)}`),
-        buildManagedScript('claude', REMOTE_IDENTITY_ROOT)
-      )
-      const { stdout: cfgRaw } = await this.r.run(
-        childArgs(conn, controlPath, `cat ${posixQuote(config)} 2>/dev/null || echo '{}'`)
-      )
-      let cfg: HookSettings = {}
-      try {
-        cfg = JSON.parse(cfgRaw || '{}') as HookSettings
-      } catch {
-        cfg = {}
-      }
-      const merged = mergeManagedHook(cfg, buildManagedHookCommand(script), events)
-      await this.r.run(
-        childArgs(conn, controlPath, `mkdir -p ${posixQuote(accountDir)} && cat > ${posixQuote(config)}`),
-        JSON.stringify(merged, null, 2)
-      )
-    } catch {
-      /* fail-open: the account session simply runs without status hooks */
+      await this.writeOwnedFile(conn, controlPath, script, buildManagedScript('claude', REMOTE_IDENTITY_ROOT), {
+        mode: '755'
+      })
+      await updateRemoteSettingsFile(config,
+        (cmd, stdin) => this.r.run(childArgs(conn, controlPath, cmd), stdin),
+        (cfg) => mergeManagedHook(cfg, buildManagedHookCommand(script), events))
+    } catch (e) {
+      warnNotInstalled('claude status hook for a managed account', e)
     }
+  }
+
+  /**
+   * Canvas control, THEN context link, never both at once.
+   *
+   * They merge DIFFERENT marker blocks into the SAME instruction files (codex AGENTS.md, GEMINI.md,
+   * opencode AGENTS.md), and the guarded transaction publishes a file only if it still holds what
+   * the writer read — so two writers racing on one file cannot both land: the second one finds the
+   * file changed, or our lock held, and skips it. Fired side by side on a connect (as they were),
+   * a fresh host routinely ended up with ONE of the two blocks per file until a later connect. Both
+   * installers fail open, so this never throws.
+   */
+  async installAgentTools(conn: SshConnection, controlPath: string, remoteHome: string): Promise<void> {
+    await this.installCanvasControl(conn, controlPath, remoteHome)
+    await this.installContextLink(conn, controlPath, remoteHome)
   }
 
   /**
@@ -612,38 +807,12 @@ export class RemoteHooks {
    * instead of telling the user canvas control is unavailable. Fail-open per step otherwise.
    */
   async installCanvasControl(conn: SshConnection, controlPath: string, remoteHome: string): Promise<void> {
-    try {
-      const shim = `${remoteHome}/.nodeterm/nodeterm.sh`
-      await this.writeRemoteShim(conn, controlPath, shim, CONTROL_SHIM_SCRIPT)
-      await this.writeRemoteSkill(
-        conn,
-        controlPath,
-        `${remoteHome}/.claude`,
-        'manage-nodeterm-canvas',
-        buildCanvasSkillBody(shim)
-      )
-      // codex / gemini / opencode have no skill system — same marker-delimited instruction block
-      // the desktop merges into their global instruction files. The opencode path is expanded by
-      // the REMOTE shell (it is XDG-respecting and the local value says nothing about the host).
-      const block = buildCanvasControlInstructions(shim)
-      // codex/gemini are plain quoted literals; opencode must stay shell-expandable and so
-      // carries a prelude that binds the untrusted $HOME to a variable (see the helper).
-      const targets: { pathExpr: string; prelude?: string }[] = [
-        { pathExpr: posixQuote(`${remoteHome}/.codex/AGENTS.md`) },
-        { pathExpr: posixQuote(`${remoteHome}/.gemini/GEMINI.md`) },
-        {
-          pathExpr: posixQuote(
-            `${await this.resolveCopilotHome(conn, controlPath, remoteHome)}/copilot-instructions.md`
-          )
-        },
-        openCodeInstructionsTarget(remoteHome)
-      ]
-      for (const t of targets) {
-        await this.mergeRemoteInstructions(conn, controlPath, t.pathExpr, block, mergeCanvasControlBlock, t.prelude)
-      }
-    } catch {
-      /* fail-open: the remote agent simply runs without canvas control */
-    }
+    // codex / gemini / copilot / opencode have no skill system — they get the same marker-delimited
+    // instruction block the desktop merges into their global instruction files. The copilot home is
+    // the HOST's, resolved only when that block is reached.
+    await this.applyAgentTools(conn, controlPath, remoteHome, canvasControlArtifacts(remoteHome), () =>
+      this.resolveCopilotHome(conn, controlPath, remoteHome)
+    )
   }
 
   /**
@@ -672,8 +841,8 @@ export class RemoteHooks {
         buildCanvasSkillBody(shim)
       )
       await this.ensureRemoteClaudeSkillsLink(conn, controlPath, remoteHome, accountDir)
-    } catch {
-      /* fail-open */
+    } catch (e) {
+      warnNotInstalled('a managed-account skill', e)
     }
   }
 
@@ -687,30 +856,9 @@ export class RemoteHooks {
    * verified tunnel; fail-open per step.
    */
   async installContextLink(conn: SshConnection, controlPath: string, remoteHome: string): Promise<void> {
-    try {
-      const shim = `${remoteHome}/.nodeterm/context.sh`
-      await this.writeRemoteShim(conn, controlPath, shim, CONTEXT_SHIM_SCRIPT)
-      await this.writeRemoteSkill(
-        conn,
-        controlPath,
-        `${remoteHome}/.claude`,
-        'get-linked-context',
-        buildContextLinkSkillBody(shim)
-      )
-      const block = buildLinkedContextInstructions(shim)
-      // codex/gemini are plain quoted literals; opencode must stay shell-expandable and so
-      // carries a prelude that binds the untrusted $HOME to a variable (see the helper).
-      const targets: { pathExpr: string; prelude?: string }[] = [
-        { pathExpr: posixQuote(`${remoteHome}/.codex/AGENTS.md`) },
-        { pathExpr: posixQuote(`${remoteHome}/.gemini/GEMINI.md`) },
-        openCodeInstructionsTarget(remoteHome)
-      ]
-      for (const t of targets) {
-        await this.mergeRemoteInstructions(conn, controlPath, t.pathExpr, block, mergeInstructionsBlock, t.prelude)
-      }
-    } catch {
-      /* fail-open: the remote agent simply runs without context link */
-    }
+    await this.applyAgentTools(conn, controlPath, remoteHome, contextLinkArtifacts(remoteHome), () =>
+      this.resolveCopilotHome(conn, controlPath, remoteHome)
+    )
   }
 
   /** The context-link skill for a REMOTE managed-account config dir (see the canvas twin). */
@@ -732,8 +880,8 @@ export class RemoteHooks {
         buildContextLinkSkillBody(shim)
       )
       await this.ensureRemoteClaudeSkillsLink(conn, controlPath, remoteHome, accountDir)
-    } catch {
-      /* fail-open */
+    } catch (e) {
+      warnNotInstalled('a managed-account skill', e)
     }
   }
 
@@ -743,11 +891,7 @@ export class RemoteHooks {
     shim: string,
     body: string
   ): Promise<void> {
-    const q = posixQuote(shim)
-    await this.r.run(
-      childArgs(conn, controlPath, `mkdir -p ${posixQuote(dirnameOf(shim))} && cat > ${q} && chmod 755 ${q}`),
-      body
-    )
+    await this.writeOwnedFile(conn, controlPath, shim, body, { mode: '755' })
   }
 
   /**
@@ -787,10 +931,264 @@ export class RemoteHooks {
     name: string,
     body: string
   ): Promise<void> {
-    const skill = `${configDir}/skills/${name}/SKILL.md`
-    await this.r.run(
-      childArgs(conn, controlPath, `mkdir -p ${posixQuote(dirnameOf(skill))} && cat > ${posixQuote(skill)}`),
-      body
+    await this.writeOwnedFile(conn, controlPath, skillFilePath(configDir, name), body)
+  }
+
+  /**
+   * Write (or merge) a list of agent-tool artifacts, in order, one group at a time.
+   *
+   * Fail-open for the connect, never silent: a failed owned-file write THROWS and ends its group
+   * (the steps after it depend on the file) with a warning naming the group; a failed instruction
+   * merge is logged by the transaction and the group carries on. A gated file (a managed account's
+   * skill) is written only while its dir still exists — re-checked on the host in the write itself —
+   * and is skipped, not failed, when it is gone. `copilotHome` is asked at most once, and only when
+   * a copilot block is reached.
+   *
+   * Returns whether everything that should have landed did, and what was ACTUALLY written: a merge
+   * that changed nothing, or a gated write whose dir vanished, is not a write.
+   */
+  private async applyAgentTools(
+    conn: SshConnection,
+    controlPath: string,
+    remoteHome: string,
+    artifacts: readonly AgentToolArtifact[],
+    copilotHome: () => Promise<string>
+  ): Promise<{ ok: boolean; written: AgentToolArtifact[] }> {
+    let copilot: Promise<string> | undefined
+    const groups = new Map<string, AgentToolArtifact[]>()
+    for (const a of artifacts) {
+      const members = groups.get(a.group)
+      if (members) members.push(a)
+      else groups.set(a.group, [a])
+    }
+    let ok = true
+    const written: AgentToolArtifact[] = []
+    for (const members of groups.values()) {
+      try {
+        for (const a of members) {
+          if (a.kind === 'file') {
+            try {
+              await this.writeOwnedFile(conn, controlPath, a.path, a.body, {
+                ...(a.mode ? { mode: a.mode } : {}),
+                ...(a.gateDir ? { requireDir: a.gateDir } : {})
+              })
+              written.push(a)
+            } catch (e) {
+              // The account was removed between the probe and this write: nothing to keep current.
+              if (!(a.gateDir && e instanceof RemoteWriteError && e.code === REMOTE_WRITE_NO_DIR)) throw e
+            }
+            continue
+          }
+          const target =
+            a.target === 'copilot'
+              ? { pathExpr: posixQuote(`${await (copilot ??= copilotHome())}/copilot-instructions.md`) }
+              : this.instructionTarget(remoteHome, a.target)
+          const r = await this.mergeRemoteInstructions(conn, controlPath, target.pathExpr, a.block, a.merge, target.prelude)
+          if (r === 'failed') ok = false
+          else if (r === 'written') written.push(a)
+        }
+      } catch (e) {
+        ok = false
+        warnNotInstalled(members[0].label, e)
+      }
+    }
+    return { ok, written }
+  }
+
+  /** The instruction files whose path does not depend on host state we have to ask for. codex and
+   *  gemini are plain quoted literals; opencode must stay shell-expandable (XDG) and so carries a
+   *  prelude binding the untrusted $HOME to a variable (see `openCodeInstructionsTarget`). */
+  private instructionTarget(
+    remoteHome: string,
+    target: Exclude<InstructionTarget, 'copilot'>
+  ): { pathExpr: string; prelude?: string } {
+    if (target === 'codex') return { pathExpr: posixQuote(`${remoteHome}/.codex/AGENTS.md`) }
+    if (target === 'gemini') return { pathExpr: posixQuote(`${remoteHome}/.gemini/GEMINI.md`) }
+    return openCodeInstructionsTarget(remoteHome)
+  }
+
+  /**
+   * Bring an SSH host's agent tools — both shims, both skills (system and every managed account
+   * pinned to this host), and our blocks in the instruction files — up to what THIS build writes,
+   * rewriting ONLY what differs.
+   *
+   * One probe checksums everything the host holds (see agent-tools-freshness.ts for the stamp and
+   * the cadence); a current host costs that one round trip and no write. A file we cannot read is
+   * never written over, and a host with one is not called confirmed, so the reuse branch keeps
+   * looking (on the tunnel-repair backoff). On a host with no `cksum` the files it can read cannot be
+   * compared: they are written (what every connect did before this check existed) and the blocks
+   * merged, but missing, unreadable and gated files are still told apart. Never throws.
+   */
+  async refreshAgentTools(
+    conn: SshConnection,
+    controlPath: string,
+    remoteHome: string,
+    accountIds: readonly string[],
+    trigger: AgentToolsTrigger,
+    now = Date.now()
+  ): Promise<AgentToolsOutcome> {
+    try {
+      // settings.json is hand-editable: an id that could leave the accounts root is dropped here,
+      // before it is spliced into any path.
+      const accounts = [...new Set(accountIds.filter(isSafeAccountId))].sort()
+      const key = `${conn.user}@${conn.host}:${conn.port ?? 22}\0${remoteHome}`
+      const inFlight = this.agentToolsInFlight.get(key)
+      if (inFlight) return await inFlight
+      const planned = this.agentToolsPlan(remoteHome, accounts)
+      if (!agentToolsCheckDue(this.agentToolsState.get(key), planned.setId, now, trigger)) return 'skipped'
+      const attempt = this.checkAgentTools(conn, controlPath, remoteHome, planned, trigger, key, now)
+      this.agentToolsInFlight.set(key, attempt)
+      try {
+        return await attempt
+      } finally {
+        this.agentToolsInFlight.delete(key)
+      }
+    } catch (e) {
+      warnNotInstalled('an agent-tools refresh', e)
+      return 'failed'
+    }
+  }
+
+  private agentToolsPlan(
+    remoteHome: string,
+    accounts: readonly string[]
+  ): { plan: AgentToolArtifact[]; expected: string[]; setId: string } {
+    const cacheKey = [remoteHome, ...accounts].join('\0')
+    const cached = this.agentToolsPlans.get(cacheKey)
+    if (cached) return cached
+    const plan = [
+      ...canvasControlArtifacts(remoteHome),
+      ...contextLinkArtifacts(remoteHome),
+      ...accounts.flatMap((id) => accountSkillArtifacts(remoteHome, id))
+    ]
+    const expected = plan.map((a) => formatCksum(posixCksum(Buffer.from(a.kind === 'file' ? a.body : a.framed, 'utf8'))))
+    const setId = createHash('sha256')
+      .update(JSON.stringify(plan.map((a, i) => [a.kind === 'file' ? a.path : `${a.group}:${a.target}`, expected[i]])))
+      .digest('hex')
+    if (this.agentToolsPlans.size >= 16) this.agentToolsPlans.clear()
+    const planned = { plan, expected, setId }
+    this.agentToolsPlans.set(cacheKey, planned)
+    return planned
+  }
+
+  private async checkAgentTools(
+    conn: SshConnection,
+    controlPath: string,
+    remoteHome: string,
+    planned: { plan: AgentToolArtifact[]; expected: string[]; setId: string },
+    trigger: AgentToolsTrigger,
+    key: string,
+    now: number
+  ): Promise<AgentToolsOutcome> {
+    const { plan, expected, setId } = planned
+    const host = `${conn.user}@${conn.host}`
+    const done = (ok: boolean, outcome: AgentToolsOutcome): AgentToolsOutcome => {
+      this.agentToolsState.set(key, recordAgentToolsCheck(this.agentToolsState.get(key), setId, ok, now))
+      return outcome
+    }
+    const entries = plan.map((a) => this.probeEntry(remoteHome, a))
+    const command = agentToolsCheckCommand(openCodeInstructionsTarget(remoteHome).prelude, entries, 'COPILOT_HOME')
+    let report: AgentToolsReport | null = null
+    try {
+      const r = await this.r.run(childArgs(conn, controlPath, command))
+      report = r.code === 0 ? parseAgentToolsReport(r.stdout, entries.length) : null
+      // A report we cannot read is not evidence that anything is stale: change nothing.
+      if (!report) console.warn(`[remote-hooks] could not check the agent tools on ${host} (exit ${r.code}); will look again`)
+    } catch (e) {
+      console.warn(`[remote-hooks] could not check the agent tools on ${host}: ${e instanceof Error ? e.message : String(e)}`)
+    }
+    if (!report) return done(false, 'failed')
+    const copilotHome = copilotHomeFromReported(report.env, remoteHome)
+    // With no cksum every file the host can read is `unknown`. On a connect or a repair those are
+    // written anyway, which is what every connect did before this check; on the hourly re-look of a
+    // host this run already brought up to date, nothing is written blind.
+    if (!report.hasCksum && trigger === 'reuse' && this.agentToolsState.get(key)?.verified?.setId === setId) {
+      return done(true, 'current')
+    }
+
+    // The probe read copilot's file at the host's raw `$COPILOT_HOME`; the installer refuses an
+    // unsafe value and writes under ~/.copilot instead. Trust the probe only when the two agree.
+    const copilotProbeTrusted = report.env === '' || isSafeRemoteCopilotHome(report.env)
+    const stale: AgentToolArtifact[] = []
+    const unreadable: AgentToolArtifact[] = []
+    let unknownBlocks = 0
+    plan.forEach((a, i) => {
+      const status = report.statuses[i]
+      if (status.state === 'unreadable') unreadable.push(a)
+      else if (status.state === 'no-gate') return
+      else if (status.state === 'missing') stale.push(a)
+      else if (status.state === 'unknown') {
+        // An owned file is written; an instruction block is MERGED, which writes only on a change.
+        stale.push(a)
+        if (a.kind === 'block') unknownBlocks++
+      } else if (formatCksum(status.sum) !== expected[i]) stale.push(a)
+      else if (a.kind === 'block' && a.target === 'copilot' && !copilotProbeTrusted) stale.push(a)
+    })
+    if (!report.hasCksum) {
+      console.info(`[remote-hooks] ${host} has no cksum: its agent tool files are written without comparison`)
+    } else if (unknownBlocks) {
+      console.warn(
+        `[remote-hooks] could not checksum ${unknownBlocks} instruction block(s) on ${host} (awk failed or is ` +
+          'missing); merged them instead, which writes only what changed'
+      )
+    }
+    if (unreadable.length) {
+      console.warn(
+        `[remote-hooks] left ${unreadable.length} agent tool file(s) on ${host} untouched because they cannot be ` +
+          `read (not a readable regular file): ${unreadable.map(describeArtifact).join(', ')}`
+      )
+    }
+    const { ok, written } = stale.length
+      ? await this.applyAgentTools(conn, controlPath, remoteHome, stale, async () => copilotHome)
+      : { ok: true, written: [] }
+    if (written.length) {
+      console.info(
+        `[remote-hooks] ${host}: rewrote ${written.length} out-of-date agent tool file(s): ` +
+          written.map(describeArtifact).join(', ')
+      )
+    }
+    const settled = ok && !unreadable.length
+    return done(settled, !settled ? 'failed' : written.length ? 'refreshed' : 'current')
+  }
+
+  /** How the probe looks at one artifact — at the SAME path the writer uses (copilot aside: the
+   *  probe reads the host's own `$COPILOT_HOME`, which `checkAgentTools` reconciles). */
+  private probeEntry(remoteHome: string, a: AgentToolArtifact): ProbeEntry {
+    if (a.kind === 'file') {
+      return { kind: 'file', pathExpr: posixQuote(a.path), ...(a.gateDir ? { gateDirExpr: posixQuote(a.gateDir) } : {}) }
+    }
+    const pathExpr =
+      a.target === 'copilot'
+        ? '"${COPILOT_HOME:-$NT_H/.copilot}/copilot-instructions.md"'
+        : this.instructionTarget(remoteHome, a.target).pathExpr
+    return { kind: 'block', pathExpr, start: a.markers.start, end: a.markers.end }
+  }
+
+  /**
+   * Publish one file WE own on the host — a hook script, a canvas/context shim, a skill, our own
+   * grok/copilot hook config. Every one of these used to be `cat > <file>`, which truncates the
+   * file the moment the remote shell starts: an ssh channel that died before the body arrived left
+   * it EMPTY, and `cat` still exited 0. That is how a host ended up with 0-byte `nodeterm.sh` and
+   * `context.sh` after a reconnect, on which every agent's canvas call exited 0 with no output.
+   *
+   * Now: an empty body is refused before any ssh, the body goes to a sibling temp, the host checks
+   * that exactly its byte count arrived, and only then is it renamed over the previous file (which
+   * is otherwise left exactly as it was). A write that did not land THROWS a `RemoteWriteError` —
+   * the runner resolves on a non-zero exit, and awaiting it and moving on is what made the failure
+   * silent. The caller's catch logs it and skips the steps that depend on the file.
+   */
+  private writeOwnedFile(
+    conn: SshConnection,
+    controlPath: string,
+    path: string,
+    body: string,
+    options: RemoteAtomicWriteOptions = {}
+  ): Promise<void> {
+    return runRemoteAtomicWrite(
+      (cmd, stdin) => this.r.run(childArgs(conn, controlPath, cmd), stdin),
+      path,
+      body,
+      options
     )
   }
 
@@ -809,20 +1207,22 @@ export class RemoteHooks {
     block: string,
     merge: (existing: string, block: string) => string,
     prelude = ''
-  ): Promise<void> {
-    try {
-      const { stdout: existing } = await this.r.run(
-        childArgs(conn, controlPath, `${prelude}cat ${pathExpr} 2>/dev/null || true`)
-      )
-      const merged = merge(existing, block)
-      if (merged === existing) return
-      await this.r.run(
-        childArgs(conn, controlPath, `${prelude}mkdir -p "$(dirname ${pathExpr})" && cat > ${pathExpr}`),
-        merged
-      )
-    } catch {
-      /* fail-open: one unwritable instruction file must never break the connect */
-    }
+  ): Promise<RemoteTextResult> {
+    // These are the USER's instruction files (often a dotfile symlink), so they get the same
+    // guarded transaction as settings.json: the link and the mode are kept, and nothing is
+    // published unless exactly the merged body arrived and the file still holds what we read. The
+    // old `cat … || true` then `cat >` read an UNREADABLE file as empty and replaced the user's
+    // text with our block alone. Never throws; a failure is logged and leaves the file as it was.
+    return updateRemoteTextFile(
+      { pathExpr, prelude, label: pathExpr },
+      (cmd, stdin) => this.r.run(childArgs(conn, controlPath, cmd), stdin),
+      (before) => {
+        const existing = before ?? ''
+        const merged = merge(existing, block)
+        return merged === existing ? null : merged
+      },
+      { createMode: '644' }
+    )
   }
 
   /**
@@ -850,34 +1250,9 @@ export class RemoteHooks {
   /** Read-merge-write the fullscreen-tui key at one absolute remote config path, over the master.
    *  Same read-if-present, write-only-if-changed, fail-open mechanics as the hook merge above. */
   private async ensureFullscreenTuiAt(conn: SshConnection, controlPath: string, config: string): Promise<void> {
-    try {
-      const { stdout: raw } = await this.r.run(
-        childArgs(conn, controlPath, `cat ${posixQuote(config)} 2>/dev/null || echo '{}'`)
-      )
-      let cfg: TuiSettings = {}
-      if (raw.trim() && raw.trim() !== '{}') {
-        try {
-          cfg = JSON.parse(raw) as TuiSettings
-        } catch {
-          // The file EXISTS but does not parse (`|| echo '{}'` only fires when it is missing):
-          // never replace the user's settings with {tui:...} — same guard as the local wrapper.
-          return
-        }
-      }
-      const { config: next, changed } = ensureFullscreenTui(cfg)
-      if (!changed) return // key already present (any value) → never overwrite the user's `/tui`
-      await this.r.run(
-        // `$(dirname …)` QUOTED, like the other three sites. Unquoted, a home with a space
-        // (a remote home with spaces) word-splits the substitution into two mkdir args, measured
-        // ARGC=2 — so junk directories are created, the correctly-quoted `cat >` then fails, and
-        // the catch below swallows it. Symptom: fullscreen-TUI silently never written for any
-        // remote user whose home has a space in it.
-        childArgs(conn, controlPath, `mkdir -p "$(dirname ${posixQuote(config)})" && cat > ${posixQuote(config)}`),
-        JSON.stringify(next, null, 2)
-      )
-    } catch {
-      /* fail-open: a failed remote read/write must never break the connect */
-    }
+    await updateRemoteSettingsFile(config,
+      (cmd, stdin) => this.r.run(childArgs(conn, controlPath, cmd), stdin),
+      (cfg) => ensureFullscreenTui(cfg).config)
   }
 
   /**
@@ -909,6 +1284,16 @@ export class RemoteHooks {
     sock: string,
     token: string
   ): Promise<boolean> {
+    return (await this.probeTunnel(conn, controlPath, sock, token)).alive
+  }
+
+  /** `verifyTunnel` with the reason kept: the watchdog logs WHY a live tunnel stopped answering. */
+  private async probeTunnel(
+    conn: SshConnection,
+    controlPath: string,
+    sock: string,
+    token: string
+  ): Promise<{ alive: boolean; detail: string }> {
     try {
       const cmd =
         `curl -s -m 5 -o /dev/null -w '%{http_code}' -X POST --unix-socket ${posixQuote(sock)} ` +
@@ -927,9 +1312,10 @@ export class RemoteHooks {
         childArgs(conn, controlPath, cmd),
         curlHeaderConfigLine('x-nodeterm-hook-token', token)
       )
-      return r.code === 0 && r.stdout.trim() === '204'
-    } catch {
-      return false
+      const alive = r.code === 0 && r.stdout.trim() === '204'
+      return { alive, detail: alive ? 'ok' : describeTunnelProbe(r.code, r.stdout) }
+    } catch (e) {
+      return { alive: false, detail: `probe threw: ${e instanceof Error ? e.message : String(e)}` }
     }
   }
 

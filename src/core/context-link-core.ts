@@ -63,12 +63,22 @@ export async function resolveLinkTranscript(
 const INSTR_START = '<!-- nodeterm:get-linked-context:start -->'
 const INSTR_END = '<!-- nodeterm:get-linked-context:end -->'
 
+/** The two markers, for the SSH freshness probe (see `CANVAS_CONTROL_MARKERS`). */
+export const LINKED_CONTEXT_MARKERS = { start: INSTR_START, end: INSTR_END } as const
+
+/** The exact bytes the merge below writes from the start marker through the end marker — the one
+ *  definition the SSH freshness probe compares a host's copy against. */
+export function frameInstructionsBlock(block: string): string {
+  return `${INSTR_START}\n${block.trim()}\n${INSTR_END}`
+}
+
 /** Idempotently merge our marker-delimited block into a global instructions file
- *  (~/.codex/AGENTS.md, ~/.gemini/GEMINI.md). Everything outside the markers is preserved. */
+ *  (~/.codex/AGENTS.md, ~/.gemini/GEMINI.md). Everything outside the markers is preserved.
+ *  The end marker is searched AFTER the start marker (see `mergeCanvasControlBlock`). */
 export function mergeInstructionsBlock(existing: string, block: string): string {
-  const full = `${INSTR_START}\n${block.trim()}\n${INSTR_END}`
+  const full = frameInstructionsBlock(block)
   const start = existing.indexOf(INSTR_START)
-  const end = existing.indexOf(INSTR_END)
+  const end = existing.indexOf(INSTR_END, start)
   if (start >= 0 && end > start) {
     return existing.slice(0, start) + full + existing.slice(end + INSTR_END.length)
   }

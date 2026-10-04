@@ -16,6 +16,7 @@
 
 import type { Project, RelayClientApi } from '@shared/types'
 import { buildRelayApi, type RelayApiHandle } from '../bridge/relay-api'
+import { sanitizeRelayProject } from './relay-ssh'
 import {
   createSession,
   bindProjectToSession,
@@ -97,7 +98,7 @@ export async function openRelayTab(
     const hostProject = ws.projects[0]
     const projectId =
       hostProject && deps.adoptProject
-        ? deps.adoptProject({ ...hostProject, remote: true }).id
+        ? deps.adoptProject(sanitizeRelayProject(hostProject)).id
         : deps.addProject(label).id
     bindProjectToSession(projectId, session.id)
     setActiveSession(session.id)

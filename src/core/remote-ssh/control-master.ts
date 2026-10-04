@@ -50,8 +50,25 @@ export function controlPathFor(projectId: string): string {
   return path.join(os.homedir(), '.nodeterm', 'ssh-cm', `${id}.sock`)
 }
 
-function target(conn: SshConnection): string {
+/**
+ * One `user@host` destination argv element, refused when it could be anything else. A leading `-`
+ * makes ssh parse the whole element as an OPTION (`-oProxyCommand=…@host` runs a local command), and
+ * whitespace or a control character is never part of a real user or host name. Every argv this module
+ * builds passes through here, so no caller — a hand-edited project file, a relay peer, a future
+ * dialog — can turn an endpoint into ssh options.
+ */
+export function sshDestination(conn: Pick<SshConnection, 'user' | 'host'>): string {
+  for (const [field, v] of [['user', conn.user], ['host', conn.host]] as const) {
+    // eslint-disable-next-line no-control-regex
+    if (typeof v !== 'string' || (field === 'host' && v === '') || v.startsWith('-') || /[\s\u0000-\u001f\u007f]/.test(v)) {
+      throw new Error(`refusing ssh ${field} ${JSON.stringify(String(v)).slice(0, 80)}: not a valid ${field}`)
+    }
+  }
   return `${conn.user}@${conn.host}`
+}
+
+function target(conn: SshConnection): string {
+  return sshDestination(conn)
 }
 
 function portArgs(conn: SshConnection): string[] {
@@ -223,11 +240,34 @@ export function childArgs(conn: SshConnection, controlPath: string, remote?: str
 export function checkMasterArgs(conn: SshConnection, controlPath: string): string[] {
   return ['-O', 'check', '-o', `ControlPath=${controlPath}`, ...portArgs(conn), target(conn)]
 }
+/**
+ * A real round trip over the master: open one session channel and run `true`. This is the
+ * liveness question `-O check` cannot answer. `-O check` is served by the master PROCESS over the
+ * local control socket, so it says "Master running" for a master whose TCP died under a sleep:
+ * measured against a black-holed connection, `-O check` exited 0 while a mux'd command hung until
+ * ServerAlive gave up ~74 s later. A channel open has to reach sshd and come back, so a
+ * half-dead master cannot answer it. The caller bounds it with a timeout; a TIMEOUT is the only
+ * verdict that means dead (see `SshProjectManager.revalidateAll`).
+ *
+ * `ControlMaster=no`: if the socket is gone this must not become a fresh master (which would
+ * answer on the new connection and say nothing about the old one). `BatchMode=yes`: if ssh falls
+ * back to a direct connection it must never park on a prompt with no one to answer it.
+ */
+export function masterRoundTripArgs(conn: SshConnection, controlPath: string): string[] {
+  return [
+    '-o',
+    'ControlMaster=no',
+    '-o',
+    `ControlPath=${controlPath}`,
+    '-o',
+    'BatchMode=yes',
+    ...portArgs(conn),
+    target(conn),
+    'true'
+  ]
+}
 export function exitMasterArgs(conn: SshConnection, controlPath: string): string[] {
   return ['-O', 'exit', '-o', `ControlPath=${controlPath}`, ...portArgs(conn), target(conn)]
-}
-export function remoteTmuxHasSessionArgs(conn: SshConnection, controlPath: string, sessionId: string): string[] {
-  return childArgs(conn, controlPath, tmuxCmd(`tmux -L ${RMT_TMUX_SOCKET} has-session -t ${sessionId}`))
 }
 /**
  * Every nodeterm tmux session on the host, by name.
@@ -479,6 +519,49 @@ export function remoteCapturePaneArgs(conn: SshConnection, controlPath: string, 
   )
 }
 /**
+ * Ask the REMOTE tmux when a node's session was created, AND what the host's clock says now — in
+ * one round trip, because the caller wants an AGE and the two clocks are not the same clock.
+ *
+ * `#{session_created}` is an epoch stamp taken on the HOST, so subtracting our own `Date.now()`
+ * would fold that host's clock skew (and every NTP correction) into the answer. Computing the
+ * difference from two numbers the host produced in the same shell removes the question entirely.
+ *
+ * Verified on tmux 3.3a and 3.4: `session_created` has been a format variable since long before
+ * either (unlike `#{bracket_paste_flag}`, the version trap this file's neighbours document), and
+ * `new-session -A` on an EXISTING session preserves the original creation time — which is the whole
+ * reason the answer can distinguish "this session was already here" from "our attach made it".
+ * Targeted `-t '=<name>:'` — the same exact-match form `PtyManager.paneCwdStale` documents, and
+ * for the same measured reason: without `=` tmux falls back to fnmatch then PREFIX matching, so
+ * `nt-abc` could answer about `nt-abcdef`, and a bare `=name` (no trailing colon) resolves NOTHING
+ * for a target-PANE query — exit 0, every format empty. Re-measured here on tmux 3.3a and 3.4.
+ */
+export function remoteSessionAgeArgs(conn: SshConnection, controlPath: string, sessionId: string): string[] {
+  return childArgs(
+    conn,
+    controlPath,
+    tmuxCmd(
+      `printf '%s %s\n' "$(tmux -L ${RMT_TMUX_SOCKET} display-message -p -t '=${sessionId}:' '#{session_created}')" "$(date +%s)"`
+    )
+  )
+}
+
+/**
+ * Seconds since a tmux session was created, from the `"<created> <now>"` line
+ * `remoteSessionAgeArgs` (and its local twin) produce. `null` for anything we cannot read as two
+ * epoch numbers — a missing session, an empty format, a shell that printed something else. Never
+ * negative: a host whose clock stepped backwards between the two `$( )` is unknowable, not brand
+ * new, and the caller ACTS on a small age.
+ */
+export function parseSessionAge(stdout: string): number | null {
+  const [created, now] = stdout.trim().split(/\s+/)
+  const a = Number(created)
+  const b = Number(now)
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return null
+  const age = b - a
+  return age < 0 ? null : age
+}
+
+/**
  * Ask the REMOTE tmux which command is in the foreground of a node's pane — the remote
  * counterpart of `PtyManager.paneCommand`'s local `display-message` path. The format is
  * single-quoted so `#{…}` survives the remote shell verbatim (same idiom as the
@@ -489,6 +572,15 @@ export function remotePaneCommandArgs(conn: SshConnection, controlPath: string, 
     conn,
     controlPath,
     tmuxCmd(`tmux -L ${RMT_TMUX_SOCKET} display-message -p -t ${sessionId} '#{pane_current_command}'`)
+  )
+}
+
+/** The remote counterpart of `PtyManager.paneCwd`'s local `display-message` path. */
+export function remotePaneCwdArgs(conn: SshConnection, controlPath: string, sessionId: string): string[] {
+  return childArgs(
+    conn,
+    controlPath,
+    tmuxCmd(`tmux -L ${RMT_TMUX_SOCKET} display-message -p -t ${sessionId} '#{pane_current_path}'`)
   )
 }
 
@@ -695,6 +787,42 @@ export function oauthForwardArgs(conn: SshConnection, controlPath: string, port:
 export function oauthForwardCancelArgs(conn: SshConnection, controlPath: string, port: number): string[] {
   if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error('invalid OAuth callback port')
   return ['-O', 'cancel', '-L', `${port}:localhost:${port}`, '-o', `ControlPath=${controlPath}`, ...portArgs(conn), target(conn)]
+}
+/**
+ * A dev-server LOCAL forward over the existing master (`ssh -O forward -L`): this machine's
+ * `127.0.0.1:<localPort>` → the host's `<target>:<remotePort>`. The local side binds loopback ONLY
+ * — never `*` or a LAN address, which would publish someone's unfinished app to the network the
+ * laptop is on. An IPv6 target is bracketed, which is how ssh's `-L` grammar takes it.
+ * `toAddr` must already be a validated IP literal (core/dev-ports.ts `forwardTarget`).
+ */
+function localFwdSpec(localPort: number, toAddr: string, remotePort: number): string {
+  // Re-validated HERE, at the argv site (CLAUDE.md rule 13), not only by the caller: the address
+  // came off another machine's command output. A throw is caught by the registry as a failed
+  // forward, never an ssh argument.
+  const okPort = (n: number): boolean => Number.isInteger(n) && n >= 1 && n <= 65535
+  const okAddr = /^\d{1,3}(\.\d{1,3}){3}$/.test(toAddr) || (/^[0-9A-Fa-f:]+$/.test(toAddr) && toAddr.includes(':'))
+  if (!okPort(localPort) || !okPort(remotePort) || !okAddr) throw new Error('invalid forward spec')
+  const host = toAddr.includes(':') ? `[${toAddr}]` : toAddr
+  return `127.0.0.1:${localPort}:${host}:${remotePort}`
+}
+export function localForwardArgs(
+  conn: SshConnection,
+  controlPath: string,
+  localPort: number,
+  toAddr: string,
+  remotePort: number
+): string[] {
+  return ['-O', 'forward', '-L', localFwdSpec(localPort, toAddr, remotePort), '-o', `ControlPath=${controlPath}`, ...portArgs(conn), target(conn)]
+}
+/** The exact spec `localForwardArgs` opened — ssh matches a cancel against it verbatim. */
+export function localForwardCancelArgs(
+  conn: SshConnection,
+  controlPath: string,
+  localPort: number,
+  toAddr: string,
+  remotePort: number
+): string[] {
+  return ['-O', 'cancel', '-L', localFwdSpec(localPort, toAddr, remotePort), '-o', `ControlPath=${controlPath}`, ...portArgs(conn), target(conn)]
 }
 /**
  * tmux `-e KEY=VALUE` pairs injecting the remote hook endpoint file + node id + protocol version,
