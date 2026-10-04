@@ -199,6 +199,11 @@ import { makeProjectSpawnOverrides } from '../core/project-spawn-overrides'
 import { makeLocalSetupRunner } from '../core/project-setup-runner-local'
 import { makeSshSetupRunner } from './remote-ssh/ssh-setup-runner'
 import { registerGitHubIntegration } from '../core/github/integration'
+import {
+  answerGitHubRead,
+  GITHUB_READ_VERBS,
+  resolveGitHubReadProject
+} from '../core/github/control-read'
 import { runGitHubCliCommand } from '../core/github/credentials'
 import {
   ElectronGitHubSecretStore,
@@ -221,7 +226,11 @@ import { registerProviderServicesIpc } from '../core/provider-services'
 import { desktopBuildPaths } from './desktop-build-paths'
 import { applyWindowsSquirrelAppUserModelId } from './windows-squirrel-identity'
 import { fetchCheck } from '../core/check'
-import { hookServer, OPEN_PROJECT_CONTROL_REFUSAL } from '../core/agents/hook-server'
+import {
+  hookServer,
+  OPEN_PROJECT_CONTROL_REFUSAL,
+  GITHUB_READ_CONTROL_REFUSAL
+} from '../core/agents/hook-server'
 import { askpassServer, ensureAskpassScript } from './remote-ssh/ssh-askpass'
 import { appSshAgent } from './remote-ssh/ssh-agent'
 import {
@@ -4483,6 +4492,31 @@ app.whenReady().then(async () => {
         granted: projectGrantedTo(nodeId, args.project)
       })
       if (gate !== 'allow') return { ok: false, error: gate.refuse, message: gate.refuse }
+    }
+    // `issues` / `prs`: the board's GitHub lane for agents, READ-ONLY and answered in MAIN from the
+    // GitHub service's cache (core/github/control-read.ts) — no GitHub request, no canvas, never
+    // forwarded. The caller's own project only: `--project` is refused by the grammar for these.
+    if (GITHUB_READ_VERBS.has(verb)) {
+      // A second guard behind the route's `requiresVerified`, like open-project's: the project read
+      // is resolved from the caller's node, so an unverified caller must never reach it.
+      if (!verified) return { ok: false, error: GITHUB_READ_CONTROL_REFUSAL, message: GITHUB_READ_CONTROL_REFUSAL }
+      const callerProjectId = projectIdOfNode(nodeId)
+      if (args.project !== undefined && args.project !== callerProjectId) {
+        const refusal = `project-target-refused: ${verb} reads only your own project`
+        return { ok: false, error: refusal, message: refusal }
+      }
+      const resolved = resolveGitHubReadProject({
+        verb,
+        callerProjectId,
+        targetProjectId: undefined,
+        grantsOtherProjects: false
+      })
+      if ('refuse' in resolved) return { ok: false, error: resolved.refuse, message: resolved.refuse }
+      return answerGitHubRead(verb, resolved.projectId, args, {
+        snapshot: (id) => github.service.controlSnapshot(id),
+        agentState: (id) => nodeState(id),
+        now: () => Date.now()
+      })
     }
     const target = getMainWindow()
     if (!target) return { ok: false, error: 'window unavailable' }

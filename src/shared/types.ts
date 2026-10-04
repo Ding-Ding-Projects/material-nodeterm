@@ -24,6 +24,7 @@ import type { GroupWorktree } from './worktree'
 import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from './presence'
 import type { WhisperModelInfo } from './speech'
 import type { ProjectKanbanGitHub } from './github-issues'
+import type { KanbanPullLinks } from './kanban-pull-links'
 import type { ProjectIcon } from './project-icon'
 import type { PortalDoorConstruction } from './portal-door'
 import type { ShortcutMap } from './shortcuts'
@@ -754,6 +755,14 @@ export interface CanvasNodeState {
   agentBaseId?: BuiltinAgentId
   /** Model selected for this agent node through the shared model gateway. */
   agentModel?: string
+  /**
+   * Agent nodes started on a GitHub issue: WHICH issue this session works on. Upstream builds that
+   * start an agent from an issue card write it; this build reads it for the read-only `issues` /
+   * `prs` control verbs (core/github/control-read.ts) and never builds a launch line from it.
+   * Git-shared, so hostile input: every reader goes through `normalizeIssueRef`. See
+   * @shared/github-issue-ref.
+   */
+  issueRef?: import('./github-issue-ref').IssueRef
   /** One-shot flag for the next fresh spawn to use the agent's default provider environment. */
   clearEnv?: boolean
   /** Set while this node is armed but not yet launched — see PendingLaunch. */
@@ -1182,6 +1191,9 @@ export interface ProjectKanban {
   labels?: KanbanLabel[]
   /** Shared, non-secret GitHub issue label mapping. Local approval and credentials live elsewhere. */
   github?: ProjectKanbanGitHub
+  /** Card ↔ pull request link tombstones and per-card auto-move opt-outs (@shared/kanban-pull-links).
+   *  Hostile input: read only through `readPullLinks`. */
+  pullLinks?: KanbanPullLinks
 }
 
 /** Who produced a board-log entry (a teammate on a shared board, or this user). */

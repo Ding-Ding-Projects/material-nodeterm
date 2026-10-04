@@ -778,6 +778,18 @@ export function buildGitHubApi(
       >,
     clearCache: (projectId) =>
       client.request(IPC.githubIssuesClearCache, projectId) as Promise<void>,
+    pullStatus: (projectId) =>
+      client.request(IPC.githubIssuesPullStatus, projectId) as ReturnType<GitHubIssuesApi['pullStatus']>,
+    chasePulls: (projectId) =>
+      client.request(IPC.githubIssuesChasePulls, projectId) as Promise<boolean>,
+    pullChecks: (projectId, pullNumber) =>
+      client.request(IPC.githubIssuesPullChecks, projectId, pullNumber) as ReturnType<
+        GitHubIssuesApi['pullChecks']
+      >,
+    claimPullAutoMove: (request) =>
+      client.request(IPC.githubIssuesClaimPullAutoMove, request) as Promise<boolean>,
+    notePullWaits: (request) =>
+      client.request(IPC.githubIssuesNotePullWaits, request) as Promise<number>,
     projectAvatar: (projectId) =>
       client.request(IPC.githubProjectAvatar, projectId) as ReturnType<
         GitHubIssuesApi['projectAvatar']
