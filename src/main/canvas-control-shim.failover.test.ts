@@ -156,9 +156,9 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim endpoint fail
     const contextShim = path.join(dir, 'context.sh')
     fs.writeFileSync(contextShim, CONTEXT_SHIM_SCRIPT)
     hookServer.setContextLinkHandler(async () => 'linked fixture')
-    const result = await run('/bin/sh', [contextShim, 'list'], {
-      env: { PATH: process.env.PATH, HOME: home, NODETERM_NODE_ID: 'node-1', NODETERM_CANVAS_CONTROL: '1',
-        NODETERM_HOOK_PORT: String(hookServer.getPort()), NODETERM_HOOK_TOKEN: 'wrong' }
+    const result = await run(REAL_POSIX_SHELL, posixShellScriptArgs(contextShim, ['list']), {
+      env: environmentForPosixShell({ PATH: process.env.PATH, HOME: home, NODETERM_NODE_ID: 'node-1', NODETERM_CANVAS_CONTROL: '1',
+        NODETERM_HOOK_PORT: String(hookServer.getPort()), NODETERM_HOOK_TOKEN: 'wrong' })
     })
     expect(result.stdout).toContain('linked fixture')
   })

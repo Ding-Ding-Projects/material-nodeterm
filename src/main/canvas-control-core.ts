@@ -6,7 +6,12 @@ import { CODEX_THREAD_IDENTITY_RESOLVER_SH } from '../core/codex-thread-identity
 import { explicitCodexResumeSession } from '../shared/agents/config'
 import { parseBrowserArgs } from '../core/browser-verb'
 import { CODEX_SANDBOX_HINT_SH } from '../core/agents/hook-sandbox-hint-sh'
-import { HOOK_ENDPOINT_FALLBACK_SH, STALE_ENDPOINT_HINT } from '../core/agents/hook-endpoint-failover-sh'
+import {
+  HOOK_ENDPOINT_FALLBACK_SH,
+  OWNED_ENDPOINT_FALLBACK_SH,
+  FOREIGN_ENDPOINT_HINT,
+  STALE_ENDPOINT_HINT
+} from '../core/agents/hook-endpoint-failover-sh'
 import { codexSandboxGuidanceLines } from '../core/context-link-core'
 import { NODE_TOKEN_READ_SH } from '../core/agents/node-token-sh'
 import { AGENT_CONFIG, AGENT_HOOK_TARGETS, BUILTIN_AGENT_IDS } from '@shared/agents/config'
@@ -644,6 +649,8 @@ fi
 # Missing everywhere leaves it empty, which the server reads as legacy — the request still goes.
 ${NODE_TOKEN_READ_SH}
 nt_read_node_token
+nt_owner_node_token="$nt_node_token"
+nt_skipped_foreign_endpoint=""
 
 ${HOOK_CURL_HEADERS_SH}
 
@@ -705,6 +712,7 @@ while [ "$nt_i" -lt "$nt_count" ]; do
 done
 
 ${HOOK_ENDPOINT_FALLBACK_SH}
+${OWNED_ENDPOINT_FALLBACK_SH}
 
 nt_out=$(mktemp 2>/dev/null || echo "/tmp/nodeterm-control.$$")
 nt_control_post() {
@@ -754,10 +762,9 @@ if ! nt_reached && { [ "$nt_code" = "421" ] || [ -z "$CODEX_SANDBOX_NETWORK_DISA
     nt_n=0
     while IFS= read -r nt_ep; do
       [ -n "$nt_ep" ] || continue
+      [ "$nt_n" -lt "$nt_fallback_max" ] || break
+      nt_adopt_for_node "$nt_ep" || continue
       nt_n=$((nt_n + 1))
-      [ "$nt_n" -le "$nt_fallback_max" ] || break
-      nt_adopt "$nt_ep" || continue
-      nt_read_node_token "$nt_ep"
       nt_control_post "$@"
       nt_reached && break
     done <<NT_CANDIDATES
@@ -770,6 +777,9 @@ if [ "$nt_code" = "200" ]; then
   cat "$nt_out" 2>/dev/null
   rm -f "$nt_out"
   exit 0
+fi
+if [ -n "$nt_skipped_foreign_endpoint" ] && ! nt_reached; then
+  echo "${FOREIGN_ENDPOINT_HINT}" >&2
 fi
 cat "$nt_out" >&2 2>/dev/null
 rm -f "$nt_out"
