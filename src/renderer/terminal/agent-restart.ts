@@ -167,6 +167,27 @@ export async function queryPaneWithin(
  *  conversation is not back until the resume half has delivered. */
 export type ExitPhaseOutcome = 'exited' | 'exit-timeout' | 'not-eligible'
 
+/** Prepare-for-update (Windows session host): one mounted node's "quit the CLI cleanly so the
+ *  conversation is saved" closure. Its own registry rather than the pause one: a pause marks the
+ *  node PAUSED, which would stop the cold restore from resuming it after the host restarts, the
+ *  opposite of what the update flow promises. `'exited'` also answers a node whose CLI had already
+ *  left the pane. A node that registers nothing is listed by the flow as "stops without a clean
+ *  exit" and resumes from its last saved turn. */
+export type AgentUpdateExitFn = () => Promise<ExitPhaseOutcome>
+
+const updateExitFns = new Map<string, AgentUpdateExitFn>()
+
+export function registerAgentUpdateExit(nodeId: string, fn: AgentUpdateExitFn): () => void {
+  updateExitFns.set(nodeId, fn)
+  return () => {
+    if (updateExitFns.get(nodeId) === fn) updateExitFns.delete(nodeId)
+  }
+}
+
+export function agentUpdateExitFn(nodeId: string): AgentUpdateExitFn | undefined {
+  return updateExitFns.get(nodeId)
+}
+
 /** The resume half's own outcomes. `'not-eligible'` covers both refusals: a session id that could
  *  never reach a command line, and a pane that stopped existing under the delivery. */
 export type ResumePhaseOutcome = 'resumed' | 'not-eligible'
@@ -520,6 +541,7 @@ export function __resetAgentRestartForTests(): void {
   inFlight.clear()
   restartFns.clear()
   hibernateFns.clear()
+  updateExitFns.clear()
 }
 
 // ── Bulk run: who gets restarted, and how the run is summed up ──────────────────────────

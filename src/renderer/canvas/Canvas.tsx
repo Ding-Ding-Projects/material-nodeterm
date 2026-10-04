@@ -310,6 +310,8 @@ import {
   type FocusDirection
 } from '../lib/directionalFocus'
 import { UpdateCard } from '../components/UpdateCard'
+import { PrepareUpdateDialog } from '../components/PrepareUpdateDialog'
+import type { PrepNode } from '../lib/updatePrep'
 import { AnnouncementBanner } from '../components/AnnouncementBanner'
 import { ResumeCard } from '../components/ResumeCard'
 import { TmuxBanner, type TerminalCreationReceipt } from '../components/TmuxBanner'
@@ -18505,6 +18507,47 @@ export function Canvas() {
     [transcriptHits, openTranscriptHit, now]
   )
 
+  // Prepare-for-update (Windows session host). Opened from the update card or the command palette
+  // via `nodeterm:prepare-update`. `prepareUpdateAvailable` gates the palette entry: main answers
+  // `unsupported` off Windows, when the session host is not the backend, and in the Server Edition.
+  const [prepareUpdateOpen, setPrepareUpdateOpen] = useState(false)
+  const [prepareUpdateAvailable, setPrepareUpdateAvailable] = useState(false)
+  useEffect(() => {
+    let live = true
+    void window.nodeTerminal.updates
+      .prepareInspect()
+      .then((r) => {
+        if (live) setPrepareUpdateAvailable(r.kind !== 'unsupported')
+      })
+      .catch(() => {})
+    const open = (): void => setPrepareUpdateOpen(true)
+    window.addEventListener('nodeterm:prepare-update', open)
+    return () => {
+      live = false
+      window.removeEventListener('nodeterm:prepare-update', open)
+    }
+  }, [])
+  const collectUpdatePrepNodes = useCallback((): PrepNode[] => {
+    // The active project's live nodes reach the store first, so a node created a moment ago is
+    // matched to its host session like every other.
+    commitActiveToStore()
+    const out: PrepNode[] = []
+    for (const p of useProjects.getState().projects) {
+      for (const n of p.nodes) {
+        if (n.kind !== 'terminal') continue
+        out.push({
+          nodeId: n.id,
+          projectId: p.id,
+          projectName: p.name,
+          projectClosed: !!p.closed,
+          title: n.title,
+          agentId: n.agentId
+        })
+      }
+    }
+    return out
+  }, [commitActiveToStore])
+
   const buildCommands = useCallback((): Command[] => {
     const disabled = useSettings.getState().settings.disabledAgents
     const activeProject = useProjects.getState().getProject(activeProjectId)
@@ -18830,6 +18873,16 @@ export function Canvas() {
               hint: 'pick up a new model',
               icon: <IconPower />,
               run: restartIdleAgents
+            } as Command
+          ]
+        : []),
+      ...(prepareUpdateAvailable
+        ? [
+            {
+              id: 'prepare-update',
+              label: 'Prepare for update…',
+              hint: 'update stop session host windows quit restart',
+              run: () => setPrepareUpdateOpen(true)
             } as Command
           ]
         : [])
@@ -19206,6 +19259,7 @@ export function Canvas() {
     )
     return cmds
   }, [
+    prepareUpdateAvailable,
     addTerminal,
     createCatalogNode,
     offersTerminalProfiles,
@@ -19748,6 +19802,13 @@ export function Canvas() {
           )
         })()}
       <UpdateCard />
+      {prepareUpdateOpen && (
+        <PrepareUpdateDialog
+          collectNodes={collectUpdatePrepNodes}
+          onTravel={travelToNode}
+          onClose={() => setPrepareUpdateOpen(false)}
+        />
+      )}
 
       <div
         className="sessions-icon-cluster"

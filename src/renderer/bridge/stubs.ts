@@ -362,7 +362,12 @@ export function buildStubApi(): Omit<
       // server handler for the update policy (the browser cannot self-install anyway), so the
       // honest answer is the shape's own "no policy" value: nothing mandatory, no minimum.
       getPolicy: (): Promise<UpdatePolicy> => Promise.resolve({ minSupported: null, mandatory: false }),
-      restart: noop
+      restart: noop,
+      // Prepare-for-update is a desktop session-host flow. The documented degrade here is the
+      // shape's own `unsupported` answer, so the card and the command palette simply hide it.
+      prepareInspect: () => Promise.resolve({ kind: 'unsupported' as const }),
+      prepareShutdownHost: () => Promise.resolve({ kind: 'unsupported' as const }),
+      prepareQuit: noop
     },
     announcements: {
       fetch: () => Promise.resolve([])

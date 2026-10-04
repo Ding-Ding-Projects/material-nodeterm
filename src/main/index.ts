@@ -217,6 +217,7 @@ import {
 } from '../core/model-gateway-credentials'
 import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
 import { initUpdater } from './updater'
+import { registerUpdatePrepIpc } from './update-prep'
 import {
   reportDesktopBootstrapFailure
 } from './squirrel-lifecycle'
@@ -3015,6 +3016,17 @@ app.whenReady().then(async () => {
   initUpdater(() => {
     quitting = true
     skipQuitConfirmation = true
+  })
+  // Prepare-for-update (Windows session host). The user confirmed the whole flow in its own
+  // dialog, so the quit at its end skips the ordinary quit confirmation, like restart-to-update.
+  registerUpdatePrepIpc({
+    mainWebContents: () => getMainWindow()?.webContents,
+    persistentSessions: () => settingsStore.get().tmuxEnabled !== false,
+    quit: () => {
+      quitting = true
+      skipQuitConfirmation = true
+      app.quit()
+    }
   })
   // Mirror live agent status to <userData>/agent-status.json for the external mobile host agent.
   initAgentStatusMirror()

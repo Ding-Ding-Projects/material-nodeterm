@@ -4217,6 +4217,13 @@ export interface UpdateApi {
   getPolicy(): Promise<UpdatePolicy>
   /** Quit and install the staged update. */
   restart(): void
+  /** Prepare-for-update (Windows session host): what the running host holds. Never launches a
+   *  host. Answers `unsupported` off Windows and in the Server Edition. */
+  prepareInspect(): Promise<import('./update-prep').UpdatePrepInspection>
+  /** Prepare-for-update: ask the host to end every session and exit, and confirm it did. */
+  prepareShutdownHost(): Promise<import('./update-prep').UpdatePrepShutdown>
+  /** Prepare-for-update: quit the app (no quit confirmation) once the host is gone. */
+  prepareQuit(): void
 }
 
 /** A single news/announcement item, fetched from the remote announcements feed. */

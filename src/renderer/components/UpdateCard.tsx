@@ -146,6 +146,22 @@ export function UpdateCard(): JSX.Element | null {
     }
   }, [])
 
+  // Windows session host: an update installs while the host keeps running its older version, so
+  // the card offers the in-app "Prepare for update" flow. Main answers `unsupported` everywhere else.
+  const [canPrepare, setCanPrepare] = useState(false)
+  useEffect(() => {
+    let live = true
+    void window.nodeTerminal.updates
+      .prepareInspect()
+      .then((r) => {
+        if (live) setCanPrepare(r.kind !== 'unsupported')
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
+
   // Mirror an owed update into the title-bar button. Deliberately never cleared from here: the
   // card's dismiss sets `idle`, and dismissing the card must not take the install path away.
   const setPending = usePendingUpdate((s) => s.setPending)
@@ -157,6 +173,17 @@ export function UpdateCard(): JSX.Element | null {
   if (status.kind === 'idle') return null
 
   const openReleases = () => window.open(RELEASES_URL, '_blank', 'noopener')
+  const prepareButton = canPrepare ? (
+    <Button
+      variant="text"
+      size="small"
+      vocabularyMode="factual"
+      className="update-card__link update-card__prepare"
+      onClick={() => window.dispatchEvent(new Event('nodeterm:prepare-update'))}
+    >
+      {text('update.prepare', 'Prepare for update…')}
+    </Button>
+  ) : null
   const dismiss = () => setStatus({ kind: 'idle' })
 
   if (minimized) {
@@ -300,6 +327,7 @@ export function UpdateCard(): JSX.Element | null {
           >
             {text('update.restart', 'Restart to update')}
           </Button>
+          {prepareButton}
         </>
       )}
 
@@ -343,6 +371,7 @@ export function UpdateCard(): JSX.Element | null {
           <Button variant="filled" size="small" vocabularyMode="factual" className="update-card__btn" onClick={() => window.nodeTerminal.updates.check()}>
             {text('update.updateNow', 'Update now')}
           </Button>
+          {prepareButton}
         </>
       )}
 
