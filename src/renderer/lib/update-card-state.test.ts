@@ -49,6 +49,11 @@ describe('update card transfer truth', () => {
     expect(updateCardControls('downloaded')).toEqual({ canMinimize: true, canDismiss: false })
   })
 
+  it('lets a no-channel answer be dismissed but never auto-cleared like "up to date"', () => {
+    expect(updateCardControls('noChannel')).toEqual({ canMinimize: false, canDismiss: true })
+    expect(clearsAfterUpToDateTimeout('noChannel')).toBe(false)
+  })
+
   it('never lets a stale up-to-date timer erase a newer update result', () => {
     expect(clearsAfterUpToDateTimeout('upToDate')).toBe(true)
     for (const kind of ['available', 'manual', 'downloaded', 'error', 'required'] as const) {

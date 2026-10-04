@@ -1002,6 +1002,46 @@ export const CATALOG: Catalog = {
     en: flat('Download'),
     yue: flat('下載')
   },
+  'update.title.noChannel': {
+    en: flat('No update channel'),
+    yue: flat('冇更新渠道')
+  },
+  'update.body.noChannel': {
+    en: [
+      'This build has no update channel, so it cannot tell you when a new version is out. Download the latest installer to update.',
+      'This build has no update channel, so it cannot tell you when a new version is out. Download the latest installer to update.',
+      'This build has no update channel, so it cannot spot new versions by itself. Grab the latest installer to update.',
+      'This build was packaged without an update channel, so it is flying blind on new versions. Grab the latest installer.',
+      'This build has no update channel at all, so it honestly has no idea whether a new version exists. Go fetch the latest installer.'
+    ],
+    yue: [
+      '呢個版本冇更新渠道，所以唔會知道有冇新版本。下載最新安裝程式嚟更新。',
+      '呢個版本冇更新渠道，所以唔會知道有冇新版本。下載最新安裝程式嚟更新。',
+      '呢個版本冇更新渠道，自己睇唔到新版本，去攞最新安裝程式嚟更新啦。',
+      '呢個版本打包嗰陣冇開更新渠道，新版本佢真係睇唔到，去攞最新安裝程式啦。',
+      '呢個版本完全冇更新渠道，老實講佢都唔知有冇新版本，快啲去攞最新安裝程式啦。'
+    ]
+  },
+  'update.openDownloadPage': {
+    en: flat('Open download page'),
+    yue: flat('打開下載頁')
+  },
+  'update.pending.button': {
+    en: flat('Update'),
+    yue: flat('更新')
+  },
+  'update.pending.downloaded': {
+    en: flat('nodeterm v{version} is ready, restart to update'),
+    yue: flat('nodeterm v{version} 準備好，重新啟動就更新')
+  },
+  'update.pending.manual': {
+    en: flat('nodeterm v{version} is available, download it to update'),
+    yue: flat('nodeterm v{version} 已推出，下載嚟更新')
+  },
+  'update.pending.required': {
+    en: flat('This version is no longer supported, update to continue'),
+    yue: flat('呢個版本已經唔再支援，更新咗先可以繼續')
+  },
   'update.body.ready': {
     en: [
       'nodeterm v{version} is ready to install.',

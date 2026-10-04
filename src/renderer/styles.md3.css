@@ -175,6 +175,10 @@
   -webkit-app-region: no-drag;
 }
 
+/* The owed-update pill (PendingUpdateButton) sits right after the brand and never shrinks away. */
+.md3-app-bar__update {
+  flex-shrink: 0;
+}
 .md3-app-bar__brand {
   display: flex;
   align-items: center;

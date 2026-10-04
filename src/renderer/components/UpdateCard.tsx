@@ -17,6 +17,7 @@ import {
   type UpdateManualStatus
 } from '@renderer/lib/update-card-state'
 import { Button, IconButton } from '@renderer/ui/md3'
+import { pendingFromStatus, RELEASES_URL, usePendingUpdate } from '../state/pendingUpdate'
 
 // The full updater lifecycle as one status union, driving a fixed bottom-right card.
 // `checking` is only ever shown for a user-initiated manual check; automatic checks stay
@@ -29,10 +30,11 @@ type Status =
   | UpdateManualStatus
   | UpdateDownloadedStatus
   | { kind: 'upToDate' }
+  // This build has no update channel at all, so no version is known and none ever will be. One
+  // card, one download link, and a sentence that is not "you are up to date".
+  | { kind: 'noChannel' }
   | { kind: 'required'; minSupported: string | null; error?: string }
   | { kind: 'error'; message: string }
-
-const RELEASES_URL = 'https://github.com/Ding-Ding-Projects/material-nodeterm/releases'
 
 /** Map only the authored template text. Values supplied by the updater remain factual and are
  * inserted untouched, so a vocabulary entry can never rewrite a version or progress number. */
@@ -85,6 +87,11 @@ export function UpdateCard(): JSX.Element | null {
         4000
       )
     })
+    const offNoChannel = window.nodeTerminal.updates.onNoChannel(() => {
+      // Never auto-hides, unlike `upToDate`: this card carries the only action the user has.
+      setStatus((s) => (s.kind === 'required' ? s : { kind: 'noChannel' }))
+      setMinimized(false)
+    })
     const offError = window.nodeTerminal.updates.onError((message) => {
       setStatus((s) =>
         annotatesStatusDuringUpdateError(s.kind) ? { ...s, error: message } : { kind: 'error', message }
@@ -96,6 +103,7 @@ export function UpdateCard(): JSX.Element | null {
       offProgress()
       offDownloaded()
       offNotAvailable()
+      offNoChannel()
       offError()
       if (upToDateTimer.current) window.clearTimeout(upToDateTimer.current)
     }
@@ -138,6 +146,14 @@ export function UpdateCard(): JSX.Element | null {
     }
   }, [])
 
+  // Mirror an owed update into the title-bar button. Deliberately never cleared from here: the
+  // card's dismiss sets `idle`, and dismissing the card must not take the install path away.
+  const setPending = usePendingUpdate((s) => s.setPending)
+  useEffect(() => {
+    const pending = pendingFromStatus(status)
+    if (pending) setPending(pending)
+  }, [status, setPending])
+
   if (status.kind === 'idle') return null
 
   const openReleases = () => window.open(RELEASES_URL, '_blank', 'noopener')
@@ -177,6 +193,8 @@ export function UpdateCard(): JSX.Element | null {
             ? text('update.title.ready', 'Update ready')
             : status.kind === 'upToDate'
               ? text('update.title.upToDate', "You're up to date")
+              : status.kind === 'noChannel'
+                ? text('update.title.noChannel', 'No update channel')
               : status.kind === 'required'
                 ? text('update.title.required', 'Update required')
                 : text('update.title.error', 'Update failed')
@@ -289,6 +307,20 @@ export function UpdateCard(): JSX.Element | null {
         <p className="update-card__body">
           {text('update.body.upToDate', 'nodeterm is on the latest version.')}
         </p>
+      )}
+
+      {status.kind === 'noChannel' && (
+        <>
+          <p className="update-card__body">
+            {text(
+              'update.body.noChannel',
+              'This build has no update channel, so it cannot tell you when a new version is out. Download the latest installer to update.'
+            )}
+          </p>
+          <Button variant="filled" size="small" vocabularyMode="factual" className="update-card__btn" onClick={openReleases}>
+            {text('update.openDownloadPage', 'Open download page')}
+          </Button>
+        </>
       )}
 
       {status.kind === 'required' && (

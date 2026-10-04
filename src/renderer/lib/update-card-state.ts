@@ -19,6 +19,7 @@ export type UpdateCardKind =
   | 'checking'
   | UpdateBodyKind
   | 'upToDate'
+  | 'noChannel'
   | 'required'
   | 'error'
 
@@ -56,7 +57,7 @@ export function updateCardControls(kind: UpdateCardKind): {
 } {
   return {
     canMinimize: kind === 'available' || kind === 'downloaded',
-    canDismiss: kind === 'manual' || kind === 'upToDate' || kind === 'error'
+    canDismiss: kind === 'manual' || kind === 'noChannel' || kind === 'upToDate' || kind === 'error'
   }
 }
 

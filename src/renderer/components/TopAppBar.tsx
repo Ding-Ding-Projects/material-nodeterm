@@ -3,6 +3,7 @@ import { useSettings } from '../state/settings'
 import { resolveAppDisplayName } from '@shared/appIdentity'
 import { resolveLogoPreset } from './appearance/BrandMark'
 import { CompactTopBarMenu, type CompactTopBarMenuItem } from './CompactTopBarMenu'
+import { PendingUpdateButton } from './PendingUpdateButton'
 
 export type TopAppBarMode = 'wide' | 'compact' | 'narrow'
 
@@ -84,6 +85,8 @@ export function TopAppBar({ children, compactSlots }: TopAppBarProps) {
           {displayName}
         </span>
       </div>
+      {/* An owed update stays one click away in every bar mode; see PendingUpdateButton. */}
+      <PendingUpdateButton />
       {compactSlots && mode !== 'wide' ? (
         <div className="md3-app-bar__compact" data-app-bar-mode={mode}>
           <div className="md3-app-bar__compact-project">{compactSlots.project}</div>

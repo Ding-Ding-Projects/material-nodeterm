@@ -4,7 +4,7 @@ import { app, autoUpdater, ipcMain, Notification } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { IPC } from '../shared/ipc'
-import { shouldEnableUpdater } from '../shared/update-platform'
+import { updateDelivery } from '../shared/update-platform'
 import { getMainWindow, sendToMain } from './main-window'
 import { nativeCopyStore } from '../core/native-copy-store'
 import { retainUntilDismissed } from './notifications'
@@ -77,8 +77,8 @@ function squirrelBackend(): SquirrelBackend {
  * never published there and logged a 404 on `latest*.yml` every six hours.
  *
  * The trade-off, stated plainly: a `dist`/`dist:linux` package can no longer smoke-test the
- * updater wiring itself — a manual check there now answers "up to date" without going near the
- * network. The old behaviour at least proved the wiring was live, at the cost of a recurring 404
+ * updater wiring itself — a manual check there does not go near the network, and it now says the
+ * build has no update channel (`updateDelivery`) rather than claiming to be up to date. The old behaviour at least proved the wiring was live, at the cost of a recurring 404
  * in every local build's log. Verifying the real feed is the job of a promoted package, which
  * carries no marker.
  */
@@ -103,9 +103,16 @@ export function initUpdater(onBeforeRestart?: () => void): void {
   const send = (channel: string, payload?: unknown) => sendToMain(channel, payload)
   ipcMain.handle(IPC.appGetVersion, () => app.getVersion())
 
-  if (!shouldEnableUpdater(app.isPackaged, packagedUpdateMode())) {
+  const delivery = updateDelivery({ isPackaged: app.isPackaged, updateMode: packagedUpdateMode() })
+  if (delivery !== 'self-install') {
+    // Neither state can reach a feed, so automatic networking and updater event wiring stay off.
+    // They answer a MANUAL check differently: a packaged build someone installed with updates
+    // switched off cannot know whether it is current, so it says it has no channel instead of
+    // claiming "up to date". An unpackaged dev run keeps the quiet reply.
     ipcMain.on(IPC.appRestartToUpdate, () => undefined)
-    ipcMain.on(IPC.appCheckForUpdates, () => send(IPC.appUpdateNotAvailable))
+    ipcMain.on(IPC.appCheckForUpdates, () =>
+      send(delivery === 'no-channel' ? IPC.appUpdateNoChannel : IPC.appUpdateNotAvailable)
+    )
     return
   }
 
