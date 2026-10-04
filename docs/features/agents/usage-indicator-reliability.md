@@ -56,9 +56,10 @@ setting was added.
 - An SSH host read that cannot run is an error, never "unavailable", so the row stays visible.
 - A remote Codex read requires `node` and `curl` on the host. Without them the row reports an
   error; no other credential location is tried.
-- On Windows the app-server fallback for local Codex usage resolves the bare `codex` command. A
-  shim-only Codex install declines that tier and the backend tier answers alone until the
-  executable-invocation helpers are ported.
+- On Windows the app-server fallback for local Codex usage resolves `codex` through PATHEXT and runs
+  an npm `.cmd` install through the escaped cmd.exe path
+  ([Windows CLI resolution and npm shim execution](../windows/cli-shim-execution.md)); a shape that
+  path refuses declines the tier and the backend tier answers alone.
 
 ## Security considerations
 

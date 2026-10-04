@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- Port the upstream Windows CLI execution chain (issue #225, upstream `0c3268d3`, `4718d5d9`,
+  `34e4826d`, `fafb9b79`). Every CLI nodeterm runs itself on Windows (the Claude, Codex and grok
+  probes, the AI commit-message agent, the Codex usage app-server tier, the Codex account daemon,
+  the opencode export for context links and every GitHub CLI call) now goes through
+  `directExecutableInvocation`: native executables run unchanged, and an npm `.cmd` shim runs
+  through `cmd.exe /d /s /v:off /c` with each argument escaped for cmd's double parse, standard
+  input kept as raw bytes, and a refusal for `.bat`, `.ps1`, line breaks, NUL and over-long
+  commands. Quoted PATH entries resolve, `findInLoginPath` moved into `exec-path.ts`, Source
+  Control resolves `gh` through the shared memoized lookup instead of a constant frozen at start-up,
+  and the Codex usage tier resolves `codex` through the login PATH. This fork's PATHEXT order (never
+  the extensionless shim) is kept. Also fixes the Windows Program Files fallback in the git
+  environment, which was written without its backslash. See
+  `docs/features/windows/cli-shim-execution.md`.
+
+  搬咗上游 Windows 執行 CLI 嘅一連串修正：nodeterm 自己行嘅 CLI（Claude、Codex、grok 探測、
+  AI commit message、Codex 用量、Codex daemon、opencode、gh）遇到 npm 嘅 .cmd shim 會經 cmd.exe
+  行，每個參數都雙重轉義，stdin 保持原始位元組；換行、NUL 同超長指令一律拒絕。
+- Port upstream grok session ids and models (upstream `877d1e5e`, `80f2181d`, `3753f10a`, and the
+  diagnostic part of `cfd26d01`). A grok node mints its session id when grok's own `--help` lists
+  `--session-id`, never on Claude's probe, and re-mints rather than reuse an id grok already owns in
+  that folder. The transfer-with-model picker offers grok the list from `grok models`. The grok
+  session map is persisted under the data directory so names survive a restart, and on Linux the
+  login shell is asked for `GROK_HOME`. New bridge member `window.nodeTerminal.grok` on the desktop,
+  the Server Edition and relay tabs. Grok subagent cards stay deferred until upstream `29409aa0` and
+  `cb81f7b9` are ported. See `docs/features/agents/grok-session-ids-and-models.md`.
+
+  搬咗上游 grok 嘅 session id 同模型：用 grok 自己嘅 --help 決定係咪預先產生 session id，
+  唔會重用已存在嘅 id；揀模型時用 `grok models` 嘅清單；session 對照表重開後仍然記得。
+
 - Port the first upstream security tranche (issue #225, upstream `1bf6fadb`, `60714074`, `fee5b244`,
   `23a7282b`, `9fa879d0`, `2d3e54cb`): a plain terminal keeps its inherited provider credentials in
   subscription mode (both strip sites in this fork); a Linux desktop with no keyring stores the
