@@ -67,6 +67,46 @@ export function shellPathNow(): string | null | undefined {
   return cachedShellPath
 }
 
+/**
+ * One environment VARIABLE, as the user's login+interactive shell sees it. Same spawn shape as
+ * `resolveShellPath` above and for the same reason: a desktop app launched from a `.desktop` entry
+ * never sourced the user's rc, while a CLI started by the shell inside a tmux pane did, so the two
+ * disagree about anything exported there and nothing errors. Linux only, like `resolveShellPath`.
+ *
+ * Cached per NAME, since each answer costs a shell spawn. Any failure (hang, non-POSIX shell,
+ * a non-Linux host, unset variable) resolves to null, which every caller must read as "not set"
+ * and never as a reason to refuse work.
+ */
+const cachedShellVars = new Map<string, Promise<string | null>>()
+export function resolveShellEnvVar(name: string): Promise<string | null> {
+  const hit = cachedShellVars.get(name)
+  if (hit) return hit
+  if (os.platform() !== 'linux' || !/^[A-Z_][A-Z0-9_]*$/.test(name)) {
+    const no = Promise.resolve(null)
+    cachedShellVars.set(name, no)
+    return no
+  }
+  const shell = process.env.SHELL || '/bin/bash'
+  const START = '__NT_VAR_START__'
+  const END = '__NT_VAR_END__'
+  const p = runAsync(shell, ['-ilc', `command printf '${START}%s${END}' "$${name}"`], {
+    encoding: 'utf-8',
+    timeout: 5000
+  })
+    .then(({ stdout }) => {
+      const m = stdout.match(new RegExp(`${START}([\\s\\S]*?)${END}`))
+      return m?.[1]?.trim() || null
+    })
+    .catch(() => null)
+  cachedShellVars.set(name, p)
+  return p
+}
+
+/** Test seam: forget the cached shell-variable answers. */
+export function _resetShellEnvVarsForTests(): void {
+  cachedShellVars.clear()
+}
+
 /** Resolve an executable against the user's real login-shell PATH, returning its absolute path.
  *  The login-shell probe only runs on Linux; elsewhere this walks the inherited PATH. */
 export async function findInLoginPath(bin: string): Promise<string | null> {
