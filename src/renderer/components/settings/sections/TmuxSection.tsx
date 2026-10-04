@@ -4,11 +4,18 @@ import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Switch } from '@renderer/ui/Switch'
 import { NumberField } from '@renderer/ui/NumberField'
+import { useI18n } from '@renderer/lib/i18n'
 import {
   LEAD_PANE_WIDTH_DEFAULT,
   LEAD_PANE_WIDTH_MAX,
   LEAD_PANE_WIDTH_MIN
 } from '@shared/tmux-lead-pane'
+import {
+  PARK_MAX,
+  PARK_MAX_LIMIT,
+  PARK_MINUTES_DEFAULT,
+  PARK_MINUTES_MAX
+} from '@renderer/terminal/park-budget'
 
 const ROWS = {
   enabled: {
@@ -20,6 +27,14 @@ const ROWS = {
     title: 'Keep lead pane wide (agent teams)',
     keywords: ['lead', 'pane', 'width', 'agent', 'team', 'teammates', 'split', 'claude', 'resize']
   },
+  parkMinutes: {
+    title: 'Keep switched-away terminals attached',
+    keywords: ['park', 'switch', 'project', 'ssh', 'fast', 'instant', 'reattach', 'minutes', 'memory']
+  },
+  parkMax: {
+    title: 'Max attached terminals in other projects',
+    keywords: ['park', 'cap', 'limit', 'switch', 'project', 'ssh', 'reattach', 'memory', 'ram']
+  },
   offscreen: {
     title: 'Release offscreen terminals',
     keywords: ['offscreen', 'memory', 'ram', 'release', 'reattach', 'idle', 'minutes']
@@ -30,6 +45,7 @@ const ENTRIES = Object.values(ROWS)
 export function TmuxSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
+  const { t, ts } = useI18n()
   return (
     <SettingsSection
       id="tmux"
@@ -94,6 +110,58 @@ export function TmuxSection({ isActive }: { isActive: boolean }): React.JSX.Elem
                 ariaLabel="Keep lead pane wide"
               />
             </div>
+          }
+        />
+      </SearchableRow>
+      <SearchableRow {...ROWS.parkMinutes}>
+        <FieldRow
+          label={t('settings.tmux.parkMinutes.label', 'Keep switched-away terminals attached').primary}
+          description={
+            t(
+              'settings.tmux.parkMinutes.description',
+              'Minutes a project\u2019s terminals stay attached after you switch to another project, so switching back is instant. After that they reattach on return, which takes seconds per project over SSH. 0 keeps them until the app quits. Default {default}. Applies from the next switch.',
+              { default: String(PARK_MINUTES_DEFAULT) }
+            ).primary
+          }
+          control={
+            <NumberField
+              value={settings.terminalParkMinutes}
+              min={0}
+              max={PARK_MINUTES_MAX}
+              step={1}
+              ariaLabel={ts('settings.tmux.parkMinutes.aria', 'Park window in minutes')}
+              // A cleared field reads back as the DEFAULT, not 0: 0 means "keep forever", the
+              // memory-expensive end, and must only ever be typed on purpose.
+              onChange={(v) =>
+                update({
+                  terminalParkMinutes: Number.isFinite(v) ? Math.max(0, v) : PARK_MINUTES_DEFAULT
+                })
+              }
+            />
+          }
+        />
+      </SearchableRow>
+      <SearchableRow {...ROWS.parkMax}>
+        <FieldRow
+          label={t('settings.tmux.parkMax.label', 'Max attached terminals in other projects').primary}
+          description={
+            t(
+              'settings.tmux.parkMax.description',
+              'How many switched-away terminals stay attached in total. Beyond this the oldest are released early, local ones before SSH ones, which are slower to reattach. Each costs about 2 MB with tmux, more without it, and one local ssh client over SSH. Default {default}.',
+              { default: String(PARK_MAX) }
+            ).primary
+          }
+          control={
+            <NumberField
+              value={settings.terminalParkMax}
+              min={1}
+              max={PARK_MAX_LIMIT}
+              step={1}
+              ariaLabel={ts('settings.tmux.parkMax.aria', 'Maximum parked terminals')}
+              onChange={(v) =>
+                update({ terminalParkMax: Number.isFinite(v) && v >= 1 ? Math.floor(v) : PARK_MAX })
+              }
+            />
           }
         />
       </SearchableRow>

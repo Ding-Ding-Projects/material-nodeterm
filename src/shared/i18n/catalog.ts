@@ -288,6 +288,56 @@ export const CATALOG: Catalog = {
       '等你嘅對話框同訊息框戴返個得體嘅表情符號，按鈕標籤依然係表情符號禁區。'
     ]
   },
+  // Park window and cap for switched-away terminals (Settings -> tmux). The minute and count
+  // defaults are factual values supplied by the renderer through {default}.
+  'settings.tmux.parkMinutes.label': {
+    en: flat('Keep switched-away terminals attached'),
+    yue: flat('轉咗 project 之後保持 terminal 連住')
+  },
+  'settings.tmux.parkMinutes.description': {
+    en: [
+      'Minutes a project\u2019s terminals stay attached after you switch to another project, so switching back is instant. After that they reattach on return, which takes seconds per project over SSH. 0 keeps them until the app quits. Default {default}. Applies from the next switch.',
+      'How long a project\u2019s terminals stay attached after you switch away, so coming back is instant. Later returns reattach, which takes seconds per project over SSH. 0 keeps them until the app quits. Default {default}. Applies from the next switch.',
+      'Minutes to keep switched-away terminals attached for an instant return. After that, coming back reattaches them, seconds per project over SSH. 0 means until the app quits. Default {default}, from the next switch on.',
+      'Minutes your switched-away terminals wait, still attached, so the trip back is instant. After that they reattach on return, a few seconds per project over SSH. 0 keeps them until the app quits. Default {default}. Starts with the next switch.',
+      'Minutes your other projects\u2019 terminals stay plugged in so hopping back is instant. After that they reattach when you return, seconds per project over SSH. 0 keeps them until the app quits. Default {default}. Kicks in from the next switch.'
+    ],
+    yue: [
+      '轉去第二個 project 之後，原本啲 terminal 保持連住幾多分鐘，咁轉返嚟就即刻見到。過咗呢個時間，返嚟就要重新連，經 SSH 每個 project 要幾秒。0 即係一直留到個 app 關咗為止。預設 {default}。下一次轉 project 開始生效。',
+      '轉走咗之後 terminal 繼續連住幾多分鐘，轉返嚟就即時。之後返嚟要重新連，SSH 每個 project 要幾秒。0 代表留到 app 關為止。預設 {default}，下次轉 project 起生效。',
+      '轉走咗嘅 terminal 留住幾多分鐘，方便即刻返嚟。過咗就要重新連，SSH 每個 project 幾秒。0 即係留到 app 關。預設 {default}，下次轉起計。',
+      '轉走咗嘅 terminal 會乖乖連住等你幾多分鐘，返嚟即刻用得。過咗時間就要重新連，SSH 每個 project 幾秒。0 就等到 app 關為止。預設 {default}，下次轉 project 起計。',
+      '其他 project 嘅 terminal 會一直插住電等你幾多分鐘，跳返嚟即刻見到。過咗就要重新連，SSH 每個 project 幾秒。0 就等到 app 收工。預設 {default}，下次轉 project 開始。'
+    ]
+  },
+  'settings.tmux.parkMinutes.aria': {
+    en: flat('Park window in minutes'),
+    yue: flat('保持連住嘅分鐘數')
+  },
+  'settings.tmux.parkMax.label': {
+    en: flat('Max attached terminals in other projects'),
+    yue: flat('其他 project 最多保持連住幾多個 terminal')
+  },
+  'settings.tmux.parkMax.description': {
+    en: [
+      'How many switched-away terminals stay attached in total. Beyond this the oldest are released early, local ones before SSH ones, which are slower to reattach. Each costs about 2 MB with tmux, more without it, and one local ssh client over SSH. Default {default}.',
+      'The total number of switched-away terminals kept attached. Past this the oldest are released first, local before SSH because SSH is slower to reattach. About 2 MB each with tmux, more without it, plus one local ssh client over SSH. Default {default}.',
+      'Total switched-away terminals kept attached. Extra ones are released oldest first, local before SSH. Each is about 2 MB with tmux, more without it, and one ssh client over SSH. Default {default}.',
+      'How many switched-away terminals can stay attached at once. Past that the oldest go first, local before SSH since SSH takes longer to come back. Roughly 2 MB each with tmux, more without it, plus one ssh client over SSH. Default {default}.',
+      'The headcount of switched-away terminals allowed to stay attached. Over the limit the oldest leave first, local before SSH, because SSH is slower to bring back. About 2 MB each with tmux, more without it, and one ssh client each over SSH. Default {default}.'
+    ],
+    yue: [
+      '轉走咗嘅 terminal 總共最多保持連住幾多個。超過嘅話最舊嗰啲會提早放開，本機嗰啲先放，SSH 嗰啲最後，因為 SSH 重新連會慢啲。用 tmux 每個大約 2 MB，冇 tmux 會多啲；經 SSH 每個仲要一個本機 ssh client。預設 {default}。',
+      '總共留住幾多個轉走咗嘅 terminal。超過就由最舊開始放，本機先、SSH 後，因為 SSH 重新連比較慢。用 tmux 每個大約 2 MB，冇 tmux 多啲，SSH 每個多一個 ssh client。預設 {default}。',
+      '轉走咗嘅 terminal 最多留幾多個。多出嚟就由最舊放起，本機先、SSH 後。tmux 下每個大約 2 MB，冇 tmux 多啲，SSH 每個一個 ssh client。預設 {default}。',
+      '轉走咗嘅 terminal 最多可以同時留幾多個。超咗就最舊嗰啲先走，本機先、SSH 後，因為 SSH 返嚟慢啲。tmux 下每個大約 2 MB，冇 tmux 多啲，SSH 每個仲要一個 ssh client。預設 {default}。',
+      '轉走咗嘅 terminal 可以留低嘅名額。爆咗就最舊嗰啲先行，本機先、SSH 後，因為 SSH 請返嚟慢啲。tmux 下每個大約 2 MB，冇 tmux 多啲，SSH 每個一個 ssh client。預設 {default}。'
+    ]
+  },
+  'settings.tmux.parkMax.aria': {
+    en: flat('Maximum parked terminals'),
+    yue: flat('最多保持連住嘅 terminal 數目')
+  },
   'settings.behavior.wheelZoom.label': {
     en: flat('Scroll wheel zooms'),
     yue: flat('滑鼠滾輪縮放')

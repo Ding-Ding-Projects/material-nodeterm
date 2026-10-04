@@ -10,6 +10,8 @@ standalone Windows session host.
   machine-local trust boundary.
 - [In-place agent restart and Eco quit](./agent-restart-in-place.md) — how a restart or Eco quits
   an agent CLI in its pane, how long a slow quit is watched, and what the failure notice offers.
+- [Switched-away terminal park](./park-window.md) — how long terminals of another project stay
+  attached, the count cap, and which parks are released first.
 
 See also [Canvas → Node kinds](../canvas/README.md) for how a terminal node fits alongside
 agent, sticky, editor and diff nodes, and [Agents](../agents/README.md) for the agent-specific

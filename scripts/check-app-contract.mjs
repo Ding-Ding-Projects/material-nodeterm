@@ -2402,6 +2402,18 @@ const FEATURES = [
     docs: ['docs/features/terminals/agent-restart-in-place.md'],
   },
   {
+    id: 'terminal-park-window',
+    label: 'Switched-away terminal park window and cap',
+    files: ['src/renderer/terminal/park-budget.ts', 'src/renderer/components/settings/sections/TmuxSection.tsx'],
+    contentChecks: [
+      ['src/renderer/terminal/park-budget.ts', 'export function parkWindowMs('],
+      ['src/renderer/terminal/park-budget.ts', 'export function parkCap('],
+      ['src/renderer/components/settings/sections/TmuxSection.tsx', 'settings.tmux.parkMinutes.label'],
+      ['src/renderer/components/settings/sections/TmuxSection.tsx', 'settings.tmux.parkMax.label'],
+    ],
+    docs: ['docs/features/terminals/park-window.md'],
+  },
+  {
     id: 'session-icons',
     label: 'Per-session icons',
     files: [

@@ -2937,6 +2937,13 @@ export interface Settings {
    *  hand-edited settings.json contains. */
   projectPartSizeValue: number
   projectPartSizeUnit: 'KB' | 'MB' | 'GB'
+  /** Minutes a terminal stays PARKED after its project is switched away — xterm + PTY client kept
+   *  alive off-DOM so switching back is instant and exact (no reattach). 0 = until the app quits.
+   *  Default 10. Hand-editable; re-validated at the use site (`parkWindowMs`). Issue #886. */
+  terminalParkMinutes: number
+  /** Max parked terminals across all projects before the oldest (local first, then remote) are
+   *  released early. Default 20. Re-validated at the use site (`parkCap`). Issue #886. */
+  terminalParkMax: number
   /** AI commit message agent: a local coding-agent CLI run read-only. */
   commitAgent: 'claude' | 'codex' | 'custom'
   /** For commitAgent='custom': command template; {prompt} placeholder optional (else stdin). */
@@ -3331,6 +3338,8 @@ export const DEFAULT_SETTINGS: Settings = {
   projectPartsEnabled: false,
   projectPartSizeValue: 256,
   projectPartSizeUnit: 'KB',
+  terminalParkMinutes: 10,
+  terminalParkMax: 20,
   commitAgent: 'claude',
   commitAgentCommand: '',
   commitExtraPrompt: '',

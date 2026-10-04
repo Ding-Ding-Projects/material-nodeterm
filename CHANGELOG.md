@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Port the upstream terminal park settings (upstream `30fbd95e`, `b894163f`, `f9980d5f`,
+  `cbe6f994`, `e43fe37a`). Settings → tmux now sets how long a switched-away project's terminals
+  stay attached (default 10 minutes, 0 until the app quits) and how many may stay attached in total
+  (default 20); past the cap local terminals are released before SSH and relay ones. An idle agent
+  CLI on a plain shell is no longer released by a project switch, and the zoom text-selection fix
+  reads layout once per frame. See `docs/features/terminals/park-window.md`.
+
+  搬咗上游 terminal 停泊設定：Settings → tmux 可以揀轉走咗嘅 project 啲 terminal 保持連住幾耐
+  （預設 10 分鐘，0 即係留到 app 關）同埋最多留幾多個（預設 20）；超咗就先放本機、後放 SSH 同
+  relay。冇 tmux 嘅 shell 入面就算 agent 閒住都唔會因為轉 project 俾人收咗。
 - Port the upstream in-place agent restart fixes (upstream `ff365255`, `00d92ea8`, `81da4c5e`,
   `1a1c5285`, `72110c57`, `d8e89701`, `43bfc1a4`). Claude and Grok are now quit with three Ctrl-C
   presses and Codex, opencode and Copilot with two, instead of a typed `/exit` that a composer popup
