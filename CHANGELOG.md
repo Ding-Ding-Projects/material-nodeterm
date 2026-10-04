@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Port the upstream stale working directory banner (upstream `eb3e520f`). When a terminal
+  reattaches to a tmux session whose folder was deleted or replaced, the node shows a slim
+  Material 3 banner along its top edge with **Restart in folder**, which ends the old session and
+  starts a fresh shell in the node's folder. Nothing restarts on its own. Local tmux sessions only;
+  SSH nodes are not probed. See `docs/features/terminals/stale-working-directory.md`.
+
+  搬咗上游「資料夾冇咗」提示：terminal 重新連返一個資料夾已經俾人刪咗或者換咗嘅 tmux session 時，
+  個 node 頂部會出一條細細嘅提示，撳「喺資料夾重新開」就會收咗舊 session、喺返個資料夾開過個新
+  shell。唔會自己重開。暫時只限本機 tmux。
 - Port upstream terminal keyboard and rendering fixes (upstream `19032d1f`, `90257bdc`, `397c09db`,
   `24597cbf`, `9e450603`): Cmd/Ctrl+1–9 switches project from a focused terminal or card modal,
   Ctrl+V pastes in Windows terminals, toggling Caps Lock during input-method composition no longer

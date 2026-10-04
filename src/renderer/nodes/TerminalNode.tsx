@@ -959,6 +959,16 @@ interface CoState {
    * fresh-only agent launch branch never runs.
    */
   agentRelaunchError: AgentColdRelaunchRecoveryError | null
+  /**
+   * A WARM reattach found the session's live working directory GONE (`PtyCreateResult.staleCwd`,
+   * issue #464): the folder was deleted — or deleted and re-created, which is a different inode,
+   * so the shell keeps printing `getcwd` errors forever. NOT an overlay state: the terminal is
+   * alive and possibly mid-work, so this only raises a slim banner offering an EXPLICIT
+   * recycle-and-respawn ("Restart in folder") plus a dismiss. Nothing is typed into the pane and
+   * nothing restarts on its own. Overwritten by every create result for this node, so a clean
+   * respawn clears it.
+   */
+  staleCwd: boolean
 }
 const NO_CO: CoState = {
   letterbox: false,
@@ -966,7 +976,8 @@ const NO_CO: CoState = {
   ended: false,
   offline: false,
   spawnError: null,
-  agentRelaunchError: null
+  agentRelaunchError: null,
+  staleCwd: false
 }
 const coStates = new Map<string, CoState>()
 const coSubs = new Map<string, (s: CoState) => void>()
@@ -2302,6 +2313,22 @@ export function TerminalNode({
       .finally(() => setAgentRelaunchRetrying(false))
   }
 
+  // "Restart in folder" (CoState.staleCwd, issue #464): the warm-reattached shell sits on a
+  // DELETED directory inode, which no `cd` we could inject would be allowed to fix (text into a
+  // pane is injection) and which re-creating the folder can never heal. The recovery is the same
+  // recycle-then-respawn the model switch and "restart shell" use: core ends the tmux session
+  // (reserving the replacement for this client), the respawn re-validates `data.cwd` and starts a
+  // fresh shell in the re-created folder. Explicit user action only — the session may hold live
+  // work, which is exactly why nothing here runs on its own.
+  const restartInFolder = (): void => {
+    setCo(termKey, { staleCwd: false })
+    transport.recycle(id)
+    updateNodeData(id, (n) => ({
+      respawnNonce: ((n.data.respawnNonce as number | undefined) ?? 0) + 1
+    }))
+  }
+  const dismissStaleCwd = (): void => setCo(termKey, { staleCwd: false })
+
   // "Not connected" (CoState.offline): the host was unreachable, so this node has no session
   // anywhere. Ask the coordinator to re-establish the project's master NOW — it flushes the
   // pending nodes (this one included) on success, which is what respawns them. We do NOT bump
@@ -3502,6 +3529,7 @@ export function TerminalNode({
             sessionId: sid,
             fresh,
             accountFallback: fellBack,
+            staleCwd,
             closed,
             screen,
             cursor,
@@ -3587,6 +3615,9 @@ export function TerminalNode({
             sessionPersistentRef.current = sessionPersistent
             if (fellBack) setAccountFallback(true)
             if (!disposed) setPersistenceUnavailable(degradedReason ?? null)
+            // Truthful on EVERY result, not only when set: a clean respawn ("Restart in folder", or
+            // any refresh that landed on a healthy session) must take the banner down with it.
+            setCo(termKey, { staleCwd: !!staleCwd })
             // Catch up a size change that landed while the spawn was in flight (applyFit skips the
             // IPC until sessionId is set, and the observer won't re-fire without another change).
             applyFit()
@@ -6175,6 +6206,46 @@ export function TerminalNode({
               </Button>
             </div>
           )}
+          {/* Stale working directory: a slim TOP banner, never a covering overlay — the terminal
+            underneath is alive and may be mid-work. Top edge on purpose: shells and agent CLIs
+            write their input line at the bottom. */}
+          {!co.closed &&
+            !co.ended &&
+            !co.spawnError &&
+            !co.offline &&
+            co.staleCwd &&
+            !offscreenDown && (
+              <div className="term-node__stalecwd nodrag" role="status">
+                <span className="term-node__stalecwd-text">
+                  {profileText(
+                    'terminal.staleCwd.message',
+                    'This terminal’s folder was deleted or replaced, so the shell’s working directory no longer exists.'
+                  )}
+                </span>
+                <Button
+                  variant="tonal"
+                  size="small"
+                  className="term-node__stalecwd-restart"
+                  vocabularyMode="factual"
+                  title={profileText(
+                    'terminal.staleCwd.restartHint',
+                    'End this shell and start a fresh one in {folder}. Anything still running in this terminal will end.',
+                    { folder: (data.cwd as string) || 'the project folder' }
+                  )}
+                  onClick={restartInFolder}
+                >
+                  {profileText('terminal.staleCwd.restart', 'Restart in folder')}
+                </Button>
+                <IconButton
+                  size="compact"
+                  className="term-node__stalecwd-dismiss"
+                  icon="close"
+                  aria-label={profileText('terminal.staleCwd.dismiss', 'Dismiss the folder warning')}
+                  title={profileText('terminal.staleCwd.dismiss', 'Dismiss the folder warning')}
+                  onClick={dismissStaleCwd}
+                />
+              </div>
+            )}
           {!co.closed && !co.ended && co.spawnError && (
             <div className="term-node__closed nodrag" role="alert">
               {/* The host error is a FACT, interpolated once into its own block: the bilingual

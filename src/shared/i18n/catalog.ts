@@ -1633,6 +1633,36 @@ export const CATALOG: Catalog = {
     en: flat('The terminal profile could not be resolved.'),
     yue: flat('無法解析終端機設定檔。')
   },
+  // Stale working-directory banner on a terminal node. {folder} is the node's own folder path,
+  // a fact supplied by the renderer.
+  'terminal.staleCwd.message': {
+    en: [
+      'This terminal\u2019s folder was deleted or replaced, so the shell\u2019s working directory no longer exists.',
+      'This terminal\u2019s folder was deleted or replaced; the shell is sitting in a directory that no longer exists.',
+      'The folder this terminal started in was deleted or replaced, so its shell has no working directory any more.',
+      'This terminal\u2019s folder was deleted or swapped out, leaving the shell standing in a directory that is gone.',
+      'This terminal\u2019s folder was deleted or replaced, so the shell is now living in a directory that has moved out.'
+    ],
+    yue: [
+      '呢個 terminal 嘅資料夾已經俾人刪咗或者換咗，shell 而家個工作目錄已經唔存在。',
+      '呢個 terminal 個資料夾刪咗或者換咗，shell 仲企喺一個已經冇咗嘅目錄。',
+      '呢個 terminal 開始時嘅資料夾刪咗或者換咗，個 shell 已經冇工作目錄。',
+      '呢個 terminal 個資料夾俾人刪咗或者掉包咗，shell 企喺一個已經消失咗嘅目錄。',
+      '呢個 terminal 個資料夾刪咗或者換咗，shell 而家住緊一個已經搬走咗嘅目錄。'
+    ]
+  },
+  'terminal.staleCwd.restart': {
+    en: flat('Restart in folder'),
+    yue: flat('喺資料夾重新開')
+  },
+  'terminal.staleCwd.restartHint': {
+    en: flat('End this shell and start a fresh one in {folder}. Anything still running in this terminal will end.'),
+    yue: flat('結束呢個 shell，喺 {folder} 開一個新嘅。呢個 terminal 入面仲行緊嘅嘢會一齊結束。')
+  },
+  'terminal.staleCwd.dismiss': {
+    en: flat('Dismiss the folder warning'),
+    yue: flat('收埋資料夾警告')
+  },
   'terminalProfiles.error.spawnLead': {
     en: flat('This terminal could not be started.'),
     yue: flat('呢個終端機無法啟動。')

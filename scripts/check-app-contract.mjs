@@ -2429,6 +2429,17 @@ const FEATURES = [
     docs: ['docs/features/terminals/terminal-keyboard-and-rendering.md'],
   },
   {
+    id: 'terminal-stale-cwd',
+    label: 'Stale working directory banner',
+    files: ['src/core/pane-cwd.ts', 'src/core/pty-manager.ts', 'src/renderer/nodes/TerminalNode.tsx'],
+    contentChecks: [
+      ['src/core/pane-cwd.ts', 'export function classifyPaneCwd('],
+      ['src/core/pty-manager.ts', 'private async paneCwdStale(persistKey: string)'],
+      ['src/renderer/nodes/TerminalNode.tsx', "profileText('terminal.staleCwd.restart', 'Restart in folder')"],
+    ],
+    docs: ['docs/features/terminals/stale-working-directory.md'],
+  },
+  {
     id: 'session-icons',
     label: 'Per-session icons',
     files: [
