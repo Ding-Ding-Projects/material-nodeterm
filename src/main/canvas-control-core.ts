@@ -6,7 +6,14 @@ import { CODEX_THREAD_IDENTITY_RESOLVER_SH } from '../core/codex-thread-identity
 import { explicitCodexResumeSession } from '../shared/agents/config'
 import { parseBrowserArgs } from '../core/browser-verb'
 import { CODEX_SANDBOX_HINT_SH } from '../core/agents/hook-sandbox-hint-sh'
-import { HOOK_ENDPOINT_FALLBACK_SH, STALE_ENDPOINT_HINT } from '../core/agents/hook-endpoint-failover-sh'
+import {
+  HOOK_ENDPOINT_FALLBACK_SH,
+  OWNED_ENDPOINT_FALLBACK_SH,
+  FOREIGN_ENDPOINT_HINT,
+  STALE_ENDPOINT_HINT,
+  TUNNEL_DOWN_HINT,
+  ownerUnreachableGuidanceLines
+} from '../core/agents/hook-endpoint-failover-sh'
 import { codexSandboxGuidanceLines } from '../core/context-link-core'
 import { NODE_TOKEN_READ_SH } from '../core/agents/node-token-sh'
 import { AGENT_CONFIG, AGENT_HOOK_TARGETS, BUILTIN_AGENT_IDS } from '@shared/agents/config'
@@ -571,6 +578,8 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '',
     ...browserGuidanceLines(),
     '',
+    ...ownerUnreachableGuidanceLines(),
+    '',
     ...codexSandboxGuidanceLines(CONTROL_UNREACHABLE_MSG),
     '',
     'Orchestration ("Build with Nodeterm orchestration"): first decide what is genuinely',
@@ -705,6 +714,7 @@ while [ "$nt_i" -lt "$nt_count" ]; do
 done
 
 ${HOOK_ENDPOINT_FALLBACK_SH}
+${OWNED_ENDPOINT_FALLBACK_SH}
 
 nt_out=$(mktemp 2>/dev/null || echo "/tmp/nodeterm-control.$$")
 nt_control_post() {
@@ -743,19 +753,21 @@ if [ -n "$NODETERM_HOOK_ENDPOINT" ] && [ -r "$NODETERM_HOOK_ENDPOINT" ]; then
 fi
 fi
 
-# An HTTP response, including a refusal, is authoritative. Only an empty or 000 transport result
-# may walk the bounded endpoint candidates, and a sandboxed denial skips doomed retries.
-nt_reached() { [ -n "$nt_code" ] && [ "$nt_code" != "000" ]; }
-if ! nt_reached && [ -z "$CODEX_SANDBOX_NETWORK_DISABLED" ]; then
+# An HTTP response, including a refusal, is authoritative. Only an empty or 000 transport result,
+# or an explicit wrong-owner (421) answer, may walk the bounded endpoint candidates; a 403 stays
+# final. A sandboxed denial skips doomed retries, but a 421 proves the transport worked and the
+# wrong owner rejected this request before dispatch, so it still permits discovery.
+nt_reached() { [ -n "$nt_code" ] && [ "$nt_code" != "000" ] && [ "$nt_code" != "421" ]; }
+if ! nt_reached && { [ "$nt_code" = "421" ] || [ -z "$CODEX_SANDBOX_NETWORK_DISABLED" ]; }; then
   nt_list=$(nt_candidates "$NODETERM_HOOK_ENDPOINT")
   if [ -n "$nt_list" ]; then
     nt_n=0
     while IFS= read -r nt_ep; do
       [ -n "$nt_ep" ] || continue
+      [ "$nt_n" -lt "$nt_fallback_max" ] || break
+      nt_adopt_for_node "$nt_ep" || continue
       nt_n=$((nt_n + 1))
-      [ "$nt_n" -le "$nt_fallback_max" ] || break
-      nt_adopt "$nt_ep" || continue
-      nt_read_node_token "$nt_ep"
+      nt_probe_endpoint || continue
       nt_control_post "$@"
       nt_reached && break
     done <<NT_CANDIDATES
@@ -769,6 +781,9 @@ if [ "$nt_code" = "200" ]; then
   rm -f "$nt_out"
   exit 0
 fi
+if [ -n "$nt_skipped_foreign_endpoint" ] && ! nt_reached; then
+  echo "${FOREIGN_ENDPOINT_HINT}" >&2
+fi
 cat "$nt_out" >&2 2>/dev/null
 rm -f "$nt_out"
 # Empty / 000 = the TRANSPORT failed, not the server. Under a codex sandbox that is the sandbox's
@@ -778,10 +793,21 @@ if [ -z "$nt_code" ] || [ "$nt_code" = "000" ]; then
     echo "nodeterm control endpoint unavailable." >&2
   else
     nt_codex_sandbox_hint || echo "${CONTROL_UNREACHABLE_MSG}" >&2
-    if [ -z "$CODEX_SANDBOX_NETWORK_DISABLED" ]; then
-      echo "${STALE_ENDPOINT_HINT}" >&2
+    # One piece of advice per failure: when the walk skipped a foreign endpoint, the owner-unreachable
+    # sentence above already says what happened and when to retry. Otherwise an SSH tunnel primary
+    # gets the tunnel advice (reconnect), anything else the stale-endpoint advice (app restart).
+    if [ -z "$CODEX_SANDBOX_NETWORK_DISABLED" ] && [ -z "$nt_skipped_foreign_endpoint" ]; then
+      if [ -n "$nt_primary_tunnel" ]; then
+        echo "${TUNNEL_DOWN_HINT}" >&2
+      else
+        echo "${STALE_ENDPOINT_HINT}" >&2
+      fi
     fi
   fi
+elif [ "$nt_code" = "421" ]; then
+  # Every endpoint that answered refused this bearer before dispatch (its body is printed above):
+  # nothing was delivered. Say so in the shim's own words, as the context shim always has.
+  echo "${CONTROL_UNREACHABLE_MSG}" >&2
 fi
 exit 1
 `
@@ -979,6 +1005,8 @@ Notes:
 - \`board\` and \`assign\` act on the CURRENTLY OPEN project's board — the same one you see when you
   toggle the kanban view. They need no confirmation.
 - If the CLI says canvas control is unavailable, you are not in a controllable nodeterm session — do not retry.
+
+${ownerUnreachableGuidanceLines().join('\n')}
 
 ${codexSandboxGuidanceLines(CONTROL_UNREACHABLE_MSG).join('\n')}
 
