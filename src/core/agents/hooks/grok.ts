@@ -21,7 +21,8 @@ export function installGrokHooks(): void {
     agentId: 'grok',
     scriptFileName: SCRIPT_FILE_NAME,
     configPath: grokHookConfigPath(),
-    events: GROK_HOOK_EVENTS
+    events: GROK_HOOK_EVENTS,
+    atomicConfig: true
   })
 }
 
@@ -29,6 +30,7 @@ export function removeGrokHooks(): void {
   removeHooksFrom({
     configPath: grokHookConfigPath(),
     events: GROK_HOOK_EVENTS,
-    scriptFileName: SCRIPT_FILE_NAME
+    scriptFileName: SCRIPT_FILE_NAME,
+    atomicConfig: true
   })
 }

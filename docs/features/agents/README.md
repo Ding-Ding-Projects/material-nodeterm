@@ -6,6 +6,9 @@ Cognition Devin are built in; any other CLI can be added as a custom agent.
 - [Agent support](./agent-support.md) — the shared status model, hook-driven detection,
   restart-safe display continuity, workflow-state sidebar grouping, permission modes, managed
   accounts, and the capability system that decides which agent gets which feature.
+- [Hook settings preservation](./hook-settings-preservation.md) — the guarded transaction that
+  merges nodeterm's status hook into a user's own `settings.json` and instruction files without
+  ever replacing a malformed, unreadable or symlinked file.
 - [Claude skill visibility](./claude-skills.md) — metadata-only discovery across local, managed,
   and connected remote configuration scopes, with explicit missing and unavailable states.
 - [Usage-threshold account rotation](./usage-account-rotation.md) - opt-in account selection for

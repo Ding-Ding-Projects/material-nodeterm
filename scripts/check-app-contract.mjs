@@ -793,6 +793,30 @@ const FEATURES = [
     docs: ['docs/features/agents/agent-support.md'],
   },
   {
+    id: 'hook-settings-preservation',
+    label: 'Hook settings preservation (guarded settings and instruction-file merges)',
+    files: [
+      'src/core/agents/hooks/settings-file.ts',
+      'src/core/agents/hooks/install-helper.ts',
+      'src/core/agents/hooks/claude-tui.ts',
+      'src/core/context-link.ts',
+      'src/main/canvas-control.ts',
+    ],
+    contentChecks: [
+      ['src/core/agents/hooks/settings-file.ts', 'export function updateSettingsFile('],
+      ['src/core/agents/hooks/install-helper.ts', 'updateSettingsFile(configPath,'],
+      ['src/core/agents/hooks/install-helper.ts', 'export function writeManagedHookFileAtomic('],
+      ['src/core/agents/hooks/claude-tui.ts', 'return updateSettingsFile(configPath,'],
+      ['src/core/context-link.ts', 'mergeInstructionFile(p,'],
+      ['src/main/canvas-control.ts', 'mergeInstructionFile(p,'],
+    ],
+    tests: [
+      ['src/core/agents/hooks/install-helper.fs.test.ts', "describe('shared settings are never healed by replacing user data'"],
+      ['src/core/agents/hooks/settings-file.test.ts', "it('creates a missing file and preserves settings, foreign handlers and mode on reinstall'"],
+    ],
+    docs: ['docs/features/agents/hook-settings-preservation.md'],
+  },
+  {
     id: 'claude-skill-visibility',
     label: 'Claude skill visibility',
     files: [
