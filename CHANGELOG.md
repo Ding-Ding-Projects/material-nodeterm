@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Port upstream terminal session pacing and co-attach fixes (upstream `8df485d9`, `3570a287`,
+  `48e86eb8`, `8379470f`, `cd83267f`, `978c7191`). The cold-restore scrollback snapshot of a busy
+  session is captured on a paced cadence, serialized, skipped when unchanged and retried after a
+  failed write. A second view of a live tmux session (another window or the kanban card modal)
+  enters the alternate screen before its first paint, a resync repaint restores tmux's alternate
+  screen and mouse modes, and the "restarted by another user" line lands on the visible screen.
+  See `docs/features/terminals/session-continuity.md`.
+
+  搬咗上游 session 快照同多個視窗嘅修正：一直忙緊嘅 session 唔會每 15 秒都影一次快照，冇變就唔寫，
+  寫失敗會再試。第二個視窗（例如 kanban 卡片）睇同一個 tmux session 時會先入 alternate screen 先
+  畫，重畫之後滑鼠同 alternate screen 都會返晒嚟。
 - Port the upstream stale working directory banner (upstream `eb3e520f`). When a terminal
   reattaches to a tmux session whose folder was deleted or replaced, the node shows a slim
   Material 3 banner along its top edge with **Restart in folder**, which ends the old session and

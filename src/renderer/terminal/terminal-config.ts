@@ -528,6 +528,11 @@ export const RESYNC_NOTICE = '\r\n\x1b[90m── reconnected — earlier output 
  */
 export const CO_ATTACH_MOUSE_SEQ = '\x1b[?1000h\x1b[?1002h\x1b[?1006h'
 
+/** Written into a TMUX-BACKED joiner's fresh xterm BEFORE its screen is painted — see
+ *  `PtyCreateResult.coAttachAltScreen`. Must precede the paint: entering the alternate buffer
+ *  clears the display. */
+export const CO_ATTACH_ALT_SCREEN_SEQ = '\x1b[?1049h'
+
 /**
  * The capture generation of the LAST repaint issued for a terminal, so a deferred repaint can tell
  * that a newer capture has superseded it (see `repaintResync`). Weak, and keyed by the xterm itself:
@@ -559,14 +564,28 @@ const resyncGeneration = new WeakMap<ResyncTarget, number>()
  *   parsed into yet, so #1 parses onto the fresh screen and #2 stacks below it. Only the LATEST
  *   capture is painted; superseded ones write nothing (they are strictly older screens of the same
  *   terminal, so there is nothing in them to lose).
+ *
+ * `tmuxClient` (PtyCreateResult.tmuxClient): the reset also drops a tmux client out of the alternate
+ * buffer and clears its mouse tracking; set, both are re-applied between the reset and the paint.
+ * Omitted, nothing is re-applied (a plain shell / session host, or a core that does not say).
  */
-export function repaintResync(term: ResyncTarget, screen: string, alive?: () => boolean): void {
+export function repaintResync(
+  term: ResyncTarget,
+  screen: string,
+  alive?: () => boolean,
+  tmuxClient = false
+): void {
   const generation = (resyncGeneration.get(term) ?? 0) + 1
   resyncGeneration.set(term, generation)
   term.write('', () => {
     if (alive && !alive()) return
     if (resyncGeneration.get(term) !== generation) return // a newer capture supersedes this one
     term.reset()
+    // `reset()` also dropped us to the NORMAL buffer and cleared mouse tracking, and tmux will not
+    // re-send either (it emits them once, at attach). For a tmux client, re-enter the alternate
+    // buffer and re-enable the mouse BEFORE the paint — entering the alt buffer clears the display.
+    // See PtyCreateResult.tmuxClient.
+    if (tmuxClient) term.write(CO_ATTACH_ALT_SCREEN_SEQ + CO_ATTACH_MOUSE_SEQ)
     term.write(toXtermText(screen))
     term.write(RESYNC_NOTICE)
   })

@@ -76,6 +76,7 @@ import {
   xtermOptionsFromSettings,
   SHIFT_ENTER_SEQ,
   CO_ATTACH_MOUSE_SEQ,
+  CO_ATTACH_ALT_SCREEN_SEQ,
   type SessionLife
 } from '../terminal/terminal-config'
 import { useXtermVisualSettings } from '../terminal/useXtermVisualSettings'
@@ -3534,6 +3535,8 @@ export function TerminalNode({
             screen,
             cursor,
             coAttachMouse,
+            coAttachAltScreen,
+            tmuxClient,
             persistent,
             persistenceUnavailable: degradedReason,
             unavailable,
@@ -3670,13 +3673,6 @@ export function TerminalNode({
                 })
               )
             }
-            // A restart we did not ask for: say why once, before the new session's output lands. (We
-            // JOIN the replacement session, so tmux — which already has a client — does not redraw for
-            // us; the first thing on this screen is whatever the new shell prints next.)
-            if (wasRecycled)
-              term.write(
-                `\r\n\x1b[90m── ${vocabRef.current('session restarted by another user (moved to a new folder)')} ──\x1b[0m\r\n`
-              )
             // Flow control: track xterm's unprocessed write backlog (bytes handed to
             // term.write but not yet parsed, plus anything still queued in the gate below). Past a
             // high watermark we pause the source so a flood can't grow this buffer without bound;
@@ -3797,7 +3793,7 @@ export function TerminalNode({
                   if (!shouldApplyResync(resyncScreen)) return
                   superseded = true
                   relieve(gate.reset())
-                  repaintResync(term, resyncScreen, () => !life.dead)
+                  repaintResync(term, resyncScreen, () => !life.dead, tmuxClient === true)
                 })
               )
             }
@@ -3830,6 +3826,11 @@ export function TerminalNode({
                   )
                 }
               } else if (replay === 'warm-attach') {
+                // A joiner's xterm never saw tmux's attach-time `\e[?1049h` (PtyCreateResult
+                // .coAttachAltScreen). Before the paint: entering the alt buffer clears the display.
+                // Not once a resync has superseded the seed: its repaint (`term.reset()` + the capture)
+                // may already have landed, and entering the alt buffer now would blank it.
+                if (coAttachAltScreen && !superseded) term.write(CO_ATTACH_ALT_SCREEN_SEQ)
                 // tmux is attached to this client and paints it: the visible screen on attach, its own
                 // history under the wheel. So there is nothing to hydrate — EXCEPT for a CO-ATTACH
                 // JOINER, whose `screen` was captured inside `create()`: tmux only repaints on SIGWINCH,
@@ -3854,6 +3855,15 @@ export function TerminalNode({
               // wheel-scroll tmux history. Enable it (see CO_ATTACH_MOUSE_SEQ). Only ever set on a join,
               // so this never fires on the solo spawn / warm-reattach-with-own-tmux-client path.
               if (coAttachMouse) term.write(CO_ATTACH_MOUSE_SEQ)
+              // A restart we did not ask for: say why once, before the new session's output lands (the
+              // gate below is still shut). We JOIN the replacement session, so tmux — which already has
+              // a client — does not redraw for us. AFTER the seed, never before it: a joiner enters the
+              // alternate buffer above (coAttachAltScreen), and a banner written earlier would sit in
+              // the normal buffer the user no longer sees — or be cleared by the switch.
+              if (wasRecycled)
+                term.write(
+                  `\r\n\x1b[90m── ${vocabRef.current('session restarted by another user (moved to a new folder)')} ──\x1b[0m\r\n`
+                )
             } catch (err) {
               // Never let a seed failure freeze the terminal: the live stream matters more than the
               // history. `finally` still opens the gate below.

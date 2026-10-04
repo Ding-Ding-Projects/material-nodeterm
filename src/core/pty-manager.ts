@@ -69,6 +69,8 @@ import { releasePty, type ReleasablePty } from './pty-release'
 import { terminateWindowsProcessTree } from '../session-host/windows-process-tree'
 import { effectiveSize, type PtySize } from './pty-size'
 import { writeScrollback, readScrollback, deleteScrollback } from './scrollback-store'
+import { snapshotDue } from './scrollback-cadence'
+import { createHash } from 'node:crypto'
 import { claudeConfigDirFor } from './claude-config-dir'
 import {
   findExecutableSync,
@@ -603,6 +605,12 @@ interface Session {
   sshRemote?: NonNullable<PtyCreateOptions['sshRemote']>
   /** Output arrived since the last scrollback snapshot — idle sessions skip the capture. */
   outputSinceSnapshot: boolean
+  /** Consecutive snapshot ticks this session was dirty — drives the busy cadence
+   *  (scrollback-cadence.ts). Reset by an idle tick. */
+  snapshotDirtyTicks: number
+  /** A periodic capture for this session is queued or running on `snapshotChain`; a tick that
+   *  lands meanwhile must not queue a second one. */
+  snapshotQueued: boolean
   /** A tmux session (local `nt-<id>`, or the remote one an SSH project attaches to) is holding this
    *  session's work, so the pty client here is expendable: detaching it loses nothing and the next
    *  create re-attaches with `new-session -A`. It is the precondition for the idle reap — see
@@ -884,6 +892,10 @@ export class PtyManager {
   /** ONE shared snapshot interval for all persisted sessions — a per-session interval spawned
    *  one tmux/ssh capture subprocess per session per tick, forever, even for idle terminals. */
   private snapshotTimer: ReturnType<typeof setInterval> | null = null
+  /** The periodic captures, serialized: one tmux/ssh spawn + scrollback write at a time. */
+  private snapshotChain: Promise<unknown> = Promise.resolve()
+  /** persistKey → sha1 of the last snapshot WRITTEN, so an identical capture is not rewritten. */
+  private lastSnapshotDigest = new Map<string, string>()
   /** ONE shared sweep for the idle reap (see `reapTick` / pty-reap.ts), armed by the first
    *  tmux-backed session and cleared once no session is left. */
   private reapTimer: ReturnType<typeof setInterval> | null = null
@@ -972,13 +984,31 @@ export class PtyManager {
     for (const session of this.sessions.values()) {
       if (!session.persistKey) continue
       anyPersisted = true
-      if (!session.outputSinceSnapshot) continue // idle since the last capture — skip the spawn
+      if (!session.outputSinceSnapshot) {
+        session.snapshotDirtyTicks = 0 // idle since the last capture — skip the spawn
+        continue
+      }
+      session.snapshotDirtyTicks++
+      // Continuously busy: keep the dirty bit, capture on the cadence (scrollback-cadence.ts).
+      if (!snapshotDue(session.snapshotDirtyTicks) || session.snapshotQueued) continue
       session.outputSinceSnapshot = false
-      void this.snapshotScrollback(session.persistKey, session.sshRemote, !!session.sessionHost).then((ok) => {
-        // Transient capture failure (ssh blip, tmux busy): put the dirty bit back so the next
-        // tick retries — otherwise a quiet session would never be snapshotted again.
-        if (!ok) session.outputSinceSnapshot = true
-      })
+      session.snapshotQueued = true
+      const persistKey = session.persistKey
+      // ONE capture at a time: the old loop fired every busy session's tmux/ssh spawn and 256 KB
+      // write in the same instant.
+      this.snapshotChain = this.snapshotChain
+        .then(() => this.snapshotScrollback(persistKey, session.sshRemote, !!session.sessionHost))
+        .then((ok) => {
+          // Transient capture failure (ssh blip, tmux busy): put the dirty bit back so the next
+          // tick retries — otherwise a quiet session would never be snapshotted again.
+          if (!ok) session.outputSinceSnapshot = true
+        })
+        .catch(() => {
+          session.outputSinceSnapshot = true
+        })
+        .finally(() => {
+          session.snapshotQueued = false
+        })
     }
     if (!anyPersisted && this.snapshotTimer) {
       clearInterval(this.snapshotTimer)
@@ -2022,18 +2052,27 @@ export class PtyManager {
     // our tmux always runs `mouse on`, so enabling these unconditionally matches its client state.
     // Rides `base` so it reaches the renderer on BOTH the resized and screen-painted branches.
     const coAttachMouse = existing.persistKey ? true : undefined
+    // Alt-screen: tmux-backed ONLY, and `tmuxBacked` alone is not that gate — a session-host session
+    // is also recorded tmuxBacked (and carries a persistKey), and switching it (or a plain shell) to
+    // the alternate buffer would hide its only scrollback. See PtyCreateResult.coAttachAltScreen.
+    const coAttachAltScreen = existing.tmuxBacked && !existing.sessionHost ? true : undefined
     // Same source, different question (and different consumer): a joiner needs to know whether the
     // session it landed on survives losing a client, because its own unmount may park it.
     const persistent = !!existing.persistKey
+    // The resync repaint's question, asked of every session (PtyCreateResult.tmuxClient) — for a
+    // join it is the alt-screen gate verbatim.
+    const tmuxClient = coAttachAltScreen
     const base: PtyCreateResult = existing.accountFallback
       ? {
           sessionId: existingId,
           fresh: false,
           accountFallback: true,
           coAttachMouse,
+          coAttachAltScreen,
+          tmuxClient,
           persistent
         }
-      : { sessionId: existingId, fresh: false, coAttachMouse, persistent }
+      : { sessionId: existingId, fresh: false, coAttachMouse, coAttachAltScreen, tmuxClient, persistent }
     if (resized) return Promise.resolve(base) // tmux is redrawing this client — do not paint twice
     // An empty capture (plain shell — no tmux to capture; a tmux/ssh blip) is OMITTED, never sent
     // as '': the renderer must not reset a terminal for nothing. A plain-shell joiner therefore
@@ -2342,6 +2381,9 @@ export class PtyManager {
       persistent,
       ...(accountFallback ? { accountFallback } : {}),
       ...degraded,
+      // A tmux client (local or remote), so a resync's `term.reset()` must re-apply the modes
+      // tmux emitted at attach — see PtyCreateResult.tmuxClient. Same gate as the join's alt screen.
+      ...(spawned?.tmuxBacked && !spawned.sessionHost ? { tmuxClient: true as const } : {}),
       ...(staleCwd ? { staleCwd: true as const } : {}),
       ...(screen ? { screen } : {})
     }
@@ -3349,6 +3391,8 @@ export class PtyManager {
       persistKey: persisted ? options.persistKey : undefined,
       sshRemote: remote,
       outputSinceSnapshot: true, // capture the initial screen on the first tick
+      snapshotDirtyTicks: 0,
+      snapshotQueued: false,
       // `persisted` IS "a tmux session (local or remote) is holding this work" — the same condition
       // that gates the scrollback snapshots. Recorded under its own name because the reap decision
       // asks a different question of it: not "is it worth snapshotting" but "would releasing this
@@ -4040,10 +4084,27 @@ export class PtyManager {
   }
 
   /**
+   * Skip rewriting an identical snapshot (a quiet-but-dirty pane, a cursor-only change). Returns
+   * whether the disk now holds this text: true when written OR skipped as unchanged, false when the
+   * write failed — so the tick can re-mark the session dirty and retry.
+   */
+  private async writeScrollbackIfChanged(persistKey: string, text: string): Promise<boolean> {
+    const digest = createHash('sha1').update(text).digest('hex')
+    if (this.lastSnapshotDigest.get(persistKey) === digest) return true
+    // Only a write that LANDED may be remembered: recording the digest of a failed one (ENOSPC, a
+    // rename that exhausted its retries on Windows) would skip every later identical capture —
+    // detach/quit's final ones included — for the rest of the run.
+    const written = await writeScrollback(persistKey, text)
+    if (written) this.lastSnapshotDigest.set(persistKey, digest)
+    return written
+  }
+
+  /**
    * Snapshot a node's recent scrollback (with colors, `-e`) to disk for cold-restart replay.
    * Best-effort: a missing session / unavailable tmux just leaves the prior snapshot in place.
-   * Returns false when the capture failed, so the periodic tick can re-mark the session dirty
-   * and retry (the dirty bit is cleared optimistically before the capture starts).
+   * Returns false when the capture OR its disk write failed, so the periodic tick can re-mark the
+   * session dirty and retry (the dirty bit is cleared optimistically before the capture starts).
+   * An empty capture writes nothing and counts as done.
    */
   private async snapshotScrollback(
     persistKey: string,
@@ -4060,8 +4121,7 @@ export class PtyManager {
           remoteCapturePaneArgs(sshRemote.conn, sshRemote.controlPath, sessionName(persistKey), false),
           { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 }
         )
-        if (stdout) await writeScrollback(persistKey, stdout)
-        return true
+        return stdout ? await this.writeScrollbackIfChanged(persistKey, stdout) : true
       } catch {
         // remote session gone / master down — keep the last good snapshot
         return false
@@ -4076,8 +4136,7 @@ export class PtyManager {
       if (!this.getSettings().tmuxEnabled || !sessionHostSupported()) return false
       try {
         const text = await sessionHostCapture(sessionName(persistKey), true)
-        if (text) await writeScrollback(persistKey, text)
-        return true
+        return text ? await this.writeScrollbackIfChanged(persistKey, text) : true
       } catch {
         return false
       }
@@ -4088,8 +4147,7 @@ export class PtyManager {
         ['-L', TMUX_SOCKET, 'capture-pane', '-p', '-e', '-t', sessionName(persistKey), '-S', '-1500'],
         { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 }
       )
-      if (stdout) await writeScrollback(persistKey, stdout)
-      return true
+      return stdout ? await this.writeScrollbackIfChanged(persistKey, stdout) : true
     } catch {
       // session gone / tmux unavailable — keep the last good snapshot
       return false
@@ -5029,6 +5087,9 @@ export class PtyManager {
     // OLD cwd's session, and the respawn is a cold start (`fresh`), so replaying it would paint the
     // pre-move terminal into the new one.
     await deleteScrollback(persistKey)
+    // The file is gone, so the digest no longer describes anything on disk: a recreated node must
+    // write its first snapshot even if the pane text happens to match.
+    this.lastSnapshotDigest.delete(persistKey)
     // Same hook, same reason as the snapshot above: this node's Codex thread records go with the
     // session. Left behind they accumulate one file per thread forever, and the hook prelude keeps
     // re-exporting a DELETED node's id into any tool shell that still carries that thread id.
@@ -5144,8 +5205,10 @@ export class PtyManager {
     for (const session of this.sessions.values()) {
       if (session.flushTimer) clearTimeout(session.flushTimer)
       // Final scrollback snapshot on quit so a reboot can replay it. Skipped for sessions with
-      // no output since the last periodic capture (unchanged pane content).
-      if (session.persistKey && session.outputSinceSnapshot)
+      // no output since the last periodic capture (unchanged pane content) — but NOT for one whose
+      // periodic capture is still queued on `snapshotChain`: the tick cleared the dirty bit when it
+      // QUEUED, the chain is not awaited here, and the process may exit before that link runs.
+      if (session.persistKey && (session.outputSinceSnapshot || session.snapshotQueued))
         finals.push(
           this.snapshotScrollback(session.persistKey, session.sshRemote, !!session.sessionHost)
         )
