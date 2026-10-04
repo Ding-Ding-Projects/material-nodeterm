@@ -4,6 +4,8 @@ import {
   BUILTIN_AGENT_IDS,
   canBranch,
   canChat,
+  mintsSessionId,
+  supportsSessionIdFlag,
   canContextLink,
   canControlCanvas,
   canReadTitle,
@@ -40,7 +42,10 @@ describe('MODEL_SWITCH_CAPABLE', () => {
     expect(canSwitchModel('claude')).toBe(true)
     expect(canSwitchModel('codex')).toBe(true)
     expect(canSwitchModel('copilot')).toBe(true)
-    for (const id of ['gemini', 'opencode', 'grok', 'custom:plain'] as const) {
+    // grok joined once its leaf existed: `-m/--model` in the launch grammar plus `grok models` for
+    // discovery. It is NOT in this list as an example of a non-capable agent any more.
+    expect(canSwitchModel('grok')).toBe(true)
+    for (const id of ['gemini', 'opencode', 'custom:plain'] as const) {
       expect(canSwitchModel(id), id).toBe(false)
     }
   })
@@ -176,6 +181,28 @@ describe('grok capabilities', () => {
     // by default (Claude Code compat, see its user-guide/08-skills.md), which is where
     // manage-nodeterm-canvas is already written. See config.control.test.ts.
     expect(canControlCanvas('grok')).toBe(true)
+  })
+
+  it('mints its own session id, gated on ITS OWN probe and never on claude\'s', () => {
+    expect(mintsSessionId('grok')).toBe(true)
+    // The third argument is grok's probe. Claude's answer must not move grok's gate in EITHER
+    // direction — that is rule 9: a gate fed by a version probe belongs to the agent it probes, and
+    // the two CLIs are installed and upgraded independently.
+    expect(supportsSessionIdFlag('grok', false, true)).toBe(true)
+    expect(supportsSessionIdFlag('grok', true, false)).toBe(false)
+    // Unprobed reads as no: a bare command, never a blocked launch. There is no shorter call to
+    // write — the third argument is required precisely so nobody can omit grok's probe by accident.
+    expect(supportsSessionIdFlag('grok', true, false)).toBe(false)
+    // And grok's probe must not move CLAUDE's gate either.
+    expect(supportsSessionIdFlag('claude', true, false)).toBe(true)
+    expect(supportsSessionIdFlag('claude', false, true)).toBe(false)
+  })
+
+  it('picks a model through the base-harness mapping, from grok\'s own catalogue', () => {
+    // The whole capability is the leaf: membership plus `grok models` for discovery and `--model`
+    // in the launch grammar. No frontend spells a grok model id, and none spells `grok` here either
+    // — `modelsForAgent` decides who is offered which catalogue.
+    expect(canSwitchModel('grok')).toBe(true)
   })
 
   it('does not yet claim the capabilities whose per-agent leaf is unwritten', () => {

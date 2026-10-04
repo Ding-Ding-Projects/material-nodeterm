@@ -1926,6 +1926,48 @@ const FEATURES = [
     docs: ['docs/features/agents/usage-popover-account-default.md'],
   },
   {
+    id: 'windows-cli-shim-execution',
+    label: 'Windows CLI resolution and escaped npm .cmd shim execution',
+    files: [
+      'src/core/exec-path.ts',
+      'src/core/exec-path.test.ts',
+      'src/core/gh-path.ts',
+      'src/core/git-service.ts',
+      'src/core/commit-message.ts',
+    ],
+    contentChecks: [
+      ['src/core/exec-path.ts', 'export function directExecutableInvocation('],
+      ['src/core/exec-path.ts', "args: ['/d', '/s', '/v:off', '/c', wrapped],"],
+      ['src/core/exec-path.ts', 'export function unquotePathEntry('],
+      ['src/core/exec-path.ts', 'export async function findInLoginPath('],
+      ['src/core/git-service.ts', 'function ghInvocation(args: string[])'],
+      ['src/core/commit-message.ts', 'directExecutableInvocation(bin, args)'],
+    ],
+    docs: ['docs/features/windows/cli-shim-execution.md'],
+  },
+  {
+    id: 'grok-session-ids-and-models',
+    label: 'Grok session-id minting, own model list, persisted session map and GROK_HOME probe',
+    files: [
+      'src/core/grok-cli.ts',
+      'src/core/grok-session-mint.ts',
+      'src/shared/agents/grok-session-mint.ts',
+      'src/renderer/state/grokSessionIds.ts',
+      'src/core/grok-session.ts',
+      'src/core/agents/grok-paths.ts',
+    ],
+    contentChecks: [
+      ['src/core/grok-cli.ts', 'export function registerGrokCliIpc()'],
+      ['src/server/handlers/index.ts', 'registerGrokCliIpc()'],
+      ['src/main/index.ts', 'registerGrokCliIpc()'],
+      ['src/renderer/bridge/ws-bridge.ts', 'export function buildGrokApi('],
+      ['src/shared/agents/config.ts', "export const SESSION_ID_CAPABLE = ['claude', 'copilot', 'grok'] as const"],
+      ['src/core/grok-session.ts', "'grok-session-dirs.json'"],
+      ['src/core/agents/grok-paths.ts', 'export async function ensureGrokHomeProbed('],
+    ],
+    docs: ['docs/features/agents/grok-session-ids-and-models.md'],
+  },
+  {
     id: 'usage-indicator-reliability',
     label: 'Usage indicator held numbers, identities, diagnostics and SSH-host Codex usage',
     files: [

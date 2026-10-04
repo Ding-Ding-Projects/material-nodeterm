@@ -37,6 +37,7 @@ import type { WorkspaceStore } from '../../core/workspace-store'
 import { describeSettingsChange } from '../../shared/settings-diff'
 import { claudeCliCaps, registerClaudeCliIpc } from '../../core/claude-cli'
 import { discoverLocalClaudeSkills } from '../../core/claude-skills'
+import { registerGrokCliIpc } from '../../core/grok-cli'
 import { registerCodexIdentityIpc } from '../../core/codex-identity-caps'
 import { UNKNOWN_CODEX_IDENTITY_CAPS } from '@shared/types'
 import { startUsageService } from '../../core/usage/usage-service'
@@ -212,6 +213,9 @@ export function registerCoreHandlers(
         .map((account) => account.id)
     )
   )
+  // Invariant 11 for probes: registered in BOTH shells, or session-id minting silently works on
+  // the desktop and not in the browser, with nothing to say which.
+  registerGrokCliIpc()
   void claudeCliCaps()
 
   // ---- Codex shared identity: a DELIBERATE degrade, not an omission ----------------------------

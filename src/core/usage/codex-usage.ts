@@ -16,6 +16,7 @@ import path from 'path'
 import { spawn } from 'child_process'
 import type { ProviderUsage, UsageLimit } from '../../shared/types'
 import { parseResetTimestamp } from './claude-usage-map'
+import { directExecutableInvocation, findInLoginPath } from '../exec-path'
 
 export const CODEX_BACKEND_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage'
 const FETCH_TIMEOUT_MS = 8000
@@ -179,10 +180,15 @@ export async function fetchCodexUsageViaAppServerAt(
   bin: string,
   home: string
 ): Promise<ProviderUsage | null> {
+  // A Windows npm install is a `.cmd` shim, which Node cannot spawn directly; the invocation
+  // helper runs it without letting a shell reinterpret the arguments, or declines (null).
+  const invocation = directExecutableInvocation(bin, [...CODEX_APP_SERVER_ARGS])
+  if (!invocation) return null
   return new Promise<ProviderUsage | null>((resolve) => {
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn(bin, [...CODEX_APP_SERVER_ARGS], {
+      child = spawn(invocation.executable, invocation.args, {
+        ...invocation.options,
         env: { ...process.env, CODEX_HOME: home },
         stdio: ['pipe', 'pipe', 'ignore']
       })
@@ -253,14 +259,10 @@ export async function fetchCodexUsageViaAppServerAt(
   })
 }
 
-/**
- * The bare command name is resolved by the operating system, as before. Resolving a Windows
- * `.cmd` shim safely needs the executable-invocation helpers in `../exec-path`, which belong to
- * a separate port; until then a shim-only Windows install declines this tier and the backend
- * tier answers on its own.
- */
+/** Resolve `codex` through the login-shell PATH (PATHEXT on Windows), then run the app-server tier. */
 async function fetchViaAppServer(home: string): Promise<ProviderUsage | null> {
-  return fetchCodexUsageViaAppServerAt('codex', home)
+  const bin = await findInLoginPath('codex')
+  return bin ? fetchCodexUsageViaAppServerAt(bin, home) : null
 }
 
 /**

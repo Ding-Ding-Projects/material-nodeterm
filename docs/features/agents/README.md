@@ -16,6 +16,8 @@ Cognition Devin are built in; any other CLI can be added as a custom agent.
 - [Usage indicator reliability and identity](./usage-indicator-reliability.md) — last good numbers
   through a failed read, named rate limits, per-account organizations, Grok diagnostics, SSH-host
   Codex usage, and the pill's default-account label.
+- [Grok session ids, models and home directory](./grok-session-ids-and-models.md): session ids
+  minted on grok's own probe, its own model list, the persisted session map and the GROK_HOME probe.
 - [Custom agent harnesses](./custom-agent-harness.md) — builtin capability inheritance, persisted
   harness identity, launch previews, environment expansion, and host-owned execution boundaries.
 - [Devin CLI](./devin-cli.md) — measured Cognition Devin CLI 3000.4.25 launch forms, lifecycle

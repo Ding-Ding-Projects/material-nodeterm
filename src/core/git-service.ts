@@ -31,7 +31,8 @@ import {
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import { resolveGitRemote, runRemoteGit } from './remote-ssh/remote-git'
 import { platform } from './platform'
-import { findExecutableSync } from './exec-path'
+import { directExecutableInvocation } from './exec-path'
+import { ghPath } from './gh-path'
 import { gitRemovalFingerprint } from './git-removal-proof'
 import { withCrossProcessLock } from './fs-transaction-lock'
 import { WorktreeOwnershipStore } from './worktree-ownership'
@@ -100,22 +101,6 @@ async function hashUntrackedFiles(cwd: string, nulPaths: string): Promise<string
   }
 }
 
-function githubCliFallbacks(): string[] {
-  if (process.platform === 'win32') {
-    const home = os.homedir()
-    const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local')
-    const programFiles = process.env.ProgramFiles || 'C:\Program Files'
-    return [
-      path.join(programFiles, 'GitHub CLI', 'gh.exe'),
-      path.join(localAppData, 'Programs', 'GitHub CLI', 'gh.exe')
-    ]
-  }
-  if (process.platform === 'linux') return ['/usr/local/bin/gh', '/usr/bin/gh']
-  return []
-}
-
-const GH_PATH = findExecutableSync('gh', githubCliFallbacks())
-
 // A desktop process may inherit a narrower PATH than a terminal. Add the standard Windows Git
 // and GitHub CLI locations while preserving the exact inherited PATH spelling. Linux Server
 // Edition keeps its standard executable directories. GIT_TERMINAL_PROMPT=0 makes authentication
@@ -125,7 +110,7 @@ function createGitEnvironment(): NodeJS.ProcessEnv {
   if (process.platform === 'win32') {
     const home = os.homedir()
     const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local')
-    const programFiles = process.env.ProgramFiles || 'C:\Program Files'
+    const programFiles = process.env.ProgramFiles || 'C:\\Program Files'
     const inheritedKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') || 'Path'
     const inherited = process.env[inheritedKey] || ''
     env[inheritedKey] = [
@@ -141,6 +126,12 @@ function createGitEnvironment(): NodeJS.ProcessEnv {
 }
 
 const GIT_ENV = createGitEnvironment()
+
+/** The argv-safe invocation for `gh <args>`, or null when gh is missing or cannot be run safely. */
+function ghInvocation(args: string[]): ReturnType<typeof directExecutableInvocation> {
+  const gh = ghPath()
+  return gh ? directExecutableInvocation(gh, args) : null
+}
 
 // Single-flight registry for the one clone the app runs at a time. Module scope keeps the
 // operation alive across desktop window replacement.
@@ -158,14 +149,19 @@ let ghAuthedCache: { value: boolean; at: number } | null = null
 let ghAuthedInFlight: Promise<boolean> | null = null
 
 async function ghAuthed(): Promise<boolean> {
-  if (!GH_PATH) return false
+  const invocation = ghInvocation(['auth', 'status'])
+  if (!invocation) return false
   const now = Date.now()
   if (ghAuthedCache && now - ghAuthedCache.at < GH_AUTH_TTL_MS) return ghAuthedCache.value
   if (ghAuthedInFlight) return ghAuthedInFlight
   ghAuthedInFlight = (async () => {
     let value = false
     try {
-      await run(GH_PATH, ['auth', 'status'], { env: GIT_ENV, maxBuffer: 1024 * 1024 })
+      await run(invocation.executable, invocation.args, {
+        ...invocation.options,
+        env: GIT_ENV,
+        maxBuffer: 1024 * 1024
+      })
       value = true
     } catch {
       value = false
@@ -185,7 +181,7 @@ async function ghAuthed(): Promise<boolean> {
  * call ever (no cache at all) reports `false` while the probe runs; that flips one refresh later.
  */
 function ghAuthedSwr(): boolean {
-  if (!GH_PATH) return false
+  if (!ghInvocation([])) return false
   const fresh = !!ghAuthedCache && Date.now() - ghAuthedCache.at < GH_AUTH_TTL_MS
   if (!fresh) void ghAuthed().catch(() => {})
   return ghAuthedCache?.value ?? false
@@ -851,7 +847,7 @@ export class GitService {
     const childName = child.trim()
     const key = branchParentConfigKey(childName)
     if (cwd.trim().length > 4096 || !key || !isBoundedDependencyRef(childName)) return { ok: false, message: 'Invalid branch name.' }
-    if (!GH_PATH) return { ok: false, message: 'GitHub CLI (gh) not found.' }
+    if (!ghPath()) return { ok: false, message: 'GitHub CLI (gh) not found.' }
     const parentResult = await git(cwd, ['config', '--get', key])
     const parentName = parentResult.out.trim()
     if (!parentResult.ok || !parentName) {
@@ -868,23 +864,26 @@ export class GitService {
       if (!token) return { ok: false, message: 'Sign in to GitHub to propose.', needsAuth: true }
       env.GH_TOKEN = token
     }
+    const invocation = ghInvocation([
+      'pr',
+      'create',
+      '--base',
+      parentName,
+      '--head',
+      childName,
+      '--title',
+      childName,
+      '--body',
+      `This pull request stacks ${childName} on ${parentName}.`
+    ])
+    if (!invocation) return { ok: false, message: 'GitHub CLI (gh) cannot be run safely on this machine.' }
     try {
-      await run(
-        GH_PATH,
-        [
-          'pr',
-          'create',
-          '--base',
-          parentName,
-          '--head',
-          childName,
-          '--title',
-          childName,
-          '--body',
-          `This pull request stacks ${childName} on ${parentName}.`
-        ],
-        { cwd, env, maxBuffer: DEPENDENCY_MAX_OUTPUT_BYTES }
-      )
+      await run(invocation.executable, invocation.args, {
+        ...invocation.options,
+        cwd,
+        env,
+        maxBuffer: DEPENDENCY_MAX_OUTPUT_BYTES
+      })
       return { ok: true, message: `Opened a pull request for ${childName} against ${parentName}.` }
     } catch (error) {
       const detail = error as { stderr?: string; message?: string }
@@ -927,7 +926,8 @@ export class GitService {
   ): Promise<GitResult> {
     if (signal.aborted) return { ok: false, message: 'Dependency operation was cancelled before execution.' }
     if (plan.operationId === 'propose') {
-      if (!GH_PATH) return { ok: false, message: 'GitHub CLI (gh) is unavailable on this machine.' }
+      const invocation = ghInvocation([...plan.args])
+      if (!invocation) return { ok: false, message: 'GitHub CLI (gh) is unavailable on this machine.' }
       const auth = await ghAuthed()
       if (signal.aborted) return { ok: false, message: 'Dependency operation was cancelled before execution.' }
       const env: NodeJS.ProcessEnv = { ...GIT_ENV }
@@ -937,7 +937,8 @@ export class GitService {
         env.GH_TOKEN = token
       }
       try {
-        const { stdout } = await run(GH_PATH, [...plan.args], {
+        const { stdout } = await run(invocation.executable, invocation.args, {
+          ...invocation.options,
           cwd: plan.cwd,
           env,
           maxBuffer: DEPENDENCY_MAX_OUTPUT_BYTES,
@@ -1046,7 +1047,7 @@ export class GitService {
       hasRemote: false,
       hasOrigin: false,
       hasUpstream: false,
-      ghAvailable: !!GH_PATH,
+      ghAvailable: !!ghInvocation([]),
       ghAuthed: false,
       staged: [],
       changes: []
@@ -1208,7 +1209,7 @@ export class GitService {
       hasRemote,
       hasOrigin,
       hasUpstream,
-      ghAvailable: !!GH_PATH,
+      ghAvailable: !!ghInvocation([]),
       ghAuthed: gh,
       staged,
       changes
@@ -1545,13 +1546,21 @@ export class GitService {
   }
 
   async publish(cwd: string, name: string, isPrivate: boolean): Promise<GitResult> {
-    if (!GH_PATH) return { ok: false, message: 'GitHub CLI (gh) not found.' }
     const repo = (name || '').trim()
     // GitHub repo names (optionally `owner/repo`) are limited to these chars and
     // must not start with `-`, so gh can't read the value as an option flag.
     if (!repo || repo.startsWith('-') || !/^[A-Za-z0-9._/-]+$/.test(repo)) {
       return { ok: false, message: 'Invalid repository name.' }
     }
+    const invocation = ghInvocation([
+      'repo',
+      'create',
+      repo,
+      isPrivate ? '--private' : '--public',
+      '--source=.',
+      '--push'
+    ])
+    if (!invocation) return { ok: false, message: 'GitHub CLI (gh) not found.' }
     // Prefer gh's own login; otherwise reuse the user's existing git HTTPS token
     // (the one that already lets them push) so publishing doesn't demand a separate
     // `gh auth login`. If neither is available, signal the UI to start a login.
@@ -1564,11 +1573,12 @@ export class GitService {
       env.GH_TOKEN = token
     }
     try {
-      await run(
-        GH_PATH,
-        ['repo', 'create', repo, isPrivate ? '--private' : '--public', '--source=.', '--push'],
-        { cwd, env, maxBuffer: 10 * 1024 * 1024 }
-      )
+      await run(invocation.executable, invocation.args, {
+        ...invocation.options,
+        cwd,
+        env,
+        maxBuffer: 10 * 1024 * 1024
+      })
       return { ok: true, message: 'Published to GitHub.' }
     } catch (e) {
       const err = e as { stderr?: string; message?: string }

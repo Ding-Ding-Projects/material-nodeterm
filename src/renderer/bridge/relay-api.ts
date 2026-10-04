@@ -45,6 +45,7 @@ import {
   buildCanvasApi,
   buildPresenceApi,
   buildClaudeApi,
+  buildGrokApi,
   buildGitHubApi,
   buildAwsWizardModelsApi
 } from './ws-bridge'
@@ -149,6 +150,12 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // claude CLI (a remote node launches on the host); `readTranscript` stays LOCAL (v1 degrade —
     // transcripts aren't relayed, so it reads this machine's; the only consumer reads the global api).
     claude: buildClaudeApi(client, local.claude),
+    // Host-routed on purpose: grok's probe and its taken-session-id read describe the machine a grok
+    // node launches on, which for a relay tab is the HOST. No caller reaches it yet: both renderer
+    // consumers (`ensureGrokCliCaps`, `ensureGrokTakenIds`) read the GLOBAL `window.nodeTerminal.grok`,
+    // i.e. the viewer's own machine, the same gap `claude.cliCaps` has. Routing them through the
+    // active session's API is the follow-up that makes this member live.
+    grok: buildGrokApi(client),
 
     // A File selected/dropped on THIS desktop can carry a perfectly valid absolute path — on THIS
     // desktop. The remote session cannot read it. Force the shared file-drop resolver down its byte
