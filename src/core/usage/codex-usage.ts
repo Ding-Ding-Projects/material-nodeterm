@@ -188,6 +188,7 @@ export async function fetchCodexUsageViaAppServerAt(
     let child: ReturnType<typeof spawn>
     try {
       child = spawn(invocation.executable, invocation.args, {
+        ...invocation.options,
         env: { ...process.env, CODEX_HOME: home },
         stdio: ['pipe', 'pipe', 'ignore']
       })
