@@ -377,8 +377,9 @@
     "src/core/remote-ssh/agent-resync-decide.ts": "215857e2b58a8de38acda45befbbb913770481e3",
     "src/core/remote-ssh/claude-version-probe.test.ts": "215857e2b58a8de38acda45befbbb913770481e3",
     "src/core/remote-ssh/claude-version-probe.ts": "215857e2b58a8de38acda45befbbb913770481e3",
+    "src/core/remote-ssh/codex-home.ts": "9d5572e2984d5a3c8a68ac7883755221838ebccc",
     "src/core/remote-ssh/control-master.destination.test.ts": "9d5572e2984d5a3c8a68ac7883755221838ebccc",
-    "src/core/remote-ssh/control-master.injection.test.ts": "215857e2b58a8de38acda45befbbb913770481e3",
+    "src/core/remote-ssh/control-master.injection.test.ts": "9d5572e2984d5a3c8a68ac7883755221838ebccc",
     "src/core/remote-ssh/control-master.realsh.test.ts": "215857e2b58a8de38acda45befbbb913770481e3",
     "src/core/remote-ssh/control-master.test.ts": "215857e2b58a8de38acda45befbbb913770481e3",
     "src/core/remote-ssh/control-master.ts": "215857e2b58a8de38acda45befbbb913770481e3",
@@ -607,7 +608,7 @@
     "src/main/remote-ssh/ssh-askpass.test.ts": "215857e2b58a8de38acda45befbbb913770481e3",
     "src/main/remote-ssh/ssh-askpass.ts": "215857e2b58a8de38acda45befbbb913770481e3",
     "src/main/remote-ssh/ssh-passphrase-prompt.test.ts": "215857e2b58a8de38acda45befbbb913770481e3",
-    "src/main/remote-ssh/ssh-project.killSessions.test.ts": "215857e2b58a8de38acda45befbbb913770481e3",
+    "src/main/remote-ssh/ssh-project.killSessions.test.ts": "9d5572e2984d5a3c8a68ac7883755221838ebccc",
     "src/main/remote-ssh/ssh-project.prewarm.test.ts": "9d5572e2984d5a3c8a68ac7883755221838ebccc",
     "src/main/remote-ssh/ssh-project.test.ts": "215857e2b58a8de38acda45befbbb913770481e3",
     "src/main/remote-ssh/ssh-project.ts": "215857e2b58a8de38acda45befbbb913770481e3",
@@ -1530,6 +1531,8 @@
     "wt-dialog.png": "215857e2b58a8de38acda45befbbb913770481e3"
   },
   "declined": {
-    "src/main/remote-ssh/remote-shim-neutrality.guard.test.ts": "9d5572e2984d5a3c8a68ac7883755221838ebccc"
+    "src/main/remote-ssh/remote-shim-neutrality.guard.test.ts": "9d5572e2984d5a3c8a68ac7883755221838ebccc",
+    "src/shared/ssh-server.test.ts": "9d5572e2984d5a3c8a68ac7883755221838ebccc",
+    "src/shared/ssh-server.ts": "9d5572e2984d5a3c8a68ac7883755221838ebccc"
   }
 }
