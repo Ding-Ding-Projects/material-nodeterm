@@ -176,6 +176,11 @@ The concrete source remediations in this pass are:
 | `destination-board-log` | Board activity log | `src/renderer/components/kanban/BoardLogPanel.tsx` | `export function BoardLogPanel` | `board-log` | Source reviewed; runtime proof pending |
 | `destination-source-filter` | Kanban source filter | `src/renderer/components/kanban/KanbanSourceFilter.tsx` | `export function KanbanSourceFilter` | `kanban-filter-menu` | Source reviewed; runtime proof pending |
 | `destination-label-picker` | Kanban label picker | `src/renderer/components/kanban/LabelPicker.tsx` | `export function LabelPicker` | `label-picker` | Source reviewed; runtime proof pending |
+| `destination-github-issue-card` | Kanban GitHub issue card | `src/renderer/components/kanban/GitHubIssueCard.tsx` | `export const GitHubIssueCard` | `github-issue-card__footer` | Source reviewed; runtime proof pending |
+| `destination-github-pull-card` | Kanban GitHub pull request card | `src/renderer/components/kanban/GitHubPullCard.tsx` | `export const GitHubPullCard` | `kanban-card--pull` | Source reviewed; runtime proof pending |
+| `destination-github-pull-status` | Pull request CI, mergeability and PR chips | `src/renderer/components/kanban/PullStatusBadges.tsx` | `export function PullStatusLine` | `pull-status` | Source reviewed; runtime proof pending |
+| `destination-github-summary-modal` | GitHub issue and pull request summary modal | `src/renderer/components/kanban/GitHubIssueSummaryModal.tsx` | `export function GitHubIssueSummaryModal` | `github-issue-modal` | Source reviewed; runtime proof pending |
+| `destination-github-pull-checks` | Pull request checks list | `src/renderer/components/kanban/GitHubIssueSummaryModal.tsx` | `export function PullChecks` | `pull-checks` | Source reviewed; runtime proof pending |
 | `destination-explorer` | Explorer destination | `src/renderer/components/ExplorerPanel.tsx` | `export function ExplorerPanel` | `md3-explorer` | Source reviewed; runtime proof pending |
 | `destination-source-control` | Source Control destination | `src/renderer/components/SourceControlPanel.tsx` | `export function SourceControlPanel` | `md3-source-control` | Source reviewed; runtime proof pending |
 | `destination-history` | History destination and tabs | `src/renderer/components/HistoryScreen.tsx` | `export function HistoryScreen` | `md3-history-screen` | Source reviewed; runtime proof pending |
@@ -250,6 +255,7 @@ The concrete source remediations in this pass are:
 | `overlay-regex-builder` | Full regex builder | `src/renderer/components/regex/RegexBuilder.tsx` | `export function RegexBuilder` | `md3-regex-builder` | Source reviewed; runtime proof pending |
 | `overlay-anchored-regex` | Anchored regex builder | `src/renderer/components/regex/AnchoredRegexBuilder.tsx` | `export function AnchoredRegexBuilder` | `md3-regex-trigger` | Source reviewed; runtime proof pending |
 | `overlay-confirm` | Confirm dialog | `src/renderer/components/ConfirmDialog.tsx` | `export function ConfirmDialog` | `confirm` | Source reviewed; runtime proof pending |
+| `overlay-confirm-choice` | Confirmation dialog required choice | `src/renderer/components/ConfirmDialog.tsx` | `confirm__choices` | `confirm__choice` | Source reviewed; runtime proof pending |
 | `overlay-destructive-gate` | Destructive action gate | `src/renderer/components/DestructiveConfirmGate.tsx` | `export function DestructiveConfirmGate` | `destgate` | Source reviewed; runtime proof pending |
 | `overlay-destructive-host` | Destructive gate host | `src/renderer/components/DestructiveGateHost.tsx` | `export function DestructiveGateHost` | `destgate-overlay` | Source reviewed; runtime proof pending |
 | `overlay-clone` | Clone repository dialog | `src/renderer/components/CloneRepoDialog.tsx` | `export function CloneRepoDialog` | `clone-dialog` | Source reviewed; runtime proof pending |
@@ -433,6 +439,10 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `kanban-column` | Kanban column | `src/renderer/components/kanban/KanbanColumn.tsx` | `useVocabularyMapper()` |
 | `kanban-session-card` | Kanban session card | `src/renderer/components/kanban/SessionCard.tsx` | `useVocabularyMapper()` |
 | `kanban-card-modal` | Kanban card modal | `src/renderer/components/kanban/CardModal.tsx` | `useVocabularyMapper()` |
+| `kanban-github-pull-card` | Kanban GitHub pull request card | `src/renderer/components/kanban/GitHubPullCard.tsx` | `useLocalizedVocabularyText()` |
+| `kanban-github-pull-status` | Pull request status line and chips | `src/renderer/components/kanban/PullStatusBadges.tsx` | `useLocalizedVocabularyText()` |
+| `kanban-github-summary-modal` | GitHub issue and pull request summary modal | `src/renderer/components/kanban/GitHubIssueSummaryModal.tsx` | `useLocalizedVocabularyText()` |
+| `kanban-source-filter` | Kanban source filter | `src/renderer/components/kanban/KanbanSourceFilter.tsx` | `useLocalizedVocabularyText()` |
 | `source-control` | Source control | `src/renderer/components/SourceControlPanel.tsx` | `VocabularyContextMenu` |
 | `worktree-dialog` | Worktree dialog | `src/renderer/components/WorktreeDialog.tsx` | `useVocabularyMapper()` |
 | `onboarding` | Onboarding | `src/renderer/components/onboarding/OnboardingFlow.tsx` | `useVocabularyMapper()` |

@@ -4,7 +4,7 @@ import { confirmKeyAction } from './confirm-key'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from './dialog-stack'
 import { useI18n } from '@renderer/lib/i18n'
 import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
-import { Button, Checkbox } from '@renderer/ui/md3'
+import { Button, Checkbox, Radio } from '@renderer/ui/md3'
 import type { DisplaySegment } from '../lib/personalVocabulary/ownedCopy'
 import { mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
@@ -31,6 +31,15 @@ interface ConfirmDialogProps {
   /** An explicit opt-in shown above the buttons (e.g. "Delete the worktree directory from disk
    *  too"). The caller owns the value, so it can also swap the confirm label / danger styling. */
   option?: { label: string; checked: boolean; onChange: (checked: boolean) => void }
+  /** A required pick among alternatives, shown from the start with `value` selected (e.g. the reason
+   *  a GitHub issue is closed). Unlike `option`, there is no "off": the caller always gets a value,
+   *  so it owns a sensible default. Labels are the caller's localized copy. */
+  choice?: {
+    label: string
+    options: { value: string; label: string }[]
+    value: string
+    onChange: (value: string) => void
+  }
   /**
    * May Enter confirm this dialog? Default true — the user asked for it. Pass FALSE for a dialog
    * the app raised on someone ELSE's behalf (an agent verb like `close-worktree`): the user never
@@ -77,6 +86,7 @@ export function ConfirmDialog({
   danger: dangerProp,
   alert = false,
   option,
+  choice,
   enterConfirms = true,
   autoFocusButtons = true,
   onConfirm,
@@ -156,6 +166,21 @@ export function ConfirmDialog({
           )}
           {messageText}
         </p>
+        {choice && (
+          <div className="confirm__choices" role="radiogroup" aria-label={vocab(choice.label)}>
+            {choice.options.map((item) => (
+              <label key={item.value} className="confirm__choice">
+                <Radio
+                  name={`${id}-choice`}
+                  value={item.value}
+                  checked={choice.value === item.value}
+                  onChange={() => choice.onChange(item.value)}
+                />
+                {vocab(item.label)}
+              </label>
+            ))}
+          </div>
+        )}
         {option && (
           <label className="confirm__option">
             <Checkbox

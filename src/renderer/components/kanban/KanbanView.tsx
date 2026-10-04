@@ -44,11 +44,15 @@ import {
   IconTrash,
   IconWeb
 } from '../icons'
-import type { GitHubIssueCardView } from '@shared/github-issues'
+import type { GitHubCloseReason, GitHubIssueCardView } from '@shared/github-issues'
+import { pullStatusFreshness, type GitHubPullStatus } from '@shared/github-pull-status'
+import { pullStatusByNumber, pullsClosingIssue } from '@shared/pull-card-links'
 import { useGitHubIssues } from '../../state/githubIssues'
+import { GITHUB_MAPPING_NOT_APPROVED, githubThrottleCopy } from '../../lib/githubSyncStatus'
+import { documentChaseDeps, startPullChase } from '../../lib/pullChase'
 import { useAgentStatus } from '../../state/agentStatus'
 import { useSession } from '../../session/session'
-import { KanbanSourceFilter, type KanbanSource } from './KanbanSourceFilter'
+import { KanbanSourceFilter, sourceVisible, type KanbanSource } from './KanbanSourceFilter'
 import { GitHubIssueSummaryModal } from './GitHubIssueSummaryModal'
 import { ConfirmDialog } from '../ConfirmDialog'
 import {
@@ -64,10 +68,21 @@ import {
   type KanbanRestartProfileHandler,
   type KanbanTerminalProfilePresentation
 } from './terminal-profile-ui'
-import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
+import { useLocalizedCopy, useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { mapBuiltinAgentLabel } from '../../lib/personalVocabulary/agentLabel'
 import type { SessionIcon } from '@shared/session-icon'
+
+/** Re-renders once a minute while `active`, so a stale pull status greys out on time. */
+function useMinuteTick(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!active) return
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [active])
+  return now
+}
 
 /** One session node shown as a board card — derived LIVE from the canvas nodes; the board
  *  itself stores only column assignments. */
@@ -192,6 +207,9 @@ export const KanbanView = memo(function KanbanView({
 }: KanbanViewProps) {
   const { api, source: sessionSource } = useSession()
   const profileText = useLocalizedVocabularyText()
+  // Localized but NOT yet vocabulary-mapped: for copy handed to a component (ConfirmDialog) that
+  // applies the personal-vocabulary boundary itself, so nothing is mapped twice.
+  const boardCopy = useLocalizedCopy()
   const mapVocabulary = useVocabularyMapper()
   const dragRef = useRef<Drag>(null)
   // One card modal at a time; a deleted node closes it via the byId.has render guard.
@@ -207,13 +225,17 @@ export const KanbanView = memo(function KanbanView({
   const [labelFilter, setLabelFilter] = useState<string[]>([])
   const [filterOpen, setFilterOpen] = useState(false)
   const [source, setSource] = useState<KanbanSource>('all')
-  const [modalIssue, setModalIssue] = useState<GitHubIssueCardView | null>(null)
+  // The summary modal shows an issue or a pull request; the kind decides which page set it
+  // refreshes from and whether it offers a Move control (a pull request is read-only here).
+  const [modalIssue, setModalIssue] = useState<{ item: GitHubIssueCardView; kind: 'issue' | 'pull' } | null>(null)
   const [githubRetry, setGitHubRetry] = useState(0)
   // A move that would close or reopen the issue on GitHub waits here for an explicit confirmation.
   const [pendingGitHubMove, setPendingGitHubMove] = useState<{
     issue: GitHubIssueCardView
     columnId: string | null
     confirmation: GitHubMoveConfirmation
+    /** The close reason the confirmation currently has selected (a close only). */
+    closeReason?: GitHubCloseReason
   } | null>(null)
   // Primitive selectors (not one object) — an object selector would re-render on every store set.
   const projectId = useProjects((s) => s.activeProjectId)
@@ -236,6 +258,36 @@ export const KanbanView = memo(function KanbanView({
   }, [sessionSource])
   const github = useGitHubIssues((state) => state.projects[projectId])
   const githubReadOnly = Object.values(github?.pages ?? {}).some((page) => page.readOnly)
+  const githubMappingNotApproved = Object.values(github?.pages ?? {}).some((page) => page.mappingNotApproved)
+  // Every page of one project carries the same identity's throttle; any one of them answers.
+  const githubThrottle = Object.values(github?.pages ?? {}).find((page) => page.throttle)?.throttle
+  const githubThrottleText = githubThrottleCopy(githubThrottle)
+  // Pull requests are evicted first when a repository outgrows the cache bounds, so the lane can
+  // legitimately be a subset. Say so — a silently short list reads as "this repo has few PRs".
+  const pullsTruncated = Object.values(github?.pullPages ?? {}).some((page) => page.partial)
+  // Pull request CI/mergeability + the PR ↔ issue links, from the host's memory.
+  const pullBoard = github?.pullBoard
+  const pullNow = useMinuteTick(!!pullBoard?.stale)
+  const pullFreshness = pullBoard ? pullStatusFreshness(pullBoard, pullNow) : 'fresh'
+  const pullByNumber = useMemo(() => pullStatusByNumber(pullBoard), [pullBoard])
+  const pullsByIssue = useMemo(() => {
+    const byIssue = new Map<number, GitHubPullStatus[]>()
+    for (const pull of pullBoard?.pulls ?? []) {
+      for (const issue of pull.closes) byIssue.set(issue, pullsClosingIssue(issue, pullBoard))
+    }
+    return byIssue
+  }, [pullBoard])
+  const pullStatusOf = useCallback((pullNumber: number) => pullByNumber.get(pullNumber), [pullByNumber])
+  const pullsForIssue = useCallback((issueNumber: number) => pullsByIssue.get(issueNumber), [pullsByIssue])
+  // A VISIBLE board keeps asking whether an undecided PR is due for another read; the host owns the
+  // schedule and the cap (lib/pullChase.ts), so a hidden page spends nothing.
+  const pullsUndecided = !!board.github && !!pullBoard?.undecided
+  useEffect(() => {
+    if (!pullsUndecided || !projectId) return
+    return startPullChase(documentChaseDeps(() => {
+      void api.githubIssues.chasePulls(projectId).catch(() => undefined)
+    }))
+  }, [api, projectId, pullsUndecided])
   const connectGitHub = useGitHubIssues((state) => state.connect)
   const moveGitHubState = useGitHubIssues((state) => state.move)
   const loadMoreGitHub = useGitHubIssues((state) => state.loadMore)
@@ -243,7 +295,10 @@ export const KanbanView = memo(function KanbanView({
   const paletteLabels = useMemo(() => boardLabels(board), [board])
   const githubLabels = useMemo(() => {
     const labels = new Map<string, { name: string; color: string }>()
-    for (const page of Object.values(github?.pages ?? {})) {
+    for (const page of [
+      ...Object.values(github?.pages ?? {}),
+      ...Object.values(github?.pullPages ?? {})
+    ]) {
       for (const issue of page.items) {
         for (const label of issue.labels) {
           const key = label.name.normalize('NFKC').toLocaleLowerCase('en-US')
@@ -252,7 +307,7 @@ export const KanbanView = memo(function KanbanView({
       }
     }
     return [...labels.values()].sort((a, b) => a.name.localeCompare(b.name))
-  }, [github?.pages])
+  }, [github?.pages, github?.pullPages])
   const localFilterKeys = useMemo(
     () => new Set(paletteLabels.map((label) => `local:${label.id}`)),
     [paletteLabels]
@@ -315,10 +370,13 @@ export const KanbanView = memo(function KanbanView({
   }, [projectId])
   useEffect(() => {
     if (!modalIssue || !github) return
-    const latest = Object.values(github.pages)
+    const pages = modalIssue.kind === 'pull' ? github.pullPages : github.pages
+    const latest = Object.values(pages)
       .flatMap((page) => page.items)
-      .find((issue) => issue.number === modalIssue.number)
-    if (latest && latest.updatedAt !== modalIssue.updatedAt) setModalIssue(latest)
+      .find((item) => item.number === modalIssue.item.number)
+    if (latest && latest.updatedAt !== modalIssue.item.updatedAt) {
+      setModalIssue({ item: latest, kind: modalIssue.kind })
+    }
   }, [github, modalIssue])
   const customAgents = useSettings((s) => s.settings.customAgents)
   const defaultTerminalProfileId = useSettings((s) => s.settings.defaultTerminalProfileId)
@@ -557,7 +615,7 @@ export const KanbanView = memo(function KanbanView({
       if (intent.kind === 'noop') return
       const confirmation = githubMoveConfirmation(issue, columnId, completion)
       if (confirmation) {
-        setPendingGitHubMove({ issue, columnId, confirmation })
+        setPendingGitHubMove({ issue, columnId, confirmation, closeReason: confirmation.defaultCloseReason })
         return
       }
       void moveGitHubState(api.githubIssues, projectId, issue.number, columnId, issue.updatedAt)
@@ -656,8 +714,19 @@ export const KanbanView = memo(function KanbanView({
     (columnId: string | null) => github?.pages[columnId ?? 'ungrouped'],
     [github]
   )
-  const sessionVisible = source !== 'github'
-  const githubVisible = source !== 'sessions' && !!board.github
+  const githubPullPage = useCallback(
+    (columnId: string | null) => github?.pullPages[columnId ?? 'ungrouped'],
+    [github]
+  )
+  const openIssue = useCallback((item: GitHubIssueCardView) => setModalIssue({ item, kind: 'issue' }), [])
+  const openPull = useCallback((item: GitHubIssueCardView) => setModalIssue({ item, kind: 'pull' }), [])
+  const loadMorePulls = useCallback(
+    (columnId: string | null) => void loadMoreGitHub(api.githubIssues, projectId, columnId, 'pull'),
+    [api.githubIssues, loadMoreGitHub, projectId]
+  )
+  const sessionVisible = sourceVisible(source, 'sessions')
+  const githubVisible = sourceVisible(source, 'github') && !!board.github
+  const pullsVisible = sourceVisible(source, 'pulls') && !!board.github
 
   // Right-click menu for a card: open on canvas, move, profile-restart, or delete.
   const cardMenuItems = (menu: { x: number; y: number; nodeId: string }): MenuItem[] => {
@@ -761,7 +830,19 @@ export const KanbanView = memo(function KanbanView({
         )}
         {board.github && githubReadOnly && (
           <span className="kanban-github-status kanban-github-status--error">
-            GitHub issues are read only until configuration and refresh are complete.
+            {githubMappingNotApproved
+              ? profileText('github.board.mappingNotApproved', GITHUB_MAPPING_NOT_APPROVED)
+              : 'GitHub issues are read only until configuration and refresh are complete.'}
+          </span>
+        )}
+        {board.github && githubThrottleText && (
+          <span className="kanban-github-status" role="status">
+            {profileText(githubThrottleText.id, githubThrottleText.template, githubThrottleText.facts)}
+          </span>
+        )}
+        {board.github && pullsVisible && pullsTruncated && (
+          <span className="kanban-github-status">
+            {profileText('github.board.pullsTruncated', 'Showing the most recently updated pull requests only.')}
           </span>
         )}
         {(paletteLabels.length > 0 || githubLabels.length > 0 || activeFilter.length > 0) && (
@@ -842,9 +923,18 @@ export const KanbanView = memo(function KanbanView({
             githubMoving={github?.moving}
             githubReadOnly={githubReadOnly}
             githubStatus={github?.issueStatus}
+            githubPulls={pullsVisible ? (githubPullPage(null)?.items ?? []) : []}
+            pullStatusOf={pullStatusOf}
+            pullsForIssue={pullsForIssue}
+            pullFreshness={pullFreshness}
+            pullObservedAt={pullBoard?.observedAt}
+            onOpenPull={openPull}
+            hasMorePulls={pullsVisible && !!githubPullPage(null)?.nextCursor}
+            onLoadMorePulls={loadMorePulls}
             displayCount={
               (sessionVisible ? columnCards.ungrouped.length : 0) +
-              (githubVisible ? (githubPage(null)?.counts.ungrouped ?? 0) : 0)
+              (githubVisible ? (githubPage(null)?.counts.ungrouped ?? 0) : 0) +
+              (pullsVisible ? (githubPullPage(null)?.counts.ungrouped ?? 0) : 0)
             }
             metaOf={metaOf}
             labelsOf={labelsOf}
@@ -857,7 +947,7 @@ export const KanbanView = memo(function KanbanView({
             onDropOnColumn={dropOnColumn}
             onDropAtCard={dropAtCard}
             onCardContext={handleCardContext}
-            onOpenGitHub={setModalIssue}
+            onOpenGitHub={openIssue}
             onMoveGitHub={handleMoveGitHub}
             onGitHubDragStart={handleGitHubDragStart}
             hasMoreGitHub={githubVisible && !!githubPage(null)?.nextCursor}
@@ -873,9 +963,18 @@ export const KanbanView = memo(function KanbanView({
               githubMoving={github?.moving}
               githubReadOnly={githubReadOnly}
               githubStatus={github?.issueStatus}
+              githubPulls={pullsVisible ? (githubPullPage(col.id)?.items ?? []) : []}
+              pullStatusOf={pullStatusOf}
+              pullsForIssue={pullsForIssue}
+              pullFreshness={pullFreshness}
+              pullObservedAt={pullBoard?.observedAt}
+              onOpenPull={openPull}
+              hasMorePulls={pullsVisible && !!githubPullPage(col.id)?.nextCursor}
+              onLoadMorePulls={loadMorePulls}
               displayCount={
                 (sessionVisible ? (columnCards.byColumn.get(col.id)?.length ?? 0) : 0) +
-                (githubVisible ? (githubPage(col.id)?.counts[col.id] ?? 0) : 0)
+                (githubVisible ? (githubPage(col.id)?.counts[col.id] ?? 0) : 0) +
+                (pullsVisible ? (githubPullPage(col.id)?.counts[col.id] ?? 0) : 0)
               }
               metaOf={metaOf}
               labelsOf={labelsOf}
@@ -892,7 +991,7 @@ export const KanbanView = memo(function KanbanView({
               onDropOnColumn={dropOnColumn}
               onDropAtCard={dropAtCard}
               onCardContext={handleCardContext}
-              onOpenGitHub={setModalIssue}
+              onOpenGitHub={openIssue}
               onMoveGitHub={handleMoveGitHub}
               onGitHubDragStart={handleGitHubDragStart}
               hasMoreGitHub={githubVisible && !!githubPage(col.id)?.nextCursor}
@@ -940,13 +1039,19 @@ export const KanbanView = memo(function KanbanView({
       )}
       {modalIssue && (
         <GitHubIssueSummaryModal
-          issue={modalIssue}
+          issue={modalIssue.item}
+          kind={modalIssue.kind}
           columns={board.columns}
-          moving={!!github?.moving[modalIssue.number]}
+          moving={!!github?.moving[modalIssue.item.number]}
           readOnly={githubReadOnly}
-          status={github?.issueStatus[modalIssue.number]}
-          onMove={(columnId) => handleMoveGitHub(modalIssue, columnId)}
+          status={github?.issueStatus[modalIssue.item.number]}
+          onMove={(columnId) => handleMoveGitHub(modalIssue.item, columnId)}
           onClose={() => setModalIssue(null)}
+          projectId={projectId}
+          pullStatus={modalIssue.kind === 'pull' ? pullByNumber.get(modalIssue.item.number) : undefined}
+          closingPulls={modalIssue.kind === 'issue' ? pullsByIssue.get(modalIssue.item.number) : undefined}
+          pullFreshness={pullFreshness}
+          pullObservedAt={pullBoard?.observedAt}
         />
       )}
       {pendingGitHubMove && (
@@ -954,16 +1059,29 @@ export const KanbanView = memo(function KanbanView({
           message={pendingGitHubMove.confirmation.message}
           confirmLabel={pendingGitHubMove.confirmation.confirmLabel}
           danger={pendingGitHubMove.confirmation.danger}
+          choice={pendingGitHubMove.confirmation.closeReasons && pendingGitHubMove.closeReason
+            ? {
+                label: boardCopy('github.close.reasonLabel', 'Close as'),
+                options: pendingGitHubMove.confirmation.closeReasons.map((reason) => ({
+                  value: reason.value,
+                  label: boardCopy(`github.close.reason.${reason.value}`, reason.label)
+                })),
+                value: pendingGitHubMove.closeReason,
+                onChange: (value) => setPendingGitHubMove((current) =>
+                  current ? { ...current, closeReason: value as GitHubCloseReason } : current)
+              }
+            : undefined}
           onCancel={() => setPendingGitHubMove(null)}
           onConfirm={() => {
-            const { issue, columnId } = pendingGitHubMove
+            const { issue, columnId, closeReason } = pendingGitHubMove
             setPendingGitHubMove(null)
             void moveGitHubState(
               api.githubIssues,
               projectId,
               issue.number,
               columnId,
-              issue.updatedAt
+              issue.updatedAt,
+              closeReason
             )
           }}
         />
