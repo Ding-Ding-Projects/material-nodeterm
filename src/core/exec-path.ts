@@ -94,11 +94,18 @@ export function isExecutable(candidate: string): boolean {
   }
 }
 
-/** Walk a PATH string for an executable — sync but SUBPROCESS-FREE (one accessSync per entry),
+/** Strip the quotes Windows tolerates around a PATH entry ("C:\Program Files\..."). `where.exe`
+ *  strips them before resolving; a quote left in place turns a real directory into a miss. */
+export function unquotePathEntry(entry: string): string {
+  return entry.replace(/^"(.*)"$/, '$1')
+}
+
+/** Walk a PATH string for an executable — sync but SUBPROCESS-FREE (one accessSync per candidate),
  *  so it is safe on the main thread. Returns the first accessible match, or null. */
 export function findInPathString(bin: string, pathStr: string | null | undefined): string | null {
   const names = execCandidates(bin)
-  for (const dir of (pathStr ?? '').split(path.delimiter)) {
+  for (const raw of (pathStr ?? '').split(path.delimiter)) {
+    const dir = unquotePathEntry(raw)
     if (!dir) continue
     for (const name of names) {
       const candidate = path.join(dir, name)
