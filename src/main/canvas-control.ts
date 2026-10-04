@@ -19,6 +19,8 @@ import {
 import { opencodeConfigDir } from '../core/agents/hooks/opencode'
 import { copilotHomeDir } from '../core/agents/hooks/copilot'
 import { renameAtomicSync } from '../core/fs-atomic'
+import { writeManagedHookFileAtomic } from '../core/agents/hooks/install-helper'
+import { mergeInstructionFile } from '../core/agents/hooks/settings-file'
 
 function dir(): string {
   return path.join(app.getPath('userData'), 'canvas-control')
@@ -102,12 +104,9 @@ function linkManagedSkills(configDir: string, sharedSkillsDir: string): void {
 function writeCliFiles(): void {
   const d = dir()
   fs.mkdirSync(d, { recursive: true })
-  fs.writeFileSync(shimPath(), CONTROL_SHIM_SCRIPT)
-  try {
-    fs.chmodSync(shimPath(), 0o755)
-  } catch {
-    /* fail open */
-  }
+  // Temp + rename, never a truncating write: agents execute this file, and a shim caught half
+  // written is a canvas call that exits 0 having done nothing.
+  writeManagedHookFileAtomic(shimPath(), CONTROL_SHIM_SCRIPT, undefined, 0o755)
   // Sweep the retired Electron-as-Node CLI off upgraders' disks — the shim no longer execs it,
   // so it would sit there forever pointing at a binary path that moves with every app update.
   try {
@@ -128,7 +127,7 @@ export function installCanvasSkillInto(configDir: string): void {
     const systemConfigDir = systemClaudeConfigDir()
     const sharedSkillsDir = path.join(systemConfigDir, 'skills')
     fs.mkdirSync(sharedSkillsDir, { recursive: true })
-    fs.writeFileSync(skillPathIn(systemConfigDir), skillBody(), 'utf8')
+    writeManagedHookFileAtomic(skillPathIn(systemConfigDir), skillBody())
     if (!sameDirectory(configDir, systemConfigDir)) linkManagedSkills(configDir, sharedSkillsDir)
   } catch (e) {
     console.warn('[canvas-control] skill install failed', configDir, e)
@@ -148,17 +147,10 @@ function installAgentInstructions(): void {
     path.join(opencodeConfigDir(), 'AGENTS.md')
   ]
   for (const p of targets) {
-    try {
-      let existing = ''
-      try {
-        existing = fs.readFileSync(p, 'utf8')
-      } catch {
-        /* new file */
-      }
-      fs.mkdirSync(path.dirname(p), { recursive: true })
-      fs.writeFileSync(p, mergeCanvasControlBlock(existing, block), 'utf8')
-    } catch (e) {
-      console.warn('[canvas-control] instructions install failed', p, e)
+    // The user's file: merged through the guarded transaction (link and mode kept, never read an
+    // unreadable file as empty and replace it with our block).
+    if (mergeInstructionFile(p, (existing) => mergeCanvasControlBlock(existing, block)) === 'failed') {
+      console.warn('[canvas-control] instructions install failed', p)
     }
   }
 }

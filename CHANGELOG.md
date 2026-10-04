@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Port the upstream hook settings-file preservation chain, local half (issue #225, upstream
+  `54fc5ca2`, `8cc40414`, `9f4e3410`, `b0d00189`). The Claude and Gemini hook install and uninstall,
+  the fullscreen-TUI default and the AGENTS.md / GEMINI.md / Copilot / opencode instruction blocks
+  now go through the guarded settings transaction: only a missing file is created, a blank file is
+  restored, and a malformed, unreadable or uninterpretable file is left exactly as found; symlinks
+  and file modes are kept, and other tools' hook handlers survive even when hand-merged into the
+  same definition. Uninstall no longer creates a settings file. Grok's own hook file is still healed
+  and is now published by temp + rename, as are the canvas-control and context-link shims and
+  skills and the Copilot hook file. See `docs/features/agents/hook-settings-preservation.md`.
 - Port the first upstream security tranche (issue #225, upstream `1bf6fadb`, `60714074`, `fee5b244`,
   `23a7282b`, `9fa879d0`, `2d3e54cb`): a plain terminal keeps its inherited provider credentials in
   subscription mode (both strip sites in this fork); a Linux desktop with no keyring stores the

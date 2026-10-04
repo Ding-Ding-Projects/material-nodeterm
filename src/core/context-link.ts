@@ -16,6 +16,8 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { platform } from './platform'
+import { writeManagedHookFileAtomic } from './agents/hooks/install-helper'
+import { mergeInstructionFile } from './agents/hooks/settings-file'
 import { IPC } from '../shared/ipc'
 import type { ContextLinkMap } from '../shared/types'
 import { type PtyManager } from './pty-manager'
@@ -69,12 +71,8 @@ function skillPath(): string {
 function writeCliFiles(): void {
   const d = contextLinkDir()
   fs.mkdirSync(d, { recursive: true })
-  fs.writeFileSync(cliShimPath(), CONTEXT_SHIM_SCRIPT)
-  try {
-    fs.chmodSync(cliShimPath(), 0o755)
-  } catch {
-    /* fail open */
-  }
+  // Temp + rename, never a truncating write: agents execute this file (see canvas-control.ts).
+  writeManagedHookFileAtomic(cliShimPath(), CONTEXT_SHIM_SCRIPT, undefined, 0o755)
   // Sweep the retired Electron-as-Node CLI off upgraders' disks: the shim no longer execs it,
   // and it would sit there pointing at a binary path that moves with every app update.
   try {
@@ -87,7 +85,7 @@ function writeCliFiles(): void {
 function installSkill(): void {
   try {
     fs.mkdirSync(path.dirname(skillPath()), { recursive: true })
-    fs.writeFileSync(skillPath(), buildContextLinkSkillBody(cliShimPath()), 'utf8')
+    writeManagedHookFileAtomic(skillPath(), buildContextLinkSkillBody(cliShimPath()))
   } catch (e) {
     console.warn('[context-link] skill install failed', e)
   }
@@ -103,17 +101,10 @@ function installAgentInstructions(): void {
     path.join(opencodeConfigDir(), 'AGENTS.md')
   ]
   for (const p of targets) {
-    try {
-      let existing = ''
-      try {
-        existing = fs.readFileSync(p, 'utf8')
-      } catch {
-        /* new file */
-      }
-      fs.mkdirSync(path.dirname(p), { recursive: true })
-      fs.writeFileSync(p, mergeInstructionsBlock(existing, block), 'utf8')
-    } catch (e) {
-      console.warn('[context-link] instructions install failed', p, e)
+    // The user's file: the guarded transaction keeps its link and mode, and an unreadable file is
+    // left alone rather than read as empty and replaced by our block (see canvas-control.ts).
+    if (mergeInstructionFile(p, (existing) => mergeInstructionsBlock(existing, block)) === 'failed') {
+      console.warn('[context-link] instructions install failed', p)
     }
   }
 }
