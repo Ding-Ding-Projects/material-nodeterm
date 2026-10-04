@@ -1,4 +1,5 @@
 import { DEFAULT_WORD_SEPARATORS, tmuxWordSeparatorsLine } from '@shared/word-separators'
+import type { TextDeliveryResult } from '../shared/text-delivery'
 import os from 'os'
 import fs from 'fs'
 import path from 'path'
@@ -129,6 +130,9 @@ import {
   sessionHostKillSession,
   sessionHostListSessions,
   sessionHostPaneCommand,
+  sessionHostMessageOwner,
+  sessionHostMessagePasteReady,
+  sessionHostMessageEnvelope,
   sessionHostSendKeys,
   sessionHostSupported,
   SessionHostProtocolCompatibilityError
@@ -139,6 +143,7 @@ import {
   type ResolvedWindowsTerminalProfile,
   type WindowsTerminalProfileResolver
 } from './windows-terminal-profiles'
+import { NativeWindowsPane } from './native-windows-pane'
 import type { ProjectSpawnOverrides, ProjectSpawnOverridesReader } from './project-spawn-overrides'
 
 // How often we snapshot a live tmux session's scrollback to disk, so a machine reboot (which
@@ -548,6 +553,7 @@ function normalizeSize(cols: number, rows: number): PtySize {
 
 interface Session {
   proc: pty.IPty
+  nativeWindowsPane?: NativeWindowsPane
   /** Every VIEW watching this session, keyed by the composite `(ClientId, viewerId)` (`SubKey`).
    *  Co-attach: ONE pty and ONE tmux client, N subscribers — a second client on the same persistKey
    *  (or the SAME client's second view, e.g. the kanban card modal) joins this set instead of
@@ -920,7 +926,10 @@ export class PtyManager {
    * persisted node this process has ever released: the same order as the session map itself, and
    * rewritten rather than appended on every subsequent release of the same node.
    */
-  private released = new Map<string, { sessionId: string; size?: PtySize; remote: boolean }>()
+  private released = new Map<
+    string,
+    { sessionId: string; size?: PtySize; remote: boolean; sessionHost?: boolean }
+  >()
   /**
    * The ONE control-mode client this manager keeps for background WRITES, plus the node whose tmux
    * session it is attached to (see `backgroundWrite` / `sharedClientFor`).
@@ -1052,7 +1061,10 @@ export class PtyManager {
       this.released.set(session.persistKey, {
         sessionId,
         size: session.appliedSize,
-        remote: !!session.sshRemote
+        remote: !!session.sshRemote,
+        // Which backend still holds the session after this client goes. Agent messaging reaches a
+        // released session by NAME, and must ask the backend that owns it (`sessionHostOwns`).
+        sessionHost: !!session.sessionHost
       })
     releasePty(session.proc as ReleasablePty)
     this.forget(sessionId, session)
@@ -2401,6 +2413,25 @@ export class PtyManager {
     return undefined
   }
 
+  /**
+   * Does the Windows session host own this node's persistent session, whether or not a client of
+   * ours is attached to it right now?
+   *
+   * A live generation answers for itself. A RELEASED one (park expiry, offscreen release) has no
+   * `Session` left, but the host keeps the session running, so the release record answers. A node
+   * this process never attached (an app restart, a project not yet opened) mirrors `sendText`'s
+   * rule: with no local tmux, the session host is this machine's persistence backend.
+   *
+   * Without the released leg, every messaging probe of a released session-host node fell through
+   * to the POSIX tmux branch, which on Windows answers null: the agent was alive and unreachable.
+   */
+  private sessionHostOwns(persistKey: string, live: Session | undefined): boolean {
+    if (live) return !!live.sessionHost
+    const known = this.released.get(persistKey)
+    if (known) return known.sessionHost === true
+    return !this.tmuxPath && this.getSettings().tmuxEnabled && sessionHostSupported()
+  }
+
   /** The exact live generation for a node id, including a non-persistent indexed plain shell. */
   private liveSessionForPersistKey(persistKey: string): Session | undefined {
     const indexedId = this.byPersistKey.get(persistKey)
@@ -3268,6 +3299,9 @@ export class PtyManager {
     const spawnSub = clientId === null ? null : subKey(clientId, options.viewerId ?? PRIMARY_VIEWER)
     const session: Session = {
       proc,
+      nativeWindowsPane: process.platform === 'win32' && !persisted
+        ? new NativeWindowsPane(proc, { ...options, scrollback: settings.tmuxScrollback })
+        : undefined,
       subscribers: spawnSub === null ? new Set<SubKey>() : new Set<SubKey>([spawnSub]),
       sizes:
         spawnSub === null
@@ -3332,6 +3366,7 @@ export class PtyManager {
       // rollback removes this exact generation, late callbacks must not recreate its flush timer
       // or leak bytes into a replacement that happens to reuse the same node id.
       if (this.sessions.get(sessionId) !== session) return
+      session.nativeWindowsPane?.recordOutput(data)
       this.queueData(sessionId, session, data)
     })
 
@@ -3452,6 +3487,7 @@ export class PtyManager {
   /** Drop a dead/released session from both indexes. Keyed off `indexKey` (not `persistKey`,
    *  which is only set for tmux-PERSISTED sessions) so a plain-shell node is un-indexed too. */
   private forget(sessionId: string, session: Session): void {
+    session.nativeWindowsPane?.dispose()
     this.sessions.delete(sessionId)
     if (session.indexKey && this.byPersistKey.get(session.indexKey) === sessionId)
       this.byPersistKey.delete(session.indexKey)
@@ -3521,6 +3557,7 @@ export class PtyManager {
       session.appliedSize = size
       try {
         session.proc.resize(size.cols, size.rows)
+        session.nativeWindowsPane?.resize(size.cols, size.rows)
       } catch {
         // resize can throw if the proc already exited; ignore.
       }
@@ -3878,6 +3915,7 @@ export class PtyManager {
    */
   async captureSession(persistKey: string, full = false): Promise<string> {
     const live = this.liveSessionForPersistKey(persistKey)
+    if (live?.nativeWindowsPane) return live.nativeWindowsPane.capture(full)
     // Remote (ssh-project) node: there is no local tmux session — capture from the REMOTE tmux
     // over the project's ControlMaster (mirrors snapshotScrollback / destroySession).
     const sshRemote = live?.sshRemote
@@ -4084,7 +4122,18 @@ export class PtyManager {
     this.textWriteGate = gate
   }
 
+  /**
+   * The IPC-facing write: `true` once the text reached the pane. A delivery that pasted the text
+   * but could not confirm its submit (`'pasted-not-submitted'`, from the Windows settled-submit
+   * paths) also answers `true`, because every caller of this boolean contract treats `false` as
+   * "nothing was written, retry", and a retry would paste the same text a second time. Callers
+   * that can show the uncertainty use `sendTextResult`.
+   */
   async sendText(persistKey: string, text: string, opts?: { enter?: boolean }): Promise<boolean> {
+    return (await this.sendTextResult(persistKey, text, opts)) !== false
+  }
+
+  async sendTextResult(persistKey: string, text: string, opts?: { enter?: boolean }): Promise<TextDeliveryResult> {
     // The renderer refuses input into a locked node, but THIS path addresses the session by name
     // and never crosses the renderer — dictation, note pushes and canvas-control all arrive here.
     // Without the gate a locked terminal went dark while dictation kept typing into it. Gate
@@ -4100,6 +4149,9 @@ export class PtyManager {
     const enter = opts?.enter ?? true
     const target = sessionName(persistKey)
     const live = this.liveSessionForPersistKey(persistKey)
+    // A direct (non-persistent) Windows PTY has no session-host entry and no tmux: it is typed
+    // into through the pane itself. Routing it to the session host below failed every time.
+    if (live?.nativeWindowsPane) return live.nativeWindowsPane.sendText(text, enter)
     const sshRemote = live?.sshRemote
     // No local tmux: this machine persists sessions via the session-host backend instead (see
     // docs/windows-session-host.md). Its `sendKeys` needs no attached client, exactly like
@@ -4346,6 +4398,7 @@ export class PtyManager {
   async paneOwner(persistKey: string): Promise<PaneOwner | null> {
     const target = sessionName(persistKey)
     const live = this.liveSessionForPersistKey(persistKey)
+    if (live?.nativeWindowsPane) return live.nativeWindowsPane.owner()
     const sshRemote = live?.sshRemote
     try {
       if (sshRemote) {
@@ -4362,9 +4415,10 @@ export class PtyManager {
         )
         return parseCombinedPaneOwner(out.stdout)
       }
-      // The session host has no tty/tmux identity surface. Do not query an unrelated POSIX tmux
-      // merely because one is installed beside this native Windows generation.
-      if (live?.sessionHost || !this.tmuxPath) return null
+      // Only the owning host may attest this generation. An older live host rejects the
+      // extension; that refusal must never fall through to an unrelated POSIX tmux.
+      if (this.sessionHostOwns(persistKey, live)) return sessionHostMessageOwner(target)
+      if (!this.tmuxPath) return null
       const first = await runAsync(this.tmuxPath, [
         '-L',
         TMUX_SOCKET,
@@ -4417,9 +4471,14 @@ export class PtyManager {
    * accidental submit a messaging delivery must never perform — an empty envelope refuses here.
    * (`buildEnvelope` can never return '', so this is a guard against a future caller, not a path.)
    */
-  async sendEnvelope(persistKey: string, envelope: string): Promise<boolean> {
+  async sendEnvelope(persistKey: string, envelope: string, expected?: PaneOwner): Promise<boolean> {
     if (envelope.length === 0) return false
+    const live = this.liveSessionForPersistKey(persistKey)
+    if (live?.nativeWindowsPane) return live.nativeWindowsPane.sendEnvelope(envelope, expected)
     const target = sessionName(persistKey)
+    if (this.sessionHostOwns(persistKey, live)) {
+      return expected ? sessionHostMessageEnvelope(target, envelope, expected) : false
+    }
     const sshRemote = this.sessionByPersistKey(persistKey)?.sshRemote
     try {
       if (sshRemote) {
@@ -4439,6 +4498,18 @@ export class PtyManager {
       // rather than throwing, so the buffer sweep is never skipped.
       return false
     }
+  }
+
+  /**
+   * Is the pane ready for a bracketed-paste envelope? A direct Windows PTY answers from its own
+   * emulator; a session-host generation asks its host; tmux frames with `paste-buffer -p`.
+   */
+  async envelopePasteReady(persistKey: string): Promise<boolean> {
+    const live = this.liveSessionForPersistKey(persistKey)
+    if (live?.nativeWindowsPane) return live.nativeWindowsPane.pasteAware()
+    if (this.sessionHostOwns(persistKey, live)) return sessionHostMessagePasteReady(sessionName(persistKey))
+    // Existing tmux path frames in paste-buffer -p.
+    return !!(live?.sshRemote || this.tmuxPath)
   }
 
   /**

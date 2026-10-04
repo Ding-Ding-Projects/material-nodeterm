@@ -1,8 +1,10 @@
+import type { TextDeliveryResult } from '../shared/text-delivery'
 // The Electron-main-side client for the session host: one long-lived connection per app process,
 // auto-spawning the host on first use and restoring every live local attachment before allowing
 // ordinary traffic through a replacement connection.
 
 import net from 'net'
+import type { PaneOwner } from '../shared/agents/pane-owner-predicate'
 import { randomUUID } from 'crypto'
 // The REAL scheduler, immune to vi.useFakeTimers (which patches the global, not this module's
 // exports): requestOnSocket defers each frame's write by one genuine event-loop turn so queued
@@ -137,6 +139,9 @@ function sleep(ms: number): Promise<void> {
 function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }
+
+/** Explicit host refusal: unlike a lost response, the host answered this request. */
+class SessionHostRequestRejectedError extends Error {}
 
 function isTransportUncertainty(value: unknown): boolean {
   const error = asError(value) as NodeJS.ErrnoException
@@ -739,7 +744,7 @@ export class SessionHostClient {
     this.pending.delete(frame.id)
     if (entry.timer) clearTimeout(entry.timer)
     if (frame.ok) entry.resolve(frame.result)
-    else entry.reject(new Error(frame.error))
+    else entry.reject(new SessionHostRequestRejectedError(frame.error))
   }
 
   private deliverData(state: ClientSessionState, data: string): void {
@@ -820,7 +825,8 @@ export class SessionHostClient {
 
   private async request<T>(
     request: SessionHostRequestBody,
-    onSuccess?: (result: T, socket: net.Socket) => void
+    onSuccess?: (result: T, socket: net.Socket) => void,
+    onSent?: () => void
   ): Promise<T> {
     // A peer-initiated close races the client's own 'close' event: a cached socket can look live
     // here while the peer already hung up, and a frame written into that gap fails (EPIPE) for
@@ -842,7 +848,7 @@ export class SessionHostClient {
       if (!socket) throw new Error('session-host: not connected')
       const connectedSocket = socket as net.Socket
       try {
-        return await this.requestOnSocket(connectedSocket, request, onSuccess)
+        return await this.requestOnSocket(connectedSocket, request, onSuccess, onSent)
       } catch (error) {
         if (!(error instanceof SessionHostRequestNotDeliveredError)) throw error
         const deliveryError = error as SessionHostRequestNotDeliveredError
@@ -857,7 +863,8 @@ export class SessionHostClient {
   private requestOnSocket<T>(
     socket: net.Socket,
     request: SessionHostRequestBody,
-    onSuccess?: (result: T, socket: net.Socket) => void
+    onSuccess?: (result: T, socket: net.Socket) => void,
+    onSent?: () => void
   ): Promise<T> {
     if (this.socket !== socket || socket.destroyed) {
       return Promise.reject(
@@ -905,6 +912,7 @@ export class SessionHostClient {
           return
         }
         pending.sent = true
+        onSent?.()
         try {
           socket.write(encodeFrame(full), (error) => {
             // A response may beat a late write callback. Identity-check this exact pending entry so
@@ -1451,12 +1459,16 @@ export class SessionHostClient {
     }
   }
 
-  async sendKeys(name: string, text: string, enter: boolean): Promise<boolean> {
+  async sendKeys(name: string, text: string, enter: boolean): Promise<TextDeliveryResult> {
+    let sent = false
     try {
-      await this.request({ cmd: 'sendKeys', name, text, enter })
-      return true
-    } catch {
-      return false
+      const result = await this.request<{ delivery?: TextDeliveryResult } | undefined>({ cmd: 'sendKeysV2', name, text, enter }, undefined, () => { sent = true })
+      // A malformed success cannot prove submission; never retry a possibly accepted paste.
+      return result?.delivery === true || result?.delivery === false ? result.delivery : 'pasted-not-submitted'
+    } catch (error) {
+      // A frame handed to the socket may already have pasted. A lost reply is not a
+      // pre-input refusal: surface uncertainty and never invite an automatic resend.
+      return sent && !(error instanceof SessionHostRequestRejectedError) ? 'pasted-not-submitted' : false
     }
   }
 
@@ -1467,6 +1479,24 @@ export class SessionHostClient {
     } catch {
       return null
     }
+  }
+
+  async messageOwner(name: string): Promise<PaneOwner | null> {
+    try {
+      return await this.request<PaneOwner | null>({ cmd: 'messageOwnerV1', name })
+    } catch { return null } // Older live hosts refuse; never replace them or use name-only input.
+  }
+
+  async messagePasteReady(name: string): Promise<boolean> {
+    try {
+      return await this.request<boolean>({ cmd: 'messagePasteReadyV1', name }) === true
+    } catch { return false }
+  }
+
+  async messageEnvelope(name: string, envelope: string, expected: PaneOwner): Promise<boolean> {
+    try {
+      return await this.request<boolean>({ cmd: 'messageEnvelopeV1', name, envelope, expected }) === true
+    } catch { return false }
   }
 
   async capture(name: string, full: boolean): Promise<string> {
