@@ -2053,18 +2053,27 @@ export class PtyManager {
     // our tmux always runs `mouse on`, so enabling these unconditionally matches its client state.
     // Rides `base` so it reaches the renderer on BOTH the resized and screen-painted branches.
     const coAttachMouse = existing.persistKey ? true : undefined
+    // Alt-screen: tmux-backed ONLY, and `tmuxBacked` alone is not that gate — a session-host session
+    // is also recorded tmuxBacked (and carries a persistKey), and switching it (or a plain shell) to
+    // the alternate buffer would hide its only scrollback. See PtyCreateResult.coAttachAltScreen.
+    const coAttachAltScreen = existing.tmuxBacked && !existing.sessionHost ? true : undefined
     // Same source, different question (and different consumer): a joiner needs to know whether the
     // session it landed on survives losing a client, because its own unmount may park it.
     const persistent = !!existing.persistKey
+    // The resync repaint's question, asked of every session (PtyCreateResult.tmuxClient) — for a
+    // join it is the alt-screen gate verbatim.
+    const tmuxClient = coAttachAltScreen
     const base: PtyCreateResult = existing.accountFallback
       ? {
           sessionId: existingId,
           fresh: false,
           accountFallback: true,
           coAttachMouse,
+          coAttachAltScreen,
+          tmuxClient,
           persistent
         }
-      : { sessionId: existingId, fresh: false, coAttachMouse, persistent }
+      : { sessionId: existingId, fresh: false, coAttachMouse, coAttachAltScreen, tmuxClient, persistent }
     if (resized) return Promise.resolve(base) // tmux is redrawing this client — do not paint twice
     // An empty capture (plain shell — no tmux to capture; a tmux/ssh blip) is OMITTED, never sent
     // as '': the renderer must not reset a terminal for nothing. A plain-shell joiner therefore
@@ -2357,10 +2366,13 @@ export class PtyManager {
     // which is what the renderer's cache-dispose levers must not assume. See PtyCreateResult.
     const persistent = !!spawned?.persistKey
     const degraded = persistenceUnavailable && !persistent ? { persistenceUnavailable } : {}
+    // A tmux client (local or remote), so a resync's `term.reset()` must re-apply the modes tmux
+    // emitted at attach — see PtyCreateResult.tmuxClient. Same gate as the join's alt screen.
+    const tmuxClient = spawned?.tmuxBacked && !spawned.sessionHost ? { tmuxClient: true as const } : {}
     if (accountFallback) {
-      return { sessionId, fresh, accountFallback, persistent, ...degraded, ...(screen ? { screen } : {}) }
+      return { sessionId, fresh, accountFallback, persistent, ...degraded, ...tmuxClient, ...(screen ? { screen } : {}) }
     }
-    return { sessionId, fresh, persistent, ...degraded, ...(screen ? { screen } : {}) }
+    return { sessionId, fresh, persistent, ...degraded, ...tmuxClient, ...(screen ? { screen } : {}) }
   }
 
   /** Does the node's remote tmux session exist (over the project's ControlMaster)? Async so the
