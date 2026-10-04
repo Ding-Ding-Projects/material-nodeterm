@@ -39,7 +39,13 @@ export const HOST_ONLY_CHANNELS: ReadonlySet<string> = new Set([
   IPC.projectSetupRun,
   IPC.projectSetupCancel,
   IPC.projectSetupConsentSubmit,
-  IPC.projectSetupRequestTrust
+  IPC.projectSetupRequestTrust,
+  // Prepare-for-update ends EVERY session on this machine's session host and quits the app. Only
+  // the host's own user may do that. Raw ipcMain handlers (no peer reaches them); listed here too
+  // so moving them onto the platform table later cannot quietly open them.
+  IPC.appUpdatePrepInspect,
+  IPC.appUpdatePrepShutdown,
+  IPC.appUpdatePrepQuit
 ])
 
 /** What a refused peer is told. One wording, so the two shells answer identically. */

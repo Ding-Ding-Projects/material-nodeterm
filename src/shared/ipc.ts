@@ -236,6 +236,12 @@ export const IPC = {
   appUpdateProgress: 'app:update-progress',
   appUpdateError: 'app:update-error',
   appUpdateNotAvailable: 'app:update-not-available',
+  /** This build has no update channel at all — distinct from "up to date". */
+  appUpdateNoChannel: 'app:update-no-channel',
+  // Prepare-for-update (Windows session host). Raw ipcMain handlers, main-window senders only.
+  appUpdatePrepInspect: 'app:update-prep-inspect',
+  appUpdatePrepShutdown: 'app:update-prep-shutdown',
+  appUpdatePrepQuit: 'app:update-prep-quit',
   appCheckForUpdates: 'app:check-for-updates',
   appGetVersion: 'app:get-version',
   appUserDataDir: 'app:user-data-dir',

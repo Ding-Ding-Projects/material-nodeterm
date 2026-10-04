@@ -75,6 +75,7 @@ import {
   xtermOptionsFromSettings,
   SHIFT_ENTER_SEQ,
   CO_ATTACH_MOUSE_SEQ,
+  CO_ATTACH_ALT_SCREEN_SEQ,
   type SessionLife
 } from '../terminal/terminal-config'
 import { useXtermVisualSettings } from '../terminal/useXtermVisualSettings'
@@ -3480,6 +3481,8 @@ export function TerminalNode({
             screen,
             cursor,
             coAttachMouse,
+            coAttachAltScreen,
+            tmuxClient,
             persistent,
             persistenceUnavailable: degradedReason,
             unavailable,
@@ -3740,7 +3743,7 @@ export function TerminalNode({
                   if (!shouldApplyResync(resyncScreen)) return
                   superseded = true
                   relieve(gate.reset())
-                  repaintResync(term, resyncScreen, () => !life.dead)
+                  repaintResync(term, resyncScreen, () => !life.dead, tmuxClient === true)
                 })
               )
             }
@@ -3783,6 +3786,11 @@ export function TerminalNode({
                 // this try/finally — the onExit notice, `term.onData` (the KEYBOARD INPUT path) and the
                 // initialCommand / agent-resume — must still be wired, or the terminal streams output,
                 // looks alive, and silently accepts no input forever.
+                // A joiner's xterm never saw tmux's attach-time `\e[?1049h`
+                // (PtyCreateResult.coAttachAltScreen). Before the paint: entering the alt buffer
+                // clears the display. Not once a resync has superseded the seed: its repaint may
+                // already have landed, and entering the alt buffer now would blank it.
+                if (coAttachAltScreen && !superseded) term.write(CO_ATTACH_ALT_SCREEN_SEQ)
                 if (seedPaint({ replay, superseded, screen }) === 'create-screen') {
                   // Start from a known-clean SGR state; the capture is LF-separated (`capture-pane -p`)
                   // and xterm runs with convertEol:false, so the LFs have to become CRLFs.

@@ -30,6 +30,8 @@ import {
   terminalLineHeight,
   xtermOptionsFromSettings,
   RESYNC_NOTICE,
+  CO_ATTACH_ALT_SCREEN_SEQ,
+  CO_ATTACH_MOUSE_SEQ,
   SHIFT_ENTER_SEQ,
   TERMINAL_LETTER_SPACING_MAX,
   TERMINAL_LETTER_SPACING_MIN,
@@ -731,6 +733,29 @@ describe('repaintResync', () => {
       'write:NEW',
       `write:${RESYNC_NOTICE}`
     ])
+  })
+
+  // `reset()` drops a tmux client out of the alternate buffer and clears its mouse tracking, and
+  // tmux re-sends neither — so a streaming terminal that was resynced would pile its output into
+  // the normal buffer's scrollback and lose wheel scrolling for good.
+  it('re-enters the alt buffer and re-enables the mouse for a tmux client, between reset and paint', () => {
+    const term = fakeTerm()
+    repaintResync(term, 'FRESH', () => true, true)
+    term.parse()
+    expect(term.ops).toEqual([
+      'write:',
+      'reset',
+      `write:${CO_ATTACH_ALT_SCREEN_SEQ}${CO_ATTACH_MOUSE_SEQ}`,
+      'write:FRESH',
+      `write:${RESYNC_NOTICE}`
+    ])
+  })
+
+  it('re-applies nothing for a non-tmux session (a plain shell keeps its normal-buffer history)', () => {
+    const term = fakeTerm()
+    repaintResync(term, 'FRESH', () => true, false)
+    term.parse()
+    expect(term.ops).toEqual(['write:', 'reset', 'write:FRESH', `write:${RESYNC_NOTICE}`])
   })
 
   it('coalescing is per terminal and per round (a later, separate resync still paints)', () => {

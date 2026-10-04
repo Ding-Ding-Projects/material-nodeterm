@@ -203,6 +203,10 @@ The concrete source remediations in this pass are:
 | `destination-usage-pill-account` | Usage pill default account label | `src/renderer/components/UsageIndicator.tsx` | `className="usage-pill__account"` | `usage-pill__account` | Source reviewed; runtime proof pending |
 | `destination-usage-switch-account` | Usage switch Claude account action | `src/renderer/components/UsageIndicator.tsx` | `const switchAction` | `usage-popover__switch` | Source reviewed; runtime proof pending |
 | `destination-updates` | Update status card | `src/renderer/components/UpdateCard.tsx` | `export function UpdateCard` | `update-card` | Source reviewed; runtime proof pending |
+| `destination-updates-no-channel` | Update card no-update-channel state | `src/renderer/components/UpdateCard.tsx` | `status.kind === 'noChannel' && (` | `update-card__body` | Source reviewed; runtime proof pending |
+| `chrome-pending-update` | Title-bar owed-update button | `src/renderer/components/PendingUpdateButton.tsx` | `export function PendingUpdateButton` | `md3-app-bar__update` | Source reviewed; runtime proof pending |
+| `overlay-prepare-update` | Prepare-for-update dialog | `src/renderer/components/PrepareUpdateDialog.tsx` | `export function PrepareUpdateDialog` | `update-prep__list` | Source reviewed; runtime proof pending |
+| `destination-updates-prepare` | Update card prepare-for-update action | `src/renderer/components/UpdateCard.tsx` | `const prepareButton = canPrepare ? (` | `update-card__body` | Source reviewed; runtime proof pending |
 | `destination-announcement` | Announcement banner | `src/renderer/components/AnnouncementBanner.tsx` | `export function AnnouncementBanner` | `announce-banner` | Source reviewed; runtime proof pending |
 | `destination-conflict` | Conflict banner | `src/renderer/components/ConflictBar.tsx` | `export function ConflictBar` | `conflict-bar` | Source reviewed; runtime proof pending |
 | `destination-minecraft` | Minecraft server manager | `src/renderer/components/minecraft/MinecraftServerPanel.tsx` | `export function MinecraftServerPanel` | `mc-body` | Source reviewed; runtime proof pending |
@@ -623,6 +627,8 @@ descendants produced by a component.
 | converter-panel | src/renderer/components/converter/FileConverterPanel.tsx | mapped-callsite |
 | pty-pressure | src/renderer/components/PtyPressureBanner.tsx | mapped-callsite |
 | update-card | src/renderer/components/UpdateCard.tsx | mapped-callsite |
+| pending-update-button | src/renderer/components/PendingUpdateButton.tsx | mapped-callsite |
+| prepare-update-dialog | src/renderer/components/PrepareUpdateDialog.tsx | mapped-callsite |
 | resume-card | src/renderer/components/ResumeCard.tsx | mapped-callsite |
 | announcement-banner | src/renderer/components/AnnouncementBanner.tsx | mapped-callsite |
 | session-memory | src/renderer/components/SessionMemoryPanel.tsx | mapped-callsite |

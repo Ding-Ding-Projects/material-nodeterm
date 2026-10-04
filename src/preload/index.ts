@@ -800,10 +800,18 @@ const api: NodeTerminalApi = {
       ipcRenderer.on(IPC.appUpdateNotAvailable, handler)
       return () => ipcRenderer.removeListener(IPC.appUpdateNotAvailable, handler)
     },
+    onNoChannel: (listener) => {
+      const handler = () => listener()
+      ipcRenderer.on(IPC.appUpdateNoChannel, handler)
+      return () => ipcRenderer.removeListener(IPC.appUpdateNoChannel, handler)
+    },
     check: () => ipcRenderer.send(IPC.appCheckForUpdates),
     getVersion: () => ipcRenderer.invoke(IPC.appGetVersion),
     getPolicy: () => ipcRenderer.invoke(IPC.appUpdatePolicy),
-    restart: () => ipcRenderer.send(IPC.appRestartToUpdate)
+    restart: () => ipcRenderer.send(IPC.appRestartToUpdate),
+    prepareInspect: () => ipcRenderer.invoke(IPC.appUpdatePrepInspect),
+    prepareShutdownHost: () => ipcRenderer.invoke(IPC.appUpdatePrepShutdown),
+    prepareQuit: () => ipcRenderer.send(IPC.appUpdatePrepQuit)
   },
   license: {
     upgrade: (target?: 'pro' | 'seats') => ipcRenderer.invoke(IPC.licenseUpgrade, target),

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -27,21 +27,49 @@ describe('stable session-host runtime', () => {
       executablePath,
       scriptPath,
       userDataDir: path.join(root, 'state'),
-      runtimeDir: path.join(root, 'local-runtime', 'app-1.0.0'),
+      runtimeDir: path.join(root, 'local-runtime'),
     }
   }
 
-  it('publishes a complete runtime outside the replaceable app directory and reuses it', async () => {
+  it('launches a packaged host only from the verified staged copy', async () => {
     const input = fixture()
-    const first = await prepareSessionHostRuntime(input)
-    expect(first.executablePath).toBe(path.join(input.runtimeDir, 'session-host-runtime.exe'))
-    expect(first.scriptPath).toBe(path.join(input.runtimeDir, 'session-host', 'host.cjs'))
-    expect(readFileSync(first.executablePath, 'utf8')).toBe('fixture executable')
-    expect(readFileSync(first.scriptPath, 'utf8')).toBe('fixture host bundle')
-    expect(existsSync(path.join(input.runtimeDir, 'session-host-runtime.json'))).toBe(true)
+    const staged = {
+      dir: path.join(input.runtimeDir, 'app-1.0.0-abc'),
+      exe: path.join(input.runtimeDir, 'app-1.0.0-abc', 'session-host-runtime.exe'),
+      script: path.join(input.runtimeDir, 'app-1.0.0-abc', 'resources', 'session-host', 'host.cjs'),
+    }
+    const stage = vi.fn(async () => staged)
+    const prepared = await prepareSessionHostRuntime({ ...input, appVersion: '1.0.0', stage })
+    expect(prepared).toEqual({ executablePath: staged.exe, scriptPath: staged.script })
+    expect(stage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        execPath: path.resolve(input.executablePath),
+        script: path.resolve(input.scriptPath),
+        runtimeRoot: path.resolve(input.runtimeDir),
+        appVersion: '1.0.0',
+      }),
+    )
+  })
 
-    const second = await prepareSessionHostRuntime(input)
-    expect(second).toEqual(first)
+  it('refuses, never falls back to the install directory, when no staged runtime exists', async () => {
+    const input = fixture()
+    await expect(
+      prepareSessionHostRuntime({ ...input, stage: async () => null }),
+    ).rejects.toThrow('never launched from the replaceable install directory')
+    await expect(
+      prepareSessionHostRuntime({ ...input, stage: () => new Promise(() => {}), waitMs: 5 }),
+    ).rejects.toThrow('never launched from the replaceable install directory')
+  })
+
+  it('keeps the dev launch (no staging root) on the running executable and repo bundle', async () => {
+    const input = fixture()
+    const stage = vi.fn()
+    const prepared = await prepareSessionHostRuntime({ ...input, runtimeDir: null, stage })
+    expect(prepared).toEqual({
+      executablePath: path.resolve(input.executablePath),
+      scriptPath: path.resolve(input.scriptPath),
+    })
+    expect(stage).not.toHaveBeenCalled()
   })
 
   it('refuses a stable runtime inside the replaceable install or persistent-state tree', async () => {
@@ -59,7 +87,7 @@ describe('stable session-host runtime', () => {
 
   it('spawns the stable executable and bundle rather than process.execPath', () => {
     const unref = vi.fn()
-    const spawnImpl = vi.fn(() => ({ unref })) as any
+    const spawnImpl = vi.fn(() => ({ unref, on: vi.fn() })) as any
     spawnSessionHost(
       'C:\\stable\\session-host-runtime.exe',
       'C:\\stable\\session-host\\host.cjs',
@@ -86,6 +114,22 @@ describe('stable session-host runtime', () => {
     }) as any
     const result = spawnSessionHost('exe', 'host.cjs', 'state', spawnImpl)
     expect(result).toEqual({ ok: false, error: expect.objectContaining({ message: 'spawn EACCES' }) })
-    expect(spawnSessionHost('exe', 'host.cjs', 'state', vi.fn(() => ({ unref: vi.fn() })) as any)).toEqual({ ok: true })
+    expect(
+      spawnSessionHost('exe', 'host.cjs', 'state', vi.fn(() => ({ unref: vi.fn(), on: vi.fn() })) as any),
+    ).toEqual({ ok: true })
+  })
+
+  it('listens for the asynchronous spawn error instead of letting it crash the process', () => {
+    let onError: ((error: Error) => void) | undefined
+    const child = {
+      unref: vi.fn(),
+      on: vi.fn((event: string, listener: (error: Error) => void) => {
+        if (event === 'error') onError = listener
+      }),
+    }
+    const result = spawnSessionHost('exe', 'host.cjs', 'state', vi.fn(() => child) as any)
+    expect(child.on).toHaveBeenCalledWith('error', expect.any(Function))
+    onError?.(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
+    expect(result).toEqual({ ok: true, asyncError: expect.objectContaining({ message: 'spawn ENOENT' }) })
   })
 })

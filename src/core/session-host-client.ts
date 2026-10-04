@@ -1,17 +1,26 @@
+import type { TextDeliveryResult } from '../shared/text-delivery'
 // The Electron-main-side client for the session host: one long-lived connection per app process,
 // auto-spawning the host on first use and restoring every live local attachment before allowing
 // ordinary traffic through a replacement connection.
 
 import net from 'net'
+import fs from 'fs'
+import type { PaneOwner } from '../shared/agents/pane-owner-predicate'
 import { randomUUID } from 'crypto'
 // The REAL scheduler, immune to vi.useFakeTimers (which patches the global, not this module's
 // exports): requestOnSocket defers each frame's write by one genuine event-loop turn so queued
 // socket 'close' events dispatch first, even inside fake-timer tests.
 import { setImmediate as realSetImmediate } from 'timers'
 import { sessionHostPaths } from '../session-host/paths'
-import { readExistingSessionHostIdentity } from '../session-host/existing-host-state'
+import {
+  EMPTY_LOCK_STALE_MS,
+  LISTEN_RETRY_BUDGET_MS,
+  readExistingSessionHostIdentity,
+  startupLockState
+} from '../session-host/existing-host-state'
 import {
   SESSION_HOST_PROTOCOL_VERSION,
+  SESSION_HOST_FEATURES,
   LineFramer,
   encodeFrame,
   type SessionHostRequest,
@@ -19,30 +28,85 @@ import {
   type SessionHostFrame,
   type SessionHostSpawnOptions,
   type AttachResult,
+  type HelloResult,
   type HasSessionResult,
   type PaneCommandResult,
   type CaptureResult,
   type KillSessionResult,
   type ExecuteLaunchResult,
-  type ListSessionsResult
+  type ListSessionsResult,
+  type ShutdownResult
 } from '../session-host/protocol'
 import {
   prepareSessionHostRuntime,
   readSessionHostFatalLine,
   resolveSessionHostScript,
   spawnSessionHost,
+  type SpawnSessionHostResult,
 } from './session-host-launcher'
+import { latestClaimSize, type SizeClaim } from './pty-size'
+import { isTerminalReport } from './terminal-reports'
 import type { PreparedAgentLaunch } from './agent-launch'
 
 export interface SessionSubscriber {
   onData(data: string): void
   onExit(exitCode: number): void
+  /** The size the shared pty actually runs at, which may not be this subscriber's own claim: the
+   *  session follows its most recently active viewer (issue #914). Called whenever that may have
+   *  changed for this subscriber — including after its own resize, even when the answer is the
+   *  same, because its renderer has just fitted itself to its own size. Deduplicate downstream. */
+  onSize?(size: { cols: number; rows: number }): void
   /** A previously confirmed attachment failed to restore. This is not an exit: the host's
    * rejection is retained so the owning manager can retire only the affected generation. */
   onAttachError?(error: Error): void
 }
 
 export const SESSION_HOST_REQUEST_TIMEOUT_MS = 10_000
+/** A `shutdown` ends every session (each kill confirmed by the host within its own 20 s bound),
+ *  so it gets a longer deadline than an ordinary request. */
+export const SHUTDOWN_REQUEST_TIMEOUT_MS = 45_000
+
+export type HostUpdateInspection =
+  | { running: false }
+  | { running: true; sessions: string[]; shutdown: boolean }
+
+export type HostShutdownOutcome =
+  | { kind: 'no-host' }
+  | { kind: 'unsupported' }
+  | { kind: 'shut-down'; ended: string[] }
+  | { kind: 'failed'; error: string }
+  | { kind: 'unconfirmed'; error: string }
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    // EPERM: the pid exists but belongs to someone else — still alive as far as a lock goes.
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+/** Bounded wait for a host that answered `shutdown` to be gone: its state file removed (it deletes
+ *  it on the way out) AND, when its pid is known, that pid no longer running. */
+async function waitForHostExit(
+  statePath: string,
+  pid: number | null,
+  waitMs: number
+): Promise<boolean> {
+  const deadline = Date.now() + waitMs
+  for (;;) {
+    let stateGone = false
+    try {
+      fs.statSync(statePath)
+    } catch (error) {
+      stateGone = (error as NodeJS.ErrnoException).code === 'ENOENT'
+    }
+    if (stateGone && (pid === null || !pidAlive(pid))) return true
+    if (Date.now() >= deadline) return false
+    await sleep(100)
+  }
+}
 
 const RECONNECT_DELAYS_MS = [50, 100, 250, 500, 1_000, 2_000] as const
 /**
@@ -106,7 +170,12 @@ type ClientSessionState = {
   protocolVersion?: 1 | 2
   entries: Map<SessionSubscriber, SubscriberEntry>
   pauseOwners: Set<SessionSubscriber>
-  sizeClaims: Map<SessionSubscriber, TerminalSize>
+  /** Each subscriber's vote, with when it was last active and whether it can adapt to a grid
+   *  that is not its own (see `latestClaimSize`). */
+  sizeClaims: Map<SessionSubscriber, SizeClaim>
+  /** What the HOST last said the pty runs at, on a connection that negotiated `geometry`. Null
+   *  until it has answered; never consulted on a connection that did not negotiate it. */
+  hostGeometry: TerminalSize | null
   bufferedData: BufferedFrame[]
   /** Attaches that have actually reached their request phase. Only these may own data arriving
    * before the correlated attach response; a merely queued replacement must not absorb bytes
@@ -131,6 +200,9 @@ function sleep(ms: number): Promise<void> {
 function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }
+
+/** Explicit host refusal: unlike a lost response, the host answered this request. */
+class SessionHostRequestRejectedError extends Error {}
 
 function isTransportUncertainty(value: unknown): boolean {
   const error = asError(value) as NodeJS.ErrnoException
@@ -233,6 +305,23 @@ function normalizeDimension(value: number, fallback: number): number {
 export class SessionHostClient {
   private socket: net.Socket | null = null
   private negotiatedProtocolVersion: 1 | 2 | null = null
+  /** The current connection negotiated the `geometry` feature, so the host pushes the pty's real
+   *  size. On a host that predates it, the size this client last requested IS the pty's size as
+   *  long as this is the host's only connection — the common case, and the one issue #914 is. */
+  private hostGeometryEvents = false
+  /** The current connection negotiated `shutdown` (issue #829): only then may prepare-for-update
+   *  ask the host to end every session and exit. An older host lacks it, and the app then falls
+   *  back to the manual steps — never to killing the host itself. */
+  private hostShutdownFeature = false
+  /** The pid the host published in its state file for the current connection. Read only to
+   *  confirm a shutdown actually ended the process. */
+  private hostPid: number | null = null
+  /** Latched once a `shutdown` was sent: the app is about to quit for an update, and a reconnect
+   *  must not LAUNCH a fresh host (which would re-lock the install directory). Cleared again only
+   *  when the host answered that it could not end everything and is still serving. */
+  private shutDownForUpdate = false
+  /** Monotonic activity clock for `SizeClaim.recency`. */
+  private claimClock = 0
   private nextId = 1
   private readonly pending = new Map<number, PendingEntry>()
   private readonly sessions = new Map<string, ClientSessionState>()
@@ -257,6 +346,10 @@ export class SessionHostClient {
       resourcesPath?: string | null
       repoRoot?: string | null
       runtimeDir?: string | null
+      /** The running app version; keys the staged runtime directory. */
+      appVersion?: string
+      /** Where the staging steps are reported (the desktop appends to session-host.log). */
+      stageLog?: (line: string) => void
       /** Test seam: how long a spawned host may take to come up (default: production budget). */
       startupTimeoutMs?: number
     }
@@ -277,6 +370,7 @@ export class SessionHostClient {
       entries: new Map(),
       pauseOwners: new Set(),
       sizeClaims: new Map(),
+      hostGeometry: null,
       bufferedData: [],
       preAckEntries: new Set(),
       preAckExit: false,
@@ -320,22 +414,52 @@ export class SessionHostClient {
     return false
   }
 
+  /** The size this client asks the host for: its most recently active subscriber's, clamped to any
+   *  subscriber that cannot adapt (issue #914 — see `latestClaimSize`). */
   private effectiveSize(state: ClientSessionState): TerminalSize {
-    let cols = Number.POSITIVE_INFINITY
-    let rows = Number.POSITIVE_INFINITY
-    for (const claim of state.sizeClaims.values()) {
-      cols = Math.min(cols, claim.cols)
-      rows = Math.min(rows, claim.rows)
-    }
     // Every entry receives a claim before it enters the map. This fallback only protects a
     // teardown race from ever putting non-finite geometry on the wire.
-    return {
-      cols: Number.isFinite(cols) ? cols : 80,
-      rows: Number.isFinite(rows) ? rows : 24
+    return latestClaimSize(state.sizeClaims.values()) ?? { cols: 80, rows: 24 }
+  }
+
+  /** Mark `sub` as the most recently active viewer and re-negotiate if that moves the size. */
+  private touchClaim(state: ClientSessionState, sub: SessionSubscriber): void {
+    const claim = state.sizeClaims.get(sub)
+    if (!claim) return
+    const before = this.effectiveSize(state)
+    claim.recency = ++this.claimClock
+    if (!sameSize(before, this.effectiveSize(state))) this.queueReconcile(state)
+  }
+
+  /** Tell every attached subscriber the size the pty runs at. On a geometry-aware connection that
+   *  is the host's own answer; otherwise it is what this client last applied. */
+  private notifySize(state: ClientSessionState): void {
+    const size = this.hostGeometryEvents ? state.hostGeometry : state.appliedSize
+    if (!size) return
+    for (const entry of state.entries.values()) {
+      if (entry.phase !== 'attached') continue
+      try {
+        entry.sub.onSize?.({ cols: size.cols, rows: size.rows })
+      } catch {
+        // One subscriber must not stop its co-attached neighbours from learning the size.
+      }
     }
   }
 
+  /** Record a host-reported size, ignoring anything that is not a positive integer grid. */
+  private recordHostGeometry(state: ClientSessionState, geometry: unknown): boolean {
+    if (!this.hostGeometryEvents || !geometry || typeof geometry !== 'object') return false
+    const { cols, rows } = geometry as { cols?: unknown; rows?: unknown }
+    if (!Number.isInteger(cols) || !Number.isInteger(rows)) return false
+    if ((cols as number) <= 0 || (rows as number) <= 0) return false
+    state.hostGeometry = { cols: cols as number, rows: rows as number }
+    return true
+  }
+
   private async ensureConnected(): Promise<void> {
+    if (this.shutDownForUpdate) {
+      throw new Error('session-host was shut down to prepare for an update; restart nodeterm')
+    }
     // A newly authenticated socket is visible while its reconnect restoration is still running.
     // The barrier wins over the raw socket check so no later request can overtake replay.
     if (this.connecting) return this.connecting
@@ -373,18 +497,30 @@ export class SessionHostClient {
           'or `npm run build` which now runs it too)'
       )
     }
-    const runtime = await prepareSessionHostRuntime({
-      scriptPath: script,
-      userDataDir: this.deps.userDataDir,
-      runtimeDir: this.deps.runtimeDir,
-    })
-    const spawned = spawnSessionHost(runtime.executablePath, runtime.scriptPath, this.deps.userDataDir)
+    // A host that is ALREADY starting needs no second one. Spawning anyway is not harmful (it
+    // exits on the exclusive-create lock), but it is a process per create during the window this
+    // wait exists for — see `hostIsStarting`.
+    let spawned: SpawnSessionHostResult = { ok: true }
+    if (!this.hostIsStarting()) {
+      const runtime = await prepareSessionHostRuntime({
+        scriptPath: script,
+        userDataDir: this.deps.userDataDir,
+        runtimeDir: this.deps.runtimeDir,
+        resourcesPath: this.deps.resourcesPath,
+        appVersion: this.deps.appVersion,
+        log: this.deps.stageLog,
+      })
+      spawned = spawnSessionHost(runtime.executablePath, runtime.scriptPath, this.deps.userDataDir)
+    }
     let lastPublicationError: Error | null = null
     const budget = this.deps.startupTimeoutMs ?? SESSION_HOST_STARTUP_TIMEOUT_MS
-    const deadline = Date.now() + budget
+    const waitStartedAt = Date.now()
+    const deadline = waitStartedAt + budget
     let delay = STARTUP_POLL_MIN_MS
-    while (Date.now() < deadline) {
-      await sleep(Math.min(delay, Math.max(0, deadline - Date.now())))
+    for (;;) {
+      const remaining = deadline - Date.now()
+      // Inside the budget, never sleep past it; past it (a host still starting), keep polling.
+      await sleep(remaining > 0 ? Math.min(delay, remaining) : delay)
       delay = Math.min(STARTUP_POLL_MAX_MS, Math.round(delay * 1.5))
       try {
         if (await this.tryConnectOnce()) {
@@ -398,12 +534,22 @@ export class SessionHostClient {
         if (!this.isTransientPublicationLock(typed)) throw typed
         lastPublicationError = typed
       }
+      if (Date.now() < deadline) continue
+      // Past the ordinary startup budget. Keep waiting ONLY while a host is demonstrably still
+      // starting — an empty startup lock whose mtime it keeps moving. That is a host waiting out
+      // an endpoint someone else still holds (issue #783: a Windows named pipe stayed busy for
+      // ~1.5 min after its owner was killed), and erroring here left every node that mounted in
+      // that window on a permanent "could not be started" until the user clicked Try again.
+      // A lock that stops being touched is abandoned, so this can never wait forever.
+      if (!this.hostIsStarting()) break
+      if (Date.now() - waitStartedAt > LISTEN_RETRY_BUDGET_MS + EMPTY_LOCK_STALE_MS) break
     }
     if (lastPublicationError) throw lastPublicationError
     // Name what is known. A swallowed spawn failure or the host's own `fatal:` log line is the
     // difference between a message that says "try again" and one that says what to fix.
     const detail: string[] = []
     if (!spawned.ok) detail.push(`launch failed: ${spawned.error.message}`)
+    else if (spawned.asyncError) detail.push(`launch failed: ${spawned.asyncError.message}`)
     const fatal = await readSessionHostFatalLine(this.deps.userDataDir)
     if (fatal) detail.push(`host log: ${fatal}`)
     throw new Error(
@@ -414,6 +560,12 @@ export class SessionHostClient {
 
   private isTransientPublicationLock(error: Error): boolean {
     return error.message === 'invalid session-host state: file is empty'
+  }
+
+  /** Is a host process between its exclusive-create lock and publication right now? True only for
+   *  an EMPTY lock it is still touching; a lock nobody moves is abandoned (see startupLockState). */
+  private hostIsStarting(): boolean {
+    return startupLockState(sessionHostPaths(this.deps.userDataDir).statePath) === 'starting'
   }
 
   /** An exclusive-create startup lock is briefly empty before atomic state publication. Retry
@@ -428,6 +580,9 @@ export class SessionHostClient {
         const typed = asError(error)
         if (!this.isTransientPublicationLock(typed)) throw typed
         lastError = typed
+        // Still empty after the small bound — but a host that is heartbeating that lock is simply
+        // still starting, so the launch path's own wait owns it rather than failing this create.
+        if (this.hostIsStarting()) return false
         await sleep(50)
       }
     }
@@ -463,6 +618,8 @@ export class SessionHostClient {
       const framer = new LineFramer()
       const helloId = this.nextId++
       let protocolVersion: 1 | 2 | null = null
+      let geometryEvents = false
+      let shutdownFeature = false
       const finish = (ok: boolean, trailing: SessionHostFrame[] = []): void => {
         if (settled) return
         settled = true
@@ -476,7 +633,9 @@ export class SessionHostClient {
             failHandshake(new Error('session-host hello did not negotiate a protocol version'))
             return
           }
-          this.attachSocket(socket, protocolVersion)
+          this.hostShutdownFeature = shutdownFeature
+          this.hostPid = Number.isInteger(identity.state.pid) ? identity.state.pid : null
+          this.attachSocket(socket, protocolVersion, geometryEvents)
           for (const frame of trailing) this.handleFrame(socket, frame)
         } else {
           try {
@@ -518,7 +677,8 @@ export class SessionHostClient {
               id: helloId,
               cmd: 'hello',
               token,
-              protocolVersion: SESSION_HOST_PROTOCOL_VERSION
+              protocolVersion: SESSION_HOST_PROTOCOL_VERSION,
+              features: [...SESSION_HOST_FEATURES]
             }),
             (error) => {
               if (error) failHandshake(asError(error))
@@ -569,6 +729,9 @@ export class SessionHostClient {
               return
             }
             protocolVersion = negotiated
+            const features = (frame.result as HelloResult | undefined)?.features
+            geometryEvents = Array.isArray(features) && features.includes('geometry')
+            shutdownFeature = Array.isArray(features) && features.includes('shutdown')
             finish(true, frames.slice(index + 1))
           } else {
             failHandshake(new Error(`session-host hello rejected: ${frame.error}`))
@@ -588,9 +751,10 @@ export class SessionHostClient {
     })
   }
 
-  private attachSocket(socket: net.Socket, protocolVersion: 1 | 2): void {
+  private attachSocket(socket: net.Socket, protocolVersion: 1 | 2, geometryEvents: boolean): void {
     this.socket = socket
     this.negotiatedProtocolVersion = protocolVersion
+    this.hostGeometryEvents = geometryEvents
     this.everConnected = true
     const framer = new LineFramer()
     socket.on('data', (chunk: Buffer) => {
@@ -618,7 +782,10 @@ export class SessionHostClient {
     if (wasCurrent) {
       this.socket = null
       this.negotiatedProtocolVersion = null
+      this.hostGeometryEvents = false
       for (const state of this.sessions.values()) {
+        // The next connection re-learns the size from its own attach replies.
+        state.hostGeometry = null
         if (state.appliedSocket !== socket) continue
         state.appliedSocket = null
         state.appliedAttached = false
@@ -694,6 +861,8 @@ export class SessionHostClient {
       }
       if (frame.type === 'data') {
         this.deliverData(state, frame.data)
+      } else if (frame.type === 'geometry') {
+        if (this.recordHostGeometry(state, frame)) this.notifySize(state)
       } else {
         this.handleExit(state, frame.exitCode)
       }
@@ -705,7 +874,7 @@ export class SessionHostClient {
     this.pending.delete(frame.id)
     if (entry.timer) clearTimeout(entry.timer)
     if (frame.ok) entry.resolve(frame.result)
-    else entry.reject(new Error(frame.error))
+    else entry.reject(new SessionHostRequestRejectedError(frame.error))
   }
 
   private deliverData(state: ClientSessionState, data: string): void {
@@ -786,7 +955,9 @@ export class SessionHostClient {
 
   private async request<T>(
     request: SessionHostRequestBody,
-    onSuccess?: (result: T, socket: net.Socket) => void
+    onSuccess?: (result: T, socket: net.Socket) => void,
+    onSent?: () => void,
+    timeoutMs = SESSION_HOST_REQUEST_TIMEOUT_MS
   ): Promise<T> {
     // A peer-initiated close races the client's own 'close' event: a cached socket can look live
     // here while the peer already hung up, and a frame written into that gap fails (EPIPE) for
@@ -808,7 +979,7 @@ export class SessionHostClient {
       if (!socket) throw new Error('session-host: not connected')
       const connectedSocket = socket as net.Socket
       try {
-        return await this.requestOnSocket(connectedSocket, request, onSuccess)
+        return await this.requestOnSocket(connectedSocket, request, onSuccess, onSent, timeoutMs)
       } catch (error) {
         if (!(error instanceof SessionHostRequestNotDeliveredError)) throw error
         const deliveryError = error as SessionHostRequestNotDeliveredError
@@ -823,7 +994,9 @@ export class SessionHostClient {
   private requestOnSocket<T>(
     socket: net.Socket,
     request: SessionHostRequestBody,
-    onSuccess?: (result: T, socket: net.Socket) => void
+    onSuccess?: (result: T, socket: net.Socket) => void,
+    onSent?: () => void,
+    timeoutMs = SESSION_HOST_REQUEST_TIMEOUT_MS
   ): Promise<T> {
     if (this.socket !== socket || socket.destroyed) {
       return Promise.reject(
@@ -856,7 +1029,7 @@ export class SessionHostClient {
         this.pending.delete(id)
         pending.reject(deadline)
         this.dropSocket(socket, deadline, true)
-      }, SESSION_HOST_REQUEST_TIMEOUT_MS)
+      }, timeoutMs)
       pending.timer.unref?.()
       this.pending.set(id, pending)
       // The send is deferred one REAL event-loop turn (immune to fake timers — the deadline above
@@ -871,6 +1044,7 @@ export class SessionHostClient {
           return
         }
         pending.sent = true
+        onSent?.()
         try {
           socket.write(encodeFrame(full), (error) => {
             // A response may beat a late write callback. Identity-check this exact pending entry so
@@ -951,6 +1125,7 @@ export class SessionHostClient {
             state.protocolVersion = protocolVersion
             state.generation = result.generation ?? expectedGeneration
             if (state.generation) this.sessionGenerations.set(state.name, state.generation)
+            this.recordHostGeometry(state, result.geometry)
             this.applyAttachment(state, replaySocket, paused, size)
             if (result.screen && state.appliedSocket === replaySocket) {
               this.deliverData(state, RECONNECT_REPAINT_PREFIX + result.screen)
@@ -1060,6 +1235,7 @@ export class SessionHostClient {
       state.releasePending = false
       this.flushData(state)
     }
+    this.notifySize(state)
   }
 
   private async reconcileState(state: ClientSessionState): Promise<void> {
@@ -1155,7 +1331,8 @@ export class SessionHostClient {
       phase: 'attaching'
     }
     state.entries.set(sub, entry)
-    state.sizeClaims.set(sub, initialSize)
+    // A new viewer is the most recently active one, exactly as a freshly attached tmux client is.
+    state.sizeClaims.set(sub, { ...initialSize, recency: ++this.claimClock })
 
     return this.enqueueState(state, async () => {
       if (this.sessions.get(name) !== state || state.entries.get(sub) !== entry) {
@@ -1250,6 +1427,7 @@ export class SessionHostClient {
         state.protocolVersion = protocolVersion
         state.generation = result.generation ?? expectedGeneration
         if (state.generation) this.sessionGenerations.set(name, state.generation)
+        this.recordHostGeometry(state, result.geometry)
         if (replacementToken && result.fresh) {
           if (this.replacementTokens.get(name) === replacementToken) {
             this.replacementTokens.delete(name)
@@ -1378,6 +1556,10 @@ export class SessionHostClient {
     const state = this.sessions.get(name)
     const entry = state?.entries.get(sub)
     if (!state || !entry) return
+    // Typing makes a viewer the active one, as it does a tmux client. An emulator's automatic
+    // answer to a query does not: every attached xterm answers, and counting those would hand the
+    // session to whichever viewer answered last.
+    if (!isTerminalReport(data)) this.touchClaim(state, sub)
     void this.enqueueState(state, async () => {
       if (this.sessions.get(name) !== state || state.entries.get(sub) !== entry) return
       try {
@@ -1389,14 +1571,34 @@ export class SessionHostClient {
     })
   }
 
-  resize(name: string, sub: SessionSubscriber, cols: number, rows: number): void {
+  /**
+   * Update `sub`'s claim. A claim that actually CHANGES makes `sub` the most recently active viewer
+   * (a phone dismissing its keyboard is the case issue #914 is about); re-reporting the same size
+   * does not, or every re-fit would steal the session. `bounding` marks a viewer that cannot adapt
+   * to any grid but its own, which caps the size for everyone (see `latestClaimSize`).
+   */
+  resize(
+    name: string,
+    sub: SessionSubscriber,
+    cols: number,
+    rows: number,
+    bounding = false
+  ): void {
     const state = this.sessions.get(name)
     if (!state || !state.entries.has(sub)) return
-    const previous = state.sizeClaims.get(sub) ?? { cols: 80, rows: 24 }
-    state.sizeClaims.set(sub, {
+    const previous = state.sizeClaims.get(sub) ?? { cols: 80, rows: 24, recency: 0 }
+    const next: SizeClaim = {
       cols: normalizeDimension(cols, previous.cols),
-      rows: normalizeDimension(rows, previous.rows)
-    })
+      rows: normalizeDimension(rows, previous.rows),
+      recency: previous.recency,
+      bounding
+    }
+    if (next.cols !== previous.cols || next.rows !== previous.rows) {
+      next.recency = ++this.claimClock
+    }
+    state.sizeClaims.set(sub, next)
+    // Always reconcile, even for an unchanged claim: it ends in `notifySize`, which is how a view
+    // that just fitted itself to its own size learns the pty is running at someone else's.
     this.queueReconcile(state)
   }
 
@@ -1417,12 +1619,16 @@ export class SessionHostClient {
     }
   }
 
-  async sendKeys(name: string, text: string, enter: boolean): Promise<boolean> {
+  async sendKeys(name: string, text: string, enter: boolean): Promise<TextDeliveryResult> {
+    let sent = false
     try {
-      await this.request({ cmd: 'sendKeys', name, text, enter })
-      return true
-    } catch {
-      return false
+      const result = await this.request<{ delivery?: TextDeliveryResult } | undefined>({ cmd: 'sendKeysV2', name, text, enter }, undefined, () => { sent = true })
+      // A malformed success cannot prove submission; never retry a possibly accepted paste.
+      return result?.delivery === true || result?.delivery === false ? result.delivery : 'pasted-not-submitted'
+    } catch (error) {
+      // A frame handed to the socket may already have pasted. A lost reply is not a
+      // pre-input refusal: surface uncertainty and never invite an automatic resend.
+      return sent && !(error instanceof SessionHostRequestRejectedError) ? 'pasted-not-submitted' : false
     }
   }
 
@@ -1433,6 +1639,24 @@ export class SessionHostClient {
     } catch {
       return null
     }
+  }
+
+  async messageOwner(name: string): Promise<PaneOwner | null> {
+    try {
+      return await this.request<PaneOwner | null>({ cmd: 'messageOwnerV1', name })
+    } catch { return null } // Older live hosts refuse; never replace them or use name-only input.
+  }
+
+  async messagePasteReady(name: string): Promise<boolean> {
+    try {
+      return await this.request<boolean>({ cmd: 'messagePasteReadyV1', name }) === true
+    } catch { return false }
+  }
+
+  async messageEnvelope(name: string, envelope: string, expected: PaneOwner): Promise<boolean> {
+    try {
+      return await this.request<boolean>({ cmd: 'messageEnvelopeV1', name, envelope, expected }) === true
+    } catch { return false }
   }
 
   async capture(name: string, full: boolean): Promise<string> {
@@ -1686,6 +1910,87 @@ export class SessionHostClient {
     state.appliedPaused = false
     state.appliedSize = null
     this.stopReconnectIfIdle()
+  }
+
+  /**
+   * Prepare-for-update, step 1 (issue #829): is a host running, which sessions does it hold, and
+   * can it shut itself down? NEVER launches a host: with no published state file there is nothing
+   * to ask, and starting one just to answer would re-lock the very directory the update needs.
+   */
+  async inspectForUpdate(): Promise<HostUpdateInspection> {
+    const paths = sessionHostPaths(this.deps.userDataDir)
+    const identity = readExistingSessionHostIdentity(paths.statePath, {
+      expectedEndpoint: paths.endpoint,
+      expectedTokenPath: paths.tokenPath
+    })
+    if (identity.kind === 'absent') return { running: false }
+    await this.ensureConnected()
+    const result = await this.request<ListSessionsResult>({ cmd: 'listSessions' })
+    return { running: true, sessions: result.names, shutdown: this.hostShutdownFeature }
+  }
+
+  /**
+   * Prepare-for-update, final step (issue #829): ask the host to end every session's process tree
+   * and exit, then confirm the process is actually gone. Every answer short of `shut-down` leaves
+   * the caller with a host that may still hold the install directory, so it must not quit and
+   * claim the update can proceed. There is deliberately no fallback that kills the host process:
+   * a host without the feature answers `unsupported`, and the caller shows the manual steps.
+   */
+  async shutdownForUpdate(options: { timeoutMs?: number; exitWaitMs?: number } = {}): Promise<
+    HostShutdownOutcome
+  > {
+    const paths = sessionHostPaths(this.deps.userDataDir)
+    const identity = readExistingSessionHostIdentity(paths.statePath, {
+      expectedEndpoint: paths.endpoint,
+      expectedTokenPath: paths.tokenPath
+    })
+    if (identity.kind === 'absent') return { kind: 'no-host' }
+    await this.ensureConnected()
+    if (!this.hostShutdownFeature) return { kind: 'unsupported' }
+    const socket = this.socket
+    if (!socket) return { kind: 'unconfirmed', error: 'session-host connection lost' }
+    const pid = this.hostPid
+    // Latched BEFORE the request leaves, so a connection that drops mid-shutdown cannot reconnect
+    // into a freshly launched host. The request itself goes on the socket already in hand (never
+    // through `request`, whose reconnect path the latch now refuses) and is never resent.
+    this.shutDownForUpdate = true
+    let result: ShutdownResult
+    try {
+      result = await this.requestOnSocket<ShutdownResult>(
+        socket,
+        { cmd: 'shutdown' },
+        undefined,
+        undefined,
+        options.timeoutMs ?? SHUTDOWN_REQUEST_TIMEOUT_MS
+      )
+    } catch (error) {
+      const message =
+        error instanceof SessionHostRequestNotDeliveredError
+          ? error.original.message
+          : asError(error).message
+      // The host's own refusal: it said which sessions it could not end, and it is still serving.
+      if (/could not end|already shutting down|shutdown requires/.test(message)) {
+        this.shutDownForUpdate = false
+        return { kind: 'failed', error: message }
+      }
+      // The frame provably never left: nothing was asked, the host is untouched and still usable.
+      if (error instanceof SessionHostRequestNotDeliveredError) {
+        this.shutDownForUpdate = false
+        return { kind: 'unconfirmed', error: message }
+      }
+      // A lost reply or a timeout says nothing about whether the host is still up. The latch STAYS
+      // set: if it did exit, a reconnect must not launch a replacement that re-locks the install
+      // directory. The caller tells the user to quit and check; a restart clears the latch.
+      return { kind: 'unconfirmed', error: message }
+    }
+    const gone = await waitForHostExit(paths.statePath, pid, options.exitWaitMs ?? 10_000)
+    if (!gone) {
+      return {
+        kind: 'unconfirmed',
+        error: 'the session host reported its sessions ended but has not exited yet'
+      }
+    }
+    return { kind: 'shut-down', ended: result.ended }
   }
 
   async listSessions(): Promise<string[]> {

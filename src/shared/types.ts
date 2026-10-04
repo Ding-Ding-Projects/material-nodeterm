@@ -329,6 +329,28 @@ export interface PtyCreateResult {
    */
   coAttachMouse?: boolean
   /**
+   * A TMUX-BACKED joiner must switch its fresh xterm to the ALTERNATE buffer before painting.
+   * tmux emits `\e[?1049h` to a client only at that client's own attach; a joiner (a renderer
+   * reload re-joins the same still-alive tmux client, and the kanban card modal is always a
+   * joiner) never sees it, so its xterm stayed on the NORMAL buffer: up to 10k lines of tmux's
+   * scrolled output piled up there and every output frame forced a layout (xterm's viewport
+   * resync) — measured 16.1% vs 7.3% total CPU for one terminal streaming 20 lines/s.
+   * Absent for plain-shell and session-host sessions: there the pty IS the shell and its
+   * normal-buffer scrollback is the only history it has.
+   */
+  coAttachAltScreen?: boolean
+  /**
+   * This session's client is a real TMUX client (local or remote; never a session-host session or a
+   * plain shell) — set on EVERY create, the solo spawn as well as a join. A `pty:resync` repaint
+   * (`repaintResync`) calls `term.reset()`, which drops the emulator back to the NORMAL buffer and
+   * clears mouse tracking; tmux does not re-send either (it emitted them once, at attach), so the
+   * renderer re-applies `CO_ATTACH_ALT_SCREEN_SEQ` + `CO_ATTACH_MOUSE_SEQ` after the reset when
+   * this is set. Same condition as `coAttachAltScreen`, asked of every session rather than only a
+   * joiner. Absent = unknown (an older core or relay peer) ⇒ the renderer re-applies nothing, the
+   * pre-field behavior.
+   */
+  tmuxClient?: boolean
+  /**
    * This session is TMUX-BACKED (local or remote) — it survives losing this client, so killing our
    * pty client only detaches us and everything running in the session keeps going.
    *
@@ -4181,6 +4203,12 @@ export interface UpdateApi {
   onError(listener: (message: string) => void): () => void
   /** No newer version is available (also the dev no-op reply to check()). Returns unsubscribe. */
   onNotAvailable(listener: () => void): () => void
+  /**
+   * This build has no update channel and can never learn whether a newer version exists.
+   * Deliberately separate from `onNotAvailable`: "we looked and you are current" and "we cannot
+   * look" are different facts with different remedies. Returns unsubscribe.
+   */
+  onNoChannel(listener: () => void): () => void
   /** Trigger a manual update check. */
   check(): void
   /** The running app version. */
@@ -4189,6 +4217,13 @@ export interface UpdateApi {
   getPolicy(): Promise<UpdatePolicy>
   /** Quit and install the staged update. */
   restart(): void
+  /** Prepare-for-update (Windows session host): what the running host holds. Never launches a
+   *  host. Answers `unsupported` off Windows and in the Server Edition. */
+  prepareInspect(): Promise<import('./update-prep').UpdatePrepInspection>
+  /** Prepare-for-update: ask the host to end every session and exit, and confirm it did. */
+  prepareShutdownHost(): Promise<import('./update-prep').UpdatePrepShutdown>
+  /** Prepare-for-update: quit the app (no quit confirmation) once the host is gone. */
+  prepareQuit(): void
 }
 
 /** A single news/announcement item, fetched from the remote announcements feed. */

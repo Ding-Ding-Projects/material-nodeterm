@@ -425,6 +425,24 @@ const FEATURES = [
     docs: ['docs/features/terminals/word-separators.md'],
   },
   {
+    id: 'windows-session-host-runtime',
+    label: 'Windows session host staged runtime, updates and messaging',
+    files: [
+      'src/core/session-host-runtime.ts',
+      'src/core/native-windows-pane.ts',
+      'src/renderer/components/PrepareUpdateDialog.tsx',
+      'src/renderer/components/PendingUpdateButton.tsx',
+    ],
+    contentChecks: [
+      ['src/core/session-host-runtime.ts', 'export async function stageHostRuntime('],
+      ['src/core/session-host-launcher.ts', 'a packaged host is never launched from the'],
+      ['src/core/native-windows-pane.ts', 'export class NativeWindowsPane'],
+      ['src/renderer/components/PrepareUpdateDialog.tsx', 'export function PrepareUpdateDialog('],
+      ['src/shared/update-platform.ts', 'export function updateDelivery('],
+    ],
+    docs: ['docs/features/terminals/windows-session-host-runtime.md'],
+  },
+  {
     id: 'windows-session-host',
     label: 'Windows session host',
     files: [

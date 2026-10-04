@@ -218,6 +218,7 @@ import {
 } from '../core/model-gateway-credentials'
 import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
 import { initUpdater } from './updater'
+import { registerUpdatePrepIpc } from './update-prep'
 import {
   reportDesktopBootstrapFailure
 } from './squirrel-lifecycle'
@@ -2656,8 +2657,10 @@ app.whenReady().then(async () => {
   // src/main/agent-messaging.ts for the whole map.
   const messagingDeps: AgentMessagingDeps = {
     paneOwner: (id) => ptyManager.paneOwner(id),
-    sendEnvelope: (id, envelope) => ptyManager.sendEnvelope(id, envelope),
-    hasLiveSession: (id) => ptyManager.hasLiveSession(id),
+    sendEnvelope: (id, envelope, expected) => ptyManager.sendEnvelope(id, envelope, expected),
+    envelopePasteReady: (id) => ptyManager.envelopePasteReady(id),
+    // Attached OR released-but-running: see AgentMessagingDeps.hasLiveSession.
+    hasLiveSession: (id) => ptyManager.sessionExists(id),
     projects: () => workspaceStore.persistedCanvases(),
     isRemoteNode: (id) => !!ptyManager.sshRemoteForNode(id),
     // GLOBAL CONSTRAINT 11: every delivery path is gated behind the per-project switch, OFF by
@@ -3013,6 +3016,17 @@ app.whenReady().then(async () => {
   initUpdater(() => {
     quitting = true
     skipQuitConfirmation = true
+  })
+  // Prepare-for-update (Windows session host). The user confirmed the whole flow in its own
+  // dialog, so the quit at its end skips the ordinary quit confirmation, like restart-to-update.
+  registerUpdatePrepIpc({
+    mainWebContents: () => getMainWindow()?.webContents,
+    persistentSessions: () => settingsStore.get().tmuxEnabled !== false,
+    quit: () => {
+      quitting = true
+      skipQuitConfirmation = true
+      app.quit()
+    }
   })
   // Mirror live agent status to <userData>/agent-status.json for the external mobile host agent.
   initAgentStatusMirror()

@@ -87,6 +87,22 @@
   唔會重用已存在嘅 id；揀模型時用 `grok models` 嘅清單；session 對照表重開後仍然記得。
   relay 分頁暫時仲係用睇緊嗰部機自己嘅 grok 探測結果，同 Claude 一樣未經主機。
 
+- Port the upstream Windows session-host and updater family (issue #225, wave 1). An installed
+  build runs the session host only from a verified private copy of its runtime under
+  `%LOCALAPPDATA%\node-terminal-session-host-runtime` (executable, DLLs, ICU data, resource paks,
+  locales and the host bundle, hash-verified and smoke-run before a marker makes it launchable);
+  a failed staging refuses the launch instead of running the host from the install directory.
+  "Prepare for update…" ends the host on purpose so the next launch starts the updated one: busy
+  agents block it, the confirmation lists what stops, and the app quits only after the host
+  confirms its new `shutdown` command finished; nodes are never deleted. A build with no update
+  channel says so instead of "You're up to date", and an owed update keeps an "Update" button in
+  the top app bar. Shared session-host sessions follow the most recently active viewer, agent
+  messages reach direct Windows PTYs and session-host panes with process re-attestation and a
+  second-write submit, the host's launch delivery verifies both ends of the echoed line and
+  clears it with Escape in Windows shells, tmux co-attach joiners and resync repaints re-enter the
+  alternate screen, the managed launcher PATH lands on Windows' `Path`, and the node-pty patch
+  reads and writes through one descriptor. See
+  `docs/features/terminals/windows-session-host-runtime.md`.
 - Port the first upstream security tranche (issue #225, upstream `1bf6fadb`, `60714074`, `fee5b244`,
   `23a7282b`, `9fa879d0`, `2d3e54cb`): a plain terminal keeps its inherited provider credentials in
   subscription mode (both strip sites in this fork); a Linux desktop with no keyring stores the

@@ -1,4 +1,5 @@
 import { DEFAULT_WORD_SEPARATORS, tmuxWordSeparatorsLine } from '@shared/word-separators'
+import type { TextDeliveryResult } from '../shared/text-delivery'
 import os from 'os'
 import fs from 'fs'
 import path from 'path'
@@ -129,6 +130,9 @@ import {
   sessionHostKillSession,
   sessionHostListSessions,
   sessionHostPaneCommand,
+  sessionHostMessageOwner,
+  sessionHostMessagePasteReady,
+  sessionHostMessageEnvelope,
   sessionHostSendKeys,
   sessionHostSupported,
   SessionHostProtocolCompatibilityError
@@ -139,6 +143,8 @@ import {
   type ResolvedWindowsTerminalProfile,
   type WindowsTerminalProfileResolver
 } from './windows-terminal-profiles'
+import { NativeWindowsPane } from './native-windows-pane'
+import { envPathKey } from './env-path-key'
 import type { ProjectSpawnOverrides, ProjectSpawnOverridesReader } from './project-spawn-overrides'
 
 // How often we snapshot a live tmux session's scrollback to disk, so a machine reboot (which
@@ -541,6 +547,7 @@ function normalizeSize(cols: number, rows: number): PtySize {
 
 interface Session {
   proc: pty.IPty
+  nativeWindowsPane?: NativeWindowsPane
   /** Every VIEW watching this session, keyed by the composite `(ClientId, viewerId)` (`SubKey`).
    *  Co-attach: ONE pty and ONE tmux client, N subscribers — a second client on the same persistKey
    *  (or the SAME client's second view, e.g. the kanban card modal) joins this set instead of
@@ -584,6 +591,17 @@ interface Session {
   /** Detached sinks: when set, output/exit ALSO go to these callbacks (relay host). */
   onData?: (data: string) => void
   onExit?: (exitCode: number) => void
+  onSinkSize?: (size: PtySize) => void
+  sinkAdapts?: boolean
+  /** The size the relay sink is believed to render (its own last report, or the last size we told
+   *  it). The sink analogue of `shown`. */
+  sinkShown?: PtySize
+  /** session-host only: the size the HOST says the shared pty runs at, which follows the most
+   *  recently active viewer across every `Session` of the node (issue #914). Undefined until the
+   *  backend has answered. */
+  backendSize?: PtySize
+  /** session-host only: whether `appliedSize` was pushed as a ceiling (see `DetachedSinks`). */
+  appliedBounding?: boolean
   /** Pending output chunks, coalesced into one IPC message per flush. */
   buf: string[]
   bufBytes: number
@@ -645,6 +663,14 @@ interface Session {
 export interface DetachedSinks {
   onData(data: string): void
   onExit(exitCode: number): void
+  /** The size the pty actually runs at, when that is not what this sink reported. Only a
+   *  session-host session can disagree with its own viewer: it follows the most recently active
+   *  viewer of the session, which may be a desktop node in another `Session` (issue #914). */
+  onSize?(size: PtySize): void
+  /** The sink's viewer renders whatever size `onSize` reports (letterbox or clip). False — every
+   *  phone build today, which ignores the relay's `Resized` frame — makes the sink's own size a
+   *  CEILING for the shared session: a viewer that cannot adapt would wrap a wider pty's output. */
+  adaptsToSize?: boolean
 }
 
 /**
@@ -913,7 +939,10 @@ export class PtyManager {
    * persisted node this process has ever released: the same order as the session map itself, and
    * rewritten rather than appended on every subsequent release of the same node.
    */
-  private released = new Map<string, { sessionId: string; size?: PtySize; remote: boolean }>()
+  private released = new Map<
+    string,
+    { sessionId: string; size?: PtySize; remote: boolean; sessionHost?: boolean }
+  >()
   /**
    * The ONE control-mode client this manager keeps for background WRITES, plus the node whose tmux
    * session it is attached to (see `backgroundWrite` / `sharedClientFor`).
@@ -1045,7 +1074,10 @@ export class PtyManager {
       this.released.set(session.persistKey, {
         sessionId,
         size: session.appliedSize,
-        remote: !!session.sshRemote
+        remote: !!session.sshRemote,
+        // Which backend still holds the session after this client goes. Agent messaging reaches a
+        // released session by NAME, and must ask the backend that owns it (`sessionHostOwns`).
+        sessionHost: !!session.sessionHost
       })
     releasePty(session.proc as ReleasablePty)
     this.forget(sessionId, session)
@@ -2014,18 +2046,27 @@ export class PtyManager {
     // our tmux always runs `mouse on`, so enabling these unconditionally matches its client state.
     // Rides `base` so it reaches the renderer on BOTH the resized and screen-painted branches.
     const coAttachMouse = existing.persistKey ? true : undefined
+    // Alt-screen: tmux-backed ONLY, and `tmuxBacked` alone is not that gate — a session-host session
+    // is also recorded tmuxBacked (and carries a persistKey), and switching it (or a plain shell) to
+    // the alternate buffer would hide its only scrollback. See PtyCreateResult.coAttachAltScreen.
+    const coAttachAltScreen = existing.tmuxBacked && !existing.sessionHost ? true : undefined
     // Same source, different question (and different consumer): a joiner needs to know whether the
     // session it landed on survives losing a client, because its own unmount may park it.
     const persistent = !!existing.persistKey
+    // The resync repaint's question, asked of every session (PtyCreateResult.tmuxClient) — for a
+    // join it is the alt-screen gate verbatim.
+    const tmuxClient = coAttachAltScreen
     const base: PtyCreateResult = existing.accountFallback
       ? {
           sessionId: existingId,
           fresh: false,
           accountFallback: true,
           coAttachMouse,
+          coAttachAltScreen,
+          tmuxClient,
           persistent
         }
-      : { sessionId: existingId, fresh: false, coAttachMouse, persistent }
+      : { sessionId: existingId, fresh: false, coAttachMouse, coAttachAltScreen, tmuxClient, persistent }
     if (resized) return Promise.resolve(base) // tmux is redrawing this client — do not paint twice
     // An empty capture (plain shell — no tmux to capture; a tmux/ssh blip) is OMITTED, never sent
     // as '': the renderer must not reset a terminal for nothing. A plain-shell joiner therefore
@@ -2318,10 +2359,13 @@ export class PtyManager {
     // which is what the renderer's cache-dispose levers must not assume. See PtyCreateResult.
     const persistent = !!spawned?.persistKey
     const degraded = persistenceUnavailable && !persistent ? { persistenceUnavailable } : {}
+    // A tmux client (local or remote), so a resync's `term.reset()` must re-apply the modes tmux
+    // emitted at attach — see PtyCreateResult.tmuxClient. Same gate as the join's alt screen.
+    const tmuxClient = spawned?.tmuxBacked && !spawned.sessionHost ? { tmuxClient: true as const } : {}
     if (accountFallback) {
-      return { sessionId, fresh, accountFallback, persistent, ...degraded, ...(screen ? { screen } : {}) }
+      return { sessionId, fresh, accountFallback, persistent, ...degraded, ...tmuxClient, ...(screen ? { screen } : {}) }
     }
-    return { sessionId, fresh, persistent, ...degraded, ...(screen ? { screen } : {}) }
+    return { sessionId, fresh, persistent, ...degraded, ...tmuxClient, ...(screen ? { screen } : {}) }
   }
 
   /** Does the node's remote tmux session exist (over the project's ControlMaster)? Async so the
@@ -2392,6 +2436,25 @@ export class PtyManager {
       if (session.persistKey === persistKey) return session
     }
     return undefined
+  }
+
+  /**
+   * Does the Windows session host own this node's persistent session, whether or not a client of
+   * ours is attached to it right now?
+   *
+   * A live generation answers for itself. A RELEASED one (park expiry, offscreen release) has no
+   * `Session` left, but the host keeps the session running, so the release record answers. A node
+   * this process never attached (an app restart, a project not yet opened) mirrors `sendText`'s
+   * rule: with no local tmux, the session host is this machine's persistence backend.
+   *
+   * Without the released leg, every messaging probe of a released session-host node fell through
+   * to the POSIX tmux branch, which on Windows answers null: the agent was alive and unreachable.
+   */
+  private sessionHostOwns(persistKey: string, live: Session | undefined): boolean {
+    if (live) return !!live.sessionHost
+    const known = this.released.get(persistKey)
+    if (known) return known.sessionHost === true
+    return !this.tmuxPath && this.getSettings().tmuxEnabled && sessionHostSupported()
   }
 
   /** The exact live generation for a node id, including a non-persistent indexed plain shell. */
@@ -2713,7 +2776,11 @@ export class PtyManager {
     // terminal, and every other agent, sees the PATH it always saw. The launcher itself falls back
     // to the bare CLI, so a session that gets the PATH but no identity is still a working session.
     if (hasSharedIdentity((options.agentBaseId ?? options.agentId ?? 'claude') as AgentId) && !options.sshRemote) {
-      env.PATH = `${codexLauncherDir()}${path.delimiter}${env.PATH ?? ''}`
+      // Prepend onto the key the environment ALREADY uses: a spread of Windows' `process.env` spells
+      // it `Path`, and reading only `PATH` dropped the user's path (the launcher then could not find
+      // the CLI), while writing `PATH` beside it handed the child two equal variables.
+      const pathKey = envPathKey(env)
+      env[pathKey] = `${codexLauncherDir()}${path.delimiter}${env[pathKey] ?? ''}`
     }
 
     // (no accountId) set nothing HERE — but they are not "untouched" on the tmux leg:
@@ -3261,6 +3328,9 @@ export class PtyManager {
     const spawnSub = clientId === null ? null : subKey(clientId, options.viewerId ?? PRIMARY_VIEWER)
     const session: Session = {
       proc,
+      nativeWindowsPane: process.platform === 'win32' && !persisted
+        ? new NativeWindowsPane(proc, { ...options, scrollback: settings.tmuxScrollback })
+        : undefined,
       subscribers: spawnSub === null ? new Set<SubKey>() : new Set<SubKey>([spawnSub]),
       sizes:
         spawnSub === null
@@ -3272,11 +3342,15 @@ export class PtyManager {
       // A detached (relay-served) pty is left unseeded: its first `resize` must reach the pty,
       // exactly as before, because its sink never reports a size at create time.
       appliedSize: clientId === null ? undefined : spawnSize,
+      // The spawn's claim went to the backend unbounded (a renderer view adapts to any size).
+      appliedBounding: false,
       nodeId: options.persistKey,
       agentId: options.agentId,
       indexKey: options.persistKey && !sinks ? options.persistKey : undefined,
       onData: sinks?.onData,
       onExit: sinks?.onExit,
+      onSinkSize: sinks?.onSize,
+      sinkAdapts: sinks?.adaptsToSize === true,
       buf: [],
       bufBytes: 0,
       flushTimer: null,
@@ -3320,11 +3394,20 @@ export class PtyManager {
     if (session.indexKey && !session.sessionHost && this.pendingRecycle.has(session.indexKey))
       this.fireRecycled(session.indexKey, true)
 
+    const hostPty = useSessionHost ? (proc as unknown as Partial<SessionHostPty>) : null
+    if (typeof hostPty?.onSize === 'function') {
+      hostPty.onSize((size) => {
+        if (this.sessions.get(sessionId) !== session) return
+        this.applyBackendSize(sessionId, session, size)
+      })
+    }
+
     proc.onData((data) => {
       // A session-host attach can fail after the shim has already delivered startup bytes. Once
       // rollback removes this exact generation, late callbacks must not recreate its flush timer
       // or leak bytes into a replacement that happens to reuse the same node id.
       if (this.sessions.get(sessionId) !== session) return
+      session.nativeWindowsPane?.recordOutput(data)
       this.queueData(sessionId, session, data)
     })
 
@@ -3445,6 +3528,7 @@ export class PtyManager {
   /** Drop a dead/released session from both indexes. Keyed off `indexKey` (not `persistKey`,
    *  which is only set for tmux-PERSISTED sessions) so a plain-shell node is un-indexed too. */
   private forget(sessionId: string, session: Session): void {
+    session.nativeWindowsPane?.dispose()
     this.sessions.delete(sessionId)
     if (session.indexKey && this.byPersistKey.get(session.indexKey) === sessionId)
       this.byPersistKey.delete(session.indexKey)
@@ -3510,10 +3594,15 @@ export class PtyManager {
     // pty at whatever size it has. Resizing it to a default here would garble the parked xterms'
     // buffers and the tmux pane behind them for no viewer's benefit.
     if (!size) return
+    if (session.sessionHost) {
+      this.applySessionHostSize(sessionId, session, size)
+      return
+    }
     if (session.appliedSize?.cols !== size.cols || session.appliedSize?.rows !== size.rows) {
       session.appliedSize = size
       try {
         session.proc.resize(size.cols, size.rows)
+        session.nativeWindowsPane?.resize(size.cols, size.rows)
       } catch {
         // resize can throw if the proc already exited; ignore.
       }
@@ -3527,6 +3616,62 @@ export class PtyManager {
       // share it, so both xterms receive one send and each renders the authoritative size (and
       // letterboxes) — exactly the co-attach contract. (A solo user, min(one), is never sent at all.)
       this.send(subClient(sub), channel, size)
+    }
+  }
+
+  /**
+   * `applySize` for a session-host session, where the size this `Session` asks for is only one vote
+   * (issue #914): the host follows the most recently active viewer across every `Session` of the
+   * node — this app's canvas node, its relay-served phone, another app — and reports back what the
+   * pty really runs at through `applyBackendSize`. So here we only VOTE; telling our views what
+   * they are showing is left to that answer, which the backend sends after every vote, changed or
+   * not. Min-over-views still decides this Session's vote, because the canvas node and the card
+   * modal share one claim exactly as they share one tmux client.
+   */
+  private applySessionHostSize(sessionId: string, session: Session, size: PtySize): void {
+    const bounding = session.sizes.has(null) && !session.sinkAdapts
+    if (
+      session.appliedSize?.cols !== size.cols ||
+      session.appliedSize?.rows !== size.rows ||
+      session.appliedBounding !== bounding
+    ) {
+      session.appliedSize = size
+      session.appliedBounding = bounding
+      try {
+        ;(session.proc as unknown as SessionHostPty).resize(size.cols, size.rows, bounding)
+      } catch {
+        // resize can throw if the proc already exited; ignore.
+      }
+      return
+    }
+    // Our vote did not move, so no answer is coming — but the view that reported may have just
+    // fitted itself to a size the pty is not running at. Correct it from the last answer we have.
+    if (session.backendSize) this.applyBackendSize(sessionId, session, session.backendSize)
+  }
+
+  /**
+   * The backend's answer: render exactly this. Every view whose xterm is not already at it is told
+   * over `pty:size` (it letterboxes a smaller grid and clips a larger one, as a tmux client does),
+   * and so is the relay sink, which forwards it to the phone as `OP.Resized`.
+   */
+  private applyBackendSize(sessionId: string, session: Session, size: PtySize): void {
+    session.backendSize = { cols: size.cols, rows: size.rows }
+    const channel = IPC.ptySize(sessionId)
+    for (const sub of session.subscribers) {
+      const shown = session.shown.get(sub)
+      if (shown && shown.cols === size.cols && shown.rows === size.rows) continue
+      session.shown.set(sub, session.backendSize)
+      this.send(subClient(sub), channel, session.backendSize)
+    }
+    if (session.onSinkSize && session.sizes.has(null)) {
+      const shown = session.sinkShown
+      if (shown && shown.cols === size.cols && shown.rows === size.rows) return
+      session.sinkShown = session.backendSize
+      try {
+        session.onSinkSize(session.backendSize)
+      } catch {
+        // A relay stream that has gone away must not break the desktop views' answer.
+      }
     }
   }
 
@@ -3764,6 +3909,12 @@ export class PtyManager {
     } else {
       const size = normalizeSize(cols, rows)
       session.sizes.set(sub, size)
+      // A sink that reports a size is owed an ANSWER to that report, even an unchanged one: the
+      // phone clears its "sized to another screen" hint whenever it sends a size (it cannot tell
+      // on its own whether it just became the active viewer), and a `Resized` that was already in
+      // flight would otherwise re-raise the hint with nothing coming to correct it. So forget what
+      // the sink was last told; the backend's next answer is forwarded unconditionally.
+      if (sub === null) session.sinkShown = undefined
       // The view's own xterm fits itself locally (as it always has), so its fit — not the last
       // authoritative size we sent it — is what it is rendering right now. If that fit isn't the
       // effective size, applySize() below corrects it straight back.
@@ -3871,6 +4022,7 @@ export class PtyManager {
    */
   async captureSession(persistKey: string, full = false): Promise<string> {
     const live = this.liveSessionForPersistKey(persistKey)
+    if (live?.nativeWindowsPane) return live.nativeWindowsPane.capture(full)
     // Remote (ssh-project) node: there is no local tmux session — capture from the REMOTE tmux
     // over the project's ControlMaster (mirrors snapshotScrollback / destroySession).
     const sshRemote = live?.sshRemote
@@ -4077,7 +4229,18 @@ export class PtyManager {
     this.textWriteGate = gate
   }
 
+  /**
+   * The IPC-facing write: `true` once the text reached the pane. A delivery that pasted the text
+   * but could not confirm its submit (`'pasted-not-submitted'`, from the Windows settled-submit
+   * paths) also answers `true`, because every caller of this boolean contract treats `false` as
+   * "nothing was written, retry", and a retry would paste the same text a second time. Callers
+   * that can show the uncertainty use `sendTextResult`.
+   */
   async sendText(persistKey: string, text: string, opts?: { enter?: boolean }): Promise<boolean> {
+    return (await this.sendTextResult(persistKey, text, opts)) !== false
+  }
+
+  async sendTextResult(persistKey: string, text: string, opts?: { enter?: boolean }): Promise<TextDeliveryResult> {
     // The renderer refuses input into a locked node, but THIS path addresses the session by name
     // and never crosses the renderer — dictation, note pushes and canvas-control all arrive here.
     // Without the gate a locked terminal went dark while dictation kept typing into it. Gate
@@ -4093,6 +4256,9 @@ export class PtyManager {
     const enter = opts?.enter ?? true
     const target = sessionName(persistKey)
     const live = this.liveSessionForPersistKey(persistKey)
+    // A direct (non-persistent) Windows PTY has no session-host entry and no tmux: it is typed
+    // into through the pane itself. Routing it to the session host below failed every time.
+    if (live?.nativeWindowsPane) return live.nativeWindowsPane.sendText(text, enter)
     const sshRemote = live?.sshRemote
     // No local tmux: this machine persists sessions via the session-host backend instead (see
     // docs/windows-session-host.md). Its `sendKeys` needs no attached client, exactly like
@@ -4339,6 +4505,7 @@ export class PtyManager {
   async paneOwner(persistKey: string): Promise<PaneOwner | null> {
     const target = sessionName(persistKey)
     const live = this.liveSessionForPersistKey(persistKey)
+    if (live?.nativeWindowsPane) return live.nativeWindowsPane.owner()
     const sshRemote = live?.sshRemote
     try {
       if (sshRemote) {
@@ -4355,9 +4522,10 @@ export class PtyManager {
         )
         return parseCombinedPaneOwner(out.stdout)
       }
-      // The session host has no tty/tmux identity surface. Do not query an unrelated POSIX tmux
-      // merely because one is installed beside this native Windows generation.
-      if (live?.sessionHost || !this.tmuxPath) return null
+      // Only the owning host may attest this generation. An older live host rejects the
+      // extension; that refusal must never fall through to an unrelated POSIX tmux.
+      if (this.sessionHostOwns(persistKey, live)) return sessionHostMessageOwner(target)
+      if (!this.tmuxPath) return null
       const first = await runAsync(this.tmuxPath, [
         '-L',
         TMUX_SOCKET,
@@ -4410,9 +4578,14 @@ export class PtyManager {
    * accidental submit a messaging delivery must never perform — an empty envelope refuses here.
    * (`buildEnvelope` can never return '', so this is a guard against a future caller, not a path.)
    */
-  async sendEnvelope(persistKey: string, envelope: string): Promise<boolean> {
+  async sendEnvelope(persistKey: string, envelope: string, expected?: PaneOwner): Promise<boolean> {
     if (envelope.length === 0) return false
+    const live = this.liveSessionForPersistKey(persistKey)
+    if (live?.nativeWindowsPane) return live.nativeWindowsPane.sendEnvelope(envelope, expected)
     const target = sessionName(persistKey)
+    if (this.sessionHostOwns(persistKey, live)) {
+      return expected ? sessionHostMessageEnvelope(target, envelope, expected) : false
+    }
     const sshRemote = this.sessionByPersistKey(persistKey)?.sshRemote
     try {
       if (sshRemote) {
@@ -4432,6 +4605,18 @@ export class PtyManager {
       // rather than throwing, so the buffer sweep is never skipped.
       return false
     }
+  }
+
+  /**
+   * Is the pane ready for a bracketed-paste envelope? A direct Windows PTY answers from its own
+   * emulator; a session-host generation asks its host; tmux frames with `paste-buffer -p`.
+   */
+  async envelopePasteReady(persistKey: string): Promise<boolean> {
+    const live = this.liveSessionForPersistKey(persistKey)
+    if (live?.nativeWindowsPane) return live.nativeWindowsPane.pasteAware()
+    if (this.sessionHostOwns(persistKey, live)) return sessionHostMessagePasteReady(sessionName(persistKey))
+    // Existing tmux path frames in paste-buffer -p.
+    return !!(live?.sshRemote || this.tmuxPath)
   }
 
   /**

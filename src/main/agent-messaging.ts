@@ -66,8 +66,16 @@ export interface MessagingStoredNode {
  */
 export interface AgentMessagingDeps {
   paneOwner(nodeId: string): Promise<PaneOwner | null>
-  sendEnvelope(nodeId: string, envelope: string): Promise<boolean>
-  hasLiveSession(nodeId: string): boolean
+  sendEnvelope(nodeId: string, envelope: string, expected?: PaneOwner): Promise<boolean>
+  /** Is the pane ready for a bracketed-paste envelope (`PtyManager.envelopePasteReady`)? Absent:
+   *  answer true, the tmux contract (`paste-buffer -p` frames from the pane's real state). */
+  envelopePasteReady?(nodeId: string): Promise<boolean>
+  /**
+   * Does a session exist for this node at all, attached in this process OR held by a backend after
+   * its client was released (`PtyManager.sessionExists`)? A probe that cannot answer must answer
+   * true: only confirmed absence is `targetGone`, which is terminal and never queued.
+   */
+  hasLiveSession(nodeId: string): boolean | Promise<boolean>
   mirrorEntry?(nodeId: string): MirrorEntry | undefined
   /** The main-process projects store (`workspaceStore.persistedCanvases()` on the desktop). */
   projects(): readonly { id: string; nodes: readonly MessagingStoredNode[] }[]
@@ -519,8 +527,13 @@ export async function runDelivery(
     // TODO(pr7): a supported agent CLI idling WITHOUT bracketed paste on is asserted by no test —
     // if one exists, its deliveries splice line-by-line and only the receipt/trace make it
     // visible. Measure per CLI before relying on this any further.
-    bracketPasteRequested: async () => true,
-    sendEnvelope: (id, envelope) => deps.sendEnvelope(id, envelope),
+    // A Windows pane (session host or direct PTY) has no `paste-buffer -p`: it answers from its own
+    // emulator's bracketed-paste state instead (`envelopePasteReady`).
+    bracketPasteRequested: (id) =>
+      deps.envelopePasteReady ? deps.envelopePasteReady(id) : Promise.resolve(true),
+    // The gate's pane owner rides along so a Windows backend can re-attest the exact process
+    // immediately before it types (`NativeWindowsPane.sendEnvelope`, the host's messageEnvelopeV1).
+    sendEnvelope: (id, envelope, expected) => deps.sendEnvelope(id, envelope, expected),
     mirrorEntry: (id) => (deps.mirrorEntry ?? coreMirrorEntry)(id),
     tokenFilePresent: (id) => nodeTokenFilePresent(id),
     lock: (id, fn) => withNodeLock(id, fn),
@@ -551,7 +564,7 @@ export async function runDelivery(
         targetIsRemote: deps.isRemoteNode(req.targetNodeId),
         notPermitted,
         retryAfterMs,
-        targetLive: deps.hasLiveSession(req.targetNodeId)
+        targetLive: await deps.hasLiveSession(req.targetNodeId)
       },
       delivery
     )

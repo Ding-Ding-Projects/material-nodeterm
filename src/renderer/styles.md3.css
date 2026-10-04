@@ -175,6 +175,10 @@
   -webkit-app-region: no-drag;
 }
 
+/* The owed-update pill (PendingUpdateButton) sits right after the brand and never shrinks away. */
+.md3-app-bar__update {
+  flex-shrink: 0;
+}
 .md3-app-bar__brand {
   display: flex;
   align-items: center;
@@ -14115,4 +14119,24 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
 }
 .mdx-input.service-node__input[aria-invalid='true'] {
   border-color: var(--md-error);
+}
+
+/* Prepare-for-update dialog (PrepareUpdateDialog). Tokens only; the surface is the md3 Dialog. */
+.update-prep .update-prep__msg {
+  margin: 0 0 12px;
+  color: var(--md-on-surface-variant);
+}
+.update-prep .update-prep__list {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  color: var(--md-on-surface);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.update-prep .update-prep__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
 }
