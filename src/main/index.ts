@@ -323,9 +323,9 @@ import { composeNativeNotification, prepareNativeNotification, retainUntilDismis
 import { installManagedAgentHooks } from '../core/agents/hooks'
 import { createSubagentTail } from '../core/subagent-tail'
 import { createContextTail, type TaskNotification } from '../core/context-tail'
+import { registerContextEnsureIpc } from '../core/context-ensure'
 import { geminiContextParse } from '../core/gemini-session'
 import { codexContextParse } from '../core/codex-session'
-import { locateCodex, locateGemini } from '../core/handoff/locate'
 import { createCodexSubagentFormatter } from '../core/codex-subagent-format'
 import { codexHome } from '../core/usage/codex-usage'
 import { grokRawFields, isAsyncSubagentLaunch, type NormalizedAgentEvent } from '../shared/agents/normalize'
@@ -334,15 +334,14 @@ import { grokSessionDir, grokSessionsDir } from '../core/agents/grok-paths'
 import { forgetGrokSession, rememberGrokSessionDir } from '../core/grok-session'
 import {
   setRemoteTranscriptReader,
-  TITLE_TAIL_BYTES,
-  SESSION_ID_RE
+  TITLE_TAIL_BYTES
 } from '../core/transcript-reader'
 import {
   locateRemoteTranscriptCommand,
   parseLocatedTranscript,
   remoteTranscriptRoots
 } from '../core/remote-transcript-locate'
-import { registerTranscriptIpc, resolveTranscript } from '../core/transcript-ipc'
+import { registerTranscriptIpc } from '../core/transcript-ipc'
 import { contextSourceForNode, contextPercentFromCounts } from '../shared/context-source'
 import { createRemoteContextTail } from './remote-context-tail'
 import { createRemoteSubagentTail } from './remote-subagent-tail'
@@ -3608,39 +3607,70 @@ app.whenReady().then(async () => {
   })
 
   initTranscriptIndex(() => settingsStore.get().claudeAccounts ?? [])
-  // Populate the context meter without a live hook event: the renderer calls this on mount
-  // (the continuing session may be idle after a restart). Track under the sessionId (the key
-  // the meter looks up); cwd is only a path fallback. contextTail.track reads immediately and
-  // the 1s interval keeps it fresh while tracked.
-  // Shares core's `resolveTranscript` with the read channels — including its `accountId`-scoped
-  // cwd fallback. This copy dropped the account, so a managed-account node could track (and then
-  // meter, and then SERVE as the chat's first-choice path) an unrelated session's transcript.
-  const contextEnsureInFlight = new Map<string, Promise<void>>()
-  corePlatform.on(
-    IPC.contextEnsure,
-    async (sessionId?: string, cwd?: string, accountId?: string, agentId?: string) => {
-      if (!sessionId || !SESSION_ID_RE.test(sessionId)) return
-      if (agentId === 'claude:remote') return
-      const provider = agentId === 'codex' || agentId === 'gemini' ? agentId : 'claude'
-      const key = `${provider}:${sessionId}:${accountId ?? ''}:${cwd ?? ''}`
-      const active = contextEnsureInFlight.get(key)
-      if (active) return active
-      const work = (async (): Promise<void> => {
-        let p: string | undefined
-        if (provider === 'codex') p = await locateCodex(sessionId)
-        else if (provider === 'gemini') p = await locateGemini(sessionId)
-        else p = await resolveTranscript({ sessionId, cwd, accountId }, (s) => contextTail.pathFor(s))
-        if (!p) return
-        if (provider === 'codex') codexContextTail.track(sessionId, p)
-        else if (provider === 'gemini') geminiContextTail.track(sessionId, p)
-        else contextTail.track(sessionId, p)
-      })().finally(() => {
-        contextEnsureInFlight.delete(key)
-      })
-      contextEnsureInFlight.set(key, work)
-      return work
+  // Populate the context meter without a live hook event: the renderer calls this on mount (the
+  // continuing session may be idle after a restart). The routing (which agent's locator, which
+  // agent's tail, local or remote) lives in core so the Server Edition serves the same handler; this
+  // shell supplies the one thing core cannot have, the remote leg (it needs a ControlMaster), plus
+  // its own jail and node bookkeeping.
+  registerContextEnsureIpc({
+    // One tail per agent, matching the hook raw-listener's routing. `undefined` is the legacy call
+    // shape and stays on claude's tail. Grok is absent on purpose: its meter reads a hook-derived
+    // `signals.json` path that no locator can reconstruct after a restart, so it has nothing to
+    // rehydrate from and gets no meter rather than somebody else's numbers.
+    tailFor: (agentId) => {
+      switch (agentId) {
+        case undefined:
+        case 'claude':
+          return contextTail
+        case 'codex':
+          return codexContextTail
+        case 'gemini':
+          return geminiContextTail
+        default:
+          return undefined
+      }
+    },
+    // The same roots the hook-fed paths are jailed to (see `safeTranscriptPath` below), inlined
+    // because that helper is declared further down this function.
+    admitLocalPath: (p) => {
+      const abs = resolve(p)
+      return isSafeLocalTranscriptPath(abs, homedir(), app.getPath('userData'), codexHome())
+        ? abs
+        : undefined
+    },
+    // The node to session association the raw listener records for a live event, so closing the
+    // node releases the tail and the per-node context ring finds the reading.
+    onTracked: ({ nodeId, sessionId, agentId }, leg) => {
+      if (!nodeId) return
+      nodeContextSession.set(nodeId, sessionId)
+      nodeContextSource.set(nodeId, `${agentId ?? 'claude'}:${leg}`)
+    },
+    ensureRemote: async ({ sessionId, cwd, accountId, agentId, nodeId, remote }) => {
+      // Two independent claims of remoteness, OR-ed: the renderer's (it knows the node belongs to
+      // an SSH project from the moment it mounts) and a live ControlMaster for the node (which only
+      // exists once the pty is up). Neither ⇒ `null`, and core takes its local path.
+      const live = nodeId ? ptyManager.sshRemoteForNode(nodeId) : undefined
+      if (!remote && !live) return null
+      // From here the session IS remote, so every answer below is terminal: core must never fall
+      // through to a local resolver for it.
+      //
+      // Remote metering is CLAUDE-only, the same boundary the hook raw-listener draws:
+      // `remote-context-tail.ts` parses claude's usage records, and the remote locator searches
+      // claude's transcript roots. A remote codex/gemini node therefore gets no meter here, not a
+      // wrong-machine read, which is what falling through would produce.
+      if (agentId && agentId !== 'claude') return 'unresolved'
+      // Already tracked (a hook event landed, or an earlier mount resolved it): nothing to ask.
+      if (remoteContextTail.pathFor(sessionId)) return 'tracked'
+      // Asks the HOST where the transcript is, jails the answer, and caches a HIT under the session
+      // id (shared with the chat read path, the locator's first consumer). A clean miss, a failed
+      // ssh call and a master that is not up yet all come back `undefined` and cache NOTHING, so a
+      // momentarily dead ControlMaster is never remembered as "this session has no transcript".
+      const ref = await remoteTranscriptRefFor(sessionId, cwd, accountId, nodeId)
+      if (!ref) return 'unresolved'
+      remoteContextTail.track(sessionId, ref)
+      return 'tracked'
     }
-  )
+  })
   // The remote half of a handoff. Same three-line shape as the context-link deps above and for
   // the same reason: reading (and here also WRITING) on an SSH project's host is the one thing
   // the handoff builder cannot answer for itself. Absent deps ⇒ local-only, as before.

@@ -87,6 +87,8 @@ high-scale layouts, and the absence of context values from portable project data
 
 ## Suggested articles
 
+- [Context meter rehydration at mount](./context-meter-rehydration.md) - per-agent and SSH-host
+  transcript resolution when a resumed node mounts.
 - [Agent support](./agent-support.md) - lifecycle hooks, provider capabilities, and recovery states.
 - [Node kinds](../canvas/node-kinds.md) - where agent and subagent cards appear.
 - [Session continuity](../terminals/session-continuity.md) - resumed sessions and transcript rehydration.

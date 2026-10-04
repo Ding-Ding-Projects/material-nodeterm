@@ -31,6 +31,8 @@ Cognition Devin are built in; any other CLI can be added as a custom agent.
   unknown and stale states, generation fencing, and the shared meter across node and board views.
 - [Context-window meter](./context-window-meter.md) — provider-qualified telemetry, bounded
   transcript indexing, and lifecycle-safe refresh behavior.
+- [Context meter rehydration at mount](./context-meter-rehydration.md) — the shared core handler
+  that fills a resumed node's meter from its own agent's transcript, on its SSH host when remote.
 - [Per-node model switching](./model-switching.md) — gateway discovery, explicit model choice,
   running-node recycle and resume, ownership checks, persistence, and recovery boundaries.
 - [Managed Codex account behavior](./codex-account-behavior.md) — isolated account lifecycle,

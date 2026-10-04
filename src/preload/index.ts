@@ -975,8 +975,8 @@ const api: NodeTerminalApi = {
       ipcRenderer.on(IPC.contextUpdate, handler)
       return () => ipcRenderer.removeListener(IPC.contextUpdate, handler)
     },
-    ensure: (sessionId, cwd, accountId, agentId) =>
-      ipcRenderer.send(IPC.contextEnsure, sessionId, cwd, accountId, agentId)
+    ensure: (sessionId, cwd, accountId, agentId, nodeId, remote) =>
+      ipcRenderer.send(IPC.contextEnsure, sessionId, cwd, accountId, agentId, nodeId, remote)
   },
   // Canvas sync: one channel in both directions. The cast goes to the reflector (src/core/canvas-sync),
   // which stamps it with the total order (`seq`) and fans it to every attached client — INCLUDING us.

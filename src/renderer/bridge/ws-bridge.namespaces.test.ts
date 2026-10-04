@@ -80,10 +80,13 @@ describe('buildFilesApi', () => {
   it('context.ensure is a cast; context.onUpdate/git.onCloneProgress subscribe', () => {
     const c = fakeClient()
     const api = buildFilesApi(c as never)
-    api.context.ensure('sid', '/cwd', undefined)
+    // The agent id, node id and remote claim ride the same cast: the Server Edition resolves per
+    // agent and refuses a remote claim, and the desktop needs the node id to find a live
+    // ControlMaster for an SSH-project session.
+    api.context.ensure('sid', '/cwd', undefined, 'codex', 'n1', false)
     const un = api.context.onUpdate(() => {})
     const un2 = api.git.onCloneProgress(() => {})
-    expect(c.calls[0]).toEqual({ kind: 'cast', method: IPC.contextEnsure, args: ['sid', '/cwd', undefined, undefined] })
+    expect(c.calls[0]).toEqual({ kind: 'cast', method: IPC.contextEnsure, args: ['sid', '/cwd', undefined, 'codex', 'n1', false] })
     expect(c.calls[1]).toEqual({ kind: 'subscribe', method: IPC.contextUpdate, args: [] })
     expect(c.calls[2]).toEqual({ kind: 'subscribe', method: IPC.gitCloneProgress, args: [] })
     expect(typeof un).toBe('function')
