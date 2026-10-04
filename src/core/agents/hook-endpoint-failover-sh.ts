@@ -140,5 +140,35 @@ nt_adopt_for_node() {
 }
 `
 
+/**
+ * What the shims print when the walk skipped at least one foreign endpoint and nothing that owns
+ * this node answered. Measured on an SSH host (2026-09-28/29): the desktop slept, its reverse
+ * tunnel's socket stayed on disk with no listener, and the walk used to reach an unrelated Server
+ * Edition whose reply — "permanent on this host … do not retry" — was true about that server and
+ * false about this session. An agent that reads a permanent refusal stops for good; the tunnel came
+ * back minutes later. So this sentence says the three things that are actually known: the OWNER is
+ * unreachable, the other endpoints were not asked, and the state is temporary. The tunnel is named
+ * as the usual cause for an SSH project, not asserted: the shim cannot see why a socket is silent.
+ *
+ * `OWNER_UNREACHABLE_LEAD` is quoted verbatim by the agent-facing bodies (see
+ * `ownerUnreachableGuidanceLines`), so the docs and the script cannot drift apart.
+ */
+export const OWNER_UNREACHABLE_LEAD = 'The nodeterm connection that owns this node is unreachable.'
+
 export const FOREIGN_ENDPOINT_HINT =
-  'Unrelated endpoints were skipped because they do not advertise this node\'s current identity. The owning nodeterm connection must be available; another local server cannot control this canvas.'
+  `${OWNER_UNREACHABLE_LEAD} Other nodeterm endpoints on this machine were skipped: they do not own ` +
+  'this node, so their answer would describe a different canvas. This is temporary — for an SSH ' +
+  "project it usually means the desktop's reverse tunnel is down (the desktop is asleep, offline or " +
+  'reconnecting). Retry the same command after it reconnects.'
+
+/** The agent-facing half of FOREIGN_ENDPOINT_HINT, rendered into all four bodies (canvas skill +
+ *  instructions block, context skill + instructions block). Without it an agent has only the
+ *  bodies' other refusal lines to go on, and several of those correctly say "do not retry". */
+export function ownerUnreachableGuidanceLines(): string[] {
+  return [
+    `Owner unreachable: if a call fails with "${OWNER_UNREACHABLE_LEAD.replace(/\.$/, '')}", the`,
+    'nodeterm app that owns this session is not answering right now; for an SSH project that usually',
+    "means the desktop's reverse tunnel is down (asleep, offline or reconnecting). This is temporary:",
+    'retry the same command later rather than giving up.'
+  ]
+}

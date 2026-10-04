@@ -14,6 +14,7 @@ import {
   CODEX_SANDBOX_RETRY_LINE
 } from '../core/agents/hook-sandbox-hint-sh'
 import { RETRYABLE } from '../core/agents/agent-message-decide'
+import { FOREIGN_ENDPOINT_HINT, OWNER_UNREACHABLE_LEAD } from '../core/agents/hook-endpoint-failover-sh'
 import { PROJECT_TARGETABLE_VERBS } from './project-grants'
 import { BROWSER_ACTION_KEYS } from '../core/browser-verb'
 import { BROWSER_RETRYABLE, BROWSER_OUTCOME_LABEL } from '../core/browser-outcomes'
@@ -332,6 +333,20 @@ describe('parseControlRequest', () => {
       expect(body.toLowerCase()).toContain('escalated permissions')
       expect(body).toMatch(/never relink, reinstall or restart nodeterm/)
       expect(body).not.toContain('network.allow_')
+    }
+  })
+
+  // The owner-unreachable sentence (2026-09-28/29): the shim prints it when the failover skipped
+  // an endpoint that does not own this node and nothing that does answered. Both bodies must
+  // teach it as TEMPORARY, quoting the shim's own lead, because the bodies' other refusal lines
+  // correctly say "do not retry" and an agent would otherwise file this one with them. The
+  // runtime shape is proven under real /bin/sh in src/server/control-owner-tunnel-down.test.ts.
+  it('both agent-facing texts teach the owner-unreachable failure as temporary', () => {
+    expect(FOREIGN_ENDPOINT_HINT.startsWith(OWNER_UNREACHABLE_LEAD)).toBe(true)
+    expect(CONTROL_SHIM_SCRIPT).toContain(`echo "${FOREIGN_ENDPOINT_HINT}" >&2`)
+    for (const body of [buildCanvasSkillBody('/x/shim.sh'), buildCanvasControlInstructions('/tmp/nodeterm.sh')]) {
+      expect(body).toContain(OWNER_UNREACHABLE_LEAD.replace(/\.$/, ''))
+      expect(body).toMatch(/This is temporary: *\n?retry the same *\n?command later/)
     }
   })
 

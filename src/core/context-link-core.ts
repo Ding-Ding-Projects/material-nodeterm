@@ -10,7 +10,8 @@ import {
   HOOK_ENDPOINT_FALLBACK_SH,
   OWNED_ENDPOINT_FALLBACK_SH,
   FOREIGN_ENDPOINT_HINT,
-  STALE_ENDPOINT_HINT
+  STALE_ENDPOINT_HINT,
+  ownerUnreachableGuidanceLines
 } from './agents/hook-endpoint-failover-sh'
 import { NODE_TOKEN_READ_SH } from './agents/node-token-sh'
 
@@ -109,6 +110,8 @@ export function buildLinkedContextInstructions(shimPath: string): string {
     '',
     'Only meaningful inside nodeterm (NODETERM_NODE_ID set) with a linked edge. If the CLI',
     'says "Not a nodeterm session" or "No linked nodes", there is nothing to read — do not retry.',
+    '',
+    ...ownerUnreachableGuidanceLines(),
     '',
     ...codexSandboxGuidanceLines(CONTEXT_UNREACHABLE_MSG)
   ].join('\n')
@@ -357,6 +360,8 @@ since it was first linked).
 \`--node\` is optional when you are linked to exactly one node; otherwise pass the id or title
 from \`list\`. If the CLI says "Not a nodeterm session" or "No linked nodes", there is nothing
 to read — do not retry.
+
+${ownerUnreachableGuidanceLines().join('\n')}
 
 ${codexSandboxGuidanceLines(CONTEXT_UNREACHABLE_MSG).join('\n')}
 `
