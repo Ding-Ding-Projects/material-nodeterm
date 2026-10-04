@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-10-04, upstream v0.4.1 port, tranche 3 wave 1A (issue #225)
+
+Wave 1A is on `main` at `0de6b6868`, pushed and read back: five lane merges from `00797a2c2`,
+settings-file preservation local half (`169699c11`), context-meter rehydration (`7d5c78d33`),
+markdown navigation guard (`fb544762f`), hook endpoint ownership (`8ff05afc7`) and the exec-path
+chain (`0de6b6868`). Each lane was implemented and adversarially reviewed by separate agents in its
+own worktree, with at most two lanes running at once, and merged `--no-ff` after its own gates;
+conflicts between lanes stayed in `CHANGELOG.md`, the app-contract row list, the port ledger and
+the generated bundles (both sides kept, ledger unioned, bundles regenerated). Verification on the
+merged tree under Node 24.19.0: `npm run typecheck` 0 errors; focused vitest over the 45 touched
+test files 786 passed, 1 failed (`src/main/canvas-control-shim.test.ts`, Darwin config.toml remedy
+case, red on the pre-merge base as well, environment-bound); `port-upstream check`,
+`check-md3-controls`, `check-material-audit`, `check-docs-bundle`, `check-changelog`,
+`check-personal-vocabulary-coverage`, `check-uh-inventory` green; `check-canonical-upstream`
+verified at `9d5572e2`; `check-app-contract` unchanged at its one known design-reference parity
+failure. Not run: a built-app session, packaged Windows captures (issue #222). Lesson from this
+integration: a merge commit created by a chained command carried conflict markers once, so merge,
+resolve, prove zero markers and commit are now four separate steps. Next: wave 1B (session-host
+and updater, terminal and pty families), then the relay core and the remaining tranches per the
+roadmap.
+
 ## 2026-10-04, upstream v0.4.1 port, tranche 2 (issue #225)
 
 Tranche 2 is on `main` at `6364df8bb`, pushed and read back: watch-link (`b1711431d`, protocol

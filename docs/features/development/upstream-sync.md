@@ -139,6 +139,28 @@ cold self-heal, share-team and port-forward (ssh; dependencies or other families
 records only byte-identical absorptions, so three-way merged files surface as conflicts again on
 the next port; a "merged but adapted" state is a known gap of the tool.
 
+### Tranche 3 record, wave 1A (2026-10-04)
+
+The four follow-up chains tranche 1 deferred, plus the context-meter rehydration fix, landed on
+`main` as five lane merges from `00797a2c2`: settings-file preservation, local half
+(`169699c11`; `docs/features/agents/hook-settings-preservation.md`), context-meter rehydration at
+mount (`7d5c78d33`; `docs/features/agents/context-meter-rehydration.md`), the markdown navigation
+guard (`fb544762f`; `docs/features/files/markdown-link-navigation-guard.md`), hook endpoint
+ownership and the owner-bound endpoint walk (`8ff05afc7`;
+`docs/features/agents/hook-endpoint-ownership.md`) and the exec-path chain (`0de6b6868`;
+`docs/features/agents/grok-session-ids-and-models.md`,
+`docs/features/windows/cli-shim-execution.md`). Each lane was implemented and reviewed by separate
+agents in its own worktree, and merged `--no-ff` only after its own gates and an adversarial
+review; the merges keep both sides of every additive conflict (changelog, app-contract rows, port
+ledger union) and regenerate the docs and changelog bundles. On the merged tree: typecheck green,
+focused vitest over the 45 touched test files 786 passed and 1 environment-bound failure
+(`canvas-control-shim.test.ts`, Darwin remedy case, red on the pre-merge base too), every source
+check green except the one known design-parity row. Deferred with the reason on issue #225: the
+remote half of settings-file preservation (needs the ssh lane's remote hooks), routing the grok
+probe and taken-id read through an SSH project's connection, and the relay-tab consumers of the
+grok and claude CLI capability reads. The session-host/updater and terminal/pty families (wave 1B)
+follow in their own record.
+
 Tranche 1 was a set of cherry-picks scattered across upstream history, so it records no single
 waypoint merge; the first waypoint merge is owed by the tranche that first absorbs a contiguous
 upstream range.

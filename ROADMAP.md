@@ -26,7 +26,10 @@ commit; see
   builders, remote writes, tunnel repair, pre-warm; the native ssh2 transport waits on the
   dependency). Source-verified only; the new surfaces (usage popover blocks, pull request cards,
   close-reason choice, SSH connection banner) owe built-app captures, tracked with issue #222.)
-- [ ] **Tranche 3:** windows/session-host/updater, terminal/pty.
+- [ ] **Tranche 3:** windows/session-host/updater, terminal/pty. (Wave 1A landed on `main` as
+  `169699c11`, `7d5c78d33`, `fb544762f`, `8ff05afc7` and `0de6b6868`: the four tranche-1 follow-up
+  chains and the context-meter rehydration fix, source-verified only, captures tracked with issue
+  #222; the session-host/updater and terminal/pty families are wave 1B, in progress.)
 - [ ] **Tranche 4:** server, settings/workspace.
 - [ ] **Tranche 5:** agents/grok/codex/accounts/hooks.
 - [ ] **Tranche 6:** canvas/control (zones, layouts, portals and triggers live here; most review).
