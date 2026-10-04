@@ -1,6 +1,3 @@
-// Resolves the standalone session-host bundle and spawns it DETACHED so it outlives this app.
-// There is no "system session-host" to prefer over ours, so the resolution is only the
-// packaged/dev split below.
 // Resolves the standalone session-host bundle and spawns it DETACHED so it outlives this app —
 // the exact same "system-first, bundled-as-floor" resolution shape `tmux-hint.ts`'s
 // `bundledTmuxPath` already uses, one level over: there is no "system session-host" to prefer, so
@@ -193,8 +190,15 @@ export function spawnSessionHost(
       windowsHide: true,
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
     })
+    const result: { ok: true; asyncError?: Error } = { ok: true }
+    // A spawn failure (ENOENT, a policy block) arrives ASYNCHRONOUSLY on 'error', which the
+    // try/catch cannot see, and an unhandled 'error' on a ChildProcess takes the main process
+    // down. Record it so the caller's startup timeout can name it.
+    child.on('error', (error: Error) => {
+      result.asyncError = error
+    })
     child.unref()
-    return { ok: true }
+    return result
   } catch (error) {
     // Still never throws — but the failure is RETURNED so the connect timeout that follows can
     // name it. A `catch {}` here meant a blocked or quarantined staged runtime surfaced as the
@@ -203,7 +207,8 @@ export function spawnSessionHost(
   }
 }
 
-export type SpawnSessionHostResult = { ok: true } | { ok: false; error: Error }
+/** `asyncError` is filled in later if the child's asynchronous 'error' event fires. */
+export type SpawnSessionHostResult = { ok: true; asyncError?: Error } | { ok: false; error: Error }
 
 const HOST_LOG_TAIL_BYTES = 8192
 

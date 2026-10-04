@@ -59,7 +59,7 @@ describe('stable session-host runtime', () => {
 
   it('spawns the stable executable and bundle rather than process.execPath', () => {
     const unref = vi.fn()
-    const spawnImpl = vi.fn(() => ({ unref })) as any
+    const spawnImpl = vi.fn(() => ({ unref, on: vi.fn() })) as any
     spawnSessionHost(
       'C:\\stable\\session-host-runtime.exe',
       'C:\\stable\\session-host\\host.cjs',
@@ -86,6 +86,22 @@ describe('stable session-host runtime', () => {
     }) as any
     const result = spawnSessionHost('exe', 'host.cjs', 'state', spawnImpl)
     expect(result).toEqual({ ok: false, error: expect.objectContaining({ message: 'spawn EACCES' }) })
-    expect(spawnSessionHost('exe', 'host.cjs', 'state', vi.fn(() => ({ unref: vi.fn() })) as any)).toEqual({ ok: true })
+    expect(
+      spawnSessionHost('exe', 'host.cjs', 'state', vi.fn(() => ({ unref: vi.fn(), on: vi.fn() })) as any),
+    ).toEqual({ ok: true })
+  })
+
+  it('listens for the asynchronous spawn error instead of letting it crash the process', () => {
+    let onError: ((error: Error) => void) | undefined
+    const child = {
+      unref: vi.fn(),
+      on: vi.fn((event: string, listener: (error: Error) => void) => {
+        if (event === 'error') onError = listener
+      }),
+    }
+    const result = spawnSessionHost('exe', 'host.cjs', 'state', vi.fn(() => child) as any)
+    expect(child.on).toHaveBeenCalledWith('error', expect.any(Function))
+    onError?.(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
+    expect(result).toEqual({ ok: true, asyncError: expect.objectContaining({ message: 'spawn ENOENT' }) })
   })
 })

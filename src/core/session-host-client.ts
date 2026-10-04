@@ -9,7 +9,12 @@ import { randomUUID } from 'crypto'
 // socket 'close' events dispatch first, even inside fake-timer tests.
 import { setImmediate as realSetImmediate } from 'timers'
 import { sessionHostPaths } from '../session-host/paths'
-import { readExistingSessionHostIdentity } from '../session-host/existing-host-state'
+import {
+  EMPTY_LOCK_STALE_MS,
+  LISTEN_RETRY_BUDGET_MS,
+  readExistingSessionHostIdentity,
+  startupLockState
+} from '../session-host/existing-host-state'
 import {
   SESSION_HOST_PROTOCOL_VERSION,
   LineFramer,
@@ -31,6 +36,7 @@ import {
   readSessionHostFatalLine,
   resolveSessionHostScript,
   spawnSessionHost,
+  type SpawnSessionHostResult,
 } from './session-host-launcher'
 import type { PreparedAgentLaunch } from './agent-launch'
 
@@ -373,18 +379,27 @@ export class SessionHostClient {
           'or `npm run build` which now runs it too)'
       )
     }
-    const runtime = await prepareSessionHostRuntime({
-      scriptPath: script,
-      userDataDir: this.deps.userDataDir,
-      runtimeDir: this.deps.runtimeDir,
-    })
-    const spawned = spawnSessionHost(runtime.executablePath, runtime.scriptPath, this.deps.userDataDir)
+    // A host that is ALREADY starting needs no second one. Spawning anyway is not harmful (it
+    // exits on the exclusive-create lock), but it is a process per create during the window this
+    // wait exists for — see `hostIsStarting`.
+    let spawned: SpawnSessionHostResult = { ok: true }
+    if (!this.hostIsStarting()) {
+      const runtime = await prepareSessionHostRuntime({
+        scriptPath: script,
+        userDataDir: this.deps.userDataDir,
+        runtimeDir: this.deps.runtimeDir,
+      })
+      spawned = spawnSessionHost(runtime.executablePath, runtime.scriptPath, this.deps.userDataDir)
+    }
     let lastPublicationError: Error | null = null
     const budget = this.deps.startupTimeoutMs ?? SESSION_HOST_STARTUP_TIMEOUT_MS
-    const deadline = Date.now() + budget
+    const waitStartedAt = Date.now()
+    const deadline = waitStartedAt + budget
     let delay = STARTUP_POLL_MIN_MS
-    while (Date.now() < deadline) {
-      await sleep(Math.min(delay, Math.max(0, deadline - Date.now())))
+    for (;;) {
+      const remaining = deadline - Date.now()
+      // Inside the budget, never sleep past it; past it (a host still starting), keep polling.
+      await sleep(remaining > 0 ? Math.min(delay, remaining) : delay)
       delay = Math.min(STARTUP_POLL_MAX_MS, Math.round(delay * 1.5))
       try {
         if (await this.tryConnectOnce()) {
@@ -398,12 +413,22 @@ export class SessionHostClient {
         if (!this.isTransientPublicationLock(typed)) throw typed
         lastPublicationError = typed
       }
+      if (Date.now() < deadline) continue
+      // Past the ordinary startup budget. Keep waiting ONLY while a host is demonstrably still
+      // starting — an empty startup lock whose mtime it keeps moving. That is a host waiting out
+      // an endpoint someone else still holds (issue #783: a Windows named pipe stayed busy for
+      // ~1.5 min after its owner was killed), and erroring here left every node that mounted in
+      // that window on a permanent "could not be started" until the user clicked Try again.
+      // A lock that stops being touched is abandoned, so this can never wait forever.
+      if (!this.hostIsStarting()) break
+      if (Date.now() - waitStartedAt > LISTEN_RETRY_BUDGET_MS + EMPTY_LOCK_STALE_MS) break
     }
     if (lastPublicationError) throw lastPublicationError
     // Name what is known. A swallowed spawn failure or the host's own `fatal:` log line is the
     // difference between a message that says "try again" and one that says what to fix.
     const detail: string[] = []
     if (!spawned.ok) detail.push(`launch failed: ${spawned.error.message}`)
+    else if (spawned.asyncError) detail.push(`launch failed: ${spawned.asyncError.message}`)
     const fatal = await readSessionHostFatalLine(this.deps.userDataDir)
     if (fatal) detail.push(`host log: ${fatal}`)
     throw new Error(
@@ -414,6 +439,12 @@ export class SessionHostClient {
 
   private isTransientPublicationLock(error: Error): boolean {
     return error.message === 'invalid session-host state: file is empty'
+  }
+
+  /** Is a host process between its exclusive-create lock and publication right now? True only for
+   *  an EMPTY lock it is still touching; a lock nobody moves is abandoned (see startupLockState). */
+  private hostIsStarting(): boolean {
+    return startupLockState(sessionHostPaths(this.deps.userDataDir).statePath) === 'starting'
   }
 
   /** An exclusive-create startup lock is briefly empty before atomic state publication. Retry
@@ -428,6 +459,9 @@ export class SessionHostClient {
         const typed = asError(error)
         if (!this.isTransientPublicationLock(typed)) throw typed
         lastError = typed
+        // Still empty after the small bound — but a host that is heartbeating that lock is simply
+        // still starting, so the launch path's own wait owns it rather than failing this create.
+        if (this.hostIsStarting()) return false
         await sleep(50)
       }
     }
