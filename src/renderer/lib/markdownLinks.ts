@@ -120,3 +120,20 @@ export function installMarkdownLinkGuard(doc: Document, deps: MarkdownLinkDeps):
 
 /** The message shown for a local link. */
 export const LOCAL_LINK_MESSAGE = "Local file links can't be opened from rendered markdown."
+
+/**
+ * Hand a web link to the bridge's `openExternal` without letting a failure escape as an unhandled
+ * rejection. The contract types it `void`, and both bridges today return nothing (the desktop
+ * preload is an IPC send, the Server Edition's is `window.open`) — but nothing stops an
+ * implementation from returning a promise (a `void` return type accepts one), and `void`-ing a
+ * rejected one at the call site is an unhandled rejection per failed click. `Promise.resolve` adopts a promise and wraps
+ * anything else, so `.catch` is never called on a non-promise; a synchronous throw is swallowed
+ * too. Nothing to report: the link simply does not open, as it would have after the rejection.
+ */
+export function openExternalQuietly(open: (url: string) => unknown, url: string): void {
+  try {
+    Promise.resolve(open(url)).catch(() => {})
+  } catch {
+    // A bridge that throws synchronously (torn down mid-click) — same outcome, no open.
+  }
+}

@@ -6,7 +6,7 @@ import { ensureClaudeCliCaps } from './state/permissionMode'
 import { ensureCodexIdentityCaps } from './state/codexIdentity'
 import { initAgentResolver } from './state/agent-resolver'
 import { refreshAgentEnv } from './lib/agentEnv'
-import { installMarkdownLinkGuard, LOCAL_LINK_MESSAGE } from './lib/markdownLinks'
+import { installMarkdownLinkGuard, LOCAL_LINK_MESSAGE, openExternalQuietly } from './lib/markdownLinks'
 import './fonts.css'
 import './styles.css'
 import './styles.md3.css'
@@ -25,10 +25,11 @@ import './styles.durable-occurrences.css'
 // the kanban card modal) must never navigate this window: a relative link used to wipe the canvas
 // on the desktop, and any link navigated the Server Edition's tab away. One delegated listener for
 // every surface — contract and reasoning in lib/markdownLinks.ts. Web links go through the bridge
-// (system browser on desktop, a new tab in the Server Edition). The toast is kind 'error' because
+// (system browser on desktop, a new tab in the Server Edition), guarded so a rejecting bridge
+// cannot surface as an unhandled rejection. The toast is kind 'error' because
 // that is the only kind Canvas renders — an 'info' toast would be a silent no-op.
 installMarkdownLinkGuard(document, {
-  openExternal: (url) => void window.nodeTerminal.shell.openExternal(url),
+  openExternal: (url) => openExternalQuietly((u) => window.nodeTerminal.shell.openExternal(u), url),
   notifyLocal: () =>
     window.dispatchEvent(
       new CustomEvent('nodeterm:toast', { detail: { kind: 'error', message: LOCAL_LINK_MESSAGE } })

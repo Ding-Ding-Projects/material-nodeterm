@@ -5,6 +5,7 @@ import path from 'path'
 import {
   decideMarkdownLinkClick,
   installMarkdownLinkGuard,
+  openExternalQuietly,
   RENDERED_MARKDOWN_CONTAINERS
 } from './markdownLinks'
 
@@ -243,5 +244,46 @@ describe('RENDERED_MARKDOWN_CONTAINERS contract', () => {
         u
       ).toBe(true)
     }
+  })
+})
+
+describe('openExternalQuietly', () => {
+  // The bridge contract types openExternal as `void`, which still admits an implementation that
+  // returns a promise — and a rejected one, dropped by a `void` at the call site, surfaces as an
+  // unhandled rejection on every failed link click.
+  it('attaches a rejection handler to a promise-returning bridge', async () => {
+    // Asserted on the promise itself: whether the runner reports an unhandled rejection is its
+    // own business (vitest's did not reach a process listener here), so watch the handler land.
+    const p = Promise.reject(new Error('E_UNSUPPORTED'))
+    const then = vi.spyOn(p, 'then')
+    try {
+      // A plain function, NOT vi.fn: a vitest mock subscribes to a returned promise itself (to
+      // record its settled result), which would hand this test the very handler it looks for.
+      const seen: string[] = []
+      const open = (url: string) => (seen.push(url), p)
+      openExternalQuietly(open, 'https://example.com/')
+      expect(seen).toEqual(['https://example.com/'])
+      await new Promise((r) => setTimeout(r, 0))
+      expect(then.mock.calls.some((c) => typeof c[1] === 'function')).toBe(true)
+    } finally {
+      p.catch(() => {}) // never leak the rejection out of a RED run
+    }
+  })
+
+  it('accepts a bridge that returns nothing (desktop) and one that throws synchronously', () => {
+    const open = vi.fn(() => undefined)
+    expect(() => openExternalQuietly(open, 'https://a.test/')).not.toThrow()
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(() =>
+      openExternalQuietly(() => {
+        throw new Error('bridge gone')
+      }, 'https://a.test/')
+    ).not.toThrow()
+  })
+
+  it('is what boot.tsx wires the guard to (no bare `void …openExternal(url)` left)', () => {
+    const src = fs.readFileSync(path.resolve(__dirname, '../boot.tsx'), 'utf8')
+    expect(src).toMatch(/openExternal: \(url\) => openExternalQuietly\(\(u\) => window\.nodeTerminal\.shell\.openExternal\(u\), url\)/)
+    expect(src).not.toMatch(/void window\.nodeTerminal\.shell\.openExternal/)
   })
 })
