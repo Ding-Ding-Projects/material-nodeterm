@@ -35,7 +35,7 @@ const timer = (): DurableTimerNode => ({
   data: { timerMode: 'countdown', durationMs: 10_000, remainingMs: 10_000, elapsedMs: 0, running: false, paused: false, repeatCount: 0, repeatRemaining: 0, sequence: [], sequenceIndex: 0, lapsMs: [], nextOccurrenceAt: null, occurrenceState: 'scheduled', alarmEnabled: true, alarmTone: 'chime', missedCount: 0, wallAnchorMs: null, monotonicAnchorMs: null }
 })
 
-describe('durable planner/alarm/timer source Chuts', () => {
+describe('durable planner/alarm/timer source guards', () => {
   it('rejects unknown keys and malformed imported state, including timer data', () => {
     const state = defaultDurableOccurrenceSnapshot()
     expect(validateDurableOccurrenceSnapshot({ ...state, stale: true })).toContain('malformed')
