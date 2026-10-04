@@ -652,8 +652,6 @@ fi
 # Missing everywhere leaves it empty, which the server reads as legacy — the request still goes.
 ${NODE_TOKEN_READ_SH}
 nt_read_node_token
-nt_owner_node_token="$nt_node_token"
-nt_skipped_foreign_endpoint=""
 
 ${HOOK_CURL_HEADERS_SH}
 
@@ -768,6 +766,7 @@ if ! nt_reached && { [ "$nt_code" = "421" ] || [ -z "$CODEX_SANDBOX_NETWORK_DISA
       [ "$nt_n" -lt "$nt_fallback_max" ] || break
       nt_adopt_for_node "$nt_ep" || continue
       nt_n=$((nt_n + 1))
+      nt_probe_endpoint || continue
       nt_control_post "$@"
       nt_reached && break
     done <<NT_CANDIDATES
@@ -793,7 +792,9 @@ if [ -z "$nt_code" ] || [ "$nt_code" = "000" ]; then
     echo "nodeterm control endpoint unavailable." >&2
   else
     nt_codex_sandbox_hint || echo "${CONTROL_UNREACHABLE_MSG}" >&2
-    if [ -z "$CODEX_SANDBOX_NETWORK_DISABLED" ]; then
+    # One piece of advice per failure: when the walk skipped a foreign endpoint, the owner-unreachable
+    # sentence above already says what happened and when to retry.
+    if [ -z "$CODEX_SANDBOX_NETWORK_DISABLED" ] && [ -z "$nt_skipped_foreign_endpoint" ]; then
       echo "${STALE_ENDPOINT_HINT}" >&2
     fi
   fi

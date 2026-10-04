@@ -752,7 +752,11 @@ describe.skipIf(process.platform === 'win32')('canvas-control shim keeps credent
   it('names no credential header in the generated source at all', () => {
     expect(CONTROL_SHIM_SCRIPT).not.toContain('-H "X-Nodeterm-Hook-Token')
     expect(CONTROL_SHIM_SCRIPT).not.toContain('-H "X-Nodeterm-Node-Token')
-    expect((CONTROL_SHIM_SCRIPT.match(/--config -/g) ?? []).length).toBe(2)
+    // Every curl call site reads its headers from stdin: the POST over each transport, and the
+    // fallback liveness probe over each transport (hook-endpoint-failover-sh.ts).
+    const calls = CONTROL_SHIM_SCRIPT.match(/\bcurl -s/g) ?? []
+    expect(calls).toHaveLength(4)
+    expect((CONTROL_SHIM_SCRIPT.match(/--config -/g) ?? []).length).toBe(calls.length)
   })
 
   it('over TCP: neither token is in argv, both arrive on stdin and reach the server', async () => {

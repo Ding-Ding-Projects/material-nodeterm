@@ -19,17 +19,25 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map(s => new Promise<void>(r => s.close(() => r()))))
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true })
 })
+// Like HookServer, a fixture answers the walk's liveness probe (`/hook/verify`) with 204 — kept out
+// of `requests`, which records only the verbs a client actually delivered.
 async function endpoint(status: number, message: string) {
   const requests: { url: string; body: string; nodeToken: string | string[] | undefined }[] = []
+  const probes: string[] = []
   const server = createServer(async (req, res) => {
     let body = ''
     for await (const chunk of req) body += chunk
+    if (req.url === '/hook/verify') {
+      probes.push(req.url)
+      res.writeHead(204); res.end()
+      return
+    }
     requests.push({ url: req.url!, body, nodeToken: req.headers['x-nodeterm-node-token'] })
     res.writeHead(status); res.end(message)
   })
   servers.push(server)
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
-  return { port: (server.address() as { port: number }).port, requests }
+  return { port: (server.address() as { port: number }).port, requests, probes }
 }
 const clients = [
   { name: 'control', script: CONTROL_SHIM_SCRIPT, args: ['close', '--node', 'finished-a,finished-b'], route: '/control/close' },
@@ -43,6 +51,7 @@ describe.skipIf(process.platform === 'win32')('node identity survives endpoint f
       const result = await fixture.call()
       expect(result.stdout).toBe('owner reply')
       expect(fixture.foreign.requests).toEqual([])
+      expect(fixture.foreign.probes).toEqual([])
       expect(fixture.owner.requests).toHaveLength(1)
       expect(fixture.owner.requests[0].nodeToken).toBe('owner-capability')
       if (client.name === 'control') {
@@ -63,6 +72,7 @@ describe.skipIf(process.platform === 'win32')('node identity survives endpoint f
         .replace(/^NODETERM_NODE_TOKEN_DIR=.*\n/m, ''))
       expect((await fixture.call()).stdout).toBe('owner reply')
       expect(fixture.foreign.requests).toEqual([])
+      expect(fixture.foreign.probes).toEqual([])
       expect(fixture.owner.requests).toHaveLength(1)
     })
     it(`${client.name}: reports the missing owning connection, not a foreign edition refusal`, async () => {
@@ -74,6 +84,7 @@ describe.skipIf(process.platform === 'win32')('node identity survives endpoint f
       expect(error.stderr).not.toContain('control-unsupported-on-this-edition')
       expect(error.stderr).not.toContain('owner-capability')
       expect(fixture.foreign.requests).toEqual([])
+      expect(fixture.foreign.probes).toEqual([])
       expect(fixture.owner.requests).toEqual([])
     })
     it.each([400, 403])(`${client.name}: keeps an owning endpoint's %s refusal final`, async status => {
@@ -84,6 +95,7 @@ describe.skipIf(process.platform === 'win32')('node identity survives endpoint f
       expect(error.stderr).not.toContain(FOREIGN_ENDPOINT_HINT)
       expect(fixture.owner.requests).toHaveLength(1)
       expect(fixture.foreign.requests).toEqual([])
+      expect(fixture.foreign.probes).toEqual([])
     })
   }
 })
