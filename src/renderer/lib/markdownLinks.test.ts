@@ -115,15 +115,71 @@ describe('installMarkdownLinkGuard', () => {
     expect(openExternal).not.toHaveBeenCalled()
   })
 
+  it('handles a middle click (auxclick) on a relative link instead of opening a stray tab', () => {
+    const { openExternal, notifyLocal } = setup(
+      '<div class="term-md__content"><a href="src/a.ts:3">a</a></div>'
+    )
+    const a = document.querySelector('a')!
+    const ev = new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 })
+    a.dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(true)
+    expect(notifyLocal).toHaveBeenCalledTimes(1)
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('opens a web link on middle click, and leaves a right-button auxclick alone', () => {
+    const { openExternal } = setup('<div class="term-chat__text"><a href="https://a.b/">x</a></div>')
+    const a = document.querySelector('a')!
+    const mid = new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 })
+    a.dispatchEvent(mid)
+    expect(openExternal).toHaveBeenCalledWith('https://a.b/')
+    const right = new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 2 })
+    a.dispatchEvent(right)
+    expect(right.defaultPrevented).toBe(false)
+    expect(openExternal).toHaveBeenCalledTimes(1)
+  })
+
   it('uninstalls cleanly', () => {
     const { openExternal } = setup('<div class="term-md__content"><a href="https://a.b/">x</a></div>')
     uninstall!()
     uninstall = undefined
     const ev = click(document.querySelector('a')!)
     expect(ev.defaultPrevented).toBe(false)
+    const aux = new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 })
+    document.querySelector('a')!.dispatchEvent(aux)
+    expect(aux.defaultPrevented).toBe(false)
     expect(openExternal).not.toHaveBeenCalled()
   })
 })
+
+/** Components whose sink takes its class from the caller — each is pinned by a usage test. */
+const DYNAMIC_CLASS_SINKS = new Set([path.join('components', 'NoteMarkdown.tsx')])
+/** Non-markdown HTML sinks, each with the reason it needs no link guard. Empty today. */
+const NON_MARKDOWN_SINKS: Record<string, string> = {}
+
+/** `file:line` of every dangerouslySetInnerHTML whose OWN element lacks a listed container class. */
+function sinkOffenders(files: { name: string; src: string }[]): string[] {
+  const listed = RENDERED_MARKDOWN_CONTAINERS.map((sel) => sel.slice(1))
+  const out: string[] = []
+  for (const { name, src } of files) {
+    if (name in NON_MARKDOWN_SINKS) continue
+    for (const m of src.matchAll(/dangerouslySetInnerHTML/g)) {
+      const at = m.index ?? 0
+      const line = src.slice(0, at).split('\n').length
+      // The opening tag this attribute belongs to: the last `<Tag` before it.
+      const lt = src.slice(0, at).search(/<[A-Za-z][\w.]*[^<]*$/)
+      const tag = lt < 0 ? '' : src.slice(lt, at)
+      const cls = /className=(?:"([^"]*)"|'([^']*)'|\{([^}]*)\})/.exec(tag)
+      const staticCls = cls?.[1] ?? cls?.[2]
+      const ok =
+        staticCls !== undefined
+          ? staticCls.split(/\s+/).some((c) => listed.includes(c))
+          : cls?.[3] !== undefined && DYNAMIC_CLASS_SINKS.has(name)
+      if (!ok) out.push(`${name}:${line}`)
+    }
+  }
+  return out
+}
 
 describe('RENDERED_MARKDOWN_CONTAINERS contract', () => {
   // The list is a contract with the components that render markdown into these classes. A rename
@@ -150,21 +206,31 @@ describe('RENDERED_MARKDOWN_CONTAINERS contract', () => {
     }
   })
 
-  it('covers every component that injects rendered markdown HTML', () => {
-    // Any file that pipes renderMarkdown output into dangerouslySetInnerHTML must do it inside one
-    // of the listed containers — a new markdown surface has to join the list.
-    const offenders = sources(RENDERER)
-      .filter((f) => {
-        const src = fs.readFileSync(f, 'utf8')
-        return /renderMarkdown/.test(src) && /dangerouslySetInnerHTML/.test(src)
-      })
-      // NoteMarkdown takes its container class from its callers — pinned by the next test.
-      .filter((f) => path.basename(f) !== 'NoteMarkdown.tsx')
-      .filter((f) => {
-        const src = fs.readFileSync(f, 'utf8')
-        return !RENDERED_MARKDOWN_CONTAINERS.some((sel) => src.includes(sel.slice(1)))
-      })
-    expect(offenders.map((f) => path.relative(RENDERER, f))).toEqual([])
+  it('puts a listed class on the SAME element as every HTML sink in the renderer', () => {
+    // Every `dangerouslySetInnerHTML` in src/renderer today is a markdown sink, so the rule is
+    // stated over ALL of them rather than over files that happen to call renderMarkdown: a sink
+    // fed through a prop (a new view receiving pre-rendered html) names no renderer and would slip
+    // past a file-level heuristic. A future NON-markdown sink joins NON_MARKDOWN_SINKS with a reason.
+    const files = sources(RENDERER).map((f) => ({
+      name: path.relative(RENDERER, f),
+      src: fs.readFileSync(f, 'utf8')
+    }))
+    expect(files.some((f) => /dangerouslySetInnerHTML/.test(f.src))).toBe(true)
+    expect(sinkOffenders(files)).toEqual([])
+  })
+
+  it('the sink check catches a second sink under an unlisted class (mutation)', () => {
+    const ok = '<div className="term-md__content" dangerouslySetInnerHTML={{ __html: a }} />'
+    const bad = '<div\n  className="term-md__other"\n  dangerouslySetInnerHTML={{ __html: b }}\n/>'
+    expect(sinkOffenders([{ name: 'X.tsx', src: ok }])).toEqual([])
+    expect(sinkOffenders([{ name: 'X.tsx', src: `${ok}\n${bad}` }])).toEqual(['X.tsx:4'])
+    // The class must sit on the sink itself, not on a wrapper around it.
+    const wrapped =
+      '<div className="term-md__content"><p dangerouslySetInnerHTML={{ __html: c }} /></div>'
+    expect(sinkOffenders([{ name: 'Y.tsx', src: wrapped }])).toEqual(['Y.tsx:1'])
+    // A dynamic class is refused outside the named pass-through component.
+    const dyn = '<div className={cls} dangerouslySetInnerHTML={{ __html: d }} />'
+    expect(sinkOffenders([{ name: 'components/Z.tsx', src: dyn }])).toEqual(['components/Z.tsx:1'])
   })
 
   it('every NoteMarkdown usage renders into a listed container', () => {

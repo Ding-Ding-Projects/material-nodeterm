@@ -84,10 +84,7 @@ export interface MarkdownLinkDeps {
 /** Install the delegated handler; returns its uninstaller. */
 export function installMarkdownLinkGuard(doc: Document, deps: MarkdownLinkDeps): () => void {
   const scope = RENDERED_MARKDOWN_CONTAINERS.join(',')
-  const onClick = (e: MouseEvent): void => {
-    // Someone closer to the anchor already owned this click; and only the primary button — a
-    // middle click never fires `click`, and a secondary one is the context menu's.
-    if (e.defaultPrevented || e.button !== 0) return
+  const handle = (e: MouseEvent): void => {
     const target = e.target
     if (!(target instanceof Element)) return
     const anchor = target.closest('a[href]')
@@ -100,8 +97,25 @@ export function installMarkdownLinkGuard(doc: Document, deps: MarkdownLinkDeps):
     if (decision.action === 'external') deps.openExternal(decision.url)
     else if (decision.action === 'local') deps.notifyLocal()
   }
+  // Someone closer to the anchor already owned this click; and only the primary button here — a
+  // secondary one is the context menu's.
+  const onClick = (e: MouseEvent): void => {
+    if (e.defaultPrevented || e.button !== 0) return
+    handle(e)
+  }
+  // A middle click never fires `click`; it fires `auxclick`, whose default in a browser opens the
+  // link in a new tab. In the Server Edition that tab would be a stray 404 for a relative link, so
+  // the middle button gets the same decision (a web link still opens, via openExternal).
+  const onAuxClick = (e: MouseEvent): void => {
+    if (e.defaultPrevented || e.button !== 1) return
+    handle(e)
+  }
   doc.addEventListener('click', onClick)
-  return () => doc.removeEventListener('click', onClick)
+  doc.addEventListener('auxclick', onAuxClick)
+  return () => {
+    doc.removeEventListener('click', onClick)
+    doc.removeEventListener('auxclick', onAuxClick)
+  }
 }
 
 /** The message shown for a local link. */

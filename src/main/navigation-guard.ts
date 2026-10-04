@@ -63,6 +63,8 @@ export function decideMainFrameNavigation(url: string, appEntryUrl: string): Mai
   if (entry && target.protocol === entry.protocol && target.host === entry.host) {
     // `file:` paths compare case-insensitively: loadFile and Chromium may spell a drive letter or
     // a case-insensitive volume differently, and a false "block" here would break reload.
+    // The trade on a case-sensitive Linux fs: a link to the entry path in different case is let
+    // through and 404s the window — only reachable by a deliberately mis-cased link to index.html.
     const a = decodedPath(target)
     const b = decodedPath(entry)
     const same = target.protocol === 'file:' ? a.toLowerCase() === b.toLowerCase() : a === b

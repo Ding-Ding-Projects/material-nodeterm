@@ -28,7 +28,7 @@ import './styles.durable-occurrences.css'
 // (system browser on desktop, a new tab in the Server Edition). The toast is kind 'error' because
 // that is the only kind Canvas renders — an 'info' toast would be a silent no-op.
 installMarkdownLinkGuard(document, {
-  openExternal: (url) => window.nodeTerminal.shell.openExternal(url),
+  openExternal: (url) => void window.nodeTerminal.shell.openExternal(url),
   notifyLocal: () =>
     window.dispatchEvent(
       new CustomEvent('nodeterm:toast', { detail: { kind: 'error', message: LOCAL_LINK_MESSAGE } })
