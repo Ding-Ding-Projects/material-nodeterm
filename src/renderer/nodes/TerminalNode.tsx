@@ -1,3 +1,4 @@
+import { patchImeModeSwitch } from '../terminal/ime-mode-switch'
 // `useLayoutEffect` arrives with focus mode, which must measure and place the focused node before
 // paint. `NODE_MIN_SIZES` is deliberately NOT imported: that module belongs to a different upstream
 // change and does not exist in this fork, so the resizer keeps its existing literal minimums below.
@@ -86,8 +87,10 @@ import {
 } from '../terminal/webgl-budget'
 import { ensureProjectLaunchInfo } from '../state/projectLaunchInfo'
 import { quantizeCharSize } from '../terminal/char-size-quantize'
+import { resyncDomRendererSpacing } from '../terminal/dom-renderer-spacing'
 import {
-  PARK_MAX,
+  parkCap,
+  parkWindowMs,
   armParkExpiry,
   canDisposeParkedEntry,
   disposableParks,
@@ -95,6 +98,7 @@ import {
   type ParkTimer
 } from '../terminal/park-budget'
 import { canEscapeToWidget } from '../terminal/widget-escape'
+import { agentProcessInPane } from '../terminal/live-work'
 import {
   mayDisposeOffscreen,
   offscreenCoreIsRemote,
@@ -141,6 +145,7 @@ import {
   restartEligibility,
   restartSessionId,
   RESTART_EXIT_TIMEOUT_MS,
+  RESTART_LATE_EXIT_MS,
   type ExitPhaseOutcome,
   type ResumePhaseOutcome
 } from '../terminal/agent-restart'
@@ -160,6 +165,7 @@ import { markNodeActivity, markNodeOpened } from '../lib/nodeActivity'
 import { Localized } from '../ui/Localized'
 import { StatusChip } from '../ui/md3/StatusChip'
 import { Button, IconButton } from '../ui/md3'
+import { PortsChip } from '../components/PortsChip'
 import { Input } from '../ui/Input'
 import { AccountIdentityPills } from '../components/AccountIdentityPills'
 import { presentAccount } from '../lib/accountPresentation'
@@ -526,13 +532,13 @@ export function setSshRetryHandler(
 /**
  * Parked terminals: when a node unmounts (project switch), its xterm instance and live PTY
  * session are kept — the `.xterm` element is detached from the DOM and held here — so a remount
- * within TERM_PARK_MS re-adopts them instead of respawning. This makes switching back to a
- * project instant AND exact: the tmux client never detaches, so the full terminal state
+ * within the park window (`settings.terminalParkMinutes`) re-adopts them instead of respawning.
+ * This makes switching back to a project instant AND exact: the tmux client never detaches, so the full terminal state
  * (alternate screen, mouse-tracking modes, scrollback, cursor) carries over with no redraw and
  * no mode re-negotiation to get wrong. After the window the entry is disposed for real (the
  * PTY client detaches; the tmux session itself keeps running, as always). The park is bounded in
- * COUNT as well as time — beyond `PARK_MAX` the oldest entries are evicted early (see
- * `terminal/park-budget.ts`), so a remount past the cap is the same warm reattach as one past the
+ * COUNT as well as time — beyond `settings.terminalParkMax` the oldest entries are evicted early,
+ * local before remote (see `terminal/park-budget.ts`), so a remount past the cap is the same warm reattach as one past the
  * window.
  *
  * "The PTY client detaches; the session keeps running" is true ONLY with tmux underneath. On the
@@ -555,6 +561,8 @@ interface ParkedTerminal {
    *  lever reads later than that, so without this snapshot every park looks agent-less. See
    *  `effectiveAgentState`. */
   parkedAgentState?: AgentState
+  /** An agent CLI was in the pane at park time — see `ParkedEntryState.agentProcess`. */
+  agentProcess: boolean
   /** When this entry was parked — what ages the snapshot above (`parkedStateFloor`). */
   parkedAt: number
   /** The node's agent state RIGHT NOW, read from the store of the session this node belongs to
@@ -572,9 +580,15 @@ interface ParkedTerminal {
   life: SessionLife & { killed: boolean }
   /** The park window, which RE-ARMS while the entry is protected (see `armParkExpiry`). */
   timer: ParkTimer
+  /** Rebuilding this session costs a network round trip — an SSH-project node (remote tmux over
+   *  the ControlMaster) or a relay tab. The LRU cap evicts these LAST (`planParkEviction`). */
+  remote: boolean
 }
 const parkedTerminals = new Map<string, ParkedTerminal>()
-const TERM_PARK_MS = 5 * 60 * 1000
+// The park window is `settings.terminalParkMinutes` (default 10 — the old TERM_PARK_MS was 5; 0 =
+// until the app quits) and the count cap `settings.terminalParkMax` (default PARK_MAX = 20), both
+// read at PARK time through their validators (`parkWindowMs` / `parkCap`), so a change applies to
+// the next switch-away without touching entries already parked. Issue #886.
 
 /** May the BUDGET levers dispose this park? The entry carries both halves of the answer: the
  *  session's tmux-backedness, and a live read of the node's OWN agent-status store with the
@@ -586,6 +600,7 @@ function parkDisposable(key: string): boolean {
   return canDisposeParkedEntry({
     tmuxBacked: p.tmuxBacked,
     parkedAgentState: p.parkedAgentState,
+    agentProcess: p.agentProcess,
     parkedAt: p.parkedAt,
     liveAgentState: p.readAgentState()
   })
@@ -615,7 +630,7 @@ export function disposeParkedTerminal(key: string): void {
   disposeParked(p)
 }
 
-/** Memory-pressure lever: drop EVERY parked terminal now, without waiting out `TERM_PARK_MS`. The
+/** Memory-pressure lever: drop EVERY parked terminal now, without waiting out the park window. The
  *  park is a cache, not state — each dropped entry costs only its warm re-adopt, and the node
  *  re-mounts as an ordinary warm reattach (tmux redraws; the session and its scrollback are
  *  untouched). Idempotent; iterates a copy because `disposeParkedTerminal` mutates the map.
@@ -946,6 +961,16 @@ interface CoState {
    * fresh-only agent launch branch never runs.
    */
   agentRelaunchError: AgentColdRelaunchRecoveryError | null
+  /**
+   * A WARM reattach found the session's live working directory GONE (`PtyCreateResult.staleCwd`,
+   * issue #464): the folder was deleted — or deleted and re-created, which is a different inode,
+   * so the shell keeps printing `getcwd` errors forever. NOT an overlay state: the terminal is
+   * alive and possibly mid-work, so this only raises a slim banner offering an EXPLICIT
+   * recycle-and-respawn ("Restart in folder") plus a dismiss. Nothing is typed into the pane and
+   * nothing restarts on its own. Overwritten by every create result for this node, so a clean
+   * respawn clears it.
+   */
+  staleCwd: boolean
 }
 const NO_CO: CoState = {
   letterbox: false,
@@ -953,7 +978,8 @@ const NO_CO: CoState = {
   ended: false,
   offline: false,
   spawnError: null,
-  agentRelaunchError: null
+  agentRelaunchError: null,
+  staleCwd: false
 }
 const coStates = new Map<string, CoState>()
 const coSubs = new Map<string, (s: CoState) => void>()
@@ -1107,7 +1133,7 @@ export function wakeHibernatedNode(nodeId: string): void {
 /**
  * The mounted instance publishes its copy-feedback sink here, for the same reason as
  * `restartSubs`: the OSC 52 handler is registered ONCE per xterm instance and that instance
- * SURVIVES A PARK (project switch → remount within TERM_PARK_MS), so a handler holding this
+ * SURVIVES A PARK (project switch → remount within the park window), so a handler holding this
  * component's `setState` would be feeding a component that unmounted two projects ago. Looked up
  * at call time instead. No entry = nobody is mounted = nothing to show.
  */
@@ -1719,6 +1745,14 @@ export function TerminalNode({
       void useSshServers.getState().hydrate()
     }
   }, [sshMachineKey])
+  /** Is an agent CLI believed to be running in this pane right now? The created agent, else one a
+   *  hook event identified (a hand-launched CLI). Read through a ref by the release/park levers. */
+  const readAgentProcess = (): boolean => {
+    const st = agentStatusStore.getState().byId[id]
+    return agentProcessInPane(agentId ?? st?.agentId, st)
+  }
+  const readAgentProcessRef = useRef(readAgentProcess)
+  readAgentProcessRef.current = readAgentProcess
   // Gate each former `isClaude` site by the capability it actually represents.
   const showStatus = !!agentHarnessId && hasHooks(agentHarnessId) // status badge + session-title capture
   const showLoop = !!agentHarnessId && canRecur(agentHarnessId) // /loop · /schedule · /cron chrome
@@ -1833,6 +1867,7 @@ export function TerminalNode({
   // node (`isRemoteSessionNode` — an SSH-project terminal carries `data.ssh`/`data.sshRemoteTmux`).
   // The affordance is absent, not merely refused on click.
   const sshProject = useProjects((s) => !!s.projects.find((p) => p.id === s.activeProjectId)?.ssh)
+  const portsProjectId = useProjects((s) => s.activeProjectId)
   // The project's SSH endpoint, as two primitives: the project object is rebuilt on every node
   // serialization, so selecting `ssh.server` itself would re-render this node on each canvas edit.
   const projectSshHost = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.ssh?.server.host)
@@ -2288,6 +2323,22 @@ export function TerminalNode({
       .finally(() => setAgentRelaunchRetrying(false))
   }
 
+  // "Restart in folder" (CoState.staleCwd, issue #464): the warm-reattached shell sits on a
+  // DELETED directory inode, which no `cd` we could inject would be allowed to fix (text into a
+  // pane is injection) and which re-creating the folder can never heal. The recovery is the same
+  // recycle-then-respawn the model switch and "restart shell" use: core ends the tmux session
+  // (reserving the replacement for this client), the respawn re-validates `data.cwd` and starts a
+  // fresh shell in the re-created folder. Explicit user action only — the session may hold live
+  // work, which is exactly why nothing here runs on its own.
+  const restartInFolder = (): void => {
+    setCo(termKey, { staleCwd: false })
+    transport.recycle(id)
+    updateNodeData(id, (n) => ({
+      respawnNonce: ((n.data.respawnNonce as number | undefined) ?? 0) + 1
+    }))
+  }
+  const dismissStaleCwd = (): void => setCo(termKey, { staleCwd: false })
+
   // "Not connected" (CoState.offline): the host was unreachable, so this node has no session
   // anywhere. Ask the coordinator to re-establish the project's master NOW — it flushes the
   // pending nodes (this one included) on success, which is what respawns them. We do NOT bump
@@ -2371,7 +2422,7 @@ export function TerminalNode({
     const container = bodyRef.current
     if (!container) return
 
-    // Adopt-or-create: a parked terminal (this node unmounted less than TERM_PARK_MS ago) is
+    // Adopt-or-create: a parked terminal (this node unmounted within the park window) is
     // re-adopted with its live PTY session and full xterm state intact; otherwise a fresh
     // xterm + session are built. `myNonce` vs the render-updated ref tells the cleanup below
     // whether it runs for a respawn (worktree move — must NOT park) or a plain unmount.
@@ -2709,6 +2760,11 @@ export function TerminalNode({
      */
     const applyFit = () => {
       try {
+        // A DOM renderer built while this node was unmeasurable — the park (its cleanup releases
+        // the webgl grant AFTER React detached the element) or a display:none wrapper — measured a
+        // 0-wide 'W' and baked a full extra cell into its row spacing. This is the first moment it
+        // can be re-derived; a no-op whenever the spacing already agrees. See the helper.
+        if (resyncDomRendererSpacing(term)) fullRepaint()
         // Board up → this canvas terminal is hidden behind the overlay. Report "not viewing" (null)
         // so a card-modal viewer of the same session drives the grid instead of being clamped to our
         // (possibly zoomed-tiny) canvas size. No modal viewer → no size vote at all → the pty simply
@@ -3137,6 +3193,7 @@ export function TerminalNode({
       term.loadAddon(fit)
       term.loadAddon(searchAddon)
       term.open(container)
+      patchImeModeSwitch(term)
       // Renderer-parity: quantize the char measurement to the device-pixel grid, so a budget
       // grant/release swaps renderers without the text visibly reflowing (see the helper).
       quantizeCharSize(term)
@@ -3267,7 +3324,12 @@ export function TerminalNode({
       // into a CSI write and cancel the event — and DO NOT preventDefault: the dispatcher bails
       // on defaultPrevented events, so a prevented bubble would kill the very dispatch this
       // exists to reach.
-      if (action === 'bubble') return false
+      // 'native': same mechanics, different owner — the PLATFORM's paste (Windows Ctrl+V, issue
+      // #562). xterm would map it to \x16 and cancel the keydown, which suppresses both
+      // Chromium's paste command and the Edit menu's Ctrl+V accelerator; leaving the event
+      // untouched lets the ordinary `paste` event reach xterm's textarea, exactly as ⌘V does on
+      // macOS (bracketed-paste framing included).
+      if (action === 'bubble' || action === 'native') return false
       e.preventDefault()
       if (action === 'copy') window.nodeTerminal.clipboard.writeText(term.getSelection())
       // Shift+Enter → ESC+CR so agent CLIs insert a newline instead of submitting
@@ -3477,6 +3539,7 @@ export function TerminalNode({
             sessionId: sid,
             fresh,
             accountFallback: fellBack,
+            staleCwd,
             closed,
             screen,
             cursor,
@@ -3564,6 +3627,9 @@ export function TerminalNode({
             sessionPersistentRef.current = sessionPersistent
             if (fellBack) setAccountFallback(true)
             if (!disposed) setPersistenceUnavailable(degradedReason ?? null)
+            // Truthful on EVERY result, not only when set: a clean respawn ("Restart in folder", or
+            // any refresh that landed on a healthy session) must take the banner down with it.
+            setCo(termKey, { staleCwd: !!staleCwd })
             // Catch up a size change that landed while the spawn was in flight (applyFit skips the
             // IPC until sessionId is set, and the observer won't re-fire without another change).
             applyFit()
@@ -3616,13 +3682,6 @@ export function TerminalNode({
                 })
               )
             }
-            // A restart we did not ask for: say why once, before the new session's output lands. (We
-            // JOIN the replacement session, so tmux — which already has a client — does not redraw for
-            // us; the first thing on this screen is whatever the new shell prints next.)
-            if (wasRecycled)
-              term.write(
-                `\r\n\x1b[90m── ${vocabRef.current('session restarted by another user (moved to a new folder)')} ──\x1b[0m\r\n`
-              )
             // Flow control: track xterm's unprocessed write backlog (bytes handed to
             // term.write but not yet parsed, plus anything still queued in the gate below). Past a
             // high watermark we pause the source so a flood can't grow this buffer without bound;
@@ -3776,6 +3835,11 @@ export function TerminalNode({
                   )
                 }
               } else if (replay === 'warm-attach') {
+                // A joiner's xterm never saw tmux's attach-time `\e[?1049h` (PtyCreateResult
+                // .coAttachAltScreen). Before the paint: entering the alt buffer clears the display.
+                // Not once a resync has superseded the seed: its repaint (`term.reset()` + the capture)
+                // may already have landed, and entering the alt buffer now would blank it.
+                if (coAttachAltScreen && !superseded) term.write(CO_ATTACH_ALT_SCREEN_SEQ)
                 // tmux is attached to this client and paints it: the visible screen on attach, its own
                 // history under the wheel. So there is nothing to hydrate — EXCEPT for a CO-ATTACH
                 // JOINER, whose `screen` was captured inside `create()`: tmux only repaints on SIGWINCH,
@@ -3805,6 +3869,15 @@ export function TerminalNode({
               // wheel-scroll tmux history. Enable it (see CO_ATTACH_MOUSE_SEQ). Only ever set on a join,
               // so this never fires on the solo spawn / warm-reattach-with-own-tmux-client path.
               if (coAttachMouse) term.write(CO_ATTACH_MOUSE_SEQ)
+              // A restart we did not ask for: say why once, before the new session's output lands (the
+              // gate below is still shut). We JOIN the replacement session, so tmux — which already has
+              // a client — does not redraw for us. AFTER the seed, never before it: a joiner enters the
+              // alternate buffer above (coAttachAltScreen), and a banner written earlier would sit in
+              // the normal buffer the user no longer sees — or be cleared by the switch.
+              if (wasRecycled)
+                term.write(
+                  `\r\n\x1b[90m── ${vocabRef.current('session restarted by another user (moved to a new folder)')} ──\x1b[0m\r\n`
+                )
             } catch (err) {
               // Never let a seed failure freeze the terminal: the live stream matters more than the
               // history. `finally` still opens the gate below.
@@ -4152,6 +4225,9 @@ export function TerminalNode({
             sessionId: agentSessionId,
             io: restartIo,
             paneCommand: () => api.pty.paneCommand(id),
+            // A user-asked restart, like performRestartResume: a CLI that is slow to quit is
+            // waited on rather than left to quit unwatched.
+            lateExitMs: RESTART_LATE_EXIT_MS,
             isLive: restartTarget
           })
           if (exited !== 'exited') return exited
@@ -4596,7 +4672,7 @@ export function TerminalNode({
       const co = getCo(termKey)
       if (sessionId && !isRespawn && !co.closed && !co.ended && !noParkIds.delete(termKey)) {
         // Park = "subscribed, but not viewing": report no size at all, so this window's (possibly
-        // small) grid stops clamping every other subscriber's terminal for the next five minutes.
+        // small) grid stops clamping every other subscriber's terminal for as long as it stays parked.
         // The subscription itself stays — output keeps streaming into the parked xterm — and the
         // adopting mount re-reports its size (sentCols/sentRows are NOT carried over; see above).
         transport.resize(sessionId, null, null)
@@ -4611,6 +4687,7 @@ export function TerminalNode({
           // Snapshot NOW, because the departure effect declared below this one clears this node's
           // agent status on this very unmount — every lever reads later and would see nothing.
           parkedAgentState: readAgentState(),
+          agentProcess: readAgentProcessRef.current(),
           parkedAt: Date.now(),
           readAgentState,
           cleanups,
@@ -4626,8 +4703,9 @@ export function TerminalNode({
                 disposeParked(entry)
               }
             },
-            TERM_PARK_MS
-          )
+            parkWindowMs(useSettings.getState().settings.terminalParkMinutes)
+          ),
+          remote: sshRemoteTmux || session.source === 'relay'
         }
         disposeParkedTerminal(termKey) // defensive: never stack two entries for one node
         parkedTerminals.set(termKey, entry)
@@ -4642,7 +4720,14 @@ export function TerminalNode({
         // re-adopt. A microtask is what defers past the whole synchronous passive-effect flush
         // (cleanups AND mounts); adoption has removed its entries from the map by then.
         queueMicrotask(() => {
-          for (const k of planParkEviction([...parkedTerminals.keys()], PARK_MAX, parkDisposable)) {
+          const cap = parkCap(useSettings.getState().settings.terminalParkMax)
+          const remoteKey = (k: string): boolean => parkedTerminals.get(k)?.remote ?? false
+          for (const k of planParkEviction(
+            [...parkedTerminals.keys()],
+            cap,
+            parkDisposable,
+            remoteKey
+          )) {
             if (k !== termKey) disposeParkedTerminal(k)
           }
         })
@@ -4792,7 +4877,8 @@ export function TerminalNode({
             if (
               shouldDeferReleaseForLiveWork({
                 tmuxBacked: sessionPersistentRef.current,
-                agentState: readAgentStateRef.current()
+                agentState: readAgentStateRef.current(),
+                agentProcess: readAgentProcessRef.current()
               })
             ) {
               // Re-stamp the offscreen clock: this node is not RELEASABLE yet, and the Eco
@@ -5667,6 +5753,17 @@ export function TerminalNode({
           {/* ADHD time awareness — beside the session chip, because a clock in a menu does nothing
             for time blindness. Renders nothing at all while the mode is off. */}
           <AdhdElapsedChip nodeId={id} />
+          {/* Dev servers this session listens on. On an SSH project a row forwards the SAME port over
+            the project's master before opening it. The card modal draws the same component. */}
+          <PortsChip
+            nodeId={id}
+            projectId={portsProjectId}
+            remote={sshProject}
+            onOpenUrl={(url) =>
+              window.dispatchEvent(new CustomEvent('nodeterm:open-url-node', { detail: { url, sourceNodeId: id } }))
+            }
+            menuZIndex={60}
+          />
           {/* Cold-relaunch recovery is an explicit anchored review card. It reads encrypted provider
             state only; mounting never sends text and the Continue action owns the only delivery. */}
           <AgentContinuationReview
@@ -6144,6 +6241,46 @@ export function TerminalNode({
               </Button>
             </div>
           )}
+          {/* Stale working directory: a slim TOP banner, never a covering overlay — the terminal
+            underneath is alive and may be mid-work. Top edge on purpose: shells and agent CLIs
+            write their input line at the bottom. */}
+          {!co.closed &&
+            !co.ended &&
+            !co.spawnError &&
+            !co.offline &&
+            co.staleCwd &&
+            !offscreenDown && (
+              <div className="term-node__stalecwd nodrag" role="status">
+                <span className="term-node__stalecwd-text">
+                  {profileText(
+                    'terminal.staleCwd.message',
+                    'This terminal’s folder was deleted or replaced, so the shell’s working directory no longer exists.'
+                  )}
+                </span>
+                <Button
+                  variant="tonal"
+                  size="small"
+                  className="term-node__stalecwd-restart"
+                  vocabularyMode="factual"
+                  title={profileText(
+                    'terminal.staleCwd.restartHint',
+                    'End this shell and start a fresh one in {folder}. Anything still running in this terminal will end.',
+                    { folder: (data.cwd as string) || 'the project folder' }
+                  )}
+                  onClick={restartInFolder}
+                >
+                  {profileText('terminal.staleCwd.restart', 'Restart in folder')}
+                </Button>
+                <IconButton
+                  size="compact"
+                  className="term-node__stalecwd-dismiss"
+                  icon="close"
+                  aria-label={profileText('terminal.staleCwd.dismiss', 'Dismiss the folder warning')}
+                  title={profileText('terminal.staleCwd.dismiss', 'Dismiss the folder warning')}
+                  onClick={dismissStaleCwd}
+                />
+              </div>
+            )}
           {!co.closed && !co.ended && co.spawnError && (
             <div className="term-node__closed nodrag" role="alert">
               {/* The host error is a FACT, interpolated once into its own block: the bilingual

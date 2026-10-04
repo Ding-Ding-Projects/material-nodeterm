@@ -68,6 +68,7 @@ import { CLOUDFLARE_TUNNEL_ACCOUNTS_CHANNEL } from '../shared/cloudflare-tunnel'
 import type { GitHubApiRequest, GitHubApiProgress } from '../shared/github-api'
 import type { AwsIdentityAction, AwsIdentityBinding, AwsIdentityOperation } from '../shared/aws-identity'
 import type { AwsManagerProgress } from '../shared/aws-resource'
+import type { DevPortForwardRequest, DevPortsQuery } from '../shared/dev-ports'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -862,6 +863,13 @@ const api: NodeTerminalApi = {
       ipcRenderer.on(IPC.agentContinuationUpdate, handler)
       return () => ipcRenderer.removeListener(IPC.agentContinuationUpdate, handler)
     }
+  },
+  // Forwarded verbatim for the same reason as sessionMemory: `remote` is OR-ed with the core's own
+  // claim, and a forward request carries only node + port — the host-side address is decided in core.
+  devPorts: {
+    scan: (q?: DevPortsQuery) => ipcRenderer.invoke(IPC.devPortsScan, q),
+    forward: (req: DevPortForwardRequest) => ipcRenderer.invoke(IPC.devPortsForward, req),
+    unforward: (req: { projectId: string; localPort: number }) => ipcRenderer.invoke(IPC.devPortsUnforward, req)
   },
   // WSL distribution management — Windows-only in practice (wsl.exe simply is not found
   // elsewhere); every call rejects honestly rather than resolving to a fabricated empty result.

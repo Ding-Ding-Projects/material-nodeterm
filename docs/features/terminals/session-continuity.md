@@ -47,6 +47,29 @@ nothing to reattach to. nodeterm bridges this gap instead of pretending it did n
   example `claude --resume <session-id>`) using the session id it had recorded, rather than
   leaving you to type it back in.
 
+### Snapshot pacing
+
+The on-disk snapshot is refreshed on a 15-second tick, but a session that stays busy (an agent's
+spinner redraws for as long as it works) is no longer captured on every tick. A session with new
+output is captured on its first four busy ticks and then on every fourth one, captures run one at a
+time, a session already queued is never queued twice, and a capture whose content has not changed
+since the last write is skipped. A failed write marks the session dirty again so the next tick
+retries, and detach and quit still take a final capture. The trade-off is deliberate: after a
+reboot, the replay of a continuously busy session can be up to about a minute old.
+(`src/core/scrollback-cadence.ts`; upstream `8df485d9`, `3570a287`, `48e86eb8`.)
+
+### A second viewer of the same session
+
+When a second client joins a live tmux session (another window on the node, or the kanban card
+modal), its fresh terminal never saw the codes tmux sent at its own attach. The joiner now enters
+the alternate screen before its captured screen is painted, as it already re-enabled mouse
+tracking, so a full-screen program looks and scrolls the same in both views. A resync repaint
+(`term.reset()` plus a fresh capture) re-applies the alternate screen and mouse modes for any tmux
+client, and the "session restarted by another user" line is written after the switch so it lands
+on the screen the user actually sees. Session-host (Windows) and plain-shell sessions are never
+switched to the alternate screen, which would hide their only scrollback. (Upstream `8379470f`,
+`cd83267f`, `978c7191`.)
+
 ## Configuration
 
 - **Settings → tmux** — turn persistent backend support on/off, and set the scrollback bound used

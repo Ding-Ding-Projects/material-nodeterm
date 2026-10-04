@@ -45,7 +45,12 @@ export const HOST_ONLY_CHANNELS: ReadonlySet<string> = new Set([
   // so moving them onto the platform table later cannot quietly open them.
   IPC.appUpdatePrepInspect,
   IPC.appUpdatePrepShutdown,
-  IPC.appUpdatePrepQuit
+  IPC.appUpdatePrepQuit,
+  // Dev-server ports: a scan lists the host's listening ports, and a forward binds a port on the
+  // HOST machine's loopback over one of its SSH masters. Neither is a peer's to ask for.
+  IPC.devPortsScan,
+  IPC.devPortsForward,
+  IPC.devPortsUnforward
 ])
 
 /** What a refused peer is told. One wording, so the two shells answer identically. */

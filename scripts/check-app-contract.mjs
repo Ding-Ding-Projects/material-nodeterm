@@ -2530,6 +2530,73 @@ const FEATURES = [
     docs: ['docs/features/terminals/named-terminal-profiles.md'],
   },
   {
+    id: 'agent-restart-in-place',
+    label: 'In-place agent restart and Eco quit',
+    files: ['src/renderer/terminal/agent-restart.ts'],
+    contentChecks: [
+      ['src/renderer/terminal/agent-restart.ts', 'const CTRL_C_QUITS: Record<string, number> = {'],
+      ['src/renderer/terminal/agent-restart.ts', 'export const RESTART_LATE_EXIT_MS = 60_000'],
+      ['src/renderer/terminal/agent-restart.ts', 'export function exitTimeoutNotice('],
+    ],
+    docs: ['docs/features/terminals/agent-restart-in-place.md'],
+  },
+  {
+    id: 'terminal-park-window',
+    label: 'Switched-away terminal park window and cap',
+    files: ['src/renderer/terminal/park-budget.ts', 'src/renderer/components/settings/sections/TmuxSection.tsx'],
+    contentChecks: [
+      ['src/renderer/terminal/park-budget.ts', 'export function parkWindowMs('],
+      ['src/renderer/terminal/park-budget.ts', 'export function parkCap('],
+      ['src/renderer/components/settings/sections/TmuxSection.tsx', 'settings.tmux.parkMinutes.label'],
+      ['src/renderer/components/settings/sections/TmuxSection.tsx', 'settings.tmux.parkMax.label'],
+    ],
+    docs: ['docs/features/terminals/park-window.md'],
+  },
+  {
+    id: 'terminal-keyboard-rendering-fixes',
+    label: 'Terminal keyboard and rendering fixes',
+    files: [
+      'src/renderer/terminal/terminal-config.ts',
+      'src/renderer/terminal/ime-mode-switch.ts',
+      'src/renderer/terminal/dom-renderer-spacing.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/terminal/terminal-config.ts', 'export function isPasteShortcut('],
+      ['src/renderer/terminal/ime-mode-switch.ts', 'export function patchImeModeSwitch('],
+      ['src/renderer/terminal/dom-renderer-spacing.ts', 'export function resyncDomRendererSpacing('],
+    ],
+    docs: ['docs/features/terminals/terminal-keyboard-and-rendering.md'],
+  },
+  {
+    id: 'terminal-stale-cwd',
+    label: 'Stale working directory banner',
+    files: ['src/core/pane-cwd.ts', 'src/core/pty-manager.ts', 'src/renderer/nodes/TerminalNode.tsx'],
+    contentChecks: [
+      ['src/core/pane-cwd.ts', 'export function classifyPaneCwd('],
+      ['src/core/pty-manager.ts', 'private async paneCwdStale(persistKey: string)'],
+      ['src/renderer/nodes/TerminalNode.tsx', "profileText('terminal.staleCwd.restart', 'Restart in folder')"],
+    ],
+    docs: ['docs/features/terminals/stale-working-directory.md'],
+  },
+  {
+    id: 'terminal-dev-ports',
+    label: 'Dev-server ports chip and SSH same-port forwarding',
+    files: [
+      'src/core/dev-ports.ts',
+      'src/core/dev-ports-service.ts',
+      'src/core/remote-ssh/port-forward.ts',
+      'src/renderer/components/PortsChip.tsx',
+      'src/renderer/canvas/useDevPortScanner.ts',
+    ],
+    contentChecks: [
+      ['src/core/dev-ports-service.ts', 'export function startDevPortsService('],
+      ['src/renderer/components/PortsChip.tsx', 'export const PortsChip'],
+      ['src/renderer/bridge/ws-bridge.ts', 'export function buildDevPortsApi('],
+      ['src/server/index.ts', 'startDevPortsService({'],
+    ],
+    docs: ['docs/features/terminals/dev-server-ports.md'],
+  },
+  {
     id: 'session-icons',
     label: 'Per-session icons',
     files: [

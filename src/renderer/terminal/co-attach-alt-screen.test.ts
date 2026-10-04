@@ -23,4 +23,20 @@ describe('co-attach joiner alternate screen', () => {
       expect(alt).toBeLessThan(paint)
     })
   }
+
+  // The recycle banner ("session restarted by another user") is written on a JOIN of the
+  // replacement session — exactly when the alt switch fires. Written before the switch it lands
+  // in the normal buffer the user no longer sees (and the paint would overwrite it anyway).
+  it('TerminalNode writes the recycle banner after the alt switch and the joiner paint', () => {
+    const s = src('nodes/TerminalNode.tsx')
+    const alt = s.indexOf('term.write(CO_ATTACH_ALT_SCREEN_SEQ)')
+    const paint = s.indexOf('toXtermText(stripTrailingNewline(')
+    const banner = s.indexOf('session restarted by another user (moved to a new folder)')
+    const gateOpen = s.indexOf('gate.open()', paint)
+    expect(banner).toBeGreaterThan(-1)
+    expect(banner).toBeGreaterThan(alt)
+    expect(banner).toBeGreaterThan(paint)
+    // …but still before the gate releases the new session's output.
+    expect(banner).toBeLessThan(gateOpen)
+  })
 })

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Button, IconButton } from '../ui/md3'
+import { useDevPortScanner } from './useDevPortScanner'
 import { useShallow } from 'zustand/react/shallow'
 import { playAlertSound, primeSfx } from '@renderer/lib/sfx'
 import { narrate, suppressNarratorTrack } from '@renderer/lib/narrator'
@@ -496,6 +497,7 @@ import { sshFs } from '../terminal/ssh-fs'
 import {
   agentHibernateFns,
   agentRestartFn,
+  exitTimeoutNotice,
   guardConcurrentRestart,
   modelSwitchEligibility,
   planBulkRestart,
@@ -2431,6 +2433,13 @@ export function Canvas() {
   // tab switch. Reading presence imperatively via `.store.getState()`/`.subscribe` (never a reactive
   // `usePresence(sel)` hook) is the PERF CONTRACT: a peer's 20 Hz cursor never re-renders Canvas.
   const activeSession = sessionForProject(activeProjectId || '')
+  // Dev-server ports of the project on screen (CLAUDE.md → Dev-server ports): a primitive of its
+  // terminal ids, so a drag or an edit does not re-run the scanner's effects.
+  const devPortTerminalSig = useMemo(
+    () => nodes.filter((n) => n.type === 'terminal').map((n) => n.id).join(','),
+    [nodes]
+  )
+  useDevPortScanner(activeProjectId || '', devPortTerminalSig)
   const activePresence = presenceForProject(activeProjectId || '')
   // "Has projects" = at least one OPEN (non-closed) tab. With only closed projects left, the
   // welcome screen shows (and lists them under "Recently closed" for reopening) — and, per
@@ -9976,6 +9985,18 @@ export function Canvas() {
       )
       markDirty()
     }
+    // The bare resume line for the exit-timeout notice, read from the same two sources the node's
+    // restart closure used (live hook id, else the persisted minted one). Null when either is
+    // unknown or unusable — `resumeCommand` refuses an unsafe id and has no line for a custom agent.
+    const exitTimeoutResumeLine = (id: string): string | null => {
+      const node = nodesRef.current.find((n) => n.id === id)
+      const agentId = node?.data.agentId as AgentId | undefined
+      const sid = restartSessionId(
+        useAgentStatus.getState().byId[id]?.sessionId,
+        node?.data.agentSessionId
+      )
+      return agentId && sid ? resumeCommand(agentId, sid) : null
+    }
     const targetLabel =
       targetAgentId == null
         ? undefined
@@ -10001,11 +10022,9 @@ export function Canvas() {
               kind: 'error',
               // Deliberately does NOT claim the session is still running: what we know is that the
               // pane never came back to a shell within the timeout, so the resume was not sent.
-              // Nothing is ever force-killed, so the pane is exactly as the CLI left it — which is
-              // what the user has to go and look at.
-              text:
-                `${action} failed: the pane did not return to a shell in time, so the CLI was not ` +
-                'relaunched. Nothing was killed — check the pane.'
+              // Nothing is ever force-killed — but a CLI that quits AFTER we stopped watching leaves
+              // a bare shell with no agent, so the notice carries the resume line.
+              text: exitTimeoutNotice(action, exitTimeoutResumeLine(nodeId))
             }
           : {
               kind: 'error',
@@ -14144,6 +14163,38 @@ export function Canvas() {
       // Deliberately NO markDirty: a temporary node is absent from every save, so marking the
       // project dirty would write a file whose only change is one the file cannot contain.
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // A user's own request to open a page beside the node that produced it (a dev-server port row in
+  // the terminal header or card modal). Unlike a page's popup above, this is a deliberate click, so
+  // the browser node is an ordinary persisted node, and the popup flood guard does not apply. Only
+  // http(s) URLs are accepted; the source node must be on the live canvas.
+  useEffect(() => {
+    const onOpenUrlNode = (e: Event): void => {
+      const d = (e as CustomEvent<{ url?: string; sourceNodeId?: string }>).detail
+      if (!d?.url || !/^https?:\/\//i.test(d.url)) return
+      const src = nodesRef.current.find((n) => n.id === d.sourceNodeId)
+      if (!src) return
+      const srcW = src.measured?.width ?? (src.width as number) ?? 800
+      const srcH = src.measured?.height ?? (src.height as number) ?? 560
+      const srcGroup = src.parentId ? nodesRef.current.find((n) => n.id === src.parentId) : undefined
+      const node = createBrowserNode(nodesRef.current.length, d.url, {
+        x: src.position.x + (srcGroup?.position.x ?? 0) + srcW / 2 + 40,
+        y: src.position.y + (srcGroup?.position.y ?? 0) + srcH + 80 + 280
+      })
+      const placed = src.parentId ? parentInto(node, src.parentId) : node
+      setNodes((ns) => [...ns, placed])
+      const nextRopes = [
+        ...controlEdgesRef.current,
+        ropeEdge(`ctrl-${src.id}-${placed.id}`, src.id, placed.id, '#0a84ff')
+      ]
+      controlEdgesRef.current = nextRopes
+      setControlEdges(nextRopes)
+      markDirty()
+    }
+    window.addEventListener('nodeterm:open-url-node', onOpenUrlNode)
+    return () => window.removeEventListener('nodeterm:open-url-node', onOpenUrlNode)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

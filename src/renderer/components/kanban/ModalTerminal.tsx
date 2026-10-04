@@ -1,4 +1,5 @@
 import { Localized } from '../../ui/Localized'
+import { patchImeModeSwitch } from '../../terminal/ime-mode-switch'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -243,6 +244,7 @@ export function ModalTerminal({
     fitRef.current = fit
     transportRef.current = transport
     term.open(hostRef.current!)
+    patchImeModeSwitch(term)
     // Renderer-parity with the canvas terminals (see char-size-quantize): the modal co-views
     // the same session, so its column math must match what the canvas draws.
     quantizeCharSize(term)
@@ -306,8 +308,9 @@ export function ModalTerminal({
       const action = terminalKeyAction(e, term.hasSelection(), ownsProjectJump, registryOwns)
       if (action === 'pass') return true
       // 'bubble': hand the chord to the window dispatcher — no preventDefault (it bails on
-      // defaultPrevented), no xterm processing. See TerminalNode's twin comment.
-      if (action === 'bubble') return false
+      // defaultPrevented), no xterm processing. 'native' leaves the event uncancelled for the
+      // PLATFORM's own paste (Windows Ctrl+V). See TerminalNode's twin comment.
+      if (action === 'bubble' || action === 'native') return false
       e.preventDefault()
       if (action === 'copy') window.nodeTerminal.clipboard.writeText(term.getSelection())
       else if (action === 'shift-enter' && sessionId) transport.write(sessionId, SHIFT_ENTER_SEQ)

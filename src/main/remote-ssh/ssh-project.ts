@@ -2766,6 +2766,14 @@ export function resolvePassphrasePrompt(requestId: string, value: string | null)
  *  not hand a host two budgets. */
 const sshChildGate = new SshChildGate()
 
+/** In-process listeners for every project status event (beside the renderer push). Used by the
+ *  dev-port forward registry to forget a disconnected project's forwards. */
+const sshStatusListeners = new Set<(e: SshProjectStatusEvent) => void>()
+export function onSshProjectStatus(listener: (e: SshProjectStatusEvent) => void): () => void {
+  sshStatusListeners.add(listener)
+  return () => sshStatusListeners.delete(listener)
+}
+
 export function initSshProject(
   onConnected?: (projectId: string) => void,
   askpassScriptPath?: string,
@@ -2925,6 +2933,13 @@ export function initSshProject(
     nodeIdsForProject: (projectId) => nodeIdsForCanvas(projectId),
     nodeTokenMinter: () => remoteNodeTokenMinter(),
     onStatus: (e) => {
+      for (const listener of [...sshStatusListeners]) {
+        try {
+          listener(e)
+        } catch {
+          // an in-process listener must never break the status push to the UI
+        }
+      }
       // sendToMain resolves the window AT SEND TIME (see main-window.ts): the `win` captured here
       // can be destroyed and recreated, and sending to the stale reference is
       // silently dropped. The try/catch is the other half: webContents.send THROWS when the render

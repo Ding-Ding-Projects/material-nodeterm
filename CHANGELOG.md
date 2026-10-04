@@ -103,6 +103,66 @@
   alternate screen, the managed launcher PATH lands on Windows' `Path`, and the node-pty patch
   reads and writes through one descriptor. See
   `docs/features/terminals/windows-session-host-runtime.md`.
+- Port upstream dev-server port discovery (upstream `4e6e8607`, `6bad4a60`). A terminal node and
+  its kanban card modal show the ports the session listens on as a Material 3 chip; a row opens
+  `http://localhost:<port>` in a browser node beside the terminal, and on an SSH project forwards
+  the same port over the project's SSH connection first (loopback only, never a privileged or
+  re-mapped port without asking). The Server Edition serves the same scan for its own machine and
+  lists the ports without an open action. See `docs/features/terminals/dev-server-ports.md`.
+
+  搬咗上游「開發伺服器 port」功能：terminal node 同 kanban 卡片會顯示個 session 監聽緊嘅 port，
+  撳一下就喺旁邊開個瀏覽器 node；SSH project 會先經 SSH 連線將同一個 port 轉駁返嚟（只綁本機，
+  1024 以下或者換 port 都會先問你）。Server Edition 會列出伺服器自己嘅 port，但唔會幫你打開。
+- Port upstream terminal session pacing and co-attach fixes (upstream `8df485d9`, `3570a287`,
+  `48e86eb8`, `8379470f`, `cd83267f`, `978c7191`). The cold-restore scrollback snapshot of a busy
+  session is captured on a paced cadence, serialized, skipped when unchanged and retried after a
+  failed write. A second view of a live tmux session (another window or the kanban card modal)
+  enters the alternate screen before its first paint, a resync repaint restores tmux's alternate
+  screen and mouse modes, and the "restarted by another user" line lands on the visible screen.
+  See `docs/features/terminals/session-continuity.md`.
+
+  搬咗上游 session 快照同多個視窗嘅修正：一直忙緊嘅 session 唔會每 15 秒都影一次快照，冇變就唔寫，
+  寫失敗會再試。第二個視窗（例如 kanban 卡片）睇同一個 tmux session 時會先入 alternate screen 先
+  畫，重畫之後滑鼠同 alternate screen 都會返晒嚟。
+- Port the upstream stale working directory banner (upstream `eb3e520f`). When a terminal
+  reattaches to a tmux session whose folder was deleted or replaced, the node shows a slim
+  Material 3 banner along its top edge with **Restart in folder**, which ends the old session and
+  starts a fresh shell in the node's folder. Nothing restarts on its own. Local tmux sessions only;
+  SSH nodes are not probed. See `docs/features/terminals/stale-working-directory.md`.
+
+  搬咗上游「資料夾冇咗」提示：terminal 重新連返一個資料夾已經俾人刪咗或者換咗嘅 tmux session 時，
+  個 node 頂部會出一條細細嘅提示，撳「喺資料夾重新開」就會收咗舊 session、喺返個資料夾開過個新
+  shell。唔會自己重開。暫時只限本機 tmux。
+- Port upstream terminal keyboard and rendering fixes (upstream `19032d1f`, `90257bdc`, `397c09db`,
+  `24597cbf`, `9e450603`): Cmd/Ctrl+1–9 switches project from a focused terminal or card modal,
+  Ctrl+V pastes in Windows terminals, toggling Caps Lock during input-method composition no longer
+  commits twice, and a DOM-rendered terminal that was built while hidden re-derives its row spacing
+  on reattach. See `docs/features/terminals/terminal-keyboard-and-rendering.md`.
+
+  搬咗上游幾個 terminal 鍵盤同顯示修正：喺 terminal 入面撳 Cmd/Ctrl+1–9 都轉到 project；Windows
+  撳 Ctrl+V 終於貼得到；用輸入法打字撳 Caps Lock 唔會重複送出；收埋咗再返嚟嘅 terminal 唔會多咗
+  一格行距。
+- Port the upstream terminal park settings (upstream `30fbd95e`, `b894163f`, `f9980d5f`,
+  `cbe6f994`, `e43fe37a`). Settings → tmux now sets how long a switched-away project's terminals
+  stay attached (default 10 minutes, 0 until the app quits) and how many may stay attached in total
+  (default 20); past the cap local terminals are released before SSH and relay ones. An idle agent
+  CLI on a plain shell is no longer released by a project switch, and the zoom text-selection fix
+  reads layout once per frame. See `docs/features/terminals/park-window.md`.
+
+  搬咗上游 terminal 停泊設定：Settings → tmux 可以揀轉走咗嘅 project 啲 terminal 保持連住幾耐
+  （預設 10 分鐘，0 即係留到 app 關）同埋最多留幾多個（預設 20）；超咗就先放本機、後放 SSH 同
+  relay。冇 tmux 嘅 shell 入面就算 agent 閒住都唔會因為轉 project 俾人收咗。
+- Port the upstream in-place agent restart fixes (upstream `ff365255`, `00d92ea8`, `81da4c5e`,
+  `1a1c5285`, `72110c57`, `d8e89701`, `43bfc1a4`). Claude and Grok are now quit with three Ctrl-C
+  presses and Codex, opencode and Copilot with two, instead of a typed `/exit` that a composer popup
+  could swallow; opencode can be restarted and hibernated; a user-requested restart keeps watching a
+  slow quit for up to a minute; and the exit-timeout notice now carries the exact resume line. The
+  resume delivery keeps this fork's Ctrl-C retry for PowerShell panes. See
+  `docs/features/terminals/agent-restart-in-place.md`.
+
+  搬咗上游原地重開 agent 嘅修正：Claude 同 Grok 而家撳三下 Ctrl-C、Codex、opencode 同 Copilot
+  撳兩下就收工，唔再打 `/exit`（打字有機會俾輸入框食咗）；opencode 都可以重開同 Eco 休眠；你自己
+  撳嘅重開會等慢嘅 CLI 最多一分鐘；等唔到嘅時候個提示會直接俾你條 resume 指令。
 - Port the first upstream security tranche (issue #225, upstream `1bf6fadb`, `60714074`, `fee5b244`,
   `23a7282b`, `9fa879d0`, `2d3e54cb`): a plain terminal keeps its inherited provider credentials in
   subscription mode (both strip sites in this fork); a Linux desktop with no keyring stores the

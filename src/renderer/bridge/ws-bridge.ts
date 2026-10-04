@@ -6,6 +6,7 @@
 // namespaces (`pty`, `workspace`, `settings`, `homeAssistant`) over that socket. Every other namespace comes from
 // `buildStubApi()` (Task 7) so the renderer boots without a full Electron preload.
 
+import type { DevPortForwardResult, DevPortsReport } from '@shared/dev-ports'
 import {
   parseRpcMessage,
   encodeArgs,
@@ -1771,6 +1772,18 @@ function buildUsageApi(client: RpcClient): Pick<NodeTerminalApi, 'usage'> {
  * which are the service's own words for "the sweep could not run" and "RAM unreadable". The panel
  * shows a failed request as a failed request.
  */
+/** Dev-server ports, served by the same core service the desktop registers (local scan only: the
+ *  server has no SSH ControlMaster, so an SSH project and every forward answer `unsupported`). */
+export function buildDevPortsApi(client: RpcClient): Pick<NodeTerminalApi, 'devPorts'> {
+  return {
+    devPorts: {
+      scan: (q) => client.request(IPC.devPortsScan, q) as Promise<DevPortsReport>,
+      forward: (req) => client.request(IPC.devPortsForward, req) as Promise<DevPortForwardResult>,
+      unforward: (req) => client.request(IPC.devPortsUnforward, req) as Promise<boolean>
+    }
+  }
+}
+
 export function buildSessionMemoryApi(client: RpcClient): Pick<NodeTerminalApi, 'sessionMemory'> {
   return {
     sessionMemory: {
@@ -2260,6 +2273,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildCloudflareZeroTrustApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
+    ...buildDevPortsApi(client),
     ...buildVsCodeApi(client),
     ...buildWslApi(client),
     ...buildWindowsDiagnosticsApi(client),

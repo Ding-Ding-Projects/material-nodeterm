@@ -25,7 +25,7 @@ import {
  *  an unknown CLI has no safe way to be asked to quit. One entry turns on both surfaces at once:
  *  the single-node "Restart agent (resume)" row in the node context menu, and the bulk "restart
  *  idle agents" action (pane menu + command palette). There is no header button for either —
- *  `HIDEABLE_HEADER_BUTTONS` is refresh / mic / ai-name / comments. The matching relaunch line
+ *  `HIDEABLE_HEADER_BUTTONS` holds no restart entry. The matching relaunch line
  *  always comes from `resumeCommand`.
  *
  *  Each value is the CLI's own DOCUMENTED PRIMARY, and is sent BARE:
@@ -40,8 +40,33 @@ const EXIT_SEQUENCES: Record<string, string> = {
   codex: '/quit',
   grok: '/quit',
   gemini: '/quit',
-  copilot: '/exit'
+  copilot: '/exit',
+  opencode: '/exit'
 }
+
+/** Agents quit with Ctrl-Cs rather than their typed exit, and how many — see `performExitPhase`.
+ *  Their entry in EXIT_SEQUENCES above still gates the restart and hibernation, which ask whether
+ *  an agent can be quit in place at all.
+ *   - codex (#842): one Ctrl-C clears the composer or, when it is empty, quits; two cover both.
+ *   - claude (#928): one Ctrl-C clears the composer, the next arms "Press Ctrl-C again to exit" and
+ *     the third exits; with an empty composer the second already exits.
+ *   - grok: same shape as claude — the first clears the whole composer ("Input cleared"), the next
+ *     arms "press again to quit" (a ~1.5 s window), the third exits. Measured on grok 1.0.40.
+ *   - opencode: one Ctrl-C clears the composer or, when it is empty, quits at once; two cover both.
+ *     Measured on 1.18.32.
+ *   - copilot: one Ctrl-C clears the composer AND arms "ctrl+c again to exit" (~2 s), the second
+ *     exits; two cover both. Measured on 1.0.88.
+ *  gemini is the one agent still on its typed exit: it was not measured (its composer is only
+ *  reachable after a login). */
+const CTRL_C_QUITS: Record<string, number> = {
+  codex: 2,
+  claude: 3,
+  grok: 3,
+  opencode: 2,
+  copilot: 2
+}
+const CTRL_C = '\x03'
+const CTRL_C_GAP_MS = 150
 
 export function exitSequence(agentId: string): string | null {
   // Resolve through the BASE harness so a custom agent that inherits claude (e.g. a proxy wrapper)
@@ -105,8 +130,19 @@ export function restartSessionId(live: unknown, persisted: unknown): string | un
   return undefined
 }
 
-/** Eligibility for the vanilla-provider recycle path. Unlike in-band exit, it may interrupt a
- * busy session because termination is identity-checked by the owning core. */
+/**
+ * "Restart on subscription" (clear-env) has the same interruption contract as a model switch: it
+ * never writes the harness exit command into the composer — core proves the expected agent owns
+ * the foreground process group and terminates that group by PID before the pane is recycled — so a
+ * `working` or `blocked` session may be interrupted safely (unlike `restartEligibility`, which must
+ * reject those states because its `/exit` would be typed AS THE ANSWER to a permission dialog).
+ * Gateway overload — the scenario this feature exists for — shows up mid-turn: the turn is stuck or
+ * failing, and "wait for the turn to finish" is exactly what you cannot do when the gateway is down.
+ *
+ * The durable requirements are shared with restart: the harness must support resume and there must
+ * be a provider session id to carry into the replacement process. The strip set itself is checked
+ * by the caller through `vanillaEnvStripPattern` (only claude/codex/copilot builtins have one).
+ */
 export function clearEnvEligibility(
   agentId: string | undefined,
   sessionId: string | undefined
@@ -122,6 +158,20 @@ export type RestartOutcome = 'restarted' | 'exit-timeout' | 'not-eligible'
 export const RESTART_EXIT_TIMEOUT_MS = 6000
 export const RESTART_POLL_MS = 250
 
+/**
+ * How much longer a user-asked RESTART keeps watching after RESTART_EXIT_TIMEOUT_MS, as long as
+ * the pane can still be read (issue #899). The exit is irreversible and the resume is the only way
+ * back, so giving up at 6s on a CLI that is merely slow to quit is the worst outcome available: it
+ * DID quit a moment later, nothing was watching, and the node was left at a bare shell with no
+ * agent and no resume. Reported on a 19-hour cron session with a 28 MB transcript; a fresh claude
+ * quits in well under a second, so the base window stays short for the common case and only a CLI
+ * that is still visibly shutting down is waited on.
+ *
+ * Restart only. The Eco sweep and Pause keep the base window: the sweep is serialized across the
+ * canvas and must not stall on one node, and neither resumes into the pane afterwards.
+ */
+export const RESTART_LATE_EXIT_MS = 60_000
+
 /** How long the resume delivery may take before this restart stops waiting for it. The delivery's
  *  own retry chain is bounded (DELIVERY_ATTEMPTS × VERIFY_TIMEOUT_MS, then a fail-open submit), so
  *  the slack is only there to let the last attempt land. A backstop, not a policy: nothing in a
@@ -131,6 +181,24 @@ export const RESTART_DELIVERY_TIMEOUT_MS = DELIVERY_ATTEMPTS * VERIFY_TIMEOUT_MS
 
 function resumeGateCommand(agentId: string, sessionId: string): string | null {
   return resumeCommand(agentId, sessionId) ?? resumeCommandWith('agent', capabilityAgentId(agentId), sessionId)
+}
+
+/**
+ * The notice for an `'exit-timeout'` restart. It keeps the two facts the old sentence carried —
+ * the relaunch was not sent, and nothing was killed — and adds the one the user actually needs
+ * (issue #899): the CLI may still quit on its own a moment later, and with nothing watching any
+ * more, the pane is then a bare shell with no agent in it. So it hands over the exact resume line
+ * to type there. `resumeLine` is the BARE resume command (no permission mode, no launcher); a
+ * custom agent without one gets the sentence without the command rather than a guessed line.
+ */
+export function exitTimeoutNotice(action: string, resumeLine: string | null | undefined): string {
+  const waited = Math.round((RESTART_EXIT_TIMEOUT_MS + RESTART_LATE_EXIT_MS) / 1000)
+  const head =
+    `${action} failed: the pane did not return to a shell within ${waited}s, so the CLI was not ` +
+    'relaunched. Nothing was killed.'
+  return resumeLine
+    ? `${head} If the CLI has quit since, resume the conversation in that pane with: ${resumeLine}`
+    : `${head} Check the pane.`
 }
 
 /**
@@ -217,6 +285,12 @@ export async function performExitPhase(d: {
   timeoutMs?: number
   pollMs?: number
   /**
+   * Extra time past `timeoutMs` to keep waiting for a CLI that has not let go of the pane yet
+   * (see RESTART_LATE_EXIT_MS). Only spent while the pane still READS: a pane we cannot see after
+   * the base window is given up on exactly as before. Absent = 0 = the base window alone.
+   */
+  lateExitMs?: number
+  /**
    * "Is the pane we are quitting still there?" — asked before the exit is written and on every
    * poll. A session can die under a restart (the node is deleted or respawned, or another client
    * destroys the tmux session), and there is then no pane left to fail in.
@@ -247,19 +321,50 @@ export async function performExitPhase(d: {
   // draft lost and a real turn started (tokens, possibly edits) — and the CLI, still running,
   // would then be reported as an exit timeout.
   //
-  // ASSUMPTION, unverified on a real build: Ctrl-U is "clear line" inside every TUI in
-  // EXIT_SEQUENCES (claude, codex, grok, gemini) — it is in every readline/ZLE prompt, and it is
+  // ASSUMPTION, unverified on a real build: Ctrl-U is "clear line" inside every TUI that still
+  // gets a typed exit (today only gemini) — it is in every readline/ZLE prompt, and it is
   // what command-delivery.ts already relies on for its rewrites. Each agent added to that table
   // inherits this assumption; only a device check retires it, per agent. If a TUI binds Ctrl-U to
   // something else this becomes one stray keystroke before the exit command — no worse than
-  // today's blind write. Belongs in the manual test matrix.
-  d.io.write(KILL_LINE)
-  d.io.write(exit + '\r')
+  // CRITICAL LOAD-BEARING SPLIT: This line-clear writes into a pane owned by an AGENT TUI, not
+  // a shell. A lone Escape (\x1b) into a live agent is the user-interrupt gesture (cancels turns/thinking),
+  // whereas \x15 is the safe line-clear attempt. Keep \x15 here even on Windows; WINDOWS_KILL_LINE
+  // (\x1b) is strictly for shell panes (command delivery retry and hibernation wake).
+  // codex, claude, grok, opencode and copilot are quit with Ctrl-Cs instead of a typed exit (issues
+  // #842 and #928; versions in CTRL_C_QUITS; macOS, isolated tmux socket, CLI started from an
+  // interactive shell). In all five, Ctrl-U clears only the line the cursor is on, so once the CR
+  // of a typed exit arrives, the rest of a multi-line draft is submitted with it as a prompt (codex
+  // also ignores a CR in the same burst as the text). Ctrl-C clears the whole composer in all five,
+  // and quits once it is empty, so a fixed number of them, apart, quits with or without a draft
+  // (CTRL_C_QUITS). opencode used to get its typed `/exit` with the CR split off by 150 ms,
+  // because its batched-input handling swallows a one-burst `/exit\r`; the Ctrl-Cs send no CR, so
+  // that split has nothing left to do. Nothing is typed and no CR
+  // is sent, so a draft is never submitted — but all of it is lost, where the line-clear lost only
+  // the cursor's line. A Ctrl-C left over once the CLI has quit lands on the shell prompt, where it
+  // does nothing.
+  const ctrlCs = CTRL_C_QUITS[capabilityAgentId(d.agentId)] ?? 0
+  if (!ctrlCs) d.io.write(KILL_LINE)
+  if (ctrlCs) {
+    for (let i = 0; i < ctrlCs; i++) {
+      if (i > 0) {
+        await new Promise((r) => setTimeout(r, CTRL_C_GAP_MS))
+        if (gone()) return 'not-eligible'
+      }
+      d.io.write(CTRL_C)
+    }
+  } else {
+    d.io.write(exit + '\r')
+  }
   const deadline = Date.now() + timeoutMs
+  // Equal to `deadline` when no late window was asked for, so every bound below is unchanged.
+  const lateDeadline = deadline + Math.max(0, d.lateExitMs ?? 0)
   let last: string | null = null
   for (;;) {
     await new Promise((r) => setTimeout(r, pollMs))
-    const pane = await queryPaneWithin(d.paneCommand, Math.max(0, deadline - Date.now()))
+    // Each query is bounded by the window it runs in: a query wedged inside the base window still
+    // lapses at `deadline` (and its null ends the run there), exactly as without a late window.
+    const until = Date.now() <= deadline ? deadline : lateDeadline
+    const pane = await queryPaneWithin(d.paneCommand, Math.max(0, until - Date.now()))
     if (gone()) return 'not-eligible' // stop polling a pane that no longer exists
     // Two ways to know the CLI let go of the pane. The allowlist is the confident one and is
     // taken immediately. The other — "the foreground command is no longer what it was before the
@@ -271,7 +376,10 @@ export async function performExitPhase(d: {
     if (isShellCommand(pane)) return 'exited'
     if (pane !== null && pane !== before && pane === last) return 'exited'
     last = pane
-    if (Date.now() > deadline) return 'exit-timeout'
+    // Past the base window, keep going only inside the late window and only while the pane is
+    // still readable — i.e. the CLI we asked to quit is visibly still there (or a changed reading
+    // is waiting for its confirming second poll). A pane we can no longer see is not "slow".
+    if (Date.now() >= deadline && (Date.now() > lateDeadline || pane === null)) return 'exit-timeout'
   }
 }
 
@@ -392,6 +500,8 @@ export async function performRestartResume(d: {
   command?: string
   timeoutMs?: number
   pollMs?: number
+  /** See `performExitPhase`; defaults to RESTART_LATE_EXIT_MS — this IS the user-asked restart. */
+  lateExitMs?: number
   /** Backstop for the resume delivery; see RESTART_DELIVERY_TIMEOUT_MS. */
   deliveryTimeoutMs?: number
   /** Handed `deliverCommand`'s cancel as the delivery starts; see `performResumePhase`. */
@@ -411,6 +521,7 @@ export async function performRestartResume(d: {
     paneCommand: d.paneCommand,
     timeoutMs: d.timeoutMs,
     pollMs: d.pollMs,
+    lateExitMs: d.lateExitMs ?? RESTART_LATE_EXIT_MS,
     isLive: d.isLive
   })
   // `'exit-timeout'` / `'not-eligible'` mean the same things they always did, so they are the
@@ -486,8 +597,61 @@ export type AgentRestartFn = (
   targetAgentId?: AgentId,
   targetModel?: string,
   restartShell?: boolean,
-  clearEnv?: boolean
+  // "Restart on subscription": recycle the session VANILLA — strip the gateway + inherited
+  // provider env so the agent falls back to its OWN default provider. No model/agent change; the
+  // cold-restore auto-resume keeps the same conversation. Uses `clearEnvEligibility` (permits busy,
+  // since `terminateForeground` is PID-safe — no `/exit` typed into a dialog) and recycles the same
+  // way a model switch does, because tmux env changes do not retroactively change an existing shell.
+  clearEnv?: boolean,
+  // Only with `restartShell`: runs AFTER the CLI has exited and BEFORE the pane is recycled — the
+  // one moment the conversation's transcript is final and nothing is writing it. The account switch
+  // copies the transcript into the target account here and rebinds the node, so the recycle's
+  // respawn launches under the new CLAUDE_CONFIG_DIR and its cold-restore `--resume` finds the SAME
+  // conversation. It cannot veto the recycle: the CLI is already gone, and the recycle + auto-resume
+  // is how the conversation comes back either way (on the old account when the step did nothing).
+  // The node-data patch it returns is merged into the SAME update as the respawn bump — a separate
+  // Canvas `setNodes` in the same tick races React Flow's `updateNodeData` queue, which rebuilds the
+  // node from the store's copy and can silently drop the rebind.
+  beforeRecycle?: () => Promise<RecyclePatch | void>
 ) => Promise<RestartOutcome>
+
+/** What a `beforeRecycle` step may rebind on the node: its account (the account switch). A key
+ *  that is PRESENT is applied even as `undefined` — that is a move to the system account. Narrow
+ *  on purpose: the same patch must also be expressible in a project's SERIALIZED node when the
+ *  restart outlives its canvas (see `settleRecycledNode`). */
+export type RecyclePatch = { accountId?: string }
+
+/**
+ * The last step of a recycling restart ("Restart agent and shell", and the account switch built on
+ * it): bind the node to what the respawn must launch as.
+ *
+ * On the active canvas this is ONE React Flow update — the rebind rides the respawn bump, see
+ * `beforeRecycle`. But the exit it waited on takes seconds, and the user may switch projects
+ * meanwhile (a bulk account move is several of them at once). Then React Flow no longer holds the
+ * node, `updateNodeData` silently does nothing, and two things went wrong together: the rebind was
+ * lost (the node came back on its OLD account), and the returning mount re-adopted the PARK —
+ * whose tmux session this very recycle had just killed — so the node showed a dead pane instead of
+ * resuming. Off the canvas, therefore: drop the park (the next mount creates fresh, and its cold
+ * restore resumes the conversation), write the rebind into the stored project, and schedule a save.
+ */
+export function settleRecycledNode(d: {
+  onCanvas: boolean
+  agentId: AgentId
+  patch: RecyclePatch | undefined
+  updateLive: (patch: RecyclePatch & { agentId: AgentId }) => void
+  updateStored: (patch: RecyclePatch & { agentId: AgentId }) => void
+  dropPark: () => void
+  markDirty: () => void
+}): void {
+  const patch = { ...(d.patch ?? {}), agentId: d.agentId }
+  if (d.onCanvas) {
+    d.updateLive(patch)
+    return
+  }
+  d.dropPark()
+  d.updateStored(patch)
+  d.markDirty()
+}
 
 const restartFns = new Map<string, AgentRestartFn>()
 
@@ -534,6 +698,56 @@ export function agentHibernateFns(nodeId: string): AgentHibernateFns | undefined
   return hibernateFns.get(nodeId)
 }
 
+/** The exit half's outcome, plus `'paused'` for a manual pause that actually took. Registered
+ *  separately from `hibernateFns.exit`: Eco's exit refuses a node the user is currently watching
+ *  (`isNodeWatched`) — the whole point of the sweep — but a MANUAL pause is the user acting on the
+ *  node they are looking at right now, so it must not carry that refusal. The resume half is
+ *  intentionally NOT duplicated here: `agentHibernateFns(id).resume()` already works for a paused
+ *  node whichever depth paused it (a warm hibernated pane, or a freshly recycled shell after the
+ *  deeper "pause & end session") — it only asks whether the pane is a shell right now, not why. */
+export type PauseOutcome = ExitPhaseOutcome | 'paused'
+
+export interface AgentPauseFns {
+  /** Ask the CLI to quit and mark the node PAUSED (see `agentStatus.paused`) so it does not
+   *  auto-resume on the next reveal or cold restart. `deep` additionally recycles the tmux session
+   *  for a fuller memory reclaim — the caller decides per node, at pause time. */
+  pause: (deep: boolean) => Promise<PauseOutcome>
+}
+
+const pauseFns = new Map<string, AgentPauseFns>()
+
+/** Register a node's pause closure; returns an unregister that is inert if superseded. */
+export function registerAgentPause(nodeId: string, fns: AgentPauseFns): () => void {
+  pauseFns.set(nodeId, fns)
+  return () => {
+    if (pauseFns.get(nodeId) === fns) pauseFns.delete(nodeId)
+  }
+}
+
+export function agentPauseFns(nodeId: string): AgentPauseFns | undefined {
+  return pauseFns.get(nodeId)
+}
+
+/** Prepare-for-update (Windows session host, issue #829): one mounted node's "quit the CLI cleanly
+ *  so the conversation is saved" closure. Its own registry rather than `agentPauseFns`: a pause
+ *  marks the node PAUSED, which would stop the cold restore from resuming it after the update —
+ *  the opposite of what the update flow promises. `'exited'` also answers a node whose CLI had
+ *  already left the pane (nothing to do). */
+export type AgentUpdateExitFn = () => Promise<ExitPhaseOutcome>
+
+const updateExitFns = new Map<string, AgentUpdateExitFn>()
+
+export function registerAgentUpdateExit(nodeId: string, fn: AgentUpdateExitFn): () => void {
+  updateExitFns.set(nodeId, fn)
+  return () => {
+    if (updateExitFns.get(nodeId) === fn) updateExitFns.delete(nodeId)
+  }
+}
+
+export function agentUpdateExitFn(nodeId: string): AgentUpdateExitFn | undefined {
+  return updateExitFns.get(nodeId)
+}
+
 /** TEST ONLY (house pattern: webgl-budget's `__resetWebglBudgetForTests`): the maps above are
  *  module-global, so a test that leaves a restart in flight would otherwise refuse the next
  *  test's restart of the same node id. */
@@ -541,6 +755,7 @@ export function __resetAgentRestartForTests(): void {
   inFlight.clear()
   restartFns.clear()
   hibernateFns.clear()
+  pauseFns.clear()
   updateExitFns.clear()
 }
 

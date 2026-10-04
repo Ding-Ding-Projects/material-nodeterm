@@ -410,6 +410,16 @@ export function buildStubApi(): Omit<
       cookieProviders: () => Promise.resolve({}),
       onUpdate: noopUnsub
     },
+    devPorts: {
+      // Superseded in a live browser session by the real WS namespace in ws-bridge (the Server
+      // Edition serves its own machine's scan). A relay tab keeps this answer: its sessions live on
+      // the host, whose ports are not the guest's to list or forward (host-only in host-control).
+      // `unsupported` is the honest answer there, and the chip is not drawn.
+      scan: () => Promise.resolve({ ok: false, reason: 'unsupported', nodes: {} }),
+      forward: () =>
+        Promise.resolve({ ok: false, reason: 'unsupported', message: 'Port forwarding is not available here.' }),
+      unforward: () => Promise.resolve(false)
+    },
     sessionMemory: {
       // Superseded by the real WS-backed namespace in ws-bridge (the core session-memory service
       // runs in the server shell too), so nothing reaches these in a live browser session. Kept

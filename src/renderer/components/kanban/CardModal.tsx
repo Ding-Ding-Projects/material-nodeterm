@@ -37,6 +37,8 @@ import { BrowserDrivingIndicator } from '../../nodes/BrowserDrivingChip'
 import { NoteMarkdown } from '../NoteMarkdown'
 import { relativeTime } from '../../lib/relativeTime'
 import { Button } from '@renderer/ui/md3'
+import { PortsChip } from '../PortsChip'
+import { useProjects } from '../../state/projects'
 import { contextSourceForNode } from '@shared/context-source'
 
 interface CardModalProps {
@@ -144,6 +146,7 @@ export function CardModal({
   const togglePanel = useCardPanel((s) => s.toggle)
   const [linksOpen, setLinksOpen] = useState(false)
   const isTerminal = session.kind === 'terminal'
+  const portsRemote = useProjects((s) => !!(projectId && s.projects.find((p) => p.id === projectId)?.ssh))
   const isBrowser = session.kind === 'browser'
   const contextSource = contextSourceForNode({
     agentId: session.agentId ?? liveAgentId,
@@ -353,6 +356,19 @@ export function CardModal({
           )}
           {isTerminal && <CardModalTerminalProfile profile={terminalProfile} />}
           <span className="kanban-modal__column">{columnTitle ?? 'Ungrouped'}</span>
+          {/* The same Ports chip as the canvas node header. Opening a port places the browser node
+              beside this node ON THE CANVAS, so the modal hands over to the canvas to show it. */}
+          {isTerminal && projectId && (
+            <PortsChip
+              nodeId={session.id}
+              projectId={projectId}
+              remote={portsRemote}
+              onOpenUrl={(url) => {
+                window.dispatchEvent(new CustomEvent('nodeterm:open-url-node', { detail: { url, sourceNodeId: session.id } }))
+                onOpenCanvas()
+              }}
+            />
+          )}
           {/* The driving chip, so a user watching a browser card THROUGH the modal is not
               driving-blind. The lease is keyed by node id (not by webview object), so this shows
               when the node is being driven even though the drive lands on the CANVAS webview, not

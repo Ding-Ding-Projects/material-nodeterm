@@ -272,6 +272,19 @@ export interface PtyCreateResult {
    *  system account. The renderer flags the account chip (folder-missing warning) when true. */
   accountFallback?: boolean
   /**
+   * WARM reattach only (local tmux): the reattached session's live working directory no longer
+   * exists — the folder was deleted (or deleted and re-created, which is a DIFFERENT inode, so the
+   * shell inside keeps printing `getcwd: cannot access parent directories`; issue #464). `tmux
+   * new-session -A` ignores the cwd we pass on a reattach, so this is the only moment the fact is
+   * knowable cheaply. The renderer shows a dismissible banner with an explicit
+   * recycle-and-respawn action — NOTHING is typed into the pane and nothing restarts on its own
+   * (the pane may be mid-work, and text into a pane is injection).
+   *
+   * Absent = fine or unknowable (fresh spawn, plain shell, SSH-remote session, probe failed, or a
+   * core older than this field over the relay) — the banner never shows on a guess.
+   */
+  staleCwd?: boolean
+  /**
    * The CURRENT SCREEN of a session this create JOINED (co-attach), captured from tmux — write it
    * into the fresh xterm before the live stream starts.
    *
@@ -2959,6 +2972,13 @@ export interface Settings {
    *  hand-edited settings.json contains. */
   projectPartSizeValue: number
   projectPartSizeUnit: 'KB' | 'MB' | 'GB'
+  /** Minutes a terminal stays PARKED after its project is switched away — xterm + PTY client kept
+   *  alive off-DOM so switching back is instant and exact (no reattach). 0 = until the app quits.
+   *  Default 10. Hand-editable; re-validated at the use site (`parkWindowMs`). Issue #886. */
+  terminalParkMinutes: number
+  /** Max parked terminals across all projects before the oldest (local first, then remote) are
+   *  released early. Default 20. Re-validated at the use site (`parkCap`). Issue #886. */
+  terminalParkMax: number
   /** AI commit message agent: a local coding-agent CLI run read-only. */
   commitAgent: 'claude' | 'codex' | 'custom'
   /** For commitAgent='custom': command template; {prompt} placeholder optional (else stdin). */
@@ -3353,6 +3373,8 @@ export const DEFAULT_SETTINGS: Settings = {
   projectPartsEnabled: false,
   projectPartSizeValue: 256,
   projectPartSizeUnit: 'KB',
+  terminalParkMinutes: 10,
+  terminalParkMax: 20,
   commitAgent: 'claude',
   commitAgentCommand: '',
   commitExtraPrompt: '',
@@ -5613,6 +5635,8 @@ export interface NodeTerminalApi {
   githubCliAccounts: import('./github-issues').GitHubCliAccountsApi
   usage: UsageApi
   sessionMemory: SessionMemoryApi
+  /** Dev-server ports listening in each node's session, and SSH same-port forwards. */
+  devPorts: import('./dev-ports').DevPortsApi
   /** Encrypted, bounded Codex continuation packets for explicit cold-relaunch review. */
   agentContinuation?: AgentContinuationApi
   vscode: VsCodeApi

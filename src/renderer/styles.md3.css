@@ -1969,6 +1969,38 @@ div.mdx-row[role='menuitemradio']:focus-visible {
   text-align: center;
   font-size: 12px;
 }
+/* Stale working directory: the project folder was deleted or replaced while this node's tmux
+   session kept running, so the shell sits on a dead inode. A slim TOP banner, never a covering
+   overlay: the terminal underneath is alive. Top edge because shells and agent CLIs write their
+   input line at the bottom. */
+.term-node__stalecwd {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  font-size: 12px;
+  color: var(--md-on-warning-container);
+  background: var(--md-warning-container);
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.term-node__stalecwd-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.term-node__stalecwd-restart {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.term-node__stalecwd-dismiss {
+  flex: 0 0 auto;
+  color: inherit;
+}
 .term-node__closed {
   color: var(--md-on-surface-variant);
   background: color-mix(in srgb, var(--md-surface-container) 96%, transparent);
@@ -14139,4 +14171,21 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   justify-content: space-between;
   gap: 12px;
   padding: 4px 0;
+}
+/* Dev-server ports a node's session listens on (components/PortsChip) — the canvas node header
+   and the card modal header alike. A compact assist chip on the shared `.mdx-chip` recipe; the
+   port reads in the monospace face so `:5173` reads as an address, not a count. */
+.ports-chip-wrap {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: 6px;
+}
+.mdx-chip.ports-chip {
+  min-height: 24px;
+  height: 24px;
+  padding: 0 8px;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
 }

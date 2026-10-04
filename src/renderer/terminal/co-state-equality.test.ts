@@ -7,7 +7,8 @@ const base = (): ComparableTerminalCoState => ({
   ended: false,
   offline: false,
   spawnError: null,
-  agentRelaunchError: null
+  agentRelaunchError: null,
+  staleCwd: false
 })
 
 describe('sameTerminalCoState', () => {
@@ -25,6 +26,11 @@ describe('sameTerminalCoState', () => {
         agentRelaunchError: { code: 'custom-agent-not-configured' }
       })
     ).toBe(false)
+  })
+
+  it('treats the stale working directory banner as a visible state change', () => {
+    const previous = base()
+    expect(sameTerminalCoState(previous, { ...previous, staleCwd: true })).toBe(false)
   })
 
   it('keeps identical visible state as a no-op', () => {

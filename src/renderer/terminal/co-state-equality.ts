@@ -10,6 +10,8 @@ export interface ComparableTerminalCoState {
   offline: boolean
   spawnError: string | null
   agentRelaunchError: unknown
+  /** The stale-working-directory banner (PtyCreateResult.staleCwd). */
+  staleCwd: boolean
 }
 
 export function sameTerminalCoState(
@@ -22,6 +24,7 @@ export function sameTerminalCoState(
     next.ended === previous.ended &&
     next.offline === previous.offline &&
     next.spawnError === previous.spawnError &&
-    next.agentRelaunchError === previous.agentRelaunchError
+    next.agentRelaunchError === previous.agentRelaunchError &&
+    next.staleCwd === previous.staleCwd
   )
 }

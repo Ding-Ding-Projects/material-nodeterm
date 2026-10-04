@@ -275,6 +275,12 @@ export const IPC = {
   /** The scoped machine's RAM (available/total) — the cheap read behind the system-resource
    *  pill. Safe to poll locally; NOT polled for an SSH scope. */
   sessionMemoryHost: 'session-memory:host',
+  /** Dev-server ports (core/dev-ports-service.ts): which TCP ports each node's session listens on
+   *  (ownership by process tree, one round trip per host), and the same-port SSH forward that makes
+   *  `http://localhost:<port>` reach an SSH project's host. Host-only for relay peers. */
+  devPortsScan: 'dev-ports:scan',
+  devPortsForward: 'dev-ports:forward',
+  devPortsUnforward: 'dev-ports:unforward',
   /** Local-only encrypted Codex crash-recovery packet reads and explicit actions. */
   agentContinuationSummary: 'agent-continuation:summary',
   agentContinuationPreview: 'agent-continuation:preview',
