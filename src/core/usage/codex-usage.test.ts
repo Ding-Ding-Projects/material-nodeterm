@@ -47,6 +47,14 @@ vi.mock('child_process', async (importOriginal) => ({
   }
 }))
 
+// The app-server tier resolves `codex` through the login-shell PATH before spawning it. Pin that
+// lookup to a fixed path so the tier reaches the stubbed spawn above whether or not this machine
+// has a Codex CLI installed.
+vi.mock('../exec-path', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../exec-path')>()),
+  findInLoginPath: async (bin: string) => (bin === 'codex' ? '/test/bin/codex' : null)
+}))
+
 /**
  * The ChatGPT backend's `wham/usage` rate_limit block, matching Codex's own
  * RateLimitStatusPayload: `used_percent`, `limit_window_seconds` (the bucket's real duration)

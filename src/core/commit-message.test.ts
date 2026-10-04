@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'node:path'
@@ -105,5 +105,45 @@ describe('runAgent — where the agent is actually spawned', () => {
   it('does NOT spawn in an SSH project’s remote path — that is the ENOENT', async () => {
     // `/root/nodeterm` exists on the server and nowhere on the machine doing the spawning.
     expect(await spawnCwdFor('/root/nodeterm', true)).toBe(os.homedir())
+  })
+})
+
+describe.skipIf(process.platform !== 'win32')('runAgent — Windows npm shim', () => {
+  let dir: string
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-commit-shim-'))
+  })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('keeps a hostile prompt as one argument without invoking cmd.exe', async () => {
+    const cmd = path.join(dir, 'fake agent.cmd')
+    const touched = path.join(dir, 'should-not-exist.txt')
+    fs.writeFileSync(cmd, '@echo off\r\nexit /b 91\r\n')
+    fs.writeFileSync(
+      path.join(dir, 'fake agent.ps1'),
+      [
+        '$bytes = [Text.Encoding]::UTF8.GetBytes($args[0])',
+        '[Console]::Out.Write([Convert]::ToBase64String($bytes))'
+      ].join('\r\n')
+    )
+    const prompt = `message & echo pwned > "${touched}"`
+
+    vi.resetModules()
+    vi.doUnmock('child_process')
+    const { runAgent } = await import('./commit-message')
+    const result = await runAgent(prompt, dir, {
+      commitAgent: 'custom',
+      commitAgentCommand: `"${cmd}" "{prompt}"`,
+      commitExtraPrompt: ''
+    } as never)
+
+    expect(result).toEqual({
+      ok: true,
+      message: Buffer.from(prompt, 'utf8').toString('base64')
+    })
+    expect(fs.existsSync(touched)).toBe(false)
   })
 })

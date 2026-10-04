@@ -8,6 +8,7 @@ import {
   codexIdentityCaps,
   codexManagedRuntimeInstalled,
   codexManagedRuntimePath,
+  probeCodexRemoteFlagAt,
   refreshCodexIdentityCaps,
   resetCodexIdentityCapsForTests
 } from './codex-identity-caps'
@@ -194,5 +195,22 @@ describe('codexCliSupportsRemote', () => {
   it('accepts an answer from either help page', () => {
     // Some CLIs list a global flag only under the subcommand that takes it.
     expect(codexCliSupportsRemote('no flags here', '  --remote <URL>')).toBe(true)
+  })
+})
+
+describe.skipIf(process.platform !== 'win32')('probeCodexRemoteFlagAt — Windows npm shim', () => {
+  it('uses the sibling PowerShell shim for both help probes', async () => {
+    const cmd = path.join(dir, 'codex.cmd')
+    fs.writeFileSync(cmd, '@echo off\r\nexit /b 91\r\n')
+    fs.writeFileSync(
+      path.join(dir, 'codex.ps1'),
+      [
+        "if ($args.Count -eq 1 -and $args[0] -eq '--help') { Write-Output 'no flag'; exit 0 }",
+        "if ($args[0] -eq 'resume' -and $args[1] -eq '--help') { Write-Output '  --remote <URL>'; exit 0 }",
+        'exit 92'
+      ].join('\r\n')
+    )
+
+    await expect(probeCodexRemoteFlagAt(cmd)).resolves.toBe(true)
   })
 })

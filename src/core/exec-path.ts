@@ -67,6 +67,13 @@ export function shellPathNow(): string | null | undefined {
   return cachedShellPath
 }
 
+/** Resolve an executable against the user's real login-shell PATH, returning its absolute path.
+ *  The login-shell probe only runs on Linux; elsewhere this walks the inherited PATH. */
+export async function findInLoginPath(bin: string): Promise<string | null> {
+  const shellPath = (await resolveShellPath()) ?? process.env.PATH ?? ''
+  return findInPathString(bin, shellPath)
+}
+
 const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD'
 
 /** Return the command filenames CreateProcess would consider for a bare name. */
@@ -113,6 +120,63 @@ export function findInPathString(bin: string, pathStr: string | null | undefined
     }
   }
   return null
+}
+
+export interface DirectExecutableInvocation {
+  executable: string
+  args: string[]
+}
+
+interface DirectExecutableInvocationOptions {
+  platform?: NodeJS.Platform
+  systemRoot?: string
+  exists?: (candidate: string) => boolean
+}
+
+/**
+ * Builds an argv-safe invocation for a resolved executable. Node cannot execute Windows npm
+ * `.cmd` shims directly, and using a shell would reinterpret user-controlled arguments. npm
+ * installs an equivalent sibling `.ps1` shim, so run that through PowerShell's `-File` boundary.
+ */
+export function directExecutableInvocation(
+  executable: string,
+  args: string[],
+  options: DirectExecutableInvocationOptions = {}
+): DirectExecutableInvocation | null {
+  const platform = options.platform ?? os.platform()
+  if (platform !== 'win32') return { executable, args }
+
+  const ext = path.win32.extname(executable).toLowerCase()
+  if (ext === '.bat') return null
+  if (ext !== '.cmd' && ext !== '.ps1') return { executable, args }
+
+  const script = ext === '.ps1' ? executable : `${executable.slice(0, -ext.length)}.ps1`
+  const systemRoot = options.systemRoot ?? process.env.SystemRoot
+  if (!systemRoot) return null
+
+  const powershell = path.win32.join(
+    systemRoot,
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'powershell.exe'
+  )
+  const exists = options.exists ?? fs.existsSync
+  if (!exists(powershell) || !exists(script)) return null
+
+  return {
+    executable: powershell,
+    args: [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      script,
+      ...args
+    ]
+  }
 }
 
 /**
