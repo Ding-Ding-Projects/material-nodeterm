@@ -2149,8 +2149,13 @@ export function TerminalNode({
   // continuing tmux session is idle and emits no event, so the main-process tailer is never
   // re-fed. Re-runs if the sessionId changes (track is idempotent). cwd is a path fallback.
   //
-  // Rehydrate from the provider's own transcript on mount. The provider id is part of the request,
-  // so a resumed Codex or Gemini session cannot fall through to Claude's cwd fallback.
+  // Rehydrate from the provider's own transcript on mount. The core handler
+  // (`core/context-ensure.ts`) routes on `agentId` to that agent's own locator and tail, so a
+  // resumed Codex or Gemini session cannot fall through to Claude's cwd fallback, and an agent with
+  // no rehydration path is refused there rather than here. `id` and `remoteSession` are load-bearing
+  // too: an SSH-project node's transcript is on its host, which the desktop reaches over the node's
+  // ControlMaster, and the renderer's remote claim holds before that pty exists, so an early mount
+  // never resolves a remote session against this machine's disk.
   useEffect(() => {
     const sid = status?.sessionId
     if (showUsage && sid)
@@ -2158,9 +2163,11 @@ export function TerminalNode({
         sid,
         (data.cwd as string) || undefined,
         data.accountId,
-        remoteSession ? 'claude:remote' : agentId
+        agentId,
+        id,
+        remoteSession
       )
-  }, [showUsage, status?.sessionId, data.cwd, data.accountId, agentId])
+  }, [showUsage, status?.sessionId, data.cwd, data.accountId, agentId, id, remoteSession])
   const updateNodeInternals = useUpdateNodeInternals()
 
   const [searchOpen, setSearchOpen] = useState(false)

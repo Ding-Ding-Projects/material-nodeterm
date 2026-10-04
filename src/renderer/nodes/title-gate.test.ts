@@ -114,13 +114,31 @@ describe('provider transcript gates', () => {
     expect(terminalNode).toContain('const showUsage = !!agentId')
   })
 
-  it('gates the mount-time meter rehydration (`context.ensure`)', () => {
+  /**
+   * `context.ensure` is gated on the meter's own capability (`showUsage`), and what makes that safe
+   * is the arguments it passes. The core handler (`core/context-ensure.ts`) routes on `agentId` to
+   * each agent's own locator and tail, so `agentId` MUST reach the call: a widened gate without it
+   * is the original bug (every agent resolving as claude, on claude's cwd fallback, adopting a
+   * stranger's session). `id` and `remoteSession` are pinned for the remote leg: without the node
+   * id the desktop cannot find the node's ControlMaster, and without the renderer's remote claim an
+   * early mount resolves an SSH-project session against this machine's disk.
+   * `core/context-ensure.test.ts` pins the routing itself.
+   */
+  it('passes the agent, node id and remote claim to the mount-time meter rehydration', () => {
     const found = sites('window.nodeTerminal.context.ensure(')
     expect(found.length).toBe(1)
     const [lineNo] = found[0]
     // The `if (…) ensure(…)` guard is the line above the call.
     const guard = lines.slice(Math.max(0, lineNo - 3), lineNo).join('\n')
     expect(guard, `${lineNo}: context.ensure guard`).toContain('showUsage')
+    // The arguments follow the call, one per line.
+    const args = lines.slice(lineNo, lineNo + 7).map((l) => l.trim())
+    expect(args, `${lineNo}: context.ensure routes per agent`).toContain('agentId,')
+    expect(args, `${lineNo}: context.ensure carries the node id`).toContain('id,')
+    expect(args, `${lineNo}: context.ensure carries the remote claim`).toContain('remoteSession')
+    // The old sentinel folded the remote claim into the agent id, so a remote codex node was sent
+    // to the core as claude.
+    expect(args.join('\n'), `${lineNo}: no agent-id sentinel`).not.toContain('claude:remote')
   })
 
   it('gates the find bar’s transcript index (`searchTranscript`)', () => {

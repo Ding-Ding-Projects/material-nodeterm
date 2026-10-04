@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Port upstream `c9a0046a` (context meter rehydrates at mount). The mount-time context-meter read
+  is now one handler in `src/core/context-ensure.ts` that the desktop and the Server Edition both
+  register. Each agent resolves through its own locator and tail (Claude with its account-scoped
+  directory fallback, Codex and Gemini strictly by session id), and other agents get no reading
+  rather than another agent's numbers. On the desktop an SSH-project node is now located on its
+  host through the jailed remote transcript locator and fills its meter at mount; previously it
+  stayed blank until its next prompt. A node is treated as remote when the renderer says it
+  belongs to an SSH project or a live ControlMaster exists for it, and an unresolved remote session
+  never falls back to this machine's disk. The Server Edition no longer registers the channel twice,
+  located paths pass each shell's transcript jail, and the shells remember which node now meters
+  which session so closing the node releases the tail. The channel keeps this fork's argument
+  order (`agentId` fourth) and adds the node id and the remote claim. See
+  `docs/features/agents/context-meter-rehydration.md`.
+
+  搬咗上游「開返個 node 即刻有 context 錶」嗰個修正：而家個 handler 喺 core 度一份過，桌面版同
+  Server Edition 一齊用。每隻 agent 用返自己嘅方法搵 transcript，唔會再借人哋嘅數；SSH project
+  嘅 node 會去返部 host 度搵，搵唔到就算，絕對唔會掉返轉頭讀本機嘅檔。Server Edition 唔會再
+  一個 cast 做兩次嘢。
+
 - Port the first upstream security tranche (issue #225, upstream `1bf6fadb`, `60714074`, `fee5b244`,
   `23a7282b`, `9fa879d0`, `2d3e54cb`): a plain terminal keeps its inherited provider credentials in
   subscription mode (both strip sites in this fork); a Linux desktop with no keyring stores the

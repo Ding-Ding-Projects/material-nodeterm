@@ -1036,8 +1036,8 @@ export function buildFilesApi(
 
   const context: ContextApi = {
     onUpdate: (listener) => client.subscribe(IPC.contextUpdate, listener as Listener),
-    ensure: (sessionId, cwd, accountId, agentId) =>
-      client.cast(IPC.contextEnsure, sessionId, cwd, accountId, agentId)
+    ensure: (sessionId, cwd, accountId, agentId, nodeId, remote) =>
+      client.cast(IPC.contextEnsure, sessionId, cwd, accountId, agentId, nodeId, remote)
   }
 
   // Board-log: REAL over the bridge for local projects (the server routes local; SSH projects on the

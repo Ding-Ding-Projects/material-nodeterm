@@ -17,11 +17,9 @@ import { createSubagentTail, type SubagentTail } from '../core/subagent-tail'
 import { createContextTail, type ContextTail, type TaskNotification } from '../core/context-tail'
 import { geminiContextParse } from '../core/gemini-session'
 import { codexContextParse } from '../core/codex-session'
-import { locateClaude, locateCodex, locateGemini } from '../core/handoff/locate'
 import { createCodexSubagentFormatter } from '../core/codex-subagent-format'
 import { codexHome } from '../core/usage/codex-usage'
 import { setNodeTranscript } from '../core/context-link'
-import { resolveTranscript } from '../core/transcript-ipc'
 import { isSafeLocalTranscriptPath } from '../core/claude-accounts-core'
 import { grokRawFields, isAsyncSubagentLaunch, type NormalizedAgentEvent } from '../shared/agents/normalize'
 import { grokSessionDir, grokSessionsDir } from '../core/agents/grok-paths'
@@ -67,7 +65,13 @@ export interface WireAgentStatusOptions {
 export function wireAgentStatus(
   platform: ServerPlatform,
   opts: WireAgentStatusOptions = {}
-): { contextTail: ContextTail; geminiContextTail: ContextTail; codexContextTail: ContextTail; ensureContext: (sessionId: string, cwd?: string, accountId?: string, agentId?: string, nodeId?: string) => Promise<void> } {
+): {
+  contextTail: ContextTail
+  geminiContextTail: ContextTail
+  codexContextTail: ContextTail
+  admitTranscriptPath: (transcriptPath: string) => string | undefined
+  noteContextNode: (nodeId: string, sessionId: string, agentId: string) => void
+} {
   const hooks = opts.hooks ?? hookServer
   // nodeId → the agent session id of whichever hook-capable CLI runs in that node (claude's, and
   // since the grok branch below, grok's)
@@ -157,32 +161,6 @@ export function wireAgentStatus(
   const geminiContextTail = createContextTail(pushContextUpdate, { parse: geminiContextParse })
   const codexContextTail = createContextTail(pushContextUpdate, { parse: codexContextParse })
 
-  // Mount-time rehydration for idle or resumed browser sessions. Keep locator work deduplicated
-  // because the canvas and board can both mount the same node at once, and route by provider so a
-  // Codex/Gemini id never falls through to Claude's cwd fallback.
-  const contextEnsureInFlight = new Map<string, Promise<void>>()
-  platform.on(
-    IPC.contextEnsure,
-    (sessionId?: string, cwd?: string, accountId?: string, agentId?: string) => {
-      if (!sessionId) return
-      const provider = agentId === 'codex' || agentId === 'gemini' ? agentId : 'claude'
-      const key = `${provider}:${sessionId}:${accountId ?? ''}:${cwd ?? ''}`
-      const active = contextEnsureInFlight.get(key)
-      if (active) return
-      const work = (async (): Promise<void> => {
-        let transcriptPath: string | undefined
-        if (provider === 'codex') transcriptPath = await locateCodex(sessionId)
-        else if (provider === 'gemini') transcriptPath = await locateGemini(sessionId)
-        else transcriptPath = contextTail.pathFor(sessionId) ?? (await locateClaude(sessionId, accountId))
-        if (!transcriptPath) return
-        if (provider === 'codex') codexContextTail.track(sessionId, transcriptPath)
-        else if (provider === 'gemini') geminiContextTail.track(sessionId, transcriptPath)
-        else contextTail.track(sessionId, transcriptPath)
-      })().finally(() => contextEnsureInFlight.delete(key))
-      contextEnsureInFlight.set(key, work)
-    }
-  )
-
   hooks.setListener((e) => {
     // Record FIRST: recordAgentEvent computes the stash-priority classification and returns the
     // event ENRICHED for a needs-you edge (a question strips its pendingId), so the browser canvas
@@ -207,31 +185,12 @@ export function wireAgentStatus(
       : undefined
   }
 
-  const ensureContext = async (
-    sessionId: string,
-    cwd?: string,
-    accountId?: string,
-    agentId?: string,
-    nodeId?: string
-  ): Promise<void> => {
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/.test(sessionId)) return
-    if (agentId === 'codex' || agentId === 'gemini') {
-      const located = agentId === 'codex' ? await locateCodex(sessionId) : await locateGemini(sessionId)
-      const p = safeTranscriptPath(located)
-      if (p) (agentId === 'codex' ? codexContextTail : geminiContextTail).track(sessionId, p)
-      if (nodeId && p) {
-        nodeContextSession.set(nodeId, sessionId)
-        nodeContextIdentity.set(nodeId, { sessionId, agentId, source: contextSource(agentId) })
-      }
-      return
-    }
-    if (agentId && agentId !== 'claude') return
-    const p = await resolveTranscript({ sessionId, cwd, accountId }, (s) => contextTail.pathFor(s))
-    if (p) contextTail.track(sessionId, p)
-    if (nodeId && p) {
-      nodeContextSession.set(nodeId, sessionId)
-      nodeContextIdentity.set(nodeId, { sessionId, agentId: agentId ?? 'claude', source: contextSource(agentId ?? 'claude') })
-    }
+  // Mount-time meter rehydration (`context:ensure`) is registered in `src/server/index.ts` through
+  // `core/context-ensure.ts`, the handler the desktop serves too. What it needs from this closure is
+  // returned below: the jail its located paths pass, and the node bookkeeping a live event records.
+  const noteContextNode = (nodeId: string, sessionId: string, agentId: string): void => {
+    nodeContextSession.set(nodeId, sessionId)
+    nodeContextIdentity.set(nodeId, { sessionId, agentId, source: contextSource(agentId) })
   }
 
   const SUBAGENT_TOOLS = new Set(['Agent', 'Task'])
@@ -408,5 +367,11 @@ export function wireAgentStatus(
   platform.on(IPC.ptyDestroy, (nodeId: string) => releaseNodeTails(nodeId))
   opts.onSessionEnded?.(releaseNodeTails)
 
-  return { contextTail, geminiContextTail, codexContextTail, ensureContext }
+  return {
+    contextTail,
+    geminiContextTail,
+    codexContextTail,
+    admitTranscriptPath: safeTranscriptPath,
+    noteContextNode
+  }
 }

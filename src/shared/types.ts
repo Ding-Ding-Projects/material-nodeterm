@@ -4594,12 +4594,34 @@ export interface ContextApi {
   /** Fires whenever a session's context fill changes. Returns unsubscribe. */
   onUpdate(listener: (usage: ContextWindowUsage) => void): () => void
   /**
-   * Ask main to start (or refresh) tracking a session's transcript so the meter populates
+   * Ask the core to start (or refresh) tracking a session's transcript so the meter populates
    * without waiting for a live hook event — e.g. on node mount after an app restart, when
    * the continuing session is idle. `cwd` is a transcript-path fallback only.
    * `accountId` scopes resolution to a managed Claude account's transcript root (default `~/.claude`).
+   *
+   * The last three arguments are load-bearing rather than informational (see
+   * `core/context-ensure.ts`):
+   * - `agentId` routes the resolve to THAT agent's own locator and tail. Claude's resolver falls
+   *   back to the newest claude transcript for the cwd, so resolving a codex/gemini session through
+   *   it would meter a stranger's conversation. Omitted ⇒ the legacy local-claude behaviour.
+   * - `nodeId` lets the desktop learn that this session runs on an SSH project's host (a live
+   *   ControlMaster for the node), whose transcript no local resolver can see, and record the node
+   *   to session association so closing the node releases the tail.
+   * - `remote` is the renderer's own claim that the node belongs to an SSH project. It holds from
+   *   the moment the node mounts, before the pty (and so the ControlMaster lookup) exists, and a
+   *   remote claim is never answered from this machine's disk.
+   *
+   * The argument order is this fork's wire order (`agentId` fourth, as every earlier build sent
+   * it); upstream sends `nodeId` before `agentId`.
    */
-  ensure(sessionId: string, cwd?: string, accountId?: string, agentId?: string, nodeId?: string): void
+  ensure(
+    sessionId: string,
+    cwd?: string,
+    accountId?: string,
+    agentId?: string,
+    nodeId?: string,
+    remote?: boolean
+  ): void
 }
 
 /**

@@ -106,6 +106,7 @@ import { initCanvasSync } from '../core/canvas-sync'
 import { wireAgentStatus } from './agent-status'
 import { initServerContextLink } from './context-link'
 import { registerTranscriptIpc } from '../core/transcript-ipc'
+import { registerContextEnsureIpc } from '../core/context-ensure'
 import { initTranscriptIndex } from '../core/transcript-index'
 import { IPC } from '@shared/ipc'
 import { WhisperModelStore } from '../core/speech/whisper-models'
@@ -516,13 +517,35 @@ export async function startServer(
   // missing/corrupt file simply yields no block.
   const installMeta = readInstallMeta(config.dataDir)
   setMirrorServerProvider(() => installMeta)
-  const { contextTail, geminiContextTail, ensureContext } = wireAgentStatus(platform, {
-    onSessionEnded: (listener) => {
-      ptyManager.onSessionEnded(listener)
+  const { contextTail, geminiContextTail, codexContextTail, admitTranscriptPath, noteContextNode } =
+    wireAgentStatus(platform, {
+      onSessionEnded: (listener) => {
+        ptyManager.onSessionEnded(listener)
+      }
+    })
+  // The context meter's mount-time rehydration: the same core handler the desktop registers, over
+  // the tails created just above. ONE registration: this shell used to add two listeners for the
+  // channel (here and in agent-status.ts), so every browser ensure resolved twice. No remote leg:
+  // this process runs on the host whose transcripts it reads, so the local locators are complete,
+  // and a node the browser marks as remote gets no meter rather than a read of this disk.
+  registerContextEnsureIpc({
+    tailFor: (agentId) => {
+      switch (agentId) {
+        case undefined:
+        case 'claude':
+          return contextTail
+        case 'codex':
+          return codexContextTail
+        case 'gemini':
+          return geminiContextTail
+        default:
+          return undefined
+      }
+    },
+    admitLocalPath: admitTranscriptPath,
+    onTracked: ({ nodeId, sessionId, agentId }) => {
+      if (nodeId) noteContextNode(nodeId, sessionId, agentId ?? 'claude')
     }
-  })
-  platform.on(IPC.contextEnsure, (sessionId?: string, cwd?: string, accountId?: string, agentId?: string, nodeId?: string) => {
-    if (sessionId) void ensureContext(sessionId, cwd, accountId, agentId, nodeId)
   })
   // The ⌘M chat view + the find-bar's transcript index. Registered HERE rather than with the rest
   // of the handlers because the hook-fed path authority is the tail created just above. No remote
