@@ -1949,6 +1949,28 @@ const FEATURES = [
     docs: ['docs/features/agents/usage-indicator-reliability.md'],
   },
   {
+    id: 'markdown-link-navigation-guard',
+    label: 'Rendered-markdown links never navigate the application window',
+    files: [
+      'src/main/navigation-guard.ts',
+      'src/main/navigation-guard.test.ts',
+      'src/renderer/lib/markdownLinks.ts',
+      'src/renderer/lib/markdownLinks.test.ts',
+      'src/renderer/boot.tsx',
+      'src/main/canvas-widget-window.ts',
+    ],
+    contentChecks: [
+      ['src/main/navigation-guard.ts', 'export function decideMainFrameNavigation('],
+      ['src/main/navigation-guard.ts', 'export function guardMainFrameNavigation('],
+      ['src/main/index.ts', 'decideMainFrameNavigation(url, appEntryUrl)'],
+      ['src/main/canvas-widget-window.ts', 'guardMainFrameNavigation(win.webContents, '],
+      ['src/renderer/lib/markdownLinks.ts', 'export function installMarkdownLinkGuard('],
+      ['src/renderer/boot.tsx', 'installMarkdownLinkGuard(document, {'],
+      ['src/renderer/boot.tsx', "localizedTextNow('markdownLinks.localLink', "],
+    ],
+    docs: ['docs/features/files/markdown-link-navigation-guard.md'],
+  },
+  {
     id: 'aws-wizard-generator',
     label: 'Schema-driven AWS wizard generator node',
     files: [

@@ -10,6 +10,9 @@ to a network service.
   bounded local creation, regex-capable filtering, file routing, and remote-host safety.
 - [Markdown preview on open](./markdown-preview.md): default-on Markdown rendering, one-shot
   migration, editor toggling, and Explorer pin discoverability.
+- [Markdown link navigation guard](./markdown-link-navigation-guard.md): links in rendered markdown
+  never navigate the application window; web links open outside, local links are refused with a
+  notice, and the desktop main process blocks any other main-frame navigation.
 
 ## Suggested articles
 
