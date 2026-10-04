@@ -2391,6 +2391,17 @@ const FEATURES = [
     docs: ['docs/features/terminals/named-terminal-profiles.md'],
   },
   {
+    id: 'agent-restart-in-place',
+    label: 'In-place agent restart and Eco quit',
+    files: ['src/renderer/terminal/agent-restart.ts'],
+    contentChecks: [
+      ['src/renderer/terminal/agent-restart.ts', 'const CTRL_C_QUITS: Record<string, number> = {'],
+      ['src/renderer/terminal/agent-restart.ts', 'export const RESTART_LATE_EXIT_MS = 60_000'],
+      ['src/renderer/terminal/agent-restart.ts', 'export function exitTimeoutNotice('],
+    ],
+    docs: ['docs/features/terminals/agent-restart-in-place.md'],
+  },
+  {
     id: 'session-icons',
     label: 'Per-session icons',
     files: [

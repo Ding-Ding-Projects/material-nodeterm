@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Port the upstream in-place agent restart fixes (upstream `ff365255`, `00d92ea8`, `81da4c5e`,
+  `1a1c5285`, `72110c57`, `d8e89701`, `43bfc1a4`). Claude and Grok are now quit with three Ctrl-C
+  presses and Codex, opencode and Copilot with two, instead of a typed `/exit` that a composer popup
+  could swallow; opencode can be restarted and hibernated; a user-requested restart keeps watching a
+  slow quit for up to a minute; and the exit-timeout notice now carries the exact resume line. The
+  resume delivery keeps this fork's Ctrl-C retry for PowerShell panes. See
+  `docs/features/terminals/agent-restart-in-place.md`.
+
+  搬咗上游原地重開 agent 嘅修正：Claude 同 Grok 而家撳三下 Ctrl-C、Codex、opencode 同 Copilot
+  撳兩下就收工，唔再打 `/exit`（打字有機會俾輸入框食咗）；opencode 都可以重開同 Eco 休眠；你自己
+  撳嘅重開會等慢嘅 CLI 最多一分鐘；等唔到嘅時候個提示會直接俾你條 resume 指令。
 - Port the first upstream security tranche (issue #225, upstream `1bf6fadb`, `60714074`, `fee5b244`,
   `23a7282b`, `9fa879d0`, `2d3e54cb`): a plain terminal keeps its inherited provider credentials in
   subscription mode (both strip sites in this fork); a Linux desktop with no keyring stores the

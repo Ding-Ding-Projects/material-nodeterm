@@ -8,6 +8,8 @@ standalone Windows session host.
 - [Windows shell profiles](./windows-shell-profiles.md) — detected PowerShell, Command Prompt,
   Git Bash, WSL, custom profiles, and user-named startup profiles; defaults, switching, and the
   machine-local trust boundary.
+- [In-place agent restart and Eco quit](./agent-restart-in-place.md) — how a restart or Eco quits
+  an agent CLI in its pane, how long a slow quit is watched, and what the failure notice offers.
 
 See also [Canvas → Node kinds](../canvas/README.md) for how a terminal node fits alongside
 agent, sticky, editor and diff nodes, and [Agents](../agents/README.md) for the agent-specific

@@ -494,6 +494,7 @@ import { sshFs } from '../terminal/ssh-fs'
 import {
   agentHibernateFns,
   agentRestartFn,
+  exitTimeoutNotice,
   guardConcurrentRestart,
   modelSwitchEligibility,
   planBulkRestart,
@@ -9970,6 +9971,18 @@ export function Canvas() {
       )
       markDirty()
     }
+    // The bare resume line for the exit-timeout notice, read from the same two sources the node's
+    // restart closure used (live hook id, else the persisted minted one). Null when either is
+    // unknown or unusable — `resumeCommand` refuses an unsafe id and has no line for a custom agent.
+    const exitTimeoutResumeLine = (id: string): string | null => {
+      const node = nodesRef.current.find((n) => n.id === id)
+      const agentId = node?.data.agentId as AgentId | undefined
+      const sid = restartSessionId(
+        useAgentStatus.getState().byId[id]?.sessionId,
+        node?.data.agentSessionId
+      )
+      return agentId && sid ? resumeCommand(agentId, sid) : null
+    }
     const targetLabel =
       targetAgentId == null
         ? undefined
@@ -9995,11 +10008,9 @@ export function Canvas() {
               kind: 'error',
               // Deliberately does NOT claim the session is still running: what we know is that the
               // pane never came back to a shell within the timeout, so the resume was not sent.
-              // Nothing is ever force-killed, so the pane is exactly as the CLI left it — which is
-              // what the user has to go and look at.
-              text:
-                `${action} failed: the pane did not return to a shell in time, so the CLI was not ` +
-                'relaunched. Nothing was killed — check the pane.'
+              // Nothing is ever force-killed — but a CLI that quits AFTER we stopped watching leaves
+              // a bare shell with no agent, so the notice carries the resume line.
+              text: exitTimeoutNotice(action, exitTimeoutResumeLine(nodeId))
             }
           : {
               kind: 'error',
