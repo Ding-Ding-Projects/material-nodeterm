@@ -46,6 +46,7 @@ import type { CloudflareTunnelApi as WizardTunnelApi } from '../../shared/cloudf
 import type { AdvancedMediaApi } from '../../shared/advanced-media'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
+  UNKNOWN_GROK_CLI_CAPS,
   type BoardLogApi,
   type TimerApi,
   type LogApi,
@@ -54,6 +55,8 @@ import {
   type ChatTranscriptResult,
   type ClaudeApi,
   type ClaudeCliCaps,
+  type GrokApi,
+  type GrokCliCaps,
   type CodexApi,
   type CodexIdentityCaps,
   UNKNOWN_CODEX_IDENTITY_CAPS,
@@ -2031,6 +2034,18 @@ export function buildClaudeApi(client: RpcClient, stub: ClaudeApi): ClaudeApi {
   }
 }
 
+/** grok's probe over WS-RPC. A REAL handler server-side (`registerGrokCliIpc` runs in that shell
+ *  too), so the browser gets the same answer the desktop does — not a stub that quietly disables
+ *  session-id minting on one surface only. Rejection degrades to the fail-open caps. */
+export function buildGrokApi(client: RpcClient): GrokApi {
+  return {
+    cliCaps: () =>
+      (client.request(IPC.grokCliCaps) as Promise<GrokCliCaps>).catch(() => UNKNOWN_GROK_CLI_CAPS),
+    takenSessionIds: (cwd: string) =>
+      (client.request(IPC.grokTakenSessionIds, cwd) as Promise<string[]>).catch(() => [])
+  }
+}
+
 /**
  * The transcript search and two READ channels, now that `registerTranscriptIpc` serves all three
  * in the server shell too. Before this the browser search stayed on the stub while the read stubs
@@ -2265,7 +2280,8 @@ export async function installWsBridge(): Promise<boolean> {
       return {
         transcripts: t.transcripts,
         chat: t.chat,
-        claude: { ...buildClaudeApi(client, stubApi.claude), readTranscript: t.claudeReadTranscript }
+        claude: { ...buildClaudeApi(client, stubApi.claude), readTranscript: t.claudeReadTranscript },
+        grok: buildGrokApi(client)
       }
     })(),
     // Web replacement for the Electron native dialog: an in-app server-directory browser over

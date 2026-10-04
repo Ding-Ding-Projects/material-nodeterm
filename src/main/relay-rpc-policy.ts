@@ -120,6 +120,10 @@ const RELAY_REQUEST_METHODS = new Set<string>([
   IPC.agentAnswerPermission,
   IPC.agentAckDone,
   IPC.claudeCliCaps,
+  // grok's own probe and the session ids it already owns for a cwd, both on the host where a relay
+  // tab's grok node launches. Read-only metadata (directory names), no file contents.
+  IPC.grokCliCaps,
+  IPC.grokTakenSessionIds,
 
   // Needed only to derive host-side worktree defaults; explicitly remote in relay-api.ts.
   IPC.appUserDataDir,

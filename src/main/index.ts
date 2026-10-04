@@ -381,6 +381,7 @@ import {
 import { resolveForeignThreadAt } from './codex-relay-daemon'
 import { claudeCliCaps, registerClaudeCliIpc, type ClaudeCliCaps } from '../core/claude-cli'
 import { discoverLocalClaudeSkills, type ClaudeSkillScope } from '../core/claude-skills'
+import { registerGrokCliIpc } from '../core/grok-cli'
 import { refreshCodexIdentityCaps, registerCodexIdentityIpc } from '../core/codex-identity-caps'
 import {
   bindCodexThreadIdentity,
@@ -2099,6 +2100,9 @@ app.whenReady().then(async () => {
     }
     return { scopes, refreshedAt: Date.now() }
   })
+  // Invariant 11 for probes: registered in BOTH shells, or session-id minting silently works on
+  // the desktop and not in the browser, with nothing to say which.
+  registerGrokCliIpc()
   registerCodexIdentityIpc()
   // Warm the `claude --version` probe now (it spawns a login shell + node, ~sub-second) so the
   // renderer's first `claude.cliCaps()` — awaited on the launch path of a cold-restored agent
