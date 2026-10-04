@@ -743,10 +743,12 @@ if [ -n "$NODETERM_HOOK_ENDPOINT" ] && [ -r "$NODETERM_HOOK_ENDPOINT" ]; then
 fi
 fi
 
-# An HTTP response, including a refusal, is authoritative. Only an empty or 000 transport result
-# may walk the bounded endpoint candidates, and a sandboxed denial skips doomed retries.
-nt_reached() { [ -n "$nt_code" ] && [ "$nt_code" != "000" ]; }
-if ! nt_reached && [ -z "$CODEX_SANDBOX_NETWORK_DISABLED" ]; then
+# An HTTP response, including a refusal, is authoritative. Only an empty or 000 transport result,
+# or an explicit wrong-owner (421) answer, may walk the bounded endpoint candidates; a 403 stays
+# final. A sandboxed denial skips doomed retries, but a 421 proves the transport worked and the
+# wrong owner rejected this request before dispatch, so it still permits discovery.
+nt_reached() { [ -n "$nt_code" ] && [ "$nt_code" != "000" ] && [ "$nt_code" != "421" ]; }
+if ! nt_reached && { [ "$nt_code" = "421" ] || [ -z "$CODEX_SANDBOX_NETWORK_DISABLED" ]; }; then
   nt_list=$(nt_candidates "$NODETERM_HOOK_ENDPOINT")
   if [ -n "$nt_list" ]; then
     nt_n=0

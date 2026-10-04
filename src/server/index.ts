@@ -651,7 +651,8 @@ export async function startServer(
     // control is not wired on this edition. Per-account fail-open lives inside the helper.
     installHooksIntoLocalAccounts(settingsStore.get().claudeAccounts ?? [])
   }
-  await hookServer.start()
+  const hookStartupWarning = await hookServer.startForApp()
+  if (hookStartupWarning) console.error('[nodeterm-server]', hookStartupWarning)
   // Canvas control does not exist on this edition, and saying so BY NAME is the whole point: the
   // null handler answered `control unavailable`, which reads to an agent like a transient outage,
   // and an agent retries an outage. Keep the shared installer here so the refusal contract stays

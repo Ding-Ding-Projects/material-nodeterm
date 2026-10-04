@@ -394,7 +394,7 @@ describe('canvas-control shim', () => {
     })
   })
 
-  it('rejects a wrong token (the server answers 403, the shim exits non-zero)', async () => {
+  it('rejects a wrong token (the server answers wrong-owner 421, the shim exits non-zero)', async () => {
     await expect(callShim(['list'], { NODETERM_HOOK_TOKEN: 'wrong' })).rejects.toMatchObject({
       code: 1
     })

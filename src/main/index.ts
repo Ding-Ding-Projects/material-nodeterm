@@ -2955,7 +2955,7 @@ app.whenReady().then(async () => {
     }
     return accounts
   })
-  await hookServer.start()
+  const hookStartupWarning = await hookServer.startForApp()
   // Probes the CLI for `--remote`, installs the launcher, and publishes the construction-time
   // answer. MUST stay after the secret above and before the window: it is what unblocks
   // `codexIdentityCaps()`, which the renderer's first Codex launch line waits on. NOT awaited —
@@ -2998,6 +2998,10 @@ app.whenReady().then(async () => {
   })
   const win = createWindow()
   mainWindowActivation.markReady()
+  if (hookStartupWarning) {
+    console.error('[agent-hooks]', hookStartupWarning)
+    void dialog.showMessageBox(win, { type: 'warning', title: 'Agent hooks unavailable', message: hookStartupWarning })
+  }
   // NT_MULTI instances are throwaway dev sandboxes. The dock badge is the one marker that is
   // always visible on macOS (the window title is hidden by titleBarStyle: 'hiddenInset', and the
   // dev dock icon/name are Electron's own), so a test instance can never be mistaken for the
