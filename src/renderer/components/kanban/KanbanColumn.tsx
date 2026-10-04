@@ -13,6 +13,8 @@ import type {
 } from './KanbanView'
 import type { GitHubIssueCardView } from '@shared/github-issues'
 import { GitHubIssueCard } from './GitHubIssueCard'
+import { GitHubPullCard } from './GitHubPullCard'
+import type { GitHubPullStatus, PullStatusFreshness } from '@shared/github-pull-status'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
 
@@ -25,6 +27,17 @@ interface KanbanColumnProps {
   githubMoving?: Record<number, true>
   githubReadOnly?: boolean
   githubStatus?: Record<number, string>
+  /** Pull requests filed under this column. Read-only: no drag, no move control. */
+  githubPulls?: GitHubIssueCardView[]
+  /** CI + mergeability for one PR, from the host's memory (absent = not covered by the read). */
+  pullStatusOf?: (pullNumber: number) => GitHubPullStatus | undefined
+  /** Open PRs that close one issue on merge (GitHub's own link). */
+  pullsForIssue?: (issueNumber: number) => GitHubPullStatus[] | undefined
+  pullFreshness?: PullStatusFreshness
+  pullObservedAt?: number
+  onOpenPull?: (pull: GitHubIssueCardView) => void
+  onLoadMorePulls?: (columnId: string | null) => void
+  hasMorePulls?: boolean
   displayCount?: number
   // Column-scoped callbacks carry the column id (and card-scoped ones the node id) so KanbanView
   // can hand every column the SAME function references — that identity stability is what lets
@@ -63,6 +76,8 @@ interface KanbanColumnProps {
 export const KanbanColumn = memo(function KanbanColumn({
   column, cards, githubCards = [], githubColumns = [], githubMoving = {}, displayCount, metaOf, labelsOf,
   githubReadOnly = false, githubStatus = {},
+  githubPulls = [], pullStatusOf, pullsForIssue, pullFreshness = 'fresh', pullObservedAt, onOpenPull,
+  onLoadMorePulls, hasMorePulls,
   onRename, onRecolor, onDelete, onOpenCard, onCardContext, onOpenGitHub, onMoveGitHub,
   onGitHubDragStart, onLoadMoreGitHub, hasMoreGitHub,
   createOptions, onCreate, onCardDragStart, onColumnDragStart, onDragEnd, onDropOnColumn,
@@ -191,7 +206,7 @@ export const KanbanColumn = memo(function KanbanColumn({
             {column ? column.title : 'Ungrouped'}
           </span>
         )}
-        <span className="kanban-col__count">{displayCount ?? cards.length + githubCards.length}</span>
+        <span className="kanban-col__count">{displayCount ?? cards.length + githubCards.length + githubPulls.length}</span>
         {column && (
           <IconButton size="dense"
             className="kanban-col__close"
@@ -240,6 +255,8 @@ export const KanbanColumn = memo(function KanbanColumn({
             moving={!!githubMoving[issue.number]}
             readOnly={githubReadOnly}
             status={githubStatus[issue.number]}
+            pulls={pullsForIssue?.(issue.number)}
+            pullFreshness={pullFreshness}
             onOpen={(item) => onOpenGitHub?.(item)}
             onMove={(item, target) => onMoveGitHub?.(item, target)}
             onDragStart={(item) => onGitHubDragStart?.(item)}
@@ -249,6 +266,21 @@ export const KanbanColumn = memo(function KanbanColumn({
         {hasMoreGitHub && (
           <Button variant="text" size="small" className="kanban-github-more" onClick={() => onLoadMoreGitHub?.(colId)}>
             Show more issues
+          </Button>
+        )}
+        {githubPulls.map((pull) => (
+          <GitHubPullCard
+            key={`github-pull:${pull.id}`}
+            pull={pull}
+            status={pullStatusOf?.(pull.number)}
+            freshness={pullFreshness}
+            observedAt={pullObservedAt}
+            onOpen={(item) => onOpenPull?.(item)}
+          />
+        ))}
+        {hasMorePulls && (
+          <Button variant="text" size="small" className="kanban-github-more" vocabularyMode="factual" onClick={() => onLoadMorePulls?.(colId)}>
+            {profileText('github.pull.showMore', 'Show more pull requests')}
           </Button>
         )}
       </div>

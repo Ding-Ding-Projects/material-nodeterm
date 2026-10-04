@@ -193,7 +193,12 @@ export const requiresVerified: ReadonlySet<string> = new Set([
   'reply',
   'notify',
   'sticky',
-  'open-project'
+  'open-project',
+  // The board's GitHub lane (core/github/control-read.ts). The project read is resolved from the
+  // CALLER's node, so a caller nobody can verify could name any node and read another project's
+  // lane — bound sessions included. NEW verbs: fail-closed strands nobody.
+  'issues',
+  'prs'
 ])
 
 /**
@@ -210,6 +215,9 @@ export const STICKY_CONTROL_REFUSAL = 'Sticky write refused.'
 /** Same posture again for `open-project` (issue #338): one sentence naming what was refused, no
  *  diagnosis, no token or restart advice — a designed refusal, not a rollout accident. */
 export const OPEN_PROJECT_CONTROL_REFUSAL = 'Project open refused.'
+
+/** The flat refusal for an unverified `issues` / `prs` read (core/github/control-read.ts). */
+export const GITHUB_READ_CONTROL_REFUSAL = 'GitHub lane read refused.'
 
 /**
  * Issue #1088: appended to a verified-only refusal when THIS INSTANCE has no node-auth secret, so no
@@ -232,6 +240,7 @@ export function identityUnavailableNote(reason: string | null): string {
 export function verifiedRefusalFor(verb: string): string {
   if (verb === 'sticky') return STICKY_CONTROL_REFUSAL
   if (verb === 'open-project') return OPEN_PROJECT_CONTROL_REFUSAL
+  if (verb === 'issues' || verb === 'prs') return GITHUB_READ_CONTROL_REFUSAL
   return MESSAGING_CONTROL_REFUSAL
 }
 

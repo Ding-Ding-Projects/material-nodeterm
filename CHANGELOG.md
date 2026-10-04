@@ -44,6 +44,22 @@
   new sessions" account when it shows that account's limits, and ⟳ re-reads the other providers
   past their debounce. The Codex app-server fallback uses the `never` approval policy every current
   CLI accepts. New copy is localized under `usage.*`.
+- Port the upstream GitHub integration family (tranche 2). Pull requests appear on the kanban
+  board as read-only cards in the column their labels map them to, with CI at the current head
+  commit, mergeability ("Ready to merge" only when GitHub reports it clean), the issues they close,
+  and a stale marker when the last status read failed; issue cards carry a chip for every open pull
+  request that closes them, and the summary modal shows a pull request's status and its checks.
+  Closing an issue from the board now asks why (Completed or Not planned). Board writes require an
+  approval that covers the current column labels, and Settings → GitHub Issues gains "Approve column
+  labels", the remaining GitHub request budget, the background-sync pause, and a sign-in line that
+  says GitHub could not be reached instead of reporting you signed out. The core gains a
+  conditional heartbeat, a proactive rate budget, tri-state token validation, per-repository pull
+  status reads with a visible-board chase, and cache deletion on revoke. Agents get the read-only,
+  verified-only `issues` and `prs` canvas-control verbs (desktop; refused by name on the Server
+  Edition), answered from the board's cache without calling GitHub. The relay scope for
+  `githubIssues:` methods now fails closed for a method it cannot read a project from. Every new
+  surface uses the Material 3 primitives, is localized, has audit rows, and is documented in
+  `docs/features/kanban/github-issues-and-pull-requests.md`.
 
 - Refresh the canonical upstream submodule pin to `9d5572e2984d5a3c8a68ac7883755221838ebccc`
   (upstream `v0.4.1-12`) and add `scripts/port-upstream.mjs` with the per-path port ledger

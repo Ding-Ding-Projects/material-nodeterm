@@ -100,6 +100,13 @@ const RELAY_REQUEST_METHODS = new Set<string>([
   IPC.githubIssuesMove,
   IPC.githubIssuesCreateLabels,
   IPC.githubIssuesClearCache,
+  // Pull request CI / mergeability and the host's pull observations: project-scoped like the issue
+  // verbs above and answered with the HOST's GitHub credential, which never leaves the host.
+  IPC.githubIssuesPullStatus,
+  IPC.githubIssuesChasePulls,
+  IPC.githubIssuesPullChecks,
+  IPC.githubIssuesClaimPullAutoMove,
+  IPC.githubIssuesNotePullWaits,
   IPC.boardLogAppend,
   IPC.boardLogSaveAttachment,
   IPC.boardLogCreateAttachmentSession,

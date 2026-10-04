@@ -918,7 +918,12 @@ describe('relay host — GitHub issue RPCs are scoped to the shared project', ()
       [IPC.githubIssuesMove, [{ projectId: 'proj-2', issueNumber: 7, toColumnId: null,
         expectedUpdatedAt: '2026-08-09T00:00:00Z' }]],
       [IPC.githubIssuesCreateLabels, ['proj-2']],
-      [IPC.githubIssuesClearCache, ['proj-2']]
+      [IPC.githubIssuesClearCache, ['proj-2']],
+      [IPC.githubIssuesPullStatus, ['proj-2']],
+      [IPC.githubIssuesChasePulls, ['proj-2']],
+      [IPC.githubIssuesPullChecks, ['proj-2', 12]],
+      [IPC.githubIssuesClaimPullAutoMove, [{ projectId: 'proj-2', cardId: 'n1', pulls: [12] }]],
+      [IPC.githubIssuesNotePullWaits, [{ projectId: 'proj-2', cardId: 'n1', pulls: [12] }]]
     ]
     for (const [method] of methods) platform.handle(method, async () => { reached.push(method) })
     const s = openHostAgainstFakeRelay({ sharedProjectId: 'proj-1' })
@@ -937,6 +942,33 @@ describe('relay host — GitHub issue RPCs are scoped to the shared project', ()
       .filter((message) => message.t === 'res' && message.id >= 100)
     expect(responses.every((response) =>
       response.ok === false && response.error.code === 'E_FORBIDDEN')).toBe(true)
+    expect(reached).toEqual([])
+  })
+
+  it('answers the pull request reads for the shared project', async () => {
+    const reached: unknown[][] = []
+    platform.handle(IPC.githubIssuesPullStatus, async (...args: unknown[]) => { reached.push(args); return { pulls: [] } })
+    platform.handle(IPC.githubIssuesPullChecks, async (...args: unknown[]) => { reached.push(args); return { status: 'hidden' } })
+    const s = openHostAgainstFakeRelay({ sharedProjectId: 'proj-1' })
+    await s.openMutually()
+    s.peerSendsTunnelText(JSON.stringify({ t: 'req', id: 300, method: IPC.githubIssuesPullStatus, args: ['proj-1'] }))
+    s.peerSendsTunnelText(JSON.stringify({ t: 'req', id: 301, method: IPC.githubIssuesPullChecks, args: ['proj-1', 12] }))
+    await vi.waitFor(() => expect(reached).toEqual([['proj-1'], ['proj-1', 12]]))
+  })
+
+  it('fails closed for a githubIssues method the scope table cannot read a project from', async () => {
+    const reached: string[] = []
+    const future = 'githubIssues:future-verb'
+    platform.handle(future, async () => { reached.push(future) })
+    const s = openHostAgainstFakeRelay({ sharedProjectId: 'proj-1' })
+    await s.openMutually()
+    s.peerSendsTunnelText(JSON.stringify({ t: 'req', id: 200, method: future, args: ['proj-1'] }))
+    await vi.waitFor(() => expect(s.textFrames.some((frame) => JSON.parse(frame).id === 200)).toBe(true))
+    const response = s.textFrames.map((frame) => JSON.parse(frame)).find((message) => message.id === 200)
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'E_FORBIDDEN', message: 'GitHub Issues project is outside this relay session' }
+    })
     expect(reached).toEqual([])
   })
 

@@ -1,8 +1,11 @@
 import type {
+  CreateIssueInput,
   GitHubIssue,
   GitHubIssueLabel,
   GitHubIssueUser,
+  GitHubPullMeta,
   GitHubRepositoryLabel,
+  IssueHeartbeatResult,
   IssuePageResult,
   LabelPageResult,
   ListIssueOptions,
@@ -14,6 +17,17 @@ import { GitHubClientError } from './client-error'
 
 export { GitHubClientError } from './client-error'
 import { parseGitHubRepository } from './config'
+import type { GitHubPullChecksResult } from '../../shared/github-pull-status'
+import {
+  GraphQLShapeError,
+  PULL_CHECKS_QUERY,
+  PULL_STATUS_QUERY,
+  graphQLErrors,
+  parsePullChecksResponse,
+  parsePullStatusResponse,
+  rateLimitFrom,
+  type PullStatusRead
+} from './graphql-pulls'
 
 const API_ORIGIN = 'https://api.github.com'
 const API_VERSION = '2022-11-28'
@@ -25,6 +39,30 @@ type ClientOptions = {
   fetch?: typeof fetch
   maxResponseBytes?: number
   timeoutMs?: number
+  /** Called with the rate budget every response carries — 200, 304 and errors alike — so the
+   *  request coordinator can pace work BEFORE GitHub has to refuse it. */
+  onRateLimit?: (sample: GitHubRateSample) => void
+}
+
+/** One reading of `x-ratelimit-*`. `resetAt` is epoch milliseconds. */
+export interface GitHubRateSample {
+  resource: string
+  limit: number
+  remaining: number
+  resetAt: number
+}
+
+/** Parses the rate headers, or null when any is absent or implausible. A missing header must never
+ *  read as "zero left": that would pause sync on every response that simply does not carry one. */
+export function rateSampleFrom(headers: Headers): GitHubRateSample | null {
+  const limit = Number(headers.get('x-ratelimit-limit') ?? NaN)
+  const remaining = Number(headers.get('x-ratelimit-remaining') ?? NaN)
+  const reset = Number(headers.get('x-ratelimit-reset') ?? NaN)
+  const resource = headers.get('x-ratelimit-resource') ?? 'core'
+  if (!Number.isSafeInteger(limit) || limit <= 0 || !Number.isSafeInteger(remaining) ||
+      remaining < 0 || remaining > limit || !Number.isSafeInteger(reset) || reset <= 0 ||
+      !/^[a-z_]{1,32}$/.test(resource)) return null
+  return { resource, limit, remaining, resetAt: reset * 1_000 }
 }
 
 function safeRepository(repository: string): string {
@@ -69,20 +107,44 @@ function issueUser(value: unknown): GitHubIssueUser | null {
   return { id: Number(item.id), login: item.login, avatarUrl: avatar.toString() }
 }
 
+/** Decodes the pull-request half of an issues-endpoint item. Returns `undefined` for an issue
+ *  (no `pull_request` object) and `null` for a malformed one, which the caller must reject —
+ *  the two answers are different facts. */
+function pullFrom(item: Record<string, unknown>): GitHubPullMeta | null | undefined {
+  const pull = object(item.pull_request)
+  if (item.pull_request === undefined) return undefined
+  if (!pull) return null
+  const mergedAt = pull.merged_at
+  if (!(mergedAt === null || mergedAt === undefined || isoDate(mergedAt))) return null
+  if (!(item.draft === undefined || typeof item.draft === 'boolean')) return null
+  return { draft: item.draft === true, mergedAt: (mergedAt ?? null) as string | null }
+}
+
+const KNOWN_STATE_REASONS: ReadonlySet<string> = new Set(['completed', 'not_planned', 'reopened', 'duplicate'])
+
+/** GitHub grows this enum (`duplicate` arrived after the decoder was written, and one such issue
+ *  failed the WHOLE scan as malformed, so that repository never synced). A value we do not know
+ *  yet is read as "no reason" — the issue itself is perfectly valid. */
+function stateReasonFrom(value: unknown): GitHubIssue['stateReason'] {
+  return typeof value === 'string' && KNOWN_STATE_REASONS.has(value)
+    ? value as GitHubIssue['stateReason']
+    : null
+}
+
 function issueFrom(value: unknown): GitHubIssue | null {
   const item = object(value)
   if (!item || !positiveInteger(Number(item.id), Number.MAX_SAFE_INTEGER) ||
       !positiveInteger(Number(item.number), Number.MAX_SAFE_INTEGER) ||
       !string(item.title, 1_024) || !(item.body === null || string(item.body, 1_000_000)) ||
       (item.state !== 'open' && item.state !== 'closed') ||
-      !(item.state_reason === null || item.state_reason === undefined ||
-        item.state_reason === 'completed' || item.state_reason === 'not_planned' ||
-        item.state_reason === 'reopened') ||
+      !(item.state_reason === null || item.state_reason === undefined || string(item.state_reason, 64)) ||
       !string(item.html_url, 2_048) || !string(item.url, 2_048) ||
       !Array.isArray(item.labels) || item.labels.length > 100 ||
       !Array.isArray(item.assignees) || item.assignees.length > 100 ||
       !isoDate(item.created_at) || !isoDate(item.updated_at) ||
       typeof item.locked !== 'boolean') return null
+  const pull = pullFrom(item)
+  if (pull === null) return null
   const labels = item.labels.map(issueLabel)
   const assignees = item.assignees.map(issueUser)
   if (labels.some((entry) => !entry) || assignees.some((entry) => !entry)) return null
@@ -102,15 +164,25 @@ function issueFrom(value: unknown): GitHubIssue | null {
     title: item.title,
     body: item.body ?? '',
     state: item.state,
-    stateReason: (item.state_reason ?? null) as GitHubIssue['stateReason'],
+    stateReason: stateReasonFrom(item.state_reason),
     htmlUrl: html.toString(),
     apiUrl: api.toString(),
     labels: labels as GitHubIssueLabel[],
     assignees: assignees as GitHubIssueUser[],
     createdAt: item.created_at,
     updatedAt: item.updated_at,
-    locked: item.locked
+    locked: item.locked,
+    ...(pull ? { pull } : {})
   }
+}
+
+/** A reason only rides a state change, and only one that fits it: GitHub rewrites `state_reason` on
+ *  any write carrying `state`, so a reason sent without one — or the wrong kind — is a caller bug. */
+function validStateReason(input: UpdateIssueInput): boolean {
+  if (input.stateReason === undefined) return true
+  if (input.state === 'closed') return input.stateReason === 'completed' || input.stateReason === 'not_planned'
+  if (input.state === 'open') return input.stateReason === 'reopened'
+  return false
 }
 
 function nextPage(link: string | null): number | undefined {
@@ -175,8 +247,24 @@ export class GitHubIssuesClient {
     this.timeoutMs = options.timeoutMs ?? 15_000
   }
 
-  async getAuthenticatedUser(): Promise<{ userId: string; login: string }> {
-    const value = object(await this.json(await this.request('/user', { method: 'GET' })))
+  /** `GET /user`, conditional on `etag`. A 304 means the identity behind this token is unchanged —
+   *  and it is free; a token GitHub no longer accepts is still refused (401) whatever the condition. */
+  async checkAuthenticatedUser(etag?: string): Promise<
+    | { notModified: true }
+    | { notModified: false; identity: { userId: string; login: string }; etag?: string }
+  > {
+    if (etag !== undefined && !string(etag, 512)) throw new GitHubClientError('invalid-request')
+    const response = await this.request('/user', {
+      method: 'GET', ...(etag ? { headers: { 'if-none-match': etag } } : {})
+    })
+    if (response.status === 304) return { notModified: true }
+    const identity = await this.userFrom(response)
+    const fresh = response.headers.get('etag')
+    return { notModified: false, identity, ...(fresh && string(fresh, 512) ? { etag: fresh } : {}) }
+  }
+
+  private async userFrom(response: Response): Promise<{ userId: string; login: string }> {
+    const value = object(await this.json(response))
     if (!value || !positiveInteger(Number(value.id), Number.MAX_SAFE_INTEGER) ||
         !string(value.login, 128) || !value.login) {
       throw new GitHubClientError('malformed-response')
@@ -197,6 +285,15 @@ export class GitHubIssuesClient {
       if (!isoDate(options.since)) throw new GitHubClientError('invalid-request')
       query.set('since', options.since)
     }
+    if (options.labels !== undefined) {
+      // Label names are `,`-joined by the API, so one containing a comma cannot be expressed here.
+      // Refuse rather than silently query for two labels that do not exist and get an empty page —
+      // which the dedupe lookup would read as "nothing upstream" and answer by filing a duplicate.
+      if (!string(options.labels, 1_000) || !options.labels.trim()) {
+        throw new GitHubClientError('invalid-request')
+      }
+      query.set('labels', options.labels)
+    }
     const response = await this.request(`/repos/${repository}/issues?${query}`, {
       method: 'GET',
       ...(options.etag ? { headers: { 'if-none-match': options.etag } } : {})
@@ -205,8 +302,11 @@ export class GitHubIssuesClient {
     const value = await this.json(response)
     if (!Array.isArray(value) || value.length > 100) throw new GitHubClientError('malformed-response')
     const items: GitHubIssue[] = []
+    // Pull requests arrive on this endpoint too, and they are kept: their bytes are already
+    // fetched, and harvesting them here is what gives the board's pull lane the incremental
+    // `since` watermark, ETags and cache the issue lane has. `/repos/{repo}/pulls` ignores
+    // `since` entirely, so a separate scan could not reuse any of it.
     for (const candidate of value) {
-      if (object(candidate)?.pull_request !== undefined) continue
       const decoded = issueFrom(candidate)
       if (!decoded) throw new GitHubClientError('malformed-response')
       items.push(decoded)
@@ -216,6 +316,32 @@ export class GitHubIssuesClient {
       ...(nextPage(response.headers.get('link')) ? { nextPage: nextPage(response.headers.get('link')) } : {}),
       ...(response.headers.get('etag') ? { etag: response.headers.get('etag')! } : {})
     }
+  }
+
+  /**
+   * One conditional request that answers "did anything in this repository change since `etag`?".
+   *
+   * It asks for the single most recently updated item with `If-None-Match`. GitHub answers an
+   * unchanged repository with 304, and a 304 does not count against the rate limit (measured
+   * 2026-09-28: twenty 304s moved `x-ratelimit-used` by zero, one 200 moved it by one). The
+   * incremental scan cannot do this on its own: its `since` moves every pass, so its URL — and
+   * therefore any ETag it could present — never repeats.
+   *
+   * `state=all` + `sort=updated` is the same endpoint and the same `updated_at` the `since` scan
+   * filters on, pull requests included, so any change the scan would pick up moves the top item
+   * and with it this ETag. The body is drained but not decoded: only the validator matters.
+   */
+  async issuesHeartbeat(repository: string, etag?: string): Promise<IssueHeartbeatResult> {
+    safeRepository(repository)
+    if (etag !== undefined && !string(etag, 512)) throw new GitHubClientError('invalid-request')
+    const response = await this.request(
+      `/repos/${repository}/issues?state=all&sort=updated&direction=desc&per_page=1`,
+      { method: 'GET', ...(etag ? { headers: { 'if-none-match': etag } } : {}) }
+    )
+    if (response.status === 304) return { notModified: true, ...(etag ? { etag } : {}) }
+    await this.json(response)
+    const fresh = response.headers.get('etag')
+    return { notModified: false, ...(fresh && string(fresh, 512) ? { etag: fresh } : {}) }
   }
 
   async getIssue(repository: string, issueNumber: number): Promise<GitHubIssue> {
@@ -236,12 +362,14 @@ export class GitHubIssuesClient {
     safeRepository(repository)
     if (!positiveInteger(issueNumber, Number.MAX_SAFE_INTEGER) ||
         (input.state !== undefined && input.state !== 'open' && input.state !== 'closed') ||
+        !validStateReason(input) ||
         (input.labels !== undefined && (!Array.isArray(input.labels) || input.labels.length > 100 ||
           input.labels.some((label) => !string(label, 50) || !label.trim())))) {
       throw new GitHubClientError('invalid-request')
     }
     const body = {
       ...(input.state ? { state: input.state } : {}),
+      ...(input.stateReason ? { state_reason: input.stateReason } : {}),
       ...(input.labels ? { labels: input.labels } : {})
     }
     const response = await this.request(`/repos/${repository}/issues/${issueNumber}`, {
@@ -251,6 +379,117 @@ export class GitHubIssuesClient {
     const decoded = issueFrom(await this.json(response))
     if (!decoded) throw new GitHubClientError('malformed-response')
     return decoded
+  }
+
+  /**
+   * Open a new issue. Bounds mirror GitHub's own: a 256-character title and a body the report
+   * composer has already clamped far below the API's 65 536.
+   *
+   * A 403 here is the one a caller must not paper over: a token with `issues: read` lists and gets
+   * issues perfectly and fails only at the write, so the feature looks configured right up to the
+   * moment it matters. `request()` already classifies a non-rate-limit 403 as
+   * `insufficient-permission`; the report service turns that code into the sentence naming the
+   * missing scope.
+   */
+  async createIssue(repository: string, input: CreateIssueInput): Promise<GitHubIssue> {
+    safeRepository(repository)
+    if (!string(input.title, 256) || !input.title.trim() || !string(input.body, 60_000) ||
+        (input.labels !== undefined && (!Array.isArray(input.labels) || input.labels.length > 100 ||
+          input.labels.some((label) => !string(label, 50) || !label.trim())))) {
+      throw new GitHubClientError('invalid-request')
+    }
+    const response = await this.request(`/repos/${repository}/issues`, {
+      method: 'POST',
+      body: JSON.stringify({
+        title: input.title,
+        body: input.body,
+        ...(input.labels?.length ? { labels: input.labels } : {})
+      })
+    })
+    const decoded = issueFrom(await this.json(response))
+    if (!decoded) throw new GitHubClientError('malformed-response')
+    return decoded
+  }
+
+  /** Comment on an existing issue. Returns the comment id; the caller only needs "it landed". */
+  async createIssueComment(
+    repository: string,
+    issueNumber: number,
+    body: string
+  ): Promise<{ id: number }> {
+    safeRepository(repository)
+    if (!positiveInteger(issueNumber, Number.MAX_SAFE_INTEGER) || !string(body, 60_000) ||
+        !body.trim()) {
+      throw new GitHubClientError('invalid-request')
+    }
+    const response = await this.request(`/repos/${repository}/issues/${issueNumber}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body })
+    })
+    const value = object(await this.json(response))
+    if (!value || !positiveInteger(Number(value.id), Number.MAX_SAFE_INTEGER)) {
+      throw new GitHubClientError('malformed-response')
+    }
+    return { id: Number(value.id) }
+  }
+
+  /**
+   * Every open pull request's head, CI rollup, mergeability and closing issues, plus the recently
+   * merged/closed ones — one GraphQL read (see graphql-pulls.ts for the measured cost). A field the
+   * token may not read comes back as `access: false`, not as an empty value.
+   */
+  async pullRequestStatuses(repository: string): Promise<PullStatusRead> {
+    const [owner, name] = safeRepository(repository).split('/')
+    const body = await this.graphql(PULL_STATUS_QUERY, { owner, name })
+    try {
+      return parsePullStatusResponse(body, repository)
+    } catch (error) {
+      if (error instanceof GraphQLShapeError) throw new GitHubClientError('malformed-response')
+      throw error
+    }
+  }
+
+  /** Per-check detail for one PR — read only when someone opens that PR. */
+  async pullRequestChecks(repository: string, pullNumber: number): Promise<GitHubPullChecksResult> {
+    const [owner, name] = safeRepository(repository).split('/')
+    if (!positiveInteger(pullNumber, 2_147_483_647)) throw new GitHubClientError('invalid-request')
+    const body = await this.graphql(PULL_CHECKS_QUERY, { owner, name, number: pullNumber })
+    try {
+      return parsePullChecksResponse(body)
+    } catch (error) {
+      if (error instanceof GraphQLShapeError) throw new GitHubClientError('malformed-response')
+      throw error
+    }
+  }
+
+  /**
+   * One GraphQL request. It goes through the same `request()` as every REST call, so its
+   * `x-ratelimit-*` headers (resource `graphql`) reach the coordinator's budget.
+   *
+   * GraphQL reports an exhausted budget as a 200 whose `errors[].type` is `RATE_LIMITED` — a body
+   * that is otherwise shaped like an answer. It is turned into the same `rate-limited` error a REST
+   * refusal produces, tagged with the `graphql` resource.
+   */
+  private async graphql(query: string, variables: Record<string, string | number>): Promise<unknown> {
+    const response = await this.request('/graphql', {
+      method: 'POST',
+      body: JSON.stringify({ query, variables })
+    })
+    const body = await this.json(response)
+    let errors: ReturnType<typeof graphQLErrors>
+    try {
+      errors = graphQLErrors(body)
+    } catch {
+      throw new GitHubClientError('malformed-response')
+    }
+    if (errors.some((error) => error.type === 'RATE_LIMITED')) {
+      const header = Number(response.headers.get('x-ratelimit-reset')) * 1_000
+      const retryAt = Number.isFinite(header) && header > 0
+        ? header
+        : rateLimitFrom(body)?.resetAt ?? Date.now() + 60_000
+      throw new GitHubClientError('rate-limited', response.status, retryAt, 'graphql')
+    }
+    return body
   }
 
   async listRepositoryLabels(
@@ -394,6 +633,10 @@ export class GitHubIssuesClient {
       clearTimeout(timer)
       init.signal?.removeEventListener('abort', abort)
     }
+    const sample = rateSampleFrom(response.headers)
+    if (sample && this.options.onRateLimit) {
+      try { this.options.onRateLimit(sample) } catch { /* an observer never breaks a request */ }
+    }
     if (response.status === 304) return response
     if (response.status === 403 || response.status === 429) {
       const retryAfter = Number(response.headers.get('retry-after'))
@@ -417,7 +660,9 @@ export class GitHubIssuesClient {
       if (secondary && !(Number.isFinite(retryAfter) && retryAfter > 0)) {
         this.secondaryBackoffMs = Math.min(this.secondaryBackoffMs * 2, 60_000)
       }
-      throw new GitHubClientError('rate-limited', response.status, retryAt)
+      const resource = primary ? response.headers.get('x-ratelimit-resource') ?? undefined : undefined
+      throw new GitHubClientError('rate-limited', response.status, retryAt,
+        resource && /^[a-z_]{1,32}$/.test(resource) ? resource : undefined)
     }
     if (!response.ok) throw new GitHubClientError('request-failed', response.status)
     return response

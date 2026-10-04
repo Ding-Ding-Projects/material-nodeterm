@@ -236,6 +236,8 @@ export function connectRelayHost(opts: ConnectRelayHostOptions): RelayHostSessio
       case IPC.githubIssuesSubscribe:
       case IPC.githubIssuesQuery:
       case IPC.githubIssuesMove:
+      case IPC.githubIssuesClaimPullAutoMove:
+      case IPC.githubIssuesNotePullWaits:
         return {
           githubIssues: true,
           projectId: args[0] && typeof args[0] === 'object'
@@ -246,9 +248,18 @@ export function connectRelayHost(opts: ConnectRelayHostOptions): RelayHostSessio
       case IPC.githubIssuesCreateLabels:
       case IPC.githubIssuesClearCache:
       case IPC.githubIssuesUnsubscribe:
+      case IPC.githubIssuesPullStatus:
+      case IPC.githubIssuesChasePulls:
+      case IPC.githubIssuesPullChecks:
         return { githubIssues: true, projectId: args[0] }
       default:
-        return { githubIssues: false, projectId: undefined }
+        // A `githubIssues:` method this switch does not know how to read a project from is treated
+        // as naming an unknown project, so a scoped session refuses it instead of waving it through.
+        // Membership is by channel class: the next verb added to the namespace fails closed until
+        // somebody adds its row here.
+        return method.startsWith('githubIssues:')
+          ? { githubIssues: true, projectId: undefined }
+          : { githubIssues: false, projectId: undefined }
     }
   }
 

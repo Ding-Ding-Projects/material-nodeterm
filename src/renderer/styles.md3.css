@@ -4423,6 +4423,145 @@ div.mdx-row[role='menuitemradio']:focus-visible {
   color: var(--md-on-surface-variant);
 }
 
+/* Pull request cards, their CI + mergeability line, the issue card's PR chips and the summary
+   modal's checks list (GitHubPullCard.tsx, PullStatusBadges.tsx, GitHubIssueSummaryModal.tsx).
+   Colour is never the only signal: every state also carries a word or a glyph. A stale snapshot is
+   dashed; one stale past the grey-out threshold is muted. */
+.kanban-card--pull {
+  /* Read-only: no drag affordance, so no grab cursor either. */
+  border-left-color: var(--md-tertiary);
+  cursor: pointer;
+}
+.github-pull-state {
+  width: 9px;
+  height: 9px;
+  margin-top: 4px;
+  border: 2px solid currentColor;
+  border-radius: var(--md-shape-full);
+  flex: 0 0 auto;
+}
+.github-pull-state--open,
+.github-pull-badge--open { color: var(--md-success); }
+.github-pull-state--draft,
+.github-pull-badge--draft { color: var(--md-on-surface-variant); }
+.github-pull-state--merged,
+.github-pull-badge--merged { color: var(--md-tertiary); }
+.github-pull-state--closed,
+.github-pull-badge--closed { color: var(--md-error); }
+.github-pull-badge {
+  margin-left: 6px;
+  border: 1px solid currentColor;
+  border-radius: var(--md-shape-full);
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.pull-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 4px 0 0 17px;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+.github-issue-modal .pull-status {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+.pull-status__ci--passed,
+.pull-status__merge--ready,
+.pull-ref__ready { color: var(--md-success); }
+.pull-status__ci--failed,
+.pull-status__merge--conflict,
+.pull-ref__conflict { color: var(--md-error); }
+.pull-status__ci--pending,
+.pull-status__merge--blocked,
+.pull-status__merge--behind { color: var(--md-warning); }
+.pull-status__ci--skipped,
+.pull-status__ci--neutral,
+.pull-status__merge--undecided,
+.pull-status__stale { color: var(--md-on-surface-variant); }
+.pull-status__stale { font-style: italic; }
+.pull-status--stale {
+  text-decoration: underline dashed var(--md-outline);
+}
+.pull-status--expired,
+.pull-status--expired * {
+  color: var(--md-outline) !important;
+}
+.pull-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 0 17px;
+}
+.github-issue-modal .pull-refs { margin: 8px 0 0; }
+.pull-ref {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
+  padding: 0 6px;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.pull-ref--merged { color: var(--md-tertiary); }
+.pull-ref--closed { color: var(--md-outline); }
+.pull-closes {
+  margin: 4px 0 0 17px;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+.github-issue-modal .pull-closes {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+.pull-checks {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.pull-checks__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.pull-checks__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--md-on-surface);
+}
+.mdx-btn.pull-checks__name {
+  justify-content: flex-start;
+  text-align: left;
+}
+.pull-checks__state,
+.pull-checks__note {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+}
+.pull-checks__note { margin: 8px 0 0; }
+
+/* ConfirmDialog's required pick (e.g. why a GitHub issue is being closed). */
+.confirm__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.confirm__choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  color: var(--md-on-surface-variant);
+  cursor: pointer;
+}
+
 /* =================================================================================================
  * Material Design 3 rewrite — OVERLAYS lane.
  *

@@ -164,7 +164,7 @@ describe('where the verbs sit in the routing tables', () => {
     }
   })
 
-  it('the verified-only set is exactly the messaging verbs plus sticky plus open-project', () => {
+  it('the verified-only set is exactly the messaging verbs plus sticky, open-project and the GitHub lane reads', () => {
     // Pins that nothing ELSE ever drifts in: adding a SHIPPED verb here would strand its legacy
     // population with no hatch, which is the one thing this set must never be casually grown by.
     // `notify` (folded in from #98, Task 5.2) is a messaging verb like the other two — it writes
@@ -175,13 +175,23 @@ describe('where the verbs sit in the routing tables', () => {
     // the grant ledger binds targeting rights to the verified caller identity — a grant minted
     // for a forgeable caller would authorize whoever forged it; new verb, so fail-closed from
     // day one strands nobody.
+    // `issues` / `prs` (core/github/control-read.ts) resolve the project from the CALLER's node, so
+    // an unverifiable caller could read another project's GitHub lane; new verbs, fail-closed.
     expect([...requiresVerified].sort()).toEqual([
+      'issues',
       'notify',
       'open-project',
+      'prs',
       'reply',
       'send',
       'sticky'
     ])
+  })
+
+  it('the GitHub lane refusal is its own flat sentence', () => {
+    expect(verifiedRefusalFor('issues')).toBe('GitHub lane read refused.')
+    expect(verifiedRefusalFor('prs')).toBe('GitHub lane read refused.')
+    expect(verifiedRefusalFor('issues')).not.toBe(MESSAGING_CONTROL_REFUSAL)
   })
 
   it('the open-project refusal is its own flat sentence, not the messaging one', () => {

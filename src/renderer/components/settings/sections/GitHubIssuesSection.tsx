@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   GitHubAuthProvider,
   GitHubAuthStatus,
@@ -6,6 +6,7 @@ import type {
   ProjectKanbanGitHub
 } from '@shared/github-issues'
 import { useProjects } from '../../../state/projects'
+import { markWorkspaceDirty } from '../../../state/workspaceDirty'
 import { SettingsSection } from '../SettingsSection'
 import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
@@ -18,6 +19,13 @@ import { Select } from '@renderer/ui/Select'
 import { Switch } from '@renderer/ui/Switch'
 import { describeGitHubAuth, tokenFieldIsPrimary } from '../../../lib/githubAuthView'
 import { GitHubCliAccountsPanel } from './GitHubCliAccountsPanel'
+import {
+  githubRateCopy,
+  githubThrottleCopy,
+  githubUnreachableCopy,
+  type GitHubSyncCopy
+} from '../../../lib/githubSyncStatus'
+import { useLocalizedVocabularyText } from '../../../lib/personalVocabulary/useLocalizedVocabularyText'
 
 const ROWS = {
   enable: {
@@ -49,7 +57,17 @@ const ROWS = {
 }
 const ENTRIES = Object.values(ROWS)
 
+/** Canvas's debounced workspace save (the `markWorkspaceDirty` seam rides it). */
+export const WORKSPACE_SAVE_DEBOUNCE_MS = 800
+
+/** The host reads the GitHub config from the project FILE, which a local edit reaches only through
+ *  the debounced autosave — so a status read right after an edit would describe the old mapping
+ *  (e.g. keep saying "Ready as …" for labels this machine has not approved). Re-read once, a margin
+ *  after that save can have landed. */
+export const STATUS_AFTER_EDIT_MS = WORKSPACE_SAVE_DEBOUNCE_MS + 700
+
 type Confirmation = 'labels' | 'cache' | 'revoke' | null
+type NoticeRow = 'repository' | 'authentication' | 'data'
 
 function defaultGitHub(columns: Array<{ id: string; title: string }>): ProjectKanbanGitHub {
   return {
@@ -66,9 +84,23 @@ function messageFor(error: unknown): string {
     ? String((error as { code: unknown }).code)
     : error instanceof Error ? error.message : ''
   if (code.includes('revision-conflict')) return 'Settings changed elsewhere. The latest state has been loaded.'
+  // Checked before anything that could read as an auth problem: a limit or an outage is not the
+  // user's credential, and naming it as one sends them to re-authenticate an account that is fine.
+  if (code.includes('rate-limited')) return 'GitHub’s rate limit was reached. Try again later.'
+  if (code.includes('github-unreachable')) {
+    return 'GitHub could not be reached. Nothing was changed; try again in a moment.'
+  }
+  if (code.includes('revoked-cache-kept')) {
+    return 'This machine is revoked, but its cached issues could not be deleted. Use “Clear cached data” to remove them.'
+  }
   if (code.includes('invalid-token')) return 'GitHub could not validate that token.'
   if (code.includes('not-authenticated')) return 'Sign in with GitHub CLI or save a valid token first.'
   if (code.includes('not-approved')) return 'Approve this repository on this machine first.'
+  // The settings edit is saved on a debounce, so a click within that window reaches a host that
+  // has not seen it yet. Name the wait rather than the generic failure.
+  if (code.includes('invalid-configuration') || code.includes('repository-not-found')) {
+    return 'These settings have not finished saving. Try again in a moment.'
+  }
   return 'The GitHub action could not be completed. Please try again.'
 }
 
@@ -85,8 +117,14 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
   const [repositoryDraft, setRepositoryDraft] = useState('')
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
+  // Which row the current notice belongs to. A result rendered away from the control that produced
+  // it reads as no result at all — an Approve failure shown three rows down looks like a dead button.
+  const [noticeRow, setNoticeRow] = useState<NoticeRow>('data')
   const [confirmation, setConfirmation] = useState<Confirmation>(null)
   const searchQuery = useSettingsSearch()
+  const text = useLocalizedVocabularyText()
+  /** A sync sentence, localized and vocabulary-mapped before its facts (times, counts) go in. */
+  const syncText = (copy: GitHubSyncCopy): string => text(copy.id, copy.template, copy.facts)
 
   /** `GitHubHostController.status(projectId)` MASKS the auth block for a project that is not
    *  approved on this machine (`ghAuthenticated: false, activeProvider: null, tokenPresent: false`)
@@ -133,18 +171,52 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
     setRepositoryDraft(githubConfig?.repository ?? '')
   }, [projectId, githubConfig?.repository])
 
+  // A config edit changes what the host will answer, but only once it is on disk: re-read the status
+  // after the save can have landed (see STATUS_AFTER_EDIT_MS). The first render is not an edit.
+  const configKey = JSON.stringify(githubConfig ?? null)
+  const statusConfigKey = useRef(configKey)
+  useEffect(() => {
+    if (!isActive || !projectId || project?.remote || statusConfigKey.current === configKey) return
+    statusConfigKey.current = configKey
+    let live = true
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const next = await window.nodeTerminal.githubControl.status(projectId)
+          if (!live) return
+          setView(next)
+          const block = await authBlockFor(next)
+          if (live) setAuth(block)
+        } catch { /* the last status stays; the next action re-reads it */ }
+      })()
+    }, STATUS_AFTER_EDIT_MS)
+    return () => { live = false; clearTimeout(timer) }
+  }, [configKey, isActive, projectId, project?.remote])
+
+  /** The host reads this project from DISK (`workspaceStore.githubProject`), so an edit that stays
+   *  in the renderer store is invisible to approve/refresh — `resolveProject` sees no `github`
+   *  block and throws `invalid-configuration`. `markWorkspaceDirty` is the seam every other
+   *  `setProjectKanban` caller outside Canvas pairs with (NodeLabels): it rides Canvas's debounced
+   *  save, so the write keeps the canvas commit and the external-change conflict gate. */
   const updateConfig = (next: ProjectKanbanGitHub | undefined): void => {
     if (!board || !projectId) return
     const updated = { ...board }
     if (next) updated.github = next
     else delete updated.github
     setProjectKanban(projectId, updated)
+    markWorkspaceDirty()
     setNotice('')
   }
 
-  const run = async (name: string, action: () => Promise<void>, success: string): Promise<void> => {
+  const run = async (
+    name: string,
+    action: () => Promise<void>,
+    success: string,
+    row: NoticeRow = 'data'
+  ): Promise<void> => {
     setBusy(name)
     setNotice('')
+    setNoticeRow(row)
     try {
       await action()
       await refreshStatus()
@@ -192,10 +264,21 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
   const enabled = !!githubConfig
   const repository = githubConfig?.repository ?? view?.project?.detectedRepository
   const approved = enabled && !!view?.project?.approved
+  // The repository approval lets the board READ; writes also need this machine to have approved the
+  // column mapping now in the (git-shared) project file. Only an explicit false withholds it.
+  const mappingApproved = approved && view?.project?.mappingApproved !== false
   const authenticated = !!view?.auth.activeProvider
   const completionReady = !!githubConfig?.completionColumnId &&
     mappings.has(githubConfig.completionColumnId)
-  const ready = approved && authenticated && completionReady
+  const ready = approved && mappingApproved && authenticated && completionReady
+  const approveRepository = (): Promise<void> => run('approve', async () => {
+    const status = await window.nodeTerminal.githubControl.status(projectId)
+    await window.nodeTerminal.githubControl.approve({
+      projectId,
+      repository: repository!,
+      expectedRevision: status.control.revision
+    })
+  }, 'Repository approved on this machine.', 'repository')
   // What actually authenticates a request is `activeProvider` — the RESULT of the selected provider
   // meeting the credentials that exist. `ghAuthenticated` alone lies in both directions: pinned to
   // token-only it can be true while nothing authenticates, and pinned to gh-only a saved token is
@@ -248,7 +331,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
             onClick={() => void run('token', async () => {
               await window.nodeTerminal.githubControl.saveToken(token)
               setToken('')
-            }, 'Token saved securely.')}
+            }, 'Token saved securely.', 'authentication')}
           >
             Save token
           </Button>
@@ -258,7 +341,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
               onClick={() => void run('clear-token', async () => {
                 await window.nodeTerminal.githubControl.clearToken()
                 setToken('')
-              }, 'Saved token cleared.')}
+              }, 'Saved token cleared.', 'authentication')}
             >
               Clear
             </Button>
@@ -283,7 +366,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
               provider: event.target.value as GitHubAuthProvider,
               expectedRevision: current.control.revision
             })
-          }, 'Authentication preference updated.')}
+          }, 'Authentication preference updated.', 'authentication')}
         >
           <option value="auto">Auto</option>
           <option value="gh">GitHub CLI only</option>
@@ -360,27 +443,27 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
                 <span className="text-muted">
                   {ready
                     ? `Ready as ${view?.auth.login ?? 'GitHub user'}`
-                    : view?.project?.approved
-                      ? 'Repository approved. Authentication is still needed.'
-                      : 'Approval is required before nodeterm reads the repository.'}
+                    : approved && !mappingApproved
+                      ? text('github.settings.mappingChanged', 'The column labels changed since this machine approved them. Approve them to let the board change issues on GitHub.')
+                      : view?.project?.approved
+                        ? view.auth.unreachable && !authenticated
+                          ? text('github.settings.approvedUnreachable', 'Repository approved. GitHub could not be reached to check the sign-in.')
+                          : 'Repository approved. Authentication is still needed.'
+                        : 'Approval is required before nodeterm reads the repository.'}
                 </span>
                 {!view?.project?.approved && repository && (
-                  <Button
-                    variant="primary"
-                    disabled={busy !== ''}
-                    onClick={() => void run('approve', async () => {
-                      const status = await window.nodeTerminal.githubControl.status(projectId)
-                      await window.nodeTerminal.githubControl.approve({
-                        projectId,
-                        repository,
-                        expectedRevision: status.control.revision
-                      })
-                    }, 'Repository approved on this machine.')}
-                  >
+                  <Button variant="primary" disabled={busy !== ''} onClick={() => void approveRepository()}>
                     Approve this machine
                   </Button>
                 )}
+                {approved && !mappingApproved && repository && (
+                  <Button variant="primary" disabled={busy !== ''} onClick={() => void approveRepository()}>
+                    {text('github.settings.approveLabels', 'Approve column labels')}
+                  </Button>
+                )}
               </div>
+              {notice && noticeRow === 'repository' &&
+                <p role="status" className="text-[13px] text-muted">{notice}</p>}
             </div>
           </SearchableRow>
 
@@ -392,6 +475,10 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
                   <p className="text-[13px] text-muted">
                     <SettingsText>GitHub authentication has not been checked yet.</SettingsText>
                   </p>
+                ) : auth.unreachable && !activeProvider ? (
+                  // GitHub never answered for this credential. Not signed out — every branch below
+                  // would say it was.
+                  <p className="text-[13px] text-muted">{syncText(githubUnreachableCopy(auth.unreachable))}</p>
                 ) : ghActive ? (
                   // Happy path: the CLI already authenticates every request — no token, no dropdown.
                   <p className="text-[13px] text-text">
@@ -421,11 +508,19 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
                 <Button disabled={busy !== ''} onClick={() => void run(
                   'recheck',
                   async () => { /* the refresh inside run() is the whole action */ },
-                  'Authentication re-checked.'
+                  'Authentication re-checked.',
+                  'authentication'
                 )}>
                   Check again
                 </Button>
               </div>
+
+              {auth?.unreachable && activeProvider && (
+                <p className="text-[13px] text-muted">
+                  {syncText(githubUnreachableCopy(auth.unreachable))}{' '}
+                  {text('github.settings.lastConfirmed', 'The sign-in above is the last one GitHub confirmed.')}
+                </p>
+              )}
 
               {/* A pinned provider decides which credential is even consulted, and the dropdown that
                   changes it now lives inside Advanced — so the pinning has to be said out loud. */}
@@ -455,6 +550,9 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
                   {tokenIsAside && tokenFieldRow}
                 </div>
               </details>
+
+              {notice && noticeRow === 'authentication' &&
+                <p role="status" className="text-[13px] text-muted">{notice}</p>}
             </div>
           </SearchableRow>
 
@@ -544,7 +642,16 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
                   Choose a mapped completion column before GitHub issue changes are enabled.
                 </p>
               )}
-              {notice && <p role="status" className="text-[13px] text-muted">{notice}</p>}
+              {view?.throttle && (
+                <p className="text-[13px] text-warn" role="status">
+                  {syncText(githubThrottleCopy(view.throttle)!)}
+                </p>
+              )}
+              {view?.rate && (
+                <p className="text-[13px] text-muted">{syncText(githubRateCopy(view.rate))}</p>
+              )}
+              {notice && noticeRow === 'data' &&
+                <p role="status" className="text-[13px] text-muted">{notice}</p>}
             </div>
           </SearchableRow>
         </>
@@ -578,7 +685,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
       )}
       {confirmation === 'revoke' && (
         <ConfirmDialog
-          message="Stop this computer from reading or changing issues for this project?"
+          message="Stop this computer from reading or changing issues for this project? Its cached copy of the issues is deleted too."
           confirmLabel="Revoke"
           onCancel={() => setConfirmation(null)}
           onConfirm={() => {

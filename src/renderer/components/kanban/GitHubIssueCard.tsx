@@ -1,18 +1,10 @@
 import { memo, useState } from 'react'
 import type { GitHubIssueCardView } from '@shared/github-issues'
+import type { GitHubPullStatus, PullStatusFreshness } from '@shared/github-pull-status'
 import type { KanbanColumn } from '@shared/types'
 import { Select } from '@renderer/ui/Select'
-
-function relativeTime(value: string): string {
-  const milliseconds = Date.now() - Date.parse(value)
-  if (!Number.isFinite(milliseconds) || milliseconds < 0) return 'updated recently'
-  const minutes = Math.floor(milliseconds / 60_000)
-  if (minutes < 1) return 'updated now'
-  if (minutes < 60) return `updated ${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `updated ${hours}h ago`
-  return `updated ${Math.floor(hours / 24)}d ago`
-}
+import { updatedRelative } from '../../lib/relativeTime'
+import { PullRefChip } from './PullStatusBadges'
 
 export const GitHubIssueCard = memo(function GitHubIssueCard({
   issue,
@@ -20,6 +12,8 @@ export const GitHubIssueCard = memo(function GitHubIssueCard({
   moving,
   readOnly,
   status,
+  pulls,
+  pullFreshness = 'fresh',
   onOpen,
   onMove,
   onDragStart,
@@ -30,6 +24,9 @@ export const GitHubIssueCard = memo(function GitHubIssueCard({
   moving: boolean
   readOnly: boolean
   status?: string
+  /** Open PRs that close this issue on merge (GitHub's own link). */
+  pulls?: GitHubPullStatus[]
+  pullFreshness?: PullStatusFreshness
   onOpen: (issue: GitHubIssueCardView) => void
   onMove: (issue: GitHubIssueCardView, columnId: string | null) => void
   onDragStart: (issue: GitHubIssueCardView) => void
@@ -66,6 +63,13 @@ export const GitHubIssueCard = memo(function GitHubIssueCard({
         <span className="github-issue-source" title="GitHub issue">GH</span>
       </div>
       <div className="github-issue-card__number">#{issue.number}</div>
+      {pulls && pulls.length > 0 && (
+        <div className="pull-refs">
+          {pulls.slice(0, 3).map((pull) => (
+            <PullRefChip key={pull.number} status={pull} freshness={pullFreshness} />
+          ))}
+        </div>
+      )}
       {issue.labels.length > 0 && (
         <div className="github-issue-card__labels">
           {issue.labels.slice(0, 5).map((label) => (
@@ -81,7 +85,7 @@ export const GitHubIssueCard = memo(function GitHubIssueCard({
         </div>
       )}
       <div className="github-issue-card__footer">
-        <span>{moving ? 'Syncing…' : relativeTime(issue.updatedAt)}</span>
+        <span>{moving ? 'Syncing…' : updatedRelative(issue.updatedAt)}</span>
         {issue.conflict && <span className="github-issue-conflict">Needs a column</span>}
         {issue.assignees.length > 0 && (
           <span className="kanban-card__avatars">
