@@ -13870,6 +13870,49 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
     border-color var(--md3-motion-effect);
 }
 
+/* ============================================================================================
+ * SSH connection banner (components/SshConnectionBanner.tsx) — the thin per-project strip under
+ * the app bar. Three tones: progress (connecting/reconnecting), warning (the hook tunnel lost its
+ * verified connection while the master is fine) and error (disconnected/error, with Reconnect).
+ * ========================================================================================== */
+.md3-ssh-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-small);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.md3-ssh-banner--warning {
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+}
+.md3-ssh-banner--error {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.md3-ssh-banner__dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--md-shape-full);
+  background: currentColor;
+}
+.md3-ssh-banner__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.md3-ssh-banner__retry {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 /* Section-radius owners. Kept as the LAST rule that names these selectors on purpose: the
    material audit (`scripts/check-material-audit.mjs`, `ownsRadiusToken`) reads the final block
    for each owner, and the row-cascade motion rules above name `.notif-center__row` without a

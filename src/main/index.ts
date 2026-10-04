@@ -3640,7 +3640,7 @@ app.whenReady().then(async () => {
       if (!rt || !sshProjectManager) return false
       try {
         const { code } = await sshProjectManager.sshRun(
-          sshWriteArgs(rt.conn, rt.controlPath, filePath),
+          sshWriteArgs(rt.conn, rt.controlPath, filePath, content),
           content
         )
         return code === 0
@@ -4858,14 +4858,21 @@ app.whenReady().then(async () => {
     loadCodexRelayBundle,
     // Lead-pane width (issue #119) for the remote tmux conf, read at connect time so the host
     // carries the value the user last saved. 0 (the default) keeps the conf byte-identical.
-    () => settingsStore.get().tmuxLeadPaneWidth
+    () => settingsStore.get().tmuxLeadPaneWidth,
+    // The managed Claude accounts pinned to a host, whose config dirs there hold their own copies of
+    // the canvas/context skills — kept current by the connect-time agent-tools check. Read per
+    // check, so an account added mid-run is included. A pending account has no finished login and
+    // is skipped; the refresh re-validates every id before it becomes a path.
+    (hostKey) =>
+      (settingsStore.get().claudeAccounts ?? []).filter((a) => a.host === hostKey && !a.pending).map((a) => a.id)
   )
   // Wake-from-sleep: re-validate every SSH master NOW instead of letting ServerAlive discover the
-  // dead TCP ~60s later — until it does, every remote terminal looks alive and is dead (no echo,
-  // no scroll). The small delay lets the network interface come back up first; connect() is
-  // idempotent so a master that survived the nap is a cheap `-O check` no-op.
+  // dead TCP ~60-75s later — until it does, every remote terminal looks alive and is dead (no
+  // echo, no scroll). The small delay lets the network interface come back up first. `roundTrip`
+  // is the load-bearing part: `-O check` alone answers "Master running" for a master whose TCP
+  // died in the sleep (measured), so without a real round trip this pass was a no-op.
   powerMonitor.on('resume', () => {
-    setTimeout(() => void sshProjectManager?.revalidateAll(), 2000)
+    setTimeout(() => void sshProjectManager?.revalidateAll({ roundTrip: true }), 2000)
   })
   // While connected, poll each SSH project's server file: the mobile companion appends the
   // sessions it starts to <remoteCwd>/.nodeterm/project.json, and this is how those nodes reach

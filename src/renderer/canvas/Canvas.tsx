@@ -85,6 +85,7 @@ import {
 } from './SharedGlyphLayer'
 import { SshReconnector } from '../lib/sshReconnect'
 import { projectMayDialSsh, receivedCanvasMutation } from '../session/relay-ssh'
+import { SshConnectionBanner } from '../components/SshConnectionBanner'
 import {
   hostAttachmentsFor,
   planActiveProjectDials,
@@ -1803,6 +1804,9 @@ export function Canvas() {
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false)
   // Live SSH ControlMaster status per project id (drives the thin connection banner).
   const [sshStatus, setSshStatus] = useState<Record<string, SshProjectStatus>>({})
+  // Projects whose reverse hook tunnel failed two liveness probes in a row while the master stayed
+  // up (`hookTunnelVerified: false`): the banner says agent status is deaf, without a reconnect.
+  const [lostHookTunnels, setLostHookTunnels] = useState<Record<string, boolean>>({})
   // The cause that came with an `error` status. Kept beside the status because the banner used to
   // render a bare "SSH connection error", throwing away the one line ssh gave us (permission
   // denied, host unreachable, host key mismatch) that tells the user what to actually fix.
@@ -17757,6 +17761,10 @@ export function Canvas() {
   // Track SSH project connection status for the thin connection banner (keyed by project id).
   useEffect(() => {
     return window.nodeTerminal.sshProject.onStatus((e) => {
+      if (e.hookTunnelVerified !== undefined) {
+        setLostHookTunnels((prev) => ({ ...prev, [e.projectId]: !e.hookTunnelVerified }))
+        return // A health probe must never trigger terminal reconnection.
+      }
       setSshStatus((prev) => ({ ...prev, [e.projectId]: e.status }))
       // Keep the cause for the banner. Cleared on any non-error status so a stale reason can
       // never be shown next to a healthy connection.
@@ -19646,74 +19654,16 @@ export function Canvas() {
             }}
           />
         )}
-        {activeSshServer &&
-          sshStatus[activeProjectId] &&
-          sshStatus[activeProjectId] !== 'connected' &&
-          (() => {
-            const st = sshStatus[activeProjectId]
-            const isError = st === 'error' || st === 'disconnected'
-            // The reason ssh gave, already trimmed to one line by lastSshErrorLine in main. Shown
-            // inline: a bare "SSH connection error" leaves the user with nothing to act on.
-            const cause = sshError[activeProjectId]
-            const text =
-              st === 'connecting'
-                ? `Connecting to ${activeSshServer.label}…`
-                : st === 'reconnecting'
-                  ? `Reconnecting to ${activeSshServer.label}…`
-                  : st === 'disconnected'
-                    ? `Disconnected from ${activeSshServer.label}`
-                    : cause
-                      ? `${activeSshServer.label}: ${cause}`
-                      : `SSH connection error: ${activeSshServer.label}`
-            return (
-              <div
-                title={`${activeSshServer.user}@${activeSshServer.host}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '6px 12px',
-                  fontSize: 12,
-                  color: 'var(--text)',
-                  background: isError ? 'rgba(120,40,40,0.92)' : 'rgba(90,72,30,0.92)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 8
-                }}
-              >
-                {isError ? (
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: '#ff6b6b'
-                    }}
-                  />
-                ) : (
-                  // connecting/reconnecting: the shared spinner instead of a static dot, so a
-                  // wait that can legitimately sit for minutes (passphrase prompt, slow host)
-                  // reads as in-progress rather than hung.
-                  <span className="ui-spinner" aria-hidden />
-                )}
-                <span style={{ flex: 1 }}>{text}</span>
-                {/* The banner used to be read-only: a failed connect left the user with a red strip
-                    and nowhere to click — the only ways back were switching tabs (which re-runs the
-                    active-project connect) or restarting the app. Reconnect runs the SAME attempt
-                    the auto-loop makes, jumping its backoff; on success the coordinator flushes the
-                    project's pending nodes, so terminals that refused to spawn locally come up
-                    remotely. Hidden while an attempt is already in flight (connecting/reconnecting)
-                    so it can't queue a second one on top. */}
-                {isError && (
-                  <Button variant="tonal" size="small"
-                    className="ssh-banner__retry"
-                    onClick={() => sshReconnectorRef.current?.retryNow(activeProjectId)}
-                  >
-                    Reconnect
-                  </Button>
-                )}
-              </div>
-            )
-          })()}
+        {activeSshServer && (
+          <SshConnectionBanner
+            label={activeSshServer.label || `${activeSshServer.user}@${activeSshServer.host}`}
+            endpoint={`${activeSshServer.user}@${activeSshServer.host}`}
+            status={sshStatus[activeProjectId]}
+            cause={sshError[activeProjectId]}
+            hooksLost={!!lostHookTunnels[activeProjectId]}
+            onReconnect={() => sshReconnectorRef.current?.retryNow(activeProjectId)}
+          />
+        )}
       </div>
       {kanbanOpen && !activeTabLocked && (
         <KanbanView

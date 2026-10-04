@@ -9,13 +9,24 @@
   pushed to an SSH host now ships at once instead of waiting out the two-second throttle. A relay
   tab of another machine's SSH project no longer carries that machine's dial-capable connection,
   and every guest-side dial site refuses a relay project, so viewing a shared SSH project can never
-  log this machine into a server the other side named.
+  log this machine into a server the other side named. Remote writes (hook endpoint, node tokens,
+  tmux conf, agent hook scripts, shims, skills, editor saves) now check the byte count before the
+  rename, so a dropped link can no longer publish an empty file, and the user's own config files go
+  through a guarded, link- and mode-preserving update. A reused connection re-verifies its reverse
+  hook tunnel and repairs it; two failed probes raise a new Material 3 connection-banner state
+  instead of leaving agent status silently deaf. The host's shims, skills and instruction blocks are
+  checked by checksum on every connect and rewritten only when they differ; ssh exec children are
+  capped per connection; wake-from-sleep tests each master with a real round trip; and the host's
+  hook endpoint file is named per installation, with a proven-ownership migration for the old name.
 
   SSH 傳輸嗰柞嘢由上游逐步搬過嚟：ssh 參數唔再收會畀 `ssh` 當成選項嘅 host 或者 user，加咗
   master 來回探測、一次過讀 session 歲數同 pane 目錄；同 project 一樣嘅 host 唔再喺每粒
   terminal 頂頭重複顯示 `SSH user@host`；推去 SSH host 嘅 agent 狀態一轉就即刻送，唔使等兩秒。
   經 relay 睇人哋嘅 SSH project，唔會再攞埋對方可以撥號嘅連線資料，呢部機唔會用自己條 key 登入
-  對方指定嘅 server。
+  對方指定嘅 server。寫去 host 嘅檔案會先核對 byte 數先至 rename，斷線唔會再留低空檔案；
+  hook 隧道斷咗會自動修補，連續兩次探測失敗先會喺新嘅 Material 3 橫額講出嚟；host 上面嘅
+  shim、skill 同指示段落用 checksum 對過先至重寫；每條連線嘅 ssh 子程序有上限；瞓醒之後用真正
+  來回測試每個 master。
 
 - Refresh the canonical upstream submodule pin to `9d5572e2984d5a3c8a68ac7883755221838ebccc`
   (upstream `v0.4.1-12`) and add `scripts/port-upstream.mjs` with the per-path port ledger

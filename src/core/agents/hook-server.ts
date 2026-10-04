@@ -1,9 +1,10 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http'
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
-import { writeFileSync, mkdirSync, chmodSync, unlinkSync } from 'fs'
+import { writeFileSync, mkdirSync, chmodSync, unlinkSync, readFileSync } from 'fs'
 import path from 'path'
 import { platform } from '../platform'
 import { hookSockPath } from './hook-sock-path'
+import { parseEndpointEnv } from './hook-endpoint-parse'
 import { canControlCanvas, type AgentId } from '../../shared/agents/config'
 import { normalizeFor, type NormalizedAgentEvent } from '../../shared/agents/normalize'
 import type { CodexIdentityEvent } from '../../shared/types'
@@ -340,6 +341,14 @@ class HookServer {
         stderr: string
       }>)
     | null = null
+  /** The bearer the previous run of THIS installation advertised in its conventional local
+   *  endpoint file, read just before a new one is minted. It proves ownership of a legacy SSH
+   *  endpoint file (src/main/remote-ssh/legacy-hook-endpoint.ts) after a normal quit removed the
+   *  local advertisement; empty on a first run. */
+  private previousEndpointToken = ''
+
+  getPreviousEndpointToken(): string { return this.previousEndpointToken }
+
   private endpointPath = ''
   private nodeAuthSecret: Buffer | null = null
   /** Why the shell could not arm a secret, when it tried and failed (see `setNodeIdentityUnavailable`). */
@@ -605,6 +614,16 @@ class HookServer {
 
   async start(): Promise<void> {
     if (this.server) return
+    this.previousEndpointToken = ''
+    try {
+      const previous = parseEndpointEnv(readFileSync(this.endpointFilePath(), 'utf8'))
+      // Only our conventional local endpoint supplies upgrade proof, never a tunnel record.
+      if (previous.NODETERM_HOOK_SOCK === hookSockPath(platform().userDataDir)) {
+        this.previousEndpointToken = previous.NODETERM_HOOK_TOKEN ?? ''
+      }
+    } catch {
+      /* a first run has no prior bearer */
+    }
     this.token = randomUUID()
     // ONE handler, shared verbatim by the TCP and the unix-socket listeners: every gate (bearer,
     // per-node verdict, verified-only verbs) runs identically on both transports.

@@ -2040,22 +2040,7 @@ body,
    fill and no action, because there is nothing for the user to do and nothing has gone wrong. */ /* Another client permanently destroyed this node's session (tmux kill-session): the terminal is
    dead and must never respawn — say so over the last screen. */ /* "Session ended — reopen to restart": the ONLY way a terminal whose session was recycled without
    a replacement gets a shell back. Deliberately a manual action — an automatic respawn would use
-   this client's stale cwd and silently undo the worktree move (see CoState.ended). */ /* "Reconnect" in the SSH connection banner. The banner paints its own dark-red background, so this
-   sits on a light translucent fill rather than the card tint the node buttons use. */
-.ssh-banner__retry {
-  padding: 3px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.12);
-  color: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.ssh-banner__retry:hover {
-  background: rgba(255, 255, 255, 0.22);
-}
-
+   this client's stale cwd and silently undo the worktree move (see CoState.ended). */
 /* Markdown view overlay (Cmd/Ctrl+M) */
 .term-md {
   position: absolute;
