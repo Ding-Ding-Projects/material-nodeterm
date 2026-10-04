@@ -11,6 +11,7 @@ import {
   OWNED_ENDPOINT_FALLBACK_SH,
   FOREIGN_ENDPOINT_HINT,
   STALE_ENDPOINT_HINT,
+  TUNNEL_DOWN_HINT,
   ownerUnreachableGuidanceLines
 } from './agents/hook-endpoint-failover-sh'
 import { NODE_TOKEN_READ_SH } from './agents/node-token-sh'
@@ -321,8 +322,13 @@ echo "${CONTEXT_UNREACHABLE_MSG}" >&2
 # the agent stops relinking a healthy canvas (the link is fine; the app behind it is not there).
 # One piece of advice per failure: when the walk skipped a foreign endpoint, the owner-unreachable
 # sentence above already says what happened and when to retry.
+# An SSH tunnel primary gets the tunnel advice (reconnect), anything else the stale one (restart).
 if { [ -z "$nt_code" ] || [ "$nt_code" = "000" ]; } && [ -z "$nt_skipped_foreign_endpoint" ]; then
-  echo "${STALE_ENDPOINT_HINT}" >&2
+  if [ -n "$nt_primary_tunnel" ]; then
+    echo "${TUNNEL_DOWN_HINT}" >&2
+  else
+    echo "${STALE_ENDPOINT_HINT}" >&2
+  fi
 fi
 exit 1
 `

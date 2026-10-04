@@ -11,6 +11,7 @@ import {
   OWNED_ENDPOINT_FALLBACK_SH,
   FOREIGN_ENDPOINT_HINT,
   STALE_ENDPOINT_HINT,
+  TUNNEL_DOWN_HINT,
   ownerUnreachableGuidanceLines
 } from '../core/agents/hook-endpoint-failover-sh'
 import { codexSandboxGuidanceLines } from '../core/context-link-core'
@@ -793,11 +794,20 @@ if [ -z "$nt_code" ] || [ "$nt_code" = "000" ]; then
   else
     nt_codex_sandbox_hint || echo "${CONTROL_UNREACHABLE_MSG}" >&2
     # One piece of advice per failure: when the walk skipped a foreign endpoint, the owner-unreachable
-    # sentence above already says what happened and when to retry.
+    # sentence above already says what happened and when to retry. Otherwise an SSH tunnel primary
+    # gets the tunnel advice (reconnect), anything else the stale-endpoint advice (app restart).
     if [ -z "$CODEX_SANDBOX_NETWORK_DISABLED" ] && [ -z "$nt_skipped_foreign_endpoint" ]; then
-      echo "${STALE_ENDPOINT_HINT}" >&2
+      if [ -n "$nt_primary_tunnel" ]; then
+        echo "${TUNNEL_DOWN_HINT}" >&2
+      else
+        echo "${STALE_ENDPOINT_HINT}" >&2
+      fi
     fi
   fi
+elif [ "$nt_code" = "421" ]; then
+  # Every endpoint that answered refused this bearer before dispatch (its body is printed above):
+  # nothing was delivered. Say so in the shim's own words, as the context shim always has.
+  echo "${CONTROL_UNREACHABLE_MSG}" >&2
 fi
 exit 1
 `

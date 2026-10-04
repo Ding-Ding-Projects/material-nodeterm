@@ -23,9 +23,13 @@ import { createServer as createNetServer, type Server, type Socket } from 'node:
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { CONTROL_SHIM_SCRIPT } from './canvas-control-core'
-import { CONTEXT_SHIM_SCRIPT } from '../core/context-link-core'
-import { FOREIGN_ENDPOINT_HINT, STALE_ENDPOINT_HINT } from '../core/agents/hook-endpoint-failover-sh'
+import { CONTROL_SHIM_SCRIPT, CONTROL_UNREACHABLE_MSG } from './canvas-control-core'
+import { CONTEXT_SHIM_SCRIPT, CONTEXT_UNREACHABLE_MSG } from '../core/context-link-core'
+import {
+  FOREIGN_ENDPOINT_HINT,
+  STALE_ENDPOINT_HINT,
+  TUNNEL_DOWN_HINT
+} from '../core/agents/hook-endpoint-failover-sh'
 import { CODEX_SANDBOX_HINT_SH } from '../core/agents/hook-sandbox-hint-sh'
 import { environmentForPosixShell, posixShellScriptArgs, REAL_POSIX_SHELL } from '../core/testing/posix-shell'
 
@@ -385,3 +389,103 @@ skipWin('4. a skipped foreign candidate leaves no endpoint behind', () => {
     expect(foreign.posts).toEqual([])
   }, T)
 })
+
+// Review round 2 on #1018: three more shapes of the same incident class.
+skipWin('5. a probe that answers 421 still leaves the agent a sentence', () => {
+  // The primary is dead and the only fallback refuses this bearer (421) at the probe. The probe used
+  // to write to /dev/null, so the control shim exited 1 with EMPTY stderr — an agent sees a failed
+  // call and nothing to act on. It must print what a POST's 421 would have printed.
+  it.each(['control', 'context'] as const)('%s: exits 1 naming the wrong-owner answer', async (which) => {
+    const host = await sshHost()
+    const sock = path.join(host.home, '.nodeterm', 'b.sock')
+    const other = await endpoint(sock, 'rebound-bearer', { status: 200, body: 'never' })
+    endpointFile(path.join(host.home, '.nodeterm', 'hook-endpoint-pb.env'), sock, 'desk-bearer', host.tokens)
+    const r = await shim(host.d, which, ['list'], host.env)
+    expect(r.code).toBe(1)
+    expect(r.stderr).toContain('hook-endpoint-wrong-owner')
+    expect(r.stderr).toContain(which === 'control' ? CONTROL_UNREACHABLE_MSG : CONTEXT_UNREACHABLE_MSG)
+    expect(other.posts).toEqual([])
+  }, T)
+})
+
+skipWin('6. an EMPTY owner reference compares where tokens are kept, not what they say', () => {
+  // The primary's token dir exists but holds nothing for this node (the desktop's token write
+  // failed), and the Server Edition holds nothing for it either. "" === "" matched, the Server
+  // Edition was adopted, and its permanent refusal was relayed — measured in review.
+  it.each(['control', 'context'] as const)(
+    '%s: a Server Edition with no token for this node is skipped; the sibling tunnel is not',
+    async (which) => {
+      const host = await sshHost({ ownerToken: false })
+      const se = await serverEdition(host.home)
+      const sibling = await endpoint(path.join(host.home, '.nodeterm', 'b.sock'), 'desk-bearer', {
+        status: 200,
+        body: 'owner reply'
+      })
+      endpointFile(path.join(host.home, '.nodeterm', 'hook-endpoint-pb.env'), path.join(host.home, '.nodeterm', 'b.sock'), 'desk-bearer', host.tokens)
+      const r = await shim(host.d, which, ['list'], host.env)
+      expect(r).toMatchObject({ code: 0, stdout: 'owner reply' })
+      expect(se.probes).toEqual([])
+      expect(se.posts).toEqual([])
+    },
+    T
+  )
+
+  it('with no sibling alive, the refusal is never relayed', async () => {
+    const host = await sshHost({ ownerToken: false })
+    const se = await serverEdition(host.home)
+    const r = await shim(host.d, 'control', ['list'], host.env)
+    expect(r.code).toBe(1)
+    expect(r.stderr).toContain(FOREIGN_ENDPOINT_HINT)
+    expect(r.stderr).not.toMatch(/permanent|do not retry|control-unsupported/i)
+    expect(se.posts).toEqual([])
+  }, T)
+
+  // The comparison is by the directory's REAL path: an older sibling file that advertises no dir
+  // (so its dir is derived as <file's dir>/node-tokens) and a spelling through a symlink are the
+  // same place.
+  it('matches an adjacent-derived or symlinked spelling of the same dir', async () => {
+    const host = await sshHost({ ownerToken: false })
+    const alias = path.join(host.home, 'tok-alias')
+    fs.symlinkSync(host.tokens, alias)
+    endpointFile(host.primary, path.join(host.home, '.nodeterm', 'a.sock'), 'desk-bearer', alias)
+    const sibling = await endpoint(path.join(host.home, '.nodeterm', 'b.sock'), 'desk-bearer', {
+      status: 200,
+      body: 'owner reply'
+    })
+    endpointFile(path.join(host.home, '.nodeterm', 'hook-endpoint-pb.env'), path.join(host.home, '.nodeterm', 'b.sock'), 'desk-bearer')
+    const r = await shim(host.d, 'control', ['list'], host.env)
+    expect(r).toMatchObject({ code: 0, stdout: 'owner reply' })
+    expect(sibling.posts).toHaveLength(1)
+  }, T)
+})
+
+skipWin('7. a dead SSH tunnel with nothing foreign around says the desktop is down, once', () => {
+  // The common host: no Server Edition, just the session's own tunnel gone quiet. "retry once — it
+  // re-advertises the endpoint on start" is advice about an app restart; here the fix is the
+  // desktop reconnecting.
+  it.each(['control', 'context'] as const)('%s: tunnel primary → the tunnel advice, not the stale one', async (which) => {
+    const host = await sshHost()
+    const r = await shim(host.d, which, ['list'], host.env)
+    expect(r.code).toBe(1)
+    expect(r.stderr).toContain(TUNNEL_DOWN_HINT)
+    expect(r.stderr).not.toContain(STALE_ENDPOINT_HINT)
+    expect(r.stderr).not.toContain(FOREIGN_ENDPOINT_HINT)
+    expect(r.stderr).not.toMatch(/retry once|permanent|do not retry/i)
+  }, T)
+
+  it('a primary that is not an SSH tunnel file keeps the stale-endpoint advice', async () => {
+    const d = tmp()
+    const home = path.join(d, 'h')
+    const userData = path.join(home, '.config', 'node-terminal')
+    fs.mkdirSync(path.join(userData, 'node-tokens'), { recursive: true })
+    const primary = path.join(userData, 'hook-endpoint.env')
+    const sock = path.join(userData, 'x.sock')
+    await staleSocket(sock)
+    endpointFile(primary, sock, 'b', path.join(userData, 'node-tokens'))
+    const r = await shim(d, 'control', ['list'], { HOME: home, NODETERM_HOOK_ENDPOINT: primary })
+    expect(r.code).toBe(1)
+    expect(r.stderr).toContain(STALE_ENDPOINT_HINT)
+    expect(r.stderr).not.toContain(TUNNEL_DOWN_HINT)
+  }, T)
+})
+

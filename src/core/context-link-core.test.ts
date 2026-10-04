@@ -12,7 +12,7 @@ import {
 } from './context-link-core'
 import { CODEX_SANDBOX_BLOCKED_LINE } from './agents/hook-sandbox-hint-sh'
 import { environmentForPosixShell, REAL_POSIX_SHELL, pathForPosixShell } from './testing/posix-shell'
-import { FOREIGN_ENDPOINT_HINT, OWNER_UNREACHABLE_LEAD } from './agents/hook-endpoint-failover-sh'
+import { FOREIGN_ENDPOINT_HINT, OWNER_UNREACHABLE_LEAD, TUNNEL_DOWN_HINT } from './agents/hook-endpoint-failover-sh'
 
 describe('buildLinkDoc', () => {
   it('enriches each link with tmux name, injected transcript path, and cwd', () => {
@@ -227,6 +227,9 @@ describe('buildLinkedContextInstructions', () => {
   // owner-unreachable sentence that replaces it must be taught as temporary, in its own words.
   it('both agent-facing texts teach the owner-unreachable failure as temporary', () => {
     expect(CONTEXT_SHIM_SCRIPT).toContain(`echo "${FOREIGN_ENDPOINT_HINT}" >&2`)
+    // The tunnel variant (no foreign endpoint, SSH tunnel primary) opens with the same quoted lead.
+    expect(TUNNEL_DOWN_HINT.startsWith(OWNER_UNREACHABLE_LEAD)).toBe(true)
+    expect(CONTEXT_SHIM_SCRIPT).toContain(`echo "${TUNNEL_DOWN_HINT}" >&2`)
     for (const body of [buildContextLinkSkillBody('/x/context.sh'), buildLinkedContextInstructions('/x/context.sh')]) {
       expect(body).toContain(OWNER_UNREACHABLE_LEAD.replace(/\.$/, ''))
       expect(body).toMatch(/This is temporary: *\n?retry the same *\n?command later/)

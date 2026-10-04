@@ -135,10 +135,13 @@ export const HOOK_ENDPOINT_FALLBACK_SH = [
  *    ownership reference it let a Server Edition that opened the same project.json (same node ids)
  *    supply the "owner's" token whenever the desktop's own token write had failed, and then pass
  *    the owner check against itself.
- *  - OWNER MODE needs that dir to EXIST. Then a candidate must hold exactly the same value in its
- *    own dir — including both holding nothing, which is what a failed token write looks like on
- *    every endpoint of the owning family. No such dir at all (a session with no endpoint file, a
- *    pre-token layout) is the only unknown-owner case, and keeps the legacy walk: adopt, re-read.
+ *  - OWNER MODE needs that dir to EXIST. With a token there, a candidate must hold the same value
+ *    in its own dir. With NONE there (the desktop's token write failed), a value proves nothing — a
+ *    Server Edition that never heard of this node holds nothing either, and "" === "" adopted it —
+ *    so the candidate's token dir must be the SAME real directory (`pwd -P`, so an adjacent-derived
+ *    or symlinked spelling still matches): sibling tunnels and a restarted desktop share it, an
+ *    unrelated instance does not. No such dir at all (a session with no endpoint file, a pre-token
+ *    layout) is the only unknown-owner case, and keeps the legacy walk: adopt, re-read.
  *  - A FALLBACK candidate is probed before it is posted to (`nt_probe_endpoint`). The real POST has
  *    no --max-time on purpose — a confirm-gated verb waits for a human, and a client-side timeout
  *    would fail over mid-wait and let a second instance raise a second dialog — but a reverse-
@@ -149,22 +152,29 @@ export const HOOK_ENDPOINT_FALLBACK_SH = [
  *    the last endpoint this node could use, which is what the codex-sandbox hint names as the
  *    socket to allow. */
 export const OWNED_ENDPOINT_FALLBACK_SH = `
-# nt_owned_token_in <endpoint-file>: print the token the CURRENTLY SOURCED endpoint keeps for this
-# node, from the dir it advertises or else the one beside its file. Fails (status 1) when neither
-# names an existing directory — the unknown-owner case. Never the global dirs (see above).
-nt_owned_token_in() {
+# nt_token_dir_of <endpoint-file>: print the REAL path (pwd -P) of the token dir the CURRENTLY
+# SOURCED endpoint keeps — the one it advertises, else the one beside its file. Fails (status 1) when
+# neither names an existing directory: the unknown-owner case. Never the global dirs (see above).
+nt_token_dir_of() {
   nt_otd="$NODETERM_NODE_TOKEN_DIR"
   [ -n "$nt_otd" ] || nt_otd=$(nt_token_dir_beside "$1")
   [ -n "$nt_otd" ] && [ -d "$nt_otd" ] || return 1
-  head -n 1 "$nt_otd/$NODETERM_NODE_ID" 2>/dev/null || :
-  return 0
+  (cd "$nt_otd" 2>/dev/null && pwd -P)
 }
 nt_owner_known=""
+nt_owner_dir=""
 nt_owner_node_token=""
 nt_skipped_foreign_endpoint=""
-if nt_owner_node_token=$(nt_owned_token_in "$NODETERM_HOOK_ENDPOINT"); then
+if nt_owner_dir=$(nt_token_dir_of "$NODETERM_HOOK_ENDPOINT"); then
   nt_owner_known=1
+  nt_owner_node_token=$(head -n 1 "$nt_owner_dir/$NODETERM_NODE_ID" 2>/dev/null) || nt_owner_node_token=""
 fi
+# An SSH project's reverse-tunnel endpoint: the only files the desktop writes under ~/.nodeterm.
+# Decides which advice a dead transport gets (TUNNEL_DOWN_HINT vs STALE_ENDPOINT_HINT).
+nt_primary_tunnel=""
+case "$NODETERM_HOOK_ENDPOINT" in
+  "$HOME"/.nodeterm/hook-endpoint.env|"$HOME"/.nodeterm/hook-endpoint-*.env) nt_primary_tunnel=1 ;;
+esac
 
 nt_restore_endpoint() {
   NODETERM_HOOK_SOCK="$nt_prev_sock"
@@ -188,9 +198,22 @@ nt_adopt_for_node() {
     nt_read_node_token "$1"
     return 0
   fi
-  nt_cand_token=$(nt_owned_token_in "$1") || nt_cand_token=""
-  if [ "$nt_cand_token" = "$nt_owner_node_token" ]; then
-    nt_node_token="$nt_cand_token"
+  nt_cand_dir=$(nt_token_dir_of "$1") || nt_cand_dir=""
+  if [ -n "$nt_owner_node_token" ]; then
+    # A reference VALUE: the candidate's own dir must hold the same capability for this node.
+    nt_cand_token=""
+    if [ -n "$nt_cand_dir" ]; then
+      nt_cand_token=$(head -n 1 "$nt_cand_dir/$NODETERM_NODE_ID" 2>/dev/null) || nt_cand_token=""
+    fi
+    if [ "$nt_cand_token" = "$nt_owner_node_token" ]; then
+      nt_node_token="$nt_cand_token"
+      return 0
+    fi
+  elif [ -n "$nt_cand_dir" ] && [ "$nt_cand_dir" = "$nt_owner_dir" ]; then
+    # An EMPTY reference proves nothing by value — a Server Edition that never heard of this node
+    # holds nothing too. Compare WHERE the tokens are kept: the same real directory is the same
+    # family of endpoints (sibling tunnels, a restarted desktop), and it holds nothing to present.
+    nt_node_token=""
     return 0
   fi
   nt_skipped_foreign_endpoint=1
@@ -201,16 +224,18 @@ nt_adopt_for_node() {
 # Bounded liveness probe for an ADOPTED fallback candidate. /hook/verify answers 204 on the bearer
 # alone on every server build (the desktop's own tunnel probe used it before /verify existed, and
 # the server keeps it answering for that reason) and 421 for a bearer it does not own. On failure
-# nt_code is set as the POST would have left it (421, or 000 for a dead transport) so the final
-# diagnosis reads the same; the candidate stays adopted, since it is this node's own endpoint.
+# nt_code is set as the POST would have left it (421, or 000 for a dead transport), and the reply
+# body lands in $nt_out exactly where the POST's would have, so the final diagnosis reads the same
+# (a 421 into /dev/null once left the control shim exiting 1 with an empty stderr). The candidate
+# stays adopted, since it is this node's own endpoint.
 nt_probe_endpoint() {
   nt_pc=""
   if [ -n "$NODETERM_HOOK_SOCK" ]; then
     nt_pc=$(nt_hook_headers |
-      curl -s -o /dev/null -w '%{http_code}' -X POST --config - --connect-timeout 0.5 --max-time 1.5 --unix-socket "$NODETERM_HOOK_SOCK" "http://localhost/hook/verify" --data '' 2>/dev/null)
+      curl -s -o "$nt_out" -w '%{http_code}' -X POST --config - --connect-timeout 0.5 --max-time 1.5 --unix-socket "$NODETERM_HOOK_SOCK" "http://localhost/hook/verify" --data '' 2>/dev/null)
   elif [ -n "$NODETERM_HOOK_PORT" ]; then
     nt_pc=$(nt_hook_headers |
-      curl -s -o /dev/null -w '%{http_code}' -X POST --config - --connect-timeout 0.5 --max-time 1.5 "http://127.0.0.1:$NODETERM_HOOK_PORT/hook/verify" --data '' 2>/dev/null)
+      curl -s -o "$nt_out" -w '%{http_code}' -X POST --config - --connect-timeout 0.5 --max-time 1.5 "http://127.0.0.1:$NODETERM_HOOK_PORT/hook/verify" --data '' 2>/dev/null)
   else
     nt_code=""
     return 1
@@ -242,6 +267,18 @@ export const FOREIGN_ENDPOINT_HINT =
   'different identity for this node, so their answer would describe a different canvas. This is temporary — for an SSH ' +
   "project it usually means the desktop's reverse tunnel is down (the desktop is asleep, offline or " +
   'reconnecting). Retry the same command after it reconnects.'
+
+/**
+ * The same diagnosis when nothing foreign was skipped but the session's primary endpoint is an SSH
+ * project's reverse-tunnel file (`~/.nodeterm/hook-endpoint*.env` — the only files the desktop
+ * writes under that dir). On that host the stale-endpoint advice ("retry once — it re-advertises the
+ * endpoint on start") describes an app restart; what brings a tunnel back is the desktop
+ * reconnecting. Starts with OWNER_UNREACHABLE_LEAD, so the agent-facing bodies' quote covers it.
+ */
+export const TUNNEL_DOWN_HINT =
+  `${OWNER_UNREACHABLE_LEAD} This session reaches it through an SSH project's reverse tunnel, and ` +
+  'the tunnel is not answering: the desktop is asleep, offline or reconnecting, or nodeterm on it ' +
+  'has quit. This is temporary — retry the same command after the desktop reconnects.'
 
 /** The agent-facing half of FOREIGN_ENDPOINT_HINT, rendered into all four bodies (canvas skill +
  *  instructions block, context skill + instructions block). Without it an agent has only the
