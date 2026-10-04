@@ -46,6 +46,12 @@ non-default grok home on Windows, set `GROK_HOME` in the environment nodeterm is
 - A remote (SSH) grok node's session name still does not resolve: the reader seam exists in
   `readAgentSessionName`, but the desktop's SSH implementation is not wired yet.
 - Subagent cards for grok are not available in this build (grok is not in `SUBAGENT_CAPABLE`).
+- A desktop SSH project: the probe and the taken-id read are local while the grok node launches on
+  the SSH host, so a local grok newer than the host's can report `--session-id` (or offer models)
+  the host's grok lacks, and the node's terminal ends on an unknown flag; a taken id that exists
+  only on the host is not seen. Claude's `--session-id` has the same SSH gap (its `auto` gate is
+  probed remotely, this flag is not). Routing both reads through the project's connection is a
+  follow-up.
 - A relay tab whose viewer has a newer grok than the host: the viewer's probe can report
   `--session-id` (or offer models) that the host's grok does not have. The host's grok then exits on
   an unknown flag and the node's terminal ends. A taken id that exists only on the host is also not
@@ -54,8 +60,11 @@ non-default grok home on Windows, set `GROK_HOME` in the environment nodeterm is
 
 ## Security considerations
 
-- On the desktop and the Server Edition the probe and the taken-id read run on the machine the node
-  launches on. The taken-id read lists directory names only and never opens a session file.
+- On the desktop for a local project, and on the Server Edition, the probe and the taken-id read run
+  on the machine the node launches on. For a desktop SSH project they do not: `createAgentNode` mints
+  `--session-id` from the local probe and checks taken ids on the local disk while the node launches
+  in the host's tmux, so a local grok newer than the host's can hand the host an unknown flag (see
+  Failure modes). The taken-id read lists directory names only and never opens a session file.
 - A relay tab does not reach the host for either answer yet. Both renderer consumers
   (`ensureGrokCliCaps` in `src/renderer/state/permissionMode.ts` and `ensureGrokTakenIds` in
   `src/renderer/state/grokSessionIds.ts`) read the global `window.nodeTerminal.grok`, which is the
@@ -70,7 +79,8 @@ non-default grok home on Windows, set `GROK_HOME` in the environment nodeterm is
 
 ## Surfaces
 
-- **Desktop:** full.
+- **Desktop:** full for local projects; an SSH project's grok node is minted from the local probe
+  and local taken ids (see Failure modes).
 - **Server Edition:** full; `registerGrokCliIpc` runs in the server shell and the browser bridge
   calls it over WS-RPC.
 - **Relay tabs:** the probe and the taken-id read currently answer for the viewing machine, not the
