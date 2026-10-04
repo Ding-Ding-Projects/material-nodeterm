@@ -128,7 +128,7 @@ describe('grok mints on ITS OWN probe', () => {
   })
 
   it('stamps a grok node once grok\'s help advertised the flag', () => {
-    resetGrokCliCapsForTests({ sessionIdFlag: true })
+    resetGrokCliCapsForTests({ sessionIdFlag: true, models: [] })
     const n = createAgentNode('grok', 0)
     expect(n.data.agentSessionId).toMatch(UUID_RE)
     // BEFORE the separator: grok's `--` is end of options, so a flag after it is swallowed into the
@@ -140,7 +140,7 @@ describe('grok mints on ITS OWN probe', () => {
     // The mutation this exists for: pointing grok's gate at claude's probe result. Both CLIs are
     // installed and upgraded independently, so claude's answer says nothing about grok's.
     resetClaudeCliCapsForTests({ ...UNKNOWN_CLAUDE_CLI_CAPS, version: '2.1.226', sessionIdFlag: true })
-    resetGrokCliCapsForTests({ sessionIdFlag: false })
+    resetGrokCliCapsForTests({ sessionIdFlag: false, models: [] })
     const n = createAgentNode('grok', 0)
     expect(n.data.agentSessionId).toBeUndefined()
     expect(n.data.initialCommand).not.toContain('--session-id')
@@ -155,7 +155,7 @@ describe('grok mints on ITS OWN probe', () => {
     const previous = g.window
     g.window = { nodeTerminal: { grok: { takenSessionIds: async () => [taken] } } }
     try {
-      resetGrokCliCapsForTests({ sessionIdFlag: true })
+      resetGrokCliCapsForTests({ sessionIdFlag: true, models: [] })
       await ensureGrokTakenIds('/work/repo')
       uuidQueue.push(taken, fresh)
       const n = createAgentNode('grok', 0, '/work/repo')
