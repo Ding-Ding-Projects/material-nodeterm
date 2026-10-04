@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Port the upstream hook-endpoint ownership chain (upstream `bd895ba1`, `bbb3a291`, `8b0009ec`,
+  `9fad4769`, `ba1d8731`, plus the nonfatal startup from `b97278dd`). The hook server now probes an
+  existing endpoint advertisement before starting and never replaces a live or unauthenticated
+  owner, removes a leftover Unix socket only after a refused connect on an unchanged inode, writes
+  its endpoint file atomically and removes only what it published. When ownership cannot be taken,
+  Desktop and Server Edition keep running with hooks disabled and say how to recover. A wrong bearer
+  is answered 421 before any handler runs, and the generated clients treat it as a reason to find
+  their own endpoint. Canvas-control and linked-context requests only fail over to an endpoint that
+  keeps this node's identity, probe each fallback with a bound so a silent tunnel socket cannot hang
+  the call, and report an unreachable owner or a down SSH tunnel as temporary instead of relaying an
+  unrelated server's permanent refusal. See `docs/features/agents/hook-endpoint-ownership.md`.
+
+  搬咗上游 hook 端點擁有權嗰串修正：hook 伺服器開機前會先確認舊端點仲有冇人用緊，唔會搶人哋嘅
+  socket 或者廣告檔；搶唔到就照開 app、停用 hooks，並話你知點樣處理。用錯 bearer 會收到 421，
+  控制同 context 指令只會轉去同一個節點身份嘅端點，後備端點會先限時探一探，SSH 隧道斷咗會講明
+  係暫時性，等桌面重新連線再試。
+
 - Port the first upstream security tranche (issue #225, upstream `1bf6fadb`, `60714074`, `fee5b244`,
   `23a7282b`, `9fa879d0`, `2d3e54cb`): a plain terminal keeps its inherited provider credentials in
   subscription mode (both strip sites in this fork); a Linux desktop with no keyring stores the

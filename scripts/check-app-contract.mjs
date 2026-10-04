@@ -1916,6 +1916,30 @@ const FEATURES = [
     docs: ['docs/features/agents/usage-indicator-reliability.md'],
   },
   {
+    id: 'hook-endpoint-ownership',
+    label: 'Hook endpoint ownership probe, nonfatal startup and owner-bound endpoint walk',
+    files: [
+      'src/core/agents/hook-socket-owner.ts',
+      'src/core/agents/hook-server.ts',
+      'src/core/agents/hook-endpoint-failover-sh.ts',
+      'src/main/canvas-control-core.ts',
+      'src/core/context-link-core.ts',
+    ],
+    contentChecks: [
+      ['src/core/agents/hook-socket-owner.ts', 'export async function assertHookEndpointAvailable('],
+      ['src/core/agents/hook-socket-owner.ts', 'export async function clearStaleHookSocket('],
+      ['src/core/agents/hook-server.ts', 'async startForApp(): Promise<string | null>'],
+      ['src/core/agents/hook-server.ts', 'res.writeHead(421,'],
+      ['src/core/agents/hook-endpoint-failover-sh.ts', 'export const OWNED_ENDPOINT_FALLBACK_SH ='],
+      ['src/core/agents/hook-endpoint-failover-sh.ts', 'export const TUNNEL_DOWN_HINT ='],
+      ['src/main/canvas-control-core.ts', '${OWNED_ENDPOINT_FALLBACK_SH}'],
+      ['src/core/context-link-core.ts', '${OWNED_ENDPOINT_FALLBACK_SH}'],
+      ['src/main/index.ts', 'await hookServer.startForApp()'],
+      ['src/server/index.ts', 'await hookServer.startForApp()'],
+    ],
+    docs: ['docs/features/agents/hook-endpoint-ownership.md'],
+  },
+  {
     id: 'aws-wizard-generator',
     label: 'Schema-driven AWS wizard generator node',
     files: [

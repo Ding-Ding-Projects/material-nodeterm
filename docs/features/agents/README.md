@@ -17,6 +17,9 @@ Cognition Devin are built in; any other CLI can be added as a custom agent.
   harness identity, launch previews, environment expansion, and host-owned execution boundaries.
 - [Devin CLI](./devin-cli.md) — measured Cognition Devin CLI 3000.4.25 launch forms, lifecycle
   hooks, status mapping, notification fallback, and capability boundaries.
+- [Hook endpoint ownership and failover](./hook-endpoint-ownership.md) — the startup ownership
+  probe, nonfatal hook startup, the 421 wrong-owner answer, and the owner-bound endpoint walk the
+  control and context shims use.
 - [Linked-agent inbox notifications](./linked-agent-inbox-notifications.md) — the fixed,
   app-authored `notify --node <id>` prompt, project consent, runtime ownership checks, and
   bounded deliver-on-idle queue.
