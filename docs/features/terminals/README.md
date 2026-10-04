@@ -5,6 +5,9 @@ standalone Windows session host.
 
 - [Session continuity](./session-continuity.md) — how a terminal survives a node remount and app
   restart, and how cold restore works after a machine reboot.
+- [Windows session host: staged runtime, updates and messaging](./windows-session-host-runtime.md)
+  — how an installed build launches the host from a verified private copy, how updates keep
+  sessions, "Prepare for update", shared-session sizing, and agent messaging on Windows panes.
 - [Windows shell profiles](./windows-shell-profiles.md) — detected PowerShell, Command Prompt,
   Git Bash, WSL, custom profiles, and user-named startup profiles; defaults, switching, and the
   machine-local trust boundary.

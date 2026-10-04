@@ -242,8 +242,43 @@ pause and geometry owner even though all of them share one `SessionHostClient` s
 sends a pause only on the local 0→1 edge and a resume only on 1→0; the host then combines that one
 connection-level ticket with other process sockets. Geometry follows the same shape: the client
 reduces its live view claims, the host reduces all socket claims componentwise, and it resizes the
-PTY and headless terminal before serializing a warm screen. Detaching a smaller viewer recomputes
-the grid so remaining viewers can grow.
+PTY and headless terminal before serializing a warm screen. Detaching a viewer recomputes the
+grid.
+
+**The client's reduction is "most recently active", not "smallest".** Under tmux a
+phone mirroring a node is its own tmux client, and tmux's default `window-size latest` gives the
+window to whichever client was active last — so a phone that dismissed its keyboard got its rows
+back. Here the phone (a relay-served `SessionHostPty`) and the desktop node share ONE client
+socket, and the old componentwise minimum held the phone to the desktop node's rows with nothing on
+screen saying why. `latestClaimSize` (`core/pty-size.ts`) now picks the claim with the highest
+recency: an attach, a claim that CHANGES (a re-fit to the same size does not count, or every fit
+would steal the session), and a write that is not a terminal report (`core/terminal-reports.ts` —
+every attached xterm answers a DA/CPR/OSC query, and counting those would hand the session to
+whoever answered last). Three rules come with it:
+
+- **A viewer that cannot adapt is a ceiling.** Every renderer view renders the size it is told
+  (`pty:size`: letterbox a smaller grid, clip a larger one, as a tmux client does). A pty wider than
+  the phone's screen would wrap into garbage there, or — rendered at the pty's size — be clipped to
+  its left ~45 columns, so a relay sink is `bounding` unless `pty.attach` carried
+  `resizedFrames: true`, and the chosen size is clamped componentwise to every bounding claim. The
+  iOS app keeps it that way on purpose: it reads `OP.Resized` only to explain the empty band
+  ("Sized to another screen") and to offer "Fit this screen", which re-claims the size with a
+  rows+1 → rows wiggle (an unchanged claim is not activity). Because the phone clears that hint
+  every time it sends a size, the host ANSWERS every sink report, unchanged or not — the sink's
+  `sinkShown` is forgotten on each report.
+- **The pty's real size flows back to every viewer.** `SessionHostPty.onSize` → `PtyManager`
+  `applyBackendSize` → `pty:size` to each view whose xterm is not already at it, and `OP.Resized`
+  (payload = `OP.Resize`'s, 2× uint16 LE) to the relay sink. A session-host `Session` only VOTES in
+  `applySize`; its views are corrected from the backend's answer, which the client sends after every
+  vote, changed or not.
+- **The host's `geometry` push is negotiated at hello, never assumed.** `hello` carries
+  `features: ['geometry']`; the host answers with the subset it speaks and pushes `geometry` frames
+  (and adds `geometry` to attach replies) ONLY on connections that asked. This is not caution: an
+  older client treats every push frame that is not `data` as an EXIT, so a geometry frame sent to it
+  retires a live session on the first resize (`session-host/geometry-host.test.ts` pins it against
+  the real bundled host). Against a host without the feature the client reports its own applied size,
+  which is exact while it is the host's only connection. Across connections (two apps on one host)
+  the HOST still takes the componentwise minimum.
 
 The same name is also a generation boundary. Data and exit events contain a session name but no
 generation id, so an exiting `HostSession` remains registered until its queued output, final exit
@@ -346,19 +381,111 @@ confirmed `{ok:true}` host responses, while a transport/request rejection remain
 propagated. That propagation is what lets the periodic snapshot keep its dirty bit for a retry and
 what prevents a delete from claiming a persistent process is gone when the host never confirmed it.
 
+## Staged host runtime
+
+A host launched from Squirrel's `app-<version>` install directory would map the installed
+executable, its DLLs and `resources.pak`, so that directory could not be retired while its sessions
+live. Ported from upstream (`src/core/session-host-runtime.ts`), the staged runtime runs the host
+from a private copy instead.
+
+**What happens.** In a packaged Windows build, before the app spawns a host it stages a private
+copy of the runtime into
+
+    %LOCALAPPDATA%\node-terminal-session-host-runtime\app-<app version>-<fingerprint>\
+        session-host-runtime.exe             (the Electron executable, renamed)
+        *.dll, icudtl.dat, resources.pak, snapshot_blob.bin, v8_context_snapshot.bin, locales\
+        resources\session-host\host.cjs + node_modules\node-pty\...
+        nodeterm-runtime.json                (marker: file list, sizes, SHA-256)
+
+and launches the host from there. The fingerprint hashes every source file's path, size and mtime,
+so a reinstall of the same version with different bytes gets its own directory. `app.asar` is not
+copied (the host never reads it). The staging root comes from `CorePlatform.sessionHostRuntimeDir`,
+which the desktop supplies only for a packaged Windows build.
+
+**Why the copy is more than the executable.** The previous staging copied only the executable and
+the host bundle. An `ELECTRON_RUN_AS_NODE` process also needs Node's ICU data (`icudtl.dat`) and the
+executable's load-time DLLs, so that copy could not be expected to start; the set above is the
+conservative one an `ELECTRON_RUN_AS_NODE` process can plausibly touch, and the smoke run below is
+the per-machine proof. It was not measured on a device (checklist item 1).
+
+**Never a half-staged directory.** Files are copied into `.staging-<uuid>` beside the target, each
+copy is re-read and compared by SHA-256 to what was read from the install directory, and the copy is
+smoke-run once: `session-host-runtime.exe -e ...` with `ELECTRON_RUN_AS_NODE=1` must load, `require`
+its own node-pty and exit `42`. Only then is the marker written, and the directory is published by
+one `renameAtomic`. A directory without a valid marker (or whose files no longer have their recorded
+sizes) is moved aside and restaged, never launched. Two app processes staging the same version at
+once both succeed: the second rename loses and adopts the first one's directory.
+
+**Fail closed.** Every staging failure (no `%LOCALAPPDATA%`, a missing required file, disk full, a
+failed hash, a smoke run that does not answer 42 within 60 s, an AppLocker or WDAC policy blocking
+executables under the profile) makes the launch fail with a named error; the node then falls back
+to a non-persistent shell and reports why, as for any other unavailable host. A first launch of a
+new version waits at most 45 s for staging; past that the launch is refused and the finished copy
+serves the next one. A staging failure is remembered for the rest of the app run. Staging progress
+and failures are appended to `<userData>\session-host.log` with an `[app]` tag. Unlike upstream,
+there is no fallback to a launch from the install directory: that would pin the old `app-*` tree.
+
+**Old copies.** After staging, copies other than the current one are collected, fail-closed: only
+when a Win32_Process query SUCCEEDS, no `session-host-runtime.exe` process has an unreadable path,
+nothing runs from under that directory, the directory is older than 10 minutes, and renaming it
+aside succeeds (Windows refuses while an image inside is mapped). A failed query deletes nothing.
+A host started by an older version therefore keeps its copy for as long as it runs; once it exits
+(30 s after its last session), the next app launch removes that copy. The `app-<version>` copies
+the previous, executable-only staging published are collected by the same rule.
+
+**Versions talk to each other.** There is one host per user-data directory, whichever runtime
+started it. A newer app connects to a host started by an older runtime through the existing
+negotiation: the state file's protocol version and the `hello` feature list
+(`SESSION_HOST_FEATURES`, e.g. `geometry`, `shutdown`). New sessions go to that host as long as it
+is compatible; it exits by itself once it empties, and the next host is launched from the current
+version's copy. The rule for every future change: **the host protocol is additive-only**. A new
+command or push frame is negotiated at `hello`, never assumed, and an app never kills a host to
+replace it.
+
+## Updates, "Prepare for update" and the host shutdown command
+
+Because the host runs from its own copy, a Squirrel update installs while every session keeps
+running. The running host keeps its **older** version until it stops. "Prepare for update..." (the
+command palette, and the update card once an update is found or required) ends it on purpose,
+without deleting a node:
+
+1. It lists every session the host holds, across every project including closed ones, and refuses
+   while any agent is working or waiting on the user (the renderer's agent store or the core status
+   mirror), with a Go button for each.
+2. It asks each idle, resumable agent on a mounted node to quit cleanly through the
+   `registerAgentUpdateExit` registry. (The TerminalNode registration is not wired yet; until it is,
+   every idle agent is listed as "stops without a clean exit" and resumes from its last saved turn.)
+3. It says what still stops (shells, agents not on the canvas, sessions on no canvas) and confirms
+   with Cancel focused.
+4. It asks the host to shut down, and quits the app only once the host confirms it is gone.
+
+The host's `shutdown` command is gated on a negotiated `shutdown` hello feature. It refuses new
+sessions while it runs, ends every session through the existing kill path (a bound per session),
+replies, removes its state and token files and exits after the reply flushes. A kill it cannot
+confirm fails the whole shutdown by name and the host keeps serving. The client's
+`inspectForUpdate` / `shutdownForUpdate` never launch a host, send `shutdown` only to a host that
+advertised it, latch against reconnecting into a fresh host, and report "shut down" only once the
+state file and the pid are gone. A host from an older build gets the manual steps
+(`MANUAL_UPDATE_STEPS` in `src/shared/update-prep.ts`); there is no kill fallback.
+
+The three IPC channels (`app:update-prep-inspect`, `app:update-prep-shutdown`,
+`app:update-prep-quit`) are raw `ipcMain` handlers that refuse any sender except the main window and
+are listed in `HOST_ONLY_CHANNELS`. The Server Edition bridge answers `unsupported`, so both entry
+points stay hidden there; the mobile companion has no equivalent. Upstream's NSIS installer
+preflight (`windows-update-preflight.ps1`) is not part of this fork: Squirrel has no installer gate
+to refuse on.
+
 ## Lifetime
 
 Mirrors tmux's server lifetime rule as closely as a different OS allows:
 
 - **Spawned detached, unref'd, `stdio: 'ignore'`, `windowsHide: true`**
   (`session-host-launcher.ts`) — survives the spawning app process exiting entirely.
-- In a **packaged** app, the current Electron executable and complete `resources/session-host`
-  bundle are first copied through an atomic staging directory into the versioned stable runtime
-  `%LOCALAPPDATA%/node-terminal-session-host-runtime/app-<version>`. The completion marker binds the
-  executable size and host-bundle digest and requires the copied `node-pty` package. A corrupt or
-  partial existing runtime is refused rather than overwritten. The child then starts the stable
-  executable with `ELECTRON_RUN_AS_NODE=1`, which runs plain Node without Chromium or a window.
-  Squirrel can replace its own `app-*` directory without touching that mapped runtime.
+- In a **packaged** app the host is launched only from a verified staged copy of its runtime under
+  `%LOCALAPPDATA%/node-terminal-session-host-runtime/` (see "Staged host runtime" below), with
+  `ELECTRON_RUN_AS_NODE=1`, which runs plain Node without Chromium or a window. Squirrel can
+  replace its own `app-*` directory without touching that mapped runtime. If no staged copy can
+  be produced the launch is refused; it never falls back to the install directory.
 - The client probes the existing state, token, and pipe before resolving or staging any runtime.
   A host from a previous app run therefore remains the owner and receives warm attachments rather
   than being replaced during an upgrade.
@@ -509,7 +636,113 @@ The ordering, connection-owned pause ledger, no-tmux relay probe/capture, platfo
 and atomic state publication are now additionally behaviour-tested with adversarial scheduling and
 injected sharing violations. That source/runtime evidence does not replace the packaged check.
 
+### Direct ConPTY agent messages (separate from the persistent host)
+
+The desktop can also hold a **non-persistent native PTY**, indexed by canvas node id but
+without `Session.persistKey`. Checking only persisted sessions incorrectly returned `targetGone`
+for such a running OpenCode. `hasLiveSession` now uses the common runtime lookup.
+
+`core/native-windows-pane.ts` implements message delivery for those direct PTYs. It uses a
+headless terminal for observed bracketed-paste mode and capture, and reads native executable
+identity through console membership and an unambiguous shell-child chain. Process birth times
+and a generation id detect replacement/PID reuse. It deliberately does not choose an arbitrary
+deepest descendant, interpret prompt text as an executable, or accept a detached console.
+This Windows ownership evidence is not POSIX foreground-group semantics; ambiguous console
+trees refuse. An interpreter is identified by its script: the probe keeps only the first
+positional argument (`CommandLineToArgvW`, inside PowerShell) and `scriptCommandName` resolves it
+to the command its npm package publishes in `bin`, else to the script basename. Measured on
+Windows 11 (2026-09-14) against a live Codex pane opened from the canvas: the PR-era probe read
+`node` and the installed app refused `send` with `targetNotAgentPane (observed: node)`, while the
+new probe read `codex` (`agent`) from the same console. A fake npm package in a separate console
+confirmed the prompt argument never appears in the probe output. The
+interpreter is the leaf; its children (a native `codex.exe`, MCP servers) do not count. Existing project consent, verified idle hooks,
+delivery locks, post-write verification and receipt tracking remain in force.
+
+The persistent host has a separate, additive messaging extension (`messageOwnerV1`,
+`messagePasteReadyV1`, `messageEnvelopeV1`). `session-host/message-pane.ts` observes the OS console
+under the **host's** session generation and reads the host's existing emulator after its output
+barrier. Before sending, it repeats the identity probe, checks paste mode again, and confirms
+that the same session object is still registered after every await. It then writes one sanitized
+multiline bracketed paste, watches its own emulator until the envelope footer renders, and sends
+Enter as a second write, only while the same generation is still registered
+(`core/settled-submit.ts`, shared with the Server Edition). With the Enter inside the paste write,
+Codex 0.154 left the envelope unsent in its composer and the delivery reported `stalled`. Main still owns the project/consent/hook/binary
+and receipt gates. The direct adapter is never used for host-backed sessions.
+
+A host-backed session stays addressable after the desktop releases its client (park expiry,
+offscreen release). `targetLive` comes from `PtyManager.sessionExists`, and the three messaging
+probes route by `sessionHostOwns`, which reads the release record when no `Session` is left and
+otherwise applies `sendText`'s rule (no local tmux means the host owns persistence).
+
+The extension is independently versioned so the existing terminal protocol v1/v2 is unchanged.
+Old live hosts reject the new command names, and the client returns null/false without falling
+back to `write`, `sendKeys`, or a local tmux. **Installing a new app does not upgrade an already
+running host.** It must retire after its existing sessions have ended, at a user-coordinated time;
+the next host starts from the new bundle. Never terminate a user's live host as an upgrade step.
+There is no hot migration of an existing ConPTY generation to another host.
+
+The upstream smoke and simulation scripts (`scripts/smoke-session-host-messaging.ts`,
+`scripts/smoke-windows-agent-messaging.ts`, `scripts/sim-agent-messaging-windows.ts`) are not part of
+this fork yet: they import the upstream messaging service module, which this fork keeps in
+`src/main/agent-messaging.ts`. The installed-device acceptance upstream recorded (OpenCode
+coordinator, architect and coder exchanging messages on direct Windows PTYs) has not been repeated
+on this fork.
+
+`PtyManager.sendText` keeps this fork's boolean IPC contract: a Windows delivery that pasted the
+text but could not confirm its submit (`'pasted-not-submitted'`) answers `true`, because callers
+treat `false` as "nothing was written, retry" and would paste the same text twice. The detailed
+result is available from `sendTextResult` for a caller that can show the uncertainty.
+
+### Launch-line delivery inside the host
+
+The host's own launch delivery (`src/session-host/session.ts`) verifies both ends of the echoed
+command line, not just its tail: an rc file reading the same tty can swallow the first character
+while the tail echoes intact. Between retries it clears the pending line with the shell's own
+gesture (`src/shared/shell-kill-line.ts`): Escape for PowerShell and cmd.exe, Ctrl-U for POSIX
+shells. The renderer's delivery keeps this fork's Ctrl-C abort. An injected prompt is framed from
+the pane's own bracketed-paste state (`src/session-host/send-keys-delivery.ts`).
+
 ## Packaged verification still owed
+
+### Ported session-host, messaging and updater work: device checklist
+
+Written and unit-tested on Linux in this fork; nothing below has run on Windows yet.
+
+1. **Measure the staged file set.** On a packaged build, run Process Monitor filtered to
+   `session-host-runtime.exe` during host start and an attach; record every file opened under the
+   staged directory and prune the planned set in `session-host-runtime.ts` to it.
+2. **Smoke run passes.** Fresh install, open a terminal: `session-host.log` shows
+   `[app] staged runtime: published <key>`, and Task Manager, Details shows `session-host-runtime.exe`
+   with a path under `%LOCALAPPDATA%\node-terminal-session-host-runtime\app-...`.
+3. **Fail closed.** Block executables under the profile (AppLocker or WDAC): the smoke run fails,
+   no host starts from the install directory, the node falls back to a non-persistent shell with a
+   named reason, and the log says which staging step failed.
+4. **Update with live sessions.** With the staged host holding live shells and agents, let Squirrel
+   install the next build and restart: every session re-attaches warm to the same host pid; the old
+   `app-*` directory is retired on a later launch.
+5. **Prepare for update.** With idle agents, a plain shell and a closed project's session on the
+   host, run "Prepare for update...": busy agents block with Go buttons, the confirm lists what
+   stops, the host exits, the app quits, and the next launch starts a host from the new copy with
+   every canvas node intact and agents resuming. Repeat against a host started by an older build:
+   the manual steps appear and nothing is killed.
+6. **Old copies.** After the old host exits and 10 minutes pass, the next launch removes its
+   directory; with PowerShell blocked by policy nothing is removed.
+7. **Defender / AV.** Time the first staging with real-time protection on and confirm a scan
+   holding the new executable does not fail the publish rename.
+8. **Agent messaging on a direct Windows PTY.** With persistence off, open two agent nodes and send
+   a message between them: the envelope lands as one block and is submitted in a second write; an
+   npm-installed CLI (Codex) is recognized as the agent, not as `node`.
+9. **Agent messaging on a session-host pane.** Same through the persistent host, including a node
+   released offscreen (still reachable) and a replaced process with the same PID (refused).
+10. **Shared-session sizing.** Mirror a node to the phone over Relay, dismiss the phone keyboard
+    while a shorter desktop node is attached: the phone gets its rows back; "Fit this screen" on the
+    phone re-claims the size.
+11. **Launch-line delivery.** A PowerShell and a cmd.exe pane whose first launch echo is mangled:
+    the retry clears the line with Escape and the command runs once.
+12. **No update channel.** A package built with `nodeTermUpdates=disabled`: "Check for updates"
+    shows "No update channel" with the download link, never "You're up to date".
+13. **Codex launcher PATH.** A managed Codex node on Windows finds `codex` (the launcher prepend
+    lands on `Path`, and the child sees one path variable).
 
 The real Windows x64 installer must still be exercised through the required cheap headless route:
 create every available profile, verify input/output/resize/Unicode/copy/cwd and labels, relaunch
