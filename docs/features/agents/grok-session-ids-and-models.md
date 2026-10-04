@@ -46,13 +46,24 @@ non-default grok home on Windows, set `GROK_HOME` in the environment nodeterm is
 - A remote (SSH) grok node's session name still does not resolve: the reader seam exists in
   `readAgentSessionName`, but the desktop's SSH implementation is not wired yet.
 - Subagent cards for grok are not available in this build (grok is not in `SUBAGENT_CAPABLE`).
+- A relay tab whose viewer has a newer grok than the host: the viewer's probe can report
+  `--session-id` (or offer models) that the host's grok does not have. The host's grok then exits on
+  an unknown flag and the node's terminal ends. A taken id that exists only on the host is also not
+  seen, because the check reads the viewer's disk. Claude's `--permission-mode auto` gate has the
+  same relay gap.
 
 ## Security considerations
 
-- The probe and the taken-id read run on the machine the node launches on. The taken-id read lists
-  directory names only and never opens a session file.
-- A relay tab routes both calls to the host; `grok-cli:caps` and `grok-cli:taken-session-ids` are on
-  the relay request allowlist (`src/main/relay-rpc-policy.ts`).
+- On the desktop and the Server Edition the probe and the taken-id read run on the machine the node
+  launches on. The taken-id read lists directory names only and never opens a session file.
+- A relay tab does not reach the host for either answer yet. Both renderer consumers
+  (`ensureGrokCliCaps` in `src/renderer/state/permissionMode.ts` and `ensureGrokTakenIds` in
+  `src/renderer/state/grokSessionIds.ts`) read the global `window.nodeTerminal.grok`, which is the
+  viewing machine's own API, so a relay tab's grok node is minted from the viewer's grok probe and
+  checked against the viewer's disk. This is the same gap `claude.cliCaps` already has. The
+  session-scoped relay member (`buildGrokApi` in `src/renderer/bridge/relay-api.ts`) and the
+  `grok-cli:caps` / `grok-cli:taken-session-ids` entries on the relay request allowlist
+  (`src/main/relay-rpc-policy.ts`) exist, but no caller uses them today.
 - A minted id is a v4 UUID and is validated again before it is placed on a command line.
 - On Windows the probe runs an npm `.cmd` install through the escaped cmd.exe path described in
   [Windows CLI resolution and npm shim execution](../windows/cli-shim-execution.md).
@@ -62,7 +73,9 @@ non-default grok home on Windows, set `GROK_HOME` in the environment nodeterm is
 - **Desktop:** full.
 - **Server Edition:** full; `registerGrokCliIpc` runs in the server shell and the browser bridge
   calls it over WS-RPC.
-- **Relay tabs:** the probe and the taken-id read answer for the host.
+- **Relay tabs:** the probe and the taken-id read currently answer for the viewing machine, not the
+  host (see Security considerations and Failure modes); routing both consumers through the active
+  session's API is a follow-up shared with `claude.cliCaps`.
 - **Mobile companion:** not applicable; it launches no agent.
 
 ## Verification

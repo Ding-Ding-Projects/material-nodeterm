@@ -24,12 +24,14 @@
   `--session-id`, never on Claude's probe, and re-mints rather than reuse an id grok already owns in
   that folder. The transfer-with-model picker offers grok the list from `grok models`. The grok
   session map is persisted under the data directory so names survive a restart, and on Linux the
-  login shell is asked for `GROK_HOME`. New bridge member `window.nodeTerminal.grok` on the desktop,
-  the Server Edition and relay tabs. Grok subagent cards stay deferred until upstream `29409aa0` and
-  `cb81f7b9` are ported. See `docs/features/agents/grok-session-ids-and-models.md`.
+  login shell is asked for `GROK_HOME`. New bridge member `window.nodeTerminal.grok` on the desktop
+  and the Server Edition. A relay tab still reads the viewer's own grok probe and disk, the same gap
+  Claude's CLI probe has, so its grok node can receive a flag the host's grok does not support.
+  Grok subagent cards stay deferred until upstream `29409aa0` and `cb81f7b9` are ported. See `docs/features/agents/grok-session-ids-and-models.md`.
 
   搬咗上游 grok 嘅 session id 同模型：用 grok 自己嘅 --help 決定係咪預先產生 session id，
   唔會重用已存在嘅 id；揀模型時用 `grok models` 嘅清單；session 對照表重開後仍然記得。
+  relay 分頁暫時仲係用睇緊嗰部機自己嘅 grok 探測結果，同 Claude 一樣未經主機。
 
 - Port the first upstream security tranche (issue #225, upstream `1bf6fadb`, `60714074`, `fee5b244`,
   `23a7282b`, `9fa879d0`, `2d3e54cb`): a plain terminal keeps its inherited provider credentials in
