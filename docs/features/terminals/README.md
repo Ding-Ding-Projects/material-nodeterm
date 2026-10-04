@@ -12,6 +12,8 @@ standalone Windows session host.
   an agent CLI in its pane, how long a slow quit is watched, and what the failure notice offers.
 - [Switched-away terminal park](./park-window.md) — how long terminals of another project stay
   attached, the count cap, and which parks are released first.
+- [Terminal keyboard and rendering fixes](./terminal-keyboard-and-rendering.md) — project jump from
+  a focused terminal, Windows Ctrl+V paste, input-method Caps Lock and DOM row spacing.
 
 See also [Canvas → Node kinds](../canvas/README.md) for how a terminal node fits alongside
 agent, sticky, editor and diff nodes, and [Agents](../agents/README.md) for the agent-specific

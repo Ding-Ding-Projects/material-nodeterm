@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Port upstream terminal keyboard and rendering fixes (upstream `19032d1f`, `90257bdc`, `397c09db`,
+  `24597cbf`, `9e450603`): Cmd/Ctrl+1–9 switches project from a focused terminal or card modal,
+  Ctrl+V pastes in Windows terminals, toggling Caps Lock during input-method composition no longer
+  commits twice, and a DOM-rendered terminal that was built while hidden re-derives its row spacing
+  on reattach. See `docs/features/terminals/terminal-keyboard-and-rendering.md`.
+
+  搬咗上游幾個 terminal 鍵盤同顯示修正：喺 terminal 入面撳 Cmd/Ctrl+1–9 都轉到 project；Windows
+  撳 Ctrl+V 終於貼得到；用輸入法打字撳 Caps Lock 唔會重複送出；收埋咗再返嚟嘅 terminal 唔會多咗
+  一格行距。
 - Port the upstream terminal park settings (upstream `30fbd95e`, `b894163f`, `f9980d5f`,
   `cbe6f994`, `e43fe37a`). Settings → tmux now sets how long a switched-away project's terminals
   stay attached (default 10 minutes, 0 until the app quits) and how many may stay attached in total

@@ -2414,6 +2414,21 @@ const FEATURES = [
     docs: ['docs/features/terminals/park-window.md'],
   },
   {
+    id: 'terminal-keyboard-rendering-fixes',
+    label: 'Terminal keyboard and rendering fixes',
+    files: [
+      'src/renderer/terminal/terminal-config.ts',
+      'src/renderer/terminal/ime-mode-switch.ts',
+      'src/renderer/terminal/dom-renderer-spacing.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/terminal/terminal-config.ts', 'export function isPasteShortcut('],
+      ['src/renderer/terminal/ime-mode-switch.ts', 'export function patchImeModeSwitch('],
+      ['src/renderer/terminal/dom-renderer-spacing.ts', 'export function resyncDomRendererSpacing('],
+    ],
+    docs: ['docs/features/terminals/terminal-keyboard-and-rendering.md'],
+  },
+  {
     id: 'session-icons',
     label: 'Per-session icons',
     files: [

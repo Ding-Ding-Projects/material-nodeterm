@@ -1,3 +1,4 @@
+import { patchImeModeSwitch } from '../terminal/ime-mode-switch'
 // `useLayoutEffect` arrives with focus mode, which must measure and place the focused node before
 // paint. `NODE_MIN_SIZES` is deliberately NOT imported: that module belongs to a different upstream
 // change and does not exist in this fork, so the resizer keeps its existing literal minimums below.
@@ -85,6 +86,7 @@ import {
 } from '../terminal/webgl-budget'
 import { ensureProjectLaunchInfo } from '../state/projectLaunchInfo'
 import { quantizeCharSize } from '../terminal/char-size-quantize'
+import { resyncDomRendererSpacing } from '../terminal/dom-renderer-spacing'
 import {
   parkCap,
   parkWindowMs,
@@ -2721,6 +2723,11 @@ export function TerminalNode({
      */
     const applyFit = () => {
       try {
+        // A DOM renderer built while this node was unmeasurable — the park (its cleanup releases
+        // the webgl grant AFTER React detached the element) or a display:none wrapper — measured a
+        // 0-wide 'W' and baked a full extra cell into its row spacing. This is the first moment it
+        // can be re-derived; a no-op whenever the spacing already agrees. See the helper.
+        if (resyncDomRendererSpacing(term)) fullRepaint()
         // Board up → this canvas terminal is hidden behind the overlay. Report "not viewing" (null)
         // so a card-modal viewer of the same session drives the grid instead of being clamped to our
         // (possibly zoomed-tiny) canvas size. No modal viewer → no size vote at all → the pty simply
@@ -3149,6 +3156,7 @@ export function TerminalNode({
       term.loadAddon(fit)
       term.loadAddon(searchAddon)
       term.open(container)
+      patchImeModeSwitch(term)
       // Renderer-parity: quantize the char measurement to the device-pixel grid, so a budget
       // grant/release swaps renderers without the text visibly reflowing (see the helper).
       quantizeCharSize(term)
@@ -3279,7 +3287,12 @@ export function TerminalNode({
       // into a CSI write and cancel the event — and DO NOT preventDefault: the dispatcher bails
       // on defaultPrevented events, so a prevented bubble would kill the very dispatch this
       // exists to reach.
-      if (action === 'bubble') return false
+      // 'native': same mechanics, different owner — the PLATFORM's paste (Windows Ctrl+V, issue
+      // #562). xterm would map it to \x16 and cancel the keydown, which suppresses both
+      // Chromium's paste command and the Edit menu's Ctrl+V accelerator; leaving the event
+      // untouched lets the ordinary `paste` event reach xterm's textarea, exactly as ⌘V does on
+      // macOS (bracketed-paste framing included).
+      if (action === 'bubble' || action === 'native') return false
       e.preventDefault()
       if (action === 'copy') window.nodeTerminal.clipboard.writeText(term.getSelection())
       // Shift+Enter → ESC+CR so agent CLIs insert a newline instead of submitting
