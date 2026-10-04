@@ -310,6 +310,7 @@ The concrete source remediations in this pass are:
 | `status-ssh-terminal-chip` | Terminal SSH host chip (hidden when it repeats the project host) | `src/renderer/nodes/TerminalNode.tsx` | `sshChipRepeatsProject(` | `term-ssh-chip` | Source reviewed; runtime proof pending |
 | `status-ssh-relay-chip` | Relay tab SSH display chip (display strings only) | `src/renderer/components/ProjectSwitcher.tsx` | `activeProject?.relaySsh` | `md3-remote-chip` | Source reviewed; runtime proof pending |
 | `status-ssh-connection-banner` | SSH connection banner (connecting, error with Reconnect, lost hook tunnel) | `src/renderer/components/SshConnectionBanner.tsx` | `export function SshConnectionBanner` | `md3-ssh-banner` | Source reviewed; runtime proof pending |
+| `status-markdown-link-notice` | Rendered-markdown local link refusal notice (canvas error banner) | `src/renderer/canvas/Canvas.tsx` | `{copyError && (` | `announce-banner` | Source reviewed; runtime proof pending |
 | `site-home` | Landing page home | `site/index.html` | `<body` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |
 | `site-docs-index` | Documentation index page | `site/docs/index.html` | `<article` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |
 | `site-docs-agent-support` | Agent support article | `site/docs/agent-support.html` | `Agent support` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |

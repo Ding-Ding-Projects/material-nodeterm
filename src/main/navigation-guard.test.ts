@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest'
-import { decideMainFrameNavigation, isSafeExternalUrl, appEntryUrlFor } from './navigation-guard'
+import { describe, it, expect, vi } from 'vitest'
+import {
+  decideMainFrameNavigation,
+  isSafeExternalUrl,
+  appEntryUrlFor,
+  guardMainFrameNavigation,
+  type NavigationGuardTarget
+} from './navigation-guard'
 
 const PACKAGED = 'file:///Applications/nodeterm.app/Contents/Resources/app.asar/out/renderer/index.html'
 const DEV = 'http://localhost:5173/'
@@ -70,5 +76,56 @@ describe('isSafeExternalUrl', () => {
     expect(isSafeExternalUrl('file:///etc/passwd')).toBe(false)
     expect(isSafeExternalUrl('relative/path')).toBe(false)
     expect(isSafeExternalUrl(42)).toBe(false)
+  })
+})
+
+describe('guardMainFrameNavigation (wired to a window, as the canvas widget does)', () => {
+  function fakeContents() {
+    let onNavigate: ((event: { preventDefault(): void }, url: string) => void) | undefined
+    let onOpen: ((details: { url: string }) => { action: 'deny' }) | undefined
+    const contents: NavigationGuardTarget = {
+      on: (_event, listener) => {
+        onNavigate = listener
+      },
+      setWindowOpenHandler: (handler) => {
+        onOpen = handler
+      }
+    }
+    const navigate = (url: string) => {
+      const preventDefault = vi.fn()
+      onNavigate!({ preventDefault }, url)
+      return preventDefault
+    }
+    return { contents, navigate, open: (url: string) => onOpen!({ url }) }
+  }
+
+  it('blocks the navigation a relative markdown link resolves to, and opens nothing', () => {
+    const { contents, navigate } = fakeContents()
+    const openExternal = vi.fn()
+    guardMainFrameNavigation(contents, PACKAGED, openExternal)
+    // What a click on [pty-manager.ts](src/core/pty-manager.ts:4100) asks the window to load.
+    const relative = new URL('src/core/pty-manager.ts:4100', PACKAGED).href
+    expect(relative.startsWith('file:///')).toBe(true)
+    expect(navigate(relative)).toHaveBeenCalledTimes(1)
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('lets the widget entry reload (its ?widget= query is ignored) and sends web links out', () => {
+    const { contents, navigate } = fakeContents()
+    const openExternal = vi.fn()
+    guardMainFrameNavigation(contents, PACKAGED, openExternal)
+    expect(navigate(`${PACKAGED}?widget=n1`)).not.toHaveBeenCalled()
+    expect(navigate('https://example.com/x')).toHaveBeenCalledTimes(1)
+    expect(openExternal).toHaveBeenCalledWith('https://example.com/x')
+  })
+
+  it('denies every new window and opens only a safe external URL', () => {
+    const { contents, open } = fakeContents()
+    const openExternal = vi.fn()
+    guardMainFrameNavigation(contents, PACKAGED, openExternal)
+    expect(open('file:///etc/passwd')).toEqual({ action: 'deny' })
+    expect(open('https://example.com/')).toEqual({ action: 'deny' })
+    expect(openExternal).toHaveBeenCalledTimes(1)
+    expect(openExternal).toHaveBeenCalledWith('https://example.com/')
   })
 })

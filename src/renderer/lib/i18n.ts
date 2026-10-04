@@ -125,3 +125,23 @@ export function useI18n(): {
     emoji
   }
 }
+
+/**
+ * One-line localized copy for code that runs outside React (a document-level listener installed
+ * at boot, for example), resolved against the live settings, School mode and personal-vocabulary
+ * stores at the moment it is called. Same rules as `useI18n().ts`: unknown School mode hydration
+ * fails closed to English level 1 with no vocabulary, and dynamic facts are inserted after the
+ * vocabulary is applied to the prose template.
+ */
+export function localizedTextNow(id: string, fallback: string, params?: Record<string, string>): string {
+  const settings = useSettings.getState().settings
+  const school = useSchoolMode.getState()
+  const allowed = schoolModeAllowsOptionalFeatures({ hydrated: school.hydrated, enabled: school.enabled })
+  const mode: LanguageMode = allowed ? normalizeLanguageMode(settings.languageMode) : 'en'
+  const levels: FunnyLevels = allowed
+    ? { en: normalizeFunnyLevel(settings.funnyLevelEn), yue: normalizeFunnyLevel(settings.funnyLevelYue) }
+    : { en: 1, yue: 1 }
+  const resolved = resolveString(id, fallback, mode, levels)
+  if (!allowed) return params ? formatText(resolved, params) : resolved
+  return applyVocabularyToTemplate(resolved, usePersonalVocabulary.getState().entries, params)
+}

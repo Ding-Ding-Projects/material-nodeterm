@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Port the upstream markdown navigation guard (issue #225, upstream `46a13215`, `da1a207d`,
+  `e514b595`): a link in rendered markdown never navigates the application window. A relative link
+  such as `src/core/pty-manager.ts:4100` used to replace the whole canvas with a missing `file://`
+  page on the desktop and navigate the Server Edition's tab away. One delegated listener now opens
+  web links outside the application, swallows fragments, and refuses local links with a localized
+  notice, for primary and middle clicks; the desktop main window only allows navigation back to its
+  own entry document. In this fork the guard also covers the changelog release notes, GitHub work
+  item bodies on their node and in their dialog, and the documentation browser, and the canvas
+  widget window, which had no navigation guard, now applies the same policy. Details in
+  `docs/features/files/markdown-link-navigation-guard.md`.
 - Port the first upstream security tranche (issue #225, upstream `1bf6fadb`, `60714074`, `fee5b244`,
   `23a7282b`, `9fa879d0`, `2d3e54cb`): a plain terminal keeps its inherited provider credentials in
   subscription mode (both strip sites in this fork); a Linux desktop with no keyring stores the

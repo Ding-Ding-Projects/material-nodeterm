@@ -47,6 +47,34 @@ export const CATALOG: Catalog = {
   'subagent.elapsed': { en: flat('{duration}'), yue: flat('{duration}') },
   'subagent.tokens': { en: flat('↓ {tokens} tokens'), yue: flat('↓ {tokens} tokens') },
   'subagent.tools': { en: flat('{count} tools'), yue: flat('{count} 個工具') },
+  // A local (relative, file:, or other non-web) link was clicked inside rendered markdown. The
+  // click never navigates the window; every level still says the link was not opened and why.
+  'markdownLinks.localLink': {
+    en: [
+      "Local file links can't be opened from rendered markdown.",
+      "Local file links can't be opened from rendered markdown.",
+      "That local file link can't be opened from rendered markdown.",
+      "That local file link can't be opened from rendered markdown, so nothing happened.",
+      "That local file link can't be opened from rendered markdown, so the window stayed put.",
+      "That local file link can't be opened from rendered markdown, so the canvas stayed right here.",
+      "Local file links can't be opened from rendered markdown. Your canvas did not go anywhere.",
+      "Local file links can't be opened from rendered markdown. The canvas is still here, safe and sound.",
+      "Local file links can't be opened from rendered markdown. Nice try, link, but the canvas stays.",
+      "Local file links can't be opened from rendered markdown. The canvas refuses to wander off."
+    ],
+    yue: [
+      '渲染咗嘅 markdown 入面嘅本機檔案連結打唔開。',
+      '渲染咗嘅 markdown 入面嘅本機檔案連結打唔開。',
+      '呢條本機檔案連結喺渲染咗嘅 markdown 度打唔開。',
+      '呢條本機檔案連結喺渲染咗嘅 markdown 度打唔開，所以乜都冇做。',
+      '呢條本機檔案連結喺渲染咗嘅 markdown 度打唔開，個視窗企喺度唔郁。',
+      '呢條本機檔案連結喺渲染咗嘅 markdown 度打唔開，畫布仲喺原位。',
+      '渲染咗嘅 markdown 入面嘅本機檔案連結打唔開。你個畫布冇走到。',
+      '渲染咗嘅 markdown 入面嘅本機檔案連結打唔開。畫布仲喺度，安全晒。',
+      '渲染咗嘅 markdown 入面嘅本機檔案連結打唔開。條連結想拉走個畫布？冇可能。',
+      '渲染咗嘅 markdown 入面嘅本機檔案連結打唔開。個畫布話：唔走，就係唔走。'
+    ]
+  },
   // Context-window progress. Provider numbers are supplied by the caller, while state words and
   // surrounding copy stay in the same language and funny-level pipeline as every other surface.
   'contextMeter.state.known': { en: flat('reported'), yue: flat('已回報') },

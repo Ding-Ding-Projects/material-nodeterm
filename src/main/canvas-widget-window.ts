@@ -23,12 +23,13 @@
  * both at open time (carried over from the node's last choice) and live while the widget is open.
  */
 
-import { BrowserWindow, ipcMain, screen } from 'electron'
+import { BrowserWindow, ipcMain, screen, shell } from 'electron'
 import { IPC } from '../shared/ipc'
 import type { CanvasWidgetLiveState } from '../shared/types'
 import type { SettingsStore } from '../core/settings-store'
 import { resolveOpenBounds, WIDGET_MIN_HEIGHT, WIDGET_MIN_WIDTH } from '../core/canvas-widget'
 import type { DesktopBuildPaths } from './desktop-build-paths'
+import { appEntryUrlFor, guardMainFrameNavigation } from './navigation-guard'
 
 /** Minimal surface this module needs off PtyManager — kept narrow so this file's own tests (were
  *  it not Electron-bound) and any future caller can pass a fake without dragging in the real
@@ -141,6 +142,13 @@ export function openCanvasWidget(
   } else {
     void win.loadFile(buildPaths.mainRenderer, { query: { widget: nodeId } })
   }
+  // The widget renders the same markdown surfaces as the main window, so it gets the same
+  // main-frame policy: only its own entry document may load, a safe web link goes to the system
+  // browser, and a relative link in rendered markdown (another file:// path) is blocked rather than
+  // replacing the widget with a missing file. Without this the window had no navigation guard.
+  guardMainFrameNavigation(win.webContents, appEntryUrlFor(devUrl, buildPaths.mainRenderer), (url) => {
+    void shell.openExternal(url)
+  })
 
   win.once('ready-to-show', () => win.show())
   win.on('resize', () => scheduleBoundsSave(settingsStore, nodeId, win))

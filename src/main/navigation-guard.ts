@@ -75,3 +75,33 @@ export function decideMainFrameNavigation(url: string, appEntryUrl: string): Mai
   if (isSafeExternalUrl(url)) return 'external'
   return 'block'
 }
+
+/** The slice of Electron's WebContents the guard needs, so it can be exercised with a fake. */
+export interface NavigationGuardTarget {
+  on(event: 'will-navigate', listener: (event: { preventDefault(): void }, url: string) => void): unknown
+  setWindowOpenHandler(handler: (details: { url: string }) => { action: 'deny' }): void
+}
+
+/**
+ * Apply the main-frame policy above to one window's web contents: `will-navigate` follows
+ * `decideMainFrameNavigation`, and a `window.open` / target=_blank request is always denied, with a
+ * safe external URL handed to `openExternal`. Used by the canvas widget window, which loads the
+ * same renderer entry (with a `?widget=` query, ignored by the comparison) and therefore renders
+ * the same markdown surfaces as the main window.
+ */
+export function guardMainFrameNavigation(
+  contents: NavigationGuardTarget,
+  appEntryUrl: string,
+  openExternal: (url: string) => void
+): void {
+  contents.on('will-navigate', (event, url) => {
+    const decision = decideMainFrameNavigation(url, appEntryUrl)
+    if (decision === 'allow') return
+    event.preventDefault()
+    if (decision === 'external') openExternal(url)
+  })
+  contents.setWindowOpenHandler(({ url }) => {
+    if (isSafeExternalUrl(url)) openExternal(url)
+    return { action: 'deny' }
+  })
+}

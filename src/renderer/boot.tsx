@@ -6,6 +6,7 @@ import { ensureClaudeCliCaps } from './state/permissionMode'
 import { ensureCodexIdentityCaps } from './state/codexIdentity'
 import { initAgentResolver } from './state/agent-resolver'
 import { refreshAgentEnv } from './lib/agentEnv'
+import { localizedTextNow } from './lib/i18n'
 import { installMarkdownLinkGuard, LOCAL_LINK_MESSAGE, openExternalQuietly } from './lib/markdownLinks'
 import './fonts.css'
 import './styles.css'
@@ -27,12 +28,15 @@ import './styles.durable-occurrences.css'
 // every surface — contract and reasoning in lib/markdownLinks.ts. Web links go through the bridge
 // (system browser on desktop, a new tab in the Server Edition), guarded so a rejecting bridge
 // cannot surface as an unhandled rejection. The toast is kind 'error' because
-// that is the only kind Canvas renders — an 'info' toast would be a silent no-op.
+// that is the only kind Canvas renders — an 'info' toast would be a silent no-op. Its message is
+// resolved at click time, so the current language, playfulness level and personal vocabulary apply.
 installMarkdownLinkGuard(document, {
   openExternal: (url) => openExternalQuietly((u) => window.nodeTerminal.shell.openExternal(u), url),
   notifyLocal: () =>
     window.dispatchEvent(
-      new CustomEvent('nodeterm:toast', { detail: { kind: 'error', message: LOCAL_LINK_MESSAGE } })
+      new CustomEvent('nodeterm:toast', {
+        detail: { kind: 'error', message: localizedTextNow('markdownLinks.localLink', LOCAL_LINK_MESSAGE) }
+      })
     )
 })
 
