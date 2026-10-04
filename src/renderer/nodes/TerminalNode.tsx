@@ -49,7 +49,7 @@ import {
 import { fileLinkDialect } from '../terminal/file-link-dialect'
 import { hostPlatformFor } from '../terminal/host-platform'
 import { sshFs } from '../terminal/ssh-fs'
-import type { FsApi, LaunchIntentExecutionResult, PendingLaunch } from '@shared/types'
+import type { FsApi, LaunchIntentExecutionResult, PendingLaunch, PtyApi } from '@shared/types'
 import { detectRemoteOAuthAuthorizeUrl, REMOTE_OAUTH_MAX_OUTPUT, type RemoteOAuthDetection } from '@shared/remote-oauth'
 import {
   attachReplay,
@@ -272,6 +272,7 @@ import { MaximizeButton } from './MaximizeButton'
 import { focusNode } from './focus-handler'
 import { connectHostAttachment } from '../lib/sshAttachments'
 import { projectMayDialSsh } from '../session/relay-ssh'
+import { waitForSshRemote } from '../lib/sshRemoteWait'
 import { appearanceId } from '../lib/appearance/registry'
 import { uuid } from '../lib/uuid'
 import { runPendingLaunchOnce } from '../lib/pendingLaunch'
@@ -393,7 +394,17 @@ export function currentControlPath(conn?: SshConnection): string | undefined {
  */
 export async function resolveSshRemote(
   conn: SshConnection,
-  cwd: string | undefined
+  cwd: string | undefined,
+  /**
+   * Opt in to the EARLY attach path: spawn as soon as the ControlMaster answers `-O check`,
+   * without waiting for the connect's remote setup chain — but ONLY once the host has positively
+   * listed this node's remote tmux session (see `waitForSshRemote`). Absent ⇒ the pre-feature
+   * behavior, wait for the full `connected`.
+   *
+   * `pty` is the CALLER'S SESSION-BOUND api, not the global: the confirmation has to be answered
+   * by the same core that will run `create` a moment later.
+   */
+  early?: { nodeId: string; pty: Pick<PtyApi, 'remoteSessionConfirmed'> }
 ): Promise<
   | {
       controlPath: string
@@ -433,45 +444,34 @@ export async function resolveSshRemote(
       (scopeId) => window.nodeTerminal.sshProject.disconnect(scopeId)
     )
   }
-  let controlPath = useSshConn.getState().getControlPath(projectId)
-  if (!controlPath) {
-    controlPath = await new Promise<string | undefined>((resolve) => {
-      let settled = false
-      const finish = (v?: string) => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        unsub()
-        resolve(v)
-      }
-      const unsub = useSshConn.subscribe((s) => {
-        const v = s.byProject[projectId]?.controlPath
-        if (v) finish(v)
-      })
-      const timer = setTimeout(
-        () => finish(useSshConn.getState().getControlPath(projectId)),
-        SSH_REMOTE_WAIT_MS
-      )
-    })
+  // The optional facts below (remote hook endpoint, remote tmux.conf path, remote $HOME, the Codex
+  // runtime) are produced by the connect's SETUP chain and are read at session CREATION only — the
+  // tmux `-e` hook/account env and the `-f` config. That is exactly why a node whose session already
+  // exists may attach over the master before any of them exist; see `waitForSshRemote`.
+  const outcome = await waitForSshRemote({
+    getFull: () => useSshConn.getState().byProject[projectId],
+    getEarly: () => useSshConn.getState().getEarlyControlPath(projectId),
+    subscribe: (cb) => useSshConn.subscribe(cb),
+    confirmSession: early
+      ? (controlPath) => early.pty.remoteSessionConfirmed(early.nodeId, { controlPath, conn })
+      : null,
+    waitMs: SSH_REMOTE_WAIT_MS
+  })
+  if (outcome.kind === 'none') return undefined
+  const remoteCwd = cwd || '~'
+  if (outcome.kind === 'early') {
+    // Warm attach over a master whose setup chain is still running. No setup facts by
+    // construction: `new-session -A` on a live session only attaches, so there is nothing for a
+    // `-f` or an `-e` to apply to, and passing a half-built value would be a lie about what the
+    // session carries.
+    return { controlPath: outcome.controlPath, conn, remoteCwd }
   }
-  if (!controlPath) return undefined
-  // The remote hook endpoint (reverse tunnel + remote install) is set up alongside the master;
-  // pass it through so the remote tmux session carries the hook env. Optional (fail-open).
-  const hookEndpointPath = useSshConn.getState().getHookEndpointPath(projectId)
-  // The remote tmux config (mouse off, so a drag is the emulator's own selection; set-clipboard on
-  // so an app that emits OSC 52 itself still reaches the local clipboard; history-limit) is written
-  // + sourced alongside the master; pass its path so a fresh remote session launches with `-f`.
-  // Optional.
-  const tmuxConfPath = useSshConn.getState().getTmuxConfPath(projectId)
-  // The connection's resolved remote $HOME, used to build an ABSOLUTE remote CLAUDE_CONFIG_DIR for a
-  // managed remote account (Task 12). Optional (fail-open): absent → the remote account env is
-  // skipped and the session runs under the remote system default `~/.claude`.
-  const remoteHome = useSshConn.getState().getRemoteHome(projectId)
+  const { controlPath, hookEndpointPath, tmuxConfPath, remoteHome } = outcome.facts
   const codexRuntime = useSshConn.getState().getCodexRuntime(projectId)
   return {
     controlPath,
     conn,
-    remoteCwd: cwd || '~',
+    remoteCwd,
     hookEndpointPath,
     tmuxConfPath,
     remoteHome,
@@ -3385,7 +3385,7 @@ export function TerminalNode({
       }
       const sshRemote =
         dialsSsh && ssh
-          ? await resolveSshRemote(ssh, data.cwd as string | undefined)
+          ? await resolveSshRemote(ssh, data.cwd as string | undefined, { nodeId: id, pty: api.pty })
           : undefined
       if (disposed) return
       // The host is unreachable (no master within the window). SPAWN NOTHING: a create with no

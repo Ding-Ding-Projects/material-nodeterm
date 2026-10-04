@@ -18,6 +18,9 @@
   checked by checksum on every connect and rewritten only when they differ; ssh exec children are
   capped per connection; wake-from-sleep tests each master with a real round trip; and the host's
   hook endpoint file is named per installation, with a proven-ownership migration for the old name.
+  A switch to an SSH project reads the host's session list once instead of probing every terminal,
+  terminals whose remote session already exists attach as soon as the control connection answers,
+  and open SSH projects are connected silently in the background shortly after launch.
 
   SSH 傳輸嗰柞嘢由上游逐步搬過嚟：ssh 參數唔再收會畀 `ssh` 當成選項嘅 host 或者 user，加咗
   master 來回探測、一次過讀 session 歲數同 pane 目錄；同 project 一樣嘅 host 唔再喺每粒
@@ -26,7 +29,8 @@
   對方指定嘅 server。寫去 host 嘅檔案會先核對 byte 數先至 rename，斷線唔會再留低空檔案；
   hook 隧道斷咗會自動修補，連續兩次探測失敗先會喺新嘅 Material 3 橫額講出嚟；host 上面嘅
   shim、skill 同指示段落用 checksum 對過先至重寫；每條連線嘅 ssh 子程序有上限；瞓醒之後用真正
-  來回測試每個 master。
+  來回測試每個 master。轉去 SSH project 時每部 host 只讀一次 session 清單；已經存在嘅 session
+  連線一應就即刻接上；開咗嘅 SSH project 會喺啟動後靜靜雞喺背景預先連好。
 
 - Refresh the canonical upstream submodule pin to `9d5572e2984d5a3c8a68ac7883755221838ebccc`
   (upstream `v0.4.1-12`) and add `scripts/port-upstream.mjs` with the per-path port ledger

@@ -1259,6 +1259,21 @@ export class WorkspaceStore {
     return adopted
   }
 
+  /**
+   * The OPEN ssh entries of the current index, with their endpoints — what the boot-time master
+   * pre-warm dials (see core/remote-ssh/ssh-prewarm.ts).
+   *
+   * Deliberately NOT `sshProjectIds()` plus a lookup: a CLOSED project must never be dialed.
+   * `closeProject` is non-destructive — it leaves the host's tmux sessions running and the project
+   * on disk — so a closed tab is the user saying "not now", and waking an ssh login (possibly a
+   * passphrase prompt) for one is worse than a slow first switch.
+   */
+  openSshProjects(): { id: string; ssh: NonNullable<Project['ssh']> }[] {
+    return (this.index?.entries ?? [])
+      .filter((e) => e.ssh && !e.closed)
+      .map((e) => ({ id: e.id, ssh: e.ssh as NonNullable<Project['ssh']> }))
+  }
+
   /** The ssh entry ids of the current index — what the connected-project poll iterates. */
   sshProjectIds(): string[] {
     return (this.index?.entries ?? []).filter((e) => e.ssh).map((e) => e.id)

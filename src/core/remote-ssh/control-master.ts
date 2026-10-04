@@ -269,9 +269,6 @@ export function masterRoundTripArgs(conn: SshConnection, controlPath: string): s
 export function exitMasterArgs(conn: SshConnection, controlPath: string): string[] {
   return ['-O', 'exit', '-o', `ControlPath=${controlPath}`, ...portArgs(conn), target(conn)]
 }
-export function remoteTmuxHasSessionArgs(conn: SshConnection, controlPath: string, sessionId: string): string[] {
-  return childArgs(conn, controlPath, tmuxCmd(`tmux -L ${RMT_TMUX_SOCKET} has-session -t ${sessionId}`))
-}
 /**
  * Every nodeterm tmux session on the host, by name.
  *

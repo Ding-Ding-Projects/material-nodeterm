@@ -77,6 +77,19 @@ sleep, each master is tested with a real round trip (`ssh -o ControlMaster=no �
 master whose TCP died in the sleep is told to exit so terminals reconnect at once instead of
 staying frozen for a minute.
 
+**Switching to an SSH project paints sooner.** A switch mounts every remote terminal at once;
+they now share ONE `tmux list-sessions` per host per burst instead of one `has-session` probe
+each, which kept a stock host under its `MaxSessions` limit (measured on a 12-terminal project:
+14 refused channels and 4 reset connections before, 3 and 0 after). The control connection is
+also published the moment `ssh -O check` answers, before the connect's setup chain (hook tunnel,
+per-agent hook installs, the remote tmux config) finishes: a terminal whose remote tmux session
+already exists attaches right away, because `new-session -A` then only attaches and the setup
+facts are read at session creation only. A terminal whose session is absent, or whose host could
+not be read, still waits for the full connect so it never loses its hook environment. Shortly
+after launch, the connections of OPEN SSH projects are dialed in the background, one host at a
+time and silently (no banner, no passphrase prompt), so the first switch takes the warm path; a
+closed project is never dialed.
+
 **Hook endpoint files are owned per installation.** The endpoint file written on a host is named
 after this installation (`hook-endpoint-<project>-<owner>.env`), so two desktops sharing one host
 account no longer overwrite each other's file. An older unqualified file is migrated only when it
@@ -144,6 +157,10 @@ the previous run of this app advertised locally); anything else is left untouche
   freshness probe under `/bin/sh`, `posix-cksum.test.ts` pins the checksum against the real
   `cksum`, `ssh-child-gate.test.ts` the per-master cap, `legacy-hook-endpoint.test.ts` the endpoint
   migration, and `SshConnectionBanner.test.tsx` the banner's tones and copy.
+- `remote-session-index.test.ts` (one coalesced list per host, tri-state verdict),
+  `sshRemoteWait.test.ts` (who may attach early), `ssh-prewarm.test.ts` and
+  `ssh-project.prewarm.test.ts` (silent background dial, closed projects skipped) and
+  `sshConn.test.ts` (the early path never claims a connection).
 - `src/core/remote-ssh/control-master.destination.test.ts` proves the destination refusal;
   `session-age.realsh.test.ts` runs the generated session-age line under a real POSIX shell
   (through `src/core/testing/posix-shell.ts`, so Windows uses Git Bash);
@@ -162,7 +179,8 @@ the previous run of this app advertised locally); anything else is left untouche
 ## Surfaces
 
 - **Desktop**: everything on this page.
-- **Server Edition**: there is no SSH-project manager in the server shell — a server runs ON the
+- **Server Edition**: the browser bridge answers the early-attach question with `false`, and there
+  is no SSH-project manager in the server shell — a server runs ON the
   machine it serves, so SSH projects, the hook tunnel, the banner's tunnel state and the remote
   agent-tool refresh do not apply there. The shared `remoteAtomicWrite`, settings-file and
   destination-refusal code is used by the desktop only.

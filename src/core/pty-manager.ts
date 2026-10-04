@@ -25,7 +25,8 @@ import { installDevinHooksInto } from './agents/hooks/devin'
 import {
   probeSaysAbsent,
   remoteHookEnvArgs,
-  remoteTmuxHasSessionArgs,
+  remoteListSessionsArgs,
+  parseRemoteSessionNames,
   remoteTmuxKillArgs,
   localKillSockets,
   localTmuxKillArgs,
@@ -40,6 +41,8 @@ import {
   remotePaneProcessArgs,
   remoteTerminateForegroundArgs
 } from './remote-ssh/control-master'
+import { RemoteSessionIndex } from './remote-ssh/remote-session-index'
+import type { SshConnection } from '../shared/ssh'
 import { probeAgentSockToPin } from './remote-ssh/agent-probe'
 import { parsePaneCursor } from './pane-cursor'
 import {
@@ -2331,22 +2334,64 @@ export class PtyManager {
   /** Does the node's remote tmux session exist (over the project's ControlMaster)? Async so the
    *  network round-trip never blocks the main event loop. A probe that FAILED for transport
    *  reasons answers "exists": only tmux's own exit 1 is evidence of absence (probeSaysAbsent) —
-   *  a dead/reconnecting master read as "cold" typed a resume command into a live agent session. */
+   *  a dead/reconnecting master read as "cold" typed a resume command into a live agent session.
+   *
+   *  ONE `list-sessions` per host per burst, not one `has-session` per node: a project switch
+   *  mounts every node in the same tick, and N probe channels on top of N pty channels overruns a
+   *  stock host's `MaxSessions`, which costs each excess child a full TCP+auth login. The whole
+   *  measurement is in `remote-session-index.ts`. The verdict contract is identical either way. */
   private async remoteSessionExists(
     sshRemote: NonNullable<PtyCreateOptions['sshRemote']>,
     sessionId: string
   ): Promise<boolean> {
-    const ssh = findSsh()
-    if (!ssh) return true // can't probe → not evidence of absence; warm attach types nothing
-    try {
-      await runAsync(ssh, remoteTmuxHasSessionArgs(sshRemote.conn, sshRemote.controlPath, sessionId), {
-        timeout: PROBE_TIMEOUT_MS
-      })
-      return true
-    } catch (e) {
-      return !probeSaysAbsent(e)
-    }
+    return this.remoteSessions.exists(sshRemote.controlPath, sessionId, sshRemote.conn)
   }
+
+  /**
+   * Was this node's remote tmux session POSITIVELY listed on the host? The strict half of the
+   * probe above, for the renderer's early-attach gate.
+   *
+   * `exists()` folds an unreadable host into "exists" because its caller is about to decide
+   * whether to type a resume command into a pane. This caller decides the opposite question —
+   * may a terminal attach over a ControlMaster whose connect-time setup (remote tmux.conf, the
+   * hook endpoint, the account env) has NOT finished yet — and there only a session that already
+   * exists is safe: `new-session -A` on a live session merely attaches, so `-f` and the tmux `-e`
+   * pairs (both creation-time only) are genuinely not needed. A session that is absent, or that we
+   * simply could not read, must wait for the full `connected` instead.
+   *
+   * So: `true` ONLY for `present`; `absent` and `unknown` both answer false, and the caller waits.
+   * Shares the one coalesced `tmux list-sessions` per host with `create()`.
+   */
+  async remoteSessionConfirmed(
+    persistKey: string,
+    sshRemote: { controlPath: string; conn: SshConnection }
+  ): Promise<boolean> {
+    return (
+      (await this.remoteSessions.verdict(sshRemote.controlPath, sessionName(persistKey), sshRemote.conn)) ===
+      'present'
+    )
+  }
+
+  /** One coalesced remote `tmux list-sessions` per ControlMaster (see remote-session-index.ts).
+   *  `list` carries the SAME classification the per-node probe had: tmux's own exit 1 ("no server
+   *  running") is the only evidence of absence; ssh 255 / 127 / a timeout answer `unknown`, which
+   *  the index renders as "exists" — a warm attach, which types nothing into the pane. */
+  private remoteSessions = new RemoteSessionIndex<SshConnection>({
+    list: async (controlPath, conn) => {
+      const ssh = findSsh()
+      // No ssh binary to probe with: not evidence of absence.
+      if (!ssh) return { kind: 'unknown' }
+      try {
+        const { stdout } = await runAsync(ssh, remoteListSessionsArgs(conn, controlPath), {
+          timeout: PROBE_TIMEOUT_MS
+        })
+        return { kind: 'names', names: parseRemoteSessionNames(stdout) }
+      } catch (e) {
+        // `list-sessions` exits 1 with "no server running" — the host genuinely holds no session.
+        return probeSaysAbsent(e) ? { kind: 'names', names: [] } : { kind: 'unknown' }
+      }
+    }
+  })
 
   /** Find the live session registered under a node id (persistKey), if any. */
   private sessionByPersistKey(persistKey: string): Session | undefined {
@@ -3008,6 +3053,10 @@ export class PtyManager {
           '[pty] remote session env skipped (no remote home or no uploader) — agent will launch without gateway/custom env'
         )
       }
+      // `new-session -A` is about to make this session exist on the host. Record it, so a second
+      // look inside the index's cache window (a respawn, a co-attach) cannot be told it is cold —
+      // which is what makes the renderer replay a snapshot and type a resume line into a live pane.
+      this.remoteSessions.markPresent(options.sshRemote.controlPath, sessionName(options.persistKey))
       args = remoteTmuxPtyArgs(
         options.sshRemote.conn,
         options.sshRemote.controlPath,
@@ -4960,6 +5009,9 @@ export class PtyManager {
       if (sshRemote) {
         // Remote (ssh-project) node: end the REMOTE session.
         const ssh = findSsh()
+        // The host's session set is about to change under the cached list; drop it rather than let
+        // a recreate inside the window read as warm.
+        this.remoteSessions.invalidate(sshRemote.controlPath)
         if (ssh) {
           try {
             await runAsync(ssh, remoteTmuxKillArgs(sshRemote.conn, sshRemote.controlPath, sessionName(persistKey)))
