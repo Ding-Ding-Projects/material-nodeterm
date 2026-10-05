@@ -22,6 +22,11 @@ npm run typecheck  # tsc for both the node and web projects — the fastest corr
 npm test           # vitest, unit + integration
 ```
 
+When testing startup request-handler registration, reject duplicate channels across both
+`handle` and `handleWithSender`, as Electron does. The generic platform fake overwrites handlers
+and cannot catch a duplicate that prevents the desktop window from opening. The PTY platform
+registration suite demonstrates the strict registry while preserving legacy cast listeners.
+
 `npm run server:dev` boots the Server Edition (browser UI) if you are working on that surface.
 
 ### Refreshing the canonical upstream pin

@@ -1,13 +1,38 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform } from './platform-fake'
 import { IPC } from '../shared/ipc'
+
+// Registration never spawns a terminal. Keep this contract independent of the host's native ABI.
+vi.mock('node-pty', () => ({ spawn: vi.fn() }))
 
 describe('PtyManager platform registration', () => {
   let fake: ReturnType<typeof fakePlatform>
   beforeEach(() => {
     fake = fakePlatform()
+    // Electron rejects duplicate request handlers, whereas the generic fake silently replaces
+    // them. Share the namespace across both registration APIs so this suite catches the same
+    // pre-window crash as an installed desktop app.
+    const register = (channel: string, handler: (...args: any[]) => unknown): void => {
+      if (Object.hasOwn(fake.handlers, channel)) {
+        throw new Error(`Attempted to register a second handler for '${channel}'`)
+      }
+      fake.handlers[channel] = handler
+    }
+    fake.handle = register
+    fake.handleWithSender = register
     initPlatform(fake)
+  })
+
+  it('registers foreground termination once and preserves the expected agent identity', async () => {
+    const { PtyManager } = await import('./pty-manager')
+    const manager = new PtyManager()
+    const terminate = vi.spyOn(manager, 'terminateForeground').mockResolvedValue(true)
+    manager.registerIpc()
+
+    await expect(fake.handlers[IPC.ptyTerminateForeground]('terminal-1', 'codex')).resolves.toBe(true)
+    expect(terminate).toHaveBeenCalledExactlyOnceWith('terminal-1', 'codex')
+    expect(fake.handlers[IPC.ptyCorrectTeamPaneWidth]).toBeTypeOf('function')
   })
   afterEach(() => resetPlatformForTests())
 

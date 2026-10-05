@@ -96,6 +96,12 @@ microsoft/node-pty#950 — if the fix lands there, delete the script, its wiring
 `npm test` runs the vitest suite (unit + integration; the remote e2e suites skip when the
 companion server repo isn't checked out). `npm run typecheck` is the fastest correctness gate.
 
+Request-handler registration tests must reject duplicate channels across both `handle` and
+`handleWithSender`, matching Electron's single `ipcMain.handle` namespace. The generic platform
+fake overwrites handlers, which hid a repeated `ptyTerminateForeground` registration in v1.0.42:
+desktop startup aborted before creating a window. `pty-manager-platform.test.ts` uses a strict
+registry and checks that the retained handler forwards the expected agent identity unchanged.
+
 ### Canonical upstream source
 
 `upstream/nodeterm` is a real Git submodule for the canonical

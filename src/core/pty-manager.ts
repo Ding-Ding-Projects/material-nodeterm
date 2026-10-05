@@ -1758,9 +1758,6 @@ export class PtyManager {
     platform().handle(IPC.ptyCorrectTeamPaneWidth, (persistKey: string) =>
       this.correctTeamLeadPaneWidth(persistKey)
     )
-    platform().handle(IPC.ptyTerminateForeground, (persistKey: string, expectedAgentId?: string) =>
-      this.terminateForeground(persistKey, expectedAgentId)
-    )
   }
 
   /** Feeds the renderer's "tmux not found" banner. Without tmux the app silently degrades to a
