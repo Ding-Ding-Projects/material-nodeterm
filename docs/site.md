@@ -1,10 +1,10 @@
 # The GitHub Pages site
 
 The static landing site lives in `site/` and deploys via
-`.github/workflows/pages.yml` on every push to `main` that touches `site/**`
-(or the workflow itself), plus `workflow_dispatch`. It is plain HTML/CSS/JS —
-no build step, no bundler, no npm dependency. The workflow uploads `site/`
-exactly as committed.
+`.github/workflows/pages.yml` on every push to `main`, plus
+`workflow_dispatch`. It is plain HTML/CSS/JS — no bundler or npm dependency.
+The workflow applies search-index exclusions to the Pages artifact before
+uploading it. Focused verification runs locally before publication.
 
 This document covers: the base-path trap this fork lives under and how the
 site avoids it, the deploy workflow, the shell/feature registry contract,
@@ -58,19 +58,27 @@ prefix), which is exactly the direction avoided here.
 
 `.github/workflows/pages.yml`:
 
-- Triggers on `push` to `main` (path-filtered to `site/**` and the workflow
-  file itself) and `workflow_dispatch`.
+- Triggers on every `push` to `main` and `workflow_dispatch`.
 - `actions/configure-pages` → `actions/upload-pages-artifact` (`path:
   site`) → `actions/deploy-pages`, with the standard `pages: write` /
   `id-token: write` / `contents: read` permissions and the `github-pages`
   environment.
+- Before upload, the workflow adds `<meta name="robots" content="noindex">`
+  to every complete HTML page in the artifact. Local verification checks the final
+  pages with an independent Python standard-library HTML parser. This keeps the pages
+  crawlable so search engines can see the directive; indexing removal can take
+  time and is not guaranteed. Do not add `Disallow: /` to block those crawlers.
+  This site is served beneath the shared `ding-ding-projects.github.io`
+  project path, so a `robots.txt` inside this repository would not be at the
+  host root and cannot replace the page-level directive.
 - A `concurrency` group keyed by the workflow, `cancel-in-progress: true`
   — a newer push superseding an in-flight deploy is correct here, since
   this workflow only ever publishes the newest content.
-- **No test job, no lint job, no type-check.** Per this project's CI
-  policy (see `docs/ci-and-releases.md`), no workflow in this repository
-  gates a release on a test/lint verdict, and that applies here too. A run
-  fails only if the deploy itself fails.
+- There is no test, lint, or type-check job here. Run
+  `node scripts/test-pages-noindex.mjs`,
+  `python3 scripts/verify_pages_noindex.py --self-test`, and
+  `python3 scripts/verify_pages_noindex.py <prepared-artifact>` locally.
+  Workflow success proves publication, not a passing test verdict.
 - It does **not** enable Pages via the API or touch repository settings —
   that's a one-time manual step outside the workflow's remit.
 
