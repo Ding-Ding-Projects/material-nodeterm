@@ -3,8 +3,8 @@
 The static landing site lives in `site/` and deploys via
 `.github/workflows/pages.yml` on every push to `main`, plus
 `workflow_dispatch`. It is plain HTML/CSS/JS — no bundler or npm dependency.
-The workflow applies and verifies the search-index exclusion contract in the
-Pages artifact before uploading it.
+The workflow applies search-index exclusions to the Pages artifact before
+uploading it. Focused verification runs locally before publication.
 
 This document covers: the base-path trap this fork lives under and how the
 site avoids it, the deploy workflow, the shell/feature registry contract,
@@ -64,8 +64,8 @@ prefix), which is exactly the direction avoided here.
   `id-token: write` / `contents: read` permissions and the `github-pages`
   environment.
 - Before upload, the workflow adds `<meta name="robots" content="noindex">`
-  to every complete HTML page in the artifact and verifies the final pages with
-  an independent Python standard-library HTML parser. This keeps the pages
+  to every complete HTML page in the artifact. Local verification checks the final
+  pages with an independent Python standard-library HTML parser. This keeps the pages
   crawlable so search engines can see the directive; indexing removal can take
   time and is not guaranteed. Do not add `Disallow: /` to block those crawlers.
   This site is served beneath the shared `ding-ding-projects.github.io`
@@ -74,9 +74,11 @@ prefix), which is exactly the direction avoided here.
 - A `concurrency` group keyed by the workflow, `cancel-in-progress: true`
   — a newer push superseding an in-flight deploy is correct here, since
   this workflow only ever publishes the newest content.
-- There is no desktop-app test, lint, or type-check job here. The Pages
-  artifact's focused search-index contract check is required; unrelated app
-  suites remain outside the Pages deploy workflow.
+- There is no test, lint, or type-check job here. Run
+  `node scripts/test-pages-noindex.mjs`,
+  `python3 scripts/verify_pages_noindex.py --self-test`, and
+  `python3 scripts/verify_pages_noindex.py <prepared-artifact>` locally.
+  Workflow success proves publication, not a passing test verdict.
 - It does **not** enable Pages via the API or touch repository settings —
   that's a one-time manual step outside the workflow's remit.
 
