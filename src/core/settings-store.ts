@@ -5,6 +5,7 @@ import { platform } from './platform'
 import { writeFileAtomic } from './fs-atomic'
 import {
   DEFAULT_ACCENT,
+  LEGACY_DEFAULT_ACCENTS,
   DEFAULT_SETTINGS,
   SETTINGS_SCHEMA_VERSION,
   type CanvasWidgetState,
@@ -91,7 +92,9 @@ function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
   merged.funnyLevelYue = normalizeFunnyLevel(saved?.funnyLevelYue, DEFAULT_FUNNY_LEVEL)
 
   // Carry existing installations from the former shipped accent to the current seed once.
-  if (saved?.accent === '#0a84ff') merged.accent = DEFAULT_ACCENT
+  if (typeof saved?.accent === 'string' && LEGACY_DEFAULT_ACCENTS.includes(saved.accent.toLowerCase())) {
+    merged.accent = DEFAULT_ACCENT
+  }
   if (saved?.wheelZoom === false && saved?.canvasDragMode === 'select') {
     merged.wheelZoom = true
     merged.canvasDragMode = 'pan'

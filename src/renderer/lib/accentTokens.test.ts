@@ -60,10 +60,10 @@ describe('accentTokens', () => {
   })
 
   it('keeps every shipped accent swatch readable across every dependent text role', () => {
-    // '#6750a4' is the current default (M3 seed); '#0a84ff' is the pre-M3 default, kept reachable
-    // as an ordinary swatch — both still need to work as a CUSTOM accent choice, not just whichever
-    // one happens to be shipped as default this release.
-    const accents = ['#6750a4', '#0a84ff', '#32d74b', '#ffd60a', '#ff453a', '#bf5af2', '#64d2ff']
+    // '#126b56' is the current default (v3 Jade seed); '#6750a4' (M3 baseline) and '#0a84ff'
+    // (pre-M3) are former defaults, kept reachable as ordinary swatches — all still need to work as
+    // a CUSTOM accent choice, not just whichever one happens to be shipped as default this release.
+    const accents = ['#126b56', '#6750a4', '#0a84ff', '#32d74b', '#ffd60a', '#ff453a', '#bf5af2', '#64d2ff']
     for (const theme of ['dark', 'light'] as const) {
       for (const value of accents) {
         const tokens = accentTokens(value, theme)!
@@ -120,7 +120,7 @@ describe('applyAccentTokens', () => {
   it('leaves the default accent family to the authored dark/light stylesheet values', () => {
     const root = document.documentElement
     applyAccentTokens(root, '#bf5af2', 'dark')
-    applyAccentTokens(root, '#6750a4', 'light')
+    applyAccentTokens(root, '#126b56', 'light')
     expect(root.getAttribute('style')).toBe('')
   })
 })

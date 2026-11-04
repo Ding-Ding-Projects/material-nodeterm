@@ -18,53 +18,53 @@
      `box-shadow` rules, which this pass does not touch. */
 
   /* Primary */
-  --md-primary: #d0bcff;
-  --md-on-primary: #381e72;
-  --md-primary-container: #4f378b;
-  --md-on-primary-container: #eaddff;
+  --md-primary: #87d6bc;
+  --md-on-primary: #00382b;
+  --md-primary-container: #005140;
+  --md-on-primary-container: #a3f2d7;
   /* Secondary */
-  --md-secondary: #ccc2dc;
-  --md-on-secondary: #332d41;
-  --md-secondary-container: #4a4458;
-  --md-on-secondary-container: #e8def8;
+  --md-secondary: #b2ccc1;
+  --md-on-secondary: #1e352d;
+  --md-secondary-container: #344c43;
+  --md-on-secondary-container: #cee9dd;
   /* Tertiary — a literal from the baseline scheme now, NOT an alias of `--agent-working` any more.
      The design's own component recipes use tertiary/tertiary-container as the RUNNING status
      colour (Board and Canvas status chips), which is a different job than the app's pre-existing
      "an agent is mid-turn" clay accent. `--agent-working` stays its own standalone token, value
      unchanged, for its existing direct call sites (`.ss-group__sig--working`, the busy-glow node
      border, …) — see that token's own comment below. */
-  --md-tertiary: #efb8c8;
-  --md-on-tertiary: #492532;
-  --md-tertiary-container: #633b48;
-  --md-on-tertiary-container: #ffd8e4;
+  --md-tertiary: #a8cbe2;
+  --md-on-tertiary: #0d3446;
+  --md-tertiary-container: #284b5d;
+  --md-on-tertiary-container: #c4e7ff;
   /* Error */
-  --md-error: #f2b8b5;
-  --md-on-error: #601410;
-  --md-error-container: #8c1d18;
-  --md-on-error-container: #f9dedc;
+  --md-error: #ffb4ab;
+  --md-on-error: #690005;
+  --md-error-container: #93000a;
+  --md-on-error-container: #ffdad6;
   /* Custom semantic roles M3 has no name for — success / warning, harmonized to the seed */
-  --md-success: #89d88c;
-  --md-success-container: #0b5219;
-  --md-on-success-container: #a4f5a6;
-  --md-warning: #e7c26c;
-  --md-warning-container: #5b4300;
-  --md-on-warning-container: #ffdf9e;
+  --md-success: #7fdca4;
+  --md-success-container: #005231;
+  --md-on-success-container: #9bf8be;
+  --md-warning: #e9c46a;
+  --md-warning-container: #574400;
+  --md-on-warning-container: #ffe08e;
   /* Surfaces — tonal elevation ladder */
-  --md-surface: #141218;
-  --md-surface-dim: #141218;
-  --md-surface-bright: #3b383e;
-  --md-surface-container-lowest: #0f0d13;
-  --md-surface-container-low: #1d1b20;
-  --md-surface-container: #211f26;
-  --md-surface-container-high: #2b2930;
-  --md-surface-container-highest: #36343b;
-  --md-on-surface: #e6e0e9;
-  --md-on-surface-variant: #cac4d0;
-  --md-outline: #938f99;
-  --md-outline-variant: #49454f;
-  --md-inverse-surface: #e6e0e9;
-  --md-inverse-on-surface: #322f35;
-  --md-inverse-primary: #6750a4;
+  --md-surface: #0f1512;
+  --md-surface-dim: #0f1512;
+  --md-surface-bright: #343b38;
+  --md-surface-container-lowest: #090f0d;
+  --md-surface-container-low: #171d1a;
+  --md-surface-container: #1b211e;
+  --md-surface-container-high: #252b29;
+  --md-surface-container-highest: #303633;
+  --md-on-surface: #dee4e0;
+  --md-on-surface-variant: #bfc9c3;
+  --md-outline: #89938e;
+  --md-outline-variant: #3f4945;
+  --md-inverse-surface: #dee4e0;
+  --md-inverse-on-surface: #2b322f;
+  --md-inverse-primary: #126b56;
   --md-scrim: rgba(0, 0, 0, 0.6);
   /* NOT a design-file value (see the section comment above — no drop-shadow ramp ships with this
      scheme). Kept exactly as it already was: the app's own box-shadow rules still scale off it via
@@ -76,8 +76,8 @@
   /* Terminal bodies stay dark in both themes. App.tsx republishes this at runtime from the user's
      chosen terminal theme (see SET_FROM_JS in styles.theme.test.ts) — the value here is only the
      pre-JS default a fresh window paints for one frame before that effect runs. */
-  --term-bg: #0f0d13;
-  --md-canvas-dot: #322f38;
+  --term-bg: #090f0d;
+  --md-canvas-dot: #2a312e;
 
   /* ---- Shape scale --------------------------------------------------------------------------
      Unchanged by this pass. The app's three pre-existing radii (6/8/12) already sat exactly on
@@ -252,9 +252,9 @@
   /* --menu-rgb / --popover-rgb / --card-rgb / --accent-rgb / --danger-rgb / --warn-rgb MUST stay
      bare RGB triples, never `var(...)`: styles.theme.test.ts's contrast maths does
      `token(...).split(',').map(parseInt)` on them, and a hex value there silently yields NaN. */
-  --accent-rgb: 208, 188, 255; /* --md-primary decomposed */
-  --danger-rgb: 242, 184, 181; /* --md-error decomposed */
-  --warn-rgb: 231, 194, 108; /* --md-warning decomposed */
+  --accent-rgb: 135, 214, 188; /* --md-primary decomposed */
+  --danger-rgb: 255, 180, 171; /* --md-error decomposed */
+  --warn-rgb: 233, 196, 106; /* --md-warning decomposed */
   --mono-font: var(--md-font-mono);
   /* Bare alias for the call sites written against the short name (the colour popover's hex
      field, the service node's meta text) -- same stack, different spelling. */
@@ -270,9 +270,9 @@
   /* Floating surfaces, each still a triple so every per-use alpha survives (same idea as
      --tint-rgb). Menus/dock/banners, popovers, and cards map onto three different M3 container
      tones, preserving the app's existing depth ordering (menu lightest, popover deepest, in dark). */
-  --menu-rgb: 43, 41, 48; /* --md-surface-container-high */
-  --popover-rgb: 15, 13, 19; /* --md-surface-container-lowest */
-  --card-rgb: 29, 27, 32; /* --md-surface-container-low */
+  --menu-rgb: 37, 43, 41; /* --md-surface-container-high */
+  --popover-rgb: 9, 15, 13; /* --md-surface-container-lowest */
+  --card-rgb: 23, 29, 26; /* --md-surface-container-low */
   /* Drop-shadow weight multiplier — unchanged, no M3 counterpart (tonal elevation, no shadows). */
   --shadow-k: 1;
   /* Modal/drawer scrim. A bare rgba(10,12,18,a) was hardcoded at five overlay sites with no
@@ -428,50 +428,50 @@
   color-scheme: light;
 
   /* Primary */
-  --md-primary: #6750a4;
+  --md-primary: #126b56;
   --md-on-primary: #ffffff;
-  --md-primary-container: #eaddff;
-  --md-on-primary-container: #21005d;
+  --md-primary-container: #a3f2d7;
+  --md-on-primary-container: #005140;
   /* Secondary */
-  --md-secondary: #625b71;
+  --md-secondary: #4b635a;
   --md-on-secondary: #ffffff;
-  --md-secondary-container: #e8def8;
-  --md-on-secondary-container: #1d192b;
+  --md-secondary-container: #cee9dd;
+  --md-on-secondary-container: #344c43;
   /* Tertiary */
-  --md-tertiary: #7d5260;
+  --md-tertiary: #406376;
   --md-on-tertiary: #ffffff;
-  --md-tertiary-container: #ffd8e4;
-  --md-on-tertiary-container: #31111d;
+  --md-tertiary-container: #c4e7ff;
+  --md-on-tertiary-container: #284b5d;
   /* Error */
-  --md-error: #b3261e;
+  --md-error: #ba1a1a;
   --md-on-error: #ffffff;
-  --md-error-container: #f9dedc;
-  --md-on-error-container: #410e0b;
+  --md-error-container: #ffdad6;
+  --md-on-error-container: #93000a;
   /* Custom: success / warning */
-  --md-success: #226c33;
-  --md-success-container: #a8f5b4;
-  --md-on-success-container: #00210a;
-  --md-warning: #785900;
-  --md-warning-container: #ffdf9e;
-  --md-on-warning-container: #261a00;
+  --md-success: #006d43;
+  --md-success-container: #9bf8be;
+  --md-on-success-container: #005231;
+  --md-warning: #765b00;
+  --md-warning-container: #ffe08e;
+  --md-on-warning-container: #574400;
   /* Surfaces — the ramp runs the OTHER way here: containers get darker as they recede, lighter as
      they rise. A mapping that assumes "higher container = lighter value" is correct in dark and
      inverted in light — see the canvas/panel note further down. */
-  --md-surface: #fef7ff;
-  --md-surface-dim: #ded8e1;
-  --md-surface-bright: #fef7ff;
+  --md-surface: #f5fbf6;
+  --md-surface-dim: #d5dbd7;
+  --md-surface-bright: #f5fbf6;
   --md-surface-container-lowest: #ffffff;
-  --md-surface-container-low: #f7f2fa;
-  --md-surface-container: #f3edf7;
-  --md-surface-container-high: #ece6f0;
-  --md-surface-container-highest: #e6e0e9;
-  --md-on-surface: #1d1b20;
-  --md-on-surface-variant: #49454f;
-  --md-outline: #79747e;
-  --md-outline-variant: #cac4d0;
-  --md-inverse-surface: #322f35;
-  --md-inverse-on-surface: #f5eff7;
-  --md-inverse-primary: #d0bcff;
+  --md-surface-container-low: #eff5f1;
+  --md-surface-container: #e9efeb;
+  --md-surface-container-high: #e4eae5;
+  --md-surface-container-highest: #dee4e0;
+  --md-on-surface: #171d1a;
+  --md-on-surface-variant: #3f4945;
+  --md-outline: #6f7975;
+  --md-outline-variant: #bfc9c3;
+  --md-inverse-surface: #2b322f;
+  --md-inverse-on-surface: #ecf2ee;
+  --md-inverse-primary: #87d6bc;
   --md-scrim: rgba(0, 0, 0, 0.32);
   /* --shadow-k's light weight: 0.55 × 0.35 ≈ 0.19. Not a design value — see the dark block's note. */
   --md-shadow: rgba(0, 0, 0, 0.19);
@@ -484,25 +484,25 @@
      --danger, --warn, --success, --accent-text, --knob, --mono-font, --panel*, --bg, --canvas-bg,
      --canvas-dot, …) already flips for free the moment the M3 role it points at is restated above,
      and needs no second declaration. */
-  --tint-rgb: 29, 27, 32; /* --md-on-surface's own literal, decomposed */
-  --text-strong: #1d1b20; /* same literal as --tint-rgb above, as a hex */
+  --tint-rgb: 23, 29, 26; /* --md-on-surface's own literal, decomposed */
+  --text-strong: #171d1a; /* same literal as --tint-rgb above, as a hex */
   --muted-2: rgba(var(--tint-rgb), 0.4);
   --agent-working: #b04a28; /* independent of the M3 tertiary role — see the dark block's note */
   --accent-hover: #5c4891; /* mix(seed, near-black, 14%) — see the dark block's note */
   /* No M3 role for a THIRD status hue distinct from warning/error — kept as its own literal. */
   --caution: #806100;
-  --accent-rgb: 103, 80, 164; /* --md-primary decomposed */
-  --danger-rgb: 179, 38, 30; /* --md-error decomposed */
-  --warn-rgb: 120, 89, 0; /* --md-warning decomposed */
-  --menu-rgb: 236, 230, 240; /* --md-surface-container-high */
+  --accent-rgb: 18, 107, 86; /* --md-primary decomposed */
+  --danger-rgb: 186, 26, 26; /* --md-error decomposed */
+  --warn-rgb: 118, 91, 0; /* --md-warning decomposed */
+  --menu-rgb: 228, 234, 229; /* --md-surface-container-high */
   --popover-rgb: 255, 255, 255; /* --md-surface-container-lowest */
-  --card-rgb: 247, 242, 250; /* --md-surface-container-low */
+  --card-rgb: 239, 245, 241; /* --md-surface-container-low */
   --shadow-k: 0.35; /* macOS light-mode shadows are about a third of the weight of dark ones */
   /* A light page needs a neutral black scrim, and M3's own light scrim is roughly half the
      weight of its dark one (0.32 vs 0.6) — so the same alphas, scaled. */
   --scrim-rgb: 0, 0, 0;
   --scrim-k: 0.55;
-  --md-canvas-dot: #d8d0de;
+  --md-canvas-dot: #cfd8d3;
   --minimap-mask: rgba(251, 248, 243, 0.6);
 }
 

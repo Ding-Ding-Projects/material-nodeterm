@@ -3255,14 +3255,17 @@ export interface Settings {
   shortcuts: ShortcutMap
 }
 
-/** The M3-baseline seed colour (design/v2/md3/tokens.css) — `--md-primary`'s literal value in
+/** The v3 Jade seed role (design/v3/v3.css) — `--md-primary`'s literal value in
  *  `styles.css`'s light block. `DEFAULT_SETTINGS.accent` reads it, and `accentTokens.ts`'s
  *  `applyAccentTokens()` compares an incoming accent against it (lowercase, matching what
  *  `toHex()` always produces) to decide whether to skip inline overrides and leave the two
  *  authored dark/light `--md-primary` defaults in charge. Replaces the pre-M3 default,
  *  `#0a84ff` (systemBlue) — see `mergeSettings`'s migration in `core/settings-store.ts` for the
  *  one-time upgrade of an existing install's saved `#0a84ff`. */
-export const DEFAULT_ACCENT = '#6750a4'
+export const DEFAULT_ACCENT = '#126b56'
+/** Former shipped defaults. A saved accent equal to one of these was never a user choice, so
+ *  `mergeSettings` carries it forward to `DEFAULT_ACCENT` once. */
+export const LEGACY_DEFAULT_ACCENTS: readonly string[] = ['#0a84ff', '#6750a4']
 export const SETTINGS_SCHEMA_VERSION = 2 as const
 
 export const DEFAULT_SETTINGS: Settings = {

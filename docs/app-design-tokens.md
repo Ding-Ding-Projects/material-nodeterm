@@ -3,7 +3,9 @@
 This is the **token source of truth for the Electron app** (`src/renderer/styles.css`), written for
 anyone authoring a Material Design 3 system *for the app*.
 
-**Status: the M3 baseline scheme has landed.** `:root` and `:root[data-theme='light']` in
+**Status, 2026-11-04: the v3 Jade scheme has replaced the baseline.** `:root` and `:root[data-theme='light']` now carry the tonal-spot scheme for seed `#1F8A70` from `design/v3/v3.css`, and `src/renderer/ui/md3/primitives.css` adds the Expressive spring tokens (`--md-spring-*`, `--md-dur-*`). The history below describes the earlier baseline landing.
+
+**Earlier status: the M3 baseline scheme had landed.** `:root` and `:root[data-theme='light']` in
 `src/renderer/styles.css` now carry the classic MD3 baseline scheme (seed `#6750A4`, dark register)
 transcribed **verbatim** from `design/v2/md3/tokens.css`, plus the app's own pre-existing radii,
 motion, git-graph identity colours and legacy compatibility tokens alongside it. This is a second

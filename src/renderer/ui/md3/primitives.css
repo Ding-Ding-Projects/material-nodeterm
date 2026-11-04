@@ -1355,3 +1355,99 @@
 .mdx-select[aria-invalid='true'] {
   border-color: var(--md-error);
 }
+
+/* ============================================================================
+   Material 3 Expressive motion layer (design/v3/v3.css, design/v3/Motion.dc.html).
+   Spring tokens for presses, toggles and arrivals, applied on top of the primitives above.
+   Every rule here is decoration: no state is carried by motion alone, and the reduced-motion
+   block at the end settles all of it — for the OS preference AND for Low stimulation
+   (`html[data-adhd-quiet='on']`, set by App.tsx), which compose rather than override.
+   ============================================================================ */
+:root {
+  --md-spring-fast-spatial: cubic-bezier(0.42, 1.67, 0.21, 0.9);
+  --md-spring-default-spatial: cubic-bezier(0.38, 1.21, 0.22, 1);
+  --md-spring-slow-spatial: cubic-bezier(0.39, 1.29, 0.35, 0.98);
+  --md-spring-default-effects: cubic-bezier(0.34, 0.8, 0.34, 1);
+  --md-dur-fast: 350ms;
+  --md-dur-default: 500ms;
+  --md-dur-slow: 650ms;
+  --md-dur-effect: 200ms;
+}
+
+/* Press morph: round controls square off while pressed, on a fast spatial spring. */
+.mdx-btn,
+.mdx-icon-btn,
+.mdx-fab,
+.md3-fab,
+.md3-icon-btn,
+.mdx-chip {
+  transition:
+    background var(--md-motion-effect),
+    color var(--md-motion-effect),
+    border-color var(--md-motion-effect),
+    box-shadow var(--md-dur-effect) var(--md-spring-default-effects),
+    border-radius var(--md-dur-fast) var(--md-spring-fast-spatial),
+    transform var(--md-dur-fast) var(--md-spring-fast-spatial);
+}
+.mdx-btn:active:not(:disabled),
+.mdx-icon-btn:active:not(:disabled),
+.md3-icon-btn:active:not(:disabled) {
+  border-radius: var(--md-shape-medium);
+  transform: scale(0.97);
+}
+.mdx-fab:hover:not(:disabled),
+.md3-fab:hover:not(:disabled) {
+  border-radius: 20px;
+}
+.mdx-fab:active:not(:disabled),
+.md3-fab:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.mdx-chip:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Cards lift on hover with a default spatial spring. */
+.mdx-card {
+  transition:
+    transform var(--md-dur-default) var(--md-spring-default-spatial),
+    box-shadow var(--md-dur-effect) var(--md-spring-default-effects),
+    border-radius var(--md-dur-default) var(--md-spring-default-spatial);
+}
+
+/* Surfaces arrive from their anchor: menus scale out of the opener, dialogs pop in. */
+@keyframes mdx-v3-menu-in {
+  from { opacity: 0; transform: scale(0.92, 0.7); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes mdx-v3-pop-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+.mdx-menu {
+  transform-origin: top left;
+  animation: mdx-v3-menu-in var(--md-dur-fast) var(--md-spring-fast-spatial) both;
+}
+.mdx-dialog {
+  animation: mdx-v3-pop-in var(--md-dur-default) var(--md-spring-default-spatial) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mdx-btn, .mdx-icon-btn, .mdx-fab, .md3-fab, .md3-icon-btn, .mdx-chip, .mdx-card {
+    transition-duration: 1ms;
+  }
+  .mdx-btn:active:not(:disabled), .mdx-icon-btn:active:not(:disabled), .md3-icon-btn:active:not(:disabled),
+  .mdx-fab:active:not(:disabled), .md3-fab:active:not(:disabled), .mdx-chip:active:not(:disabled) {
+    transform: none;
+  }
+  .mdx-menu, .mdx-dialog { animation: none; }
+}
+html[data-adhd-quiet='on'] .mdx-btn, html[data-adhd-quiet='on'] .mdx-icon-btn, html[data-adhd-quiet='on'] .mdx-fab,
+html[data-adhd-quiet='on'] .md3-fab, html[data-adhd-quiet='on'] .md3-icon-btn, html[data-adhd-quiet='on'] .mdx-chip,
+html[data-adhd-quiet='on'] .mdx-card {
+  transition-duration: 1ms;
+}
+html[data-adhd-quiet='on'] .mdx-menu, html[data-adhd-quiet='on'] .mdx-dialog { animation: none; }
+html[data-adhd-quiet='on'] :is(.mdx-btn, .mdx-icon-btn, .md3-icon-btn, .mdx-fab, .md3-fab, .mdx-chip):active:not(:disabled) {
+  transform: none;
+}

@@ -60,7 +60,7 @@ const FORMATS: { id: Format; label: string }[] = [
  *  seed (the shipped default, styles.css `--md-primary`); `#0a84ff` (systemBlue, the pre-M3
  *  default) stays reachable a step behind it rather than being dropped. */
 const QUICK_SWATCHES = [
-  '#6750a4', '#0a84ff', '#32d74b', '#ff9f0a', '#ff453a', '#bf5af2', '#ffd60a', '#64d2ff',
+  '#126b56', '#6750a4', '#0a84ff', '#32d74b', '#ff9f0a', '#ff453a', '#bf5af2', '#ffd60a', '#64d2ff',
   '#ff375f', '#30d158', '#a2845e', '#ffffff', '#8e8e93', '#1c1c1e', '#000000'
 ]
 

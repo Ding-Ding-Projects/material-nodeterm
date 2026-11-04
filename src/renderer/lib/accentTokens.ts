@@ -113,7 +113,7 @@ export function applyAccentTokens(
 ): void {
   const tokens = accentTokens(accentValue, theme)
   // The persisted default is the M3 baseline seed. Leaving it to styles.css preserves BOTH
-  // authored default families — dark #D0BCFF / light #6750A4 as `--md-primary`, plus every
+  // authored default families — dark #87D6BC / light #126B56 as `--md-primary`, plus every
   // deliberately tuned hover/text/container role that goes with them. Inline derivation is only
   // for a genuine override.
   if (!tokens || tokens.accent === DEFAULT_ACCENT) {

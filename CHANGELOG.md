@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Start the v3 Material 3 Expressive redesign (`design/v3/`). The colour roles in both themes move
+  from the purple M3 baseline seed to the Jade seed `#1F8A70`, generated as a tonal-spot scheme;
+  the Server Edition sign-in pages follow. Installs still on a former shipped default accent
+  (`#6750a4` or `#0a84ff`) move to the new default once; a deliberately chosen accent is kept.
+  Buttons, icon buttons, chips and FABs now morph their shape on press on a fast spring, cards lift
+  on hover, menus open from their anchor and dialogs pop in. Every one of these settles under the
+  operating system's reduced-motion setting and under Low stimulation. The remaining surfaces in
+  `design/v3/HANDOFF.md` are not implemented yet.
+
+  開始做 v3 Material 3 Expressive 新設計：兩個主題嘅顏色由紫色換做翡翠綠 `#1F8A70`，Server Edition
+  登入頁一齊換。之前用緊預設顏色嘅會自動轉新預設，自己揀過嘅就照留。掣、chip 同 FAB 撳落會變形，
+  卡片 hover 會浮起，menu 由個掣度彈出，dialog 會 pop 入嚟；系統開咗減少動畫或者低刺激模式就全部
+  靜止。`design/v3/HANDOFF.md` 入面其餘嘅畫面仲未做。
+
 - Port the upstream hook settings-file preservation chain, local half (issue #225, upstream
   `54fc5ca2`, `8cc40414`, `9f4e3410`, `b0d00189`). The Claude and Gemini hook install and uninstall,
   the fullscreen-TUI default and the AGENTS.md / GEMINI.md / Copilot / opencode instruction blocks

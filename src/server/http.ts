@@ -201,29 +201,29 @@ function esc(s: string): string {
 /**
  * M3 color roles for these four pre-render pages, inlined rather than imported: they render
  * before the renderer bundle — and its styles.css — exists, so this IS the whole palette, not a
- * subset borrowed from design/v2/md3/tokens.css. Dark is the baseline (`:root`), matching the
+ * subset borrowed from design/v3/v3.css. Dark is the baseline (`:root`), matching the
  * app's own default; light activates under `prefers-color-scheme` because these pages carry no
  * `data-theme` attribute to key off — the app's own light/dark switch hasn't loaded yet either.
  */
 const PAGE_THEME_STYLE = `<style>
 :root{
-  --md-primary:#D0BCFF;--md-on-primary:#381E72;
-  --md-error:#F2B8B5;
-  --md-surface:#141218;--md-surface-container:#211F26;--md-surface-container-low:#1D1B20;
-  --md-surface-container-lowest:#0F0D13;--md-surface-container-high:#2B2930;
-  --md-on-surface:#E6E0E9;--md-on-surface-variant:#CAC4D0;
-  --md-outline:#938F99;--md-outline-variant:#49454F;
+  --md-primary:#87D6BC;--md-on-primary:#00382B;
+  --md-error:#FFB4AB;
+  --md-surface:#0F1512;--md-surface-container:#1B211E;--md-surface-container-low:#171D1A;
+  --md-surface-container-lowest:#090F0D;--md-surface-container-high:#252B29;
+  --md-on-surface:#DEE4E0;--md-on-surface-variant:#BFC9C3;
+  --md-outline:#89938E;--md-outline-variant:#3F4945;
   --md-shape-xs:8px;--md-shape-sm:12px;
   --md-font-ui:'Outfit','Segoe UI',system-ui,sans-serif;
 }
 @media (prefers-color-scheme: light){
   :root{
-    --md-primary:#6750A4;--md-on-primary:#FFFFFF;
-    --md-error:#B3261E;
-    --md-surface:#FEF7FF;--md-surface-container:#F3EDF7;--md-surface-container-low:#F7F2FA;
-    --md-surface-container-lowest:#FFFFFF;--md-surface-container-high:#ECE6F0;
-    --md-on-surface:#1D1B20;--md-on-surface-variant:#49454F;
-    --md-outline:#79747E;--md-outline-variant:#CAC4D0;
+    --md-primary:#126B56;--md-on-primary:#FFFFFF;
+    --md-error:#BA1A1A;
+    --md-surface:#F5FBF6;--md-surface-container:#E9EFEB;--md-surface-container-low:#EFF5F1;
+    --md-surface-container-lowest:#FFFFFF;--md-surface-container-high:#E4EAE5;
+    --md-on-surface:#171D1A;--md-on-surface-variant:#3F4945;
+    --md-outline:#6F7975;--md-outline-variant:#BFC9C3;
   }
 }
 </style>`

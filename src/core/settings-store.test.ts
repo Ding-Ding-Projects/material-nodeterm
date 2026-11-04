@@ -144,6 +144,20 @@ describe('SettingsStore nested-default merge', () => {
     expect(store.get().fontSize).toBe(17)
   })
 
+  it('carries former shipped default accents forward to the current seed, and keeps a real choice', () => {
+    for (const legacy of ['#6750a4', '#6750A4', '#0a84ff']) {
+      writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ accent: legacy }), 'utf-8')
+      const store = new SettingsStore()
+      store.init()
+      expect(store.get().accent).toBe(DEFAULT_SETTINGS.accent)
+    }
+    writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ accent: '#bf5af2' }), 'utf-8')
+    const store = new SettingsStore()
+    store.init()
+    expect(store.get().accent).toBe('#bf5af2')
+    expect(DEFAULT_SETTINGS.accent).toBe('#126b56')
+  })
+
   describe('legacy terminalGpuRendering boolean migration', () => {
     const load = (value: unknown): SettingsStore => {
       writeFileSync(
