@@ -19,6 +19,8 @@ migration toward Material Design 3.
   documentation page, plus the source-level remediation and remaining ownership conflicts.
 - [Accessibility tools](./accessibility-tools.md) — the rail button and menu for text size, high
   contrast, reduced motion, a bold focus ring and larger targets, and how hiding it works.
+- [Live charts](./live-charts.md) — the Liveline-style chart component, its honest states, scrubbing
+  and the RAM-in-use chart in the session memory panel.
 - [Easter eggs](./easter-eggs.md) — the stable 60-entry catalog of local, accessible interface
   surprises, its bounded trigger cabinet, ten funny levels, and School-mode suppression contract.
 - [Build version and updated time](./build-provenance.md) - the stamped package version and

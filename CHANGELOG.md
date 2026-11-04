@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add a live RAM-in-use chart to the top of the session memory panel. The line eases to each new
+  reading, the newest point pulses only while readings are actually arriving, and you can scrub
+  it with the pointer or the arrow keys. SSH projects show their on-demand readings as paused,
+  never as live, and a missed reading shows as a gap rather than a made-up value. See
+  `docs/features/appearance/live-charts.md`.
+
+  Session memory 面板頂加咗即時 RAM 圖：條線會順住新讀數滑過去，真係有讀數入嚟先會閃點，可以用
+  滑鼠或者方向鍵睇返每一點。SSH project 只係有需要先讀，所以會顯示「暫停」，唔會扮即時。
+
 - Add the accessibility tools button at the bottom of the navigation rail. Its menu changes text
   size and turns on high contrast, reduced motion, a bold focus ring and larger targets, and opens
   the keyboard shortcuts. Hiding the button asks first and keeps every mode; Settings → Appearance

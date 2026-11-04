@@ -16,10 +16,39 @@ import { activeSessionApi, sessionForProject } from '../session/session'
 /** How often the pill re-reads the LOCAL machine's RAM. Local only — see `startHostPoll`. */
 export const HOST_POLL_MS = 30_000
 
+/** How many RAM readings the live chart keeps: 60 × 30 s = the last half hour on a local scope. */
+export const MEM_HISTORY_MAX = 60
+
+/** One measured reading of the scoped machine's RAM, as the share in use. */
+export interface MemSample {
+  /** Epoch ms when the reading ARRIVED — the reader reports no timestamp of its own. */
+  t: number
+  usedPct: number
+}
+
+/** Used share of RAM, or null when the reading cannot support one (a zero or missing total must
+ *  never chart as 0% or 100%). */
+export function memUsedPct(mem: MemInfo | null): number | null {
+  if (!mem || !(mem.totalMb > 0) || !Number.isFinite(mem.availableMb)) return null
+  const used = (1 - mem.availableMb / mem.totalMb) * 100
+  return Math.min(100, Math.max(0, used))
+}
+
+/** Append a reading, keeping only the newest `MEM_HISTORY_MAX`. An unusable reading adds nothing:
+ *  the chart shows a gap in time rather than an invented point. */
+export function appendMemSample(history: readonly MemSample[], mem: MemInfo | null, t: number): MemSample[] {
+  const usedPct = memUsedPct(mem)
+  if (usedPct === null) return history as MemSample[]
+  const next = [...history, { t, usedPct }]
+  return next.length > MEM_HISTORY_MAX ? next.slice(next.length - MEM_HISTORY_MAX) : next
+}
+
 interface SessionMemoryState {
   ok: boolean
   rows: SessionMemoryRow[]
   mem: MemInfo | null
+  /** Readings for the live chart, oldest first, for the CURRENT scope only. */
+  history: MemSample[]
   loading: boolean
   /** Scope key the current rows belong to; null before the first successful load. */
   loadedScope: string | null
@@ -60,6 +89,7 @@ export const useSessionMemory = create<SessionMemoryState>((set, get) => ({
   ok: true,
   rows: [],
   mem: null,
+  history: [],
   loading: false,
   loadedScope: null,
 
@@ -72,7 +102,7 @@ export const useSessionMemory = create<SessionMemoryState>((set, get) => ({
       mem = null // could not read — the pill says "unknown"; it must not claim 0.
     }
     if (scopeKey !== activeScope) return
-    set({ mem })
+    set({ mem, history: appendMemSample(get().history, mem, Date.now()) })
   },
 
   async refreshFull(scopeKey, projectId) {
@@ -83,7 +113,7 @@ export const useSessionMemory = create<SessionMemoryState>((set, get) => ({
       if (scopeKey !== activeScope) return
       // `ok:false` is carried through untouched: the panel renders "could not measure", never an
       // empty session list.
-      set({ ok: r.ok, rows: r.rows, mem: r.mem, loadedScope: scopeKey })
+      set({ ok: r.ok, rows: r.rows, mem: r.mem, loadedScope: scopeKey, history: appendMemSample(get().history, r.mem, Date.now()) })
     } catch {
       // A rejected call (dead WS bridge, no session yet) is the same fact as `ok:false` — the sweep
       // could not run. It is emphatically not "there are no sessions".
@@ -130,5 +160,5 @@ function enterScope(scopeKey: string, set: SetState): void {
   activeScope = scopeKey
   // `loading:false` too: whatever was in flight now belongs to a scope we have left, so its
   // `finally` will (correctly) not clear the spinner it set.
-  set({ ok: true, rows: [], mem: null, loading: false, loadedScope: null })
+  set({ ok: true, rows: [], mem: null, history: [], loading: false, loadedScope: null })
 }

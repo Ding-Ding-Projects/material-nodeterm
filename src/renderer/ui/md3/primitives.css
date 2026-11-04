@@ -1485,3 +1485,114 @@ html[data-a11y-targets='on'] :is(.mdx-icon-btn, .md3-icon-btn) {
   min-width: 48px;
   min-height: 48px;
 }
+
+/* ============================================================================
+   Live chart, Liveline style (components/LiveChart.tsx; design/v3 Status board).
+   ============================================================================ */
+.md3-live-chart {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+}
+.md3-live-chart__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.md3-live-chart__label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--md-on-surface-variant);
+}
+.md3-live-chart__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.md3-live-chart__badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--md-success);
+}
+.md3-live-chart__plot {
+  display: block;
+  max-width: 100%;
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container-lowest);
+  touch-action: none;
+}
+.md3-live-chart__plot:focus-visible {
+  outline: 3px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.md3-live-chart__grid {
+  stroke: var(--md-outline-variant);
+  stroke-width: 1;
+  stroke-dasharray: 2 6;
+}
+.md3-live-chart__fill-top { stop-color: var(--md-primary); stop-opacity: 0.32; }
+.md3-live-chart__fill-bottom { stop-color: var(--md-primary); stop-opacity: 0; }
+.md3-live-chart__line {
+  fill: none;
+  stroke: var(--md-primary);
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* The easing: Chromium transitions the path geometry itself, so each new reading glides into
+   place instead of jumping. */
+.md3-live-chart__line,
+.md3-live-chart__area {
+  transition: d var(--md-dur-default, 500ms) var(--md-spring-default-effects, ease-out);
+}
+.md3-live-chart__head-dot {
+  transition: transform var(--md-dur-default, 500ms) var(--md-spring-default-effects, ease-out);
+}
+.md3-live-chart__dot { fill: var(--md-primary); }
+.md3-live-chart__pulse {
+  fill: var(--md-primary);
+  opacity: 0.25;
+  transform-origin: center;
+  animation: md3-live-pulse 1.8s ease-out infinite;
+}
+@keyframes md3-live-pulse {
+  0% { transform: scale(0.4); opacity: 0.45; }
+  80%, 100% { transform: scale(1.4); opacity: 0; }
+}
+.md3-live-chart__crosshair {
+  stroke: var(--md-on-surface-variant);
+  stroke-width: 1;
+}
+.md3-live-chart__caption {
+  min-height: 16px;
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
+}
+.md3-live-chart--stale .md3-live-chart__line,
+.md3-live-chart--paused .md3-live-chart__line {
+  stroke: var(--md-outline);
+}
+@media (prefers-reduced-motion: reduce) {
+  .md3-live-chart__line, .md3-live-chart__area, .md3-live-chart__head-dot { transition: none; }
+  .md3-live-chart__pulse { display: none; }
+}
+html[data-adhd-quiet='on'] :is(.md3-live-chart__line, .md3-live-chart__area, .md3-live-chart__head-dot),
+html[data-a11y-motion='reduced'] :is(.md3-live-chart__line, .md3-live-chart__area, .md3-live-chart__head-dot) {
+  transition: none;
+}
+html[data-adhd-quiet='on'] .md3-live-chart__pulse,
+html[data-a11y-motion='reduced'] .md3-live-chart__pulse {
+  display: none;
+}

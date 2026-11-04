@@ -17,7 +17,8 @@ import type { ExportTable } from '@shared/export'
 import { buildTableExport } from '@shared/export'
 import { useAgentStatus } from '../state/agentStatus'
 import { useProjects } from '../state/projects'
-import { useSessionMemory } from '../state/sessionMemory'
+import { HOST_POLL_MS, useSessionMemory } from '../state/sessionMemory'
+import { LiveChart, type LiveChartStatus } from './LiveChart'
 import { resolveSessionRows, totalMb, type SessionMemoryView } from '../lib/sessionMemoryRows'
 import { usageScopeKey } from '../lib/usageScope'
 import {
@@ -111,6 +112,7 @@ export function SessionMemoryPanel({
   const loading = useSessionMemory((s) => s.loading)
   const loadedScope = useSessionMemory((s) => s.loadedScope)
   const refreshFull = useSessionMemory((s) => s.refreshFull)
+  const history = useSessionMemory((s) => s.history)
 
   // EVERY project, closed ones included: `closeProject` keeps the project and its nodes on disk
   // (only the tab goes away), so its sessions resolve to a real title. Filtering to the open tabs
@@ -305,6 +307,22 @@ export function SessionMemoryPanel({
     )
   }
 
+  // The RAM chart's honest state. A local scope is polled, so it is live until a reading is older
+  // than two poll intervals; an SSH scope is read on demand only, so it is never drawn as live.
+  const chartPoints = useMemo(() => history.map((h) => ({ t: h.t, v: h.usedPct })), [history])
+  const lastAt = history.length ? history[history.length - 1].t : null
+  const chartStatus: LiveChartStatus = relay
+    ? 'unavailable'
+    : history.length === 0
+      ? loading
+        ? 'loading'
+        : 'unavailable'
+      : scopeKey !== ''
+        ? 'paused'
+        : lastAt !== null && Date.now() - lastAt > HOST_POLL_MS * 2
+          ? 'stale'
+          : 'live'
+
   return (
     <div className="sessmem-panel md3-sessmem-panel" id="sessmem-panel" role="region" aria-label={vocab('Session memory')}>
       <div className="sessmem-panel__head md3-sessmem-head">
@@ -315,6 +333,24 @@ export function SessionMemoryPanel({
         {/* No total unless we measured one: a grand total of `0 MB` beside a failure is the exact
             conflation this panel exists to end. */}
         {measured && <span className="sessmem-panel__total md3-sessmem-total">{formatMb(totalMb(views))}</span>}
+      </div>
+
+      <div className="sessmem-panel__chart md3-sessmem-chart">
+        <LiveChart
+          points={chartPoints}
+          status={chartStatus}
+          label={vocab('RAM in use')}
+          format={(v) => `${Math.round(v)}%`}
+          domain={[0, 100]}
+          width={300}
+          height={72}
+          statusText={{
+            loading: vocab('Measuring…'),
+            paused: vocab('Read on demand on this host — not live.'),
+            stale: vocab('No new reading for a while.'),
+            unavailable: vocab('No RAM readings yet.')
+          }}
+        />
       </div>
 
       {body}

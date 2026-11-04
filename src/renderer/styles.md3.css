@@ -7589,6 +7589,11 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   margin-left: 4px;
 }
 
+.sessmem-panel__chart {
+  padding: 8px 12px 0;
+  display: flex;
+  justify-content: center;
+}
 .sessmem-panel__attrib {
   color: var(--md-on-surface-variant);
   line-height: 1.5;
