@@ -1082,6 +1082,25 @@ const FEATURES = [
     docs: ['docs/language-modes.md'],
   },
   {
+    // The workbench tabs: mounted inside the builder, evaluated in a Worker, conversion pure.
+    id: 'regex-workbench',
+    label: 'Regex workbench tabs (test cases, GREP, convert, benchmark, history)',
+    files: [
+      'src/renderer/components/regex/RegexWorkbenchTabs.tsx',
+      'src/renderer/components/regex/RegexWorkbenchTabs.test.tsx',
+      'src/renderer/lib/regex/convert.ts',
+      'src/renderer/lib/regex/convert.test.ts',
+      'src/renderer/lib/regex/lab.ts',
+      'src/renderer/lib/regex/regexLabWorker.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/components/regex/RegexBuilder.tsx', '<RegexWorkbenchTabs'],
+      ['src/renderer/lib/regex/useRegexLab.ts', "import RegexLabWorker from './regexLabWorker?worker'"],
+      ['src/renderer/lib/regex/convert.ts', 'export function convertRegex('],
+    ],
+    docs: ['docs/regex-builder.md'],
+  },
+  {
     id: 'regex-builder',
     label: 'Regex builder',
     files: ['src/renderer/components/regex/AnchoredRegexBuilder.tsx'],

@@ -15,6 +15,7 @@ import { highlightSegments } from '../../lib/regex/highlight'
 import { explainPattern } from '../../lib/regex/explain'
 import { REGEX_PRESETS, type RegexPreset } from '../../lib/regex/presets'
 import { REGEX_TOKEN_GROUPS, filterTokenGroups, type RegexToken } from './insertTokens'
+import { RegexWorkbenchTabs } from './RegexWorkbenchTabs'
 import { IconDuplicate, IconSearch, IconTrash } from '../icons'
 import { IconRegexArrowInsert, IconRegexError, IconRegexQuote, IconRegexWarning } from './regexIcons'
 import { TextArea } from '@renderer/ui/md3'
@@ -410,6 +411,14 @@ export function RegexBuilder({ value, onChange, onDone, autoFocusPattern = false
         </div>
       </aside>
       </div>
+
+      <RegexWorkbenchTabs
+        value={value}
+        onChange={onChange}
+        valid={compiled.ok}
+        sample={clampedSample.text}
+        matches={safe.status === 'ok' ? safe.matches : null}
+      />
 
       {onDone && (
         <div className="md3-regex-builder__footer">

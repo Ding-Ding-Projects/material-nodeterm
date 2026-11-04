@@ -6963,6 +6963,187 @@ body:has(.mdx-dialog-scrim) .mdx-snackbar-stack {
   color: var(--md-on-surface-variant);
 }
 
+/* -- workbench tabs (RegexWorkbenchTabs): test cases, GREP, convert, benchmark, history -- */
+.md3-regex-lab {
+  border-top: 1px solid var(--md-outline-variant);
+  padding: 8px 16px 12px;
+  min-width: 0;
+}
+.md3-regex-lab__tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+.md3-regex-lab__tab {
+  flex: none;
+  padding: 10px 14px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 12px 12px 0 0;
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font: 600 13px/18px var(--md-font-ui, inherit);
+  cursor: pointer;
+  transition:
+    color var(--md-motion-effect),
+    border-color var(--md-dur-fast, 350ms) var(--md-spring-fast-spatial, ease);
+}
+.md3-regex-lab__tab:hover {
+  background: var(--md-surface-container-highest);
+}
+.md3-regex-lab__tab--on {
+  color: var(--md-primary);
+  border-bottom-color: var(--md-primary);
+}
+.md3-regex-lab__tab:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+.md3-regex-lab__panel {
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.md3-regex-lab__note,
+.md3-regex-lab__empty {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+}
+.md3-regex-lab__error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--md-error);
+}
+.md3-regex-lab__error ul,
+.md3-regex-lab__warnings {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.md3-regex-lab__warnings {
+  color: var(--md-warning);
+}
+.md3-regex-lab__add,
+.md3-regex-lab__targets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.md3-regex-lab__add > :first-child {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.md3-regex-lab__summary {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.md3-regex-lab__cases,
+.md3-regex-lab__grep,
+.md3-regex-lab__history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.md3-regex-lab__case,
+.md3-regex-lab__grep li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: var(--md-surface-container);
+  font-size: 12.5px;
+}
+.md3-regex-lab__case.is-pass .md3-regex-lab__case-verdict {
+  color: var(--md-success);
+}
+.md3-regex-lab__case.is-fail {
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.md3-regex-lab__case-verdict {
+  flex: none;
+  width: 34px;
+  font-weight: 700;
+}
+.md3-regex-lab__case-text,
+.md3-regex-lab__grep-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+  font-family: var(--md-font-mono, monospace);
+}
+.md3-regex-lab__case-expect,
+.md3-regex-lab__grep-hits,
+.md3-regex-lab__history-time {
+  flex: none;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+}
+.md3-regex-lab__grep-line {
+  flex: none;
+  min-width: 32px;
+  text-align: right;
+  color: var(--md-primary);
+  font-family: var(--md-font-mono, monospace);
+}
+.md3-regex-lab__code {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--md-surface-container-lowest);
+  font: 12.5px/1.5 var(--md-font-mono, monospace);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.md3-regex-lab__bench {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+.md3-regex-lab__bench dt {
+  color: var(--md-on-surface-variant);
+}
+.md3-regex-lab__bench dd {
+  margin: 0;
+  font-family: var(--md-font-mono, monospace);
+}
+.mdx-btn.md3-regex-lab__history-item {
+  width: 100%;
+  justify-content: space-between;
+  gap: 12px;
+}
+.md3-regex-lab__history-item code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+  font-family: var(--md-font-mono, monospace);
+}
+@media (prefers-reduced-motion: reduce) {
+  .md3-regex-lab__tab {
+    transition: none;
+  }
+}
+
 /* -- footer ("Done") -- */
 .md3-regex-builder__footer {
   display: flex;

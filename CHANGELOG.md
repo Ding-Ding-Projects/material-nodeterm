@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add workbench tabs under the regex builder: Test cases (should match or not, with pass and fail),
+  GREP over the sample with line numbers, Use & convert (JavaScript, Python, Go, Rust, C#, Java and
+  PowerShell code, naming any construct the target cannot express), Benchmark, and this session's
+  History. Cases and benchmarks run in a time-boxed background worker. See `docs/regex-builder.md`.
+
+  Regex 建構器下面加咗工作枱分頁：測試個案（應該中定唔應該中，有過關同唔過關）、對住樣本做
+  GREP 連行號、轉換去 JavaScript、Python、Go、Rust、C#、Java 同 PowerShell（目標做唔到嘅語法會講明）、
+  效能測試，同埋今次用過嘅樣式記錄。測試同效能都喺有時限嘅背景 worker 度跑。
+
 - Replace the ring spinner with the Material 3 Expressive loading indicator, a shape that morphs
   as it turns, and let notifications rise into their stack on a spring. Both rest still under any
   reduced-motion setting; the text beside them still says what is happening.

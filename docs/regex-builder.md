@@ -166,12 +166,39 @@ a distinct `label` (its accessible name) — see `SettingsSidebar.tsx`, `Explore
   group's label once every row under it is filtered out is real UI work this pass didn't attempt,
   and this is stated here rather than left as a silent, undocumented gap.
 
+## Workbench tabs (Test cases, GREP, Use & convert, Benchmark, History)
+
+Below the live builder sits a tab strip (`components/regex/RegexWorkbenchTabs.tsx`, the v3
+`Regex.dc.html` workbench). The tabs use the shared `Tabs` primitive, so arrow keys, Home and End
+move between them.
+
+| Tab | What it does | Where it runs |
+| --- | --- | --- |
+| Test cases | A list of texts, each marked "should match" or "should not match", with a pass or fail per case and a summary. Up to 50 cases. | `lib/regex/regexLabWorker.ts`, time-boxed by `useRegexLab` |
+| GREP | The lines of the sample that contain a match, with line numbers and a hit count. | Main thread, from the match offsets the live-preview Worker already returned; nothing is evaluated again |
+| Use & convert | Rewrites the pattern for JavaScript, Python, Go, Rust, C#, Java or PowerShell and gives paste-ready code. | `lib/regex/convert.ts`, pure, syntax only |
+| Benchmark | Scans the sample repeatedly and reports median, fastest and slowest time for one scan. Runs only when you press Run. | `regexLabWorker.ts`, capped at 200 runs or 300 ms |
+| History | Valid patterns you worked on in this session; pick one to restore it. | Memory only, never written to disk |
+
+Conversion follows three rules:
+
+- A construct the target cannot express makes the conversion fail with the reason (for example,
+  Go and Rust have no lookaround or backreferences, Python's `re` has no `\p{…}` and no
+  variable-width lookbehind). It is never dropped or swapped for something close.
+- A construct the target accepts with a different meaning is converted with a warning (for example,
+  `.NET` `\d` matches Unicode digits).
+- Only syntax is rewritten. The tab says the result has not been run on that engine.
+
+History is session-only on purpose: a pattern can hold text pasted from a private log.
+
 ## What this pass did not do
 
 - Every dropdown/right-click menu in the app does **not** carry the filter head yet — only
   `ContextMenu.tsx`'s flat-list path does. A sectioned menu (separators/labels/submenus) needs a
   real decision about what happens to a group heading once its rows are filtered out; that's future
   work, named here rather than silently skipped.
+- The workbench has no step-by-step debugger yet; the Explanation column is the closest view of
+  how the engine reads a pattern.
 - There is no modal fallback path for `AnchoredPopover` today (every surface wired up had room for
   the anchored presentation). If a future surface genuinely can't host it at a narrow width, add
   one there — and keep the same "paint your own surface, scroll don't clip, return focus on close"

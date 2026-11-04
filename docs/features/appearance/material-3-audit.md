@@ -269,6 +269,7 @@ The concrete source remediations in this pass are:
 | `overlay-vocabulary-context-menu` | Vocabulary context menu | `src/renderer/components/menu/VocabularyContextMenu.tsx` | `export function VocabularyContextMenu` | `ctx-menu` | Source reviewed; runtime proof pending |
 | `overlay-regex-builder` | Full regex builder | `src/renderer/components/regex/RegexBuilder.tsx` | `export function RegexBuilder` | `md3-regex-builder` | Source reviewed; runtime proof pending |
 | `overlay-anchored-regex` | Anchored regex builder | `src/renderer/components/regex/AnchoredRegexBuilder.tsx` | `export function AnchoredRegexBuilder` | `md3-regex-trigger` | Source reviewed; runtime proof pending |
+| `overlay-regex-workbench` | Regex workbench tabs | `src/renderer/components/regex/RegexWorkbenchTabs.tsx` | `export function RegexWorkbenchTabs` | `md3-regex-lab` | Source reviewed; runtime proof pending |
 | `overlay-confirm` | Confirm dialog | `src/renderer/components/ConfirmDialog.tsx` | `export function ConfirmDialog` | `confirm` | Source reviewed; runtime proof pending |
 | `overlay-confirm-choice` | Confirmation dialog required choice | `src/renderer/components/ConfirmDialog.tsx` | `confirm__choices` | `confirm__choice` | Source reviewed; runtime proof pending |
 | `overlay-destructive-gate` | Destructive action gate | `src/renderer/components/DestructiveConfirmGate.tsx` | `export function DestructiveConfirmGate` | `destgate` | Source reviewed; runtime proof pending |
