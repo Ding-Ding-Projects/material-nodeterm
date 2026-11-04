@@ -19,6 +19,7 @@ migration toward Material Design 3.
   documentation page, plus the source-level remediation and remaining ownership conflicts.
 - [Accessibility tools](./accessibility-tools.md) — the rail button and menu for text size, high
   contrast, reduced motion, a bold focus ring and larger targets, and how hiding it works.
+- [Info guidance on settings](./info-guidance.md) — the per-control info button above each settings control and its guided steps
 - [Live charts](./live-charts.md) — the Liveline-style chart component, its honest states, scrubbing
   and the RAM-in-use chart in the session memory panel.
 - [Easter eggs](./easter-eggs.md) — the stable 60-entry catalog of local, accessible interface

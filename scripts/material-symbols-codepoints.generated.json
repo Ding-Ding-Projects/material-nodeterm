@@ -78,6 +78,7 @@
     "grid_view": "U+E9B0",
     "hourglass_top": "U+EA5B",
     "hub": "U+E9F4",
+    "info": "U+E88E",
     "keyboard": "U+E312",
     "label": "U+E892",
     "language": "U+E894",
@@ -127,7 +128,7 @@
     "wb_sunny": "U+E430",
     "workspaces": "U+E1A0"
   },
-  "outputBytes": 106076,
+  "outputBytes": 106472,
   "sourceBytes": 5347060,
   "sourceFont": "material-symbols-rounded.woff2 (Rounded variant)",
   "sourcePackage": "material-symbols",

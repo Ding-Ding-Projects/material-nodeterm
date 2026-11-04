@@ -2816,7 +2816,7 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   from pinned devDependencies by `scripts/build-fonts.mjs`. `check-app-contract.mjs` scans for
   any font/icon CDN reference anywhere under `src/renderer`, including in a comment, and fails —
   the CSP's `font-src 'self' data:` would silently drop a remote `@font-face` at runtime rather
-  than merely slow it down. The icon font is subsetted to the app's 99 used glyphs by CODEPOINT,
+  than merely slow it down. The icon font is subsetted to the app's 100 used glyphs by CODEPOINT,
   not ligature (ligature subsetting pulls in every other glyph built from the same letters), so
   `MaterialSymbol` (`components/MaterialSymbol.tsx`, names typed against the generated
   `materialSymbols.generated.ts` codepoint map — an unknown name is a compile error, not tofu)

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an info button directly above every settings control that has help text. It opens a small
+  panel explaining that one setting with three guided steps, works from the keyboard and returns
+  focus when closed. See `docs/features/appearance/info-guidance.md`.
+
+  每個有說明嘅設定，個控制上面都加咗個資訊掣：撳開會解釋呢個設定，仲有三步指引，用鍵盤都得，
+  閂返會跳返去個掣度。
+
 - Add a live RAM-in-use chart to the top of the session memory panel. The line eases to each new
   reading, the newest point pulses only while readings are actually arriving, and you can scrub
   it with the pointer or the arrow keys. SSH projects show their on-demand readings as paused,

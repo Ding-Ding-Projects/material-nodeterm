@@ -66,6 +66,7 @@ export const MATERIAL_SYMBOLS = {
   "grid_view": '\uE9B0',
   "hourglass_top": '\uEA5B',
   "hub": '\uE9F4',
+  "info": '\uE88E',
   "keyboard": '\uE312',
   "label": '\uE892',
   "language": '\uE894',

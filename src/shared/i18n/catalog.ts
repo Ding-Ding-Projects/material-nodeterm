@@ -39,6 +39,14 @@ function flat(text: string): FunnyVariants {
 export const CATALOG: Catalog = {
   // Accessibility tools menu (design/v3 Overlays board). Factual copy at every level: these
   // controls change how the app can be used, so the wording never plays.
+  // Per-control info guidance (Settings rows). Factual help text, so the wording never plays.
+  'infoGuide.about': { en: flat('About this setting'), yue: flat('關於呢個設定') },
+  'infoGuide.step1': { en: flat('Change it with the control just below this button.'), yue: flat('用呢個掣下面嗰個控制改佢。') },
+  'infoGuide.step2': { en: flat('There is no Save button: the change is kept automatically.'), yue: flat('唔使撳儲存：改咗就自動記住。') },
+  'infoGuide.step3': {
+    en: flat('Changed your mind? Restore an earlier version from Settings → Local history.'),
+    yue: flat('改變主意？去「設定 → 本機歷史」還原返之前嘅版本。')
+  },
   'a11yTools.open': { en: flat('Accessibility tools'), yue: flat('無障礙工具') },
   'a11yTools.short': { en: flat('Access'), yue: flat('無障礙') },
   'a11yTools.textSize': { en: flat('Text size'), yue: flat('字體大小') },

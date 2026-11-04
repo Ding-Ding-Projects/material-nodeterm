@@ -2,6 +2,7 @@ import type React from 'react'
 import { useVocabularyTemplate, useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
 import { resolutionIncludes, useSettingsVocabularyResolution, type SettingsVocabularyResolution } from './context'
 import { SettingsText, type SettingsTextSegment } from './SettingsText'
+import { InfoGuide } from './InfoGuide'
 
 /** label (+ optional description, + optional highlighted note) on the left, a control on the right. */
 export function FieldRow({
@@ -47,7 +48,11 @@ export function FieldRow({
         {vocabDescription ? <p className="md3-settings-row__desc">{vocabDescription}</p> : null}
         {vocabNote ? <p className="md3-settings-row__note">{vocabNote}</p> : null}
       </div>
-      <div className="md3-settings-row__control">{control}</div>
+      <div className="md3-settings-row__control">
+        {/* Info guidance sits directly above its own control, only where there is help to show. */}
+        {vocabDescription ? <InfoGuide label={vocabLabel} description={vocabDescription} /> : null}
+        {control}
+      </div>
     </div>
   )
 }
