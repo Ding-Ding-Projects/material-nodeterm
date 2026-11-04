@@ -1629,3 +1629,30 @@ html[data-adhd-quiet='on'] .react-flow__node > *,
 html[data-a11y-motion='reduced'] .react-flow__node > * {
   animation: none;
 }
+
+/* Snackbars rise into the stack on the default spatial spring (design/v3 Overlays: stacked
+   toasts), and a newly stacked one nudges in rather than appearing. Backwards fill, so a finished
+   entrance pins nothing. Off under every reduced-motion source; the existing quick fade-in rule
+   above stays the fallback shape. */
+.mdx-snackbar {
+  transform-origin: bottom left;
+  animation: mdx-v3-snack-in var(--md-dur-default) var(--md-spring-default-spatial) backwards;
+}
+@keyframes mdx-v3-snack-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mdx-snackbar {
+    animation: none;
+  }
+}
+html[data-adhd-quiet='on'] .mdx-snackbar {
+  animation: none;
+}

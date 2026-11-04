@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Replace the ring spinner with the Material 3 Expressive loading indicator, a shape that morphs
+  as it turns, and let notifications rise into their stack on a spring. Both rest still under any
+  reduced-motion setting; the text beside them still says what is happening.
+
+  轉圈圈換咗做 Material 3 Expressive 嘅載入指示：一邊轉一邊變形。通知會彈升入疊度。開咗任何
+  減少動畫設定就唔郁，旁邊啲字照樣講緊做緊乜。
+
 - Follow the v3 workspace chrome: the navigation rail widens to 96 px, nodes round to 28 px
   corners, and nodes fade in one after another when a project loads. The fade is opacity only, so
   terminal text stays sharp, and it is off under any reduced-motion setting.
