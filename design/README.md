@@ -7,11 +7,21 @@ them next to the running app.
 | --- | --- |
 | `Nodeterm MD3.dc.html` | The original Material Design 3 target. Superseded by `v2/` — kept for reference. |
 | `Nodeterm Today.dc.html` | The current-state reference it was designed against. |
-| `v2/` | The current Material Design 3 rewrite target. See below. |
+| `v3/` | The current target: a full Material 3 Expressive redesign. See below. |
+| `v2/` | The previous Material Design 3 rewrite target, superseded by `v3/`. |
 | `pages/` | The published-site design, its `HANDOFF.md`, and the brand assets. |
 | `compare/` | An Electron tool that shows the prototype and the running app together. |
 
-## v2 — the current rewrite target
+## v3 — Material 3 Expressive redesign
+
+`v3/` supersedes `v2/` as the visual target: Jade seed `#1F8A70`, expressive shape morphing and
+spring motion with a complete reduced-motion path, and 17 artboards covering every surface the app
+must carry, including the regex workbench, the in-depth appearance editor, safety flows, tools,
+Status Hub and the narrow / high-scale layouts. Start with `v3/HANDOFF.md`; `v3/canvas.json` lists
+the artboards, `v3/v3.css` is the token and component layer, `v3/frames/` holds rendered stills, and
+`v3/REHEARSAL.md` records the review.
+
+## v2 — the previous rewrite target
 
 `v2/` supersedes the prototypes above. It is a full-surface Material Design 3 rewrite —
 canvas, kanban board, files and source control, settings, command palette and every overlay,

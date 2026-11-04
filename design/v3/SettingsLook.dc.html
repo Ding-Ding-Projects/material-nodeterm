@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Appearance editor, colour picker and logo</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./v3.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=Roboto+Mono:wght@400;500&amp;family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0&amp;display=block" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#87D6BC}a:hover{color:#A3F2D7}
+@keyframes hueSpin { to { filter: hue-rotate(360deg); } }
+</style>
+</helmet>
+<div class="v3" style="width: 100%; height: 1100px; position: relative; overflow: hidden; background: var(--md-surface); background-image: radial-gradient(var(--canvas-dot) 1.2px, transparent 1.4px); background-size: 24px 24px">
+  <section class="node focus" style="position: absolute; left: 48px; top: 64px; width: 440px; height: 260px" aria-label="Element being edited">
+    <div class="hd" style="background: color-mix(in srgb, #E9C46A 18%, transparent)"><span class="dot live" style="background: var(--md-success); color: var(--md-success)"></span><span class="title-s">Claude Code · auth refactor</span><span class="chip" style="height: 24px; padding: 0 8px; font-size: 11px; margin-left: auto">Header edited</span></div>
+    <div class="bd"><div style="color: var(--md-primary)">● Reading src/main/auth/session.ts</div><div>● Updating token refresh</div><div class="caret" style="margin-top: 8px">✻ Thinking</div></div>
+  </section>
+  <div style="position: absolute; left: 492px; top: 92px; width: 40px; height: 2px; background: var(--md-primary)"></div>
+
+  <aside class="dialog" aria-label="Edit appearance: node header" style="position: absolute; left: 532px; top: 40px; width: 560px; height: 1000px; padding: 0; border-radius: 32px; display: flex; flex-direction: column; overflow: hidden">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 18px 16px 10px 24px; cursor: move"><span class="msr" style="color: var(--md-primary)">brush</span><div style="display: flex; flex-direction: column; flex: 1"><span class="title-m">Edit appearance</span><span class="body-s muted">Node header · Hover state</span></div>
+      <button class="ibtn sm sl" aria-label="Undo"><span class="msr">undo</span></button><button class="ibtn sm sl" aria-label="Redo"><span class="msr">redo</span></button><button class="ibtn sm sl" aria-label="Close editor"><span class="msr">close</span></button></div>
+    <div style="display: flex; gap: 4px; padding: 0 16px 12px; flex-wrap: wrap">
+      <span class="chip">Default</span><span class="chip on">Hover</span><span class="chip">Focus</span><span class="chip">Pressed</span><span class="chip">Disabled</span><span class="chip">::before</span>
+    </div>
+    <div style="display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--md-outline-variant)">
+      <span class="label-l" style="padding: 12px 14px; border-bottom: 3px solid var(--md-primary); color: var(--md-primary); border-radius: 3px 3px 0 0">Colour</span>
+      <span class="label-l muted" style="padding: 12px 14px">Type</span><span class="label-l muted" style="padding: 12px 14px">Shape</span><span class="label-l muted" style="padding: 12px 14px">Image layers</span><span class="label-l muted" style="padding: 12px 14px">Animation</span>
+    </div>
+    <div style="flex: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; overflow: hidden">
+      <div style="display: flex; gap: 16px">
+        <div style="flex: 1; height: 200px; border-radius: 20px; position: relative; background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(44 74% 50%))">
+          <span style="position: absolute; left: 62%; top: 22%; width: 22px; height: 22px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.4); transition: all .35s var(--spring-fast-spatial)"></span>
+        </div>
+        <div style="width: 200px; height: 200px; border-radius: 50%; position: relative; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red)">
+          <div style="position: absolute; inset: 34px; border-radius: 50%; background: var(--md-surface-container-high); display: grid; place-items: center"><span class="label-m muted">HUE 44°</span></div>
+          <div style="position: absolute; inset: -6px; border-radius: 50%; border: 3px solid transparent; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red) border-box; -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: hueSpin 6s linear infinite; opacity: .9"></div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center">
+        <span class="chip" style="gap: 8px"><span style="width: 16px; height: 16px; border-radius: 50%; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); animation: hueSpin 6s linear infinite"></span>Animated rainbow</span>
+        <span class="body-s muted">Speed</span><div class="slider" style="flex: 1; height: 32px"><div class="trk" style="height: 10px"><div class="act" style="width: 40%"></div></div><div class="hnd" style="left: calc(40% + 2px); height: 32px"></div></div>
+      </div>
+      <div class="card filled" style="border-radius: 20px; display: grid; grid-template-columns: 120px minmax(0, 1fr) 40px; gap: 8px 12px; align-items: center; padding: 16px">
+        <span class="label-m muted">SPACE</span><span class="body-m"><b>OKLCH</b> · sRGB gamut · alpha kept</span><span></span>
+        <span class="label-m muted">HEX8</span><span class="mono body-m">#E9C46A2E</span><button class="ibtn sm sl" aria-label="Copy HEX8"><span class="msr">content_copy</span></button>
+        <span class="label-m muted">OKLCH</span><span class="mono body-m">oklch(0.83 0.12 87 / 0.18)</span><button class="ibtn sm sl" aria-label="Copy OKLCH"><span class="msr">content_copy</span></button>
+        <span class="label-m muted">CMYK</span><span class="mono body-m">0 16 55 9</span><button class="ibtn sm sl" aria-label="Copy CMYK"><span class="msr">content_copy</span></button>
+        <span class="label-m muted">NEAREST NAME</span><span class="body-m">Saffron</span><span></span>
+        <span class="label-m muted">CONTRAST</span><span class="body-m"><span class="chip" style="height: 24px; background: var(--md-success-container); color: var(--md-on-success-container); box-shadow: none">7.9 : 1 AAA</span> on header text</span><span></span>
+      </div>
+      <div class="field outl"><div class="box" style="height: 48px"><span class="msr">search</span><span class="body-m muted" style="flex: 1">Search colours or type any format</span><span class="regex">.*</span></div></div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <button class="btn tonal xs sl"><span class="msr" style="font-size: 18px">content_paste</span>Paste style</button>
+        <button class="btn tonal xs sl"><span class="msr" style="font-size: 18px">bookmark_add</span>Save preset</button>
+        <button class="btn tonal xs sl"><span class="msr" style="font-size: 18px">ios_share</span>Export</button>
+        <button class="btn text xs sl">Reset this property</button><button class="btn text xs sl">Reset element</button>
+      </div>
+      <div class="divider"></div>
+      <span class="title-s">Animation and transition</span>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="height: 40px; border-radius: 12px; background: var(--md-surface-container-highest); position: relative; overflow: hidden">
+          <div style="position: absolute; left: 8%; width: 30%; top: 8px; bottom: 8px; border-radius: 8px; background: var(--md-primary-container); color: var(--md-on-primary-container); display: flex; align-items: center; padding: 0 10px" class="label-s">background · 200ms</div>
+          <div style="position: absolute; left: 20%; width: 55%; top: 8px; bottom: 8px; border-radius: 8px; background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); display: flex; align-items: center; padding: 0 10px; opacity: .9" class="label-s">shape · fast spatial spring</div>
+          <div style="position: absolute; left: 44%; top: 0; bottom: 0; width: 2px; background: var(--md-primary)"></div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center"><span class="chip on" style="height: 28px">On hover</span><span class="chip" style="height: 28px">Interrupt: reverse</span><span class="chip" style="height: 28px">Reduced motion: snap</span><button class="ibtn sm tonal sl" aria-label="Play preview" style="margin-left: auto"><span class="msr fill">play_arrow</span></button></div>
+      </div>
+    </div>
+  </aside>
+
+  <section class="pane" aria-label="App logo" style="position: absolute; left: 1124px; top: 40px; width: 280px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+    <span class="title-m">App logo</span>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+      <div style="aspect-ratio: 1; border-radius: 20px; background: var(--md-primary-container); color: var(--md-on-primary-container); display: grid; place-items: center; box-shadow: 0 0 0 3px var(--md-primary)"><span class="msr fill" style="font-size: 32px">hub</span></div>
+      <div style="aspect-ratio: 1; border-radius: 50%; background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); display: grid; place-items: center"><span class="msr" style="font-size: 32px">terminal</span></div>
+      <div style="aspect-ratio: 1; border-radius: 12px; background: #090F0D; color: #87D6BC; display: grid; place-items: center"><span class="mono" style="font-size: 22px; font-weight: 500">&gt;_</span></div>
+    </div>
+    <div style="height: 120px; border-radius: 20px; border: 2px dashed var(--md-outline); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px" class="body-s muted"><span class="msr">add_photo_alternate</span>Upload your own image<span>Checked and converted on this PC</span></div>
+    <div class="body-s muted" style="display: flex; gap: 8px; align-items: center"><span class="msr" style="font-size: 18px">crop</span>Crop · fit · focal point · safe area</div>
+    <div class="divider"></div>
+    <span class="title-m">Accessibility</span>
+    <div style="display: flex; align-items: center; gap: 8px"><span class="body-m" style="flex: 1">Text size</span><div class="bgroup"><button class="btn xs sl">100</button><button class="btn xs sl on">125</button><button class="btn xs sl">150</button><button class="btn xs sl">200</button></div></div>
+    <div style="display: flex; align-items: center; gap: 8px"><span class="body-m" style="flex: 1">High contrast</span><span class="switch" role="img" aria-label="Off"></span></div>
+    <div style="display: flex; align-items: center; gap: 8px"><span class="body-m" style="flex: 1">Larger targets</span><span class="switch on" role="img" aria-label="On"></span></div>
+    <div style="display: flex; align-items: center; gap: 8px"><span class="body-m" style="flex: 1">Motion</span><div class="bgroup"><button class="btn xs sl on">Full</button><button class="btn xs sl">Gentle</button><button class="btn xs sl">Off</button></div></div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

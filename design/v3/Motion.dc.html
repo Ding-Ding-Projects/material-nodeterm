@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Motion and transitions</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./v3.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=Roboto+Mono:wght@400;500&amp;family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0&amp;display=block" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#87D6BC}a:hover{color:#A3F2D7}
+</style>
+</helmet>
+<div class="v3" style="width: 1440px; height: 1400px; padding: 56px 64px; display: flex; flex-direction: column; gap: 28px; overflow: hidden">
+  <div style="display: flex; align-items: flex-end; gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 4px"><span class="label-l" style="color: var(--md-primary)">Motion system</span><h1 class="display-m" style="margin: 0">Everything moves for a reason</h1></div>
+    <div style="margin-left: auto; display: flex; gap: 8px; align-items: center"><span class="body-m muted">Preview as</span>
+      <div class="bgroup"><button class="btn sl {{fullCls}}" onClick="{{setFull}}">Full motion</button><button class="btn sl {{redCls}}" onClick="{{setReduced}}">Reduced</button></div>
+      <button class="btn filled sl" onClick="{{replay}}"><span class="msr">replay</span>Replay</button></div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px" data-motion="{{mode}}">
+    <section class="pane" style="padding: 24px; display: flex; flex-direction: column; gap: 14px; height: 300px">
+      <span class="title-m">Press morph</span><span class="body-s muted">Round to square on press, fast spatial spring, 350 ms.</span>
+      <div style="flex: 1; display: grid; place-items: center"><button class="btn filled lg sl" onClick="{{toggleMorph}}" style="border-radius: {{morphRad}}; transition: border-radius {{dur350}} var(--spring-fast-spatial), transform {{dur350}} var(--spring-fast-spatial); transform: scale({{morphScale}})">Press me</button></div>
+    </section>
+    <section class="pane" style="padding: 24px; display: flex; flex-direction: column; gap: 14px; height: 300px">
+      <span class="title-m">FAB opens into a menu</span><span class="body-s muted">Container transform: the FAB grows into the menu surface.</span>
+      <div style="flex: 1; position: relative">
+        <div style="position: absolute; left: 0; bottom: 0; width: {{fabW}}; height: {{fabH}}; border-radius: {{fabR}}; background: var(--md-primary-container); color: var(--md-on-primary-container); overflow: hidden; transition: all {{dur500}} var(--spring-default-spatial); display: flex; flex-direction: column; padding: 8px; gap: 2px">
+          <button class="ibtn sl" onClick="{{toggleFab}}" aria-label="Toggle menu" style="color: inherit"><span class="msr">{{fabIcon}}</span></button>
+          <div class="mi" style="opacity: {{fabItems}}; transition: opacity {{dur200}}">Terminal</div><div class="mi" style="opacity: {{fabItems}}; transition: opacity {{dur200}}">Coding agent</div><div class="mi" style="opacity: {{fabItems}}; transition: opacity {{dur200}}">Editor</div>
+        </div>
+      </div>
+    </section>
+    <section class="pane" style="padding: 24px; display: flex; flex-direction: column; gap: 14px; height: 300px">
+      <span class="title-m">Nodes arrive in a stagger</span><span class="body-s muted">Rise 16 px and fade, 40 ms apart, default spatial spring.</span>
+      <div class="stagger" style="display: flex; flex-direction: column; gap: 6px" data-replay="{{tick}}">
+        <div class="li" style="min-height: 40px">Claude Code</div><div class="li" style="min-height: 40px">pwsh · tests</div><div class="li" style="min-height: 40px">Sticky note</div>
+      </div>
+    </section>
+    <section class="pane" style="padding: 24px; display: flex; flex-direction: column; gap: 14px; height: 300px">
+      <span class="title-m">Rail selection</span><span class="body-s muted">Indicator pill stretches 56 → 64 px and icon fills.</span>
+      <div style="flex: 1; display: flex; gap: 8px; align-items: center; justify-content: center">
+        <sc-for list="{{rail}}" as="r" hint-placeholder-count="3"><button class="ri sl" onClick="{{r.pick}}"><span class="pill" style="width: {{r.w}}; background: {{r.bg}}; transition: width {{dur350}} var(--spring-fast-spatial), background-color {{dur200}}"><span class="msr">{{r.icon}}</span></span>{{r.label}}</button></sc-for>
+      </div>
+    </section>
+    <section class="pane" style="padding: 24px; display: flex; flex-direction: column; gap: 14px; height: 300px">
+      <span class="title-m">Loading and progress</span><span class="body-s muted">Shape-morph loader and wavy progress; both settle when motion is reduced.</span>
+      <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 20px; align-items: center"><div class="loader" style="animation-play-state: {{play}}"></div><div class="wavy" style="--p: 66%; --rest: 33%; width: 100%"></div></div>
+    </section>
+    <section class="pane" style="padding: 24px; display: flex; flex-direction: column; gap: 14px; height: 300px">
+      <span class="title-m">Live data</span><span class="body-s muted">Values roll in place; the live dot pulses only while data streams.</span>
+      <div style="flex: 1; display: flex; align-items: center; gap: 16px; justify-content: center"><span class="dot live" style="width: 12px; height: 12px; background: var(--md-success); color: var(--md-success)"></span><span class="display-m" style="font-variant-numeric: tabular-nums">{{num}}%</span></div>
+    </section>
+  </div>
+
+  <section class="pane" style="padding: 24px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 6px"><span class="label-m muted">FAST SPATIAL</span><span class="mono body-s">cubic-bezier(.42,1.67,.21,.90)</span><span class="body-s">350 ms · presses, toggles, chips</span></div>
+    <div style="display: flex; flex-direction: column; gap: 6px"><span class="label-m muted">DEFAULT SPATIAL</span><span class="mono body-s">cubic-bezier(.38,1.21,.22,1)</span><span class="body-s">500 ms · menus, FAB, nodes, panels</span></div>
+    <div style="display: flex; flex-direction: column; gap: 6px"><span class="label-m muted">SLOW SPATIAL</span><span class="mono body-s">cubic-bezier(.39,1.29,.35,.98)</span><span class="body-s">650 ms · page and destination changes</span></div>
+    <div style="display: flex; flex-direction: column; gap: 6px"><span class="label-m muted">EFFECTS</span><span class="mono body-s">cubic-bezier(.34,.80,.34,1)</span><span class="body-s">200 ms · colour, opacity, state layers</span></div>
+  </section>
+  <section class="card outlined" style="border-radius: 24px; padding: 20px 24px; display: flex; gap: 16px; align-items: flex-start">
+    <span class="msr" style="color: var(--md-tertiary)">motion_photos_off</span>
+    <div style="display: flex; flex-direction: column; gap: 6px"><span class="title-s">Reduced-motion path, required on every animated surface</span>
+      <span class="body-m muted">The OS setting, the app's Motion = Off, Low stimulation and the per-element Animation tab all compose. Springs snap, staggers appear at once, the loader is a still circle, the rainbow settles on one hue, live dots stop pulsing, and every state also shows in colour, icon or text.</span></div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1400}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { reduced: false, morph: false, fab: false, sel: 0, tick: 0, num: 37 }; }
+  componentDidMount() { this.iv = setInterval(() => { if (!this.state.reduced) this.setState({ num: 30 + Math.round(Math.random() * 15) }); }, 1600); }
+  componentWillUnmount() { clearInterval(this.iv); }
+  renderVals() {
+    const s = this.state, r = s.reduced;
+    const d = (ms) => (r ? '1ms' : ms + 'ms');
+    const R = [['Canvas','workspaces'],['Board','view_kanban'],['Tools','construction']];
+    return {
+      mode: r ? 'reduced' : 'full', fullCls: r ? '' : 'on', redCls: r ? 'on' : '', play: r ? 'paused' : 'running',
+      setFull: () => this.setState({ reduced: false }), setReduced: () => this.setState({ reduced: true }),
+      replay: () => this.setState({ tick: s.tick + 1, morph: false, fab: false }), tick: s.tick,
+      dur200: d(200), dur350: d(350), dur500: d(500),
+      morphRad: s.morph ? '16px' : '999px', morphScale: s.morph ? '0.96' : '1', toggleMorph: () => this.setState({ morph: !s.morph }),
+      fabW: s.fab ? '240px' : '56px', fabH: s.fab ? '196px' : '56px', fabR: s.fab ? '28px' : '16px', fabIcon: s.fab ? 'close' : 'add', fabItems: s.fab ? '1' : '0',
+      toggleFab: () => this.setState({ fab: !s.fab }), num: s.num,
+      rail: R.map(([label, icon], i) => ({ label, icon, w: s.sel === i ? '64px' : '56px', bg: s.sel === i ? 'var(--md-secondary-container)' : 'transparent', pick: () => this.setState({ sel: i }) }))
+    };
+  }
+}
+</script>
+</body>
+</html>

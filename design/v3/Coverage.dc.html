@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Feature coverage map</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./v3.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=Roboto+Mono:wght@400;500&amp;family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0&amp;display=block" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#87D6BC}a:hover{color:#A3F2D7}
+</style>
+</helmet>
+<div class="v3" style="width: 1440px; height: 1120px; padding: 48px 56px; display: flex; flex-direction: column; gap: 20px; overflow: hidden">
+  <div style="display: flex; align-items: flex-end; gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 4px"><span class="label-l" style="color: var(--md-primary)">Completeness inventory</span><h1 class="headline-l" style="margin: 0">Every app-facing contract, and the board that draws it</h1></div>
+    <span class="chip on" style="margin-left: auto">{{count}} contracts · {{drawn}} drawn · {{na}} not applicable</span>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 16px">
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="78">
+      <div style="display: flex; align-items: center; gap: 8px; min-height: 26px; padding: 2px 10px; border-radius: 8px; background: var(--md-surface-container-low)">
+        <span class="msr fill" style="font-size: 16px; color: {{r.color}}">{{r.icon}}</span>
+        <span class="mono" style="font-size: 11.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{r.id}}</span>
+        <span class="body-s muted" style="white-space: nowrap">{{r.where}}</span>
+      </div>
+    </sc-for>
+  </div>
+  <p class="body-s muted" style="margin: 0">Drawn means the canvas shows the surface and its states. It does not mean built or verified; the app's own inventory and checks decide that.</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1120}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const M = [
+      ['job-experience-document-label','n/a: no job workflow'],['language','Settings · Compact'],['funny-emoji','Settings'],['personal-vocabulary','Settings'],
+      ['vocabulary-drop-apply','Settings'],['school-mode','Settings · Safety'],['narration','Settings'],['action-sound-effects','Settings'],
+      ['scheduled-settings','Settings'],['display-name','Settings'],['adhd-modes','Settings · Motion'],['dim-sum','Settings'],
+      ['dim-sum-photo-source','History · Status'],['material-design','Main · all'],['workflow-navigation','Workspace'],['motion','Motion · all'],
+      ['live-charts','Status · Workspace'],['appearance-editor','Appearance x2'],['color-picker','Appearance'],['logo-customization','Appearance'],
+      ['overlay-panels','Overlays'],['collapse-filters','Board'],['accessibility-sizing','Overlays · Compact'],['functional-ui','Workspace · all'],
+      ['onboarding-wizard','Onboarding'],['tabs','Workspace'],['regex-search','Regex · every search'],['command-palette','Palette'],
+      ['context-menus','Overlays · Board · Main'],['menu-shortcuts','Board · Overlays'],['rich-controls','Palette'],['guided-forms','Overlays · Onboarding'],
+      ['info-icon-guidance','Overlays · Settings'],['settings-explanations','Overlays · Settings'],['blank-editors','Appearance presets'],['super-confirmation','Safety'],
+      ['element-locks','Safety · Board'],['support-tickets','Safety'],['unlock-ladder','Safety'],['authenticator','Safety'],
+      ['qr-pairing','Safety'],['honest-monetization','Status'],['local-history','History'],['exports','History'],
+      ['bulk-actions','Board · Overlays'],['changelog','History'],['offline-docs','History'],['rendered-provider-text','History'],
+      ['notifications','Overlays'],['file-converter','Tools'],['base64-tools','Tools'],['minecraft-server-manager','Tools'],
+      ['minecraft-world-generator','Tools'],['ollama-suite','Tools'],['external-editor','Tools'],['download-handoff','Overlays'],
+      ['forge-publishing','Overlays · Status'],['progress-recovery','Overlays · Status'],['drawesome-drawing','Tools'],['completeness-parity','this board'],
+      ['front-provenance','Workspace · Status'],['product-evidence','frames in design/v3'],['screen-recording','n/a: release step'],['design-reference-parity','design/v3'],
+      ['cheap-jor-matrix','Compact'],['vendored-fonts','Main (shipped fonts)'],['vocabulary-unlock-boundary','n/a: public copy'],['status-hub','Status'],
+      ['discord-status-bridge','Status'],['panic-webhooks','Status'],['tidbyt-displays','n/a: suspended'],['bundled-dependencies','Tools (bundled rows)'],
+      ['squirrel-installer','Status (update)'],['auto-updates','Status'],['app-icon','Main · Appearance'],['dim-sum-code-names','History · Status']
+    ];
+    const rows = M.map(([id, where]) => {
+      const na = where.startsWith('n/a');
+      return { id, where, icon: na ? 'remove_circle' : 'check_circle', color: na ? 'var(--md-outline)' : 'var(--md-success)' };
+    });
+    const na = rows.filter(r => r.icon === 'remove_circle').length;
+    return { rows, count: rows.length, drawn: rows.length - na, na };
+  }
+}
+</script>
+</body>
+</html>

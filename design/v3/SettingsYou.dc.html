@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings: language, voice and modes</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./v3.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=Roboto+Mono:wght@400;500&amp;family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0&amp;display=block" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#87D6BC}a:hover{color:#A3F2D7}
+</style>
+</helmet>
+<div class="v3" style="width: 100%; height: 1120px; display: flex; background: var(--md-surface-container); overflow: hidden">
+  <aside style="width: 300px; padding: 20px 12px 20px 20px; display: flex; flex-direction: column; gap: 12px">
+    <h1 class="headline-s" style="margin: 4px 8px">Settings</h1>
+    <div class="search" style="height: 44px"><span class="msr">search</span><span class="body-m" style="flex: 1">Search settings</span><span class="regex">.*</span></div>
+    <div class="list" style="gap: 2px">
+      <div class="li sel" style="min-height: 48px"><span class="msr fill">translate</span><span class="title-s">Language and voice</span></div>
+      <div class="li" style="min-height: 48px"><span class="msr">psychology</span><span class="title-s">Modes</span></div>
+      <div class="li" style="min-height: 48px"><span class="msr">palette</span><span class="title-s">Appearance</span></div>
+      <div class="li" style="min-height: 48px"><span class="msr">schedule</span><span class="title-s">Schedules</span></div>
+      <div class="li" style="min-height: 48px"><span class="msr">smart_toy</span><span class="title-s">Agents</span></div>
+      <div class="li" style="min-height: 48px"><span class="msr">terminal</span><span class="title-s">Terminals</span></div>
+      <div class="li" style="min-height: 48px"><span class="msr">shield_lock</span><span class="title-s">Locks and safety</span></div>
+      <div class="li" style="min-height: 48px"><span class="msr">update</span><span class="title-s">Updates</span></div>
+    </div>
+    <div class="card filled" style="margin-top: auto; border-radius: 20px; display: flex; flex-direction: column; gap: 6px"><span class="label-m muted">GLOBAL · PROJECT</span><span class="body-s">Project overrides show a dot. Every change is in History and can be undone.</span></div>
+  </aside>
+  <main style="flex: 1; min-width: 0; margin: 12px 12px 12px 0; border-radius: 32px; background: var(--md-surface); padding: 32px 40px; display: flex; flex-direction: column; gap: 24px; overflow: hidden">
+    <section class="stagger" style="display: flex; flex-direction: column; gap: 12px">
+      <h2 class="title-l" style="margin: 0">Language</h2>
+      <div class="card filled" style="border-radius: 24px; display: flex; flex-direction: column; gap: 16px; padding: 20px">
+        <div style="display: flex; align-items: center; gap: 16px"><div style="flex: 1; display: flex; flex-direction: column"><span class="title-s">Interface language</span><span class="body-s muted">Bilingual shows English with Cantonese beneath it.</span></div>
+          <div class="bgroup"><button class="btn sl">English</button><button class="btn sl">廣東話</button><button class="btn sl on">Bilingual</button></div><button class="ibtn sm sl" aria-label="About interface language"><span class="msr">info</span></button></div>
+        <div class="divider"></div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+          <div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; align-items: center"><span class="title-s">Funny level · English</span><span class="label-l" style="margin-left: auto; color: var(--md-primary)">3 · Cheeky</span></div>
+            <div class="slider"><div class="trk"><div class="act" style="width: 60%"></div></div><div class="hnd" style="left: calc(60% + 2px)"></div></div><span class="body-s muted">“Terminal took a nap. Waking it.”</span></div>
+          <div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; align-items: center"><span class="title-s">Funny level · 廣東話</span><span class="label-l" style="margin-left: auto; color: var(--md-primary)">4 · 好鬼死搞笑</span></div>
+            <div class="slider"><div class="trk"><div class="act" style="width: 80%"></div></div><div class="hnd" style="left: calc(80% + 2px)"></div></div><span class="body-s muted">「個終端瞓著咗，叫醒佢先。」</span></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px"><div style="flex: 1; display: flex; flex-direction: column"><span class="title-s">Emoji in dialogs</span><span class="body-s muted">Adds one emoji to dialog titles. Off keeps dialogs plain.</span></div><button class="switch sl {{emojiCls}}" style="border: 0" onClick="{{toggleEmoji}}" aria-pressed="{{emoji}}" aria-label="Emoji in dialogs"></button></div>
+        <div style="display: flex; align-items: center; gap: 16px"><div style="flex: 1; display: flex; flex-direction: column"><span class="title-s">Personal vocabulary</span><span class="body-s muted">Upload or drop a vocabulary JSON anywhere on the window. It stays on this PC.</span></div>
+          <div style="width: 320px; height: 56px; border-radius: 16px; border: 2px dashed var(--md-outline); display: flex; align-items: center; justify-content: center; gap: 8px" class="body-m muted"><span class="msr">upload_file</span>Drop JSON or browse</div></div>
+      </div>
+    </section>
+    <section style="display: flex; flex-direction: column; gap: 12px">
+      <h2 class="title-l" style="margin: 0">Voice</h2>
+      <div class="card filled" style="border-radius: 24px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 20px; align-items: center">
+        <div style="display: flex; align-items: center; gap: 12px"><span class="title-s" style="flex: 1">Narrator</span><button class="switch sl {{narCls}}" style="border: 0" onClick="{{toggleNar}}" aria-pressed="{{nar}}" aria-label="Narrator"></button></div>
+        <div class="field outl"><div class="box" style="height: 48px"><span class="body-m" style="flex: 1">English voice · Aria</span><span class="msr">arrow_drop_down</span></div></div>
+        <div class="field outl"><div class="box" style="height: 48px"><span class="body-m" style="flex: 1">廣東話 voice · HiuGaai</span><span class="msr">arrow_drop_down</span></div></div>
+        <div style="display: flex; align-items: center; gap: 12px"><span class="title-s" style="flex: 1">Action sounds</span><span class="switch on" role="img" aria-label="On"></span></div>
+        <div style="grid-column: span 2; display: flex; gap: 8px"><button class="btn tonal xs sl"><span class="msr" style="font-size: 18px">play_arrow</span>Preview</button><span class="body-s muted" style="align-self: center">Secrets and tokens are never read aloud.</span></div>
+      </div>
+    </section>
+    <section style="display: flex; flex-direction: column; gap: 12px">
+      <h2 class="title-l" style="margin: 0">Modes</h2>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+        <div class="card filled hover" style="border-radius: 24px; display: flex; flex-direction: column; gap: 10px"><span class="msr" style="color: var(--md-primary)">school</span><span class="title-s">School mode</span><span class="body-s muted">Plain wording, no jokes, games stay hidden.</span><span class="switch" role="img" aria-label="Off" style="margin-top: auto"></span></div>
+        <div class="card filled hover" style="border-radius: 24px; display: flex; flex-direction: column; gap: 10px"><span class="msr" style="color: var(--md-primary)">child_care</span><span class="title-s">Kids mode</span><span class="body-s muted">Big buttons, safe commands, a grown-up PIN to leave.</span><span class="switch" role="img" aria-label="Off" style="margin-top: auto"></span></div>
+        <div class="card filled hover" style="border-radius: 24px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 0 0 2px var(--md-primary)"><span class="msr" style="color: var(--md-primary)">neurology</span><span class="title-s">ADHD modes</span><div style="display: flex; flex-wrap: wrap; gap: 6px"><span class="chip on" style="height: 28px">Focus</span><span class="chip" style="height: 28px">Low stimulation</span><span class="chip" style="height: 28px">Body double</span></div><span class="switch on" role="img" aria-label="On" style="margin-top: auto"></span></div>
+        <div class="card filled hover" style="border-radius: 24px; display: flex; flex-direction: column; gap: 10px"><span class="msr" style="color: var(--md-primary)">ramen_dining</span><span class="title-s">Dim sum surprise</span><span class="body-s muted">A small dim sum card now and then, from the public photo set.</span><span class="switch on" role="img" aria-label="On" style="margin-top: auto"></span></div>
+      </div>
+    </section>
+    <section style="display: flex; flex-direction: column; gap: 12px">
+      <h2 class="title-l" style="margin: 0">Schedules and identity</h2>
+      <div class="list">
+        <div class="li"><span class="msr">schedule</span><div style="flex: 1; display: flex; flex-direction: column"><span class="title-s">Weeknights 22:00 to 07:00</span><span class="body-s muted">Light theme off · Low stimulation on · sounds off</span></div><span class="chip" style="height: 28px">Active now</span><button class="ibtn sm sl" aria-label="Edit schedule"><span class="msr">edit</span></button></div>
+        <div class="li"><span class="msr">link</span><div style="flex: 1; display: flex; flex-direction: column"><span class="title-s">External source · team-defaults.json</span><span class="body-s muted">Checked 4 min ago · 3 settings applied, 1 refused</span></div><button class="btn text xs sl">Review</button></div>
+        <div class="li"><span class="msr">badge</span><div style="flex: 1; display: flex; flex-direction: column"><span class="title-s">Display name</span><span class="body-s muted">Shown in the title bar and notifications. Installed files keep their name.</span></div><span class="body-m">nodeterm</span><button class="ibtn sm sl" aria-label="Rename"><span class="msr">edit</span></button></div>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1120}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { emoji: true, nar: false }; }
+  renderVals() {
+    return {
+      emoji: String(this.state.emoji), nar: String(this.state.nar),
+      emojiCls: this.state.emoji ? 'on' : '',
+      narCls: this.state.nar ? 'on' : '',
+      toggleEmoji: () => this.setState({ emoji: !this.state.emoji }),
+      toggleNar: () => this.setState({ nar: !this.state.nar })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>nodeterm v3 tokens and components</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./v3.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=Roboto+Mono:wght@400;500&amp;family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0&amp;display=block" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#87D6BC}a:hover{color:#A3F2D7}
+</style>
+</helmet>
+<div class="v3" style="width: 1440px; height: 1180px; padding: 56px 64px; display: flex; flex-direction: column; gap: 40px; overflow: hidden">
+  <div style="display: flex; align-items: flex-end; gap: 24px">
+    <div style="width: 72px; height: 72px; border-radius: 24px; background: var(--md-primary-container); color: var(--md-on-primary-container); display: grid; place-items: center">
+      <span class="msr fill" style="font-size: 40px">hub</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <span class="label-l" style="color: var(--md-primary)">nodeterm 3 · Material 3 Expressive</span>
+      <h1 class="display-m" style="margin: 0">Every session, a living node</h1>
+    </div>
+    <div style="margin-left: auto; display: flex; gap: 8px">
+      <span class="chip on"><span class="msr">dark_mode</span>Dark default</span>
+      <span class="chip"><span class="msr">light_mode</span>Light</span>
+      <span class="chip"><span class="msr">palette</span>Seed #1F8A70</span>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+    <section class="pane" style="padding: 24px; display: flex; flex-direction: column; gap: 16px">
+      <h2 class="title-l" style="margin: 0">Colour roles</h2>
+      <div class="stagger" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+        <div style="height: 72px; border-radius: 16px; background: var(--md-primary); color: var(--md-on-primary); padding: 10px" class="label-m">primary</div>
+        <div style="height: 72px; border-radius: 16px; background: var(--md-primary-container); color: var(--md-on-primary-container); padding: 10px" class="label-m">primary container</div>
+        <div style="height: 72px; border-radius: 16px; background: var(--md-secondary-container); color: var(--md-on-secondary-container); padding: 10px" class="label-m">secondary container</div>
+        <div style="height: 72px; border-radius: 16px; background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); padding: 10px" class="label-m">tertiary container</div>
+        <div style="height: 72px; border-radius: 16px; background: var(--md-error-container); color: var(--md-on-error-container); padding: 10px" class="label-m">error container</div>
+        <div style="height: 72px; border-radius: 16px; background: var(--md-warning-container); color: var(--md-on-warning-container); padding: 10px" class="label-m">warning container</div>
+        <div style="height: 72px; border-radius: 16px; background: var(--md-success-container); color: var(--md-on-success-container); padding: 10px" class="label-m">success container</div>
+        <div style="height: 72px; border-radius: 16px; background: var(--term-bg); color: var(--term-fg); padding: 10px; box-shadow: inset 0 0 0 1px var(--md-outline-variant)" class="label-m">terminal body</div>
+      </div>
+      <div style="display: flex; gap: 4px; height: 40px">
+        <div style="flex: 1; border-radius: 12px 4px 4px 12px; background: var(--md-surface-container-lowest)"></div>
+        <div style="flex: 1; border-radius: 4px; background: var(--md-surface-container-low)"></div>
+        <div style="flex: 1; border-radius: 4px; background: var(--md-surface-container)"></div>
+        <div style="flex: 1; border-radius: 4px; background: var(--md-surface-container-high)"></div>
+        <div style="flex: 1; border-radius: 4px 12px 12px 4px; background: var(--md-surface-container-highest)"></div>
+      </div>
+      <p class="body-s muted" style="margin: 0">Tonal surface ladder, lowest to highest. Data colours (agent accounts, charts, diff lines) stay data, never chrome.</p>
+    </section>
+
+    <section class="pane" style="padding: 24px; display: flex; flex-direction: column; gap: 10px">
+      <h2 class="title-l" style="margin: 0 0 6px">Type: Outfit + Roboto Mono</h2>
+      <span class="display-m">Display 45</span>
+      <span class="headline-m">Headline 28 emphasized</span>
+      <span class="title-l">Title 22 · node names</span>
+      <span class="body-l">Body 16 reads at every scale from 100 to 200%.</span>
+      <span class="label-l muted">LABEL 14 · BUTTONS AND TABS</span>
+      <span class="mono" style="font-size: 13px; color: var(--md-primary)">$ claude --resume  # mono 13</span>
+    </section>
+
+    <section class="pane" style="padding: 24px; display: flex; flex-direction: column; gap: 16px">
+      <h2 class="title-l" style="margin: 0">Shape scale and morph</h2>
+      <div style="display: flex; gap: 12px; align-items: flex-end">
+        <div style="width: 48px; height: 48px; border-radius: 4px; background: var(--md-tertiary-container)"></div>
+        <div style="width: 48px; height: 48px; border-radius: 12px; background: var(--md-tertiary-container)"></div>
+        <div style="width: 48px; height: 48px; border-radius: 16px; background: var(--md-tertiary-container)"></div>
+        <div style="width: 48px; height: 48px; border-radius: 28px 28px 28px 8px; background: var(--md-tertiary-container)"></div>
+        <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--md-tertiary-container)"></div>
+        <div class="loader" style="width: 48px; height: 48px"></div>
+      </div>
+      <p class="body-m muted" style="margin: 0">Pressed controls trade round for square on a fast spatial spring; the loading indicator morphs through the shape set and settles to a circle when motion is reduced.</p>
+      <div class="wavy" style="--p: 64%; --rest: 33%"></div>
+      <div class="lin"><i style="width: 42%"></i></div>
+    </section>
+  </div>
+
+  <section class="pane" style="padding: 28px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px">
+    <div style="display: flex; flex-direction: column; gap: 18px">
+      <h2 class="title-l" style="margin: 0">Buttons</h2>
+      <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center">
+        <button class="btn filled sl"><span class="msr">terminal</span>New terminal</button>
+        <button class="btn tonal sl">Resume agent</button>
+        <button class="btn outlined sl">Open folder</button>
+        <button class="btn text sl">Learn more</button>
+        <button class="btn elevated sl"><span class="msr">sync</span>Sync</button>
+        <button class="btn danger sl">Delete</button>
+      </div>
+      <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap">
+        <div class="bgroup">
+          <button class="btn sl on"><span class="msr">grid_view</span>Canvas</button>
+          <button class="btn sl"><span class="msr">view_kanban</span>Board</button>
+          <button class="btn sl"><span class="msr">account_tree</span>Graph</button>
+        </div>
+        <div class="split">
+          <button class="btn filled sl"><span class="msr">smart_toy</span>Launch Claude Code</button>
+          <button class="btn filled sl" aria-label="Choose agent"><span class="msr">keyboard_arrow_down</span></button>
+        </div>
+      </div>
+      <div style="display: flex; gap: 12px; align-items: center">
+        <button class="ibtn sl" aria-label="Search"><span class="msr">search</span></button>
+        <button class="ibtn tonal sl" aria-label="Split"><span class="msr">splitscreen_right</span></button>
+        <button class="ibtn sel sl" aria-label="Pinned"><span class="msr fill">push_pin</span></button>
+        <button class="ibtn filled wide sl" aria-label="Run"><span class="msr fill">play_arrow</span></button>
+        <button class="fab sl" aria-label="New node"><span class="msr">add</span></button>
+        <button class="fab sl"><span class="msr">bolt</span>New agent</button>
+        <button class="fab lg sl" aria-label="Create"><span class="msr">add</span></button>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 18px">
+      <h2 class="title-l" style="margin: 0">Inputs and selection</h2>
+      <div class="search"><span class="msr">search</span><span class="body-l" style="flex: 1">Search nodes, settings and commands</span><span class="regex">.*</span><span class="kbd">Ctrl Shift F</span></div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <span class="chip on"><span class="msr">check</span>Running</span>
+        <span class="chip">Needs you</span>
+        <span class="chip"><span class="msr">filter_list</span>Worktree</span>
+        <span class="chip"><span class="msr">lock</span>Locked</span>
+      </div>
+      <div style="display: flex; gap: 24px; align-items: center">
+        <span class="switch on" role="img" aria-label="Switch on"></span>
+        <span class="switch" role="img" aria-label="Switch off"></span>
+        <div class="slider" style="flex: 1"><div class="trk"><div class="act" style="width: 58%"></div></div><div class="hnd" style="left: calc(58% + 4px)"></div></div>
+      </div>
+      <div class="field"><div class="box focus"><div style="display: flex; flex-direction: column"><span class="lbl" style="color: var(--md-primary)">Project name</span><span class="body-l">material-nodeterm</span></div><span class="msr" style="margin-left: auto">info</span></div><span class="sup">Display name only. The folder on disk keeps its name.</span></div>
+    </div>
+  </section>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+    <div class="list">
+      <div class="li sel"><div class="lead"><span class="msr fill">smart_toy</span></div><div style="display: flex; flex-direction: column"><span class="title-s">Claude Code · auth refactor</span><span class="body-s">Running 12 min · 41% context</span></div><span class="dot live" style="margin-left: auto; background: var(--md-success); color: var(--md-success)"></span></div>
+      <div class="li"><div class="lead" style="background: var(--md-tertiary-container); color: var(--md-on-tertiary-container)"><span class="msr">terminal</span></div><div style="display: flex; flex-direction: column"><span class="title-s">pwsh · build</span><span class="body-s muted">Idle</span></div></div>
+      <div class="li"><div class="lead" style="background: var(--md-surface-container-highest); color: var(--md-on-surface-variant)"><span class="msr">description</span></div><div style="display: flex; flex-direction: column"><span class="title-s">ROADMAP.md</span><span class="body-s muted">Editor node</span></div></div>
+    </div>
+    <div class="menu" style="position: relative">
+      <div class="search" style="height: 40px; margin: 4px; border-radius: 12px; background: var(--md-surface-container-highest)"><span class="msr" style="font-size: 20px">filter_list</span><span class="body-m muted" style="flex: 1">Filter</span><span class="regex">.*</span></div>
+      <div class="mi"><span class="msr">content_copy</span>Duplicate node<span class="kbd">Ctrl D</span></div>
+      <div class="mi on"><span class="msr">brush</span>Edit appearance…<span class="kbd">Alt E</span></div>
+      <div class="mi"><span class="msr">lock</span>Lock this element<span class="kbd">Ctrl L</span></div>
+      <div class="divider" style="margin: 4px 8px"></div>
+      <div class="mi danger"><span class="msr" style="color: inherit">delete</span>Close node<span class="kbd">Ctrl W</span></div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div class="snack"><span style="flex: 1">Worktree feat/auth created</span><button class="btn text sl">Open</button></div>
+      <div class="card filled" style="display: flex; gap: 12px; align-items: center"><span class="msr" style="color: var(--md-primary)">info</span><span class="body-m">Every tooltip, menu and dialog paints its own surface and stays inside the window.</span></div>
+      <span class="tip" style="align-self: flex-start">Toggle minimap · M</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

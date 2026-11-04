@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tools</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./v3.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=Roboto+Mono:wght@400;500&amp;family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0&amp;display=block" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#87D6BC}a:hover{color:#A3F2D7}
+</style>
+</helmet>
+<div class="v3" style="width: 100%; height: 820px; display: flex; background: var(--md-surface-container); overflow: hidden">
+  <aside style="width: 260px; padding: 20px 12px 20px 20px; display: flex; flex-direction: column; gap: 10px">
+    <h1 class="headline-s" style="margin: 4px 8px">Tools</h1>
+    <div class="search" style="height: 40px"><span class="msr" style="font-size: 20px">search</span><span class="body-m" style="flex: 1">Search tools</span><span class="regex">.*</span></div>
+    <div class="list">
+      <div class="li" style="min-height: 46px"><span class="msr">transform</span><span class="title-s">File converter</span></div>
+      <div class="li" style="min-height: 46px"><span class="msr">data_object</span><span class="title-s">Base64</span></div>
+      <div class="li" style="min-height: 46px"><span class="msr">neurology</span><span class="title-s">Ollama</span></div>
+      <div class="li sel" style="min-height: 46px"><span class="msr fill">deployed_code</span><span class="title-s">Minecraft servers</span></div>
+      <div class="li" style="min-height: 46px"><span class="msr">draw</span><span class="title-s">Draw</span></div>
+      <div class="li" style="min-height: 46px"><span class="msr">tune</span><span class="title-s">Regex workbench</span></div>
+      <div class="li" style="min-height: 46px"><span class="msr">password</span><span class="title-s">Authenticator</span></div>
+      <div class="li" style="min-height: 46px"><span class="msr">upload</span><span class="title-s">Publish to GitHub</span></div>
+    </div>
+  </aside>
+  <main style="flex: 1; min-width: 0; margin: 12px 12px 12px 0; border-radius: 32px; background: var(--md-surface); padding: 24px 28px; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 18px">
+    <section style="grid-column: span 2; display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+      <div class="lead" style="width: 52px; height: 52px; border-radius: 18px; background: var(--md-success-container); color: var(--md-on-success-container); display: grid; place-items: center"><span class="msr fill">deployed_code</span></div>
+      <div style="display: flex; flex-direction: column"><span class="headline-s">survival-1.21</span><span class="body-s muted">Paper 1.21.4 · local Docker · port 25565</span></div>
+      <span class="chip" style="gap: 8px"><span class="dot live" style="background: var(--md-success); color: var(--md-success)"></span>Running · 3 players · 2.1 GB</span>
+      <div style="margin-left: auto; display: flex; gap: 8px"><button class="btn outlined sl"><span class="msr">backup</span>Back up</button><button class="btn tonal sl"><span class="msr">restart_alt</span>Restart</button><button class="btn filled sl"><span class="msr">stop</span>Stop gracefully</button></div>
+    </section>
+    <section class="pane" style="padding: 18px; display: flex; flex-direction: column; gap: 12px; background: var(--md-surface-container-low)">
+      <div style="display: flex; align-items: center; gap: 8px"><span class="title-m">World generator</span><span class="chip" style="height: 26px; font-size: 12px">from the 1.21.4 server jar</span></div>
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 16px">
+        <div style="aspect-ratio: 1.3; border-radius: 20px; background: var(--md-surface-container-lowest); background-image: linear-gradient(var(--md-outline-variant) 1px, transparent 1px), linear-gradient(90deg, var(--md-outline-variant) 1px, transparent 1px); background-size: 16px 16px; position: relative" role="application" aria-label="Generation area on the chunk grid; arrow keys move, Shift plus arrows resize">
+          <div style="position: absolute; left: 22%; top: 18%; width: 52%; height: 62%; border-radius: 6px; background: color-mix(in srgb, var(--md-primary) 25%, transparent); box-shadow: inset 0 0 0 2px var(--md-primary)">
+            <span class="label-s" style="position: absolute; left: 8px; top: 6px; color: var(--md-primary)">100 × 100 chunks</span>
+            <i style="position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; border-radius: 4px; background: var(--md-primary)"></i>
+            <i style="position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 4px; background: var(--md-primary)"></i>
+          </div>
+          <span class="msr fill" style="position: absolute; left: 47%; top: 47%; color: var(--md-tertiary)">location_on</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div class="field outl"><div class="box" style="height: 44px"><span class="body-s" style="flex: 1">Width 100</span><span class="msr">unfold_more</span></div></div>
+          <div class="field outl"><div class="box" style="height: 44px"><span class="body-s" style="flex: 1">Height 100</span><span class="msr">unfold_more</span></div></div>
+          <div class="field outl"><div class="box" style="height: 44px"><span class="body-s mono" style="flex: 1">Seed 8812044017</span><span class="msr">casino</span></div></div>
+          <div class="field outl"><div class="box" style="height: 44px"><span class="body-s" style="flex: 1">Preset: Default</span><span class="msr">arrow_drop_down</span></div></div>
+          <div style="display: flex; gap: 4px; flex-wrap: wrap"><span class="chip" style="height: 26px; font-size: 11px">Superflat layers</span><span class="chip" style="height: 26px; font-size: 11px">Biomes</span><span class="chip" style="height: 26px; font-size: 11px">Structures</span><span class="chip" style="height: 26px; font-size: 11px">Game rules 63</span><span class="chip" style="height: 26px; font-size: 11px">Border</span></div>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px"><div class="bgroup"><button class="btn xs sl on">Folder</button><button class="btn xs sl">ZIP</button></div><span class="body-s mono muted" style="flex: 1">D:\Worlds\survival-new</span><button class="btn outlined xs sl">Browse…</button><button class="btn filled xs sl">Accept EULA and generate</button></div>
+    </section>
+    <section style="display: flex; flex-direction: column; gap: 14px; min-height: 0">
+      <div class="pane" style="padding: 16px; display: flex; flex-direction: column; gap: 10px; background: var(--md-surface-container-low)">
+        <div style="display: flex; align-items: center; gap: 8px"><span class="msr" style="color: var(--md-primary)">transform</span><span class="title-m">Convert report.pdf</span></div>
+        <div class="list">
+          <div class="li" style="min-height: 44px"><span class="body-s" style="flex: 1">PDF → PNG pages</span><span class="body-s muted">bundled</span></div>
+          <div class="li" style="min-height: 44px"><span class="body-s" style="flex: 1">Split · merge · rotate · reorder</span><span class="body-s muted">bundled</span></div>
+          <div class="li" style="min-height: 44px; opacity: .6" aria-disabled="true"><span class="body-s" style="flex: 1">PDF → DOCX</span><span class="body-s">needs LibreOffice, not bundled</span></div>
+        </div>
+      </div>
+      <div class="pane" style="padding: 16px; display: flex; flex-direction: column; gap: 10px; background: var(--md-surface-container-low)">
+        <div style="display: flex; align-items: center; gap: 8px"><span class="msr" style="color: var(--md-primary)">data_object</span><span class="title-m">Base64</span><div class="bgroup" style="margin-left: auto"><button class="btn xs sl on">Standard</button><button class="btn xs sl">URL-safe</button><button class="btn xs sl">MIME</button></div></div>
+        <div style="display: flex; flex-direction: column; gap: 4px"><span class="body-s muted">logo.png · 48.2 KB → 64.3 KB · SHA-256 round trip verified</span><div class="wavy" style="--p: 100%; --rest: 0%"></div></div>
+      </div>
+      <div class="pane" style="padding: 16px; display: flex; flex-direction: column; gap: 10px; background: var(--md-surface-container-low)">
+        <div style="display: flex; align-items: center; gap: 8px"><span class="msr" style="color: var(--md-primary)">neurology</span><span class="title-m">Ollama</span><span class="chip" style="height: 26px; font-size: 12px; margin-left: auto">0.6.2 · running</span></div>
+        <div class="li" style="border-radius: 16px; min-height: 48px"><span class="body-s" style="flex: 1">qwen3-coder:30b</span><span class="body-s muted">18 GB</span><button class="btn text xs sl">Chat</button></div>
+      </div>
+      <div class="pane" style="padding: 12px 16px; display: flex; align-items: center; gap: 8px; background: var(--md-surface-container-low)">
+        <span class="msr" style="color: var(--md-primary)">code</span><span class="body-s" style="flex: 1">Open in VS Code · Insiders detected</span><button class="btn tonal xs sl">Open folder</button>
+      </div>
+      <div class="toolbar-float" style="align-self: flex-start; animation-delay: 160ms" role="toolbar" aria-label="Drawing pens">
+        <button class="ibtn sel sm sl" aria-label="Pen 1"><span class="msr">edit</span></button><button class="ibtn sm sl" aria-label="Marker"><span class="msr">ink_marker</span></button><button class="ibtn sm sl" aria-label="Highlighter"><span class="msr">ink_highlighter</span></button><button class="ibtn sm sl" aria-label="Brush"><span class="msr">brush</span></button><button class="ibtn sm sl" aria-label="Pencil"><span class="msr">stylus</span></button><button class="ibtn sm sl" aria-label="Calligraphy"><span class="msr">stylus_note</span></button><button class="ibtn sm sl" aria-label="Laser"><span class="msr">flare</span></button><button class="ibtn sm sl" aria-label="Eraser"><span class="msr">ink_eraser</span></button>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":820}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

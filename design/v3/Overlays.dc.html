@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Overlays, notifications and accessibility tools</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./v3.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=Roboto+Mono:wght@400;500&amp;family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0&amp;display=block" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#87D6BC}a:hover{color:#A3F2D7}
+</style>
+</helmet>
+<div class="v3" style="width: 100%; height: 1000px; position: relative; overflow: hidden; background: var(--md-surface); background-image: radial-gradient(var(--canvas-dot) 1.2px, transparent 1.4px); background-size: 24px 24px">
+
+  <section style="position: absolute; left: 32px; top: 32px; width: 380px; display: flex; flex-direction: column; gap: 10px">
+    <span class="label-l" style="color: var(--md-primary)">Every menu opens with its own filter</span>
+    <div class="menu" role="menu" aria-label="Terminal node menu">
+      <div class="search" style="height: 40px; margin: 4px; border-radius: 12px; background: var(--md-surface-container-highest)"><span class="msr" style="font-size: 20px">filter_list</span><span class="body-m" style="flex: 1">spl<span class="caret"></span></span><span class="regex">.*</span></div>
+      <div class="mi sl"><span class="msr">splitscreen_right</span>Split right<span class="kbd">Ctrl Shift D</span></div>
+      <div class="mi sl"><span class="msr">splitscreen_bottom</span>Split down<span class="kbd">Ctrl Alt D</span></div>
+      <div class="body-s muted" style="padding: 6px 12px">2 of 14 items · Esc clears</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 18px">
+      <span class="label-l" style="color: var(--md-primary)">Guide sits right above its control</span>
+      <div class="card" style="border-radius: 20px; background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); display: flex; flex-direction: column; gap: 6px; animation: v3pop .5s var(--spring-default-spatial) both">
+        <span class="label-m">STEP 1 OF 2 · AUTO-RESUME</span><span class="body-s">When an agent stops mid-task, nodeterm offers to continue it after a restart. Try it in the playground first; nothing real runs.</span>
+        <div style="display: flex; gap: 6px"><button class="btn text xs sl" style="color: inherit">Back</button><button class="btn text xs sl" style="color: inherit">Cancel</button><button class="btn filled xs sl" style="margin-left: auto">Next</button></div>
+      </div>
+      <div style="display: flex; align-items: flex-end; gap: 4px; margin-left: 260px"><button class="ibtn sm tonal sl" aria-label="Explain Auto-resume agents" style="width: 28px; height: 28px"><span class="msr" style="font-size: 18px">info</span></button></div>
+      <div class="li" style="border-radius: 20px"><span class="body-m" style="flex: 1">Auto-resume agents</span><span class="body-s muted">from settings.json</span><span class="switch on" role="img" aria-label="On"></span></div>
+      <span class="body-s muted">Default: off · you changed it 2026-10-30</span>
+    </div>
+  </section>
+
+  <aside class="dialog" aria-label="Notifications" style="position: absolute; left: 448px; top: 32px; width: 420px; height: 600px; padding: 0; border-radius: 28px; display: flex; flex-direction: column; overflow: hidden; resize: both">
+    <div style="display: flex; align-items: center; gap: 8px; padding: 18px 16px 8px 20px; cursor: move"><span class="title-m">Notifications</span><span class="badge">3</span><button class="ibtn sm sl" aria-label="Close" style="margin-left: auto"><span class="msr">close</span></button></div>
+    <div style="padding: 0 16px 8px; display: flex; gap: 8px"><div class="search" style="height: 40px; flex: 1"><span class="msr" style="font-size: 20px">search</span><span class="body-m" style="flex: 1">Search</span><span class="regex">.*</span></div><button class="btn tonal xs sl" style="height: 40px">Select</button></div>
+    <div class="list stagger" style="padding: 0 12px">
+      <div class="li" style="align-items: flex-start; padding: 12px"><span class="msr fill" style="color: var(--md-success)">check_circle</span><div style="flex: 1; display: flex; flex-direction: column"><span class="title-s">Worktree feat/auth ready</span><span class="body-s muted">10:41 · material-nodeterm</span></div><button class="btn text xs sl">Open</button></div>
+      <div class="li" style="align-items: flex-start; padding: 12px"><span class="msr fill" style="color: var(--md-tertiary)">front_hand</span><div style="flex: 1; display: flex; flex-direction: column"><span class="title-s">Codex needs approval</span><span class="body-s muted">10:39 · migrations</span></div><button class="btn text xs sl">Go</button></div>
+      <div class="li" style="align-items: flex-start; padding: 12px"><span class="msr fill" style="color: var(--md-error)">error</span><div style="flex: 1; display: flex; flex-direction: column"><span class="title-s">Usage limit reached on account 2</span><span class="body-s muted">10:20 · resets 12:30</span></div></div>
+    </div>
+    <div style="margin-top: auto; padding: 12px 16px; display: flex; gap: 8px; border-top: 1px solid var(--md-outline-variant)"><button class="btn text xs sl">Mark all read</button><button class="btn text xs sl">Clear read</button><span class="msr muted" style="margin-left: auto; font-size: 18px" aria-hidden="true">drag_handle</span></div>
+  </aside>
+
+  <aside class="dialog" aria-label="Accessibility tools" style="position: absolute; left: 904px; top: 32px; width: 300px; border-radius: 28px; display: flex; flex-direction: column; gap: 10px; animation-delay: 80ms">
+    <div style="display: flex; align-items: center; gap: 8px"><span class="msr" style="color: var(--md-tertiary)">accessibility_new</span><span class="title-m">Accessibility tools</span></div>
+    <div style="display: flex; align-items: center; gap: 8px"><span class="body-m" style="flex: 1">Text size</span><button class="ibtn sm tonal sl" aria-label="Smaller"><span class="msr">text_decrease</span></button><span class="label-l">125%</span><button class="ibtn sm tonal sl" aria-label="Larger"><span class="msr">text_increase</span></button></div>
+    <div style="display: flex; align-items: center; gap: 8px"><span class="body-m" style="flex: 1">High contrast</span><span class="switch" role="img" aria-label="Off"></span></div>
+    <div style="display: flex; align-items: center; gap: 8px"><span class="body-m" style="flex: 1">Reduce motion</span><span class="switch" role="img" aria-label="Off"></span></div>
+    <div style="display: flex; align-items: center; gap: 8px"><span class="body-m" style="flex: 1">Bold focus ring</span><span class="switch on" role="img" aria-label="On"></span></div>
+    <div style="display: flex; align-items: center; gap: 8px"><span class="body-m" style="flex: 1">Larger targets</span><span class="switch on" role="img" aria-label="On"></span></div>
+    <button class="btn tonal sl"><span class="msr">record_voice_over</span>Read this screen aloud</button>
+    <button class="btn text sl">Keyboard shortcuts</button>
+    <div class="divider"></div>
+    <button class="btn text xs sl" style="color: var(--md-on-surface-variant); align-self: flex-start">Hide this button…</button>
+  </aside>
+
+  <section class="dialog" aria-label="Clone repository" style="position: absolute; left: 32px; top: 640px; width: 400px; border-radius: 28px; display: flex; flex-direction: column; gap: 12px">
+    <span class="title-m">Clone repository</span>
+    <div class="li" style="border-radius: 16px; min-height: 48px"><span class="msr">account_circle</span><span class="body-m" style="flex: 1">your-account · Ding-Ding-Projects</span><span class="msr">arrow_drop_down</span></div>
+    <div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex"><span class="body-s">Receiving objects</span><span class="body-s muted" style="margin-left: auto">62% · 41 MB</span></div><div class="wavy" style="--p: 62%; --rest: 37%"></div></div>
+    <div style="display: flex; gap: 8px; justify-content: flex-end"><button class="btn text sl">Cancel</button><button class="btn filled sl" disabled style="opacity: .4">Cloning…</button></div>
+  </section>
+
+  <section class="dialog" aria-label="Downloading" style="position: absolute; left: 468px; top: 670px; width: 400px; border-radius: 28px; display: flex; flex-direction: column; gap: 10px; animation-delay: 120ms">
+    <div style="display: flex; align-items: center; gap: 8px"><span class="msr" style="color: var(--md-primary)">download</span><span class="title-m">Downloading node-v22.12.0-x64.msi</span></div>
+    <span class="body-s muted">nodejs.org → D:\Downloads · 18.4 of 31.2 MB · 6.2 MB/s · 2 s left</span>
+    <div class="lin"><i style="width: 59%"></i></div>
+    <div style="display: flex; gap: 8px"><button class="btn tonal xs sl"><span class="msr" style="font-size: 18px">pause</span>Pause</button><button class="btn text xs sl">Cancel</button><button class="btn text xs sl" style="margin-left: auto">Show folder</button></div>
+  </section>
+
+  <div style="position: absolute; right: 28px; bottom: 28px; display: flex; flex-direction: column; gap: 10px; width: 400px" aria-live="polite">
+    <div class="snack"><span class="msr" style="color: var(--md-inverse-primary)">check_circle</span><span style="flex: 1">Exported 12 cards to board.zip</span><button class="btn text sl">Show</button></div>
+    <div class="snack" style="animation-delay: 120ms"><span class="msr" style="color: #FFB4AB">warning</span><span style="flex: 1">Gemini CLI not found on PATH</span><button class="btn text sl">Install</button><button class="ibtn sm sl" aria-label="Dismiss" style="color: inherit"><span class="msr">close</span></button></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

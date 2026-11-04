@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Board</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./v3.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=Roboto+Mono:wght@400;500&amp;family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0&amp;display=block" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#87D6BC}a:hover{color:#A3F2D7}
+</style>
+</helmet>
+<div class="v3" style="width: 100%; height: 900px; display: flex; overflow: hidden; background: var(--md-surface-container)">
+  <nav class="rail" aria-label="Destinations">
+    <button class="fab sl" aria-label="New card" style="margin-bottom: 12px"><span class="msr">add</span></button>
+    <button class="ri sl"><span class="pill"><span class="msr">workspaces</span></span>Canvas</button>
+    <button class="ri on sl" aria-current="page"><span class="pill" style="width: 64px"><span class="msr fill">view_kanban</span></span>Board</button>
+    <button class="ri sl"><span class="pill"><span class="msr">folder</span></span>Files</button>
+    <button class="ri sl"><span class="pill"><span class="msr">construction</span></span>Tools</button>
+    <button class="ri sl"><span class="pill"><span class="msr">history</span></span>History</button>
+  </nav>
+  <main style="flex: 1; min-width: 0; background: var(--md-surface); border-radius: 28px 0 0 0; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; position: relative">
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+      <h1 class="headline-s" style="margin: 0">material-nodeterm board</h1>
+      <span class="chip"><span class="msr">sync</span>GitHub · 2 min ago</span>
+      <div class="search" style="height: 44px; width: 380px; margin-left: auto"><span class="msr">search</span><span class="body-m" style="flex: 1">relay|hook</span><span class="regex">.*</span></div>
+      <button class="btn tonal sl" aria-expanded="false"><span class="msr">filter_list</span>Filters · 2 active<span class="msr">expand_more</span></button>
+      <button class="btn outlined sl" aria-expanded="false"><span class="msr">insights</span>Stats<span class="msr">expand_more</span></button>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center" aria-label="Active filters while collapsed">
+      <span class="chip on">Assignee: me<span class="msr">close</span></span><span class="chip on">Label: relay<span class="msr">close</span></span>
+      <button class="btn text xs sl">Clear all</button>
+    </div>
+    <div style="flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; min-height: 0">
+      <section class="pane" style="padding: 12px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 4px 6px"><span class="title-m">Backlog</span><span class="chip" style="height: 24px">4</span><button class="ibtn sm sl" aria-label="Column menu" style="margin-left: auto"><span class="msr">more_horiz</span></button></div>
+        <div class="stagger" style="display: flex; flex-direction: column; gap: 8px">
+          <article class="card filled hover" style="display: flex; flex-direction: column; gap: 8px"><span class="label-m muted">#1357</span><span class="title-s">Reply to the opener from a station</span><div style="display: flex; gap: 6px"><span class="chip" style="height: 24px; font-size: 11px">relay</span><span class="chip" style="height: 24px; font-size: 11px">upstream</span></div></article>
+          <article class="card filled hover" style="display: flex; flex-direction: column; gap: 8px"><span class="label-m muted">#1350</span><span class="title-s">Kanban header popups above columns</span></article>
+          <article class="card filled hover" style="display: flex; flex-direction: column; gap: 8px; opacity: .92"><div style="display: flex"><span class="label-m muted">#1344</span><span class="msr fill" style="margin-left: auto; font-size: 18px; color: var(--md-warning)" aria-label="Locked">lock</span></div><span class="title-s">Chat tool groups</span><span class="body-s muted">Locked by you · unlock with the ladder</span></article>
+        </div>
+      </section>
+      <section class="pane" style="padding: 12px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 4px 6px"><span class="title-m">In progress</span><span class="chip" style="height: 24px">3</span></div>
+        <div class="stagger" style="display: flex; flex-direction: column; gap: 8px">
+          <article class="card filled" style="display: flex; flex-direction: column; gap: 8px; box-shadow: 0 0 0 2px var(--md-primary); background: var(--md-secondary-container); border-radius: 20px"><div style="display: flex; align-items: center; gap: 8px"><span class="msr fill" style="color: var(--md-primary); font-size: 20px">check_box</span><span class="label-m">#1355</span></div><span class="title-s">Chat view phase 1</span><div style="display: flex; align-items: center; gap: 6px"><span class="dot live" style="background: var(--md-success); color: var(--md-success)"></span><span class="body-s">Claude Code working</span></div></article>
+          <article class="card filled" style="display: flex; flex-direction: column; gap: 8px; box-shadow: 0 0 0 2px var(--md-primary); background: var(--md-secondary-container); border-radius: 20px"><div style="display: flex; align-items: center; gap: 8px"><span class="msr fill" style="color: var(--md-primary); font-size: 20px">check_box</span><span class="label-m">#1360</span></div><span class="title-s">Liquid glass terminals</span></article>
+          <article class="card filled" style="display: flex; flex-direction: column; gap: 8px; box-shadow: 0 0 0 2px var(--md-primary); background: var(--md-secondary-container); border-radius: 20px"><div style="display: flex; align-items: center; gap: 8px"><span class="msr fill" style="color: var(--md-primary); font-size: 20px">check_box</span><span class="label-m">#1358</span></div><span class="title-s">Notify the opener</span></article>
+        </div>
+      </section>
+      <section class="pane" style="padding: 12px; display: flex; flex-direction: column; gap: 8px; position: relative">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 4px 6px"><span class="title-m">Review</span><span class="chip" style="height: 24px">1</span></div>
+        <article class="card filled" style="display: flex; flex-direction: column; gap: 8px; box-shadow: 0 0 0 2px var(--md-tertiary)"><span class="label-m muted">PR #224</span><span class="title-s">Exclude Pages from indexing</span><div style="display: flex; gap: 6px; align-items: center"><span class="msr fill" style="font-size: 18px; color: var(--md-success)">check_circle</span><span class="body-s">Checks passed</span></div></article>
+        <div class="menu" style="position: absolute; left: 60px; top: 150px; z-index: 2" role="menu" aria-label="Card menu">
+      <div class="search" style="height: 40px; margin: 4px; border-radius: 12px; background: var(--md-surface-container-highest)"><span class="msr" style="font-size: 20px">filter_list</span><span class="body-m muted" style="flex: 1">Filter</span><span class="regex">.*</span></div>
+          <div class="mi sl"><span class="msr">open_in_new</span>Open on GitHub<span class="kbd">Enter</span></div>
+          <div class="mi sl"><span class="msr">smart_toy</span>Start agent on this<span class="kbd">Ctrl Shift C</span></div>
+          <div class="mi sl"><span class="msr">drive_file_move</span>Move to…<span class="kbd">M</span></div>
+          <div class="mi on sl"><span class="msr">brush</span>Edit appearance…<span class="kbd">Alt E</span></div>
+          <div class="mi sl"><span class="msr">lock</span>Lock card<span class="kbd">Ctrl L</span></div>
+          <div class="divider" style="margin: 4px 8px"></div>
+          <div class="mi danger sl"><span class="msr" style="color: inherit">archive</span>Archive<span class="kbd">Del</span></div>
+        </div>
+      </section>
+      <section class="pane" style="padding: 12px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 4px 6px"><span class="title-m">Done</span><span class="chip" style="height: 24px">12</span></div>
+        <article class="card" style="display: flex; flex-direction: column; gap: 6px; background: transparent; box-shadow: inset 0 0 0 1px var(--md-outline-variant)"><span class="title-s muted">Android Play links</span></article>
+        <article class="card" style="display: flex; flex-direction: column; gap: 6px; background: transparent; box-shadow: inset 0 0 0 1px var(--md-outline-variant)"><span class="title-s muted">Onboarding focus-mode row</span></article>
+        <button class="btn text sl" style="align-self: flex-start">Show 10 more</button>
+      </section>
+    </div>
+    <div class="dock-center" style="bottom: 24px"><div class="toolbar-float vibrant" role="toolbar" aria-label="3 cards selected" style="padding: 8px 8px 8px 20px; gap: 6px">
+      <span class="label-l">3 selected</span>
+      <div style="width: 1px; height: 24px; background: currentColor; opacity: .3; margin: 0 6px"></div>
+      <button class="btn xs sl" style="background: transparent; color: inherit"><span class="msr" style="font-size: 18px">drive_file_move</span>Move</button>
+      <button class="btn xs sl" style="background: transparent; color: inherit"><span class="msr" style="font-size: 18px">label</span>Label</button>
+      <button class="btn xs sl" style="background: transparent; color: inherit"><span class="msr" style="font-size: 18px">ios_share</span>Export</button>
+      <button class="btn xs sl" style="background: transparent; color: inherit"><span class="msr" style="font-size: 18px">lock</span>Lock</button>
+      <button class="btn xs filled sl"><span class="msr" style="font-size: 18px">visibility</span>Preview changes</button>
+      <button class="ibtn sm sl" aria-label="Clear selection" style="color: inherit"><span class="msr">close</span></button>
+    </div></div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

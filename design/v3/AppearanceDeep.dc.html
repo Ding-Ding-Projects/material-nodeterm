@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Appearance editor in depth</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./v3.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=Roboto+Mono:wght@400;500&amp;family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0&amp;display=block" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#87D6BC}a:hover{color:#A3F2D7}
+</style>
+</helmet>
+<div class="v3" style="width: 100%; height: 1100px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; padding: 28px; background: var(--md-surface-container-lowest); overflow: hidden">
+
+  <section class="pane" aria-label="Type tab" style="padding: 20px; display: flex; flex-direction: column; gap: 12px; background: var(--md-surface-container)">
+    <div style="display: flex; align-items: center; gap: 8px"><span class="label-l" style="color: var(--md-primary)">Type</span><span class="body-s muted">Node title · Default state</span></div>
+    <div class="search" style="height: 40px"><span class="msr" style="font-size: 20px">search</span><span class="body-m" style="flex: 1">Search type properties</span><span class="regex">.*</span></div>
+    <div style="display: flex; gap: 8px"><div class="field outl" style="flex: 1"><div class="box" style="height: 44px"><span class="body-m" style="flex: 1">Outfit</span><span class="msr">arrow_drop_down</span></div></div><div class="field outl" style="width: 96px"><div class="box" style="height: 44px"><span class="body-m">14.5</span><span class="body-s muted">px</span></div></div></div>
+    <div style="display: flex; gap: 4px; flex-wrap: wrap">
+      <button class="ibtn sel sm sl" aria-label="Bold"><span class="msr">format_bold</span></button><button class="ibtn sm sl" aria-label="Italic"><span class="msr">format_italic</span></button><button class="ibtn sm sl" aria-label="Underline"><span class="msr">format_underlined</span></button><button class="ibtn sm sl" aria-label="Strikethrough"><span class="msr">strikethrough_s</span></button><button class="ibtn sm sl" aria-label="Double strikethrough"><span class="msr">format_strikethrough</span></button><button class="ibtn sm sl" aria-label="Overline"><span class="msr">format_overline</span></button><button class="ibtn sm sl" aria-label="Superscript"><span class="msr">superscript</span></button><button class="ibtn sm sl" aria-label="Subscript"><span class="msr">subscript</span></button><button class="ibtn sm sl" aria-label="Highlight"><span class="msr">format_ink_highlighter</span></button><button class="ibtn sm sl" aria-label="Small caps"><span class="msr">match_case</span></button>
+    </div>
+    <div style="display: grid; grid-template-columns: 110px minmax(0, 1fr) 56px; gap: 6px 10px; align-items: center" class="body-s">
+      <span>Weight</span><div class="slider" style="height: 28px"><div class="trk" style="height: 8px"><div class="act" style="width: 60%"></div></div><div class="hnd" style="left: calc(60% + 2px); height: 28px"></div></div><span class="mono">600</span>
+      <span>Letter spacing</span><div class="slider" style="height: 28px"><div class="trk" style="height: 8px"><div class="act" style="width: 45%"></div></div><div class="hnd" style="left: calc(45% + 2px); height: 28px"></div></div><span class="mono">0.1px</span>
+      <span>Word spacing</span><div class="slider" style="height: 28px"><div class="trk" style="height: 8px"><div class="act" style="width: 30%"></div></div><div class="hnd" style="left: calc(30% + 2px); height: 28px"></div></div><span class="mono">0</span>
+      <span>Line height</span><div class="slider" style="height: 28px"><div class="trk" style="height: 8px"><div class="act" style="width: 55%"></div></div><div class="hnd" style="left: calc(55% + 2px); height: 28px"></div></div><span class="mono">1.4</span>
+      <span>Baseline shift</span><div class="slider" style="height: 28px"><div class="trk" style="height: 8px"><div class="act" style="width: 50%"></div></div><div class="hnd" style="left: calc(50% + 2px); height: 28px"></div></div><span class="mono">0</span>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap"><span class="body-s" style="width: 110px">Case</span><div class="bgroup"><button class="btn xs sl on">As typed</button><button class="btn xs sl">UPPER</button><button class="btn xs sl">Title</button><button class="btn xs sl">Small caps</button></div></div>
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap"><span class="body-s" style="width: 110px">Align · direction</span><div class="bgroup"><button class="btn xs sl on"><span class="msr" style="font-size: 18px">format_align_left</span></button><button class="btn xs sl"><span class="msr" style="font-size: 18px">format_align_center</span></button><button class="btn xs sl"><span class="msr" style="font-size: 18px">format_align_right</span></button><button class="btn xs sl"><span class="msr" style="font-size: 18px">format_textdirection_r_to_l</span></button></div></div>
+    <div class="list">
+      <div class="li" style="min-height: 44px"><span class="body-s" style="flex: 1">Underline style · colour · offset</span><span class="body-s muted">wavy · primary · 3px</span></div>
+      <div class="li" style="min-height: 44px"><span class="body-s" style="flex: 1">Outline · shadow · glow</span><span class="body-s muted">off · 0 2 6 · off</span></div>
+      <div class="li" style="min-height: 44px"><span class="body-s" style="flex: 1">OpenType features</span><span class="body-s muted">tnum, ss01</span></div>
+    </div>
+    <div class="card filled" style="border-radius: 16px; margin-top: auto"><span style="font: 600 18px/26px var(--font-ui); text-decoration: underline wavy var(--md-primary); text-underline-offset: 3px">Claude Code · auth refactor</span><div class="body-s muted">Live preview at 100% and your current scale</div></div>
+  </section>
+
+  <section class="pane" aria-label="Image layers tab" style="padding: 20px; display: flex; flex-direction: column; gap: 12px; background: var(--md-surface-container)">
+    <div style="display: flex; align-items: center; gap: 8px"><span class="label-l" style="color: var(--md-primary)">Image layers</span><span class="body-s muted">Canvas background · non-destructive</span></div>
+    <div style="height: 180px; border-radius: 20px; position: relative; overflow: hidden; background: linear-gradient(135deg, #0B3B30, #184B5D 60%, #2A3B1C)">
+      <div style="position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,.18) 1.2px, transparent 1.4px); background-size: 20px 20px"></div>
+      <div style="position: absolute; right: 16px; bottom: 16px; width: 90px; height: 90px; border-radius: 28px; background: rgba(135,214,188,.35); backdrop-filter: blur(6px)"></div>
+    </div>
+    <div class="list stagger">
+      <div class="li sel" style="min-height: 52px"><span class="msr fill" style="font-size: 20px">visibility</span><div style="width: 36px; height: 28px; border-radius: 6px; background: rgba(135,214,188,.5)"></div><div style="flex: 1; display: flex; flex-direction: column"><span class="title-s">Glass blob</span><span class="body-s">Screen · 35% · mask</span></div><span class="msr" style="font-size: 18px">lock_open</span></div>
+      <div class="li" style="min-height: 52px"><span class="msr fill" style="font-size: 20px">visibility</span><span class="msr" style="font-size: 22px; color: var(--md-tertiary)">tune</span><div style="flex: 1; display: flex; flex-direction: column"><span class="title-s">Curves</span><span class="body-s muted">Adjustment · clipped</span></div></div>
+      <div class="li" style="min-height: 52px"><span class="msr fill" style="font-size: 20px">visibility</span><div style="width: 36px; height: 28px; border-radius: 6px; background-image: radial-gradient(#fff 1px, transparent 1.2px); background-size: 6px 6px; background-color: #333"></div><div style="flex: 1; display: flex; flex-direction: column"><span class="title-s">Dot grid</span><span class="body-s muted">Overlay · 18%</span></div></div>
+      <div class="li" style="min-height: 52px"><span class="msr" style="font-size: 20px; opacity: .5">visibility_off</span><div style="width: 36px; height: 28px; border-radius: 6px; background: linear-gradient(135deg, #0B3B30, #184B5D)"></div><div style="flex: 1; display: flex; flex-direction: column"><span class="title-s">Base gradient</span><span class="body-s muted">Normal · 100%</span></div></div>
+    </div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap">
+      <div class="field outl" style="flex: 1"><div class="box" style="height: 40px"><span class="body-s" style="flex: 1">Blend: Screen</span><span class="msr">arrow_drop_down</span></div></div>
+      <div class="field outl" style="width: 110px"><div class="box" style="height: 40px"><span class="body-s">Opacity 35%</span></div></div>
+    </div>
+    <div style="display: flex; gap: 4px; flex-wrap: wrap"><button class="btn xs tonal sl">+ Layer</button><button class="btn xs tonal sl">+ Adjustment</button><button class="btn xs tonal sl">Mask</button><button class="btn xs tonal sl">Filter</button><button class="btn xs tonal sl">Crop / transform</button></div>
+    <span class="body-s muted">Every layer, mask and filter stays editable. Reset per layer, per state or everything.</span>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 16px; min-height: 0">
+    <div class="pane" aria-label="Animation tab" style="padding: 20px; display: flex; flex-direction: column; gap: 10px; background: var(--md-surface-container)">
+      <div style="display: flex; align-items: center; gap: 8px"><span class="label-l" style="color: var(--md-primary)">Animation</span><span class="body-s muted">Node arrive · 650 ms</span><button class="ibtn sm tonal sl" aria-label="Play" style="margin-left: auto"><span class="msr fill">play_arrow</span></button></div>
+      <div style="display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 4px 8px; align-items: center" class="body-s">
+        <span></span><div class="mono" style="display: flex; justify-content: space-between; font-size: 10px; color: var(--md-on-surface-variant)"><span>0</span><span>200</span><span>400</span><span>650ms</span></div>
+        <span>opacity</span><div style="height: 22px; border-radius: 6px; background: var(--md-surface-container-highest); position: relative"><i style="position: absolute; left: 0; width: 10px; height: 10px; top: 6px; background: var(--md-primary); transform: rotate(45deg)"></i><i style="position: absolute; left: 30%; width: 10px; height: 10px; top: 6px; background: var(--md-primary); transform: rotate(45deg)"></i></div>
+        <span>translateY</span><div style="height: 22px; border-radius: 6px; background: var(--md-surface-container-highest); position: relative"><i style="position: absolute; left: 0; width: 10px; height: 10px; top: 6px; background: var(--md-tertiary); transform: rotate(45deg)"></i><i style="position: absolute; right: 2px; width: 10px; height: 10px; top: 6px; background: var(--md-tertiary); transform: rotate(45deg)"></i></div>
+        <span>radius</span><div style="height: 22px; border-radius: 6px; background: var(--md-surface-container-highest); position: relative"><i style="position: absolute; left: 20%; width: 10px; height: 10px; top: 6px; background: var(--md-warning); transform: rotate(45deg)"></i><i style="position: absolute; left: 70%; width: 10px; height: 10px; top: 6px; background: var(--md-warning); transform: rotate(45deg)"></i></div>
+      </div>
+      <svg viewBox="0 0 200 60" width="100%" height="60" role="img" aria-label="Spring easing curve with overshoot"><path d="M0 58 C 70 -18, 90 2, 200 6" fill="none" stroke="#87D6BC" stroke-width="2.5"></path><line x1="0" y1="6" x2="200" y2="6" stroke="#3F4945" stroke-dasharray="3 3"></line></svg>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap"><span class="chip on" style="height: 28px">Default spatial spring</span><span class="chip" style="height: 28px">Trigger: mount</span><span class="chip" style="height: 28px">Stagger 40 ms</span><span class="chip" style="height: 28px">Interrupt: retarget</span><span class="chip" style="height: 28px">Reduced: fade only</span></div>
+    </div>
+    <div class="pane" aria-label="Capability matrix" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; background: var(--md-surface-container); flex: 1">
+      <span class="label-l" style="color: var(--md-primary)">Capability matrix · this element</span>
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, 54px); gap: 4px; font-size: 12px; align-items: center">
+        <span class="label-s muted">PROPERTY</span><span class="label-s muted">EDIT</span><span class="label-s muted">UNDO</span><span class="label-s muted">LOCK</span><span class="label-s muted">PER STATE</span>
+        <span>Colour and fill</span><span class="msr fill" style="font-size: 18px; color: var(--md-success)">check_circle</span><span class="msr fill" style="font-size: 18px; color: var(--md-success)">check_circle</span><span class="msr fill" style="font-size: 18px; color: var(--md-success)">check_circle</span><span class="msr fill" style="font-size: 18px; color: var(--md-success)">check_circle</span>
+        <span>Typography</span><span class="msr fill" style="font-size: 18px; color: var(--md-success)">check_circle</span><span class="msr fill" style="font-size: 18px; color: var(--md-success)">check_circle</span><span class="msr fill" style="font-size: 18px; color: var(--md-success)">check_circle</span><span class="msr fill" style="font-size: 18px; color: var(--md-success)">check_circle</span>
+        <span>Image layers</span><span class="msr fill" style="font-size: 18px; color: var(--md-success)">check_circle</span><span class="msr fill" style="font-size: 18px; color: var(--md-success)">check_circle</span><span class="msr fill" style="font-size: 18px; color: var(--md-success)">check_circle</span><span class="msr" style="font-size: 18px; color: var(--md-warning)">remove_circle</span>
+        <span>Terminal glyph colours</span><span class="msr" style="font-size: 18px; color: var(--md-error)">block</span><span class="body-s muted" style="grid-column: span 3">Owned by the terminal theme. Open it ›</span>
+      </div>
+      <div style="display: flex; gap: 6px; margin-top: auto; flex-wrap: wrap"><button class="btn tonal xs sl">Copy style</button><button class="btn tonal xs sl">Paste style</button><button class="btn tonal xs sl">Presets</button><button class="btn tonal xs sl">Import</button><button class="btn tonal xs sl">Export</button><button class="btn text xs sl">Reset everything</button></div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

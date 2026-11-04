@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>First-run setup</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./v3.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=Roboto+Mono:wght@400;500&amp;family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0&amp;display=block" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#87D6BC}a:hover{color:#A3F2D7}
+</style>
+</helmet>
+<div class="v3" style="width: 100%; height: 900px; display: flex; flex-direction: column; background: var(--md-surface-container); overflow: hidden">
+  <header class="titlebar"><span class="title-s" style="margin-left: 4px">Set up nodeterm</span><span class="body-s muted" style="margin-left: 12px">Progress saves as you go · resume any time</span>
+    <div class="wctl"><button class="sl" aria-label="Minimize"><span class="msr">remove</span></button><button class="sl" aria-label="Maximize"><span class="msr">crop_square</span></button><button class="sl" aria-label="Close window"><span class="msr">close</span></button></div></header>
+  <div style="flex: 1; display: flex; gap: 0; min-height: 0">
+    <aside style="width: 320px; padding: 24px 16px 24px 24px; display: flex; flex-direction: column; gap: 4px" aria-label="Setup steps">
+      <sc-for list="{{steps}}" as="s" hint-placeholder-count="6">
+        <button class="li sl" onClick="{{s.go}}" style="border-radius: 20px; background: {{s.bg}}; color: {{s.fg}}; border: 0; text-align: left; font: inherit">
+          <span style="width: 32px; height: 32px; border-radius: {{s.shape}}; display: grid; place-items: center; background: {{s.dotBg}}; color: {{s.dotFg}}; flex: none; transition: border-radius .35s var(--spring-fast-spatial)"><span class="msr" style="font-size: 18px">{{s.icon}}</span></span>
+          <span style="display: flex; flex-direction: column"><span class="title-s">{{s.label}}</span><span class="body-s" style="opacity: .8">{{s.sub}}</span></span>
+        </button>
+      </sc-for>
+    </aside>
+    <main style="flex: 1; min-width: 0; margin: 0 16px 16px 0; border-radius: 32px; background: var(--md-surface); padding: 40px 48px; display: flex; flex-direction: column; gap: 24px">
+      <div class="lin" aria-label="Step {{num}} of 6"><i style="width: {{pct}}"></i></div>
+      <sc-if value="{{isShell}}" hint-placeholder-val="{{ true }}">
+        <div class="stagger" style="display: flex; flex-direction: column; gap: 20px">
+          <span class="label-l" style="color: var(--md-primary)">Step 3 of 6 · Shells and agents</span>
+          <h1 class="headline-l" style="margin: 0">We found these on this PC</h1>
+          <p class="body-l muted" style="margin: 0; max-width: 680px">Pick the shell new terminals start in and which coding agents get a launch button. Detection ran just now; nothing was installed.</p>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+            <div class="card filled" style="border-radius: 24px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 0 0 2px var(--md-primary); background: var(--md-secondary-container)"><div style="display: flex; align-items: center; gap: 8px"><span class="msr">terminal</span><span class="title-s">PowerShell 7.5</span><span class="msr fill" style="margin-left: auto; color: var(--md-primary)">radio_button_checked</span></div><span class="body-s mono">C:\Program Files\PowerShell\7\pwsh.exe</span></div>
+            <div class="card filled" style="border-radius: 24px; display: flex; flex-direction: column; gap: 10px"><div style="display: flex; align-items: center; gap: 8px"><span class="msr">terminal</span><span class="title-s">Ubuntu (WSL)</span><span class="msr" style="margin-left: auto">radio_button_unchecked</span></div><span class="body-s mono">wsl.exe -d Ubuntu</span></div>
+            <div class="card filled" style="border-radius: 24px; display: flex; flex-direction: column; gap: 10px"><div style="display: flex; align-items: center; gap: 8px"><span class="msr">terminal</span><span class="title-s">Git Bash</span><span class="msr" style="margin-left: auto">radio_button_unchecked</span></div><span class="body-s mono">C:\Program Files\Git\bin\bash.exe</span></div>
+          </div>
+          <div class="list" style="max-width: 760px">
+            <div class="li"><span class="msr fill" style="color: var(--md-success)">check_circle</span><span class="title-s" style="flex: 1">Claude Code 2.4</span><span class="body-s muted">signed in</span><span class="switch on" role="img" aria-label="Show launch button"></span></div>
+            <div class="li"><span class="msr fill" style="color: var(--md-success)">check_circle</span><span class="title-s" style="flex: 1">Codex CLI</span><span class="body-s muted">signed in</span><span class="switch on" role="img" aria-label="Show launch button"></span></div>
+            <div class="li"><span class="msr" style="color: var(--md-warning)">error</span><span class="title-s" style="flex: 1">Gemini CLI</span><span class="body-s muted">not found</span><button class="btn tonal xs sl">Install with winget</button><button class="ibtn sm sl" aria-label="What this does"><span class="msr">info</span></button></div>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{isOther}}" hint-placeholder-val="{{ false }}">
+        <div class="stagger" style="display: flex; flex-direction: column; gap: 20px">
+          <span class="label-l" style="color: var(--md-primary)">Step {{num}} of 6</span>
+          <h1 class="headline-l" style="margin: 0">{{title}}</h1>
+          <p class="body-l muted" style="margin: 0; max-width: 680px">{{body}}</p>
+          <div style="display: flex; gap: 12px"><div class="card filled" style="width: 240px; height: 140px; border-radius: 24px"></div><div class="card filled" style="width: 240px; height: 140px; border-radius: 24px"></div></div>
+        </div>
+      </sc-if>
+      <div style="margin-top: auto; display: flex; align-items: center; gap: 12px">
+        <button class="btn text sl" onClick="{{back}}"><span class="msr">arrow_back</span>Back</button>
+        <button class="btn text sl">Skip this step</button>
+        <span class="body-s muted" style="margin-left: auto">Enter continues · Esc saves and closes</span>
+        <button class="btn filled lg sl" onClick="{{next}}">{{nextLabel}}<span class="msr">arrow_forward</span></button>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { i: 2 }; }
+  renderVals() {
+    const S = [
+      ['Language', 'English, Cantonese or both', 'translate', 'Choose your language', 'Pick English, Cantonese or bilingual text, and how playful the wording gets in each.'],
+      ['Look', 'Theme, seed colour, motion', 'palette', 'Make it yours', 'Dark or light, a seed colour from the infinite picker, and how much motion you want.'],
+      ['Shells and agents', 'Detected on this PC', 'terminal', '', ''],
+      ['First project', 'Open a folder or clone', 'folder_open', 'Open your first project', 'Choose a folder or clone a repository. It opens as a canvas with one terminal ready.'],
+      ['Accessibility', 'Text size, contrast, read aloud', 'accessibility_new', 'Accessibility tools', 'Text size, contrast, larger targets, reduced motion and read-aloud. The tools button stays on every screen.'],
+      ['Done', 'Open the workspace', 'rocket_launch', 'All set', 'Your workspace opens next with the project and terminal you picked.']
+    ];
+    const i = this.state.i;
+    return {
+      steps: S.map((s, k) => ({ label: s[0], sub: k < i ? 'Done' : s[1], icon: k < i ? 'check' : s[2],
+        bg: k === i ? 'var(--md-secondary-container)' : 'transparent', fg: k === i ? 'var(--md-on-secondary-container)' : 'var(--md-on-surface)',
+        dotBg: k < i ? 'var(--md-primary)' : (k === i ? 'var(--md-primary-container)' : 'var(--md-surface-container-highest)'),
+        dotFg: k < i ? 'var(--md-on-primary)' : 'var(--md-on-surface)', shape: k === i ? '12px' : '50%',
+        go: () => this.setState({ i: k }) })),
+      num: i + 1, pct: Math.round((i + 1) / 6 * 100) + '%',
+      isShell: i === 2, isOther: i !== 2, title: S[i][3], body: S[i][4],
+      nextLabel: i === 5 ? 'Open workspace' : 'Next',
+      next: () => this.setState({ i: Math.min(5, i + 1) }), back: () => this.setState({ i: Math.max(0, i - 1) })
+    };
+  }
+}
+</script>
+</body>
+</html>

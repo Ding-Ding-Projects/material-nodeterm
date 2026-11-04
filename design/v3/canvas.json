@@ -1,0 +1,215 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-04T11:05:00Z"
+  },
+  "title": "nodeterm v3 Material Design 3 Expressive redesign",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1180,
+      "title": "Material Design 3 Expressive tokens, type, shape"
+    },
+    "Motion.dc.html": {
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 1400,
+      "title": "Motion and transitions, reduced-motion path",
+      "is_interactive": true
+    },
+    "Coverage.dc.html": {
+      "x": 3040,
+      "y": 0,
+      "w": 1440,
+      "h": 1120,
+      "title": "canonical feature coverage map"
+    },
+    "Workspace.dc.html": {
+      "x": 0,
+      "y": 1940,
+      "w": 1440,
+      "h": 900,
+      "title": "Workspace app: canvas, tabs, rail",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Palette.dc.html": {
+      "x": 1520,
+      "y": 1940,
+      "w": 1440,
+      "h": 900,
+      "title": "Ctrl+Shift+F palette and regex builder",
+      "expand": "fill"
+    },
+    "Board.dc.html": {
+      "x": 3040,
+      "y": 1940,
+      "w": 1440,
+      "h": 900,
+      "title": "Board, bulk actions, context menu, toy locks",
+      "expand": "fill"
+    },
+    "Onboarding.dc.html": {
+      "x": 0,
+      "y": 3380,
+      "w": 1440,
+      "h": 900,
+      "title": "Onboarding wizard",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "SettingsYou.dc.html": {
+      "x": 1520,
+      "y": 3380,
+      "w": 1440,
+      "h": 1120,
+      "title": "Settings: language, voice, modes",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "SettingsLook.dc.html": {
+      "x": 3040,
+      "y": 3380,
+      "w": 1440,
+      "h": 1100,
+      "title": "Appearance editor, colour picker, logo",
+      "expand": "fill"
+    },
+    "Safety.dc.html": {
+      "x": 0,
+      "y": 5020,
+      "w": 1440,
+      "h": 1000,
+      "title": "Super confirmation, unlock ladder, authenticator",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "History.dc.html": {
+      "x": 1520,
+      "y": 5020,
+      "w": 1440,
+      "h": 820,
+      "title": "History, changelog, exports, offline docs",
+      "expand": "fill"
+    },
+    "Tools.dc.html": {
+      "x": 3040,
+      "y": 5020,
+      "w": 1440,
+      "h": 820,
+      "title": "Tools: converter, Base64, Ollama, Minecraft",
+      "expand": "fill"
+    },
+    "Status.dc.html": {
+      "x": 0,
+      "y": 6660,
+      "w": 1440,
+      "h": 760,
+      "title": "Status Hub, live charts, updates",
+      "expand": "fill"
+    },
+    "Overlays.dc.html": {
+      "x": 1520,
+      "y": 6660,
+      "w": 1440,
+      "h": 1000,
+      "title": "Overlays, notifications, accessibility tools",
+      "expand": "fill"
+    },
+    "Compact.dc.html": {
+      "x": 3040,
+      "y": 6660,
+      "w": 1440,
+      "h": 1000,
+      "title": "Narrow width and 200% scale without clipping"
+    },
+    "Regex.dc.html": {
+      "x": 0,
+      "y": 8200,
+      "w": 1440,
+      "h": 1100,
+      "title": "Regex workbench, RegexBuddy parity",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "AppearanceDeep.dc.html": {
+      "x": 1520,
+      "y": 8200,
+      "w": 1440,
+      "h": 1100,
+      "title": "Appearance editor in depth: type, layers, keyframes"
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Motion.dc.html",
+    "Coverage.dc.html",
+    "Workspace.dc.html",
+    "Palette.dc.html",
+    "Board.dc.html",
+    "Onboarding.dc.html",
+    "SettingsYou.dc.html",
+    "SettingsLook.dc.html",
+    "Safety.dc.html",
+    "History.dc.html",
+    "Tools.dc.html",
+    "Status.dc.html",
+    "Overlays.dc.html",
+    "Compact.dc.html",
+    "Regex.dc.html",
+    "AppearanceDeep.dc.html"
+  ],
+  "notes": {
+    "r1": {
+      "x": 0,
+      "y": -300,
+      "text": "System: tokens, motion, canonical coverage",
+      "kind": "title1",
+      "maxW": 4480
+    },
+    "r2": {
+      "x": 0,
+      "y": 1640,
+      "text": "Working app surfaces",
+      "kind": "title1",
+      "maxW": 4480
+    },
+    "r3": {
+      "x": 0,
+      "y": 3080,
+      "text": "Onboarding and Settings",
+      "kind": "title1",
+      "maxW": 4480
+    },
+    "r4": {
+      "x": 0,
+      "y": 4720,
+      "text": "Safety, records, Tools",
+      "kind": "title1",
+      "maxW": 4480
+    },
+    "r5": {
+      "x": 0,
+      "y": 6360,
+      "text": "Status Hub, overlays, clipping matrix",
+      "kind": "title1",
+      "maxW": 4480
+    },
+    "r6": {
+      "x": 0,
+      "y": 7900,
+      "text": "Deep editors: regex and appearance",
+      "kind": "title1",
+      "maxW": 2960
+    }
+  },
+  "designSystems": []
+}
