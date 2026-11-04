@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add Type and Animation tabs to the appearance editor. Type covers kerning, ligatures, figure
+  styles, hyphenation, vertical writing, first-line indent and a line limit. Animation offers
+  pulse, breathe, float, bounce, wiggle, spin and rainbow text with duration, delay, repeats and
+  easing, and stops under any reduced-motion setting.
+- Fix appearance preset import dropping compositing, filter and transform settings, and stop a
+  hand-edited or imported style value from closing its CSS rule and restyling the rest of the app.
+
+  外觀編輯器加咗「字型排版」同「動畫」分頁：字距微調、連字、數字樣式、斷字、直排、首行縮排同
+  行數上限；動畫有閃、呼吸、浮、彈、搖、轉同彩虹字，可以調時間、延遲、次數同緩動，開咗減少動畫
+  就停。另外修正咗匯入預設會唔見咗合成、濾鏡同變形設定，同埋堵咗手改或者匯入嘅值整爛成個樣式表。
+
 - Add workbench tabs under the regex builder: Test cases (should match or not, with pass and fail),
   GREP over the sample with line numbers, Use & convert (JavaScript, Python, Go, Rust, C#, Java and
   PowerShell code, naming any construct the target cannot express), Benchmark, and this session's

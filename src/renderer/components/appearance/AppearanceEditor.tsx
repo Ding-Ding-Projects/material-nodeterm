@@ -33,13 +33,22 @@ import {
   quoteFamily
 } from '@renderer/lib/fontDetect'
 import { UI_FONT_CATALOG } from '@renderer/lib/appearance/uiFontDetect'
-import { APPEARANCE_BLEND_MODES } from '@shared/types'
+import {
+  APPEARANCE_ANIMATION_EASINGS,
+  APPEARANCE_ANIMATION_PRESETS,
+  APPEARANCE_BLEND_MODES,
+  APPEARANCE_HYPHENS,
+  APPEARANCE_KERNING,
+  APPEARANCE_LIGATURES,
+  APPEARANCE_NUMERIC_FIGURES,
+  APPEARANCE_WRITING_MODES
+} from '@shared/types'
 import type { AppearanceBlendMode, AppearancePreset, AppearanceTextStyle, ElementAppearanceEntry } from '@shared/types'
 import { saveBlobDownload } from '@renderer/lib/exportSave'
 import { Slider, Tablist } from '@renderer/ui/md3'
 import { Chip } from '@renderer/ui/md3'
 
-type Tab = 'font' | 'color' | 'layout' | 'presets'
+type Tab = 'font' | 'type' | 'color' | 'layout' | 'motion' | 'presets'
 
 /** Feature-detects `font-variation-settings` support once — this is a CSS mechanism check, not a
  *  per-font one: no API exists to ask "does THIS installed font define a wght axis?" without
@@ -169,8 +178,10 @@ export function AppearanceEditorHost(): React.JSX.Element | null {
         {(
           [
             { id: 'font', label: 'Font' },
+            { id: 'type', label: 'Type' },
             { id: 'color', label: 'Colour & effects' },
             { id: 'layout', label: 'Layout' },
+            { id: 'motion', label: 'Animation' },
             { id: 'presets', label: 'Presets' }
           ] as const
         ).map((t) => (
@@ -193,6 +204,8 @@ export function AppearanceEditorHost(): React.JSX.Element | null {
         )}
         {tab === 'color' && <ColorTab style={style} patch={patch} clear={clear} />}
         {tab === 'layout' && <LayoutTab style={style} patch={patch} clear={clear} />}
+        {tab === 'type' && <TypeTab style={style} patch={patch} clear={clear} />}
+        {tab === 'motion' && <AnimationTab style={style} patch={patch} clear={clear} />}
         {tab === 'presets' && (
           <PresetsTab
             elementId={target.id}
@@ -663,6 +676,159 @@ function LayoutTab({
             <option value="justify">{vocab('Justify')}</option>
         </Select>
       } />
+    </div>
+  )
+}
+
+/** Human labels for each closed list. Every list value must have one (the editor test checks). */
+export const TYPE_OPTION_LABELS = {
+  fontKerning: { auto: 'Automatic', normal: 'On', none: 'Off' },
+  ligatures: { normal: 'Standard', none: 'Off', discretionary: 'Standard and discretionary' },
+  numericFigures: {
+    normal: 'Font default',
+    lining: 'Lining',
+    oldstyle: 'Old-style',
+    tabular: 'Tabular (aligned columns)',
+    proportional: 'Proportional',
+    'slashed-zero': 'Slashed zero'
+  },
+  hyphens: { none: 'Off', manual: 'Only where marked', auto: 'Automatic' },
+  writingMode: { 'horizontal-tb': 'Horizontal', 'vertical-rl': 'Vertical, right to left', 'vertical-lr': 'Vertical, left to right' }
+} as const
+
+export const ANIMATION_LABELS = {
+  animationPreset: {
+    pulse: 'Pulse (fade in and out)',
+    breathe: 'Breathe (grow slightly)',
+    float: 'Float (drift up and down)',
+    bounce: 'Bounce',
+    wiggle: 'Wiggle',
+    spin: 'Spin',
+    rainbow: 'Rainbow text'
+  },
+  animationEasing: { linear: 'Linear', 'ease-in-out': 'Ease in and out', spring: 'Spring' }
+} as const
+
+/** One select row over a closed list: an unset value shows the "Not set" option, and picking it
+ *  clears the property so the element falls back to what it rendered before. */
+function EnumRow<K extends keyof AppearanceTextStyle>({
+  label,
+  field,
+  options,
+  labels,
+  style,
+  patch,
+  clear
+}: {
+  label: string
+  field: K
+  options: readonly string[]
+  labels: Record<string, string>
+  style: AppearanceTextStyle
+  patch: (p: Partial<AppearanceTextStyle>) => void
+  clear: (k: keyof AppearanceTextStyle) => void
+}): React.JSX.Element {
+  const vocab = useVocabularyMapper()
+  const value = style[field] as string | undefined
+  return (
+    <Row
+      label={label}
+      onReset={value !== undefined ? () => clear(field) : undefined}
+      control={
+        <Select
+          value={value ?? ''}
+          aria-label={vocab(label)}
+          onChange={(e) => (e.target.value === '' ? clear(field) : patch({ [field]: e.target.value } as Partial<AppearanceTextStyle>))}
+        >
+          <option value="">{vocab('Not set')}</option>
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {vocab(labels[o])}
+            </option>
+          ))}
+        </Select>
+      }
+    />
+  )
+}
+
+/** Word-processor typography (design/v3 AppearanceDeep, Type tab). */
+function TypeTab({
+  style,
+  patch,
+  clear
+}: {
+  style: AppearanceTextStyle
+  patch: (p: Partial<AppearanceTextStyle>) => void
+  clear: (k: keyof AppearanceTextStyle) => void
+}): React.JSX.Element {
+  const vocab = useVocabularyMapper()
+  const common = { style, patch, clear }
+  return (
+    <div className="appearance-editor__fields">
+      <EnumRow {...common} label="Kerning" field="fontKerning" options={APPEARANCE_KERNING} labels={TYPE_OPTION_LABELS.fontKerning} />
+      <EnumRow {...common} label="Ligatures" field="ligatures" options={APPEARANCE_LIGATURES} labels={TYPE_OPTION_LABELS.ligatures} />
+      <EnumRow {...common} label="Figures" field="numericFigures" options={APPEARANCE_NUMERIC_FIGURES} labels={TYPE_OPTION_LABELS.numericFigures} />
+      <EnumRow {...common} label="Hyphenation" field="hyphens" options={APPEARANCE_HYPHENS} labels={TYPE_OPTION_LABELS.hyphens} />
+      <EnumRow {...common} label="Writing mode" field="writingMode" options={APPEARANCE_WRITING_MODES} labels={TYPE_OPTION_LABELS.writingMode} />
+      <Row
+        label="First-line indent"
+        onReset={style.textIndentPx != null ? () => clear('textIndentPx') : undefined}
+        control={<NumberField value={style.textIndentPx ?? 0} min={-200} max={200} ariaLabel={vocab('First-line indent (px)')} onChange={(v) => patch({ textIndentPx: v })} className="w-20" />}
+      />
+      <Row
+        label="Line limit"
+        hint="Show at most this many lines, then an ellipsis. 0 means no limit."
+        onReset={style.lineClamp != null ? () => clear('lineClamp') : undefined}
+        control={<NumberField value={style.lineClamp ?? 0} min={0} max={50} ariaLabel={vocab('Maximum lines (0 for no limit)')} onChange={(v) => patch({ lineClamp: v })} className="w-20" />}
+      />
+      <p className="appearance-editor__note">
+        {vocab('Kerning, ligatures and figure styles only change text when the chosen font includes those features.')}
+      </p>
+    </div>
+  )
+}
+
+/** One named loop from a fixed library (design/v3 AppearanceDeep, Animation tab). */
+function AnimationTab({
+  style,
+  patch,
+  clear
+}: {
+  style: AppearanceTextStyle
+  patch: (p: Partial<AppearanceTextStyle>) => void
+  clear: (k: keyof AppearanceTextStyle) => void
+}): React.JSX.Element {
+  const vocab = useVocabularyMapper()
+  const common = { style, patch, clear }
+  const on = style.animationPreset !== undefined
+  return (
+    <div className="appearance-editor__fields">
+      <EnumRow {...common} label="Animation" field="animationPreset" options={APPEARANCE_ANIMATION_PRESETS} labels={ANIMATION_LABELS.animationPreset} />
+      {on && (
+        <>
+          <Row
+            label="Duration"
+            onReset={style.animationDurationMs != null ? () => clear('animationDurationMs') : undefined}
+            control={<NumberField value={style.animationDurationMs ?? 1600} min={100} max={60000} step={100} ariaLabel={vocab('Animation duration (ms)')} onChange={(v) => patch({ animationDurationMs: v })} className="w-20" />}
+          />
+          <Row
+            label="Delay"
+            onReset={style.animationDelayMs != null ? () => clear('animationDelayMs') : undefined}
+            control={<NumberField value={style.animationDelayMs ?? 0} min={0} max={60000} step={100} ariaLabel={vocab('Animation delay (ms)')} onChange={(v) => patch({ animationDelayMs: v })} className="w-20" />}
+          />
+          <Row
+            label="Repeats"
+            hint="How many times it plays. 0 means forever."
+            onReset={style.animationIterations != null ? () => clear('animationIterations') : undefined}
+            control={<NumberField value={style.animationIterations ?? 0} min={0} max={1000} ariaLabel={vocab('Animation repeats (0 for forever)')} onChange={(v) => patch({ animationIterations: v })} className="w-20" />}
+          />
+          <EnumRow {...common} label="Easing" field="animationEasing" options={APPEARANCE_ANIMATION_EASINGS} labels={ANIMATION_LABELS.animationEasing} />
+        </>
+      )}
+      <p className="appearance-editor__note">
+        {vocab('Animations stop under the system reduced-motion setting, the Reduce motion switch in Accessibility tools, and Low stimulation. The element keeps its look; only the movement stops.')}
+      </p>
     </div>
   )
 }

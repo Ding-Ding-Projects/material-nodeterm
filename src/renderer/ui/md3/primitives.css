@@ -1656,3 +1656,15 @@ html[data-a11y-motion='reduced'] .react-flow__node > * {
 html[data-adhd-quiet='on'] .mdx-snackbar {
   animation: none;
 }
+
+/* The appearance editor's live preview carries its animation inline, so it needs its own stop
+   (the generated per-element rules are switched off in styles.md3.css). */
+@media (prefers-reduced-motion: reduce) {
+  .appearance-editor__preview {
+    animation: none !important;
+  }
+}
+html[data-adhd-quiet='on'] .appearance-editor__preview,
+html[data-a11y-motion='reduced'] .appearance-editor__preview {
+  animation: none !important;
+}

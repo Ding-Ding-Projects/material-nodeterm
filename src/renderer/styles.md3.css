@@ -14560,3 +14560,51 @@ html[data-adhd-quiet='on'] .md3-info-guide__panel,
 html[data-a11y-motion='reduced'] .md3-info-guide__panel {
   animation: none;
 }
+
+/* ---- Appearance editor animation library (lib/appearance/apply.ts → animationCss). A user
+   picks one of these by name; nothing else can be injected. Keyframes use the individual
+   `translate`/`rotate`/`scale` properties so they compose with the element's own transform
+   instead of replacing it. Every one is switched off under any reduced-motion source, with a
+   selector more specific than the generated `[data-appearance-id="…"]` rule it must beat. */
+@keyframes nt-appearance-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@keyframes nt-appearance-breathe {
+  0%, 100% { scale: 1; }
+  50% { scale: 1.04; }
+}
+@keyframes nt-appearance-float {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -4px; }
+}
+@keyframes nt-appearance-bounce {
+  0%, 60%, 100% { translate: 0 0; }
+  30% { translate: 0 -6px; }
+}
+@keyframes nt-appearance-wiggle {
+  0%, 100% { rotate: 0deg; }
+  25% { rotate: -3deg; }
+  75% { rotate: 3deg; }
+}
+@keyframes nt-appearance-spin {
+  from { rotate: 0deg; }
+  to { rotate: 360deg; }
+}
+@keyframes nt-appearance-rainbow {
+  0%, 100% { color: hsl(0 85% 62%); }
+  17% { color: hsl(45 90% 55%); }
+  33% { color: hsl(120 60% 50%); }
+  50% { color: hsl(185 75% 50%); }
+  67% { color: hsl(230 80% 66%); }
+  83% { color: hsl(290 70% 64%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html [data-appearance-id] {
+    animation: none !important;
+  }
+}
+html[data-adhd-quiet='on'] [data-appearance-id],
+html[data-a11y-motion='reduced'] [data-appearance-id] {
+  animation: none !important;
+}

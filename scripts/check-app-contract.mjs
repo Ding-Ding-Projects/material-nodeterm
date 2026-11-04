@@ -1296,7 +1296,14 @@ const FEATURES = [
     id: 'appearance-editor',
     label: 'Appearance editor',
     files: ['src/renderer/components/appearance/AppearanceEditor.tsx'],
-    contentChecks: [['src/renderer/components/appearance/AppearanceEditor.tsx', 'export function AppearanceEditorHost']],
+    contentChecks: [
+      ['src/renderer/components/appearance/AppearanceEditor.tsx', 'export function AppearanceEditorHost'],
+      // The Type and Animation tabs, and the stylesheet value guard every entry passes through.
+      ['src/renderer/components/appearance/AppearanceEditor.tsx', "{tab === 'type' && <TypeTab"],
+      ['src/renderer/components/appearance/AppearanceEditor.tsx', "{tab === 'motion' && <AnimationTab"],
+      ['src/renderer/lib/appearance/apply.ts', '.filter(([, v]) => isSafeCssValue(v))'],
+      ['src/renderer/styles.md3.css', '@keyframes nt-appearance-pulse {'],
+    ],
     wired: { file: 'src/renderer/App.tsx', symbol: 'AppearanceEditorHost' },
     settingsSection: 'appearance-editor',
     docs: ['docs/appearance.md'],

@@ -2626,7 +2626,41 @@ export interface AppearanceTextStyle {
   skewXDeg?: number
   skewYDeg?: number
   transformOrigin?: string
+  /** --- Word-processor typography (design/v3 AppearanceDeep, Type tab). Each emits CSS only
+   *  when set and only from its own closed list, so a hand-edited value cannot reach the
+   *  stylesheet. */
+  fontKerning?: AppearanceKerning
+  ligatures?: AppearanceLigatures
+  numericFigures?: AppearanceNumericFigures
+  textIndentPx?: number
+  hyphens?: AppearanceHyphens
+  writingMode?: AppearanceWritingMode
+  /** Maximum visible lines before an ellipsis; 0 or unset means no limit. */
+  lineClamp?: number
+  /** --- Animation (AppearanceDeep, Animation tab): one named loop from a fixed library, never
+   *  arbitrary keyframes. Off under every reduced-motion source. */
+  animationPreset?: AppearanceAnimationPreset
+  animationDurationMs?: number
+  animationDelayMs?: number
+  /** Number of runs; 0 or unset means repeat forever. */
+  animationIterations?: number
+  animationEasing?: AppearanceAnimationEasing
 }
+
+export const APPEARANCE_KERNING = ['auto', 'normal', 'none'] as const
+export type AppearanceKerning = (typeof APPEARANCE_KERNING)[number]
+export const APPEARANCE_LIGATURES = ['normal', 'none', 'discretionary'] as const
+export type AppearanceLigatures = (typeof APPEARANCE_LIGATURES)[number]
+export const APPEARANCE_NUMERIC_FIGURES = ['normal', 'lining', 'oldstyle', 'tabular', 'proportional', 'slashed-zero'] as const
+export type AppearanceNumericFigures = (typeof APPEARANCE_NUMERIC_FIGURES)[number]
+export const APPEARANCE_HYPHENS = ['none', 'manual', 'auto'] as const
+export type AppearanceHyphens = (typeof APPEARANCE_HYPHENS)[number]
+export const APPEARANCE_WRITING_MODES = ['horizontal-tb', 'vertical-rl', 'vertical-lr'] as const
+export type AppearanceWritingMode = (typeof APPEARANCE_WRITING_MODES)[number]
+export const APPEARANCE_ANIMATION_PRESETS = ['pulse', 'breathe', 'float', 'bounce', 'wiggle', 'spin', 'rainbow'] as const
+export type AppearanceAnimationPreset = (typeof APPEARANCE_ANIMATION_PRESETS)[number]
+export const APPEARANCE_ANIMATION_EASINGS = ['linear', 'ease-in-out', 'spring'] as const
+export type AppearanceAnimationEasing = (typeof APPEARANCE_ANIMATION_EASINGS)[number]
 
 /** A themed element as persisted in `Settings.elementAppearance`, keyed by a stable id
  *  (`renderer/lib/appearance/registry.ts` → `appearanceId(kind, key)`). */

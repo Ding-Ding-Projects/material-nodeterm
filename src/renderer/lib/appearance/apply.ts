@@ -1,4 +1,14 @@
-import type { AppearanceTextStyle, ElementAppearanceEntry } from '@shared/types'
+import {
+  APPEARANCE_ANIMATION_EASINGS,
+  APPEARANCE_ANIMATION_PRESETS,
+  APPEARANCE_HYPHENS,
+  APPEARANCE_KERNING,
+  APPEARANCE_LIGATURES,
+  APPEARANCE_NUMERIC_FIGURES,
+  APPEARANCE_WRITING_MODES,
+  type AppearanceTextStyle,
+  type ElementAppearanceEntry
+} from '@shared/types'
 
 /**
  * Turns a style bag into CSS. One function, two callers: the live stylesheet injector
@@ -122,7 +132,76 @@ export function styleToCssProperties(style: AppearanceTextStyle): Record<string,
   if (tf.length) out['transform'] = tf.join(' ')
   if (style.transformOrigin) out['transform-origin'] = style.transformOrigin
 
+  Object.assign(out, typographyCss(style), animationCss(style))
   return out
+}
+
+/** `value` when it is one of `allowed`, else undefined. Settings and imported presets are
+ *  hand-editable, and these values end up in stylesheet text. */
+function oneOf<T extends string>(allowed: readonly T[], value: unknown): T | undefined {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : undefined
+}
+
+/** A finite number clamped to [min, max], else undefined. */
+function bounded(value: unknown, min: number, max: number): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : undefined
+}
+
+const NUMERIC_VARIANT: Record<string, string> = {
+  lining: 'lining-nums',
+  oldstyle: 'oldstyle-nums',
+  tabular: 'tabular-nums',
+  proportional: 'proportional-nums',
+  'slashed-zero': 'slashed-zero'
+}
+
+/** Word-processor typography: kerning, ligatures, figures, indent, hyphenation, writing mode and
+ *  a line clamp. Each emits only when set to a known value. */
+export function typographyCss(style: AppearanceTextStyle): Record<string, string> {
+  const out: Record<string, string> = {}
+  const kerning = oneOf(APPEARANCE_KERNING, style.fontKerning)
+  if (kerning) out['font-kerning'] = kerning
+  const lig = oneOf(APPEARANCE_LIGATURES, style.ligatures)
+  if (lig === 'none') out['font-variant-ligatures'] = 'none'
+  else if (lig === 'discretionary') out['font-variant-ligatures'] = 'common-ligatures discretionary-ligatures'
+  else if (lig === 'normal') out['font-variant-ligatures'] = 'normal'
+  const figures = oneOf(APPEARANCE_NUMERIC_FIGURES, style.numericFigures)
+  if (figures) out['font-variant-numeric'] = figures === 'normal' ? 'normal' : NUMERIC_VARIANT[figures]
+  const indent = bounded(style.textIndentPx, -200, 200)
+  if (indent !== undefined) out['text-indent'] = `${indent}px`
+  const hyphens = oneOf(APPEARANCE_HYPHENS, style.hyphens)
+  if (hyphens) out['hyphens'] = hyphens
+  const mode = oneOf(APPEARANCE_WRITING_MODES, style.writingMode)
+  if (mode) out['writing-mode'] = mode
+  const clamp = bounded(style.lineClamp, 0, 50)
+  if (clamp !== undefined && clamp >= 1) {
+    out['display'] = '-webkit-box'
+    out['-webkit-box-orient'] = 'vertical'
+    out['-webkit-line-clamp'] = String(Math.round(clamp))
+    out['overflow'] = 'hidden'
+  }
+  return out
+}
+
+const EASING_CSS: Record<string, string> = {
+  linear: 'linear',
+  'ease-in-out': 'ease-in-out',
+  spring: 'cubic-bezier(0.38, 1.21, 0.22, 1)'
+}
+
+/** One named loop from the fixed keyframe library in styles.md3.css (`nt-appearance-<name>`).
+ *  The reduced-motion rules there switch every one of them off. */
+export function animationCss(style: AppearanceTextStyle): Record<string, string> {
+  const preset = oneOf(APPEARANCE_ANIMATION_PRESETS, style.animationPreset)
+  if (!preset) return {}
+  const duration = bounded(style.animationDurationMs, 100, 60_000) ?? 1600
+  const delay = bounded(style.animationDelayMs, 0, 60_000) ?? 0
+  const runs = bounded(style.animationIterations, 0, 1000)
+  const count = runs === undefined || runs < 1 ? 'infinite' : String(Math.round(runs))
+  const easing = EASING_CSS[oneOf(APPEARANCE_ANIMATION_EASINGS, style.animationEasing) ?? 'ease-in-out']
+  return {
+    animation: `nt-appearance-${preset} ${duration}ms ${easing} ${delay}ms ${count} both`
+  }
 }
 
 /** React inline-style object (camelCase-agnostic — React accepts a plain CSS-property-keyed
@@ -132,9 +211,19 @@ export function styleToReactStyle(style: AppearanceTextStyle): React.CSSProperti
   return styleToCssProperties(style) as unknown as React.CSSProperties
 }
 
+/** Characters that could end a declaration or a rule, open markup, or start an escape. A value
+ *  holding one is dropped rather than repaired: settings.json and imported presets are
+ *  hand-editable, and this text becomes a live stylesheet. */
+const UNSAFE_CSS_VALUE = /[;{}<>\\]/
+
+export function isSafeCssValue(value: string): boolean {
+  return !UNSAFE_CSS_VALUE.test(value)
+}
+
 function cssDeclarations(style: AppearanceTextStyle): string {
   const props = styleToCssProperties(style)
   return Object.entries(props)
+    .filter(([, v]) => isSafeCssValue(v))
     .map(([k, v]) => `${k}: ${v} !important;`)
     .join(' ')
 }

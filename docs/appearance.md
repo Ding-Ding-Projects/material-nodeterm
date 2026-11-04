@@ -24,7 +24,7 @@ whatever element opened it.
 
 ## What can be edited
 
-Four tabs inside the editor:
+Six tabs inside the editor:
 
 - **Font** — family (a detected-installed list plus free-text CSS stack, with a live preview
   sample rendered in the chosen font and a warning when the primary family isn't actually
@@ -37,6 +37,18 @@ Four tabs inside the editor:
   (a second, wider shadow layer), background colour, border colour and corner radius.
 - **Layout** — letter spacing, word spacing, line height, baseline offset, text direction
   (ltr/rtl), and alignment.
+- **Type** — word-processor typography: kerning (automatic, on, off), ligatures (standard, off,
+  or standard plus discretionary), figure style (lining, old-style, tabular, proportional,
+  slashed zero), hyphenation, writing mode (horizontal or vertical), first-line indent, and a line
+  limit that ends in an ellipsis. Kerning, ligatures and figures only change text when the chosen
+  font includes those features, and the tab says so.
+- **Animation** — one named loop from a fixed library (pulse, breathe, float, bounce, wiggle,
+  spin, rainbow text) with duration, delay, repeat count (0 = forever) and easing (linear, ease
+  in and out, spring). The keyframes live in `styles.md3.css` as `nt-appearance-<name>` and use
+  the individual `translate`/`rotate`/`scale` properties, so they compose with the element's own
+  transform instead of replacing it. Every animation stops under the operating system's
+  reduced-motion setting, the Reduce motion switch in Accessibility tools, and Low stimulation;
+  the element keeps its look and only the movement stops.
 - **Presets** — apply a saved preset to the current element, save the current style as a new
   named preset, set another element to **inherit** any property this one leaves unset, export
   every saved preset to a JSON file, import one, and reset this one element.
@@ -134,7 +146,14 @@ strings) written to the same `settings.json` every other setting lives in. Impor
 bounded, allowlisted shape (`renderer/state/appearance.ts` → `parseImportFile`/`sanitizeStyle`) —
 unknown keys, wrong types, and over-length strings are dropped per-property rather than
 rejecting or silently corrupting the whole file, and a name collision on import is skipped rather
-than overwritten. Export writes a plain JSON file via a client-side `Blob`/`<a download>` — no
+than overwritten. The allowlist covers every documented key, including compositing, filters,
+transform, Type and Animation, so an exported preset imports with everything it carried.
+
+The generated stylesheet has its own guard, because `settings.json` is hand-editable too: the
+Type and Animation fields are only emitted from their closed lists (numbers are clamped), and any
+declaration whose value contains `;`, `{`, `}`, `<`, `>` or a backslash is dropped
+(`isSafeCssValue` in `lib/appearance/apply.ts`). A forged font family cannot close the rule and
+restyle the rest of the app. Export writes a plain JSON file via a client-side `Blob`/`<a download>` — no
 network request is made.
 
 Both preset-export entry points use the shared browser download primitive. Its generated Blob URL

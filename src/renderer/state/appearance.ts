@@ -183,12 +183,20 @@ export function parseImportFile(raw: string, existing: readonly AppearancePreset
 const NUMERIC_KEYS = new Set([
   'fontSizePx', 'fontWeight', 'baselineShiftPx', 'outlineWidthPx', 'shadowBlurPx',
   'shadowOffsetXPx', 'shadowOffsetYPx', 'glowBlurPx', 'letterSpacingPx', 'wordSpacingPx',
-  'lineHeight', 'borderRadiusPx'
+  'lineHeight', 'borderRadiusPx',
+  // Compositing, filters and transform (these were missing, so an exported preset lost them on
+  // import), plus the Type and Animation tabs.
+  'opacity', 'filterBrightness', 'filterContrast', 'filterSaturate', 'filterHueRotateDeg',
+  'filterBlurPx', 'filterGrayscale', 'filterInvert', 'filterSepia', 'backdropBlurPx',
+  'translateXPx', 'translateYPx', 'rotateDeg', 'scaleX', 'scaleY', 'skewXDeg', 'skewYDeg',
+  'textIndentPx', 'lineClamp', 'animationDurationMs', 'animationDelayMs', 'animationIterations'
 ])
 const STRING_KEYS = new Set([
   'fontFamily', 'underline', 'underlineColor', 'strikethrough', 'capitalization',
   'verticalAlign', 'color', 'highlightColor', 'outlineColor', 'shadowColor', 'glowColor',
-  'direction', 'textAlign', 'backgroundColor', 'borderColor'
+  'direction', 'textAlign', 'backgroundColor', 'borderColor',
+  'blendMode', 'transformOrigin', 'fontKerning', 'ligatures', 'numericFigures', 'hyphens',
+  'writingMode', 'animationPreset', 'animationEasing'
 ])
 
 /** Drops any key/value pair that doesn't match the documented `AppearanceTextStyle` contract
