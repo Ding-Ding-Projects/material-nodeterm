@@ -37,6 +37,31 @@ function flat(text: string): FunnyVariants {
 }
 
 export const CATALOG: Catalog = {
+  // Accessibility tools menu (design/v3 Overlays board). Factual copy at every level: these
+  // controls change how the app can be used, so the wording never plays.
+  'a11yTools.open': { en: flat('Accessibility tools'), yue: flat('無障礙工具') },
+  'a11yTools.short': { en: flat('Access'), yue: flat('無障礙') },
+  'a11yTools.textSize': { en: flat('Text size'), yue: flat('字體大小') },
+  'a11yTools.smaller': { en: flat('Smaller text'), yue: flat('細啲') },
+  'a11yTools.larger': { en: flat('Larger text'), yue: flat('大啲') },
+  'a11yTools.highContrast': { en: flat('High contrast'), yue: flat('高對比') },
+  'a11yTools.reduceMotion': { en: flat('Reduce motion'), yue: flat('減少動畫') },
+  'a11yTools.boldFocus': { en: flat('Bold focus ring'), yue: flat('粗身焦點框') },
+  'a11yTools.largerTargets': { en: flat('Larger targets'), yue: flat('大啲嘅掣') },
+  'a11yTools.shortcuts': { en: flat('Keyboard shortcuts'), yue: flat('鍵盤快捷鍵') },
+  'a11yTools.hide': { en: flat('Hide this button…'), yue: flat('收起呢個掣…') },
+  'a11yTools.hideTitle': { en: flat('Hide the accessibility tools button?'), yue: flat('收起無障礙工具掣？') },
+  'a11yTools.hideBody': {
+    en: flat('Your accessibility settings stay as they are. Bring the button back from Settings → Appearance, or reset Appearance.'),
+    yue: flat('你啲無障礙設定會照留。去「設定 → 外觀」或者重設外觀就可以攞返個掣出嚟。')
+  },
+  'a11yTools.hideConfirm': { en: flat('Hide button'), yue: flat('收起個掣') },
+  'a11yTools.cancel': { en: flat('Cancel'), yue: flat('取消') },
+  'a11yTools.settingRow': { en: flat('Show the accessibility tools button'), yue: flat('顯示無障礙工具掣') },
+  'a11yTools.settingHint': {
+    en: flat('The button at the bottom of the navigation rail opens text size, contrast, motion, focus and target-size controls.'),
+    yue: flat('導航欄底嘅掣可以調字體大小、對比、動畫、焦點框同掣嘅大細。')
+  },
   'subagent.collapse': { en: flat('Collapse'), yue: flat('收埋') },
   'subagent.openOutput': { en: flat('Open output'), yue: flat('打開輸出') },
   'subagent.type': { en: flat('subagent'), yue: flat('subagent') },

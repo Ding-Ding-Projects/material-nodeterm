@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add the accessibility tools button at the bottom of the navigation rail. Its menu changes text
+  size and turns on high contrast, reduced motion, a bold focus ring and larger targets, and opens
+  the keyboard shortcuts. Hiding the button asks first and keeps every mode; Settings → Appearance
+  brings it back. The active rail pill now stretches and the add button changes shape when opened.
+  See `docs/features/appearance/accessibility-tools.md`.
+
+  導航欄底加咗無障礙工具掣：可以調字體大小，開高對比、減少動畫、粗身焦點框同大啲嘅掣，仲可以
+  打開鍵盤快捷鍵。收起個掣之前會問一次，啲設定照留；去「設定 → 外觀」就攞得返。
+
 - Start the v3 Material 3 Expressive redesign (`design/v3/`). The colour roles in both themes move
   from the purple M3 baseline seed to the Jade seed `#1F8A70`, generated as a tonal-spot scheme;
   the Server Edition sign-in pages follow. Installs still on a former shipped default accent

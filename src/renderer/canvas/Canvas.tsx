@@ -20036,6 +20036,7 @@ export function Canvas() {
           <NavRail
             destinations={destinations}
             kidsLabel="Kids"
+            onOpenShortcuts={() => setShortcutsOpen(true)}
             // ENTERS Kids mode; it does not open a settings page about it. `components/kids/entry.ts`
             // has always documented this destination as its caller ("the clean entry point the nav
             // rail's child_care destination calls instead of toggling a local view"), but the rail was

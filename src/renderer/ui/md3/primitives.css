@@ -1451,3 +1451,37 @@ html[data-adhd-quiet='on'] .mdx-menu, html[data-adhd-quiet='on'] .mdx-dialog { a
 html[data-adhd-quiet='on'] :is(.mdx-btn, .mdx-icon-btn, .md3-icon-btn, .mdx-fab, .md3-fab, .mdx-chip):active:not(:disabled) {
   transform: none;
 }
+
+/* ============================================================================
+   Accessibility tool modes (components/AccessibilityTools.tsx, lib/a11yAttributes.ts).
+   Each mode is one attribute on <html>; off means the attribute is absent.
+   ============================================================================ */
+html[data-a11y-contrast='on'] {
+  --md-outline-variant: var(--md-outline);
+  --md-on-surface-variant: var(--md-on-surface);
+}
+html[data-a11y-contrast='on'] :is(.mdx-btn--outlined, .mdx-chip, .mdx-card, .mdx-field, .mdx-input) {
+  border-color: var(--md-on-surface);
+}
+html[data-a11y-motion='reduced'] *,
+html[data-a11y-motion='reduced'] *::before,
+html[data-a11y-motion='reduced'] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+  scroll-behavior: auto !important;
+}
+html[data-a11y-motion='reduced'] :is(.mdx-btn, .mdx-icon-btn, .md3-icon-btn, .mdx-fab, .md3-fab, .mdx-chip):active:not(:disabled) {
+  transform: none;
+}
+html[data-a11y-focus='on'] :focus-visible {
+  outline: 4px solid var(--md-primary) !important;
+  outline-offset: 3px !important;
+}
+html[data-a11y-targets='on'] :is(.mdx-btn, .mdx-chip, .mdx-row) {
+  min-height: 48px;
+}
+html[data-a11y-targets='on'] :is(.mdx-icon-btn, .md3-icon-btn) {
+  min-width: 48px;
+  min-height: 48px;
+}

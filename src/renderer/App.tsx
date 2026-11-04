@@ -1,3 +1,4 @@
+import { applyA11yAttributes } from './lib/a11yAttributes'
 import { useEffect } from 'react'
 import { rainbowDurationSeconds } from './lib/nodeColor'
 import { ReactFlowProvider } from '@xyflow/react'
@@ -103,6 +104,21 @@ export default function App() {
     root.dataset.adhdQuiet = modes.lowStimulation ? 'on' : ''
     if (!modes.lowStimulation) delete root.dataset.adhdQuiet
   }, [adhdModes])
+
+  // Accessibility tools (components/AccessibilityTools.tsx): each mode is one attribute on <html>,
+  // read by the rules at the end of ui/md3/primitives.css. Only a literal `true` turns a mode on.
+  const a11yHighContrast = useSettings((s) => s.settings.a11yHighContrast === true)
+  const a11yReduceMotion = useSettings((s) => s.settings.a11yReduceMotion === true)
+  const a11yBoldFocus = useSettings((s) => s.settings.a11yBoldFocus === true)
+  const a11yLargerTargets = useSettings((s) => s.settings.a11yLargerTargets === true)
+  useEffect(() => {
+    applyA11yAttributes(document.documentElement, {
+      contrast: a11yHighContrast,
+      motion: a11yReduceMotion,
+      focus: a11yBoldFocus,
+      targets: a11yLargerTargets
+    })
+  }, [a11yHighContrast, a11yReduceMotion, a11yBoldFocus, a11yLargerTargets])
 
   // Publish the resolved appearance as `data-theme` on <html> — what the light palette in
   // styles.css keys off. Absent, or 'dark', leaves every token at its original value, so this one

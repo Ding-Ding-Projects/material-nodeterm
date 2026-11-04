@@ -136,6 +136,7 @@ The concrete source remediations in this pass are:
 | `desktop-app-error-boundary` | Application error recovery card | `src/renderer/components/AppErrorBoundary.tsx` | `export class AppErrorBoundary` | `app-error` | Source reviewed; runtime proof pending |
 | `desktop-top-app-bar` | Top app bar | `src/renderer/components/TopAppBar.tsx` | `export function TopAppBar` | `md3-app-bar` | Source reviewed; runtime proof pending |
 | `desktop-nav-rail` | Navigation rail and node-creation FAB | `src/renderer/components/NavRail.tsx` | `export function NavRail` | `md3-nav-rail` | Source reviewed; runtime proof pending |
+| `desktop-a11y-tools` | Accessibility tools rail button, menu and hide confirmation | `src/renderer/components/AccessibilityTools.tsx` | `export function AccessibilityTools` | `md3-a11y-tools` | Source reviewed; runtime proof pending |
 | `desktop-project-switcher` | Project switcher menu | `src/renderer/components/ProjectSwitcher.tsx` | `export function ProjectSwitcher` | `md3-switcher-menu` | Source reviewed; runtime proof pending |
 | `desktop-welcome` | Welcome and empty-project screen | `src/renderer/components/WelcomeScreen.tsx` | `export function WelcomeScreen` | `md3-welcome` | Source reviewed; runtime proof pending |
 | `desktop-sessions-sidebar` | Sessions sidebar | `src/renderer/components/SessionsSidebar.tsx` | `export function SessionsSidebar` | `sessions-sidebar` | Source reviewed; runtime proof pending |

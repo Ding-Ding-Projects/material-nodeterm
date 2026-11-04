@@ -1117,6 +1117,119 @@
   margin-top: auto;
 }
 
+/* v3 Expressive rail motion (design/v3/Workspace.dc.html, Motion.dc.html): the active pill
+   stretches 56 → 64px and the FAB trades its rotation for a shape change. Settled by the
+   reduced-motion rules in ui/md3/primitives.css. */
+.md3-rail-item__pill {
+  transition:
+    background var(--md-motion-effect),
+    width var(--md-dur-fast, 350ms) var(--md-spring-fast-spatial, cubic-bezier(0.42, 1.67, 0.21, 0.9));
+}
+.md3-rail-item.is-active .md3-rail-item__pill {
+  width: 64px;
+}
+.md3-fab {
+  transition:
+    transform var(--md-motion-spatial),
+    border-radius var(--md-dur-default, 500ms) var(--md-spring-default-spatial, cubic-bezier(0.38, 1.21, 0.22, 1)),
+    background var(--md-motion-effect);
+}
+.md3-fab:hover:not(:disabled) {
+  border-radius: 20px;
+}
+.md3-fab.is-open {
+  transform: none;
+  border-radius: 28px;
+}
+
+/* Accessibility tools (components/AccessibilityTools.tsx): the rail button sits above Kids mode,
+   and its menu is FIXED for the same reason the FAB menu is — a child of the rail would be
+   clipped by the rail's column and trapped in its stacking context. */
+.md3-a11y-tools {
+  display: flex;
+  justify-content: center;
+}
+.md3-a11y-tools__pill {
+  background: var(--md-tertiary-container);
+  color: var(--md-on-tertiary-container);
+}
+.md3-a11y-tools__panel {
+  position: fixed;
+  left: calc(var(--nav-rail-w) + 10px);
+  bottom: 14px;
+  width: 300px;
+  max-height: calc(100vh - var(--app-bar-h) - 28px);
+  overflow-y: auto;
+  z-index: 29;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--md-shape-extra-large);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  transform-origin: bottom left;
+  animation: mdx-v3-menu-in var(--md-dur-fast, 350ms) var(--md-spring-fast-spatial, ease-out) both;
+}
+.md3-a11y-tools__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+.md3-a11y-tools__head .msr {
+  color: var(--md-tertiary);
+}
+.md3-a11y-tools__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.md3-a11y-tools__label {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.md3-a11y-tools__value {
+  min-width: 48px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.md3-a11y-tools__divider {
+  height: 1px;
+  background: var(--md-outline-variant);
+  margin: 4px 0;
+}
+.mdx-btn.md3-a11y-tools__hide {
+  align-self: flex-start;
+  color: var(--md-on-surface-variant);
+}
+.md3-a11y-tools__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--md-shape-large);
+  background: var(--md-surface-container-highest);
+}
+.md3-a11y-tools__confirm p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--md-on-surface-variant);
+}
+.md3-a11y-tools__confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* ---------------------------------------------------------------------------------------------
    Bottom-left canvas chrome: undo/redo/save pill + the merged zoom/fit/lock Controls row
    --------------------------------------------------------------------------------------------- */

@@ -61,6 +61,10 @@ const ROWS = {
     title: 'Resume card',
     keywords: ['resume', 'where you left off', 'breadcrumb', 'card', 'popup', 'trail']
   },
+  a11yTools: {
+    title: 'Accessibility tools button',
+    keywords: ['accessibility', 'a11y', 'contrast', 'motion', 'focus', 'targets', 'text size', 'hide', 'show']
+  },
   menuItems: {
     title: 'Node menu items',
     keywords: ['menu', 'context', 'right click', 'items', 'hide']
@@ -177,6 +181,7 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
   const hiddenNodeMenuItems = useSettings((s) => s.base.hiddenNodeMenuItems)
   const hiddenHeaderButtons = useSettings((s) => s.base.hiddenHeaderButtons)
   const showResumeCard = useSettings((s) => s.base.showResumeCard)
+  const a11yToolsVisible = useSettings((s) => s.base.a11yToolsVisible !== false)
   const windowTitleActiveSession = useSettings((s) => s.base.windowTitleActiveSession)
   const rainbowSpeed = useSettings((s) => s.base.rainbowSpeed)
   const rainbowValueText = useVocabularyTemplate(
@@ -341,6 +346,19 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
               checked={showResumeCard}
               onChange={(v) => update({ showResumeCard: v })}
               ariaLabel="Show the resume card on project activation"
+            />
+          }
+        />
+      </SearchableRow>
+      <SearchableRow {...ROWS.a11yTools}>
+        <FieldRow
+          label="Accessibility tools button"
+          description="The button at the bottom of the navigation rail opens text size, contrast, motion, focus and target-size controls. Hiding it keeps every accessibility setting as it is."
+          control={
+            <Switch
+              checked={a11yToolsVisible}
+              onChange={(v) => update({ a11yToolsVisible: v })}
+              ariaLabel="Show the accessibility tools button"
             />
           }
         />

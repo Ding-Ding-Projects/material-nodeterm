@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { FabMenu, type FabMenuProps } from './FabMenu'
 import { Button } from '../ui/md3'
+import { AccessibilityTools } from './AccessibilityTools'
 
 export interface RailDestination {
   id: string
@@ -16,6 +17,8 @@ export interface NavRailProps extends FabMenuProps {
   destinations: RailDestination[]
   kidsLabel: string
   onOpenKids: () => void
+  /** Opens the keyboard shortcuts panel from the accessibility tools menu. */
+  onOpenShortcuts: () => void
 }
 
 /**
@@ -27,7 +30,7 @@ export interface NavRailProps extends FabMenuProps {
  * means) is decided by the caller (`Canvas.tsx`), which already owns every one of those open/close
  * states. This keeps the rail itself agnostic of Explorer/Source Control/Converter/Ollama/etc.
  */
-export function NavRail({ destinations, kidsLabel, onOpenKids, ...fab }: NavRailProps) {
+export function NavRail({ destinations, kidsLabel, onOpenKids, onOpenShortcuts, ...fab }: NavRailProps) {
   return (
     <nav className="md3-nav-rail" aria-label="Primary navigation" data-canvas-chrome data-easter-surface="canvas">
       <FabMenu {...fab} />
@@ -54,6 +57,7 @@ export function NavRail({ destinations, kidsLabel, onOpenKids, ...fab }: NavRail
         ))}
       </div>
       <div className="md3-nav-rail__spacer" />
+      <AccessibilityTools onOpenShortcuts={onOpenShortcuts} />
       <Button variant="text" vocabularyMode="factual" className="md3-rail-item md3-rail-item--kids" title={kidsLabel} onClick={onOpenKids}>
         <span className="md3-rail-item__pill">
           <KidsIcon />

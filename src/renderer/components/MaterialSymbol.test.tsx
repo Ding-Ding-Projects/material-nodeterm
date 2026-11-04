@@ -36,10 +36,10 @@ describe('MaterialSymbol', () => {
     expect(huge).toContain("&#x27;wght&#x27; 700")
   })
 
-  it('renders every one of the 92 bundled glyph names without throwing', () => {
+  it('renders every one of the 99 bundled glyph names without throwing', () => {
     for (const name of Object.keys(MATERIAL_SYMBOLS) as (keyof typeof MATERIAL_SYMBOLS)[]) {
       expect(() => renderToStaticMarkup(<MaterialSymbol name={name} />)).not.toThrow()
     }
-    expect(Object.keys(MATERIAL_SYMBOLS)).toHaveLength(92)
+    expect(Object.keys(MATERIAL_SYMBOLS)).toHaveLength(99)
   })
 })

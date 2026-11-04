@@ -3057,6 +3057,19 @@ export interface Settings {
    *  once-per-app-run popup). OFF by default — it interrupts every project switch, so it is
    *  opt-in. Cmd+[ / Cmd+] and the Dock buttons walk the trail regardless of this. */
   showResumeCard: boolean
+  /** Accessibility tools (design/v3 Overlays board). The rail button that opens the menu is
+   *  VISIBLE by default; hiding it needs a confirmation and Settings → Appearance (or a reset)
+   *  brings it back. The four modes are independent and OFF by default; every reader treats only
+   *  a literal `true` as on, because settings.json is hand-editable. */
+  a11yToolsVisible: boolean
+  /** Stronger outlines and secondary text against their surfaces. */
+  a11yHighContrast: boolean
+  /** The app's own reduced-motion switch; composes with the OS preference and Low stimulation. */
+  a11yReduceMotion: boolean
+  /** A thicker, always-visible keyboard focus ring. */
+  a11yBoldFocus: boolean
+  /** Raises buttons, icon buttons, chips and list rows to at least 48px targets. */
+  a11yLargerTargets: boolean
   /** Whether usage percentages render as consumed ("32% used"), remaining ("68% left"), or raw
    *  token counts ("48k/200k tokens" — context-window surfaces only; provider quota surfaces
    *  have no token counts and fall back to 'used' display). 'remaining' is the historical
@@ -3423,6 +3436,11 @@ export const DEFAULT_SETTINGS: Settings = {
   // Opt-in: the resume card pops over the canvas on every qualifying project activation, which
   // reads as noise to users who navigate by the trail chords/Dock buttons instead.
   showResumeCard: false,
+  a11yToolsVisible: true,
+  a11yHighContrast: false,
+  a11yReduceMotion: false,
+  a11yBoldFocus: false,
+  a11yLargerTargets: false,
   usagePercentMode: 'remaining',
   claudeUsageRotationEnabled: false,
   claudeUsageRotationThreshold: 90,

@@ -40,6 +40,11 @@ export const APPEARANCE_RESET_KEYS = [
   'hiddenNodeMenuItems',
   'hiddenHeaderButtons',
   'showResumeCard',
+  'a11yToolsVisible',
+  'a11yHighContrast',
+  'a11yReduceMotion',
+  'a11yBoldFocus',
+  'a11yLargerTargets',
   'windowTitleActiveSession'
 ] as const satisfies readonly (keyof Settings)[]
 

@@ -15,6 +15,7 @@
 //   - "system_update" was requested but does not exist in this exact material-symbols version; rendering "system_update_alt" instead.
 
 export const MATERIAL_SYMBOLS = {
+  "accessibility_new": '\uE92C',
   "account_circle": '\uE853',
   "account_tree": '\uE97A',
   "add": '\uE145',
@@ -29,6 +30,7 @@ export const MATERIAL_SYMBOLS = {
   "call_split": '\uE0B6',
   "campaign": '\uEF49',
   "cast": '\uE307',
+  "center_focus_strong": '\uE3B4',
   "check": '\uE5CA',
   "check_circle": '\uE86C',
   "checklist": '\uE6B1',
@@ -73,6 +75,7 @@ export const MATERIAL_SYMBOLS = {
   "memory": '\uE322',
   "mic": '\uE029',
   "monitor_heart": '\uEAA2',
+  "motion_photos_off": '\uE9C0',
   "north_east": '\uF1E1',
   "north_west": '\uF1E2',
   "notifications": '\uE7F4',
@@ -100,9 +103,13 @@ export const MATERIAL_SYMBOLS = {
   "tab": '\uE8D8',
   "task_alt": '\uE2E6',
   "terminal": '\uEB8E',
+  "text_decrease": '\uEADD',
+  "text_increase": '\uEAE2',
+  "touch_app": '\uE913',
   "upload_file": '\uE9FC',
   "verified": '\uE031',
   "view_kanban": '\uEB7F',
+  "visibility_off": '\uE8F5',
   "vpn_key": '\uE0DA',
   "warning": '\uE002',
   "wb_sunny": '\uE430',
