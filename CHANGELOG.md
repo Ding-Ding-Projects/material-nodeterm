@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Follow the v3 workspace chrome: the navigation rail widens to 96 px, nodes round to 28 px
+  corners, and nodes fade in one after another when a project loads. The fade is opacity only, so
+  terminal text stays sharp, and it is off under any reduced-motion setting.
+
+  跟足 v3 嘅工作區外框：導航欄闊到 96 px，節點轉角變 28 px，開 project 嗰陣啲節點會逐個淡入。
+  只係透明度變，終端機啲字唔會矇；開咗任何減少動畫設定就唔郁。
+
 - Add an info button directly above every settings control that has help text. It opens a small
   panel explaining that one setting with three guided steps, works from the keyboard and returns
   focus when closed. See `docs/features/appearance/info-guidance.md`.

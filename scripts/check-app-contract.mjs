@@ -1815,6 +1815,52 @@ const FEATURES = [
     docs: ['docs/unlock-ladder.md'],
   },
   {
+    // Accessibility tools: the rail button, its four persisted modes, and the DOM attributes the
+    // CSS keys off. Defined AND mounted AND applied, since each half alone is a dead switch.
+    id: 'accessibility-tools',
+    label: 'Accessibility tools button and modes',
+    files: [
+      'src/renderer/components/AccessibilityTools.tsx',
+      'src/renderer/components/AccessibilityTools.test.tsx',
+      'src/renderer/lib/a11yAttributes.ts',
+    ],
+    contentChecks: [
+      ['src/renderer/components/AccessibilityTools.tsx', 'export function AccessibilityTools({'],
+      ['src/renderer/components/NavRail.tsx', '<AccessibilityTools onOpenShortcuts={onOpenShortcuts} />'],
+      ['src/renderer/lib/a11yAttributes.ts', 'export function applyA11yAttributes('],
+      ['src/renderer/App.tsx', 'applyA11yAttributes(document.documentElement,'],
+      ['src/renderer/ui/md3/primitives.css', "html[data-a11y-motion='reduced']"],
+    ],
+    docs: ['docs/features/appearance/accessibility-tools.md'],
+  },
+  {
+    // Live charts: the component and the one place it is fed real readings.
+    id: 'live-charts',
+    label: 'Live charts (RAM in use)',
+    files: ['src/renderer/components/LiveChart.tsx', 'src/renderer/components/LiveChart.test.tsx'],
+    contentChecks: [
+      ['src/renderer/components/LiveChart.tsx', 'export function LiveChart({'],
+      ['src/renderer/state/sessionMemory.ts', 'export function appendMemSample('],
+      ['src/renderer/components/SessionMemoryPanel.tsx', '<LiveChart'],
+    ],
+    docs: ['docs/features/appearance/live-charts.md'],
+  },
+  {
+    // Info guidance: rendered once in FieldRow so every settings section is covered; a guide
+    // that exists but is never rendered by the row would pass its own test and reach nobody.
+    id: 'info-guidance',
+    label: 'Per-control info guidance on settings',
+    files: [
+      'src/renderer/components/settings/InfoGuide.tsx',
+      'src/renderer/components/settings/InfoGuide.test.tsx',
+    ],
+    contentChecks: [
+      ['src/renderer/components/settings/InfoGuide.tsx', 'export function InfoGuide({'],
+      ['src/renderer/components/settings/FieldRow.tsx', '<InfoGuide label={vocabLabel} description={vocabDescription} />'],
+    ],
+    docs: ['docs/features/appearance/info-guidance.md'],
+  },
+  {
     // The extracted MD3 component library — one definition per shape (button, chip, menu
     // surface, …) instead of the same recipe re-authored per feature lane. See the doc for why
     // `mdx-` and not `md3-`, and which pieces reuse an already-shipped class instead of a new one.

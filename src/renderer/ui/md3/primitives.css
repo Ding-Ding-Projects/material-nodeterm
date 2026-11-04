@@ -1596,3 +1596,36 @@ html[data-adhd-quiet='on'] .md3-live-chart__pulse,
 html[data-a11y-motion='reduced'] .md3-live-chart__pulse {
   display: none;
 }
+
+/* Staggered node arrival (design/v3 Workspace): a node's own body fades in when it mounts, a
+   little later for each of the first eight siblings, so a project load reads as the canvas
+   filling in rather than appearing at once. Fill mode is backwards so a finished animation never pins opacity over a dimmed node. Opacity only: React Flow positions nodes by
+   transform, and a transform on the body would also resample a terminal's raster mid-animation.
+   Off under the OS setting, the app's Reduce motion switch and Low stimulation. */
+.react-flow__node > * {
+  animation: mdx-v3-node-in var(--md-dur-default) var(--md-spring-default-effects) backwards;
+}
+.react-flow__node:nth-child(2) > * { animation-delay: 30ms; }
+.react-flow__node:nth-child(3) > * { animation-delay: 60ms; }
+.react-flow__node:nth-child(4) > * { animation-delay: 90ms; }
+.react-flow__node:nth-child(5) > * { animation-delay: 120ms; }
+.react-flow__node:nth-child(6) > * { animation-delay: 150ms; }
+.react-flow__node:nth-child(7) > * { animation-delay: 180ms; }
+.react-flow__node:nth-child(n + 8) > * { animation-delay: 210ms; }
+@keyframes mdx-v3-node-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__node > * {
+    animation: none;
+  }
+}
+html[data-adhd-quiet='on'] .react-flow__node > *,
+html[data-a11y-motion='reduced'] .react-flow__node > * {
+  animation: none;
+}

@@ -2302,7 +2302,7 @@ multiply-linked inode whose other name may be outside the staging tree.
   brand mark plus whatever the caller composes into it: the project switcher, the docked search
   bar, the presence facepile, and the icon-button cluster (all owned by `Canvas.tsx`, which
   already had their state/handlers — this only changed WHERE they render, not how they work).
-  `NavRail.tsx` (88px, left) replaces the old bottom `Dock.tsx`, and is a REAL flex sibling of
+  `NavRail.tsx` (96px, left) replaces the old bottom `Dock.tsx`, and is a REAL flex sibling of
   `.flow-wrap`, not a floating overlay drawn on top of it — the canvas area is genuinely
   narrower, so `fit-view.ts` never needs to treat the rail as an obstacle. Its FAB
   (`FabMenu.tsx`) owns node creation (same choices as the old dock `+`, same ⌘T/⌘⇧C, same
@@ -2321,7 +2321,7 @@ multiply-linked inode whose other name may be outside the staging tree.
   `.md3-canvas-actions` pill (stacked above the merged zoom `Controls` row so the two bottom-left
   clusters don't collide), and zoom −/%/+ plus Fit view merged into React Flow's own
   `<Controls>` (now horizontal) — every one of these still calls the exact same handlers as
-  before. `--app-bar-h` (64px) / `--nav-rail-w` (88px) / `APP_BAR_HEIGHT`
+  before. `--app-bar-h` (64px) / `--nav-rail-w` (96px) / `APP_BAR_HEIGHT`
   (`src/shared/layout.ts`, main's copy, feeding the win32 `titleBarOverlay` height) are the
   three named sources for this geometry and move together; every floating overlay that assumed
   the old 44px bar and no left rail (kanban, the sessions sidebar and its icon cluster, the

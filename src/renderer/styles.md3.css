@@ -21,7 +21,7 @@
 
 :root {
   --app-bar-h: 64px;
-  --nav-rail-w: 88px;
+  --nav-rail-w: 96px;
 }
 
 /* Cloudflare Tunnel inventory: all values use the shared MD3 token roles and stay scrollable on

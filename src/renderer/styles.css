@@ -98,7 +98,7 @@
   /* Bar geometry, named once so the stylesheet and src/shared/layout.ts cannot drift.
      The Windows titleBarOverlay height in src/main/index.ts reads the same constant. */
   --app-bar-h: 64px;
-  --nav-rail-w: 88px;
+  --nav-rail-w: 96px;
   --md-shape-medium: var(--radius-lg); /* 12px */
   --md-shape-large: var(--radius-xl); /* 16px */
   --md-shape-extra-large: var(--radius-xxl); /* 28px */
@@ -159,7 +159,7 @@
   /* Measured desktop component geometry, kept named so surfaces share one Material Design 3 scale. */
   /* Component-specific geometry remains a token rather than a one-off declaration. These values
      are the measured node, section, and compact badge shapes in the checked-in desktop design. */
-  --md-shape-node: 24px;
+  --md-shape-node: 28px;
   --md-shape-section: 20px;
   --md-shape-compact: 4px;
 
