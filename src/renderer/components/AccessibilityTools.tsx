@@ -5,6 +5,7 @@ import { useSettings } from '../state/settings'
 import { useI18n } from '../lib/i18n'
 import { resolveUiScale, UI_SCALE_MAX, UI_SCALE_MIN } from '@shared/ui-scale'
 import type { Settings } from '@shared/types'
+import { canReadAloud, pickReadAloudText, readAloud, stopReadingAloud } from '../lib/readAloud'
 
 /** The four independent modes the menu toggles. Each is read as on only when the stored value is a
  *  literal `true`, because settings.json is hand-editable. */
@@ -63,6 +64,13 @@ export function AccessibilityTools({ onOpenShortcuts }: AccessibilityToolsProps)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const cancelRef = useRef<HTMLButtonElement>(null)
+  // What Read aloud will speak, captured the moment the trigger is pressed: after that, focus is
+  // on the trigger and the panel, not on what the user was reading.
+  const readTargetRef = useRef('')
+  const [readNotice, setReadNotice] = useState<string | null>(null)
+  const captureReadTarget = () => {
+    readTargetRef.current = pickReadAloudText(window.getSelection?.()?.toString() ?? '', document.activeElement)
+  }
 
   const close = (restoreFocus: boolean) => {
     setOpen(false)
@@ -113,7 +121,17 @@ export function AccessibilityTools({ onOpenShortcuts }: AccessibilityToolsProps)
         aria-label={label}
         aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={() => (open ? close(false) : setOpen(true))}
+        onPointerDown={() => {
+          if (!open) captureReadTarget()
+        }}
+        onKeyDown={(e) => {
+          if (!open && (e.key === 'Enter' || e.key === ' ')) captureReadTarget()
+        }}
+        onClick={() => {
+          setReadNotice(null)
+          if (open) close(false)
+          else setOpen(true)
+        }}
       >
         <span className="md3-rail-item__pill md3-a11y-tools__pill">
           <MaterialSymbol name="accessibility_new" />
@@ -157,6 +175,31 @@ export function AccessibilityTools({ onOpenShortcuts }: AccessibilityToolsProps)
               />
             </div>
           ))}
+          <div className="md3-a11y-tools__row md3-a11y-tools__read">
+            <Button
+              variant="tonal"
+              vocabularyMode="factual"
+              leadingIcon={<MaterialSymbol name="record_voice_over" />}
+              disabled={!canReadAloud()}
+              title={canReadAloud() ? undefined : ts('a11yTools.readUnavailable', 'Speech is not available on this system.')}
+              onClick={() => {
+                const ok = readAloud(readTargetRef.current)
+                setReadNotice(
+                  ok ? null : ts('a11yTools.readNothing', 'Select some text, or focus something, then open this menu again.')
+                )
+              }}
+            >
+              {ts('a11yTools.read', 'Read aloud')}
+            </Button>
+            <Button variant="text" vocabularyMode="factual" onClick={() => stopReadingAloud()}>
+              {ts('a11yTools.stopReading', 'Stop')}
+            </Button>
+          </div>
+          {readNotice && (
+            <p className="md3-a11y-tools__notice" role="status">
+              {readNotice}
+            </p>
+          )}
           <Button
             variant="tonal"
             vocabularyMode="factual"

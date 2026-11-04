@@ -56,6 +56,13 @@ export const CATALOG: Catalog = {
   'a11yTools.reduceMotion': { en: flat('Reduce motion'), yue: flat('減少動畫') },
   'a11yTools.boldFocus': { en: flat('Bold focus ring'), yue: flat('粗身焦點框') },
   'a11yTools.largerTargets': { en: flat('Larger targets'), yue: flat('大啲嘅掣') },
+  'a11yTools.read': { en: flat('Read aloud'), yue: flat('讀出嚟') },
+  'a11yTools.stopReading': { en: flat('Stop'), yue: flat('停') },
+  'a11yTools.readNothing': {
+    en: flat('Select some text, or focus something, then open this menu again.'),
+    yue: flat('揀啲字，或者揀中一樣嘢，再打開呢個選單。')
+  },
+  'a11yTools.readUnavailable': { en: flat('Speech is not available on this system.'), yue: flat('呢部機用唔到語音。') },
   'a11yTools.shortcuts': { en: flat('Keyboard shortcuts'), yue: flat('鍵盤快捷鍵') },
   'a11yTools.hide': { en: flat('Hide this button…'), yue: flat('收起呢個掣…') },
   'a11yTools.hideTitle': { en: flat('Hide the accessibility tools button?'), yue: flat('收起無障礙工具掣？') },

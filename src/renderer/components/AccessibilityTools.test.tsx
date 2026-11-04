@@ -7,6 +7,23 @@ import { useSettings } from '../state/settings'
 import { AccessibilityTools, stepUiScale } from './AccessibilityTools'
 import { applyA11yAttributes } from '../lib/a11yAttributes'
 
+const reader = vi.hoisted(() => ({ spoken: [] as string[], stops: 0, available: true }))
+vi.mock('../lib/readAloud', async (orig) => {
+  const real = await orig<typeof import('../lib/readAloud')>()
+  return {
+    ...real,
+    canReadAloud: () => reader.available,
+    readAloud: (text: string) => {
+      if (!text) return false
+      reader.spoken.push(text)
+      return true
+    },
+    stopReadingAloud: () => {
+      reader.stops++
+    }
+  }
+})
+
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 let root: Root
@@ -119,6 +136,47 @@ describe('AccessibilityTools', () => {
     act(() => btn.click())
     expect(onOpen).toHaveBeenCalledTimes(1)
     expect(document.querySelector('.md3-a11y-tools__panel')).toBeNull()
+  })
+})
+
+describe('Read aloud', () => {
+  it('reads the text that had focus when the menu was opened, and Stop stops it', () => {
+    reader.spoken = []
+    reader.stops = 0
+    const field = document.createElement('textarea')
+    field.value = 'Read me please'
+    document.body.appendChild(field)
+    field.focus()
+    act(() => root.render(<AccessibilityTools onOpenShortcuts={vi.fn()} />))
+    act(() => {
+      trigger().dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      trigger().click()
+    })
+    const read = [...document.querySelectorAll('.md3-a11y-tools__panel button')].find((b) => b.textContent?.includes('Read aloud')) as HTMLButtonElement
+    act(() => read.click())
+    expect(reader.spoken).toEqual(['Read me please'])
+    const stop = [...document.querySelectorAll('.md3-a11y-tools__panel button')].find((b) => b.textContent === 'Stop') as HTMLButtonElement
+    act(() => stop.click())
+    expect(reader.stops).toBe(1)
+    field.remove()
+  })
+
+  it('with nothing to read it says what to do instead of staying silent', () => {
+    reader.spoken = []
+    openMenu()
+    const read = [...document.querySelectorAll('.md3-a11y-tools__panel button')].find((b) => b.textContent?.includes('Read aloud')) as HTMLButtonElement
+    act(() => read.click())
+    expect(reader.spoken).toEqual([])
+    expect(document.querySelector('.md3-a11y-tools__notice')?.textContent).toMatch(/Select some text/)
+  })
+
+  it('is disabled with a reason when speech is unavailable', () => {
+    reader.available = false
+    openMenu()
+    const read = [...document.querySelectorAll('.md3-a11y-tools__panel button')].find((b) => b.textContent?.includes('Read aloud')) as HTMLButtonElement
+    expect(read.disabled).toBe(true)
+    expect(read.title).toMatch(/not available/)
+    reader.available = true
   })
 })
 

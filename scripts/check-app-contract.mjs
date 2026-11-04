@@ -1856,6 +1856,8 @@ const FEATURES = [
       ['src/renderer/lib/a11yAttributes.ts', 'export function applyA11yAttributes('],
       ['src/renderer/App.tsx', 'applyA11yAttributes(document.documentElement,'],
       ['src/renderer/ui/md3/primitives.css', "html[data-a11y-motion='reduced']"],
+      ['src/renderer/components/AccessibilityTools.tsx', 'const ok = readAloud(readTargetRef.current)'],
+      ['src/renderer/lib/readAloud.ts', "return el.type === 'password' ? '' : el.value"],
     ],
     docs: ['docs/features/appearance/accessibility-tools.md'],
   },

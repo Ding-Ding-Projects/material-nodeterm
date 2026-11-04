@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add Read aloud to the accessibility tools menu. It speaks your selected text, or the focused
+  element, through the narrator's voices, never reads a password field, and uses the Cantonese
+  voice for Chinese text when Cantonese is allowed. Stop ends it.
+
+  無障礙工具加咗「讀出嚟」：會用旁述把聲讀你揀咗嘅字或者而家揀中嗰樣嘢，密碼欄一定唔讀；
+  可以用廣東話嘅時候，中文字會用廣東話把聲讀。撳「停」就停。
+
 - Add Type and Animation tabs to the appearance editor. Type covers kerning, ligatures, figure
   styles, hyphenation, vertical writing, first-line indent and a line limit. Animation offers
   pulse, breathe, float, bounce, wiggle, spin and rainbow text with duration, delay, repeats and

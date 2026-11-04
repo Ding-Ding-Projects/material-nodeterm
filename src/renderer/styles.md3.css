@@ -14608,3 +14608,12 @@ html[data-adhd-quiet='on'] [data-appearance-id],
 html[data-a11y-motion='reduced'] [data-appearance-id] {
   animation: none !important;
 }
+.md3-a11y-tools__read {
+  gap: 4px;
+}
+.md3-a11y-tools__notice {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+}
